@@ -48,7 +48,26 @@ UltraRender 不仅仅是一个图形渲染器，而是一个**物理光学模拟
 - [ ] **神经光谱缓存 (Neural Spectral Cache)**: 训练神经网络预测光谱分布，而非简单的 RGB 降噪。
 - [ ] **可微光谱渲染**: 支持从照片反推材质的化学成分。
 
-## 5. 工程目录结构
+## 5. 渲染优化与降噪路线图 (Optimization & Denoising Roadmap) [新增]
+
+针对高采样场景下的彩色噪点与渲染时间问题，我们制定了专项优化计划：
+
+### 优化一阶段：确定性与重要性采样 (Determinism & Importance Sampling)
+1.  **修复色散通道选择算法**: 
+    - 废弃随机波长选择，改为**三通道确定性加权积分**或全光谱追踪，确保每次采样都对 RGB 通道有贡献，消除因随机波长丢弃导致的色彩方差。
+2.  **实现直接光照采样 (Direct Light Sampling / NEE)**:
+    - 将直接照明与间接照明彻底解耦。
+    - 对光源进行显式**重要性采样 (Importance Sampling)**，确保阴影射线总是指向光源，彻底消除阴影噪点。
+3.  **增强重要性采样**:
+    - 优化 BSDF 采样策略，根据材质粗糙度匹配光线分布，减少无效散射。
+
+### 优化二阶段：采样序列与分层 (Sampling Strategy)
+1.  **低差异序列 (Low-Discrepancy Sequences)**:
+    - 使用 Sobol 或 Halton 序列替代伪随机数 (PRNG)，确保样本在空间分布更均匀，提升收敛速度（O(1/N) vs O(1/sqrt(N))）。
+2.  **分层采样 (Stratified Sampling)**:
+    - 对像素平面和透镜进行分层抖动采样，进一步减少聚集噪点。
+
+## 6. 工程目录结构
 ```text
 RenderEngine/
 ├── src/                # 源代码
@@ -65,7 +84,7 @@ RenderEngine/
 └── CMakeLists.txt      # 构建配置文件
 ```
 
-## 6. 构建与运行
+## 7. 构建与运行
 ### 依赖准备
 1.  CMake 3.25+
 2.  支持 C++23 的编译器 (MSVC 19.34+, Clang 16+, GCC 13+)

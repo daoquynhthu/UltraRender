@@ -1,0 +1,5 @@
+output/*
+
+build/*
+build_ninja/*
+build_vs4/*
