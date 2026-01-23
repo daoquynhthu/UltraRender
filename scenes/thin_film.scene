@@ -1,0 +1,25 @@
+# Thin Film Interference - Bubble Wand Scene
+width 1980
+height 1600
+camera 0 2 8 0 0 0 35
+
+# Materials
+define_material mat_ground lambertian 0.6 0.6 0.6
+define_material mat_frame metal 1.0 0.85 0.5 0.02 0.17 3.1 2.7 1.9  # Gold frame, low roughness
+define_material mat_film dielectric 1.0 1.0 1.0 0.0 1.0 0.0 thin_film 500 1.33 # Soap bubble: Air-Film(1.33)-Air
+define_material mat_light light 150 150 150
+
+# Ground
+add_entity mesh_cylinder mat_ground 0 -1.5 0 1 1 1 0 0 0 10.0 0.2 64
+
+# Upright Ring (Torus) - Slightly higher
+# major_r=1.2, minor_r=0.08
+add_entity mesh_torus mat_frame 0 0.2 0 1 1 1 90 0 0 1.2 0.08 64 32
+
+# Thin Film inside the ring
+add_entity mesh_cylinder mat_film 0 0.2 0 1 1 1 90 0 0 1.2 0.001 64
+
+# Lights - Brighter and better positions
+add_entity sphere mat_light 0 10 5 2 2 2
+add_entity sphere mat_light 8 8 0 1 1 1
+add_entity sphere mat_light -8 8 0 1 1 1

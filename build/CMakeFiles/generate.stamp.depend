@@ -1,0 +1,33 @@
+# CMake generation dependency list for this directory.
+C:/msys64/mingw64/share/cmake/Modules/CMakeCUDAInformation.cmake
+C:/msys64/mingw64/share/cmake/Modules/CMakeCXXInformation.cmake
+C:/msys64/mingw64/share/cmake/Modules/CMakeCommonLanguageInclude.cmake
+C:/msys64/mingw64/share/cmake/Modules/CMakeGenericSystem.cmake
+C:/msys64/mingw64/share/cmake/Modules/CMakeInitializeConfigs.cmake
+C:/msys64/mingw64/share/cmake/Modules/CMakeLanguageInformation.cmake
+C:/msys64/mingw64/share/cmake/Modules/CMakeRCInformation.cmake
+C:/msys64/mingw64/share/cmake/Modules/CMakeSystemSpecificInformation.cmake
+C:/msys64/mingw64/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake
+C:/msys64/mingw64/share/cmake/Modules/CheckLanguage.cmake
+C:/msys64/mingw64/share/cmake/Modules/Compiler/CMakeCommonCompilerMacros.cmake
+C:/msys64/mingw64/share/cmake/Modules/Compiler/MSVC-CXX.cmake
+C:/msys64/mingw64/share/cmake/Modules/Compiler/MSVC.cmake
+C:/msys64/mingw64/share/cmake/Modules/Compiler/NVIDIA-CUDA.cmake
+C:/msys64/mingw64/share/cmake/Modules/Compiler/NVIDIA.cmake
+C:/msys64/mingw64/share/cmake/Modules/Internal/CMakeCXXLinkerInformation.cmake
+C:/msys64/mingw64/share/cmake/Modules/Internal/CMakeCommonLinkerInformation.cmake
+C:/msys64/mingw64/share/cmake/Modules/Linker/MSVC-CXX.cmake
+C:/msys64/mingw64/share/cmake/Modules/Linker/MSVC.cmake
+C:/msys64/mingw64/share/cmake/Modules/Platform/Linker/Windows-MSVC-CXX.cmake
+C:/msys64/mingw64/share/cmake/Modules/Platform/Linker/Windows-MSVC.cmake
+C:/msys64/mingw64/share/cmake/Modules/Platform/Windows-Initialize.cmake
+C:/msys64/mingw64/share/cmake/Modules/Platform/Windows-MSVC-CXX.cmake
+C:/msys64/mingw64/share/cmake/Modules/Platform/Windows-MSVC.cmake
+C:/msys64/mingw64/share/cmake/Modules/Platform/Windows-NVIDIA-CUDA.cmake
+C:/msys64/mingw64/share/cmake/Modules/Platform/Windows.cmake
+C:/msys64/mingw64/share/cmake/Modules/Platform/WindowsPaths.cmake
+E:/Render Engine/CMakeLists.txt
+E:/Render Engine/build/CMakeFiles/4.1.1/CMakeCUDACompiler.cmake
+E:/Render Engine/build/CMakeFiles/4.1.1/CMakeCXXCompiler.cmake
+E:/Render Engine/build/CMakeFiles/4.1.1/CMakeRCCompiler.cmake
+E:/Render Engine/build/CMakeFiles/4.1.1/CMakeSystem.cmake

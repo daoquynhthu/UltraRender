@@ -1,0 +1,7 @@
+# Resolution Test
+resolution 640 360
+camera pos 0 0 5 lookat 0 0 0 fov 60
+define_material red lambertian 1.0 0.2 0.2
+add_entity sphere red 0 0 0 1 1 1
+define_material light light 10 10 10
+add_entity sphere light 0 10 0 2 2 2

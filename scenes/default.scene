@@ -1,0 +1,27 @@
+# Default Procedural Scene
+resolution 2560 1600
+camera pos 0 3 12 lookat 0 1 0 fov 45
+
+# Materials
+define_material mat_ground lambertian 0.8 0.8 0.8 1.0
+define_material mat_glass  dielectric 1.0 1.0 1.0 0.0 1.5 0.012
+define_material mat_gold   metal      0.8 0.6 0.2 0.1
+define_material mat_diamond dielectric 1.0 1.0 1.0 0.0 2.4 0.044
+define_material mat_light  light      25.0 25.0 25.0
+
+# Entities
+
+# Ground (Quad 1000x1000)
+add_entity quad mat_ground 0 0 0 1000 1 1000
+
+# Glass Sphere (Left, Radius 1.0)
+add_entity sphere mat_glass -2.5 1 -1 2 2 2
+
+# Metal Sphere (Right, Radius 1.0)
+add_entity sphere mat_gold 2.5 1 -1 2 2 2
+
+# Diamond Cube (Center, Size 2.0, Rotated)
+add_entity cube mat_diamond 0 1.5 2 2 2 2 45 45 0
+
+# Light
+add_entity sphere mat_light 10 20 15 16 16 16

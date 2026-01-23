@@ -1,0 +1,1473 @@
+
+---
+events:
+  -
+    kind: "message-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineSystem.cmake:212 (message)"
+      - "CMakeLists.txt:13 (project)"
+    message: |
+      The system is: Windows - 10.0.26100 - AMD64
+  -
+    kind: "find-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCompilerId.cmake:462 (find_file)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCompilerId.cmake:500 (CMAKE_DETERMINE_COMPILER_ID_WRITE)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCompilerId.cmake:53 (__determine_compiler_id_test)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCUDACompiler.cmake:162 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:13 (project)"
+    mode: "file"
+    variable: "src_in"
+    description: "Path to a file."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "CMakeCUDACompilerId.cu.in"
+    candidate_directories:
+      - "C:/msys64/mingw64/share/cmake/Modules/"
+    found: "C:/msys64/mingw64/share/cmake/Modules/CMakeCUDACompilerId.cu.in"
+    search_context:
+      ENV{PATH}:
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\bcc5b7b7\\\\versions\\\\node\\\\current"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\bcc5b7b7\\versions\\node\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Windows\\System32"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\cloudflared\\"
+        - "C:\\Program Files\\dotnet\\"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\e48c161b\\\\versions\\\\node\\\\current"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\e48c161b\\versions\\node\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Windows\\System32"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\cloudflared\\"
+        - "c:\\Users\\Lenovo\\AppData\\Local\\Programs\\Trae\\bin"
+        - "C:\\Users\\Lenovo\\.cargo\\bin"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\intelFPGA\\17.0\\modelsim_ase\\win32aloem"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\Users\\Lenovo\\AppD"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Windsurf\\bin"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Python\\bin"
+        - "C:\\Coq-Platform~8.20~2025.01\\bin"
+        - "C:\\Users\\Lenovo\\.dotnet\\tools"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCompilerId.cmake:53 (__determine_compiler_id_test)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCUDACompiler.cmake:162 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:13 (project)"
+    message: |
+      Compiling the CUDA compiler identification source file "CMakeCUDACompilerId.cu" succeeded.
+      Compiler:  
+      Build flags: 
+      Id flags: --keep;--keep-dir;tmp -v
+      
+      The output was:
+      0
+      适用于 .NET Framework MSBuild 版本 17.14.23+b0019275e
+      生成启动时间为 2026/1/22 16:20:47。
+      
+      节点 1 上的项目“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(默认目标)。
+      PrepareForBuild:
+        正在创建目录“Debug\\”。
+        已启用结构化输出。编译器诊断的格式设置将反映错误层次结构。有关详细信息，请参阅 https://aka.ms/cpp/structured-output。
+        正在创建目录“Debug\\CompilerIdCUDA.tlog\\”。
+      InitializeBuildStatus:
+        正在创建“Debug\\CompilerIdCUDA.tlog\\unsuccessfulbuild”，因为已指定“AlwaysCreate”。
+        正在对“Debug\\CompilerIdCUDA.tlog\\unsuccessfulbuild”执行 Touch 任务。
+      AddCudaCompileDeps:
+        C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe /E /nologo /showIncludes /TP /D__CUDACC__ /D__CUDACC_VER_MAJOR__=13 /D__CUDACC_VER_MINOR__=0 /D_MBCS /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" /IC:\\vcpkg\\installed\\x64-windows\\include /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64" /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" /I. /FIcuda_runtime.h /c "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" 
+      项目“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(1)正在节点 1 上生成“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(1:2) (CudaBuildCore 个目标)。
+      CudaBuildCore:
+        Compiling CUDA source file CMakeCUDACompilerId.cu...
+        正在创建目录“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug”。
+        cmd.exe /C "C:\\Users\\Lenovo\\AppData\\Local\\Temp\\tmp40f4f046a1bd49788d32623f14d51886.cmd"
+        "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe" -gencode=arch=compute_75,code=\\"sm_75,compute_75\\" --use-local-env -ccbin "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64" -x cu   -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" -I"C:\\vcpkg\\installed\\x64-windows\\include" -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include"  -G   --keep-dir CompilerIdCUDA\\x64\\Debug  -maxrregcount=0    --machine 64 --compile -cudart static -v -allow-unsupported-compiler -g  -D_MBCS -Xcompiler "/EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd " -Xcompiler "/FdDebug\\vc143.pdb" -o "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu"
+        
+        E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA>"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe" -gencode=arch=compute_75,code=\\"sm_75,compute_75\\" --use-local-env -ccbin "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64" -x cu   -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" -I"C:\\vcpkg\\installed\\x64-windows\\include" -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include"  -G   --keep-dir CompilerIdCUDA\\x64\\Debug  -maxrregcount=0    --machine 64 --compile -cudart static -v -allow-unsupported-compiler -g  -D_MBCS -Xcompiler "/EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd " -Xcompiler "/FdDebug\\vc143.pdb" -o "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" 
+        #$ _NVVM_BRANCH_=nvvm
+        #$ _SPACE_= 
+        #$ _CUDART_=cudart
+        #$ _HERE_=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin
+        #$ _THERE_=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin
+        #$ _TARGET_SIZE_=
+        #$ _TARGET_DIR_=
+        #$ _TARGET_SIZE_=64
+        #$ _WIN_PLATFORM_=x64
+        #$ TOP=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/..
+        #$ CICC_PATH=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../nvvm/bin
+        #$ NVVMIR_LIBRARY_DIR=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../nvvm/libdevice
+        #$ PATH=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../nvvm/bin;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../lib;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64;;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x86;;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\tools;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\ide;C:\\Program Files (x86)\\HTML Help Workshop;;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\MSBuild\\Current\\Bin\\amd64;C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\;C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\MSBuild\\Current\\Bin;C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\;;c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\bcc5b7b7\\\\versions\\\\node\\\\current;c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current;c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\bcc5b7b7\\versions\\node\\current;c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin;C:\\msys64\\mingw64\\bin;C:\\Windows\\System32\\WindowsPowerShell\\v1.0;C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\;C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR;C:\\Windows\\System32;C:\\Program Files\\Git\\cmd;C:\\Program Files\\cursor\\resources\\app\\bin;C:\\Program Files (x86)\\cloudflared\\;C:\\Program Files\\dotnet\\;c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\e48c161b\\\\versions\\\\node\\\\current;c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current;c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\e48c161b\\versions\\node\\current;c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin;C:\\msys64\\mingw64\\bin;C:\\Windows\\System32\\WindowsPowerShell\\v1.0;C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\;C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR;C:\\Windows\\System32;C:\\Program Files\\Git\\cmd;C:\\Program Files\\cursor\\resources\\app\\bin;C:\\Program Files (x86)\\cloudflared\\;c:\\Users\\Lenovo\\AppData\\Local\\Programs\\Trae\\bin;C:\\Users\\Lenovo\\.cargo\\bin;C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\;C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\;C:\\msys64\\mingw64\\bin;C:\\intelFPGA\\17.0\\modelsim_ase\\win32aloem;C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Lenovo\\AppD;C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Windsurf\\bin;C:\\Users\\Lenovo\\AppData\\Local\\Python\\bin;C:\\Coq-Platform~8.20~2025.01\\bin;C:\\Users\\Lenovo\\.dotnet\\tools;
+        #$ INCLUDES="-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include/cccl"  
+        #$ SYSTEM_INCLUDES= 
+        #$ LIBRARIES=  "/LIBPATH:C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../lib/x64"
+        #$ CUDAFE_FLAGS=--sdk_dir "C:\\Program Files (x86)\\Windows Kits\\10"
+        #$ PTXAS_FLAGS=
+        CMakeCUDACompilerId.cu
+        #$ resource file C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-8.res: [-D__CUDA_ARCH_LIST__=750 -nologo -E -TP -EHsc -D__CUDACC__ -D__NVCC__ -D__CUDACC_DEBUG__  /EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd /FdDebug\\vc143.pdb -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" -I"C:/vcpkg/installed/x64-windows/include" -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include/cccl"      -D "_MBCS" -D__CUDACC_VER_MAJOR__=13 -D__CUDACC_VER_MINOR__=0 -D__CUDACC_VER_BUILD__=88 -D__CUDA_API_VER_MAJOR__=13 -D__CUDA_API_VER_MINOR__=0 -D__NVCC_DIAG_PRAGMA_SUPPORT__=1 -D__CUDACC_DEVICE_ATOMIC_BUILTINS__=1 -FI "cuda_runtime.h" -Zi "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" ]
+        #$ cl.exe -D__NV_NO_HOST_COMPILER_CHECK=1 @"C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-8.res" > "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-6_CMakeCUDACompilerId.cpp4.ii" 
+        CMakeCUDACompilerId.cu
+        #$ erase C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-8.res
+        #$ cudafe++ --ms_c++14 --static-host-stub --device-hidden-visibility --microsoft_version=1944 --msvc_target_version=1944 --compiler_bindir "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/HostX64/x64/../../../../../../.." --display_error_number --orig_src_file_name "E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CMakeCUDACompilerId.cu" --orig_src_path_name "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" --allow_managed --debug_mode --sdk_dir "C:\\Program Files (x86)\\Windows Kits\\10" --m64 --parse_templates --gen_c_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.cpp" --stub_file_name "tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.stub.c" --gen_module_id_file --module_id_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-5_CMakeCUDACompilerId.module_id" "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-6_CMakeCUDACompilerId.cpp4.ii" 
+        #$ resource file C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-10.res: [-D__CUDA_ARCH__=750 -D__CUDA_ARCH_LIST__=750 -nologo -E -TP  -DCUDA_DOUBLE_MATH_FUNCTIONS -EHsc -D__CUDACC__ -D__NVCC__ -D__CUDACC_DEBUG__  /EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd /FdDebug\\vc143.pdb -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" -I"C:/vcpkg/installed/x64-windows/include" -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include/cccl"      -D "_MBCS" -D__CUDACC_VER_MAJOR__=13 -D__CUDACC_VER_MINOR__=0 -D__CUDACC_VER_BUILD__=88 -D__CUDA_API_VER_MAJOR__=13 -D__CUDA_API_VER_MINOR__=0 -D__NVCC_DIAG_PRAGMA_SUPPORT__=1 -D__CUDACC_DEVICE_ATOMIC_BUILTINS__=1 -FI "cuda_runtime.h" -Zi "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" ]
+        #$ cl.exe -D__NV_NO_HOST_COMPILER_CHECK=1 @"C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-10.res" > "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-9_CMakeCUDACompilerId.cpp1.ii" 
+        CMakeCUDACompilerId.cu
+        #$ erase C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-10.res
+        #$ ""%CICC_PATH%\\cicc" --ms_c++14 --static-host-stub --device-hidden-visibility --microsoft_version=1944 --msvc_target_version=1944 --compiler_bindir "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/HostX64/x64/../../../../../../.." --display_error_number --orig_src_file_name "E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CMakeCUDACompilerId.cu" --orig_src_path_name "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" --allow_managed --debug_mode --sdk_dir "C:\\Program Files (x86)\\Windows Kits\\10"  -arch compute_75 -m64 --no-version-ident -ftz=0 -prec_div=1 -prec_sqrt=1 -fmad=1 --include_file_name "tmpxft_000051a4_00000000-4_CMakeCUDACompilerId.fatbin.c" -g -O0 -tused --module_id_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-5_CMakeCUDACompilerId.module_id" --gen_c_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.c" --stub_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.stub.c" --gen_device_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.gpu"  "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-9_CMakeCUDACompilerId.cpp1.ii" -o "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.ptx""
+        #$ ptxas -arch=sm_75 -m64 -g --dont-merge-basicblocks --return-at-end "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.ptx"  -o "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-11_CMakeCUDACompilerId.sm_75.cubin" 
+        #$ fatbinary -64 --ident="E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CMakeCUDACompilerId.cu" --cmdline="-g --dont-merge-basicblocks --return-at-end " --cicc-cmdline="-ftz=0 -prec_div=1 -prec_sqrt=1 -fmad=1 " -g "--image3=kind=elf,sm=75,file=C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-11_CMakeCUDACompilerId.sm_75.cubin" "--image3=kind=ptx,sm=75,file=C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.ptx" --embedded-fatbin="C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-4_CMakeCUDACompilerId.fatbin.c" 
+        #$ erase C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-4_CMakeCUDACompilerId.fatbin
+        #$ resource file C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-12.res: [-D__CUDA_ARCH__=750 -D__CUDA_ARCH_LIST__=750 -nologo -c -TP  -DCUDA_DOUBLE_MATH_FUNCTIONS -EHsc /EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd /FdDebug\\vc143.pdb -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" -I"C:/vcpkg/installed/x64-windows/include" -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include/cccl"     -Zi "C:\\Users\\Lenovo\\AppData\\Local\\Temp\\tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.cpp" ]
+        #$ cl.exe @"C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-12.res" -Fo"E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CompilerIdCUDA/x64/Debug/CMakeCUDACompilerId.cu.obj" 
+        tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.cpp
+        #$ erase C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-12.res
+      已完成生成项目“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(CudaBuildCore 个目标)的操作。
+      VcpkgTripletSelection:
+        Using triplet "x64-windows" from "C:\\vcpkg\\installed\\x64-windows\\"
+        Using normalized configuration "Release"
+      Link:
+        C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\link.exe /ERRORREPORT:QUEUE /OUT:".\\CompilerIdCUDA.exe" /INCREMENTAL:NO /NOLOGO /LIBPATH:"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link" cudart_static.lib "C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib" /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /PDB:".\\CompilerIdCUDA.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:".\\CompilerIdCUDA.lib" /MACHINE:X64 "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj"
+          正在创建库 .\\CompilerIdCUDA.lib 和对象 .\\CompilerIdCUDA.exp
+      LINK : warning LNK4098: 默认库“LIBCMT”与其他库的使用冲突；请使用 /NODEFAULTLIB:library [E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj]
+        CompilerIdCUDA.vcxproj -> E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.exe
+      AppLocalFromInstalled:
+        pwsh.exe -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "Debug\\CompilerIdCUDA.tlog\\CompilerIdCUDA.write.1u.tlog" "Debug\\vcpkg.applocal.log"
+        'pwsh.exe' 不是内部或外部命令，也不是可运行的程序
+        或批处理文件。
+        命令“pwsh.exe -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "Debug\\CompilerIdCUDA.tlog\\CompilerIdCUDA.write.1u.tlog" "Debug\\vcpkg.applocal.log"”已退出，代码为 9009。
+        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "Debug\\CompilerIdCUDA.tlog\\CompilerIdCUDA.write.1u.tlog" "Debug\\vcpkg.applocal.log"
+      PostBuildEvent:
+        echo CMAKE_CUDA_COMPILER=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe
+        :VCEnd
+        CMAKE_CUDA_COMPILER=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe
+      FinalizeBuildStatus:
+        正在删除文件“Debug\\CompilerIdCUDA.tlog\\unsuccessfulbuild”。
+        正在对“Debug\\CompilerIdCUDA.tlog\\CompilerIdCUDA.lastbuildstate”执行 Touch 任务。
+      已完成生成项目“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(默认目标)的操作。
+      
+      已成功生成。
+      
+      “E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(默认目标) (1) ->
+      (Link 目标) -> 
+        LINK : warning LNK4098: 默认库“LIBCMT”与其他库的使用冲突；请使用 /NODEFAULTLIB:library [E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj]
+      
+          1 个警告
+          0 个错误
+      
+      已用时间 00:00:02.86
+      
+      
+      Compilation of the CUDA compiler identification source "CMakeCUDACompilerId.cu" produced "CompilerIdCUDA.exe"
+      
+      Compilation of the CUDA compiler identification source "CMakeCUDACompilerId.cu" produced "CompilerIdCUDA.exp"
+      
+      Compilation of the CUDA compiler identification source "CMakeCUDACompilerId.cu" produced "CompilerIdCUDA.lib"
+      
+      Compilation of the CUDA compiler identification source "CMakeCUDACompilerId.cu" produced "CompilerIdCUDA.vcxproj"
+      
+      The CUDA compiler identification is NVIDIA, found in:
+        E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CompilerIdCUDA.exe
+      The host compiler identification is MSVC
+      
+  -
+    kind: "find-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeFindBinUtils.cmake:37 (find_program)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeFindBinUtils.cmake:65 (__resolve_tool_path)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeFindBinUtils.cmake:103 (__resolve_linker_path)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCUDACompiler.cmake:185 (include)"
+      - "CMakeLists.txt:13 (project)"
+    mode: "program"
+    variable: "_CMAKE_TOOL_WITH_PATH"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "link"
+    candidate_directories:
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/"
+      - "C:/msys64/mingw64/bin/"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/"
+      - "C:/Windows/System32/"
+      - "C:/Program Files/Git/cmd/"
+      - "C:/Program Files/cursor/resources/app/bin/"
+      - "C:/Program Files (x86)/cloudflared/"
+      - "C:/Program Files/dotnet/"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/"
+      - "C:/Users/Lenovo/.cargo/bin/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/"
+      - "C:/Users/Lenovo/AppD/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/"
+      - "C:/Coq-Platform~8.20~2025.01/bin/"
+      - "C:/Users/Lenovo/.dotnet/tools/"
+    searched_directories:
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/link.com"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/link.exe"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/link"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/link.com"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/link.exe"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/link"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/link.com"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/link.exe"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/link"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/link.com"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/link.exe"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/link"
+      - "C:/msys64/mingw64/bin/link.com"
+      - "C:/msys64/mingw64/bin/link.exe"
+      - "C:/msys64/mingw64/bin/link"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/link.com"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/link.exe"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/link"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/link.com"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/link.exe"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/link"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/link.com"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/link.exe"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/link"
+      - "C:/Windows/System32/link.com"
+      - "C:/Windows/System32/link.exe"
+      - "C:/Windows/System32/link"
+      - "C:/Program Files/Git/cmd/link.com"
+      - "C:/Program Files/Git/cmd/link.exe"
+      - "C:/Program Files/Git/cmd/link"
+      - "C:/Program Files/cursor/resources/app/bin/link.com"
+      - "C:/Program Files/cursor/resources/app/bin/link.exe"
+      - "C:/Program Files/cursor/resources/app/bin/link"
+      - "C:/Program Files (x86)/cloudflared/link.com"
+      - "C:/Program Files (x86)/cloudflared/link.exe"
+      - "C:/Program Files (x86)/cloudflared/link"
+      - "C:/Program Files/dotnet/link.com"
+      - "C:/Program Files/dotnet/link.exe"
+      - "C:/Program Files/dotnet/link"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/link.com"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/link.exe"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/link"
+      - "C:/Users/Lenovo/.cargo/bin/link.com"
+      - "C:/Users/Lenovo/.cargo/bin/link.exe"
+      - "C:/Users/Lenovo/.cargo/bin/link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/link"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/link.com"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/link.exe"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/link"
+      - "C:/Users/Lenovo/AppD/link.com"
+      - "C:/Users/Lenovo/AppD/link.exe"
+      - "C:/Users/Lenovo/AppD/link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/link"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/link.com"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/link"
+      - "C:/Coq-Platform~8.20~2025.01/bin/link.com"
+      - "C:/Coq-Platform~8.20~2025.01/bin/link.exe"
+      - "C:/Coq-Platform~8.20~2025.01/bin/link"
+      - "C:/Users/Lenovo/.dotnet/tools/link.com"
+      - "C:/Users/Lenovo/.dotnet/tools/link.exe"
+      - "C:/Users/Lenovo/.dotnet/tools/link"
+    found: false
+    search_context:
+      ENV{PATH}:
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\bcc5b7b7\\\\versions\\\\node\\\\current"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\bcc5b7b7\\versions\\node\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Windows\\System32"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\cloudflared\\"
+        - "C:\\Program Files\\dotnet\\"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\e48c161b\\\\versions\\\\node\\\\current"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\e48c161b\\versions\\node\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Windows\\System32"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\cloudflared\\"
+        - "c:\\Users\\Lenovo\\AppData\\Local\\Programs\\Trae\\bin"
+        - "C:\\Users\\Lenovo\\.cargo\\bin"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\intelFPGA\\17.0\\modelsim_ase\\win32aloem"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\Users\\Lenovo\\AppD"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Windsurf\\bin"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Python\\bin"
+        - "C:\\Coq-Platform~8.20~2025.01\\bin"
+        - "C:\\Users\\Lenovo\\.dotnet\\tools"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeFindBinUtils.cmake:37 (find_program)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeFindBinUtils.cmake:65 (__resolve_tool_path)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeFindBinUtils.cmake:104 (__resolve_linker_path)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCUDACompiler.cmake:185 (include)"
+      - "CMakeLists.txt:13 (project)"
+    mode: "program"
+    variable: "_CMAKE_TOOL_WITH_PATH"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "lld-link"
+    candidate_directories:
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/"
+      - "C:/msys64/mingw64/bin/"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/"
+      - "C:/Windows/System32/"
+      - "C:/Program Files/Git/cmd/"
+      - "C:/Program Files/cursor/resources/app/bin/"
+      - "C:/Program Files (x86)/cloudflared/"
+      - "C:/Program Files/dotnet/"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/"
+      - "C:/Users/Lenovo/.cargo/bin/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/"
+      - "C:/Users/Lenovo/AppD/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/"
+      - "C:/Coq-Platform~8.20~2025.01/bin/"
+      - "C:/Users/Lenovo/.dotnet/tools/"
+    searched_directories:
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/lld-link.com"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/lld-link.exe"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/lld-link"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/lld-link.com"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/lld-link.exe"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/lld-link"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/lld-link.com"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/lld-link.exe"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/lld-link"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/lld-link.com"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/lld-link.exe"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/lld-link"
+      - "C:/msys64/mingw64/bin/lld-link.com"
+      - "C:/msys64/mingw64/bin/lld-link.exe"
+      - "C:/msys64/mingw64/bin/lld-link"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/lld-link.com"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/lld-link.exe"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/lld-link"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/lld-link.com"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/lld-link.exe"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/lld-link"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/lld-link.com"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/lld-link.exe"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/lld-link"
+      - "C:/Windows/System32/lld-link.com"
+      - "C:/Windows/System32/lld-link.exe"
+      - "C:/Windows/System32/lld-link"
+      - "C:/Program Files/Git/cmd/lld-link.com"
+      - "C:/Program Files/Git/cmd/lld-link.exe"
+      - "C:/Program Files/Git/cmd/lld-link"
+      - "C:/Program Files/cursor/resources/app/bin/lld-link.com"
+      - "C:/Program Files/cursor/resources/app/bin/lld-link.exe"
+      - "C:/Program Files/cursor/resources/app/bin/lld-link"
+      - "C:/Program Files (x86)/cloudflared/lld-link.com"
+      - "C:/Program Files (x86)/cloudflared/lld-link.exe"
+      - "C:/Program Files (x86)/cloudflared/lld-link"
+      - "C:/Program Files/dotnet/lld-link.com"
+      - "C:/Program Files/dotnet/lld-link.exe"
+      - "C:/Program Files/dotnet/lld-link"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/lld-link.com"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/lld-link.exe"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/lld-link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/lld-link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/lld-link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/lld-link"
+      - "C:/Users/Lenovo/.cargo/bin/lld-link.com"
+      - "C:/Users/Lenovo/.cargo/bin/lld-link.exe"
+      - "C:/Users/Lenovo/.cargo/bin/lld-link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/lld-link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/lld-link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/lld-link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/lld-link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/lld-link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/lld-link"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/lld-link.com"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/lld-link.exe"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/lld-link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/lld-link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/lld-link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/lld-link"
+      - "C:/Users/Lenovo/AppD/lld-link.com"
+      - "C:/Users/Lenovo/AppD/lld-link.exe"
+      - "C:/Users/Lenovo/AppD/lld-link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/lld-link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/lld-link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/lld-link"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/lld-link.com"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/lld-link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/lld-link"
+      - "C:/Coq-Platform~8.20~2025.01/bin/lld-link.com"
+      - "C:/Coq-Platform~8.20~2025.01/bin/lld-link.exe"
+      - "C:/Coq-Platform~8.20~2025.01/bin/lld-link"
+      - "C:/Users/Lenovo/.dotnet/tools/lld-link.com"
+      - "C:/Users/Lenovo/.dotnet/tools/lld-link.exe"
+      - "C:/Users/Lenovo/.dotnet/tools/lld-link"
+    found: false
+    search_context:
+      ENV{PATH}:
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\bcc5b7b7\\\\versions\\\\node\\\\current"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\bcc5b7b7\\versions\\node\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Windows\\System32"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\cloudflared\\"
+        - "C:\\Program Files\\dotnet\\"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\e48c161b\\\\versions\\\\node\\\\current"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\e48c161b\\versions\\node\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Windows\\System32"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\cloudflared\\"
+        - "c:\\Users\\Lenovo\\AppData\\Local\\Programs\\Trae\\bin"
+        - "C:\\Users\\Lenovo\\.cargo\\bin"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\intelFPGA\\17.0\\modelsim_ase\\win32aloem"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\Users\\Lenovo\\AppD"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Windsurf\\bin"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Python\\bin"
+        - "C:\\Coq-Platform~8.20~2025.01\\bin"
+        - "C:\\Users\\Lenovo\\.dotnet\\tools"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeFindBinUtils.cmake:238 (find_program)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCUDACompiler.cmake:185 (include)"
+      - "CMakeLists.txt:13 (project)"
+    mode: "program"
+    variable: "CMAKE_LINKER"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "link"
+    candidate_directories:
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/"
+      - "C:/msys64/mingw64/bin/"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/"
+      - "C:/Windows/System32/"
+      - "C:/Program Files/Git/cmd/"
+      - "C:/Program Files/cursor/resources/app/bin/"
+      - "C:/Program Files (x86)/cloudflared/"
+      - "C:/Program Files/dotnet/"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/"
+      - "C:/Users/Lenovo/.cargo/bin/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/"
+      - "C:/Users/Lenovo/AppD/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/"
+      - "C:/Coq-Platform~8.20~2025.01/bin/"
+      - "C:/Users/Lenovo/.dotnet/tools/"
+    searched_directories:
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/link.com"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/link.exe"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/link"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/link.com"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/link.exe"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/link"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/link.com"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/link.exe"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/link"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/link.com"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/link.exe"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/link"
+      - "C:/msys64/mingw64/bin/link.com"
+      - "C:/msys64/mingw64/bin/link.exe"
+      - "C:/msys64/mingw64/bin/link"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/link.com"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/link.exe"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/link"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/link.com"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/link.exe"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/link"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/link.com"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/link.exe"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/link"
+      - "C:/Windows/System32/link.com"
+      - "C:/Windows/System32/link.exe"
+      - "C:/Windows/System32/link"
+      - "C:/Program Files/Git/cmd/link.com"
+      - "C:/Program Files/Git/cmd/link.exe"
+      - "C:/Program Files/Git/cmd/link"
+      - "C:/Program Files/cursor/resources/app/bin/link.com"
+      - "C:/Program Files/cursor/resources/app/bin/link.exe"
+      - "C:/Program Files/cursor/resources/app/bin/link"
+      - "C:/Program Files (x86)/cloudflared/link.com"
+      - "C:/Program Files (x86)/cloudflared/link.exe"
+      - "C:/Program Files (x86)/cloudflared/link"
+      - "C:/Program Files/dotnet/link.com"
+      - "C:/Program Files/dotnet/link.exe"
+      - "C:/Program Files/dotnet/link"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/link.com"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/link.exe"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/link"
+      - "C:/Users/Lenovo/.cargo/bin/link.com"
+      - "C:/Users/Lenovo/.cargo/bin/link.exe"
+      - "C:/Users/Lenovo/.cargo/bin/link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/link"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/link.com"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/link.exe"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/link"
+      - "C:/Users/Lenovo/AppD/link.com"
+      - "C:/Users/Lenovo/AppD/link.exe"
+      - "C:/Users/Lenovo/AppD/link"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/link.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/link"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/link.com"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/link.exe"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/link"
+      - "C:/Coq-Platform~8.20~2025.01/bin/link.com"
+      - "C:/Coq-Platform~8.20~2025.01/bin/link.exe"
+      - "C:/Coq-Platform~8.20~2025.01/bin/link"
+      - "C:/Users/Lenovo/.dotnet/tools/link.com"
+      - "C:/Users/Lenovo/.dotnet/tools/link.exe"
+      - "C:/Users/Lenovo/.dotnet/tools/link"
+    found: false
+    search_context:
+      ENV{PATH}:
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\bcc5b7b7\\\\versions\\\\node\\\\current"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\bcc5b7b7\\versions\\node\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Windows\\System32"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\cloudflared\\"
+        - "C:\\Program Files\\dotnet\\"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\e48c161b\\\\versions\\\\node\\\\current"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\e48c161b\\versions\\node\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Windows\\System32"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\cloudflared\\"
+        - "c:\\Users\\Lenovo\\AppData\\Local\\Programs\\Trae\\bin"
+        - "C:\\Users\\Lenovo\\.cargo\\bin"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\intelFPGA\\17.0\\modelsim_ase\\win32aloem"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\Users\\Lenovo\\AppD"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Windsurf\\bin"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Python\\bin"
+        - "C:\\Coq-Platform~8.20~2025.01\\bin"
+        - "C:\\Users\\Lenovo\\.dotnet\\tools"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeFindBinUtils.cmake:238 (find_program)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCUDACompiler.cmake:185 (include)"
+      - "CMakeLists.txt:13 (project)"
+    mode: "program"
+    variable: "CMAKE_MT"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "mt"
+    candidate_directories:
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/"
+      - "C:/msys64/mingw64/bin/"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/"
+      - "C:/Windows/System32/"
+      - "C:/Program Files/Git/cmd/"
+      - "C:/Program Files/cursor/resources/app/bin/"
+      - "C:/Program Files (x86)/cloudflared/"
+      - "C:/Program Files/dotnet/"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/"
+      - "C:/Users/Lenovo/.cargo/bin/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/"
+      - "C:/Users/Lenovo/AppD/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/"
+      - "C:/Coq-Platform~8.20~2025.01/bin/"
+      - "C:/Users/Lenovo/.dotnet/tools/"
+    searched_directories:
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/mt.com"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/mt.exe"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/mt"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/mt.com"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/mt.exe"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/mt"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/mt.com"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/mt.exe"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/mt"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/mt.com"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/mt.exe"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/mt"
+      - "C:/msys64/mingw64/bin/mt.com"
+      - "C:/msys64/mingw64/bin/mt.exe"
+      - "C:/msys64/mingw64/bin/mt"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/mt.com"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/mt.exe"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/mt"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/mt.com"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/mt.exe"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/mt"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/mt.com"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/mt.exe"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/mt"
+      - "C:/Windows/System32/mt.com"
+      - "C:/Windows/System32/mt.exe"
+      - "C:/Windows/System32/mt"
+      - "C:/Program Files/Git/cmd/mt.com"
+      - "C:/Program Files/Git/cmd/mt.exe"
+      - "C:/Program Files/Git/cmd/mt"
+      - "C:/Program Files/cursor/resources/app/bin/mt.com"
+      - "C:/Program Files/cursor/resources/app/bin/mt.exe"
+      - "C:/Program Files/cursor/resources/app/bin/mt"
+      - "C:/Program Files (x86)/cloudflared/mt.com"
+      - "C:/Program Files (x86)/cloudflared/mt.exe"
+      - "C:/Program Files (x86)/cloudflared/mt"
+      - "C:/Program Files/dotnet/mt.com"
+      - "C:/Program Files/dotnet/mt.exe"
+      - "C:/Program Files/dotnet/mt"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/mt.com"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/mt.exe"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/mt"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/mt.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/mt.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/mt"
+      - "C:/Users/Lenovo/.cargo/bin/mt.com"
+      - "C:/Users/Lenovo/.cargo/bin/mt.exe"
+      - "C:/Users/Lenovo/.cargo/bin/mt"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/mt.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/mt.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/mt"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/mt.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/mt.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/mt"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/mt.com"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/mt.exe"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/mt"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/mt.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/mt.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/mt"
+      - "C:/Users/Lenovo/AppD/mt.com"
+      - "C:/Users/Lenovo/AppD/mt.exe"
+      - "C:/Users/Lenovo/AppD/mt"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/mt.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/mt.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/mt"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/mt.com"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/mt.exe"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/mt"
+      - "C:/Coq-Platform~8.20~2025.01/bin/mt.com"
+      - "C:/Coq-Platform~8.20~2025.01/bin/mt.exe"
+      - "C:/Coq-Platform~8.20~2025.01/bin/mt"
+      - "C:/Users/Lenovo/.dotnet/tools/mt.com"
+      - "C:/Users/Lenovo/.dotnet/tools/mt.exe"
+      - "C:/Users/Lenovo/.dotnet/tools/mt"
+    found: false
+    search_context:
+      ENV{PATH}:
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\bcc5b7b7\\\\versions\\\\node\\\\current"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\bcc5b7b7\\versions\\node\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Windows\\System32"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\cloudflared\\"
+        - "C:\\Program Files\\dotnet\\"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\e48c161b\\\\versions\\\\node\\\\current"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\e48c161b\\versions\\node\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Windows\\System32"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\cloudflared\\"
+        - "c:\\Users\\Lenovo\\AppData\\Local\\Programs\\Trae\\bin"
+        - "C:\\Users\\Lenovo\\.cargo\\bin"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\intelFPGA\\17.0\\modelsim_ase\\win32aloem"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\Users\\Lenovo\\AppD"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Windsurf\\bin"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Python\\bin"
+        - "C:\\Coq-Platform~8.20~2025.01\\bin"
+        - "C:\\Users\\Lenovo\\.dotnet\\tools"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeFindBinUtils.cmake:238 (find_program)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCUDACompiler.cmake:185 (include)"
+      - "CMakeLists.txt:13 (project)"
+    mode: "program"
+    variable: "CMAKE_AR"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "lib"
+    candidate_directories:
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/"
+      - "C:/msys64/mingw64/bin/"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/"
+      - "C:/Windows/System32/"
+      - "C:/Program Files/Git/cmd/"
+      - "C:/Program Files/cursor/resources/app/bin/"
+      - "C:/Program Files (x86)/cloudflared/"
+      - "C:/Program Files/dotnet/"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/"
+      - "C:/Users/Lenovo/.cargo/bin/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/"
+      - "C:/Users/Lenovo/AppD/"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/"
+      - "C:/Coq-Platform~8.20~2025.01/bin/"
+      - "C:/Users/Lenovo/.dotnet/tools/"
+    searched_directories:
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/lib.com"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/lib.exe"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/bcc5b7b7/versions/node/current/lib"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/lib.com"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/lib.exe"
+      - "C:/Users/Lenovo/.trae/sdks/versions/node/current/lib"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/lib.com"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/lib.exe"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/lib"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/lib.com"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/lib.exe"
+      - "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/lib"
+      - "C:/msys64/mingw64/bin/lib.com"
+      - "C:/msys64/mingw64/bin/lib.exe"
+      - "C:/msys64/mingw64/bin/lib"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/lib.com"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/lib.exe"
+      - "C:/Windows/System32/WindowsPowerShell/v1.0/lib"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/lib.com"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/lib.exe"
+      - "C:/Program Files/NVIDIA Corporation/Nsight Compute 2025.3.1/lib"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/lib.com"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/lib.exe"
+      - "C:/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR/lib"
+      - "C:/Windows/System32/lib.com"
+      - "C:/Windows/System32/lib.exe"
+      - "C:/Windows/System32/lib"
+      - "C:/Program Files/Git/cmd/lib.com"
+      - "C:/Program Files/Git/cmd/lib.exe"
+      - "C:/Program Files/Git/cmd/lib"
+      - "C:/Program Files/cursor/resources/app/bin/lib.com"
+      - "C:/Program Files/cursor/resources/app/bin/lib.exe"
+      - "C:/Program Files/cursor/resources/app/bin/lib"
+      - "C:/Program Files (x86)/cloudflared/lib.com"
+      - "C:/Program Files (x86)/cloudflared/lib.exe"
+      - "C:/Program Files (x86)/cloudflared/lib"
+      - "C:/Program Files/dotnet/lib.com"
+      - "C:/Program Files/dotnet/lib.exe"
+      - "C:/Program Files/dotnet/lib"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/lib.com"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/lib.exe"
+      - "C:/Users/Lenovo/.trae/sdks/workspaces/e48c161b/versions/node/current/lib"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/lib.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/lib.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Trae/bin/lib"
+      - "C:/Users/Lenovo/.cargo/bin/lib.com"
+      - "C:/Users/Lenovo/.cargo/bin/lib.exe"
+      - "C:/Users/Lenovo/.cargo/bin/lib"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/lib.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/lib.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/Scripts/lib"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/lib.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/lib.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Python/Python314/lib"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/lib.com"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/lib.exe"
+      - "C:/intelFPGA/17.0/modelsim_ase/win32aloem/lib"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/lib.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/lib.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Microsoft VS Code/bin/lib"
+      - "C:/Users/Lenovo/AppD/lib.com"
+      - "C:/Users/Lenovo/AppD/lib.exe"
+      - "C:/Users/Lenovo/AppD/lib"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/lib.com"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/lib.exe"
+      - "C:/Users/Lenovo/AppData/Local/Programs/Windsurf/bin/lib"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/lib.com"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/lib.exe"
+      - "C:/Users/Lenovo/AppData/Local/Python/bin/lib"
+      - "C:/Coq-Platform~8.20~2025.01/bin/lib.com"
+      - "C:/Coq-Platform~8.20~2025.01/bin/lib.exe"
+      - "C:/Coq-Platform~8.20~2025.01/bin/lib"
+      - "C:/Users/Lenovo/.dotnet/tools/lib.com"
+      - "C:/Users/Lenovo/.dotnet/tools/lib.exe"
+      - "C:/Users/Lenovo/.dotnet/tools/lib"
+    found: false
+    search_context:
+      ENV{PATH}:
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\bcc5b7b7\\\\versions\\\\node\\\\current"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\bcc5b7b7\\versions\\node\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Windows\\System32"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\cloudflared\\"
+        - "C:\\Program Files\\dotnet\\"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\e48c161b\\\\versions\\\\node\\\\current"
+        - "c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\e48c161b\\versions\\node\\current"
+        - "c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Windows\\System32"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\cloudflared\\"
+        - "c:\\Users\\Lenovo\\AppData\\Local\\Programs\\Trae\\bin"
+        - "C:\\Users\\Lenovo\\.cargo\\bin"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\intelFPGA\\17.0\\modelsim_ase\\win32aloem"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\Users\\Lenovo\\AppD"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Windsurf\\bin"
+        - "C:\\Users\\Lenovo\\AppData\\Local\\Python\\bin"
+        - "C:\\Coq-Platform~8.20~2025.01\\bin"
+        - "C:\\Users\\Lenovo\\.dotnet\\tools"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/Internal/CMakeNVCCParseImplicitInfo.cmake:136 (message)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCUDACompiler.cmake:294 (cmake_nvcc_parse_implicit_info)"
+      - "CMakeLists.txt:13 (project)"
+    message: |
+      Parsed CUDA nvcc implicit link information:
+        found 'PATH=' string: [C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../nvvm/bin;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../lib;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64;;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x86;;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\tools;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\ide;C:\\Program Files (x86)\\HTML Help Workshop;;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\MSBuild\\Current\\Bin\\amd64;C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\;C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\MSBuild\\Current\\Bin;C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\;;c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\bcc5b7b7\\\\versions\\\\node\\\\current;c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current;c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\bcc5b7b7\\versions\\node\\current;c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin;C:\\msys64\\mingw64\\bin;C:\\Windows\\System32\\WindowsPowerShell\\v1.0;C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\;C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR;C:\\Windows\\System32;C:\\Program Files\\Git\\cmd;C:\\Program Files\\cursor\\resources\\app\\bin;C:\\Program Files (x86)\\cloudflared\\;C:\\Program Files\\dotnet\\;c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\e48c161b\\\\versions\\\\node\\\\current;c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current;c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\e48c161b\\versions\\node\\current;c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin;C:\\msys64\\mingw64\\bin;C:\\Windows\\System32\\WindowsPowerShell\\v1.0;C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\;C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR;C:\\Windows\\System32;C:\\Program Files\\Git\\cmd;C:\\Program Files\\cursor\\resources\\app\\bin;C:\\Program Files (x86)\\cloudflared\\;c:\\Users\\Lenovo\\AppData\\Local\\Programs\\Trae\\bin;C:\\Users\\Lenovo\\.cargo\\bin;C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\;C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\;C:\\msys64\\mingw64\\bin;C:\\intelFPGA\\17.0\\modelsim_ase\\win32aloem;C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Lenovo\\AppD;C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Windsurf\\bin;C:\\Users\\Lenovo\\AppData\\Local\\Python\\bin;C:\\Coq-Platform~8.20~2025.01\\bin;C:\\Users\\Lenovo\\.dotnet\\tools;]
+        found 'LIBRARIES=' string: ["/LIBPATH:C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../lib/x64"]
+        found 'INCLUDES=' string: ["-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include/cccl"  ]
+        found 'SYSTEM_INCLUDES=' string: []
+        considering line: [适用于 .NET Framework MSBuild 版本 17.14.23+b0019275e]
+        considering line: [生成启动时间为 2026/1/22 16:20:47。]
+        considering line: [节点 1 上的项目“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(默认目标)。]
+        considering line: [PrepareForBuild:]
+        considering line: [  正在创建目录“Debug\\”。]
+        considering line: [  已启用结构化输出。编译器诊断的格式设置将反映错误层次结构。有关详细信息，请参阅 https://aka.ms/cpp/structured-output。]
+        considering line: [  正在创建目录“Debug\\CompilerIdCUDA.tlog\\”。]
+        considering line: [InitializeBuildStatus:]
+        considering line: [  正在创建“Debug\\CompilerIdCUDA.tlog\\unsuccessfulbuild”，因为已指定“AlwaysCreate”。]
+        considering line: [  正在对“Debug\\CompilerIdCUDA.tlog\\unsuccessfulbuild”执行 Touch 任务。]
+        considering line: [AddCudaCompileDeps:]
+        considering line: [  C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe /E /nologo /showIncludes /TP /D__CUDACC__ /D__CUDACC_VER_MAJOR__=13 /D__CUDACC_VER_MINOR__=0 /D_MBCS /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" /IC:\\vcpkg\\installed\\x64-windows\\include /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64" /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" /I. /FIcuda_runtime.h /c "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" ]
+        considering line: [项目“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(1)正在节点 1 上生成“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(1:2) (CudaBuildCore 个目标)。]
+        considering line: [CudaBuildCore:]
+        considering line: [  Compiling CUDA source file CMakeCUDACompilerId.cu...]
+        considering line: [  正在创建目录“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug”。]
+        considering line: [  cmd.exe /C "C:\\Users\\Lenovo\\AppData\\Local\\Temp\\tmp40f4f046a1bd49788d32623f14d51886.cmd"]
+        considering line: [  "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe" -gencode=arch=compute_75,code=\\"sm_75,compute_75\\" --use-local-env -ccbin "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64" -x cu   -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" -I"C:\\vcpkg\\installed\\x64-windows\\include" -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include"  -G   --keep-dir CompilerIdCUDA\\x64\\Debug  -maxrregcount=0    --machine 64 --compile -cudart static -v -allow-unsupported-compiler -g  -D_MBCS -Xcompiler "/EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd " -Xcompiler "/FdDebug\\vc143.pdb" -o "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu"]
+        considering line: [  ]
+        considering line: [  E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA>"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe" -gencode=arch=compute_75,code=\\"sm_75,compute_75\\" --use-local-env -ccbin "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64" -x cu   -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" -I"C:\\vcpkg\\installed\\x64-windows\\include" -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include"  -G   --keep-dir CompilerIdCUDA\\x64\\Debug  -maxrregcount=0    --machine 64 --compile -cudart static -v -allow-unsupported-compiler -g  -D_MBCS -Xcompiler "/EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd " -Xcompiler "/FdDebug\\vc143.pdb" -o "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" ]
+        considering line: [                                      CMakeCUDACompilerId.cu]
+        considering line: [  #$ resource file C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-8.res: [-D__CUDA_ARCH_LIST__=750 -nologo -E -TP -EHsc -D__CUDACC__ -D__NVCC__ -D__CUDACC_DEBUG__  /EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd /FdDebug\\vc143.pdb -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" -I"C:/vcpkg/installed/x64-windows/include" -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include/cccl"      -D "_MBCS" -D__CUDACC_VER_MAJOR__=13 -D__CUDACC_VER_MINOR__=0 -D__CUDACC_VER_BUILD__=88 -D__CUDA_API_VER_MAJOR__=13 -D__CUDA_API_VER_MINOR__=0 -D__NVCC_DIAG_PRAGMA_SUPPORT__=1 -D__CUDACC_DEVICE_ATOMIC_BUILTINS__=1 -FI "cuda_runtime.h" -Zi "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" ]]
+        considering line: [  #$ cl.exe -D__NV_NO_HOST_COMPILER_CHECK=1 @"C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-8.res" > "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-6_CMakeCUDACompilerId.cpp4.ii" ]
+        considering line: [  CMakeCUDACompilerId.cu]
+        considering line: [  #$ erase C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-8.res]
+        considering line: [  #$ cudafe++ --ms_c++14 --static-host-stub --device-hidden-visibility --microsoft_version=1944 --msvc_target_version=1944 --compiler_bindir "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/HostX64/x64/../../../../../../.." --display_error_number --orig_src_file_name "E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CMakeCUDACompilerId.cu" --orig_src_path_name "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" --allow_managed --debug_mode --sdk_dir "C:\\Program Files (x86)\\Windows Kits\\10" --m64 --parse_templates --gen_c_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.cpp" --stub_file_name "tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.stub.c" --gen_module_id_file --module_id_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-5_CMakeCUDACompilerId.module_id" "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-6_CMakeCUDACompilerId.cpp4.ii" ]
+        considering line: [  #$ resource file C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-10.res: [-D__CUDA_ARCH__=750 -D__CUDA_ARCH_LIST__=750 -nologo -E -TP  -DCUDA_DOUBLE_MATH_FUNCTIONS -EHsc -D__CUDACC__ -D__NVCC__ -D__CUDACC_DEBUG__  /EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd /FdDebug\\vc143.pdb -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" -I"C:/vcpkg/installed/x64-windows/include" -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include/cccl"      -D "_MBCS" -D__CUDACC_VER_MAJOR__=13 -D__CUDACC_VER_MINOR__=0 -D__CUDACC_VER_BUILD__=88 -D__CUDA_API_VER_MAJOR__=13 -D__CUDA_API_VER_MINOR__=0 -D__NVCC_DIAG_PRAGMA_SUPPORT__=1 -D__CUDACC_DEVICE_ATOMIC_BUILTINS__=1 -FI "cuda_runtime.h" -Zi "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" ]]
+        considering line: [  #$ cl.exe -D__NV_NO_HOST_COMPILER_CHECK=1 @"C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-10.res" > "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-9_CMakeCUDACompilerId.cpp1.ii" ]
+        considering line: [  CMakeCUDACompilerId.cu]
+        considering line: [  #$ erase C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-10.res]
+        considering line: [  #$ ""%CICC_PATH%\\cicc" --ms_c++14 --static-host-stub --device-hidden-visibility --microsoft_version=1944 --msvc_target_version=1944 --compiler_bindir "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/HostX64/x64/../../../../../../.." --display_error_number --orig_src_file_name "E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CMakeCUDACompilerId.cu" --orig_src_path_name "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" --allow_managed --debug_mode --sdk_dir "C:\\Program Files (x86)\\Windows Kits\\10"  -arch compute_75 -m64 --no-version-ident -ftz=0 -prec_div=1 -prec_sqrt=1 -fmad=1 --include_file_name "tmpxft_000051a4_00000000-4_CMakeCUDACompilerId.fatbin.c" -g -O0 -tused --module_id_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-5_CMakeCUDACompilerId.module_id" --gen_c_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.c" --stub_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.stub.c" --gen_device_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.gpu"  "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-9_CMakeCUDACompilerId.cpp1.ii" -o "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.ptx""]
+        considering line: [  #$ ptxas -arch=sm_75 -m64 -g --dont-merge-basicblocks --return-at-end "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.ptx"  -o "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-11_CMakeCUDACompilerId.sm_75.cubin" ]
+        considering line: [  #$ fatbinary -64 --ident="E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CMakeCUDACompilerId.cu" --cmdline="-g --dont-merge-basicblocks --return-at-end " --cicc-cmdline="-ftz=0 -prec_div=1 -prec_sqrt=1 -fmad=1 " -g "--image3=kind=elf,sm=75,file=C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-11_CMakeCUDACompilerId.sm_75.cubin" "--image3=kind=ptx,sm=75,file=C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.ptx" --embedded-fatbin="C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-4_CMakeCUDACompilerId.fatbin.c" ]
+        considering line: [  #$ erase C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-4_CMakeCUDACompilerId.fatbin]
+        considering line: [  #$ resource file C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-12.res: [-D__CUDA_ARCH__=750 -D__CUDA_ARCH_LIST__=750 -nologo -c -TP  -DCUDA_DOUBLE_MATH_FUNCTIONS -EHsc /EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd /FdDebug\\vc143.pdb -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" -I"C:/vcpkg/installed/x64-windows/include" -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include/cccl"     -Zi "C:\\Users\\Lenovo\\AppData\\Local\\Temp\\tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.cpp" ]]
+        considering line: [  #$ cl.exe @"C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-12.res" -Fo"E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CompilerIdCUDA/x64/Debug/CMakeCUDACompilerId.cu.obj" ]
+        considering line: [  tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.cpp]
+        considering line: [  #$ erase C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-12.res]
+        considering line: [已完成生成项目“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(CudaBuildCore 个目标)的操作。]
+        considering line: [VcpkgTripletSelection:]
+        considering line: [  Using triplet "x64-windows" from "C:\\vcpkg\\installed\\x64-windows\\"]
+        considering line: [  Using normalized configuration "Release"]
+        considering line: [Link:]
+        considering line: [  C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\link.exe /ERRORREPORT:QUEUE /OUT:".\\CompilerIdCUDA.exe" /INCREMENTAL:NO /NOLOGO /LIBPATH:"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link" cudart_static.lib "C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib" /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /PDB:".\\CompilerIdCUDA.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:".\\CompilerIdCUDA.lib" /MACHINE:X64 "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj"]
+          extracted link line: [link.exe /ERRORREPORT:QUEUE /OUT:".\\CompilerIdCUDA.exe" /INCREMENTAL:NO /NOLOGO /LIBPATH:"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link" cudart_static.lib "C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib" /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /PDB:".\\CompilerIdCUDA.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:".\\CompilerIdCUDA.lib" /MACHINE:X64 "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj"]
+        considering line: [    正在创建库 .\\CompilerIdCUDA.lib 和对象 .\\CompilerIdCUDA.exp]
+        considering line: [LINK : warning LNK4098: 默认库“LIBCMT”与其他库的使用冲突；请使用 /NODEFAULTLIB:library [E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj]]
+        considering line: [  CompilerIdCUDA.vcxproj -> E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.exe]
+        considering line: [AppLocalFromInstalled:]
+        considering line: [  pwsh.exe -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "Debug\\CompilerIdCUDA.tlog\\CompilerIdCUDA.write.1u.tlog" "Debug\\vcpkg.applocal.log"]
+        considering line: [  'pwsh.exe' 不是内部或外部命令，也不是可运行的程序]
+        considering line: [  或批处理文件。]
+        considering line: [  命令“pwsh.exe -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "Debug\\CompilerIdCUDA.tlog\\CompilerIdCUDA.write.1u.tlog" "Debug\\vcpkg.applocal.log"”已退出，代码为 9009。]
+        considering line: [  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "Debug\\CompilerIdCUDA.tlog\\CompilerIdCUDA.write.1u.tlog" "Debug\\vcpkg.applocal.log"]
+        considering line: [PostBuildEvent:]
+        considering line: [  echo CMAKE_CUDA_COMPILER=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe]
+        considering line: [  :VCEnd]
+        considering line: [  CMAKE_CUDA_COMPILER=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe]
+        considering line: [FinalizeBuildStatus:]
+        considering line: [  正在删除文件“Debug\\CompilerIdCUDA.tlog\\unsuccessfulbuild”。]
+        considering line: [  正在对“Debug\\CompilerIdCUDA.tlog\\CompilerIdCUDA.lastbuildstate”执行 Touch 任务。]
+        considering line: [已完成生成项目“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(默认目标)的操作。]
+        considering line: [已成功生成。]
+        considering line: [“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(默认目标) (1) ->]
+        considering line: [(Link 目标) -> ]
+        considering line: [  LINK : warning LNK4098: 默认库“LIBCMT”与其他库的使用冲突；请使用 /NODEFAULTLIB:library [E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj]]
+        considering line: [    1 个警告]
+        considering line: [    0 个错误]
+        considering line: [已用时间 00:00:02.86]
+        considering line: []
+      
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|link\\.exe|lld-link(\\.exe)?|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        link line: [cuda-fake-ld link.exe /ERRORREPORT:QUEUE /OUT:".\\CompilerIdCUDA.exe" /INCREMENTAL:NO /NOLOGO /LIBPATH:"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link" cudart_static.lib "C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib" /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /PDB:".\\CompilerIdCUDA.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:".\\CompilerIdCUDA.lib" /MACHINE:X64 "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj"]
+          arg [cuda-fake-ld] ==> ignore
+          arg [link.exe] ==> ignore
+          arg [/ERRORREPORT:QUEUE] ==> ignore
+          arg [/OUT:.\\CompilerIdCUDA.exe] ==> ignore
+          arg [/INCREMENTAL:NO] ==> ignore
+          arg [/NOLOGO] ==> ignore
+          arg [/LIBPATH:C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64] ==> dir [C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64]
+          arg [/LIBPATH:C:\\vcpkg\\installed\\x64-windows\\lib] ==> dir [C:\\vcpkg\\installed\\x64-windows\\lib]
+          arg [/LIBPATH:C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link] ==> dir [C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link]
+          arg [cudart_static.lib] ==> lib [cudart_static.lib]
+          arg [C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib] ==> lib [C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib]
+          arg [/MANIFEST] ==> ignore
+          arg [/MANIFESTUAC:level='asInvoker' uiAccess='false'] ==> ignore
+          arg [/manifest:embed] ==> ignore
+          arg [/PDB:.\\CompilerIdCUDA.pdb] ==> ignore
+          arg [/SUBSYSTEM:CONSOLE] ==> ignore
+          arg [/TLBID:1] ==> ignore
+          arg [/DYNAMICBASE] ==> ignore
+          arg [/NXCOMPAT] ==> ignore
+          arg [/IMPLIB:.\\CompilerIdCUDA.lib] ==> ignore MSVC link option
+          arg [/MACHINE:X64] ==> ignore
+          arg [E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj] ==> ignore
+        collapse lib [C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib] ==> [C:/vcpkg/installed/x64-windows/lib/*.lib]
+        collapse library dir [C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64] ==> [C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/lib/x64]
+        collapse library dir [C:\\vcpkg\\installed\\x64-windows\\lib] ==> [C:/vcpkg/installed/x64-windows/lib]
+        collapse library dir [C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link] ==> [C:/vcpkg/installed/x64-windows/lib/manual-link]
+        implicit libs: [cudart_static.lib;C:/vcpkg/installed/x64-windows/lib/*.lib]
+        implicit objs: []
+        implicit dirs: [C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/lib/x64;C:/vcpkg/installed/x64-windows/lib;C:/vcpkg/installed/x64-windows/lib/manual-link]
+        implicit fwks: []
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/Internal/CMakeNVCCParseImplicitInfo.cmake:165 (message)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCUDACompiler.cmake:294 (cmake_nvcc_parse_implicit_info)"
+      - "CMakeLists.txt:13 (project)"
+    message: |
+      Parsed CUDA nvcc include information:
+        found 'PATH=' string: [C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../nvvm/bin;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../lib;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64;;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x86;;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\tools;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\ide;C:\\Program Files (x86)\\HTML Help Workshop;;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\MSBuild\\Current\\Bin\\amd64;C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\;C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\MSBuild\\Current\\Bin;C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\;;c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\bcc5b7b7\\\\versions\\\\node\\\\current;c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current;c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\bcc5b7b7\\versions\\node\\current;c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin;C:\\msys64\\mingw64\\bin;C:\\Windows\\System32\\WindowsPowerShell\\v1.0;C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\;C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR;C:\\Windows\\System32;C:\\Program Files\\Git\\cmd;C:\\Program Files\\cursor\\resources\\app\\bin;C:\\Program Files (x86)\\cloudflared\\;C:\\Program Files\\dotnet\\;c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\workspaces\\\\e48c161b\\\\versions\\\\node\\\\current;c:\\\\Users\\\\Lenovo\\\\.trae\\\\sdks\\\\versions\\\\node\\\\current;c:\\Users\\Lenovo\\.trae\\sdks\\workspaces\\e48c161b\\versions\\node\\current;c:\\Users\\Lenovo\\.trae\\sdks\\versions\\node\\current;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin;C:\\msys64\\mingw64\\bin;C:\\Windows\\System32\\WindowsPowerShell\\v1.0;C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2025.3.1\\;C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR;C:\\Windows\\System32;C:\\Program Files\\Git\\cmd;C:\\Program Files\\cursor\\resources\\app\\bin;C:\\Program Files (x86)\\cloudflared\\;c:\\Users\\Lenovo\\AppData\\Local\\Programs\\Trae\\bin;C:\\Users\\Lenovo\\.cargo\\bin;C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\;C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python314\\;C:\\msys64\\mingw64\\bin;C:\\intelFPGA\\17.0\\modelsim_ase\\win32aloem;C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\Lenovo\\AppD;C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Windsurf\\bin;C:\\Users\\Lenovo\\AppData\\Local\\Python\\bin;C:\\Coq-Platform~8.20~2025.01\\bin;C:\\Users\\Lenovo\\.dotnet\\tools;]
+        found 'LIBRARIES=' string: ["/LIBPATH:C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../lib/x64"]
+        found 'INCLUDES=' string: ["-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include/cccl"  ]
+        found 'SYSTEM_INCLUDES=' string: []
+        considering line: [适用于 .NET Framework MSBuild 版本 17.14.23+b0019275e]
+        considering line: [生成启动时间为 2026/1/22 16:20:47。]
+        considering line: [节点 1 上的项目“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(默认目标)。]
+        considering line: [PrepareForBuild:]
+        considering line: [  正在创建目录“Debug\\”。]
+        considering line: [  已启用结构化输出。编译器诊断的格式设置将反映错误层次结构。有关详细信息，请参阅 https://aka.ms/cpp/structured-output。]
+        considering line: [  正在创建目录“Debug\\CompilerIdCUDA.tlog\\”。]
+        considering line: [InitializeBuildStatus:]
+        considering line: [  正在创建“Debug\\CompilerIdCUDA.tlog\\unsuccessfulbuild”，因为已指定“AlwaysCreate”。]
+        considering line: [  正在对“Debug\\CompilerIdCUDA.tlog\\unsuccessfulbuild”执行 Touch 任务。]
+        considering line: [AddCudaCompileDeps:]
+        considering line: [  C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe /E /nologo /showIncludes /TP /D__CUDACC__ /D__CUDACC_VER_MAJOR__=13 /D__CUDACC_VER_MINOR__=0 /D_MBCS /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" /IC:\\vcpkg\\installed\\x64-windows\\include /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64" /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" /I. /FIcuda_runtime.h /c "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" ]
+        considering line: [项目“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(1)正在节点 1 上生成“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(1:2) (CudaBuildCore 个目标)。]
+        considering line: [CudaBuildCore:]
+        considering line: [  Compiling CUDA source file CMakeCUDACompilerId.cu...]
+        considering line: [  正在创建目录“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug”。]
+        considering line: [  cmd.exe /C "C:\\Users\\Lenovo\\AppData\\Local\\Temp\\tmp40f4f046a1bd49788d32623f14d51886.cmd"]
+        considering line: [  "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe" -gencode=arch=compute_75,code=\\"sm_75,compute_75\\" --use-local-env -ccbin "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64" -x cu   -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" -I"C:\\vcpkg\\installed\\x64-windows\\include" -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include"  -G   --keep-dir CompilerIdCUDA\\x64\\Debug  -maxrregcount=0    --machine 64 --compile -cudart static -v -allow-unsupported-compiler -g  -D_MBCS -Xcompiler "/EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd " -Xcompiler "/FdDebug\\vc143.pdb" -o "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu"]
+        considering line: [  ]
+        considering line: [  E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA>"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe" -gencode=arch=compute_75,code=\\"sm_75,compute_75\\" --use-local-env -ccbin "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64" -x cu   -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" -I"C:\\vcpkg\\installed\\x64-windows\\include" -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include"  -G   --keep-dir CompilerIdCUDA\\x64\\Debug  -maxrregcount=0    --machine 64 --compile -cudart static -v -allow-unsupported-compiler -g  -D_MBCS -Xcompiler "/EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd " -Xcompiler "/FdDebug\\vc143.pdb" -o "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" ]
+        considering line: [                                      CMakeCUDACompilerId.cu]
+        considering line: [  #$ resource file C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-8.res: [-D__CUDA_ARCH_LIST__=750 -nologo -E -TP -EHsc -D__CUDACC__ -D__NVCC__ -D__CUDACC_DEBUG__  /EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd /FdDebug\\vc143.pdb -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" -I"C:/vcpkg/installed/x64-windows/include" -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include/cccl"      -D "_MBCS" -D__CUDACC_VER_MAJOR__=13 -D__CUDACC_VER_MINOR__=0 -D__CUDACC_VER_BUILD__=88 -D__CUDA_API_VER_MAJOR__=13 -D__CUDA_API_VER_MINOR__=0 -D__NVCC_DIAG_PRAGMA_SUPPORT__=1 -D__CUDACC_DEVICE_ATOMIC_BUILTINS__=1 -FI "cuda_runtime.h" -Zi "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" ]]
+        considering line: [  #$ cl.exe -D__NV_NO_HOST_COMPILER_CHECK=1 @"C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-8.res" > "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-6_CMakeCUDACompilerId.cpp4.ii" ]
+        considering line: [  CMakeCUDACompilerId.cu]
+        considering line: [  #$ erase C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-8.res]
+        considering line: [  #$ cudafe++ --ms_c++14 --static-host-stub --device-hidden-visibility --microsoft_version=1944 --msvc_target_version=1944 --compiler_bindir "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/HostX64/x64/../../../../../../.." --display_error_number --orig_src_file_name "E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CMakeCUDACompilerId.cu" --orig_src_path_name "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" --allow_managed --debug_mode --sdk_dir "C:\\Program Files (x86)\\Windows Kits\\10" --m64 --parse_templates --gen_c_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.cpp" --stub_file_name "tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.stub.c" --gen_module_id_file --module_id_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-5_CMakeCUDACompilerId.module_id" "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-6_CMakeCUDACompilerId.cpp4.ii" ]
+        considering line: [  #$ resource file C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-10.res: [-D__CUDA_ARCH__=750 -D__CUDA_ARCH_LIST__=750 -nologo -E -TP  -DCUDA_DOUBLE_MATH_FUNCTIONS -EHsc -D__CUDACC__ -D__NVCC__ -D__CUDACC_DEBUG__  /EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd /FdDebug\\vc143.pdb -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" -I"C:/vcpkg/installed/x64-windows/include" -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include/cccl"      -D "_MBCS" -D__CUDACC_VER_MAJOR__=13 -D__CUDACC_VER_MINOR__=0 -D__CUDACC_VER_BUILD__=88 -D__CUDA_API_VER_MAJOR__=13 -D__CUDA_API_VER_MINOR__=0 -D__NVCC_DIAG_PRAGMA_SUPPORT__=1 -D__CUDACC_DEVICE_ATOMIC_BUILTINS__=1 -FI "cuda_runtime.h" -Zi "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" ]]
+        considering line: [  #$ cl.exe -D__NV_NO_HOST_COMPILER_CHECK=1 @"C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-10.res" > "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-9_CMakeCUDACompilerId.cpp1.ii" ]
+        considering line: [  CMakeCUDACompilerId.cu]
+        considering line: [  #$ erase C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-10.res]
+        considering line: [  #$ ""%CICC_PATH%\\cicc" --ms_c++14 --static-host-stub --device-hidden-visibility --microsoft_version=1944 --msvc_target_version=1944 --compiler_bindir "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/HostX64/x64/../../../../../../.." --display_error_number --orig_src_file_name "E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CMakeCUDACompilerId.cu" --orig_src_path_name "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CMakeCUDACompilerId.cu" --allow_managed --debug_mode --sdk_dir "C:\\Program Files (x86)\\Windows Kits\\10"  -arch compute_75 -m64 --no-version-ident -ftz=0 -prec_div=1 -prec_sqrt=1 -fmad=1 --include_file_name "tmpxft_000051a4_00000000-4_CMakeCUDACompilerId.fatbin.c" -g -O0 -tused --module_id_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-5_CMakeCUDACompilerId.module_id" --gen_c_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.c" --stub_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.stub.c" --gen_device_file_name "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.gpu"  "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-9_CMakeCUDACompilerId.cpp1.ii" -o "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.ptx""]
+        considering line: [  #$ ptxas -arch=sm_75 -m64 -g --dont-merge-basicblocks --return-at-end "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.ptx"  -o "C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-11_CMakeCUDACompilerId.sm_75.cubin" ]
+        considering line: [  #$ fatbinary -64 --ident="E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CMakeCUDACompilerId.cu" --cmdline="-g --dont-merge-basicblocks --return-at-end " --cicc-cmdline="-ftz=0 -prec_div=1 -prec_sqrt=1 -fmad=1 " -g "--image3=kind=elf,sm=75,file=C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-11_CMakeCUDACompilerId.sm_75.cubin" "--image3=kind=ptx,sm=75,file=C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.ptx" --embedded-fatbin="C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-4_CMakeCUDACompilerId.fatbin.c" ]
+        considering line: [  #$ erase C:/Users/Lenovo/AppData/Local/Temp/tmpxft_000051a4_00000000-4_CMakeCUDACompilerId.fatbin]
+        considering line: [  #$ resource file C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-12.res: [-D__CUDA_ARCH__=750 -D__CUDA_ARCH_LIST__=750 -nologo -c -TP  -DCUDA_DOUBLE_MATH_FUNCTIONS -EHsc /EHsc /W0 /nologo /Od /FS /Zi /RTC1 /MDd /FdDebug\\vc143.pdb -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" -I"C:/vcpkg/installed/x64-windows/include" -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include" "-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin/../include/cccl"     -Zi "C:\\Users\\Lenovo\\AppData\\Local\\Temp\\tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.cpp" ]]
+        considering line: [  #$ cl.exe @"C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-12.res" -Fo"E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/4.1.1/CompilerIdCUDA/CompilerIdCUDA/x64/Debug/CMakeCUDACompilerId.cu.obj" ]
+        considering line: [  tmpxft_000051a4_00000000-7_CMakeCUDACompilerId.cudafe1.cpp]
+        considering line: [  #$ erase C:\\Users\\Lenovo\\AppData\\Local\\Temp/tmpxft_000051a4_00000000-12.res]
+        considering line: [已完成生成项目“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(CudaBuildCore 个目标)的操作。]
+        considering line: [VcpkgTripletSelection:]
+        considering line: [  Using triplet "x64-windows" from "C:\\vcpkg\\installed\\x64-windows\\"]
+        considering line: [  Using normalized configuration "Release"]
+        considering line: [Link:]
+        considering line: [  C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\link.exe /ERRORREPORT:QUEUE /OUT:".\\CompilerIdCUDA.exe" /INCREMENTAL:NO /NOLOGO /LIBPATH:"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link" cudart_static.lib "C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib" /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /PDB:".\\CompilerIdCUDA.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:".\\CompilerIdCUDA.lib" /MACHINE:X64 "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj"]
+          extracted link line: [link.exe /ERRORREPORT:QUEUE /OUT:".\\CompilerIdCUDA.exe" /INCREMENTAL:NO /NOLOGO /LIBPATH:"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link" cudart_static.lib "C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib" /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /PDB:".\\CompilerIdCUDA.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:".\\CompilerIdCUDA.lib" /MACHINE:X64 "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj"]
+        considering line: [    正在创建库 .\\CompilerIdCUDA.lib 和对象 .\\CompilerIdCUDA.exp]
+        considering line: [LINK : warning LNK4098: 默认库“LIBCMT”与其他库的使用冲突；请使用 /NODEFAULTLIB:library [E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj]]
+        considering line: [  CompilerIdCUDA.vcxproj -> E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.exe]
+        considering line: [AppLocalFromInstalled:]
+        considering line: [  pwsh.exe -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "Debug\\CompilerIdCUDA.tlog\\CompilerIdCUDA.write.1u.tlog" "Debug\\vcpkg.applocal.log"]
+        considering line: [  'pwsh.exe' 不是内部或外部命令，也不是可运行的程序]
+        considering line: [  或批处理文件。]
+        considering line: [  命令“pwsh.exe -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "Debug\\CompilerIdCUDA.tlog\\CompilerIdCUDA.write.1u.tlog" "Debug\\vcpkg.applocal.log"”已退出，代码为 9009。]
+        considering line: [  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "Debug\\CompilerIdCUDA.tlog\\CompilerIdCUDA.write.1u.tlog" "Debug\\vcpkg.applocal.log"]
+        considering line: [PostBuildEvent:]
+        considering line: [  echo CMAKE_CUDA_COMPILER=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe]
+        considering line: [  :VCEnd]
+        considering line: [  CMAKE_CUDA_COMPILER=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe]
+        considering line: [FinalizeBuildStatus:]
+        considering line: [  正在删除文件“Debug\\CompilerIdCUDA.tlog\\unsuccessfulbuild”。]
+        considering line: [  正在对“Debug\\CompilerIdCUDA.tlog\\CompilerIdCUDA.lastbuildstate”执行 Touch 任务。]
+        considering line: [已完成生成项目“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(默认目标)的操作。]
+        considering line: [已成功生成。]
+        considering line: [“E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj”(默认目标) (1) ->]
+        considering line: [(Link 目标) -> ]
+        considering line: [  LINK : warning LNK4098: 默认库“LIBCMT”与其他库的使用冲突；请使用 /NODEFAULTLIB:library [E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA.vcxproj]]
+        considering line: [    1 个警告]
+        considering line: [    0 个错误]
+        considering line: [已用时间 00:00:02.86]
+        considering line: []
+      
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|link\\.exe|lld-link(\\.exe)?|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        link line: [cuda-fake-ld link.exe /ERRORREPORT:QUEUE /OUT:".\\CompilerIdCUDA.exe" /INCREMENTAL:NO /NOLOGO /LIBPATH:"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link" cudart_static.lib "C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib" /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /PDB:".\\CompilerIdCUDA.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:".\\CompilerIdCUDA.lib" /MACHINE:X64 "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj"]
+          arg [cuda-fake-ld] ==> ignore
+          arg [link.exe] ==> ignore
+          arg [/ERRORREPORT:QUEUE] ==> ignore
+          arg [/OUT:.\\CompilerIdCUDA.exe] ==> ignore
+          arg [/INCREMENTAL:NO] ==> ignore
+          arg [/NOLOGO] ==> ignore
+          arg [/LIBPATH:C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64] ==> dir [C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64]
+          arg [/LIBPATH:C:\\vcpkg\\installed\\x64-windows\\lib] ==> dir [C:\\vcpkg\\installed\\x64-windows\\lib]
+          arg [/LIBPATH:C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link] ==> dir [C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link]
+          arg [cudart_static.lib] ==> lib [cudart_static.lib]
+          arg [C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib] ==> lib [C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib]
+          arg [/MANIFEST] ==> ignore
+          arg [/MANIFESTUAC:level='asInvoker' uiAccess='false'] ==> ignore
+          arg [/manifest:embed] ==> ignore
+          arg [/PDB:.\\CompilerIdCUDA.pdb] ==> ignore
+          arg [/SUBSYSTEM:CONSOLE] ==> ignore
+          arg [/TLBID:1] ==> ignore
+          arg [/DYNAMICBASE] ==> ignore
+          arg [/NXCOMPAT] ==> ignore
+          arg [/IMPLIB:.\\CompilerIdCUDA.lib] ==> ignore MSVC link option
+          arg [/MACHINE:X64] ==> ignore
+          arg [E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\4.1.1\\CompilerIdCUDA\\CompilerIdCUDA\\x64\\Debug\\CMakeCUDACompilerId.cu.obj] ==> ignore
+        collapse lib [C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib] ==> [C:/vcpkg/installed/x64-windows/lib/*.lib]
+        collapse library dir [C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64] ==> [C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/lib/x64]
+        collapse library dir [C:\\vcpkg\\installed\\x64-windows\\lib] ==> [C:/vcpkg/installed/x64-windows/lib]
+        collapse library dir [C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link] ==> [C:/vcpkg/installed/x64-windows/lib/manual-link]
+        implicit libs: [cudart_static.lib;C:/vcpkg/installed/x64-windows/lib/*.lib]
+        implicit objs: []
+        implicit dirs: [C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/lib/x64;C:/vcpkg/installed/x64-windows/lib;C:/vcpkg/installed/x64-windows/lib/manual-link]
+        implicit fwks: []
+      
+      
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCompilerABI.cmake:83 (try_compile)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeTestCUDACompiler.cmake:19 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:13 (project)"
+    checks:
+      - "Detecting CUDA compiler ABI info"
+    directories:
+      source: "E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/CMakeScratch/TryCompile-gmguy6"
+      binary: "E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/CMakeScratch/TryCompile-gmguy6"
+    cmakeVariables:
+      CMAKE_CUDA_ARCHITECTURES: "75"
+      CMAKE_CUDA_FLAGS: "-D_WINDOWS -Xcompiler=\" /EHsc\""
+      CMAKE_CUDA_FLAGS_DEBUG: "-Xcompiler=\" -Ob0 -Od\""
+      CMAKE_CUDA_RUNTIME_LIBRARY: "Static"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: ""
+    buildResult:
+      variable: "CMAKE_CUDA_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: 'E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/CMakeScratch/TryCompile-gmguy6'
+        
+        Run Build Command(s): "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_a89da.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+        閫傜敤浜?.NET Framework MSBuild 鐗堟湰 17.14.23+b0019275e
+        鐢熸垚鍚姩鏃堕棿涓?2026/1/22 16:20:50銆?
+        
+        鑺傜偣 1 涓婄殑椤圭洰鈥淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?榛樿鐩爣)銆?
+        PrepareForBuild:
+          姝ｅ湪鍒涘缓鐩綍鈥渃mTC_a89da.dir\\Debug\\鈥濄€?
+          宸插惎鐢ㄧ粨鏋勫寲杈撳嚭銆傜紪璇戝櫒璇婃柇鐨勬牸寮忚缃皢鍙嶆槧閿欒灞傛缁撴瀯銆傛湁鍏宠缁嗕俊鎭紝璇峰弬闃?https://aka.ms/cpp/structured-output銆?
+          姝ｅ湪鍒涘缓鐩綍鈥淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\Debug\\鈥濄€?
+          姝ｅ湪鍒涘缓鐩綍鈥渃mTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\鈥濄€?
+        InitializeBuildStatus:
+          姝ｅ湪鍒涘缓鈥渃mTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\unsuccessfulbuild鈥濓紝鍥犱负宸叉寚瀹氣€淎lwaysCreate鈥濄€?
+          姝ｅ湪瀵光€渃mTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\unsuccessfulbuild鈥濇墽琛?Touch 浠诲姟銆?
+        AddCudaCompileDeps:
+          C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe /E /nologo /showIncludes /TP /D__CUDACC__ /D__CUDACC_VER_MAJOR__=13 /D__CUDACC_VER_MINOR__=0 /D_WINDOWS /DCMAKE_INTDIR="Debug" /D_MBCS /DCMAKE_INTDIR="Debug" /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64" /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" /I. /FIcuda_runtime.h /c C:\\msys64\\mingw64\\share\\cmake\\Modules\\CMakeCUDACompilerABI.cu 
+        椤圭洰鈥淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?1)姝ｅ湪鑺傜偣 1 涓婄敓鎴愨€淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?1:2) (CudaBuildCore 涓洰鏍?銆?
+        CudaBuildCore:
+          Compiling CUDA source file C:\\msys64\\mingw64\\share\\cmake\\Modules\\CMakeCUDACompilerABI.cu...
+          cmd.exe /C "C:\\Users\\Lenovo\\AppData\\Local\\Temp\\tmp6134110b70104ea6a685d991c01771bb.cmd"
+          "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe"  --use-local-env -ccbin "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64" -x cu    -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include"     --keep-dir cmTC_a89da\\x64\\Debug  -maxrregcount=0    --machine 64 --compile -cudart static --generate-code=arch=compute_75,code=[compute_75,sm_75] -Xcompiler="/EHsc -Ob0 -Zi -v" -g  -D_WINDOWS -D"CMAKE_INTDIR=\\"Debug\\"" -D_MBCS -D"CMAKE_INTDIR=\\"Debug\\"" -Xcompiler "/EHsc /W1 /nologo /Od /FS /Zi /RTC1 /MDd " -Xcompiler "/FdcmTC_a89da.dir\\Debug\\vc143.pdb" -o cmTC_a89da.dir\\Debug\\CMakeCUDACompilerABI.obj "C:\\msys64\\mingw64\\share\\cmake\\Modules\\CMakeCUDACompilerABI.cu"
+          
+          E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6>"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe"  --use-local-env -ccbin "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64" -x cu    -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include"     --keep-dir cmTC_a89da\\x64\\Debug  -maxrregcount=0    --machine 64 --compile -cudart static --generate-code=arch=compute_75,code=[compute_75,sm_75] -Xcompiler="/EHsc -Ob0 -Zi -v" -g  -D_WINDOWS -D"CMAKE_INTDIR=\\"Debug\\"" -D_MBCS -D"CMAKE_INTDIR=\\"Debug\\"" -Xcompiler "/EHsc /W1 /nologo /Od /FS /Zi /RTC1 /MDd " -Xcompiler "/FdcmTC_a89da.dir\\Debug\\vc143.pdb" -o cmTC_a89da.dir\\Debug\\CMakeCUDACompilerABI.obj "C:\\msys64\\mingw64\\share\\cmake\\Modules\\CMakeCUDACompilerABI.cu" 
+        cl : 鍛戒护琛?warning D9002: 蹇界暐鏈煡閫夐」鈥?v鈥?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]
+          CMakeCUDACompilerABI.cu
+        cl : 鍛戒护琛?warning D9002: 蹇界暐鏈煡閫夐」鈥?v鈥?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]
+          CMakeCUDACompilerABI.cu
+          CMakeCUDACompilerABI.cu
+        cl : 鍛戒护琛?warning D9002: 蹇界暐鏈煡閫夐」鈥?v鈥?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]
+          tmpxft_000087d0_00000000-7_CMakeCUDACompilerABI.cudafe1.cpp
+        C:\\msys64\\mingw64\\share\\cmake\\Modules\\CMakeCompilerCUDAArch.h(10): warning C4305: 鈥渞eturn鈥? 浠庘€渋nt鈥濆埌鈥渂ool鈥濇埅鏂?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]
+        宸插畬鎴愮敓鎴愰」鐩€淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?CudaBuildCore 涓洰鏍?鐨勬搷浣溿€?
+        VcpkgTripletSelection:
+          Using triplet "x64-windows" from "C:\\vcpkg\\installed\\x64-windows\\"
+          Using normalized configuration "Release"
+        Link:
+          C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\link.exe /OUT:"E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\Debug\\cmTC_a89da.exe" /INCREMENTAL /ILK:"cmTC_a89da.dir\\Debug\\cmTC_a89da.ilk" /NOLOGO /LIBPATH:"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link" cudadevrt.lib cudart_static.lib "C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib" /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/CMakeScratch/TryCompile-gmguy6/Debug/cmTC_a89da.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/CMakeScratch/TryCompile-gmguy6/Debug/cmTC_a89da.lib" /MACHINE:X64  -v cmTC_a89da.dir\\Debug\\CMakeCUDACompilerABI.obj
+        LINK : warning LNK4044: 鏃犳硶璇嗗埆鐨勯€夐」鈥?v鈥濓紱宸插拷鐣?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]
+            姝ｅ湪鍒涘缓搴?E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/CMakeScratch/TryCompile-gmguy6/Debug/cmTC_a89da.lib 鍜屽璞?E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/CMakeScratch/TryCompile-gmguy6/Debug/cmTC_a89da.exp
+        LINK : warning LNK4098: 榛樿搴撯€淟IBCMT鈥濅笌鍏朵粬搴撶殑浣跨敤鍐茬獊锛涜浣跨敤 /NODEFAULTLIB:library [E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]
+          cmTC_a89da.vcxproj -> E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\Debug\\cmTC_a89da.exe
+        AppLocalFromInstalled:
+          pwsh.exe -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\Debug\\cmTC_a89da.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "cmTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\cmTC_a89da.write.1u.tlog" "cmTC_a89da.dir\\Debug\\vcpkg.applocal.log"
+          'pwsh.exe' 涓嶆槸鍐呴儴鎴栧閮ㄥ懡浠わ紝涔熶笉鏄彲杩愯鐨勭▼搴?
+          鎴栨壒澶勭悊鏂囦欢銆?
+          鍛戒护鈥減wsh.exe -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\Debug\\cmTC_a89da.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "cmTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\cmTC_a89da.write.1u.tlog" "cmTC_a89da.dir\\Debug\\vcpkg.applocal.log"鈥濆凡閫€鍑猴紝浠ｇ爜涓?9009銆?
+          "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\Debug\\cmTC_a89da.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "cmTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\cmTC_a89da.write.1u.tlog" "cmTC_a89da.dir\\Debug\\vcpkg.applocal.log"
+        FinalizeBuildStatus:
+          姝ｅ湪鍒犻櫎鏂囦欢鈥渃mTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\unsuccessfulbuild鈥濄€?
+          姝ｅ湪瀵光€渃mTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\cmTC_a89da.lastbuildstate鈥濇墽琛?Touch 浠诲姟銆?
+        宸插畬鎴愮敓鎴愰」鐩€淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?榛樿鐩爣)鐨勬搷浣溿€?
+        
+        宸叉垚鍔熺敓鎴愩€?
+        
+        鈥淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?榛樿鐩爣) (1) ->
+        鈥淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?CudaBuildCore 鐩爣) (1:2) ->
+        (CudaBuildCore 鐩爣) -> 
+          cl : 鍛戒护琛?warning D9002: 蹇界暐鏈煡閫夐」鈥?v鈥?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]
+          cl : 鍛戒护琛?warning D9002: 蹇界暐鏈煡閫夐」鈥?v鈥?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]
+          cl : 鍛戒护琛?warning D9002: 蹇界暐鏈煡閫夐」鈥?v鈥?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]
+          C:\\msys64\\mingw64\\share\\cmake\\Modules\\CMakeCompilerCUDAArch.h(10): warning C4305: 鈥渞eturn鈥? 浠庘€渋nt鈥濆埌鈥渂ool鈥濇埅鏂?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]
+        
+        
+        鈥淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?榛樿鐩爣) (1) ->
+        (Link 鐩爣) -> 
+          LINK : warning LNK4044: 鏃犳硶璇嗗埆鐨勯€夐」鈥?v鈥濓紱宸插拷鐣?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]
+          LINK : warning LNK4098: 榛樿搴撯€淟IBCMT鈥濅笌鍏朵粬搴撶殑浣跨敤鍐茬獊锛涜浣跨敤 /NODEFAULTLIB:library [E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]
+        
+            6 涓鍛?
+            0 涓敊璇?
+        
+        宸茬敤鏃堕棿 00:00:02.63
+        
+      exitCode: 0
+  -
+    kind: "message-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCompilerABI.cmake:217 (message)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeTestCUDACompiler.cmake:19 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:13 (project)"
+    message: |
+      Parsed CUDA implicit include dir info: rv=start
+        warn: unable to parse implicit include dirs!
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCompilerABI.cmake:253 (message)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeTestCUDACompiler.cmake:19 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:13 (project)"
+    message: |
+      Parsed CUDA implicit link information:
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|link\\.exe|lld-link(\\.exe)?|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        linker tool regex: [^[ 	]*(->|")?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|link\\.exe|lld-link(\\.exe)?))("|,| |$)]
+        ignore line: [Change Dir: 'E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/CMakeScratch/TryCompile-gmguy6']
+        ignore line: []
+        ignore line: [Run Build Command(s): "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_a89da.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n]
+        ignore line: [閫傜敤浜?.NET Framework MSBuild 鐗堟湰 17.14.23+b0019275e]
+        ignore line: [鐢熸垚鍚姩鏃堕棿涓?2026/1/22 16:20:50銆?]
+        ignore line: []
+        ignore line: [鑺傜偣 1 涓婄殑椤圭洰鈥淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?榛樿鐩爣)銆?]
+        ignore line: [PrepareForBuild:]
+        ignore line: [  姝ｅ湪鍒涘缓鐩綍鈥渃mTC_a89da.dir\\Debug\\鈥濄€?]
+        ignore line: [  宸插惎鐢ㄧ粨鏋勫寲杈撳嚭銆傜紪璇戝櫒璇婃柇鐨勬牸寮忚缃皢鍙嶆槧閿欒灞傛缁撴瀯銆傛湁鍏宠缁嗕俊鎭紝璇峰弬闃?https://aka.ms/cpp/structured-output銆?]
+        ignore line: [  姝ｅ湪鍒涘缓鐩綍鈥淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\Debug\\鈥濄€?]
+        ignore line: [  姝ｅ湪鍒涘缓鐩綍鈥渃mTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\鈥濄€?]
+        ignore line: [InitializeBuildStatus:]
+        ignore line: [  姝ｅ湪鍒涘缓鈥渃mTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\unsuccessfulbuild鈥濓紝鍥犱负宸叉寚瀹氣€淎lwaysCreate鈥濄€?]
+        ignore line: [  姝ｅ湪瀵光€渃mTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\unsuccessfulbuild鈥濇墽琛?Touch 浠诲姟銆?]
+        ignore line: [AddCudaCompileDeps:]
+        ignore line: [  C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe /E /nologo /showIncludes /TP /D__CUDACC__ /D__CUDACC_VER_MAJOR__=13 /D__CUDACC_VER_MINOR__=0 /D_WINDOWS /DCMAKE_INTDIR="Debug" /D_MBCS /DCMAKE_INTDIR="Debug" /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\x64" /I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include" /I. /FIcuda_runtime.h /c C:\\msys64\\mingw64\\share\\cmake\\Modules\\CMakeCUDACompilerABI.cu ]
+        ignore line: [椤圭洰鈥淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?1)姝ｅ湪鑺傜偣 1 涓婄敓鎴愨€淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?1:2) (CudaBuildCore 涓洰鏍?銆?]
+        ignore line: [CudaBuildCore:]
+        ignore line: [  Compiling CUDA source file C:\\msys64\\mingw64\\share\\cmake\\Modules\\CMakeCUDACompilerABI.cu...]
+        ignore line: [  cmd.exe /C "C:\\Users\\Lenovo\\AppData\\Local\\Temp\\tmp6134110b70104ea6a685d991c01771bb.cmd"]
+        ignore line: [  "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe"  --use-local-env -ccbin "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64" -x cu    -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include"     --keep-dir cmTC_a89da\\x64\\Debug  -maxrregcount=0    --machine 64 --compile -cudart static --generate-code=arch=compute_75 code=[compute_75 sm_75] -Xcompiler="/EHsc -Ob0 -Zi -v" -g  -D_WINDOWS -D"CMAKE_INTDIR=\\"Debug\\"" -D_MBCS -D"CMAKE_INTDIR=\\"Debug\\"" -Xcompiler "/EHsc /W1 /nologo /Od /FS /Zi /RTC1 /MDd " -Xcompiler "/FdcmTC_a89da.dir\\Debug\\vc143.pdb" -o cmTC_a89da.dir\\Debug\\CMakeCUDACompilerABI.obj "C:\\msys64\\mingw64\\share\\cmake\\Modules\\CMakeCUDACompilerABI.cu"]
+        ignore line: [  ]
+        ignore line: [  E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6>"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\bin\\nvcc.exe"  --use-local-env -ccbin "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64" -x cu    -I"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\include"     --keep-dir cmTC_a89da\\x64\\Debug  -maxrregcount=0    --machine 64 --compile -cudart static --generate-code=arch=compute_75 code=[compute_75 sm_75] -Xcompiler="/EHsc -Ob0 -Zi -v" -g  -D_WINDOWS -D"CMAKE_INTDIR=\\"Debug\\"" -D_MBCS -D"CMAKE_INTDIR=\\"Debug\\"" -Xcompiler "/EHsc /W1 /nologo /Od /FS /Zi /RTC1 /MDd " -Xcompiler "/FdcmTC_a89da.dir\\Debug\\vc143.pdb" -o cmTC_a89da.dir\\Debug\\CMakeCUDACompilerABI.obj "C:\\msys64\\mingw64\\share\\cmake\\Modules\\CMakeCUDACompilerABI.cu" ]
+        ignore line: [cl : 鍛戒护琛?warning D9002: 蹇界暐鏈煡閫夐」鈥?v鈥?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]]
+        ignore line: [  CMakeCUDACompilerABI.cu]
+        ignore line: [cl : 鍛戒护琛?warning D9002: 蹇界暐鏈煡閫夐」鈥?v鈥?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]]
+        ignore line: [  CMakeCUDACompilerABI.cu]
+        ignore line: [  CMakeCUDACompilerABI.cu]
+        ignore line: [cl : 鍛戒护琛?warning D9002: 蹇界暐鏈煡閫夐」鈥?v鈥?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]]
+        ignore line: [  tmpxft_000087d0_00000000-7_CMakeCUDACompilerABI.cudafe1.cpp]
+        ignore line: [C:\\msys64\\mingw64\\share\\cmake\\Modules\\CMakeCompilerCUDAArch.h(10): warning C4305: 鈥渞eturn鈥? 浠庘€渋nt鈥濆埌鈥渂ool鈥濇埅鏂?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]]
+        ignore line: [宸插畬鎴愮敓鎴愰」鐩€淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?CudaBuildCore 涓洰鏍?鐨勬搷浣溿€?]
+        ignore line: [VcpkgTripletSelection:]
+        ignore line: [  Using triplet "x64-windows" from "C:\\vcpkg\\installed\\x64-windows\\"]
+        ignore line: [  Using normalized configuration "Release"]
+        ignore line: [Link:]
+        ignore line: [  C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\link.exe /OUT:"E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\Debug\\cmTC_a89da.exe" /INCREMENTAL /ILK:"cmTC_a89da.dir\\Debug\\cmTC_a89da.ilk" /NOLOGO /LIBPATH:"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.0\\lib\\x64" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib" /LIBPATH:"C:\\vcpkg\\installed\\x64-windows\\lib\\manual-link" cudadevrt.lib cudart_static.lib "C:\\vcpkg\\installed\\x64-windows\\lib\\*.lib" /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/CMakeScratch/TryCompile-gmguy6/Debug/cmTC_a89da.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/CMakeScratch/TryCompile-gmguy6/Debug/cmTC_a89da.lib" /MACHINE:X64  -v cmTC_a89da.dir\\Debug\\CMakeCUDACompilerABI.obj]
+        ignore line: [LINK : warning LNK4044: 鏃犳硶璇嗗埆鐨勯€夐」鈥?v鈥濓紱宸插拷鐣?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]]
+        ignore line: [    姝ｅ湪鍒涘缓搴?E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/CMakeScratch/TryCompile-gmguy6/Debug/cmTC_a89da.lib 鍜屽璞?E:/Render Engine/build_vs4/CMakeFiles/CheckCUDA/CMakeFiles/CMakeScratch/TryCompile-gmguy6/Debug/cmTC_a89da.exp]
+        ignore line: [LINK : warning LNK4098: 榛樿搴撯€淟IBCMT鈥濅笌鍏朵粬搴撶殑浣跨敤鍐茬獊锛涜浣跨敤 /NODEFAULTLIB:library [E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]]
+        ignore line: [  cmTC_a89da.vcxproj -> E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\Debug\\cmTC_a89da.exe]
+        ignore line: [AppLocalFromInstalled:]
+        ignore line: [  pwsh.exe -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\Debug\\cmTC_a89da.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "cmTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\cmTC_a89da.write.1u.tlog" "cmTC_a89da.dir\\Debug\\vcpkg.applocal.log"]
+        ignore line: [  'pwsh.exe' 涓嶆槸鍐呴儴鎴栧閮ㄥ懡浠わ紝涔熶笉鏄彲杩愯鐨勭▼搴?]
+        ignore line: [  鎴栨壒澶勭悊鏂囦欢銆?]
+        ignore line: [  鍛戒护鈥減wsh.exe -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\Debug\\cmTC_a89da.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "cmTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\cmTC_a89da.write.1u.tlog" "cmTC_a89da.dir\\Debug\\vcpkg.applocal.log"鈥濆凡閫€鍑猴紝浠ｇ爜涓?9009銆?]
+        ignore line: [  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -ExecutionPolicy Bypass -noprofile -File "C:\\vcpkg\\scripts\\buildsystems\\msbuild\\applocal.ps1" "E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\Debug\\cmTC_a89da.exe" "C:\\vcpkg\\installed\\x64-windows\\bin" "cmTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\cmTC_a89da.write.1u.tlog" "cmTC_a89da.dir\\Debug\\vcpkg.applocal.log"]
+        ignore line: [FinalizeBuildStatus:]
+        ignore line: [  姝ｅ湪鍒犻櫎鏂囦欢鈥渃mTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\unsuccessfulbuild鈥濄€?]
+        ignore line: [  姝ｅ湪瀵光€渃mTC_a89da.dir\\Debug\\cmTC_a89da.tlog\\cmTC_a89da.lastbuildstate鈥濇墽琛?Touch 浠诲姟銆?]
+        ignore line: [宸插畬鎴愮敓鎴愰」鐩€淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?榛樿鐩爣)鐨勬搷浣溿€?]
+        ignore line: []
+        ignore line: [宸叉垚鍔熺敓鎴愩€?]
+        ignore line: []
+        ignore line: [鈥淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?榛樿鐩爣) (1) ->]
+        ignore line: [鈥淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?CudaBuildCore 鐩爣) (1:2) ->]
+        ignore line: [(CudaBuildCore 鐩爣) -> ]
+        ignore line: [  cl : 鍛戒护琛?warning D9002: 蹇界暐鏈煡閫夐」鈥?v鈥?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]]
+        ignore line: [  cl : 鍛戒护琛?warning D9002: 蹇界暐鏈煡閫夐」鈥?v鈥?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]]
+        ignore line: [  cl : 鍛戒护琛?warning D9002: 蹇界暐鏈煡閫夐」鈥?v鈥?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]]
+        ignore line: [  C:\\msys64\\mingw64\\share\\cmake\\Modules\\CMakeCompilerCUDAArch.h(10): warning C4305: 鈥渞eturn鈥? 浠庘€渋nt鈥濆埌鈥渂ool鈥濇埅鏂?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]]
+        ignore line: []
+        ignore line: []
+        ignore line: [鈥淓:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj鈥?榛樿鐩爣) (1) ->]
+        ignore line: [(Link 鐩爣) -> ]
+        ignore line: [  LINK : warning LNK4044: 鏃犳硶璇嗗埆鐨勯€夐」鈥?v鈥濓紱宸插拷鐣?[E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]]
+        ignore line: [  LINK : warning LNK4098: 榛樿搴撯€淟IBCMT鈥濅笌鍏朵粬搴撶殑浣跨敤鍐茬獊锛涜浣跨敤 /NODEFAULTLIB:library [E:\\Render Engine\\build_vs4\\CMakeFiles\\CheckCUDA\\CMakeFiles\\CMakeScratch\\TryCompile-gmguy6\\cmTC_a89da.vcxproj]]
+        ignore line: []
+        ignore line: [    6 涓鍛?]
+        ignore line: [    0 涓敊璇?]
+        ignore line: []
+        ignore line: [宸茬敤鏃堕棿 00:00:02.63]
+        ignore line: []
+        ignore line: []
+        linker tool for 'CUDA': C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/HostX64/x64/link.exe
+        implicit libs: []
+        implicit objs: []
+        implicit dirs: []
+        implicit fwks: []
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "C:/msys64/mingw64/share/cmake/Modules/Internal/CMakeDetermineLinkerId.cmake:36 (message)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineCompilerABI.cmake:299 (cmake_determine_linker_id)"
+      - "C:/msys64/mingw64/share/cmake/Modules/CMakeTestCUDACompiler.cmake:19 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:13 (project)"
+    message: |
+      Running the CUDA compiler's linker: "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/HostX64/x64/link.exe" "-v"
+      Microsoft (R) Incremental Linker Version 14.44.35221.0
+      Copyright (C) Microsoft Corporation.  All rights reserved.
+...

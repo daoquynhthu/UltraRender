@@ -1,0 +1,16 @@
+# ninja log v7
+28	1847	7907727317834597	CMakeFiles/UltraRender.dir/src/io/image_saver.cpp.obj	6cac20807e3fba2c
+268	1993	7907727320233475	CMakeFiles/UltraRender.dir/src/gpu/gpu_driver_stub.cpp.obj	4f997779caabfe0f
+62	2026	7907727318171206	CMakeFiles/UltraRender.dir/src/materials/lambertian.cpp.obj	7c739915278870f6
+245	2076	7907727320014008	CMakeFiles/UltraRender.dir/src/scene/triangle.cpp.obj	f5b552be261eceb1
+222	2117	7907727319786414	CMakeFiles/UltraRender.dir/src/scene/sphere.cpp.obj	d91579b6a5aa935a
+82	2118	7907727318372683	CMakeFiles/UltraRender.dir/src/materials/layered_bsdf.cpp.obj	4804120b03a830af
+106	2203	7907727318628255	CMakeFiles/UltraRender.dir/src/scene/camera.cpp.obj	712c9092784a9dc6
+128	2223	7907727318836424	CMakeFiles/UltraRender.dir/src/scene/mesh.cpp.obj	c9ffd0805af276e
+6	2243	7907727317619515	CMakeFiles/UltraRender.dir/src/accelerators/bvh_accelerator.cpp.obj	79804ea91a1fcf52
+46	2260	7907727318021818	CMakeFiles/UltraRender.dir/src/main.cpp.obj	d0626c5f89e04c2
+152	2484	7907727319081559	CMakeFiles/UltraRender.dir/src/scene/obj_loader.cpp.obj	fbb6fc70f38d51f4
+174	2536	7907727319293867	CMakeFiles/UltraRender.dir/src/scene/scene.cpp.obj	5aa4cc75d2420ea
+17	2666	7907727317728473	CMakeFiles/UltraRender.dir/src/integrators/path_tracer.cpp.obj	7edbf467a3cd4aeb
+10	1766	7907727791433900	CMakeFiles/UltraRender.dir/src/scene/scene_factory.cpp.obj	cc1a0cd266b1d6f0
+1767	2059	7907727809002006	bin/UltraRender.exe	e16676cbda56bf32
