@@ -1,0 +1,40 @@
+# Glass Cup Scene (Quick Test)
+resolution 800 600
+
+# Camera: Level View
+# Positioned to see the water surface (y=0.05) clearly.
+camera pos 5 7 3 lookat 0 0.2 0 fov 35
+
+# Materials
+define_material mat_ground lambertian 0.5 0.5 0.5
+define_material mat_glass dielectric 1.0 1.0 1.0 0.0 1.5 0.01
+# Give water a deeper blue tint for demonstration
+define_material mat_water dielectric 0.96 0.98 0.99 0.0 1.33 0.015
+define_material mat_red_matte lambertian 0.9 0.1 0.1
+define_material mat_gold metal 1.0 0.85 0.5 0.05 0.17 3.1 2.7 1.9
+define_material mat_light light 15 15 15
+
+# Entities
+# Ground (using mesh_cylinder as a large disk)
+# Positioned at y=-1.1 to be just below the cup bottom (y=-1.0)
+add_entity mesh_cylinder mat_ground 0 -1.1 0 1 1 1 0 0 0 10.0 0.2 64
+
+# Glass Cup
+# Bottom at y=-1.0, height 2.0 -> Top at y=1.0
+add_entity mesh_cup mat_glass 0 0 0 1 1 1 0 0 0 0.8 2.0 0.05 256
+
+# Water
+# Radius 0.752 (slightly larger than inner radius 0.75 to overlap and prevent TIR air gap)
+# Height 1.2 (slightly more than half full)
+# Bottom at y=-0.951 (overlap with cup floor -0.95). Center = -0.951 + 0.6 = -0.351
+add_entity mesh_cylinder mat_water 0 -0.351 0 1 1 1 0 0 0 0.752 1.2 256
+
+# Red Matte Sphere (behind the cup for refraction testing)
+# Positioned at z=-2.0, y=0.0
+add_entity sphere mat_red_matte 0 0 -2.0 1.0 1.0 1.0
+
+# Gold Metal Sphere (to the side for polarization testing)
+add_entity sphere mat_gold 2.5 0 -1.0 1.5 1.5 1.5
+
+# Light
+add_entity sphere mat_light 0 10 5 2 2 2

@@ -44,6 +44,96 @@ __device__ inline float rand_float(unsigned int& seed) {
     return seed * 2.3283064365386963e-10f; // 1 / 2^32
 }
 
+// ==========================================
+// Low Discrepancy Sequence (Halton)
+// ==========================================
+__device__ inline int get_prime(int n) {
+    // Expanded prime table for high-dimensional sampling (up to ~42 bounces)
+    // 256 Primes
+    if (n >= 256) {
+        // Extended primes for deep paths (up to ~50 bounces)
+        int p_ext[] = {
+            1621, 1627, 1637, 1657, 1663, 1667, 1669, 1693, 1697, 1699, 1709, 1721, 1723, 1733, 1741, 1747,
+            1753, 1759, 1777, 1783, 1787, 1789, 1801, 1811, 1823, 1831, 1847, 1861, 1867, 1871, 1873, 1877,
+            1879, 1889, 1901, 1907, 1913, 1931, 1933, 1949, 1951, 1973, 1979, 1987, 1993, 1997, 1999, 2003,
+            2011, 2017, 2027, 2029, 2039, 2053, 2063, 2069, 2081, 2083, 2087, 2089, 2099, 2111, 2113, 2129
+        };
+        if (n - 256 < 64) return p_ext[n - 256];
+        return 2129 + (n - 319) * 2; // Fallback
+    }
+    
+    // Stored in constant memory ideally, but here as static array
+    // We split into chunks to avoid stack overflow in some compilers
+    if (n < 64) {
+        int p[] = {
+            2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53,
+            59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131,
+            137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223,
+            227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311
+        };
+        return p[n];
+    } else if (n < 128) {
+        int p[] = {
+            313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409,
+            419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503,
+            509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587, 593, 599, 601, 607, 613,
+            617, 619, 631, 641, 643, 647, 653, 659, 661, 673, 677, 683, 691, 701, 709, 719
+        };
+        return p[n - 64];
+    } else if (n < 192) {
+        int p[] = {
+            727, 733, 739, 743, 751, 757, 761, 769, 773, 787, 797, 809, 811, 821, 823, 827,
+            829, 839, 853, 857, 859, 863, 877, 881, 883, 887, 907, 911, 919, 929, 937, 941,
+            947, 953, 967, 971, 977, 983, 991, 997, 1009, 1013, 1019, 1021, 1031, 1033, 1039, 1049,
+            1051, 1061, 1063, 1069, 1087, 1091, 1093, 1097, 1103, 1109, 1117, 1123, 1129, 1151, 1153, 1163
+        };
+        return p[n - 128];
+    } else {
+        int p[] = {
+            1171, 1181, 1187, 1193, 1201, 1213, 1217, 1223, 1229, 1231, 1237, 1249, 1259, 1277, 1279, 1283,
+            1289, 1291, 1297, 1301, 1303, 1307, 1319, 1321, 1327, 1361, 1367, 1373, 1381, 1399, 1409, 1423,
+            1427, 1429, 1433, 1439, 1447, 1451, 1453, 1459, 1471, 1481, 1483, 1487, 1489, 1493, 1499, 1511,
+            1523, 1531, 1543, 1549, 1553, 1559, 1567, 1571, 1579, 1583, 1597, 1601, 1607, 1609, 1613, 1619
+        };
+        return p[n - 192];
+    }
+}
+
+__device__ inline float halton(int index, int base) {
+    float f = 1.0f;
+    float r = 0.0f;
+    while (index > 0) {
+        f = f / (float)base;
+        r = r + f * (float)(index % base);
+        index = index / base;
+    }
+    return r;
+}
+
+__device__ inline float scramble_float(int pixel_idx, int dim) {
+    // Randomized Quasi-Monte Carlo Scramble
+    // Use Wang Hash to generate a stable random offset per pixel per dimension
+    unsigned int h = wang_hash(pixel_idx ^ (dim * 19349663));
+    h = wang_hash(h); 
+    return h * 2.3283064365386963e-10f;
+}
+
+__device__ inline float sample_dimension(int sample_idx, int pixel_idx, int dim) {
+    int base = get_prime(dim);
+    float h = halton(sample_idx + 1, base); // +1 to avoid 0
+    float s = scramble_float(pixel_idx, dim);
+    float val = h + s;
+    if (val >= 1.0f) val -= 1.0f;
+    return val;
+}
+
+__device__ inline GpuVec3 sample_unit_vector_lds(float r1, float r2) {
+    float theta = 6.28318530718f * r1;
+    float z = 2.0f * r2 - 1.0f;
+    float r = sqrtf(fmaxf(0.0f, 1.0f - z * z));
+    return GpuVec3(r * cosf(theta), r * sinf(theta), z);
+}
+
 __device__ inline GpuVec3 random_in_unit_sphere(unsigned int& seed) {
     // Rejection sampling might be slow due to divergence. 
     // Spherical coordinates are better for GPU.
@@ -241,8 +331,10 @@ __device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float
             int left_child = node_idx + 1;
             int right_child = node.child_or_primitive_index;
             
-            stack[stack_ptr++] = right_child;
-            stack[stack_ptr++] = left_child;
+            if (stack_ptr < 64) {
+                stack[stack_ptr++] = right_child;
+                stack[stack_ptr++] = left_child;
+            }
         }
     }
 
@@ -616,8 +708,18 @@ __device__ bool scatter(
     const GpuRay& r_in, const GpuMaterial& mat, const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
     const GpuSpectrum& current_throughput,
     GpuSpectrum& attenuation, GpuRay& scattered, StokesVector& stokes, unsigned int& seed,
-    float dispersion_clamp
+    float dispersion_clamp,
+    int sample_index,
+    int pixel_index,
+    int depth
 ) {
+    // LDS Sampling
+    // Dimensions reserved for BSDF: 0, 1, 2 offset by depth
+    int dim_offset = 4 + depth * 6;
+    float r_bsdf_1 = sample_dimension(sample_index, pixel_index, dim_offset + 0);
+    float r_bsdf_2 = sample_dimension(sample_index, pixel_index, dim_offset + 1);
+    float r_bsdf_3 = sample_dimension(sample_index, pixel_index, dim_offset + 2);
+
     // Modulate thin film thickness based on UVs to simulate gravity/irregularity (Color Bands)
     float effective_thickness = mat.thin_film_thickness;
     if (effective_thickness > 0.0f) {
@@ -627,8 +729,12 @@ __device__ bool scatter(
         effective_thickness = effective_thickness * (1.5f - 1.0f * uv.v);
     }
 
+    // Initialize interaction normal for consistent reference frame rotation
+    // Removed: interaction_normal was causing issues with Metal reflection.
+    // GpuVec3 interaction_normal = n;
+
     if (mat.type == MaterialType::Lambertian) {
-        GpuVec3 scatter_direction = n + random_unit_vector(seed);
+        GpuVec3 scatter_direction = n + sample_unit_vector_lds(r_bsdf_1, r_bsdf_2);
         
         // Catch degenerate scatter direction (near zero)
         if (scatter_direction.length_sq() < 1e-16f)
@@ -637,8 +743,8 @@ __device__ bool scatter(
         scattered.direction = scatter_direction.normalize(); // Normalize for consistent t
         
         // Offset along normal. For Lambertian, always scatter OUT.
-        // Increased epsilon to 1e-3f to prevent self-intersection / light leaking
-        GpuVec3 offset = n;
+        // Use Robust Offset: push in direction of scatter to prevent self-intersection
+        GpuVec3 offset = (scattered.direction.dot(n) > 0.0f) ? n : -n;
         scattered.origin = p + offset * 1e-3f; 
         
         scattered.t_min = 1e-3f; 
@@ -657,100 +763,142 @@ __device__ bool scatter(
         GpuVec3 N = n;
         if (V.dot(N) < 0.0f) N = -N; // Ensure Normal faces View
 
-        // GGX Importance Sampling
-        float r1 = rand_float(seed);
-        float r2 = rand_float(seed);
+        // GGX Importance Sampling (LDS)
+        float r1 = r_bsdf_1;
+        float r2 = r_bsdf_2;
         
         GpuVec3 H = ImportanceSampleGGX(r1, r2, N, mat.roughness);
+        // interaction_normal = H; // Removed
         GpuVec3 L = reflect(-V, H);
         
         scattered.direction = L.normalize();
         
         // Spectral Wavelength Selection for Metal (Phase 2 & 3 Integration)
-        float w_r = current_throughput.values.x;
-        float w_g = current_throughput.values.y;
-        float w_b = current_throughput.values.z;
-        float total_w = w_r + w_g + w_b;
+        // Deterministic Stratified Sampling for Dispersion to reduce color noise
+        // We use the 'channel' to determine the reference wavelength for polarization (Stokes),
+        // but we calculate attenuation for ALL channels to prevent color noise.
+        int channel = sample_index % 3;
         
-        int channel = 1; // Default Green
         float n_val = mat.ior;
-        float k_val = mat.extinction.values.y; // Default Green
         
-        if (total_w > 1e-6f) {
-            float rnd = rand_float(seed) * total_w;
-            if (rnd < w_r) {
-                channel = 0;
-                k_val = mat.extinction.values.x;
-            } else if (rnd < w_r + w_g) {
-                channel = 1;
-                k_val = mat.extinction.values.y;
-            } else {
-                channel = 2;
-                k_val = mat.extinction.values.z;
-            }
-        }
+        // Calculate Extinction for all channels
+        float k_r = mat.extinction.values.x;
+        float k_g = mat.extinction.values.y;
+        float k_b = mat.extinction.values.z;
+        
+        // Use the selected channel for Stokes/Geometric interactions
+        float k_val = (channel == 0) ? k_r : ((channel == 1) ? k_g : k_b);
         
         // Phase 3: Polarization for Metal (Conductor)
         // Treat as reflection off microfacet H
         GpuVec3 ref_in = get_reference_frame(r_in.direction);
-        GpuVec3 s_axis = r_in.direction.cross(H).normalize(); // Plane of incidence defined by H
         
-        if (s_axis.length_sq() < 1e-6f) s_axis = get_reference_frame(H);
+        // Fix Singularity: Check length before normalization
+        GpuVec3 raw_s = r_in.direction.cross(H);
+        float raw_len_sq = raw_s.length_sq();
+        GpuVec3 s_axis;
+        
+        if (raw_len_sq < 1e-12f) {
+            s_axis = get_reference_frame(H);
+        } else {
+            s_axis = raw_s * (1.0f / sqrtf(raw_len_sq));
+        }
 
         // Rotate In
-        float cos_phi_in = ref_in.dot(s_axis);
-        float sin_phi_in = ref_in.cross(s_axis).dot(r_in.direction);
+        float cos_phi_in = 1.0f;
+        float sin_phi_in = 0.0f;
+        
+        // Robust check for singular s_axis (Parallel View/Normal)
+        // If s_axis length is effectively zero, we are at normal incidence or singularity.
+        // Rotation is undefined but also irrelevant as Rs=Rp.
+        if (s_axis.length_sq() > 1e-6f) {
+            cos_phi_in = ref_in.dot(s_axis);
+            sin_phi_in = ref_in.cross(s_axis).dot(r_in.direction);
+        }
+        
         float phi_in = atan2f(sin_phi_in, cos_phi_in);
         rotate_stokes(stokes, 2.0f * phi_in);
         
         // Apply Physical Conductor Mueller Matrix
         float cos_theta_h = fmaxf(0.0f, V.dot(H));
+        
+        float stokes_I_in = stokes.I;
         apply_mueller_reflection_conductor(stokes, n_val, k_val, cos_theta_h);
+        float stokes_I_out = stokes.I;
+        
+        // Calculate Fresnel Reflectance Factor from Stokes intensity change
+        // Robust check to prevent black holes at singularities
+        float fresnel_reflectance = 0.0f;
+        if (stokes_I_in > 1e-6f) {
+             fresnel_reflectance = stokes_I_out / stokes_I_in;
+        } else {
+             // Fallback for zero intensity input (shouldn't happen with valid light)
+             fresnel_reflectance = 1.0f; 
+        }
         
         float tf_boost = 1.0f;
         // Thin-film interference for metal
         if (effective_thickness > 0.0f) {
-            float lambda = (channel == 0) ? 650.0f : ((channel == 1) ? 550.0f : 450.0f);
+            // Calculate thin film for all channels
+            float r_base_r = mat.albedo.values.x;
+            float r_base_g = mat.albedo.values.y;
+            float r_base_b = mat.albedo.values.z;
             
-            // For metal, the base reflectance is already high. 
-            // The thin film acts as an anti-reflection or enhancement layer.
-            // We use the base color as r12 proxy.
-            float r_base = (channel == 0 ? mat.albedo.values.x : (channel == 1 ? mat.albedo.values.y : mat.albedo.values.z));
-            float R_tf = get_thin_film_interference(lambda, effective_thickness, mat.thin_film_ior, cos_theta_h, r_base);
+            float R_tf_r = get_thin_film_interference(650.0f, effective_thickness, mat.thin_film_ior, cos_theta_h, r_base_r);
+            float R_tf_g = get_thin_film_interference(550.0f, effective_thickness, mat.thin_film_ior, cos_theta_h, r_base_g);
+            float R_tf_b = get_thin_film_interference(450.0f, effective_thickness, mat.thin_film_ior, cos_theta_h, r_base_b);
+
+            // Calculate per-channel boost
+            float boost_r = R_tf_r / fmaxf(1e-6f, r_base_r);
+            float boost_g = R_tf_g / fmaxf(1e-6f, r_base_g);
+            float boost_b = R_tf_b / fmaxf(1e-6f, r_base_b);
             
-            tf_boost = R_tf / fmaxf(1e-6f, r_base);
+            // Use average boost for Stokes intensity modulation (approximation)
+            tf_boost = (boost_r + boost_g + boost_b) / 3.0f;
+            
             stokes.I *= tf_boost;
             stokes.Q *= tf_boost;
             stokes.U *= tf_boost;
             stokes.V *= tf_boost;
+            
+            // Update albedo with thin film effect directly
+            attenuation.values.x = mat.albedo.values.x * boost_r * fresnel_reflectance;
+            attenuation.values.y = mat.albedo.values.y * boost_g * fresnel_reflectance;
+            attenuation.values.z = mat.albedo.values.z * boost_b * fresnel_reflectance;
+        } else {
+            // Standard Metal
+            attenuation.values.x = mat.albedo.values.x * fresnel_reflectance;
+            attenuation.values.y = mat.albedo.values.y * fresnel_reflectance;
+            attenuation.values.z = mat.albedo.values.z * fresnel_reflectance;
         }
 
-        // Rotate Out
+        // Phase 3: Rotate Stokes to Outgoing Reference Frame (Missing Logic Fixed)
+        // Use H (Microfacet Normal) for consistent reference frame with input
         GpuVec3 ref_out = get_reference_frame(scattered.direction);
-        GpuVec3 s_axis_out = scattered.direction.cross(H).normalize(); 
-        
+        GpuVec3 raw_s_out = scattered.direction.cross(H);
+        float raw_len_sq_out = raw_s_out.length_sq();
+        GpuVec3 s_axis_out;
+
+        if (raw_len_sq_out < 1e-12f) {
+            s_axis_out = get_reference_frame(H);
+        } else {
+            s_axis_out = raw_s_out * (1.0f / sqrtf(raw_len_sq_out));
+        }
+
         float cos_phi_out = s_axis_out.dot(ref_out);
         float sin_phi_out = s_axis_out.cross(ref_out).dot(scattered.direction);
         float phi_out = atan2f(sin_phi_out, cos_phi_out);
-        rotate_stokes(stokes, 2.0f * phi_out);
 
-        // Metal is opaque, always scatter OUT.
-        GpuVec3 offset = N;
-        scattered.origin = p + offset * 1e-3f;
+        rotate_stokes(stokes, 2.0f * phi_out);
         
+        // Final Setup for Metal
+        // Use Robust Offset based on scatter direction and geometric normal N (not H)
+        GpuVec3 offset = (scattered.direction.dot(N) > 0.0f) ? N : -N;
+        scattered.origin = p + offset * 1e-3f; 
         scattered.t_min = 1e-3f;
         scattered.t_max = FLT_MAX;
-        
-        // Mask attenuation to only allow the chosen channel and apply albedo
-        float prob = (channel == 0 ? w_r : (channel == 1 ? w_g : w_b)) / total_w;
-        if (prob < 1e-6f) prob = 1.0f;
-        float channel_boost = 1.0f / prob;
-        
-        attenuation = GpuSpectrum(0.0f);
-        if (channel == 0) attenuation.values.x = mat.albedo.values.x * channel_boost * tf_boost;
-        if (channel == 1) attenuation.values.y = mat.albedo.values.y * channel_boost * tf_boost;
-        if (channel == 2) attenuation.values.z = mat.albedo.values.z * channel_boost * tf_boost;
-        
+
+        // Remove channel masking - return full RGB
         return (scattered.direction.dot(N) > 0);
     } else if (mat.type == MaterialType::Dielectric) {
         // Default to white for reflection/base
@@ -759,29 +907,15 @@ __device__ bool scatter(
 
         // Dispersion and Thin-Film Wavelength Sampling Logic
         if (mat.dispersion > 0.0f || mat.thin_film_thickness > 0.0f) {
-            float w_r = current_throughput.values.x;
-            float w_g = current_throughput.values.y;
-            float w_b = current_throughput.values.z;
-            float total_w = w_r + w_g + w_b;
-            
-            int channel = 1; // Default Green
+            // Deterministic Stratified Sampling
+            int channel = sample_index % 3;
             float lambda = 550.0f;
             
-            if (total_w > 1e-6f) {
-                float rnd = rand_float(seed) * total_w;
-                if (rnd < w_r) {
-                    channel = 0;
-                    lambda = 650.0f;
-                } else if (rnd < w_r + w_g) {
-                    channel = 1;
-                    lambda = 550.0f;
-                } else {
-                    channel = 2;
-                    lambda = 450.0f;
-                }
-            }
+            if (channel == 0) lambda = 650.0f;
+            else if (channel == 1) lambda = 550.0f;
+            else lambda = 450.0f;
 
-            // Apply Dispersion if requested
+            // Apply Dispersion if requested (affects Geometry/IOR)
             if (mat.dispersion > 0.0f) {
                 float inv_lambda2 = 1.0f / (lambda * lambda);
                 float inv_ref2 = 1.0f / (550.0f * 550.0f);
@@ -791,15 +925,11 @@ __device__ bool scatter(
             }
 
             // Mask attenuation and boost
-            float prob = (channel == 0 ? w_r : (channel == 1 ? w_g : w_b)) / total_w;
-            if (prob < 1e-6f) prob = 1.0f;
-            float b_val = 1.0f / prob;
+            float b_val = 1.0f;
             if (b_val > dispersion_clamp) b_val = dispersion_clamp; 
             
-            attenuation = GpuSpectrum(0.0f);
-            if (channel == 0) attenuation.values.x = b_val;
-            else if (channel == 1) attenuation.values.y = b_val;
-            else if (channel == 2) attenuation.values.z = b_val;
+            // Fix: Do NOT mask attenuation. Calculate contributions for all channels.
+            attenuation = GpuSpectrum(b_val); 
         }
 
         bool front_face = r_in.direction.dot(n) < 0;
@@ -807,19 +937,26 @@ __device__ bool scatter(
 
         // Micro-jitter normal to smooth out singular caustics (anti-firefly for perfect dielectrics)
         if (mat.type == MaterialType::Dielectric) {
-            GpuVec3 jitter = random_unit_vector(seed) * 0.002f; // Very slight roughness
+            // Increased jitter from 0.002f to 0.005f to help smooth out caustics noise
+            GpuVec3 jitter = sample_unit_vector_lds(r_bsdf_1, r_bsdf_2) * 0.005f; 
             normal = (normal + jitter).normalize();
+            // interaction_normal = normal; // Removed
         }
 
         // Phase 3: Polarization-aware Dielectric Scattering
         
         // 1. Setup Incident Reference Frame Rotation
         GpuVec3 ref_in = get_reference_frame(r_in.direction);
-        GpuVec3 s_axis = r_in.direction.cross(normal).normalize();
         
-        // Handle singularity (normal parallel to ray)
-        if (s_axis.length_sq() < 1e-6f) {
-            s_axis = get_reference_frame(normal); // Arbitrary perp
+        // Fix Singularity: Check length before normalization
+        GpuVec3 raw_s = r_in.direction.cross(normal);
+        float raw_len_sq = raw_s.length_sq();
+        GpuVec3 s_axis;
+        
+        if (raw_len_sq < 1e-12f) {
+            s_axis = get_reference_frame(normal);
+        } else {
+            s_axis = raw_s * (1.0f / sqrtf(raw_len_sq));
         }
 
         // Calculate rotation angle phi_in (from ref_in to s_axis)
@@ -871,33 +1008,29 @@ __device__ bool scatter(
         if (is_tir) reflect_prob = 1.0f;
 
         // Thin-film interference for dielectric
-        if (!is_tir && effective_thickness > 0.0f) {
-            float lambda = 550.0f;
-            if (attenuation.values.x > 0.0f) lambda = 650.0f;
-            else if (attenuation.values.y > 0.0f) lambda = 550.0f;
-            else if (attenuation.values.z > 0.0f) lambda = 450.0f;
+        GpuVec3 R_spectral(1.0f, 1.0f, 1.0f); 
+        GpuVec3 T_spectral(1.0f, 1.0f, 1.0f);
+        bool has_thin_film = (!is_tir && effective_thickness > 0.0f);
+
+        if (has_thin_film) {
+            float R_r = get_dielectric_thin_film_reflectance(650.0f, effective_thickness, mat.thin_film_ior, eta_i, eta_t, cos_theta_i);
+            float R_g = get_dielectric_thin_film_reflectance(550.0f, effective_thickness, mat.thin_film_ior, eta_i, eta_t, cos_theta_i);
+            float R_b = get_dielectric_thin_film_reflectance(450.0f, effective_thickness, mat.thin_film_ior, eta_i, eta_t, cos_theta_i);
             
-            // Calculate thin-film modulated reflectance using Airy Summation
-            // We pass eta_i (Incident IOR) and eta_t (Substrate IOR)
-            float R_tf = get_dielectric_thin_film_reflectance(
-                lambda, effective_thickness, mat.thin_film_ior, 
-                eta_i, eta_t, cos_theta_i
-            );
+            R_spectral = GpuVec3(R_r, R_g, R_b);
+            T_spectral = GpuVec3(1.0f - R_r, 1.0f - R_g, 1.0f - R_b);
             
-            // Update the effective reflection probability
-            reflect_prob = R_tf;
-            
-            // We will apply the boost inside the reflection/refraction branches to ensure normalization
+            // Fix: Use Average Reflectance for Sampling Probability (Deterministic)
+            // This reduces variance compared to random channel selection
+            reflect_prob = (R_r + R_g + R_b) / 3.0f;
         }
-        
-        // 4. Sample and Update
+
+        // 4. Sample and Update (LDS)
         GpuVec3 out_direction;
         float delta = 0.0f;
 
-        if (rand_float(seed) < reflect_prob) {
+        if (r_bsdf_3 < reflect_prob) {
             // Reflection (White for Dielectric)
-            // attenuation remains white (1.0)
-            
             out_direction = reflect(unit_direction, normal);
             
             if (is_tir) {
@@ -912,28 +1045,37 @@ __device__ bool scatter(
                 delta = phase_s - phase_p;
                 
                 apply_mueller_reflection_dielectric(stokes, 1.0f, 1.0f, delta);
-                // TIR reflect_prob is 1.0, no normalization needed
             } else {
-                // float old_I = stokes.I; // Unused
                 apply_mueller_reflection_dielectric(stokes, rs, rp);
-                
-                // If thin film is present, we need to scale the Mueller result 
-                // so that the intensity matches the thin-film reflectance R_tf.
-                // Since reflect_prob IS R_tf, we scale stokes by R_tf / stokes.I.
-                float current_I = stokes.I;
-                float scale = reflect_prob / fmaxf(1e-6f, current_I);
-                stokes.I *= scale;
-                stokes.Q *= scale;
-                stokes.U *= scale;
-                stokes.V *= scale;
             }
             
+            // Apply Spectral Modulation for Thin Film
+            if (has_thin_film) {
+                attenuation.values.x *= R_spectral.x;
+                attenuation.values.y *= R_spectral.y;
+                attenuation.values.z *= R_spectral.z;
+            } else {
+                // Apply Fresnel Reflectance (Energy Conservation)
+                attenuation = attenuation * reflect_prob;
+            }
+
             // Standard importance sampling normalization
-            stokes = stokes * (1.0f / fmaxf(1e-6f, reflect_prob));
+            float pdf = fmaxf(1e-6f, reflect_prob);
+            stokes = stokes * (1.0f / pdf);
+            attenuation = attenuation * (1.0f / pdf);
         } else {
             // Refraction
-            // Apply albedo as transmission tint (Beer's Law approximation)
-            attenuation = attenuation * mat.albedo;
+            GpuSpectrum transmission_color = mat.albedo;
+            
+            if (has_thin_film) {
+                 transmission_color.values.x *= T_spectral.x;
+                 transmission_color.values.y *= T_spectral.y;
+                 transmission_color.values.z *= T_spectral.z;
+            } else {
+                // Standard Dielectric Transmission
+                transmission_color = transmission_color * (1.0f - reflect_prob);
+            }
+            attenuation = transmission_color;
 
             GpuVec3 perp = (eta_i / eta_t) * (unit_direction + cos_theta_i * normal);
             GpuVec3 para = -sqrtf(fmaxf(0.0f, 1.0f - perp.length_sq())) * normal;
@@ -942,24 +1084,37 @@ __device__ bool scatter(
             float transmit_prob = 1.0f - reflect_prob;
             apply_mueller_transmission_dielectric(stokes, ts, tp, (eta_t * cos_theta_t) / (eta_i * cos_theta_i));
             
-            // Scale transmission to match transmit_prob (1 - R_tf)
-            float current_I = stokes.I;
-            float scale = transmit_prob / fmaxf(1e-6f, current_I);
-            stokes.I *= scale;
-            stokes.Q *= scale;
-            stokes.U *= scale;
-            stokes.V *= scale;
+            // Radiance Scaling:
+            // Strictly speaking, L_t = L_i * (eta_t / eta_i)^2.
+            // However, this causes excessive brightness ("glowing") and fireflies for high IOR ratios.
+            // We switch to Flux Conservation logic (scale = 1.0) to stabilize the image and fix the glowing artifact.
+            // This effectively traces Flux Density rather than Radiance, which is robust for this renderer.
+            float radiance_scale = 1.0f;
+            stokes = stokes * radiance_scale;
+            attenuation = attenuation * radiance_scale;
 
             // Normalize by transmit_prob
-            stokes = stokes * (1.0f / fmaxf(1e-6f, transmit_prob));
+            float pdf = fmaxf(1e-6f, transmit_prob);
+            stokes = stokes * (1.0f / pdf);
+            attenuation = attenuation * (1.0f / pdf);
         }
 
         // 5. Rotate to Outgoing Reference Frame
         scattered.direction = out_direction.normalize();
         
         GpuVec3 ref_out = get_reference_frame(scattered.direction);
-        GpuVec3 s_axis_out = scattered.direction.cross(normal).normalize(); 
         
+        // Fix Singularity: Check length before normalization
+        GpuVec3 raw_s_out = scattered.direction.cross(normal);
+        float raw_len_sq_out = raw_s_out.length_sq();
+        GpuVec3 s_axis_out;
+        
+        if (raw_len_sq_out < 1e-12f) {
+            s_axis_out = get_reference_frame(normal);
+        } else {
+            s_axis_out = raw_s_out * (1.0f / sqrtf(raw_len_sq_out));
+        }
+
         float cos_phi_out = s_axis_out.dot(ref_out);
         float sin_phi_out = s_axis_out.cross(ref_out).dot(scattered.direction);
         float phi_out = atan2f(sin_phi_out, cos_phi_out);
@@ -968,7 +1123,10 @@ __device__ bool scatter(
         rotate_stokes(stokes, 2.0f * phi_out);
 
         // Final Setup
-        scattered.origin = p + scattered.direction * 1e-3f; 
+        // Use Robust Offset based on scatter direction and original normal 'n'
+        // This handles both Reflection (same side) and Refraction (opposite side) correctly
+        GpuVec3 offset = (scattered.direction.dot(n) > 0.0f) ? n : -n;
+        scattered.origin = p + offset * 1e-3f; 
         scattered.t_min = 1e-3f;
         scattered.t_max = FLT_MAX;
         
@@ -984,12 +1142,15 @@ __device__ bool scatter(
         
         attenuation = mat.albedo * intensity;
         
-        // Treat as Lambertian scattering
-        GpuVec3 scatter_direction = n + random_unit_vector(seed);
+        // Treat as Lambertian scattering (LDS)
+        GpuVec3 scatter_direction = n + sample_unit_vector_lds(r_bsdf_1, r_bsdf_2);
         if (scatter_direction.length_sq() < 1e-16f) scatter_direction = n;
         
         scattered.direction = scatter_direction.normalize();
-        scattered.origin = p + n * 1e-3f;
+        
+        // Use Robust Offset
+        GpuVec3 offset = (scattered.direction.dot(n) > 0.0f) ? n : -n;
+        scattered.origin = p + offset * 1e-3f;
         scattered.t_min = 1e-3f;
         scattered.t_max = FLT_MAX;
         return true;
@@ -997,8 +1158,12 @@ __device__ bool scatter(
     return false;
 }
 
-__device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed) {
-    GpuSpectrum accumulated_color = GpuSpectrum::from_rgb(GpuVec3(1.0f, 1.0f, 1.0f)); 
+__device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int sample_index, int pixel_index) {
+    // Initialize Throughput with Full Spectral Weight (Deterministic)
+    // We trace one path (Hero Wavelength driven) but accumulate contribution for all RGB channels.
+    // This eliminates color noise at the cost of slight spectral blurring (biased but consistent).
+    GpuSpectrum accumulated_color = GpuSpectrum(1.0f);
+    
     GpuSpectrum final_color = GpuSpectrum::from_rgb(GpuVec3(0.0f, 0.0f, 0.0f));
     
     // Phase 3: Polarization tracking
@@ -1024,13 +1189,25 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed) {
             
             // Add emission from the material we just hit
             GpuSpectrum emitted = mat.emission;
-            final_color = final_color + accumulated_color * emitted;
+            
+            // Indirect Clamping (Firefly Removal) - Apply to Contribution, not Throughput
+            GpuSpectrum contribution = accumulated_color * emitted;
+            
+            // Allow higher dynamic range for primary hit, clamp more aggressively for indirect
+            float max_radiance = (depth == 0) ? 1000.0f : 20.0f; 
+            
+            contribution.values.x = fminf(contribution.values.x, max_radiance);
+            contribution.values.y = fminf(contribution.values.y, max_radiance);
+            contribution.values.z = fminf(contribution.values.z, max_radiance);
+            
+            final_color = final_color + contribution;
 
             GpuRay scattered;
             GpuSpectrum attenuation;
             
-            // Pass default dispersion clamp (20.0f) for megakernel path
-            if (scatter(r, mat, p, n, uv, accumulated_color, attenuation, scattered, current_stokes, seed, 20.0f)) {
+            // Pass default dispersion clamp (10.0f) for megakernel path
+            // Reduced from 20.0f to reduce fireflies in caustics
+            if (scatter(r, mat, p, n, uv, accumulated_color, attenuation, scattered, current_stokes, seed, 10.0f, sample_index, pixel_index, depth)) {
                 accumulated_color = accumulated_color * attenuation;
                 
                 // Robust NaN check (checking first value as proxy)
@@ -1048,7 +1225,7 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed) {
                     float max_comp = fmaxf(rgb.x, fmaxf(rgb.y, rgb.z));
                     // Clamp probability to avoid terminating bright paths too aggressively or infinite loops
                     // Also clamp minimum probability to prevent massive weight boosts (fireflies) for dark paths
-                    float probability = fmaxf(0.1f, fminf(max_comp, 0.95f)); 
+                    float probability = fminf(fmaxf(max_comp, 0.1f), 0.95f); 
                     
                     if (rand_float(seed) > probability) {
                         break;
@@ -1125,9 +1302,15 @@ __global__ void generate_rays_kernel(
     unsigned int seed = wang_hash(1984 + pixel_index + sample_index * width * height);
     
     // Tent Filter for High Quality Anti-Aliasing (Strict Quality Mode)
-    // Maps uniform random numbers to a triangle distribution [-1, 1]
-    float r1 = rand_float(seed);
-    float r2 = rand_float(seed);
+    // Uses Halton Sequence (LDS) for faster convergence
+    // Dimensions 0 and 1 for Pixel Jitter
+    float r1 = sample_dimension(sample_index, pixel_index, 0);
+    float r2 = sample_dimension(sample_index, pixel_index, 1);
+    
+    // Reserve Dimensions 2 and 3 for Lens Sampling (Stratified)
+    // Even if camera is pinhole, we reserve these to align with scatter offsets
+    // float r3 = sample_dimension(sample_index, pixel_index, 2);
+    // float r4 = sample_dimension(sample_index, pixel_index, 3);
     
     float dx = (r1 < 0.5f) ? sqrtf(2.0f * r1) - 1.0f : 1.0f - sqrtf(2.0f * (1.0f - r1));
     float dy = (r2 < 0.5f) ? sqrtf(2.0f * r2) - 1.0f : 1.0f - sqrtf(2.0f * (1.0f - r2));
@@ -1141,7 +1324,13 @@ __global__ void generate_rays_kernel(
     
     queue.origins[ray_index] = r.origin;
     queue.directions[ray_index] = r.direction;
-    queue.throughputs[ray_index] = GpuSpectrum::from_rgb(GpuVec3(1, 1, 1));
+
+    // Initialize Throughput with Full Spectral Weight (Deterministic)
+    // We trace one path (Hero Wavelength driven) but accumulate contribution for all RGB channels.
+    // This eliminates color noise at the cost of slight spectral blurring (biased but consistent).
+    GpuSpectrum initial_throughput = GpuSpectrum(1.0f); 
+    
+    queue.throughputs[ray_index] = initial_throughput;
     queue.stokes[ray_index] = StokesVector(1.0f, 0.0f, 0.0f, 0.0f); // Phase 3: Unpolarized
     queue.seeds[ray_index] = seed;
     queue.pixel_indices[ray_index] = pixel_index;
@@ -1480,13 +1669,12 @@ __global__ void shade_kernel(
             GpuVec3 rgb = contribution.to_rgb();
             
             if (depth > 0) {
-                 // Relaxed clamp for Caustics (was 10.0f)
+                 // Relaxed clamp for Caustics
                  // High-quality caustics require high dynamic range.
-                 // Restored to 1000.0f as requested to preserve caustic intensity.
-                 // We rely on high SPP to resolve fireflies.
-                 float max_radiance = 1000.0f; 
-                 if (rgb.x > max_radiance) rgb.x = max_radiance;
-                 if (rgb.y > max_radiance) rgb.y = max_radiance;
+                 // Increased to 1000.0f to allow bright caustics (e.g. through glass)
+                float max_radiance = 1000.0f; 
+                if (rgb.x > max_radiance) rgb.x = max_radiance;
+                if (rgb.y > max_radiance) rgb.y = max_radiance;
                  if (rgb.z > max_radiance) rgb.z = max_radiance;
             }
 
@@ -1504,47 +1692,92 @@ __global__ void shade_kernel(
     // Next Event Estimation (NEE)
     // Only for non-specular materials (Lambertian, Cloth)
     if (scene.light_count > 0 && (mat.type == MaterialType::Lambertian || mat.type == MaterialType::Cloth)) {
+        // LDS for Light Sampling
+        // Dimensions reserved for Light: 3, 4, 5 offset by depth
+        // Base offset = 4 + depth * 6 (BSDF takes 0,1,2; Light takes 3,4,5)
+        int dim_offset = 4 + depth * 6;
+        
+        float r_light_pick = sample_dimension(sample_index, pixel_index, dim_offset + 3);
+        float r_light_1 = sample_dimension(sample_index, pixel_index, dim_offset + 4);
+        float r_light_2 = sample_dimension(sample_index, pixel_index, dim_offset + 5);
+
         // Pick a random light
-        int light_idx_idx = min(int(rand_float(seed) * scene.light_count), scene.light_count - 1);
+        int light_idx_idx = min(int(r_light_pick * scene.light_count), scene.light_count - 1);
         int light_idx = scene.light_indices[light_idx_idx];
         
-        // Sample Point on Light (Sphere)
+        // Sample Point on Light (Sphere) using Cone Sampling (Solid Angle)
         GpuSphere light_sphere = scene.spheres[light_idx];
-        GpuVec3 on_light = light_sphere.center + random_unit_vector(seed) * light_sphere.radius;
-        GpuVec3 to_light = on_light - p;
-        float dist_sq = to_light.length_sq();
-        float dist = sqrtf(dist_sq);
-        GpuVec3 l_dir = to_light * (1.0f / dist);
-        
-        // Cosine at Light (Normal of sphere at point is (point - center).normalized)
-        GpuVec3 n_light = (on_light - light_sphere.center).normalize();
-        float cos_light = fmaxf(0.0f, (-l_dir).dot(n_light));
-        
-        // Cosine at Surface
-        float cos_surf = fmaxf(0.0f, n.dot(l_dir));
-        
-        // Shadow Terminator Fix: Ensure light is also visible from geometric normal
-        if (cos_light > 0.0f && cos_surf > 0.0f && ng.dot(l_dir) > 0.0f) {
-             // Light Emission
-             GpuSpectrum L_e = scene.materials[light_sphere.material_index].emission;
-             
-             // BRDF (Lambertian = albedo / PI)
-             GpuSpectrum f_r = mat.albedo * (1.0f / 3.14159f);
+        GpuVec3 wc = light_sphere.center - p;
+        float dist_sq = wc.length_sq();
+        float radius = light_sphere.radius;
+        float radius_sq = radius * radius;
 
-             float area = 4.0f * 3.14159f * light_sphere.radius * light_sphere.radius;
-             float weight = area * scene.light_count;
-             
-             GpuSpectrum contribution = throughput * L_e * f_r * (cos_surf * cos_light / dist_sq) * weight;
-             
-             // Queue Shadow Ray
-             int s_idx = atomicAdd(shadow_queue.count, 1);
-             if (s_idx < shadow_queue.capacity) {
-                 shadow_queue.origins[s_idx] = p + ng * 1e-4f;
-                 shadow_queue.directions[s_idx] = l_dir;
-                 shadow_queue.max_dist[s_idx] = dist - 2e-4f; // Stop before hitting the light itself
-                 shadow_queue.radiance[s_idx] = contribution;
-                 shadow_queue.pixel_indices[s_idx] = pixel_index;
-             }
+        // Check if we are outside the light
+        if (dist_sq > radius_sq) {
+            float dist = sqrtf(dist_sq);
+            float sin_theta_max2 = radius_sq / dist_sq;
+            float cos_theta_max = sqrtf(fmaxf(0.0f, 1.0f - sin_theta_max2));
+            
+            // Uniform Sample Cone
+            float r1 = r_light_1;
+            float r2 = r_light_2;
+            float cos_theta = 1.0f - r1 + r1 * cos_theta_max;
+            float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - cos_theta * cos_theta));
+            float phi = 6.2831853f * r2;
+            
+            // Build Orthonormal Basis (w aligned to light center)
+            GpuVec3 w = wc * (1.0f / dist);
+            GpuVec3 u = (fabsf(w.x) > 0.9f) ? GpuVec3(0, 1, 0) : GpuVec3(1, 0, 0);
+            u = u.cross(w).normalize();
+            GpuVec3 v = w.cross(u);
+            
+            GpuVec3 l_dir = (u * cosf(phi) * sin_theta + v * sinf(phi) * sin_theta + w * cos_theta).normalize();
+            
+            // Visibility Check (Geometry)
+            // Note: Cone sampling ensures we hit the light, so cos_light is implicitly handled in Solid Angle PDF
+            float cos_surf = fmaxf(0.0f, n.dot(l_dir));
+            
+            // Shadow Terminator Fix: Ensure light is also visible from geometric normal
+            if (cos_surf > 0.0f && ng.dot(l_dir) > 0.0f) {
+                 // Solid Angle PDF
+                 float solid_angle = 6.2831853f * (1.0f - cos_theta_max);
+                 float pdf = 1.0f / solid_angle;
+                 
+                 // Selection PDF (1/N)
+                 pdf *= (1.0f / scene.light_count);
+                 
+                 // Light Emission
+                 GpuSpectrum L_e = scene.materials[light_sphere.material_index].emission;
+                 
+                 // BRDF (Lambertian = albedo / PI)
+                 GpuSpectrum f_r = mat.albedo * (1.0f / 3.14159f);
+                 
+                 // Contribution = Le * fr * cos_surf / PDF
+                 GpuSpectrum contribution = throughput * L_e * f_r * cos_surf * (1.0f / pdf);
+                 
+                 // Calculate exact distance to sphere surface for shadow ray
+                 // Intersection t: t^2 + 2(M.D)t + (M.M - R^2) = 0 where M = P - C = -wc
+                 float M_dot_D = -wc.dot(l_dir);
+                 float c = dist_sq - radius_sq;
+                 float discriminant = M_dot_D * M_dot_D - c;
+                 
+                 if (discriminant > 0.0f) {
+                    float t_hit = -M_dot_D - sqrtf(discriminant);
+                    
+                    // Fix: Ensure t_hit is positive to avoid self-intersection or wrong direction
+                    if (t_hit > 1e-4f) {
+                        // Queue Shadow Ray
+                        int s_idx = atomicAdd(shadow_queue.count, 1);
+                        if (s_idx < shadow_queue.capacity) {
+                            shadow_queue.origins[s_idx] = p + ng * 1e-4f;
+                            shadow_queue.directions[s_idx] = l_dir;
+                            shadow_queue.max_dist[s_idx] = t_hit - 1e-4f; 
+                            shadow_queue.radiance[s_idx] = contribution;
+                            shadow_queue.pixel_indices[s_idx] = pixel_index;
+                        }
+                    }
+                }
+            }
         }
     }
     
@@ -1561,7 +1794,7 @@ __global__ void shade_kernel(
 
     GpuVec2 uv = hit_queue.uv[idx];
 
-    if (scatter(r_in, mat, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, dispersion_clamp)) {
+    if (scatter(r_in, mat, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, dispersion_clamp, sample_index, pixel_index, depth)) {
         GpuSpectrum new_throughput = throughput * attenuation;
         
         // Robust NaN check
@@ -1703,13 +1936,10 @@ __global__ void adaptive_render_kernel(
         GpuVec3 mean_sq = mean * mean;
         GpuVec3 var_vec = (sum_sq * (1.0f / N)) - mean_sq;
         
-        float max_var = fmaxf(var_vec.x, fmaxf(var_vec.y, var_vec.z));
+        // Fix: Ensure all channels are converged and handle potential precision issues
+        float threshold_sq_N = variance_threshold * variance_threshold * N;
         
-        // Standard Error = sqrt(Var / N)
-        // If Standard Error < Threshold, we are converged
-        // To avoid sqrt, check Var/N < Threshold^2 => Var < Threshold^2 * N
-        
-        if (max_var < (variance_threshold * variance_threshold * N)) {
+        if (var_vec.x < threshold_sq_N && var_vec.y < threshold_sq_N && var_vec.z < threshold_sq_N) {
             // Converged
             return;
         }
@@ -1721,8 +1951,22 @@ __global__ void adaptive_render_kernel(
     GpuVec3 batch_sq(0, 0, 0);
     
     for (int s = 0; s < batch_samples; ++s) {
-        float u = (float(i) + rand_float(seed)) / float(width - 1);
-        float v = (float(height - 1 - j) + rand_float(seed)) / float(height - 1); 
+        // Tent Filter Implementation
+        // Maps uniform random [0,1] to triangle distribution [-1, 1]
+        // This provides better anti-aliasing than a Box filter.
+        float r_x = rand_float(seed);
+        float r_y = rand_float(seed);
+        
+        float dx, dy;
+        if (r_x < 0.5f) dx = sqrtf(2.0f * r_x) - 1.0f;
+        else dx = 1.0f - sqrtf(2.0f * (1.0f - r_x));
+        
+        if (r_y < 0.5f) dy = sqrtf(2.0f * r_y) - 1.0f;
+        else dy = 1.0f - sqrtf(2.0f * (1.0f - r_y));
+
+        // Use 'width' and 'height' for correct UV mapping (not -1)
+        float u = (float(i) + 0.5f + dx) / float(width);
+        float v = (float(height - 1 - j) + 0.5f + dy) / float(height); 
 
         GpuRay ray;
         ray.origin = camera.origin;
@@ -1730,7 +1974,7 @@ __global__ void adaptive_render_kernel(
         ray.t_min = 1e-4f;
         ray.t_max = FLT_MAX;
         
-        GpuVec3 sample_radiance = path_trace(ray, scene, seed);
+        GpuVec3 sample_radiance = path_trace(ray, scene, seed, current_samples + s, pixel_index);
         batch_color = batch_color + sample_radiance;
         batch_sq = batch_sq + (sample_radiance * sample_radiance);
     }
@@ -2565,7 +2809,10 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
         // SPP 100 -> 0.2
         // SPP 400 -> 0.1
         // SPP 2500 -> 0.04
-        float c_phi = fmaxf(0.02f, 2.0f / sqrtf((float)samples_per_pixel)); 
+        float c_phi = 1.0f;
+        if (samples_per_pixel > 0) {
+            c_phi = fmaxf(0.02f, 2.0f / sqrtf((float)samples_per_pixel));
+        } 
         
         // If SPP is very high, reduce iterations to avoid over-smoothing
         if (samples_per_pixel > 1000) iterations = 2;
@@ -2604,41 +2851,45 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
 
     // FXAA Pass
     // Only apply if we have a valid pointer (always true here)
-    std::cout << "[GPU] Anti-Aliasing (FXAA)..." << std::endl;
-    
-    // We need a destination buffer. 
-    // If denoiser was run, we can reuse the OTHER ping-pong buffer.
-    // If denoiser was NOT run, we need to allocate a temp buffer or reuse something.
-    // Simpler: Just allocate a dedicated FXAA output buffer or reuse d_ping/d_pong if available.
-    
+    // Update: Disable FXAA for high SPP (>= 400) to avoid double-blurring with Tent filter
+    bool enable_fxaa = (samples_per_pixel < 400); 
+
     GpuVec3* d_fxaa_out = nullptr;
-    
-    if (enable_denoiser) {
-        d_fxaa_out = (final_denoised == d_ping) ? d_pong : d_ping;
+
+    if (enable_fxaa) {
+        std::cout << "[GPU] Anti-Aliasing (FXAA)..." << std::endl;
+        
+        if (enable_denoiser) {
+            d_fxaa_out = (final_denoised == d_ping) ? d_pong : d_ping;
+        } else {
+            // Need a temp buffer if denoiser wasn't run but FXAA is enabled
+            cudaMalloc(&d_fxaa_out, framebuffer_size);
+        }
+
+        fxaa_kernel<<<numBlocks, threadsPerBlock>>>(
+            d_fxaa_out,
+            final_denoised,
+            width,
+            height
+        );
+        checkCudaErrors(cudaGetLastError());
+        checkCudaErrors(cudaDeviceSynchronize());
+        
+        std::cout << "[GPU] Copying results to host..." << std::endl;
+        cudaMemcpy(output_buffer, d_fxaa_out, framebuffer_size, cudaMemcpyDeviceToHost);
     } else {
-        // reuse d_ping logic but we didn't alloc it.
-        // Let's alloc one temp buffer.
-        cudaMalloc(&d_fxaa_out, framebuffer_size);
+        std::cout << "[GPU] High SPP detected, skipping FXAA for maximum sharpness." << std::endl;
+        std::cout << "[GPU] Copying results to host..." << std::endl;
+        cudaMemcpy(output_buffer, final_denoised, framebuffer_size, cudaMemcpyDeviceToHost);
     }
 
-    fxaa_kernel<<<numBlocks, threadsPerBlock>>>(
-        d_fxaa_out,
-        final_denoised,
-        width,
-        height
-    );
-    checkCudaErrors(cudaGetLastError());
-    checkCudaErrors(cudaDeviceSynchronize());
-    
-    std::cout << "[GPU] Copying results to host..." << std::endl;
-    cudaMemcpy(output_buffer, d_fxaa_out, framebuffer_size, cudaMemcpyDeviceToHost);
     std::cout << "[GPU] Render Complete." << std::endl;
 
     if (enable_denoiser) {
         cudaFree(d_ping);
         cudaFree(d_pong);
     } else {
-        cudaFree(d_fxaa_out);
+        if (d_fxaa_out) cudaFree(d_fxaa_out);
     }
     cudaFree(d_normal_buffer);
     cudaFree(d_albedo_buffer);

@@ -1,0 +1,7 @@
+# Test Noise Scene
+resolution 2560 1600
+camera pos 3 5 5 lookat 0 0.2 0 fov 35
+define_material mat_water dielectric 0.95 0.98 1.0 0.0 1.33 0.015
+define_material mat_light light 25 25 25
+add_entity sphere mat_water 0 0 0 1 1 1
+add_entity sphere mat_light 0 10 5 2 2 2

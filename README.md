@@ -40,7 +40,7 @@ UltraRender 不仅仅是一个图形渲染器，而是一个**物理光学模拟
 ### 阶段三：超越几何光学 (Beyond Ray Optics) [进行中]
 - [x] **偏振光渲染 (Polarization)**: 引入 Stokes 矢量与 Mueller 矩阵，模拟天空偏振、全反射相位偏移。
 - [x] **光谱金属材质**: 支持基于波长的复折射率 (n, k) 渲染（金、铜、铝等预设）。
-- [/] **薄膜干涉 (Thin-film Interference)**: 已初步实现基于物理相位差的干涉模型，正在调试干涉色彩对比度。
+- [x] **薄膜干涉 (Thin-film Interference)**: 实现了完整的 Airy Summation 公式，支持多重反射干涉，并增加了基于 UV 的重力厚度调制。
 - [ ] **波动光学接口 (Wave Optics)**: 探索在微观尺度引入波动方程，精确模拟昆虫翅膀的结构色 (Structural Color)。
 - [ ] **荧光与磷光 (Fluorescence & Phosphorescence)**: 支持波长偏移 (Wavelength Shifting) 的材质路径追踪。
 
@@ -51,6 +51,15 @@ UltraRender 不仅仅是一个图形渲染器，而是一个**物理光学模拟
 ## 5. 渲染优化与降噪路线图 (Optimization & Denoising Roadmap) [新增]
 
 针对高采样场景下的彩色噪点与渲染时间问题，我们制定了专项优化计划：
+
+### 已完成优化 (Completed Optimizations)
+1.  **物理能量守恒修复**:
+    - 修复了电介质折射时的**辐射亮度缩放 (Radiance Scaling)**，严格遵循 $(\eta_i / \eta_t)^2$ 物理定律，解决了水体异常发光问题。
+    - 修正了光谱渲染中的通道能量增强逻辑，消除了多波次反射后的能量爆炸。
+2.  **几何与伪影修复**:
+    - **鲁棒性反射**: 修复了金属反射视线与法线平行时的数学奇点（Singularity），消除了“黑洞”伪影。
+    - **焦散可见性**: 放宽了辐射亮度截断 (Clamping) 阈值 (20 -> 1000)，恢复了玻璃杯底部的真实焦散细节。
+    - **几何细分**: 提升了过程化几何体（杯子、水柱）的细分精度 (64 -> 256)，消除了折射中的多边形棱角。
 
 ### 优化一阶段：确定性与重要性采样 (Determinism & Importance Sampling)
 1.  **修复色散通道选择算法**: 

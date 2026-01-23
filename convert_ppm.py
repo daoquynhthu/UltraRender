@@ -16,5 +16,5 @@ def convert_bmp_to_png(bmp_path, png_path):
 
 if __name__ == "__main__":
     # 示例：将 output 目录下的 glass_cup.bmp 转换为 glass_cup.png
-    convert_bmp_to_png("output/glass_cup.bmp", "output/glass_cup.png")
+    convert_bmp_to_png("output/glass_cup_quick.bmp", "output/glass_cup_quick.png")
     
