@@ -20,6 +20,10 @@ __host__ __device__ inline float4 operator+(const float4& a, const float4& b) {
     return make_float4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
 }
 
+__host__ __device__ inline float4 operator-(const float4& a, const float4& b) {
+    return make_float4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);
+}
+
 __host__ __device__ inline float4 operator*(const float4& a, const float4& b) {
     return make_float4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w);
 }
@@ -152,6 +156,13 @@ struct alignas(16) GpuSpectrum {
     __host__ __device__ GpuSpectrum operator+(const GpuSpectrum& other) const {
         GpuSpectrum res;
         res.values = values + other.values;
+        res.wavelengths = wavelengths;
+        return res;
+    }
+
+    __host__ __device__ GpuSpectrum operator-(const GpuSpectrum& other) const {
+        GpuSpectrum res;
+        res.values = values - other.values;
         res.wavelengths = wavelengths;
         return res;
     }
@@ -300,6 +311,7 @@ struct RayQueue {
     int* pixel_indices;
     int* depths;
     int* flags; // Bitmask for ray state (e.g. 0x1 = Specular Bounce)
+    float* last_pdf; // For MIS: PDF of the last sampled direction
     
     // Using pointer for atomic operations on device
     int* count; 

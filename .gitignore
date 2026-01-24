@@ -3,3 +3,4 @@ output/*
 build/*
 build_ninja/*
 build_vs4/*
+build_vs/*

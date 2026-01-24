@@ -649,16 +649,106 @@ __device__ inline float get_dielectric_thin_film_reflectance(
     return 0.5f * (R_s + R_p);
 }
 
+__device__ inline float get_cloth_intensity(const GpuVec3& p) {
+    float freq = 20.0f; // Lower frequency for visible texture
+    float noise = sinf(p.x * freq) * sinf(p.z * freq);
+    // Map [-1, 1] to [0.5, 1.0] for high contrast visibility
+    return 0.75f + noise * 0.25f;
+}
+
+__device__ float pdf_bsdf(const GpuMaterial& mat, const GpuVec3& n, const GpuVec3& wo, const GpuVec3& wi) {
+    if (mat.type == MaterialType::Lambertian || mat.type == MaterialType::Cloth) {
+        float cosine = n.dot(wi);
+        return (cosine > 0.0f) ? cosine * 0.318309886f : 0.0f;
+    } else if (mat.type == MaterialType::Metal) {
+        GpuVec3 V = wo;
+        GpuVec3 L = wi;
+        GpuVec3 N = n;
+        if (V.dot(N) < 0.0f) N = -N;
+        
+        float NdotV = N.dot(V);
+        float NdotL = N.dot(L);
+        if (NdotV <= 1e-6f || NdotL <= 1e-6f) return 0.0f;
+        
+        GpuVec3 H = (V + L).normalize();
+        float NdotH = N.dot(H);
+        if (NdotH <= 0.0f) return 0.0f;
+        
+        float D = ggx_D(NdotH, mat.roughness);
+        
+        float rough = fmaxf(0.001f, mat.roughness);
+        float k = (rough + 1.0f);
+        k = (k * k) * 0.125f;
+        float G1_V = smith_G1(NdotV, k);
+        
+        // PDF(L) = G1(V) * D / (4 * n.v) for Visible Normal Sampling
+        return (G1_V * D) / (4.0f * NdotV);
+    } else if (mat.type == MaterialType::Dielectric) {
+        // Delta distribution (Perfect Specular) -> PDF is Dirac Delta (effectively 0 for solid angle sampling)
+        return 0.0f;
+    }
+    return 0.0f;
+}
+
+__device__ GpuSpectrum eval_bsdf(const GpuMaterial& mat, const GpuVec3& p, const GpuVec3& n, const GpuVec3& wo, const GpuVec3& wi) {
+    if (mat.type == MaterialType::Lambertian) {
+        float cosine = n.dot(wi);
+        if (cosine > 0.0f) {
+            return mat.albedo * 0.318309886f;
+        }
+    } else if (mat.type == MaterialType::Cloth) {
+        float cosine = n.dot(wi);
+        if (cosine > 0.0f) {
+            float intensity = get_cloth_intensity(p);
+            return mat.albedo * intensity * 0.318309886f;
+        }
+    } else if (mat.type == MaterialType::Metal) {
+        GpuVec3 V = wo;
+        GpuVec3 L = wi;
+        GpuVec3 N = n;
+        if (V.dot(N) < 0.0f) N = -N;
+        
+        float NdotV = N.dot(V);
+        float NdotL = N.dot(L);
+        if (NdotV <= 1e-6f || NdotL <= 1e-6f) return GpuSpectrum(0.0f);
+        
+        GpuVec3 H = (V + L).normalize();
+        float NdotH = N.dot(H);
+        float VdotH = V.dot(H);
+        
+        float D = ggx_D(NdotH, mat.roughness);
+        
+        float rough = fmaxf(0.001f, mat.roughness);
+        float k = (rough + 1.0f);
+        k = (k * k) * 0.125f;
+        float G = smith_G(NdotV, NdotL, k);
+        
+        // Approx Fresnel (Schlick)
+        float one_minus = powf(1.0f - fmaxf(0.0f, VdotH), 5.0f);
+        // Note: Assuming mat.albedo is F0
+        GpuSpectrum F0 = mat.albedo;
+        GpuSpectrum F = F0 + (GpuSpectrum(1.0f) - F0) * one_minus;
+        
+        return F * (D * G / (4.0f * NdotV * NdotL));
+    } else if (mat.type == MaterialType::Dielectric) {
+        // Delta distribution -> BSDF is Dirac Delta (cannot evaluate as function)
+        return GpuSpectrum(0.0f);
+    }
+    return GpuSpectrum(0.0f);
+}
+
 __device__ bool scatter(
     const GpuRay& r_in, const GpuMaterial& mat, const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
     const GpuSpectrum& current_throughput,
     GpuSpectrum& attenuation, GpuRay& scattered, StokesVector& stokes, unsigned int& seed,
+    float& out_pdf,
     float dispersion_clamp,
     int sample_index,
     int pixel_index,
     int depth,
     int& spectral_channel // 0: None, 1: R, 2: G, 3: B
 ) {
+    out_pdf = 0.0f;
     // LDS Sampling
     // Dimensions reserved for BSDF: 0, 1, 2 offset by depth
     int dim_offset = 4 + depth * 6;
@@ -702,6 +792,8 @@ __device__ bool scatter(
         stokes.Q = 0.0f;
         stokes.U = 0.0f;
         stokes.V = 0.0f;
+        
+        out_pdf = pdf_bsdf(mat, n, -r_in.direction, scattered.direction);
         
         return true;
     } else if (mat.type == MaterialType::Metal) {
@@ -876,6 +968,8 @@ __device__ bool scatter(
         scattered.t_min = 1e-3f;
         scattered.t_max = FLT_MAX;
 
+        out_pdf = pdf_bsdf(mat, n, -r_in.direction, scattered.direction);
+
         // Remove channel masking - return full RGB
         return (scattered.direction.dot(N) > 0);
     } else if (mat.type == MaterialType::Dielectric) {
@@ -1049,6 +1143,7 @@ __device__ bool scatter(
             float pdf = fmaxf(1e-6f, reflect_prob);
             stokes = stokes * (1.0f / pdf);
             attenuation = attenuation * (1.0f / pdf);
+            out_pdf = pdf;
         } else {
             // Refraction
             GpuSpectrum transmission_color = mat.albedo;
@@ -1080,6 +1175,7 @@ __device__ bool scatter(
             float pdf = fmaxf(1e-6f, transmit_prob);
             stokes = stokes * (1.0f / pdf);
             attenuation = attenuation * (1.0f / pdf);
+            out_pdf = pdf;
         }
 
         // 5. Rotate to Outgoing Reference Frame
@@ -1116,12 +1212,7 @@ __device__ bool scatter(
         return true;
     } else if (mat.type == MaterialType::Cloth) {
         // Procedural Weave Pattern
-        // Use world position to modulate albedo
-        float freq = 20.0f; // Lower frequency for visible texture (was 100.0f)
-        float noise = sinf(p.x * freq) * sinf(p.z * freq);
-        
-        // Map [-1, 1] to [0.5, 1.0] for high contrast visibility
-        float intensity = 0.75f + noise * 0.25f;
+        float intensity = get_cloth_intensity(p);
         
         attenuation = mat.albedo * intensity;
         
@@ -1136,6 +1227,9 @@ __device__ bool scatter(
         scattered.origin = p + offset * 1e-3f;
         scattered.t_min = 1e-3f;
         scattered.t_max = FLT_MAX;
+        
+        out_pdf = pdf_bsdf(mat, n, -r_in.direction, scattered.direction);
+        
         return true;
     }
     return false;
@@ -1282,7 +1376,8 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
             
             // Pass default dispersion clamp (10.0f) for megakernel path
             // Reduced from 20.0f to reduce fireflies in caustics
-            if (scatter(r, mat, p, n, uv, accumulated_color, attenuation, scattered, current_stokes, seed, 10.0f, sample_index, pixel_index, depth, spectral_channel)) {
+            float pdf_val = 0.0f;
+            if (scatter(r, mat, p, n, uv, accumulated_color, attenuation, scattered, current_stokes, seed, pdf_val, 10.0f, sample_index, pixel_index, depth, spectral_channel)) {
                 accumulated_color = accumulated_color * attenuation;
                 
                 // Track Medium Enter/Exit for SSS
@@ -1897,15 +1992,44 @@ __global__ void shade_kernel(
     // Emission
     GpuVec3 emission_rgb = mat.emission.to_rgb();
     if (emission_rgb.length_sq() > 0) {
-        // Split MIS Logic:
-        // 1. Primary rays (depth 0) always see lights.
-        // 2. Specular bounces (flag=1) always see lights (NEE not possible).
-        // 3. Diffuse bounces (flag=0) DO NOT see lights implicitly (handled by NEE), unless no lights exist.
+        // MIS Logic for Implicit Light Hits
+        float mis_weight = 1.0f;
         
-        bool should_add = (depth == 0) || (flag & 1);
+        // If previous bounce was diffuse (flag & 1 == 0) and we have lights, 
+        // we need to balance against NEE.
+        if (depth > 0 && !(flag & 1) && scene.light_count > 0) {
+             float light_area = 0.0f;
+             
+             // Identify the light source (Sphere only for now)
+             for(int k=0; k<scene.light_count; ++k) {
+                 int l_idx = scene.light_indices[k];
+                 GpuSphere sph = scene.spheres[l_idx];
+                 // Simple check: Material match + Radius check
+                 if (sph.material_index == mat_idx) {
+                      light_area = 4.0f * 3.14159f * sph.radius * sph.radius;
+                      break;
+                 }
+             }
+             
+             if (light_area > 0.0f) {
+                 float dist_sq = (p - current_queue.origins[idx]).length_sq();
+                 float cos_theta = fmaxf(0.0f, (-current_queue.directions[idx]).dot(n));
+                 
+                 if (cos_theta > 1e-6f) {
+                     // PDF_nee (Solid Angle) = (1/N) * (1/Area) * (dist^2 / cos_theta)
+                     float pdf_nee = (1.0f / scene.light_count) * (1.0f / light_area) * (dist_sq / cos_theta);
+                     float last_pdf = current_queue.last_pdf[idx];
+                     
+                     // Power Heuristic
+                     mis_weight = (last_pdf * last_pdf) / (last_pdf * last_pdf + pdf_nee * pdf_nee);
+                 } else {
+                     mis_weight = 0.0f;
+                 }
+             }
+        }
         
-        if (should_add) {
-            GpuSpectrum contribution = throughput * mat.emission;
+        if (mis_weight > 0.0f) {
+            GpuSpectrum contribution = throughput * mat.emission * mis_weight;
             GpuVec3 rgb = contribution.to_rgb();
             
             if (depth > 0) {
@@ -1990,10 +2114,14 @@ __global__ void shade_kernel(
                  GpuSpectrum L_e = scene.materials[light_sphere.material_index].emission;
                  
                  // BRDF (Lambertian = albedo / PI)
-                 GpuSpectrum f_r = mat.albedo * (1.0f / 3.14159f);
+                 GpuSpectrum f_r = eval_bsdf(mat, p, n, -current_queue.directions[idx], l_dir);
                  
-                 // Contribution = Le * fr * cos_surf / PDF
-                 GpuSpectrum contribution = throughput * L_e * f_r * cos_surf * (1.0f / pdf);
+                 // MIS Weight (Power Heuristic)
+                 float pdf_mat = pdf_bsdf(mat, n, -current_queue.directions[idx], l_dir);
+                 float mis_weight = (pdf * pdf) / (pdf * pdf + pdf_mat * pdf_mat);
+                 
+                 // Contribution = Le * fr * cos_surf / PDF * MIS_Weight
+                 GpuSpectrum contribution = throughput * L_e * f_r * cos_surf * (1.0f / pdf) * mis_weight;
                  
                  // Calculate exact distance to sphere surface for shadow ray
                  // Intersection t: t^2 + 2(M.D)t + (M.M - R^2) = 0 where M = P - C = -wc
@@ -2047,7 +2175,8 @@ __global__ void shade_kernel(
             // 0: None, 1: R, 2: G, 3: B
             int spectral_channel = (flag >> 1) & 3;
 
-            if (scatter(r_in, mat, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, dispersion_clamp, sample_index, pixel_index, depth, spectral_channel)) {
+            float pdf_val = 0.0f;
+            if (scatter(r_in, mat, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, pdf_val, dispersion_clamp, sample_index, pixel_index, depth, spectral_channel)) {
                 GpuSpectrum new_throughput = throughput * attenuation;
                 
                 // Robust NaN check
@@ -2088,6 +2217,7 @@ __global__ void shade_kernel(
             next_queue.directions[out_idx] = scattered.direction;
             next_queue.throughputs[out_idx] = new_throughput;
             next_queue.stokes[out_idx] = current_stokes; // Phase 3: Propagate updated Stokes vector
+            next_queue.last_pdf[out_idx] = pdf_val;
             
             // Phase 3: Volume / SSS Medium Tracking
             int next_medium = current_medium_idx;
@@ -2133,6 +2263,7 @@ void alloc_ray_queue(RayQueue& q, int capacity) {
     cudaMalloc(&q.pixel_indices, capacity * sizeof(int));
     cudaMalloc(&q.depths, capacity * sizeof(int));
     cudaMalloc(&q.flags, capacity * sizeof(int));
+    cudaMalloc(&q.last_pdf, capacity * sizeof(float)); // MIS
     cudaMalloc(&q.count, sizeof(int));
 }
 
@@ -2146,6 +2277,7 @@ void free_ray_queue(RayQueue& q) {
     cudaFree(q.pixel_indices);
     cudaFree(q.depths);
     cudaFree(q.flags);
+    cudaFree(q.last_pdf); // MIS
     cudaFree(q.count);
 }
 
