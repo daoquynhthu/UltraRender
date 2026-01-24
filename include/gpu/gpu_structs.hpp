@@ -136,6 +136,11 @@ struct alignas(16) GpuSpectrum {
         values = make_float4(v, v, v, v);
         wavelengths = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
     }
+    
+    __host__ __device__ GpuSpectrum(float r, float g, float b) {
+        values = make_float4(r, g, b, (r+g+b)/3.0f);
+        wavelengths = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
 
     __host__ __device__ GpuSpectrum operator*(const GpuSpectrum& other) const {
         GpuSpectrum res;

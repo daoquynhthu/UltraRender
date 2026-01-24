@@ -9,6 +9,7 @@
 
 #include "gpu/gpu_driver.hpp"
 #include "gpu/gpu_structs.hpp"
+#include "gpu/path_tracer_sampling.cuh"
 #include "gpu/gpu_scene_loader.hpp"
 #include "gpu/bvh_builder.hpp"
 
@@ -25,135 +26,46 @@ void check_cuda(cudaError_t result, char const *const func, const char *const fi
 
 namespace ure::gpu {
 
-// ==========================================
-// Fast RNG (Xorshift)
-// ==========================================
-__device__ inline unsigned int wang_hash(unsigned int seed) {
-    seed = (seed ^ 61) ^ (seed >> 16);
-    seed *= 9;
-    seed = seed ^ (seed >> 4);
-    seed *= 0x27d4eb2d;
-    seed = seed ^ (seed >> 15);
-    return seed;
-}
+__global__ void resolve_framebuffer_kernel(
+    GpuVec3* accum_buffer,
+    int* sample_counts,
+    GpuVec3* output,
+    int width,
+    int height
+);
 
-__device__ inline float rand_float(unsigned int& seed) {
-    seed ^= seed << 13;
-    seed ^= seed >> 17;
-    seed ^= seed << 5;
-    return seed * 2.3283064365386963e-10f; // 1 / 2^32
-}
+__global__ void atrous_filter_kernel(
+    GpuVec3* output_buffer,
+    const GpuVec3* input_buffer,
+    const GpuVec3* normal_buffer,
+    const GpuVec3* albedo_buffer,
+    int width,
+    int height,
+    int step_size,
+    float c_phi,
+    float n_phi,
+    float p_phi
+);
 
-// ==========================================
-// Low Discrepancy Sequence (Halton)
-// ==========================================
-__device__ inline int get_prime(int n) {
-    // Expanded prime table for high-dimensional sampling (up to ~42 bounces)
-    // 256 Primes
-    if (n >= 256) {
-        // Extended primes for deep paths (up to ~50 bounces)
-        int p_ext[] = {
-            1621, 1627, 1637, 1657, 1663, 1667, 1669, 1693, 1697, 1699, 1709, 1721, 1723, 1733, 1741, 1747,
-            1753, 1759, 1777, 1783, 1787, 1789, 1801, 1811, 1823, 1831, 1847, 1861, 1867, 1871, 1873, 1877,
-            1879, 1889, 1901, 1907, 1913, 1931, 1933, 1949, 1951, 1973, 1979, 1987, 1993, 1997, 1999, 2003,
-            2011, 2017, 2027, 2029, 2039, 2053, 2063, 2069, 2081, 2083, 2087, 2089, 2099, 2111, 2113, 2129
-        };
-        if (n - 256 < 64) return p_ext[n - 256];
-        return 2129 + (n - 319) * 2; // Fallback
-    }
-    
-    // Stored in constant memory ideally, but here as static array
-    // We split into chunks to avoid stack overflow in some compilers
-    if (n < 64) {
-        int p[] = {
-            2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53,
-            59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131,
-            137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223,
-            227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311
-        };
-        return p[n];
-    } else if (n < 128) {
-        int p[] = {
-            313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409,
-            419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503,
-            509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587, 593, 599, 601, 607, 613,
-            617, 619, 631, 641, 643, 647, 653, 659, 661, 673, 677, 683, 691, 701, 709, 719
-        };
-        return p[n - 64];
-    } else if (n < 192) {
-        int p[] = {
-            727, 733, 739, 743, 751, 757, 761, 769, 773, 787, 797, 809, 811, 821, 823, 827,
-            829, 839, 853, 857, 859, 863, 877, 881, 883, 887, 907, 911, 919, 929, 937, 941,
-            947, 953, 967, 971, 977, 983, 991, 997, 1009, 1013, 1019, 1021, 1031, 1033, 1039, 1049,
-            1051, 1061, 1063, 1069, 1087, 1091, 1093, 1097, 1103, 1109, 1117, 1123, 1129, 1151, 1153, 1163
-        };
-        return p[n - 128];
-    } else {
-        int p[] = {
-            1171, 1181, 1187, 1193, 1201, 1213, 1217, 1223, 1229, 1231, 1237, 1249, 1259, 1277, 1279, 1283,
-            1289, 1291, 1297, 1301, 1303, 1307, 1319, 1321, 1327, 1361, 1367, 1373, 1381, 1399, 1409, 1423,
-            1427, 1429, 1433, 1439, 1447, 1451, 1453, 1459, 1471, 1481, 1483, 1487, 1489, 1493, 1499, 1511,
-            1523, 1531, 1543, 1549, 1553, 1559, 1567, 1571, 1579, 1583, 1597, 1601, 1607, 1609, 1613, 1619
-        };
-        return p[n - 192];
-    }
-}
+__global__ void suppress_dark_outliers_kernel(
+    GpuVec3* output_buffer,
+    const GpuVec3* input_buffer,
+    const GpuVec3* normal_buffer,
+    const GpuVec3* albedo_buffer,
+    int width,
+    int height,
+    float k_sigma,
+    float min_luma,
+    float normal_phi,
+    float albedo_phi
+);
 
-__device__ inline float halton(int index, int base) {
-    float f = 1.0f;
-    float r = 0.0f;
-    while (index > 0) {
-        f = f / (float)base;
-        r = r + f * (float)(index % base);
-        index = index / base;
-    }
-    return r;
-}
-
-__device__ inline float scramble_float(int pixel_idx, int dim) {
-    // Randomized Quasi-Monte Carlo Scramble
-    // Use Wang Hash to generate a stable random offset per pixel per dimension
-    unsigned int h = wang_hash(pixel_idx ^ (dim * 19349663));
-    h = wang_hash(h); 
-    return h * 2.3283064365386963e-10f;
-}
-
-__device__ inline float sample_dimension(int sample_idx, int pixel_idx, int dim) {
-    int base = get_prime(dim);
-    float h = halton(sample_idx + 1, base); // +1 to avoid 0
-    float s = scramble_float(pixel_idx, dim);
-    float val = h + s;
-    if (val >= 1.0f) val -= 1.0f;
-    return val;
-}
-
-__device__ inline GpuVec3 sample_unit_vector_lds(float r1, float r2) {
-    float theta = 6.28318530718f * r1;
-    float z = 2.0f * r2 - 1.0f;
-    float r = sqrtf(fmaxf(0.0f, 1.0f - z * z));
-    return GpuVec3(r * cosf(theta), r * sinf(theta), z);
-}
-
-__device__ inline GpuVec3 random_in_unit_sphere(unsigned int& seed) {
-    // Rejection sampling might be slow due to divergence. 
-    // Spherical coordinates are better for GPU.
-    float theta = 6.28318530718f * rand_float(seed);
-    float phi = acosf(2.0f * rand_float(seed) - 1.0f);
-    float r = cbrtf(rand_float(seed));
-    float sin_phi = sinf(phi);
-    return GpuVec3(
-        r * sin_phi * cosf(theta),
-        r * sin_phi * sinf(theta),
-        r * cosf(phi)
-    );
-}
-
-__device__ inline GpuVec3 random_unit_vector(unsigned int& seed) {
-    float theta = 6.28318530718f * rand_float(seed);
-    float z = 2.0f * rand_float(seed) - 1.0f;
-    float r = sqrtf(1.0f - z * z);
-    return GpuVec3(r * cosf(theta), r * sinf(theta), z);
-}
+__global__ void fxaa_kernel(
+    GpuVec3* output,
+    const GpuVec3* input,
+    int width,
+    int height
+);
 
 __device__ GpuVec3 reflect(const GpuVec3& v, const GpuVec3& n) {
     return v - 2.0f * v.dot(n) * n;
@@ -447,24 +359,6 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
     return hit_anything;
 }
 
-__device__ GpuVec3 ImportanceSampleGGX(float r1, float r2, GpuVec3 N, float roughness) {
-    float a = roughness * roughness;
-    float phi = 2.0f * 3.14159265f * r1;
-    float cosTheta = sqrtf((1.0f - r2) / (1.0f + (a*a - 1.0f) * r2));
-    float sinTheta = sqrtf(1.0f - cosTheta*cosTheta);
-    
-    GpuVec3 H;
-    H.x = cosf(phi) * sinTheta;
-    H.y = sinf(phi) * sinTheta;
-    H.z = cosTheta;
-    
-    GpuVec3 Up = (fabsf(N.z) < 0.999f) ? GpuVec3(0,0,1) : GpuVec3(1,0,0);
-    GpuVec3 Tangent = Up.cross(N).normalize();
-    GpuVec3 Bitangent = N.cross(Tangent);
-    
-    return (Tangent * H.x + Bitangent * H.y + N * H.z).normalize();
-}
-
 // Phase 3: Polarization Helpers
 __device__ inline GpuVec3 get_reference_frame(const GpuVec3& dir) {
     // Generate a consistent reference frame (horizontal axis) for a given direction
@@ -711,7 +605,8 @@ __device__ bool scatter(
     float dispersion_clamp,
     int sample_index,
     int pixel_index,
-    int depth
+    int depth,
+    int& spectral_channel // 0: None, 1: R, 2: G, 3: B
 ) {
     // LDS Sampling
     // Dimensions reserved for BSDF: 0, 1, 2 offset by depth
@@ -908,7 +803,15 @@ __device__ bool scatter(
         // Dispersion and Thin-Film Wavelength Sampling Logic
         if (mat.dispersion > 0.0f || mat.thin_film_thickness > 0.0f) {
             // Deterministic Stratified Sampling
-            int channel = sample_index % 3;
+            // If we are already in a spectral channel, reuse it to prevent energy loss
+            int channel;
+            if (spectral_channel > 0) {
+                channel = spectral_channel - 1;
+            } else {
+                float r_spec = sample_dimension(sample_index, pixel_index, dim_offset + 6);
+                channel = min(int(r_spec * 3.0f), 2);
+            }
+
             float lambda = 550.0f;
             
             if (channel == 0) lambda = 650.0f;
@@ -928,8 +831,7 @@ __device__ bool scatter(
             float b_val = 1.0f;
             if (b_val > dispersion_clamp) b_val = dispersion_clamp; 
             
-            // Fix: Do NOT mask attenuation. Calculate contributions for all channels.
-            attenuation = GpuSpectrum(b_val); 
+            attenuation = GpuSpectrum(b_val);
         }
 
         bool front_face = r_in.direction.dot(n) < 0;
@@ -937,8 +839,8 @@ __device__ bool scatter(
 
         // Micro-jitter normal to smooth out singular caustics (anti-firefly for perfect dielectrics)
         if (mat.type == MaterialType::Dielectric) {
-            // Increased jitter from 0.002f to 0.005f to help smooth out caustics noise
-            GpuVec3 jitter = sample_unit_vector_lds(r_bsdf_1, r_bsdf_2) * 0.005f; 
+            // Reduce jitter to minimize surface graininess while maintaining caustic smoothing
+            GpuVec3 jitter = sample_unit_vector_lds(r_bsdf_1, r_bsdf_2) * 0.0001f; 
             normal = (normal + jitter).normalize();
             // interaction_normal = normal; // Removed
         }
@@ -1084,12 +986,9 @@ __device__ bool scatter(
             float transmit_prob = 1.0f - reflect_prob;
             apply_mueller_transmission_dielectric(stokes, ts, tp, (eta_t * cos_theta_t) / (eta_i * cos_theta_i));
             
-            // Radiance Scaling:
-            // Strictly speaking, L_t = L_i * (eta_t / eta_i)^2.
-            // However, this causes excessive brightness ("glowing") and fireflies for high IOR ratios.
-            // We switch to Flux Conservation logic (scale = 1.0) to stabilize the image and fix the glowing artifact.
-            // This effectively traces Flux Density rather than Radiance, which is robust for this renderer.
-            float radiance_scale = 1.0f;
+            float eta_ratio = eta_t / eta_i;
+            float radiance_scale = eta_ratio * eta_ratio;
+            if (radiance_scale > 1.5f) radiance_scale = 1.5f;
             stokes = stokes * radiance_scale;
             attenuation = attenuation * radiance_scale;
 
@@ -1168,6 +1067,8 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
     
     // Phase 3: Polarization tracking
     StokesVector current_stokes(1.0f, 0.0f, 0.0f, 0.0f); // Start unpolarized
+    
+    int spectral_channel = 0; // 0: None, 1: R, 2: G, 3: B
 
     int depth = 0;
     // Increase max_depth to prevent black artifacts in dielectrics (TIR trapping)
@@ -1207,7 +1108,7 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
             
             // Pass default dispersion clamp (10.0f) for megakernel path
             // Reduced from 20.0f to reduce fireflies in caustics
-            if (scatter(r, mat, p, n, uv, accumulated_color, attenuation, scattered, current_stokes, seed, 10.0f, sample_index, pixel_index, depth)) {
+            if (scatter(r, mat, p, n, uv, accumulated_color, attenuation, scattered, current_stokes, seed, 10.0f, sample_index, pixel_index, depth, spectral_channel)) {
                 accumulated_color = accumulated_color * attenuation;
                 
                 // Robust NaN check (checking first value as proxy)
@@ -1220,12 +1121,13 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
                 depth++;
 
                 // Russian Roulette
-                if (depth > 3) {
+                // Delay RR for deep paths to allow dielectrics to escape
+                if (depth > 12) {
                     GpuVec3 rgb = accumulated_color.to_rgb();
                     float max_comp = fmaxf(rgb.x, fmaxf(rgb.y, rgb.z));
                     // Clamp probability to avoid terminating bright paths too aggressively or infinite loops
                     // Also clamp minimum probability to prevent massive weight boosts (fireflies) for dark paths
-                    float probability = fminf(fmaxf(max_comp, 0.1f), 0.95f); 
+                    float probability = fminf(fmaxf(max_comp, 0.1f), 0.99f); 
                     
                     if (rand_float(seed) > probability) {
                         break;
@@ -1577,7 +1479,7 @@ __global__ void extend_shadow_kernel(
     GpuVec3 rgb = radiance.to_rgb();
     
     // Clamping for fireflies (NEE can be bright)
-    float max_val = 20.0f; // Reduced from 100.0f to reduce noise
+    float max_val = 55.0f; // Reduced from 100.0f to reduce noise
     if (rgb.x > max_val) rgb.x = max_val;
     if (rgb.y > max_val) rgb.y = max_val;
     if (rgb.z > max_val) rgb.z = max_val;
@@ -1627,10 +1529,8 @@ __global__ void shade_kernel(
         }
 
         // Feature Buffers (Sky)
-        if (depth == 0) {
-            if (normal_buffer) normal_buffer[pixel_index] = GpuVec3(0, 0, 0);
-            if (albedo_buffer) albedo_buffer[pixel_index] = sky_color;
-        }
+        if (normal_buffer) normal_buffer[pixel_index] = GpuVec3(0, 0, 0);
+        if (albedo_buffer) albedo_buffer[pixel_index] = sky_color;
         return;
     }
     
@@ -1649,10 +1549,8 @@ __global__ void shade_kernel(
     GpuVec3 ng = hit_queue.ng[idx];
 
     // Feature Buffers (Hit)
-    if (depth == 0) {
-        if (normal_buffer) normal_buffer[pixel_index] = n;
-        if (albedo_buffer) albedo_buffer[pixel_index] = mat.albedo.to_rgb();
-    }
+    if (normal_buffer) normal_buffer[pixel_index] = n;
+    if (albedo_buffer) albedo_buffer[pixel_index] = mat.albedo.to_rgb();
     
     // Emission
     GpuVec3 emission_rgb = mat.emission.to_rgb();
@@ -1794,38 +1692,45 @@ __global__ void shade_kernel(
 
     GpuVec2 uv = hit_queue.uv[idx];
 
-    if (scatter(r_in, mat, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, dispersion_clamp, sample_index, pixel_index, depth)) {
-        GpuSpectrum new_throughput = throughput * attenuation;
-        
-        // Robust NaN check
-        if (!isfinite(new_throughput.values.x) || !isfinite(new_throughput.values.y) || 
-            !isfinite(new_throughput.values.z) || !isfinite(new_throughput.values.w)) {
-            return;
-        }
+            // Decode spectral channel (Bit 1-2)
+            // 0: None, 1: R, 2: G, 3: B
+            int spectral_channel = (flag >> 1) & 3;
 
-        // Russian Roulette
-        if (depth > 3) {
-            GpuVec3 rgb = new_throughput.to_rgb();
-            float max_comp = fmaxf(rgb.x, fmaxf(rgb.y, rgb.z));
-            
-            // Fix: Probability must be clamped to 1.0
-            // Also clamp minimum probability to prevent massive weight boosts (fireflies) for dark paths
-            float prob = fmaxf(rr_min_prob, fminf(1.0f, max_comp));
-            
-            if (rand_float(seed) > prob) {
-                return; // Terminate
-            }
-            new_throughput = new_throughput * (1.0f / prob);
-        }
-        
-        // Determine next flag for MIS
-        int next_flag = 0;
-        bool is_specular = (mat.type == MaterialType::Metal || mat.type == MaterialType::Dielectric);
-        if (is_specular || scene.light_count == 0) {
-            next_flag = 1; // Specular bounce or no lights -> Enable implicit emission
-        }
+            if (scatter(r_in, mat, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, dispersion_clamp, sample_index, pixel_index, depth, spectral_channel)) {
+                GpuSpectrum new_throughput = throughput * attenuation;
+                
+                // Robust NaN check
+                if (!isfinite(new_throughput.values.x) || !isfinite(new_throughput.values.y) || 
+                    !isfinite(new_throughput.values.z) || !isfinite(new_throughput.values.w)) {
+                    return;
+                }
 
-        // Enqueue to next_queue
+                // Russian Roulette
+                if (depth > 3) {
+                    GpuVec3 rgb = new_throughput.to_rgb();
+                    float max_comp = fmaxf(rgb.x, fmaxf(rgb.y, rgb.z));
+                    
+                    // Fix: Probability must be clamped to 1.0
+                    // Also clamp minimum probability to prevent massive weight boosts (fireflies) for dark paths
+                    float prob = fmaxf(rr_min_prob, fminf(1.0f, max_comp));
+                    
+                    if (rand_float(seed) > prob) {
+                        return; // Terminate
+                    }
+                    new_throughput = new_throughput * (1.0f / prob);
+                }
+                
+                // Determine next flag for MIS
+                int next_flag = 0;
+                bool is_specular = (mat.type == MaterialType::Metal || mat.type == MaterialType::Dielectric);
+                if (is_specular || scene.light_count == 0) {
+                    next_flag = 1; // Specular bounce or no lights -> Enable implicit emission
+                }
+                
+                // Propagate spectral channel
+                next_flag |= (spectral_channel << 1);
+
+                // Enqueue to next_queue
         int out_idx = atomicAdd(next_queue.count, 1);
         if (out_idx < next_queue.capacity) {
             next_queue.origins[out_idx] = scattered.origin;
@@ -1983,322 +1888,6 @@ __global__ void adaptive_render_kernel(
     accum_buffer[pixel_index] = accum_buffer[pixel_index] + batch_color;
     accum_sq_buffer[pixel_index] = accum_sq_buffer[pixel_index] + batch_sq;
     sample_counts[pixel_index] += batch_samples;
-}
-
-__global__ void resolve_framebuffer_kernel(
-    GpuVec3* accum_buffer,
-    int* sample_counts,
-    GpuVec3* output,
-    int width,
-    int height
-) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int j = blockIdx.y * blockDim.y + threadIdx.y;
-
-    if (i >= width || j >= height) return;
-    int pixel_index = j * width + i;
-    
-    int N = sample_counts[pixel_index];
-    if (N > 0) {
-        GpuVec3 final_val = accum_buffer[pixel_index] * (1.0f / N);
-        // Final Safety Clamp against NaNs/Infs (Purple Pixel Fix)
-        if (!isfinite(final_val.x) || !isfinite(final_val.y) || !isfinite(final_val.z)) {
-            final_val = GpuVec3(0, 0, 0);
-        }
-        output[pixel_index] = final_val;
-    } else {
-        output[pixel_index] = GpuVec3(0, 0, 0);
-    }
-}
-
-__global__ void atrous_filter_kernel(
-    GpuVec3* output_buffer,
-    const GpuVec3* input_buffer,
-    const GpuVec3* normal_buffer,
-    const GpuVec3* albedo_buffer,
-    int width,
-    int height,
-    int step_size,
-    float c_phi, 
-    float n_phi, 
-    float p_phi
-) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    
-    if (x >= width || y >= height) return;
-    
-    int idx = y * width + x;
-    
-    GpuVec3 c_val = input_buffer[idx];
-    GpuVec3 n_val = normal_buffer[idx];
-    GpuVec3 p_val = albedo_buffer[idx]; // Using albedo as position/feature guide
-    
-    // 5x5 B3-Spline Kernel Weights
-    // 1/16 * [1, 4, 6, 4, 1] -> outer product
-    // Simplified fixed weights for 5x5:
-    // 1/256 * ...
-    // We can use a precomputed kernel or simple approximation.
-    // Standard A-Trous kernel:
-    // [1/16, 1/4, 3/8, 1/4, 1/16] for 1D
-    const float kernel[5] = { 1.0f/16.0f, 1.0f/4.0f, 3.0f/8.0f, 1.0f/4.0f, 1.0f/16.0f };
-
-    GpuVec3 sum_color(0,0,0);
-    float sum_weight = 0.0f;
-    
-    for (int j = -2; j <= 2; ++j) {
-        for (int i = -2; i <= 2; ++i) {
-            int nx = x + i * step_size;
-            int ny = y + j * step_size;
-            
-            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-            
-            int n_idx = ny * width + nx;
-            
-            GpuVec3 c_tmp = input_buffer[n_idx];
-            GpuVec3 n_tmp = normal_buffer[n_idx];
-            GpuVec3 p_tmp = albedo_buffer[n_idx];
-            
-            GpuVec3 t = c_val - c_tmp;
-            float dist2 = t.dot(t);
-            float w_c = __expf(-dist2 / c_phi);
-            
-            GpuVec3 t_n = n_val - n_tmp;
-            float dist2_n = t_n.dot(t_n);
-            float w_n = __expf(-dist2_n / n_phi);
-            
-            GpuVec3 t_p = p_val - p_tmp;
-            float dist2_p = t_p.dot(t_p);
-            float w_p = __expf(-dist2_p / p_phi);
-            
-            float weight = w_c * w_n * w_p * kernel[i+2] * kernel[j+2];
-            
-            sum_color = sum_color + c_tmp * weight;
-            sum_weight += weight;
-        }
-    }
-    
-    if (sum_weight > 1e-6f) {
-        output_buffer[idx] = sum_color * (1.0f / sum_weight);
-    } else {
-        output_buffer[idx] = c_val;
-    }
-}
-
-__device__ float luma(GpuVec3 rgb) {
-    return rgb.x * 0.299f + rgb.y * 0.587f + rgb.z * 0.114f;
-}
-
-__device__ GpuVec3 sample_bilinear(const GpuVec3* buffer, int width, int height, float x, float y) {
-    int x0 = floorf(x);
-    int y0 = floorf(y);
-    int x1 = min(x0 + 1, width - 1);
-    int y1 = min(y0 + 1, height - 1);
-    x0 = max(x0, 0);
-    y0 = max(y0, 0);
-    
-    float dx = x - x0;
-    float dy = y - y0;
-    
-    int idx_y0 = y0 * width;
-    int idx_y1 = y1 * width;
-    
-    GpuVec3 c00 = buffer[idx_y0 + x0];
-    GpuVec3 c10 = buffer[idx_y0 + x1];
-    GpuVec3 c01 = buffer[idx_y1 + x0];
-    GpuVec3 c11 = buffer[idx_y1 + x1];
-    
-    GpuVec3 top = c00 * (1.0f - dx) + c10 * dx;
-    GpuVec3 bot = c01 * (1.0f - dx) + c11 * dx;
-    return top * (1.0f - dy) + bot * dy;
-}
-
-__global__ void fxaa_kernel(
-    GpuVec3* output,
-    const GpuVec3* input,
-    int width,
-    int height
-) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    
-    if (x >= width || y >= height) return;
-    
-    int idx = y * width + x;
-    
-    // FXAA Quality Parameters (High Quality / PC Preset)
-    const float FXAA_EDGE_THRESHOLD = 1.0f/16.0f; // 0.0625
-    const float FXAA_EDGE_THRESHOLD_MIN = 1.0f/24.0f; // 0.0417
-    const int FXAA_SEARCH_STEPS = 12;
-    const float FXAA_SUBPIX_TRIM = 1.0f/4.0f;
-    const float FXAA_SUBPIX_CAP = 3.0f/4.0f;
-    const float FXAA_SUBPIX_TRIM_SCALE = 1.0f/(1.0f - FXAA_SUBPIX_TRIM);
-
-    GpuVec3 rgbM = input[idx];
-    
-    auto load = [&](int dx, int dy) {
-        int nx = min(max(x + dx, 0), width - 1);
-        int ny = min(max(y + dy, 0), height - 1);
-        return input[ny * width + nx];
-    };
-    
-    GpuVec3 rgbN = load(0, -1);
-    GpuVec3 rgbW = load(-1, 0);
-    GpuVec3 rgbE = load(1, 0);
-    GpuVec3 rgbS = load(0, 1);
-    
-    float lumaM = luma(rgbM);
-    float lumaN = luma(rgbN);
-    float lumaW = luma(rgbW);
-    float lumaE = luma(rgbE);
-    float lumaS = luma(rgbS);
-    
-    float lumaMin = min(lumaM, min(min(lumaN, lumaW), min(lumaS, lumaE)));
-    float lumaMax = max(lumaM, max(max(lumaN, lumaW), max(lumaS, lumaE)));
-    float lumaRange = lumaMax - lumaMin;
-    
-    // Early Exit: Contrast check
-    if (lumaRange < max(FXAA_EDGE_THRESHOLD_MIN, lumaMax * FXAA_EDGE_THRESHOLD)) {
-        output[idx] = rgbM;
-        return;
-    }
-    
-    GpuVec3 rgbNW = load(-1, -1);
-    GpuVec3 rgbNE = load(1, -1);
-    GpuVec3 rgbSW = load(-1, 1);
-    GpuVec3 rgbSE = load(1, 1);
-    
-    float lumaNW = luma(rgbNW);
-    float lumaNE = luma(rgbNE);
-    float lumaSW = luma(rgbSW);
-    float lumaSE = luma(rgbSE);
-    
-    float lumaL = (lumaN + lumaW + lumaE + lumaS) * 0.25f;
-    float rangeL = fabsf(lumaL - lumaM);
-    float blendL = max(0.0f, (rangeL / lumaRange) - FXAA_SUBPIX_TRIM) * FXAA_SUBPIX_TRIM_SCALE;
-    blendL = min(FXAA_SUBPIX_CAP, blendL);
-    
-    // Choose Direction
-    float edgeVert = 
-        fabsf((0.25f * lumaNW) + (-0.5f * lumaN) + (0.25f * lumaNE)) +
-        fabsf((0.50f * lumaW ) + (-1.0f * lumaM) + (0.50f * lumaE )) +
-        fabsf((0.25f * lumaSW) + (-0.5f * lumaS) + (0.25f * lumaSE));
-        
-    float edgeHorz = 
-        fabsf((0.25f * lumaNW) + (-0.5f * lumaW) + (0.25f * lumaSW)) +
-        fabsf((0.50f * lumaN ) + (-1.0f * lumaM) + (0.50f * lumaS )) +
-        fabsf((0.25f * lumaNE) + (-0.5f * lumaE) + (0.25f * lumaSE));
-        
-    bool isHorz = edgeHorz >= edgeVert;
-    
-    // Length of the edge
-    // float stepLength = isHorz ? -1.0f : -1.0f; // Unused
-    
-    float luma1 = isHorz ? lumaN : lumaW;
-    float luma2 = isHorz ? lumaS : lumaE;
-    
-    float gradient1 = luma1 - lumaM;
-    float gradient2 = luma2 - lumaM;
-    
-    bool is1Steepest = fabsf(gradient1) >= fabsf(gradient2);
-    float gradientScaled = 0.25f * max(fabsf(gradient1), fabsf(gradient2));
-    
-    float stepX = 0.0f;
-    float stepY = 0.0f;
-    
-    if (isHorz) {
-        stepY = is1Steepest ? -1.0f : 1.0f;
-        stepX = 0.0f;
-    } else {
-        stepX = is1Steepest ? -1.0f : 1.0f;
-        stepY = 0.0f;
-    }
-    
-    float lumaLocalAverage = 0.0f;
-    if (is1Steepest) {
-        lumaLocalAverage = 0.5f * (luma1 + lumaM);
-    } else {
-        lumaLocalAverage = 0.5f * (luma2 + lumaM);
-    }
-    
-    // Shift UV by half pixel in the steepest direction
-    float currX = float(x) + 0.5f;
-    float currY = float(y) + 0.5f;
-    
-    if (isHorz) {
-        currY += stepY * 0.5f;
-    } else {
-        currX += stepX * 0.5f;
-    }
-    
-    // Search Loop
-    float2 offset = isHorz ? make_float2(1.0f, 0.0f) : make_float2(0.0f, 1.0f);
-    
-    float2 uv1 = make_float2(currX - offset.x, currY - offset.y);
-    float2 uv2 = make_float2(currX + offset.x, currY + offset.y);
-    
-    float lumaEnd1 = 0.0f;
-    float lumaEnd2 = 0.0f;
-    bool reached1 = false;
-    bool reached2 = false;
-    bool reachedBoth = false;
-    
-    for (int i = 0; i < FXAA_SEARCH_STEPS; ++i) {
-        if (!reached1) {
-            lumaEnd1 = luma(sample_bilinear(input, width, height, uv1.x, uv1.y));
-            lumaEnd1 -= lumaLocalAverage;
-        }
-        if (!reached2) {
-            lumaEnd2 = luma(sample_bilinear(input, width, height, uv2.x, uv2.y));
-            lumaEnd2 -= lumaLocalAverage;
-        }
-        
-        reached1 = fabsf(lumaEnd1) >= gradientScaled;
-        reached2 = fabsf(lumaEnd2) >= gradientScaled;
-        reachedBoth = reached1 && reached2;
-        
-        if (!reached1) {
-            uv1.x -= offset.x;
-            uv1.y -= offset.y;
-        }
-        if (!reached2) {
-            uv2.x += offset.x;
-            uv2.y += offset.y;
-        }
-        
-        if (reachedBoth) break;
-    }
-    
-    float dist1 = isHorz ? (currX - uv1.x) : (currY - uv1.y);
-    float dist2 = isHorz ? (uv2.x - currX) : (uv2.y - currY);
-    
-    bool isDirection1 = dist1 < dist2;
-    float distMin = min(dist1, dist2);
-    float distTotal = dist1 + dist2;
-    
-    float edgeBlend = 0.5f - (distMin / distTotal);
-    
-    bool isLumaEndSteepest = isDirection1 ? (lumaEnd1 < 0.0f) : (lumaEnd2 < 0.0f);
-    bool isLumaLocalSteepest = (lumaLocalAverage - lumaM) < 0.0f; // lumaM is center
-    
-    // Check if we went too far (sign change)
-    if (isLumaEndSteepest != isLumaLocalSteepest) {
-        edgeBlend = 0.0f;
-    }
-    
-    float finalBlend = max(blendL, edgeBlend);
-    
-    // Final Sampling
-    float finalStepX = 0.0f;
-    float finalStepY = 0.0f;
-    
-    if (isHorz) {
-        finalStepY = stepY * finalBlend;
-    } else {
-        finalStepX = stepX * finalBlend;
-    }
-    
-    output[idx] = sample_bilinear(input, width, height, float(x) + 0.5f + finalStepX, float(y) + 0.5f + finalStepY);
 }
 
 void render_frame_gpu(float* output_buffer, int width, int height, int samples_per_pixel,
@@ -2797,7 +2386,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
         // Copy initial noisy image to ping buffer
         cudaMemcpy(d_ping, d_output, framebuffer_size, cudaMemcpyDeviceToDevice);
         
-        int iterations = 4;
+        int iterations = 5;
         
         // Adaptive Denoiser Parameters
         // As SPP increases, we reduce the color tolerance (c_phi) to preserve fine detail.
@@ -2811,14 +2400,35 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
         // SPP 2500 -> 0.04
         float c_phi = 1.0f;
         if (samples_per_pixel > 0) {
-            c_phi = fmaxf(0.02f, 2.0f / sqrtf((float)samples_per_pixel));
+            c_phi = fmaxf(0.03f, 4.0f / sqrtf((float)samples_per_pixel));
         } 
         
         // If SPP is very high, reduce iterations to avoid over-smoothing
         if (samples_per_pixel > 1000) iterations = 2;
 
-        float n_phi = 0.1f; // Normal sigma
-        float p_phi = 0.1f; // Position/Albedo sigma
+        float n_phi = 0.15f;
+        float p_phi = 0.1f;
+        
+        suppress_dark_outliers_kernel<<<numBlocks, threadsPerBlock>>>(
+            d_pong,
+            d_ping,
+            d_normal_buffer,
+            d_albedo_buffer,
+            width,
+            height,
+            1.2f,
+            0.03f,
+            0.2f,
+            0.15f
+        );
+        checkCudaErrors(cudaGetLastError());
+        checkCudaErrors(cudaDeviceSynchronize());
+        
+        {
+            GpuVec3* temp = d_ping;
+            d_ping = d_pong;
+            d_pong = temp;
+        }
         
         for (int i = 0; i < iterations; ++i) {
             int step_width = 1 << i;
@@ -2842,8 +2452,28 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
             checkCudaErrors(cudaDeviceSynchronize());
         }
         
-        // Final result is in the last output buffer
         final_denoised = (iterations % 2 == 0) ? d_ping : d_pong;
+
+        {
+            GpuVec3* input = final_denoised;
+            GpuVec3* output = (final_denoised == d_ping) ? d_pong : d_ping;
+
+            suppress_dark_outliers_kernel<<<numBlocks, threadsPerBlock>>>(
+                output,
+                input,
+                d_normal_buffer,
+                d_albedo_buffer,
+                width,
+                height,
+                1.0f,
+                0.03f,
+                0.2f,
+                0.15f
+            );
+            checkCudaErrors(cudaGetLastError());
+            checkCudaErrors(cudaDeviceSynchronize());
+            final_denoised = output;
+        }
     } else {
         std::cout << "[GPU] High SPP detected (" << samples_per_pixel << "), skipping denoiser for sharpness." << std::endl;
         final_denoised = d_output;

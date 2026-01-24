@@ -41,8 +41,14 @@ if(CMAKE_CUDA_COMPILER)
     # 设置 CUDA 标准
     set(CMAKE_CUDA_STANDARD 20) # CUDA 13 支持 C++20
 
-    # 添加 CUDA 源文件
-    file(GLOB_RECURSE ENGINE_SOURCES_CUDA src/gpu/*.cu)
+    set(ENGINE_SOURCES_CUDA
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/gpu_driver.cu"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_kernel.cu"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_material.cu"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_raygen.cu"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_denoise.cu"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_post.cu"
+    )
     
     message(STATUS "Building with CUDA support.")
     add_definitions(-DUSE_CUDA)
