@@ -17,13 +17,19 @@ public:
         // Store camera
         current_scene_camera_ = scene.camera;
 
-        // Base material index offset (7 default materials 0-6 in scene loader)
+        // Store medium
+        medium_density_ = scene.medium_density;
+        auto to_gpu_vec3_local = [](const Vec3& v) { return ure::gpu::GpuVec3(v.x, v.y, v.z); };
+        medium_scattering_ = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3_local(scene.medium_scattering));
+        medium_absorption_ = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3_local(scene.medium_absorption));
+        medium_max_distance_ = scene.medium_max_distance;
+
         int material_offset = 7; 
 
         // Helper to cache material
         auto cache_material = [&](std::shared_ptr<Material> mat) -> int {
             if (!mat) return 0; // Default material
-            ure::gpu::GpuMaterial gpu_mat;
+            ure::gpu::GpuMaterial gpu_mat = {};
             
             switch (mat->type) {
                 case MaterialType::Lambertian: gpu_mat.type = ure::gpu::MaterialType::Lambertian; break;
@@ -41,6 +47,13 @@ public:
             gpu_mat.dispersion = mat->dispersion;
             gpu_mat.thin_film_thickness = mat->thin_film_thickness;
             gpu_mat.thin_film_ior = mat->thin_film_ior;
+            
+            // Phase 3: Volume / SSS
+            gpu_mat.medium_density = mat->medium_density;
+            gpu_mat.medium_scattering = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(mat->medium_scattering));
+            gpu_mat.medium_absorption = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(mat->medium_absorption));
+            
+            gpu_mat.extinction = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(mat->extinction));
             gpu_mat.texture_index = -1; 
             
             cached_materials_.push_back(gpu_mat);
@@ -165,7 +178,11 @@ public:
             cached_materials_,
             cam_pos,
             cam_look,
-            current_scene_camera_.fov
+            current_scene_camera_.fov,
+            medium_density_,
+            medium_scattering_,
+            medium_absorption_,
+            medium_max_distance_
         );
     }
 
@@ -179,6 +196,12 @@ private:
     std::vector<ure::gpu::GpuSphere> cached_spheres_;
     std::vector<ure::gpu::GpuMaterial> cached_materials_;
     Camera current_scene_camera_;
+    
+    // Medium parameters
+    float medium_density_ = 0.0f;
+    ure::gpu::GpuSpectrum medium_scattering_;
+    ure::gpu::GpuSpectrum medium_absorption_;
+    float medium_max_distance_ = 0.0f;
 };
 
 std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_engine() {

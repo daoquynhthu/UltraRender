@@ -62,6 +62,21 @@ Scene SceneParser::parse_file(const std::string& filepath) {
             ss >> w >> h;
             builder.set_resolution(w, h);
         }
+        else if (command == "medium") {
+             // medium density <d> scatter <r> <g> <b> absorb <r> <g> <b> max_dist <dist>
+             float density = 0.0f;
+             Vec3 scattering = {0,0,0}, absorption = {0,0,0};
+             float max_dist = 0.0f;
+             
+             std::string token;
+             while (ss >> token) {
+                 if (token == "density") ss >> density;
+                 else if (token == "scatter") ss >> scattering.x >> scattering.y >> scattering.z;
+                 else if (token == "absorb") ss >> absorption.x >> absorption.y >> absorption.z;
+                 else if (token == "max_dist") ss >> max_dist;
+             }
+             builder.set_medium(density, scattering, absorption, max_dist);
+        }
         else if (command == "define_material") {
             // define_material <name> <type> [params...]
             std::string name, type_str;
@@ -94,12 +109,21 @@ Scene SceneParser::parse_file(const std::string& filepath) {
                 ss >> mat->emission.x >> mat->emission.y >> mat->emission.z;
             }
 
-            // Check for optional thin film parameters at the end of any material definition
+            // Check for optional parameters (thin film, medium/SSS) at the end of any material definition
             ss.clear(); // Clear any failbits from optional parameters
             std::string extra_token;
             while (ss >> extra_token) {
                 if (extra_token == "thin_film") {
                     ss >> mat->thin_film_thickness >> mat->thin_film_ior;
+                }
+                else if (extra_token == "density") {
+                    ss >> mat->medium_density;
+                }
+                else if (extra_token == "scatter") {
+                    ss >> mat->medium_scattering.x >> mat->medium_scattering.y >> mat->medium_scattering.z;
+                }
+                else if (extra_token == "absorb") {
+                    ss >> mat->medium_absorption.x >> mat->medium_absorption.y >> mat->medium_absorption.z;
                 }
             }
             

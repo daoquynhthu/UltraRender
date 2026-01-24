@@ -225,6 +225,12 @@ struct GpuMaterial {
     float dispersion; // 0.0 = no dispersion. High values (~0.05) = strong dispersion.
     float thin_film_thickness;
     float thin_film_ior;
+    
+    // Phase 3: Volume / SSS
+    float medium_density;     // 0.0 = Surface only, > 0.0 = Volumetric/SSS
+    GpuSpectrum medium_scattering; // Color of the medium (sigma_s)
+    GpuSpectrum medium_absorption; // Absorption of the medium (sigma_a)
+    
     GpuSpectrum emission;
     int texture_index = -1; // -1 means no texture
 };
@@ -275,6 +281,12 @@ struct GpuScene {
     int texture_count;
     int* light_indices; // Indices of emissive spheres/meshes
     int light_count;
+    
+    // Global Homogeneous Medium (Volumetric Fog)
+    float medium_density = 0.0f;
+    GpuSpectrum medium_scattering;
+    GpuSpectrum medium_absorption;
+    float medium_max_distance = 0.0f;
 };
 
 // Wavefront Path Tracing Structures
@@ -283,6 +295,7 @@ struct RayQueue {
     GpuVec3* directions;
     GpuSpectrum* throughputs;
     StokesVector* stokes; // Phase 3: Polarization
+    int* medium_indices; // Phase 3: Volume / SSS (Current medium index, -1 = Global)
     unsigned int* seeds; // Lightweight RNG state
     int* pixel_indices;
     int* depths;

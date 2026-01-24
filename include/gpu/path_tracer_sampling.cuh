@@ -139,4 +139,32 @@ __device__ inline GpuVec3 ImportanceSampleGGX(float r1, float r2, GpuVec3 N, flo
     return (Tangent * H.x + Bitangent * H.y + N * H.z).normalize();
 }
 
+__device__ inline GpuVec3 ImportanceSampleGGXVisible(float r1, float r2, const GpuVec3& V, const GpuVec3& N, float roughness) {
+    float alpha = fmaxf(0.001f, roughness);
+    float a = alpha * alpha;
+    GpuVec3 Up = (fabsf(N.z) < 0.999f) ? GpuVec3(0,0,1) : GpuVec3(1,0,0);
+    GpuVec3 T = Up.cross(N).normalize();
+    GpuVec3 B = N.cross(T);
+    GpuVec3 Vh = GpuVec3(T.dot(V), B.dot(V), N.dot(V));
+    Vh = GpuVec3(a * Vh.x, a * Vh.y, Vh.z).normalize();
+    float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
+    GpuVec3 T1;
+    if (lensq > 1e-7f) {
+        float inv_len = 1.0f / sqrtf(lensq);
+        T1 = GpuVec3(-Vh.y * inv_len, Vh.x * inv_len, 0.0f);
+    } else {
+        T1 = GpuVec3(1.0f, 0.0f, 0.0f);
+    }
+    GpuVec3 T2 = Vh.cross(T1);
+    float r = sqrtf(r1);
+    float phi = 2.0f * 3.14159265f * r2;
+    float t1 = r * cosf(phi);
+    float t2 = r * sinf(phi);
+    float s = 0.5f * (1.0f + Vh.z);
+    float t2_mod = (1.0f - s) * sqrtf(fmaxf(0.0f, 1.0f - t1 * t1)) + s * t2;
+    GpuVec3 Nh = T1 * t1 + T2 * t2_mod + Vh * sqrtf(fmaxf(0.0f, 1.0f - t1 * t1 - t2_mod * t2_mod));
+    GpuVec3 Hh = GpuVec3(a * Nh.x, a * Nh.y, fmaxf(0.0f, Nh.z)).normalize();
+    return (T * Hh.x + B * Hh.y + N * Hh.z).normalize();
+}
+
 } // namespace ure::gpu

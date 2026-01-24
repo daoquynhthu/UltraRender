@@ -25,6 +25,10 @@ static __device__ inline float schlick(float cosine, float ref_idx) {
     return r0 + (1.0f - r0) * powf((1.0f - cosine), 5.0f);
 }
 
+static __device__ inline float smith_G1(float NdotV, float k) {
+    return NdotV / (NdotV * (1.0f - k) + k);
+}
+
 static __device__ inline bool hit_sphere(const GpuSphere& sphere, const GpuRay& r, float t_min, float t_max, float& t, GpuVec3& p, GpuVec3& n, int& mat_idx) {
     GpuVec3 oc = r.origin - sphere.center;
     float a = r.direction.dot(r.direction);
@@ -509,7 +513,7 @@ static __device__ inline bool scatter(
         float r1 = r_bsdf_1;
         float r2 = r_bsdf_2;
         
-        GpuVec3 H = ImportanceSampleGGX(r1, r2, N, mat.roughness);
+        GpuVec3 H = ImportanceSampleGGXVisible(r1, r2, V, N, mat.roughness);
         GpuVec3 L = reflect(-V, H);
         
         scattered.direction = L.normalize();
@@ -559,6 +563,26 @@ static __device__ inline bool scatter(
         } else {
              fresnel_reflectance = 1.0f; 
         }
+
+        float NdotV = N.dot(V);
+        float NdotL = N.dot(scattered.direction);
+        float NdotH = N.dot(H);
+        float VdotH = V.dot(H);
+        
+        if (NdotL <= 0.0f || NdotV <= 0.0f || NdotH <= 0.0f || VdotH <= 0.0f) {
+            return false;
+        }
+        
+        NdotV = fmaxf(1e-6f, NdotV);
+        NdotH = fmaxf(1e-6f, NdotH);
+        VdotH = fmaxf(1e-6f, VdotH);
+        
+        float rough = fmaxf(0.001f, mat.roughness);
+        float k = (rough + 1.0f);
+        k = (k * k) * 0.125f;
+        
+        float G1_L = smith_G1(NdotL, k);
+        float microfacet_weight = (G1_L * VdotH) / fmaxf(1e-6f, NdotH * NdotV);
         
         float tf_boost = 1.0f;
         if (effective_thickness > 0.0f) {
@@ -581,13 +605,13 @@ static __device__ inline bool scatter(
             stokes.U *= tf_boost;
             stokes.V *= tf_boost;
             
-            attenuation.values.x = mat.albedo.values.x * boost_r * fresnel_reflectance;
-            attenuation.values.y = mat.albedo.values.y * boost_g * fresnel_reflectance;
-            attenuation.values.z = mat.albedo.values.z * boost_b * fresnel_reflectance;
+            attenuation.values.x = mat.albedo.values.x * boost_r * fresnel_reflectance * microfacet_weight;
+            attenuation.values.y = mat.albedo.values.y * boost_g * fresnel_reflectance * microfacet_weight;
+            attenuation.values.z = mat.albedo.values.z * boost_b * fresnel_reflectance * microfacet_weight;
         } else {
-            attenuation.values.x = mat.albedo.values.x * fresnel_reflectance;
-            attenuation.values.y = mat.albedo.values.y * fresnel_reflectance;
-            attenuation.values.z = mat.albedo.values.z * fresnel_reflectance;
+            attenuation.values.x = mat.albedo.values.x * fresnel_reflectance * microfacet_weight;
+            attenuation.values.y = mat.albedo.values.y * fresnel_reflectance * microfacet_weight;
+            attenuation.values.z = mat.albedo.values.z * fresnel_reflectance * microfacet_weight;
         }
 
         GpuVec3 ref_out = get_reference_frame(scattered.direction);
@@ -650,8 +674,11 @@ static __device__ inline bool scatter(
         GpuVec3 normal = front_face ? n : -n;
 
         if (mat.type == MaterialType::Dielectric) {
-            GpuVec3 jitter = sample_unit_vector_lds(r_bsdf_1, r_bsdf_2) * 0.0001f; 
-            normal = (normal + jitter).normalize();
+            float jitter_scale = mat.roughness * 0.002f;
+            if (jitter_scale > 0.0f) {
+                GpuVec3 jitter = sample_unit_vector_lds(r_bsdf_1, r_bsdf_2) * jitter_scale; 
+                normal = (normal + jitter).normalize();
+            }
         }
         
         GpuVec3 ref_in = get_reference_frame(r_in.direction);

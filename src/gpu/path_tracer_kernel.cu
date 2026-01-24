@@ -79,6 +79,20 @@ __device__ bool refract(const GpuVec3& uv, const GpuVec3& n, float etai_over_eta
     return true;
 }
 
+__device__ inline float ggx_D(float NdotH, float a) {
+    float a2 = a * a;
+    float denom = NdotH * NdotH * (a2 - 1.0f) + 1.0f;
+    return a2 / (3.14159265f * denom * denom);
+}
+
+__device__ inline float smith_G1(float NdotV, float k) {
+    return NdotV / (NdotV * (1.0f - k) + k);
+}
+
+__device__ inline float smith_G(float NdotV, float NdotL, float k) {
+    return smith_G1(NdotV, k) * smith_G1(NdotL, k);
+}
+
 __device__ float schlick(float cosine, float ref_idx) {
     float r0 = (1.0f - ref_idx) / (1.0f + ref_idx);
     r0 = r0 * r0;
@@ -699,7 +713,7 @@ __device__ bool scatter(
         float r1 = r_bsdf_1;
         float r2 = r_bsdf_2;
         
-        GpuVec3 H = ImportanceSampleGGX(r1, r2, N, mat.roughness);
+        GpuVec3 H = ImportanceSampleGGXVisible(r1, r2, V, N, mat.roughness);
         // interaction_normal = H; // Removed
         GpuVec3 L = reflect(-V, H);
         
@@ -775,8 +789,30 @@ __device__ bool scatter(
             fresnel_g = conductor_fresnel_reflectance(n_val, k_g, cos_theta_h);
             fresnel_b = conductor_fresnel_reflectance(n_val, k_b, cos_theta_h);
         }
-        float fresnel_reflectance = (fresnel_r + fresnel_g + fresnel_b) / 3.0f;
-        fresnel_reflectance = fminf(1.0f, fmaxf(0.0f, fresnel_reflectance));
+        float NdotV = N.dot(V);
+        float NdotL = N.dot(scattered.direction);
+        float NdotH = N.dot(H);
+        float VdotH = V.dot(H);
+        
+        if (NdotL <= 0.0f || NdotV <= 0.0f || NdotH <= 0.0f || VdotH <= 0.0f) {
+            return false;
+        }
+        
+        NdotV = fmaxf(1e-6f, NdotV);
+        NdotL = fmaxf(1e-6f, NdotL);
+        NdotH = fmaxf(1e-6f, NdotH);
+        VdotH = fmaxf(1e-6f, VdotH);
+        
+        float rough = fmaxf(0.001f, mat.roughness);
+        float k = (rough + 1.0f);
+        k = (k * k) * 0.125f;
+        
+        float G1_L = smith_G1(NdotL, k);
+        float microfacet_weight = (G1_L * VdotH) / fmaxf(1e-6f, NdotH * NdotV);
+        
+        float base_r = use_albedo_fresnel ? 1.0f : mat.albedo.values.x;
+        float base_g = use_albedo_fresnel ? 1.0f : mat.albedo.values.y;
+        float base_b = use_albedo_fresnel ? 1.0f : mat.albedo.values.z;
         
         float tf_boost = 1.0f;
         // Thin-film interference for metal
@@ -804,14 +840,14 @@ __device__ bool scatter(
             stokes.V *= tf_boost;
             
             // Update albedo with thin film effect directly
-            attenuation.values.x = mat.albedo.values.x * boost_r * fresnel_r;
-            attenuation.values.y = mat.albedo.values.y * boost_g * fresnel_g;
-            attenuation.values.z = mat.albedo.values.z * boost_b * fresnel_b;
+            attenuation.values.x = base_r * boost_r * fresnel_r * microfacet_weight;
+            attenuation.values.y = base_g * boost_g * fresnel_g * microfacet_weight;
+            attenuation.values.z = base_b * boost_b * fresnel_b * microfacet_weight;
         } else {
             // Standard Metal
-            attenuation.values.x = mat.albedo.values.x * fresnel_r;
-            attenuation.values.y = mat.albedo.values.y * fresnel_g;
-            attenuation.values.z = mat.albedo.values.z * fresnel_b;
+            attenuation.values.x = base_r * fresnel_r * microfacet_weight;
+            attenuation.values.y = base_g * fresnel_g * microfacet_weight;
+            attenuation.values.z = base_b * fresnel_b * microfacet_weight;
         }
 
         // Phase 3: Rotate Stokes to Outgoing Reference Frame (Missing Logic Fixed)
@@ -886,10 +922,11 @@ __device__ bool scatter(
 
         // Micro-jitter normal to smooth out singular caustics (anti-firefly for perfect dielectrics)
         if (mat.type == MaterialType::Dielectric) {
-            // Reduce jitter to minimize surface graininess while maintaining caustic smoothing
-            GpuVec3 jitter = sample_unit_vector_lds(r_bsdf_1, r_bsdf_2) * 0.0001f; 
-            normal = (normal + jitter).normalize();
-            // interaction_normal = normal; // Removed
+            float jitter_scale = mat.roughness * 0.002f;
+            if (jitter_scale > 0.0f) {
+                GpuVec3 jitter = sample_unit_vector_lds(r_bsdf_1, r_bsdf_2) * jitter_scale; 
+                normal = (normal + jitter).normalize();
+            }
         }
 
         // Phase 3: Polarization-aware Dielectric Scattering
@@ -1117,6 +1154,11 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
     
     int spectral_channel = 0; // 0: None, 1: R, 2: G, 3: B
 
+    // Phase 3: Volume / SSS Tracking
+    // -1: Global Medium (Air/Vacuum)
+    // >=0: Inside Material (SSS)
+    int current_medium_mat_idx = -1;
+
     int depth = 0;
     // Increase max_depth to prevent black artifacts in dielectrics (TIR trapping)
     int max_depth = 50; 
@@ -1128,11 +1170,96 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
         int mat_idx;
         
         // Use a consistent epsilon for primary and secondary rays
-        // But for secondary rays, 'r' already has offset origin and t_min set.
-        // We should respect r.t_min if it's set larger.
         float current_t_min = (depth == 0) ? 1e-3f : r.t_min;
         
-        if (world_hit(scene, r, current_t_min, FLT_MAX, t, p, n, ng, uv, mat_idx)) {
+        // 1. Determine active medium properties
+        float density_scale = 0.0f;
+        GpuSpectrum sigma_s = GpuSpectrum(0.0f);
+        GpuSpectrum sigma_a = GpuSpectrum(0.0f);
+        
+        if (current_medium_mat_idx == -1) {
+            // Global Medium
+            if (scene.medium_density > 0.0f) {
+                density_scale = scene.medium_density;
+                sigma_s = scene.medium_scattering * density_scale;
+                sigma_a = scene.medium_absorption * density_scale;
+            }
+        } else {
+            // Inside SSS Object
+            GpuMaterial mat = scene.materials[current_medium_mat_idx];
+            if (mat.medium_density > 0.0f) {
+                density_scale = mat.medium_density;
+                sigma_s = mat.medium_scattering * density_scale;
+                sigma_a = mat.medium_absorption * density_scale;
+            }
+        }
+
+        GpuSpectrum sigma_t = sigma_s + sigma_a;
+        float max_sigma_t = fmaxf(sigma_t.values.x, fmaxf(sigma_t.values.y, sigma_t.values.z));
+
+        // 2. Intersect Scene (Geometry)
+        bool hit_surface = world_hit(scene, r, current_t_min, FLT_MAX, t, p, n, ng, uv, mat_idx);
+        float hit_distance = hit_surface ? t : FLT_MAX;
+
+        // 3. Sample Volume Interaction
+        if (max_sigma_t > 1e-6f) {
+            // Sample distance using the majorant (max_sigma_t)
+            // PDF = max_sigma_t * exp(-max_sigma_t * s)
+            float scatter_dist = -logf(rand_float(seed)) / max_sigma_t;
+            
+            if (scatter_dist < hit_distance) {
+                // Volume Scatter Event
+                
+                // Throughput update:
+                // Weight = (sigma_s * Transmittance_physical) / PDF_sampling
+                // Weight = (sigma_s * exp(-sigma_t * s)) / (max_sigma_t * exp(-max_sigma_t * s))
+                // Weight = (sigma_s / max_sigma_t) * exp((max_sigma_t - sigma_t) * s)
+                
+                GpuSpectrum weight_term = (sigma_s * (1.0f / max_sigma_t));
+                GpuSpectrum trans_correction;
+                trans_correction.values.x = expf((max_sigma_t - sigma_t.values.x) * scatter_dist);
+                trans_correction.values.y = expf((max_sigma_t - sigma_t.values.y) * scatter_dist);
+                trans_correction.values.z = expf((max_sigma_t - sigma_t.values.z) * scatter_dist);
+                
+                accumulated_color = accumulated_color * weight_term * trans_correction;
+                
+                // Update Ray
+                r.origin = r.origin + r.direction * scatter_dist;
+                r.direction = random_in_unit_sphere(seed); // Isotropic Phase Function
+                
+                // Depolarize in volume (multiple scattering)
+                current_stokes = StokesVector(1.0f, 0.0f, 0.0f, 0.0f); 
+
+                depth++;
+                
+                // Russian Roulette for Volume
+                if (depth > 12) {
+                     GpuVec3 rgb = accumulated_color.to_rgb();
+                     float max_comp = fmaxf(rgb.x, fmaxf(rgb.y, rgb.z));
+                     float probability = fminf(fmaxf(max_comp, 0.1f), 0.99f);
+                     if (rand_float(seed) > probability) break;
+                     accumulated_color = accumulated_color * (1.0f / probability);
+                }
+
+                continue; // Skip Surface Logic
+            } else {
+                // Surface Hit (Pass through volume)
+                // We sampled a distance BEYOND the surface, so we treat this as no scatter.
+                // Weight = Transmittance_physical(hit_dist) / Prob_no_scatter(hit_dist)
+                // Prob_no_scatter(d) = P(s > d) = exp(-max_sigma_t * d)
+                // Weight = exp(-sigma_t * d) / exp(-max_sigma_t * d)
+                // Weight = exp((max_sigma_t - sigma_t) * d)
+                
+                GpuSpectrum trans_correction;
+                trans_correction.values.x = expf((max_sigma_t - sigma_t.values.x) * hit_distance);
+                trans_correction.values.y = expf((max_sigma_t - sigma_t.values.y) * hit_distance);
+                trans_correction.values.z = expf((max_sigma_t - sigma_t.values.z) * hit_distance);
+                
+                accumulated_color = accumulated_color * trans_correction;
+            }
+        }
+
+        if (hit_surface) {
             GpuMaterial mat = scene.materials[mat_idx];
             
             // Add emission from the material we just hit
@@ -1158,6 +1285,24 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
             if (scatter(r, mat, p, n, uv, accumulated_color, attenuation, scattered, current_stokes, seed, 10.0f, sample_index, pixel_index, depth, spectral_channel)) {
                 accumulated_color = accumulated_color * attenuation;
                 
+                // Track Medium Enter/Exit for SSS
+                if (mat.type == MaterialType::Dielectric) {
+                    float in_dot = r.direction.dot(ng);
+                    float out_dot = scattered.direction.dot(ng);
+                    
+                    // If signs match, we transmitted through the surface (Refraction)
+                    if ((in_dot * out_dot) > 0.0f) {
+                        if (in_dot < 0.0f) {
+                            // Entering
+                            current_medium_mat_idx = mat_idx;
+                        } else {
+                            // Exiting
+                            current_medium_mat_idx = -1;
+                        }
+                    }
+                    // Else Reflected: Medium stays the same
+                }
+
                 // Robust NaN check (checking first value as proxy)
                 if (accumulated_color.values.x != accumulated_color.values.x) {
                     accumulated_color = GpuSpectrum::from_rgb(GpuVec3(0,0,0));
@@ -1281,6 +1426,7 @@ __global__ void generate_rays_kernel(
     
     queue.throughputs[ray_index] = initial_throughput;
     queue.stokes[ray_index] = StokesVector(1.0f, 0.0f, 0.0f, 0.0f); // Phase 3: Unpolarized
+    queue.medium_indices[ray_index] = -1; // Phase 3: Start in Global Medium
     queue.seeds[ray_index] = seed;
     queue.pixel_indices[ray_index] = pixel_index;
     queue.depths[ray_index] = 0;
@@ -1573,7 +1719,7 @@ __global__ void extend_shadow_kernel(
     GpuVec3 rgb = radiance.to_rgb();
     
     // Clamping for fireflies (NEE can be bright)
-    float max_val = 55.0f; // Reduced from 100.0f to reduce noise
+    float max_val = 1000.0f;
     if (rgb.x > max_val) rgb.x = max_val;
     if (rgb.y > max_val) rgb.y = max_val;
     if (rgb.z > max_val) rgb.z = max_val;
@@ -1608,6 +1754,108 @@ __global__ void shade_kernel(
     unsigned int seed = current_queue.seeds[idx];
     int flag = current_queue.flags[idx];
     
+    // Phase 3: Volume / SSS Integration
+    int current_medium_idx = current_queue.medium_indices[idx];
+    float t_hit = (mat_idx != -1) ? hit_queue.t[idx] : 1e30f;
+    
+    float density = 0.0f;
+    GpuSpectrum sigma_s(0.0f);
+    GpuSpectrum sigma_a(0.0f);
+    
+    if (current_medium_idx == -1) {
+        // Global Medium
+        density = scene.medium_density;
+        sigma_s = scene.medium_scattering;
+        sigma_a = scene.medium_absorption;
+    } else {
+        // Material Medium (SSS)
+        GpuMaterial med_mat = scene.materials[current_medium_idx];
+        density = med_mat.medium_density;
+        sigma_s = med_mat.medium_scattering;
+        sigma_a = med_mat.medium_absorption;
+    }
+    
+    // Simple monochromatic approximation for distance sampling
+    GpuSpectrum sigma_t = (sigma_s + sigma_a) * density;
+    float sigma_t_avg = (sigma_t.values.x + sigma_t.values.y + sigma_t.values.z) / 3.0f;
+    
+    bool volume_event = false;
+    
+    if (sigma_t_avg > 1e-4f) {
+        float r_dist = rand_float(seed);
+        float t_medium = -logf(1.0f - r_dist) / sigma_t_avg;
+        
+        if (t_medium < t_hit) {
+            volume_event = true;
+            
+            // Transmittance & PDF Weight
+            // Weight = (sigma_s / sigma_t) * Phase(w) / PDF(w)
+            // Isotropic: Phase = 1/4pi, PDF = 1/4pi -> Cancel out.
+            // Result: Throughput *= sigma_s / sigma_t (Albedo)
+            
+            // Chromatic handling:
+            // Tr = exp(-sigma_t * t)
+            // pdf_t = sigma_t_avg * exp(-sigma_t_avg * t)
+            // Weight = Tr / pdf_t
+            
+            GpuVec3 tr_vals;
+            tr_vals.x = expf(-sigma_t.values.x * t_medium);
+            tr_vals.y = expf(-sigma_t.values.y * t_medium);
+            tr_vals.z = expf(-sigma_t.values.z * t_medium);
+            
+            float pdf_t = sigma_t_avg * expf(-sigma_t_avg * t_medium);
+            
+            GpuSpectrum tr_spectrum = GpuSpectrum::from_rgb(tr_vals);
+            // throughput = throughput * tr_spectrum * (1.0f / pdf_t) * sigma_s * density; // Wait, sigma_s is per unit distance, need density?
+            // sigma_s struct already includes density? No, multiplied above.
+            
+            // Correct Logic:
+            // sigma_s_eff = sigma_s * density
+            // sigma_t_eff = sigma_t * density
+            // Throughput *= (Tr * sigma_s_eff) / pdf_t
+            
+            GpuSpectrum sigma_s_eff = sigma_s * density;
+            throughput = throughput * tr_spectrum * sigma_s_eff * (1.0f / pdf_t);
+            
+            // Scatter Direction (Isotropic)
+            GpuVec3 new_dir = random_unit_vector(seed);
+            GpuVec3 new_origin = current_queue.origins[idx] + current_queue.directions[idx] * t_medium;
+            
+            // Enqueue
+             int out_idx = atomicAdd(next_queue.count, 1);
+             if (out_idx < next_queue.capacity) {
+                next_queue.origins[out_idx] = new_origin;
+                next_queue.directions[out_idx] = new_dir;
+                next_queue.throughputs[out_idx] = throughput;
+                next_queue.stokes[out_idx] = current_queue.stokes[idx]; // Unchanged for isotropic (approx)
+                next_queue.medium_indices[out_idx] = current_medium_idx; // Stay in same medium
+                next_queue.seeds[out_idx] = seed;
+                next_queue.pixel_indices[out_idx] = pixel_index;
+                next_queue.depths[out_idx] = depth + 1;
+                
+                // Preserve spectral channel, mark as Diffuse (bit 0 = 0)
+                int spectral_channel = (flag >> 1) & 3;
+                next_queue.flags[out_idx] = (spectral_channel << 1); 
+             }
+             return; // Skip surface shading
+        } else {
+             // Surface Hit - Apply Transmittance up to t_hit
+            GpuVec3 tr_vals;
+            tr_vals.x = expf(-sigma_t.values.x * t_hit);
+            tr_vals.y = expf(-sigma_t.values.y * t_hit);
+            tr_vals.z = expf(-sigma_t.values.z * t_hit);
+            
+            // Division by probability of NOT scattering?
+            // prob_no_scatter = exp(-sigma_t_avg * t_hit)
+            float prob_no_scatter = expf(-sigma_t_avg * t_hit);
+            
+            // Robustness: Avoid division by zero
+            if (prob_no_scatter > 1e-6f) {
+                throughput = throughput * GpuSpectrum::from_rgb(tr_vals) * (1.0f / prob_no_scatter);
+            }
+        }
+    }
+
     if (mat_idx == -1) {
         // Miss: Sky color
         GpuVec3 unit_direction = current_queue.directions[idx].normalize();
@@ -1758,6 +2006,15 @@ __global__ void shade_kernel(
                     
                     // Fix: Ensure t_hit is positive to avoid self-intersection or wrong direction
                     if (t_hit > 1e-4f) {
+                        // Phase 3: Volumetric Shadow Attenuation
+                        if (sigma_t_avg > 1e-4f) {
+                             GpuVec3 tr_vals;
+                             tr_vals.x = expf(-sigma_t.values.x * t_hit);
+                             tr_vals.y = expf(-sigma_t.values.y * t_hit);
+                             tr_vals.z = expf(-sigma_t.values.z * t_hit);
+                             contribution = contribution * GpuSpectrum::from_rgb(tr_vals);
+                        }
+
                         // Queue Shadow Ray
                         int s_idx = atomicAdd(shadow_queue.count, 1);
                         if (s_idx < shadow_queue.capacity) {
@@ -1831,6 +2088,31 @@ __global__ void shade_kernel(
             next_queue.directions[out_idx] = scattered.direction;
             next_queue.throughputs[out_idx] = new_throughput;
             next_queue.stokes[out_idx] = current_stokes; // Phase 3: Propagate updated Stokes vector
+            
+            // Phase 3: Volume / SSS Medium Tracking
+            int next_medium = current_medium_idx;
+            if (mat.type == MaterialType::Dielectric) {
+                // Check for Transmission (Refraction) vs Reflection
+                // If dot(in, ng) and dot(out, ng) have SAME sign -> Transmission
+                // Use geometric normal ng for robust inside/outside check
+                float in_dot_ng = r_in.direction.dot(ng);
+                float out_dot_ng = scattered.direction.dot(ng);
+                
+                if (in_dot_ng * out_dot_ng > 0.0f) {
+                    // Transmission: Enter/Exit Medium
+                    if (current_medium_idx == -1) {
+                        next_medium = mat_idx; // Enter
+                    } else if (current_medium_idx == mat_idx) {
+                        next_medium = -1; // Exit
+                    } else {
+                        // Enter new nested medium
+                        // For now, simple override. Proper handling requires a stack.
+                        next_medium = mat_idx; 
+                    }
+                }
+            }
+            next_queue.medium_indices[out_idx] = next_medium;
+
             next_queue.seeds[out_idx] = seed;
             next_queue.pixel_indices[out_idx] = pixel_index;
             next_queue.depths[out_idx] = depth + 1;
@@ -1846,6 +2128,7 @@ void alloc_ray_queue(RayQueue& q, int capacity) {
     cudaMalloc(&q.directions, capacity * sizeof(GpuVec3));
     cudaMalloc(&q.throughputs, capacity * sizeof(GpuSpectrum));
     cudaMalloc(&q.stokes, capacity * sizeof(StokesVector)); // Phase 3
+    cudaMalloc(&q.medium_indices, capacity * sizeof(int)); // Phase 3: Volume / SSS
     cudaMalloc(&q.seeds, capacity * sizeof(unsigned int));
     cudaMalloc(&q.pixel_indices, capacity * sizeof(int));
     cudaMalloc(&q.depths, capacity * sizeof(int));
@@ -1858,6 +2141,7 @@ void free_ray_queue(RayQueue& q) {
     cudaFree(q.directions);
     cudaFree(q.throughputs);
     cudaFree(q.stokes); // Phase 3
+    cudaFree(q.medium_indices); // Phase 3
     cudaFree(q.seeds);
     cudaFree(q.pixel_indices);
     cudaFree(q.depths);
@@ -1990,7 +2274,11 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
                       const std::vector<ure::gpu::GpuMaterial>& materials,
                       const float* cam_pos,
                       const float* cam_look,
-                      float fov) {
+                      float fov,
+                      float medium_density,
+                      GpuSpectrum medium_scattering,
+                      GpuSpectrum medium_absorption,
+                      float medium_max_distance) {
     std::cout << "[GPU] Allocating memory for " << width << "x" << height << " image..." << std::endl;
 
     size_t framebuffer_size = width * height * sizeof(GpuVec3);
@@ -2291,6 +2579,12 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
     scene.texture_count = (int)host_gpu_textures.size();
     scene.light_indices = d_light_indices;
     scene.light_count = (int)host_light_indices.size();
+    
+    // Medium Setup
+    scene.medium_density = medium_density;
+    scene.medium_scattering = medium_scattering;
+    scene.medium_absorption = medium_absorption;
+    scene.medium_max_distance = medium_max_distance;
 
     std::cout << "[GPU] Found " << scene.light_count << " emissive spheres for NEE." << std::endl;
 

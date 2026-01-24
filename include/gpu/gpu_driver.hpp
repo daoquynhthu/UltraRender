@@ -24,7 +24,11 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
                       const std::vector<GpuMaterial>& materials,
                       const float* cam_pos = nullptr,
                       const float* cam_look = nullptr,
-                      float fov = 45.0f);
+                      float fov = 45.0f,
+                      float medium_density = 0.0f,
+                      GpuSpectrum medium_scattering = GpuSpectrum(0.0f),
+                      GpuSpectrum medium_absorption = GpuSpectrum(0.0f),
+                      float medium_max_distance = 0.0f);
 
 // Check if GPU is available
 bool check_gpu_availability();

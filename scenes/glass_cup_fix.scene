@@ -2,7 +2,7 @@
 resolution 2560 1600
 
 # Camera: Level View
-camera pos 3 7 3 lookat 0 0.2 0 fov 35
+camera pos 3 7 5 lookat 0 0 0 fov 35
 
 # Materials
 define_material mat_ground lambertian 0.5 0.5 0.5

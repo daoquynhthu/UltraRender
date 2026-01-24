@@ -16,6 +16,7 @@ public:
 
     SceneBuilder& set_camera(Vec3 pos, Vec3 look_at, float fov);
     SceneBuilder& set_resolution(int width, int height);
+    SceneBuilder& set_medium(float density, Vec3 scattering, Vec3 absorption, float max_dist);
     
     // Primitive Generators
     static std::shared_ptr<Mesh> create_quad();

@@ -48,6 +48,12 @@ struct Material {
     float thin_film_thickness = 0.0f;    // In nanometers
     float thin_film_ior = 1.0f;
     Vec3 emission = {0.0f, 0.0f, 0.0f};
+    
+    // Phase 3: Volume / SSS (Physical parameters)
+    float medium_density = 0.0f;
+    Vec3 medium_scattering = {0.0f, 0.0f, 0.0f};
+    Vec3 medium_absorption = {0.0f, 0.0f, 0.0f};
+    
     std::shared_ptr<Texture> albedo_texture;
 };
 
@@ -85,6 +91,10 @@ struct Scene {
     std::vector<SphereEntity> spheres;
     Camera camera;
     Vec3 background_color = {0,0,0};
+    float medium_density = 0.0f;
+    Vec3 medium_scattering = {0.0f, 0.0f, 0.0f};
+    Vec3 medium_absorption = {0.0f, 0.0f, 0.0f};
+    float medium_max_distance = 50.0f;
     int width = 0;  // 0 means use default or CLI override
     int height = 0;
 };
