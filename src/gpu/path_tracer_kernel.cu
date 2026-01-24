@@ -2054,8 +2054,8 @@ __global__ void shade_kernel(
     if (depth >= 50) return;
 
     // Next Event Estimation (NEE)
-    // Only for non-specular materials (Lambertian, Cloth)
-    if (scene.light_count > 0 && (mat.type == MaterialType::Lambertian || mat.type == MaterialType::Cloth)) {
+    // Only for non-specular materials (Lambertian, Cloth, Rough Metal)
+    if (scene.light_count > 0 && (mat.type == MaterialType::Lambertian || mat.type == MaterialType::Cloth || (mat.type == MaterialType::Metal && mat.roughness > 0.02f))) {
         // LDS for Light Sampling
         // Dimensions reserved for Light: 3, 4, 5 offset by depth
         // Base offset = 4 + depth * 6 (BSDF takes 0,1,2; Light takes 3,4,5)
