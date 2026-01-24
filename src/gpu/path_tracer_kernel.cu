@@ -479,6 +479,43 @@ __device__ inline void apply_mueller_reflection_conductor(StokesVector& s, float
     s.V = new_V;
 }
 
+__device__ inline float conductor_fresnel_reflectance(float n, float k, float cos_theta) {
+    float sin_theta2 = 1.0f - cos_theta * cos_theta;
+    float n2_minus_k2 = n * n - k * k;
+    float two_nk = 2.0f * n * k;
+    float re_inner = n2_minus_k2 - sin_theta2;
+    float im_inner = two_nk;
+    float r = sqrtf(re_inner * re_inner + im_inner * im_inner);
+    float a = sqrtf(fmaxf(0.0f, 0.5f * (r + re_inner)));
+    float b = sqrtf(fmaxf(0.0f, 0.5f * (r - re_inner)));
+    
+    float den_s_re = cos_theta + a;
+    float den_s_im = b;
+    float num_s_re = cos_theta - a;
+    float num_s_im = -b;
+    float den_s_sq = den_s_re * den_s_re + den_s_im * den_s_im;
+    
+    float rs_re = (num_s_re * den_s_re + num_s_im * den_s_im) / den_s_sq;
+    float rs_im = (num_s_im * den_s_re - num_s_re * den_s_im) / den_s_sq;
+    
+    float n2_cos_re = n2_minus_k2 * cos_theta;
+    float n2_cos_im = two_nk * cos_theta;
+    
+    float num_p_re = n2_cos_re - a;
+    float num_p_im = n2_cos_im - b;
+    float den_p_re = n2_cos_re + a;
+    float den_p_im = n2_cos_im + b;
+    float den_p_sq = den_p_re * den_p_re + den_p_im * den_p_im;
+    
+    float rp_re = (num_p_re * den_p_re + num_p_im * den_p_im) / den_p_sq;
+    float rp_im = (num_p_im * den_p_re - num_p_re * den_p_im) / den_p_sq;
+    
+    float Rs = rs_re * rs_re + rs_im * rs_im;
+    float Rp = rp_re * rp_re + rp_im * rp_im;
+    
+    return 0.5f * (Rs + Rp);
+}
+
 __device__ inline void apply_mueller_transmission_dielectric(StokesVector& s, float ts, float tp, float eta_rel) {
     // Mueller matrix for transmission
     // ts, tp are amplitude transmission coefficients
@@ -717,19 +754,29 @@ __device__ bool scatter(
         // Apply Physical Conductor Mueller Matrix
         float cos_theta_h = fmaxf(0.0f, V.dot(H));
         
-        float stokes_I_in = stokes.I;
-        apply_mueller_reflection_conductor(stokes, n_val, k_val, cos_theta_h);
-        float stokes_I_out = stokes.I;
-        
-        // Calculate Fresnel Reflectance Factor from Stokes intensity change
-        // Robust check to prevent black holes at singularities
-        float fresnel_reflectance = 0.0f;
-        if (stokes_I_in > 1e-6f) {
-             fresnel_reflectance = stokes_I_out / stokes_I_in;
-        } else {
-             // Fallback for zero intensity input (shouldn't happen with valid light)
-             fresnel_reflectance = 1.0f; 
+        bool use_albedo_fresnel = (k_r * k_r + k_g * k_g + k_b * k_b) < 1e-8f;
+        if (!use_albedo_fresnel) {
+            apply_mueller_reflection_conductor(stokes, n_val, k_val, cos_theta_h);
         }
+        
+        float fresnel_r;
+        float fresnel_g;
+        float fresnel_b;
+        if (use_albedo_fresnel) {
+            float f0_r = fminf(0.999f, fmaxf(0.0f, mat.albedo.values.x));
+            float f0_g = fminf(0.999f, fmaxf(0.0f, mat.albedo.values.y));
+            float f0_b = fminf(0.999f, fmaxf(0.0f, mat.albedo.values.z));
+            float one_minus = powf(1.0f - cos_theta_h, 5.0f);
+            fresnel_r = f0_r + (1.0f - f0_r) * one_minus;
+            fresnel_g = f0_g + (1.0f - f0_g) * one_minus;
+            fresnel_b = f0_b + (1.0f - f0_b) * one_minus;
+        } else {
+            fresnel_r = conductor_fresnel_reflectance(n_val, k_r, cos_theta_h);
+            fresnel_g = conductor_fresnel_reflectance(n_val, k_g, cos_theta_h);
+            fresnel_b = conductor_fresnel_reflectance(n_val, k_b, cos_theta_h);
+        }
+        float fresnel_reflectance = (fresnel_r + fresnel_g + fresnel_b) / 3.0f;
+        fresnel_reflectance = fminf(1.0f, fmaxf(0.0f, fresnel_reflectance));
         
         float tf_boost = 1.0f;
         // Thin-film interference for metal
@@ -757,14 +804,14 @@ __device__ bool scatter(
             stokes.V *= tf_boost;
             
             // Update albedo with thin film effect directly
-            attenuation.values.x = mat.albedo.values.x * boost_r * fresnel_reflectance;
-            attenuation.values.y = mat.albedo.values.y * boost_g * fresnel_reflectance;
-            attenuation.values.z = mat.albedo.values.z * boost_b * fresnel_reflectance;
+            attenuation.values.x = mat.albedo.values.x * boost_r * fresnel_r;
+            attenuation.values.y = mat.albedo.values.y * boost_g * fresnel_g;
+            attenuation.values.z = mat.albedo.values.z * boost_b * fresnel_b;
         } else {
             // Standard Metal
-            attenuation.values.x = mat.albedo.values.x * fresnel_reflectance;
-            attenuation.values.y = mat.albedo.values.y * fresnel_reflectance;
-            attenuation.values.z = mat.albedo.values.z * fresnel_reflectance;
+            attenuation.values.x = mat.albedo.values.x * fresnel_r;
+            attenuation.values.y = mat.albedo.values.y * fresnel_g;
+            attenuation.values.z = mat.albedo.values.z * fresnel_b;
         }
 
         // Phase 3: Rotate Stokes to Outgoing Reference Frame (Missing Logic Fixed)
@@ -1459,20 +1506,67 @@ __global__ void extend_shadow_kernel(
     int pixel_index = shadow_queue.pixel_indices[idx];
     GpuSpectrum radiance = shadow_queue.radiance[idx];
 
-    // Visibility Check (Any Hit)
     GpuRay r;
     r.origin = origin;
     r.direction = direction;
     
-    // Check Spheres
-    // For shadows, we can return early on ANY hit (t < max_dist)
-    // using any_hit which is faster than world_hit
-    
-    // We trace up to max_dist - epsilon
-    // If we hit something closer than light, it's occluded.
-    if (any_hit(scene, r, 1e-3f, max_dist - 1e-3f)) {
-        // Occluded
-        return;
+    float remaining_dist = max_dist;
+    for (int pass = 0; pass < 8; ++pass) {
+        float t;
+        GpuVec3 p, n, ng;
+        GpuVec2 uv;
+        int mat_idx;
+        
+        if (!world_hit(scene, r, 1e-3f, remaining_dist - 1e-3f, t, p, n, ng, uv, mat_idx)) {
+            break;
+        }
+        
+        GpuMaterial mat = scene.materials[mat_idx];
+        GpuVec3 emission_rgb = mat.emission.to_rgb();
+        if (emission_rgb.length_sq() > 0.0f) {
+            break;
+        }
+        
+        if (mat.type != MaterialType::Dielectric) {
+            return;
+        }
+        
+        bool front_face = r.direction.dot(n) < 0.0f;
+        GpuVec3 normal = front_face ? n : -n;
+        float eta_i = front_face ? 1.0f : mat.ior;
+        float eta_t = front_face ? mat.ior : 1.0f;
+        float eta = eta_i / eta_t;
+        
+        float cos_theta = fminf((-r.direction).dot(normal), 1.0f);
+        float sin_theta2 = fmaxf(0.0f, 1.0f - cos_theta * cos_theta);
+        bool cannot_refract = eta * eta * sin_theta2 > 1.0f;
+        
+        float r0 = (eta_t - eta_i) / (eta_t + eta_i);
+        r0 *= r0;
+        float fresnel = r0 + (1.0f - r0) * powf(1.0f - cos_theta, 5.0f);
+        float transmission = 1.0f - fresnel;
+        
+        radiance = radiance * (mat.albedo * transmission);
+        GpuVec3 radiance_rgb = radiance.to_rgb();
+        if (!isfinite(radiance_rgb.x) || !isfinite(radiance_rgb.y) || !isfinite(radiance_rgb.z)) {
+            return;
+        }
+        
+        if (cannot_refract) {
+            return;
+        }
+        
+        GpuVec3 refracted;
+        refract(r.direction, normal, eta, refracted);
+        r.direction = refracted.normalize();
+        
+        float advance = t + 1e-3f;
+        remaining_dist -= advance;
+        if (remaining_dist <= 1e-3f) {
+            return;
+        }
+        
+        r.origin = p + r.direction * 1e-3f;
     }
     
     // Unoccluded - Add Contribution
