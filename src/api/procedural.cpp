@@ -37,11 +37,12 @@ SceneBuilder& SceneBuilder::set_resolution(int width, int height) {
     return *this;
 }
 
-SceneBuilder& SceneBuilder::set_medium(float density, Vec3 scattering, Vec3 absorption, float max_dist) {
+SceneBuilder& SceneBuilder::set_medium(float density, Vec3 scattering, Vec3 absorption, float max_dist, float anisotropy) {
     scene_.medium_density = density;
     scene_.medium_scattering = scattering;
     scene_.medium_absorption = absorption;
     scene_.medium_max_distance = max_dist;
+    scene_.medium_anisotropy = anisotropy;
     return *this;
 }
 

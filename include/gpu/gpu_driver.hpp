@@ -26,6 +26,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
                       const float* cam_look = nullptr,
                       float fov = 45.0f,
                       float medium_density = 0.0f,
+                      float medium_anisotropy = 0.0f,
                       GpuSpectrum medium_scattering = GpuSpectrum(0.0f),
                       GpuSpectrum medium_absorption = GpuSpectrum(0.0f),
                       float medium_max_distance = 0.0f);

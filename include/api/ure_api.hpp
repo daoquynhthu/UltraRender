@@ -51,6 +51,7 @@ struct Material {
     
     // Phase 3: Volume / SSS (Physical parameters)
     float medium_density = 0.0f;
+    float medium_anisotropy = 0.0f; // g
     Vec3 medium_scattering = {0.0f, 0.0f, 0.0f};
     Vec3 medium_absorption = {0.0f, 0.0f, 0.0f};
     
@@ -92,6 +93,7 @@ struct Scene {
     Camera camera;
     Vec3 background_color = {0,0,0};
     float medium_density = 0.0f;
+    float medium_anisotropy = 0.0f; // g
     Vec3 medium_scattering = {0.0f, 0.0f, 0.0f};
     Vec3 medium_absorption = {0.0f, 0.0f, 0.0f};
     float medium_max_distance = 50.0f;

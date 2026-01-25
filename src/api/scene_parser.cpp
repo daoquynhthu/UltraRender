@@ -63,10 +63,11 @@ Scene SceneParser::parse_file(const std::string& filepath) {
             builder.set_resolution(w, h);
         }
         else if (command == "medium") {
-             // medium density <d> scatter <r> <g> <b> absorb <r> <g> <b> max_dist <dist>
+             // medium density <d> scatter <r> <g> <b> absorb <r> <g> <b> max_dist <dist> g <g>
              float density = 0.0f;
              Vec3 scattering = {0,0,0}, absorption = {0,0,0};
              float max_dist = 0.0f;
+             float anisotropy = 0.0f;
              
              std::string token;
              while (ss >> token) {
@@ -74,8 +75,9 @@ Scene SceneParser::parse_file(const std::string& filepath) {
                  else if (token == "scatter") ss >> scattering.x >> scattering.y >> scattering.z;
                  else if (token == "absorb") ss >> absorption.x >> absorption.y >> absorption.z;
                  else if (token == "max_dist") ss >> max_dist;
+                 else if (token == "g" || token == "anisotropy") ss >> anisotropy;
              }
-             builder.set_medium(density, scattering, absorption, max_dist);
+             builder.set_medium(density, scattering, absorption, max_dist, anisotropy);
         }
         else if (command == "define_material") {
             // define_material <name> <type> [params...]
@@ -124,6 +126,9 @@ Scene SceneParser::parse_file(const std::string& filepath) {
                 }
                 else if (extra_token == "absorb") {
                     ss >> mat->medium_absorption.x >> mat->medium_absorption.y >> mat->medium_absorption.z;
+                }
+                else if (extra_token == "g" || extra_token == "anisotropy") {
+                    ss >> mat->medium_anisotropy;
                 }
             }
             

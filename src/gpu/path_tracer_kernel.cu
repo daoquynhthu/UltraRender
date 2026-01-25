@@ -1235,6 +1235,48 @@ __device__ bool scatter(
     return false;
 }
 
+__device__ GpuVec3 sample_henyey_greenstein(const GpuVec3& w_in, float g, unsigned int& seed) {
+    if (fabsf(g) < 1e-3f) {
+        return random_unit_vector(seed);
+    }
+
+    float r1 = rand_float(seed);
+    float r2 = rand_float(seed);
+
+    // Sample cos(theta)
+    float sqr_term = (1.0f - g * g) / (1.0f - g + 2.0f * g * r1);
+    float cos_theta = (1.0f + g * g - sqr_term * sqr_term) / (2.0f * g);
+
+    // Clamp for numerical stability
+    if (cos_theta > 1.0f) cos_theta = 1.0f;
+    if (cos_theta < -1.0f) cos_theta = -1.0f;
+
+    float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - cos_theta * cos_theta));
+    float phi = 2.0f * 3.14159265359f * r2;
+
+    // Coordinate system from w_in (forward direction)
+    GpuVec3 forward = w_in.normalize();
+    GpuVec3 v1;
+    if (fabsf(forward.x) > 0.9f) {
+        v1 = GpuVec3(0.0f, 1.0f, 0.0f);
+    } else {
+        v1 = GpuVec3(1.0f, 0.0f, 0.0f);
+    }
+    GpuVec3 v2 = forward.cross(v1).normalize();
+    v1 = forward.cross(v2).normalize();
+
+    return (v1 * (cosf(phi) * sin_theta) +
+            v2 * (sinf(phi) * sin_theta) +
+            forward * cos_theta).normalize();
+}
+
+__device__ float eval_henyey_greenstein(float cos_theta, float g) {
+    if (fabsf(g) < 1e-3f) return 1.0f / (4.0f * 3.14159265359f);
+    
+    float denom = 1.0f + g * g - 2.0f * g * cos_theta;
+    return (1.0f - g * g) / (4.0f * 3.14159265359f * denom * sqrtf(fmaxf(0.0f, denom)));
+}
+
 __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int sample_index, int pixel_index) {
     // Initialize Throughput with Full Spectral Weight (Deterministic)
     // We trace one path (Hero Wavelength driven) but accumulate contribution for all RGB channels.
@@ -1268,6 +1310,7 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
         
         // 1. Determine active medium properties
         float density_scale = 0.0f;
+        float anisotropy = 0.0f;
         GpuSpectrum sigma_s = GpuSpectrum(0.0f);
         GpuSpectrum sigma_a = GpuSpectrum(0.0f);
         
@@ -1275,6 +1318,7 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
             // Global Medium
             if (scene.medium_density > 0.0f) {
                 density_scale = scene.medium_density;
+                anisotropy = scene.medium_anisotropy;
                 sigma_s = scene.medium_scattering * density_scale;
                 sigma_a = scene.medium_absorption * density_scale;
             }
@@ -1283,6 +1327,7 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
             GpuMaterial mat = scene.materials[current_medium_mat_idx];
             if (mat.medium_density > 0.0f) {
                 density_scale = mat.medium_density;
+                anisotropy = mat.medium_anisotropy;
                 sigma_s = mat.medium_scattering * density_scale;
                 sigma_a = mat.medium_absorption * density_scale;
             }
@@ -1316,10 +1361,69 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
                 trans_correction.values.z = expf((max_sigma_t - sigma_t.values.z) * scatter_dist);
                 
                 accumulated_color = accumulated_color * weight_term * trans_correction;
+
+                // Volume NEE (Next Event Estimation)
+                if (scene.light_count > 0) {
+                    // Pick a random light
+                    int light_idx_idx = min(int(rand_float(seed) * scene.light_count), scene.light_count - 1);
+                    int light_idx = scene.light_indices[light_idx_idx];
+                    GpuSphere light_sphere = scene.spheres[light_idx];
+                    
+                    GpuVec3 p_vol = r.origin + r.direction * scatter_dist;
+                    GpuVec3 wc = light_sphere.center - p_vol;
+                    float dist_sq = wc.length_sq();
+                    float radius = light_sphere.radius;
+                    float radius_sq = radius * radius;
+                    
+                    if (dist_sq > radius_sq) {
+                        float dist = sqrtf(dist_sq);
+                        float sin_theta_max2 = radius_sq / dist_sq;
+                        float cos_theta_max = sqrtf(fmaxf(0.0f, 1.0f - sin_theta_max2));
+                        
+                        float r1 = rand_float(seed);
+                        float r2 = rand_float(seed);
+                        float cos_theta = 1.0f - r1 + r1 * cos_theta_max;
+                        float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - cos_theta * cos_theta));
+                        float phi = 6.2831853f * r2;
+                        
+                        GpuVec3 w = wc * (1.0f / dist);
+                        GpuVec3 u = (fabsf(w.x) > 0.9f) ? GpuVec3(0, 1, 0) : GpuVec3(1, 0, 0);
+                        u = u.cross(w).normalize();
+                        GpuVec3 v = w.cross(u);
+                        GpuVec3 l_dir = (u * cosf(phi) * sin_theta + v * sinf(phi) * sin_theta + w * cos_theta).normalize();
+                        
+                        float phase_val = eval_henyey_greenstein(r.direction.dot(l_dir), anisotropy);
+                        float solid_angle = 6.2831853f * (1.0f - cos_theta_max);
+                        float pdf = 1.0f / (solid_angle * scene.light_count);
+                        
+                        // Visibility Check
+                        float M_dot_D = -wc.dot(l_dir);
+                        float c_val = dist_sq - radius_sq;
+                        float t_to_light = -M_dot_D - sqrtf(fmaxf(0.0f, M_dot_D * M_dot_D - c_val));
+                        
+                        if (t_to_light > 1e-4f) {
+                            float t_dummy;
+                            GpuVec3 p_dummy, n_dummy, ng_dummy;
+                            GpuVec2 uv_dummy;
+                            int mat_dummy;
+                            bool occluded = world_hit(scene, GpuRay(p_vol, l_dir, 1e-4f, t_to_light - 1e-4f), 1e-4f, t_to_light - 1e-4f, t_dummy, p_dummy, n_dummy, ng_dummy, uv_dummy, mat_dummy);
+                            
+                            if (!occluded) {
+                                GpuSpectrum tr_light;
+                                tr_light.values.x = expf(-sigma_t.values.x * t_to_light);
+                                tr_light.values.y = expf(-sigma_t.values.y * t_to_light);
+                                tr_light.values.z = expf(-sigma_t.values.z * t_to_light);
+                                
+                                GpuSpectrum L_e = scene.materials[light_sphere.material_index].emission;
+                                final_color = final_color + accumulated_color * L_e * phase_val * tr_light * (1.0f / pdf);
+                            }
+                        }
+                    }
+                }
                 
                 // Update Ray
                 r.origin = r.origin + r.direction * scatter_dist;
-                r.direction = random_unit_vector(seed); // Isotropic Phase Function
+                r.direction = sample_henyey_greenstein(r.direction, anisotropy, seed); // Isotropic/Anisotropic Phase Function
                 
                 // Depolarize in volume (multiple scattering)
                 current_stokes = StokesVector(1.0f, 0.0f, 0.0f, 0.0f); 
@@ -1854,18 +1958,21 @@ __global__ void shade_kernel(
     float t_hit = (mat_idx != -1) ? hit_queue.t[idx] : 1e30f;
     
     float density = 0.0f;
+    float anisotropy = 0.0f;
     GpuSpectrum sigma_s(0.0f);
     GpuSpectrum sigma_a(0.0f);
     
     if (current_medium_idx == -1) {
         // Global Medium
         density = scene.medium_density;
+        anisotropy = scene.medium_anisotropy;
         sigma_s = scene.medium_scattering;
         sigma_a = scene.medium_absorption;
     } else {
         // Material Medium (SSS)
         GpuMaterial med_mat = scene.materials[current_medium_idx];
         density = med_mat.medium_density;
+        anisotropy = med_mat.medium_anisotropy;
         sigma_s = med_mat.medium_scattering;
         sigma_a = med_mat.medium_absorption;
     }
@@ -1874,14 +1981,11 @@ __global__ void shade_kernel(
     GpuSpectrum sigma_t = (sigma_s + sigma_a) * density;
     float sigma_t_avg = (sigma_t.values.x + sigma_t.values.y + sigma_t.values.z) / 3.0f;
     
-    bool volume_event = false;
-    
     if (sigma_t_avg > 1e-4f) {
         float r_dist = rand_float(seed);
         float t_medium = -logf(1.0f - r_dist) / sigma_t_avg;
         
         if (t_medium < t_hit) {
-            volume_event = true;
             
             // Transmittance & PDF Weight
             // Weight = (sigma_s / sigma_t) * Phase(w) / PDF(w)
@@ -1912,8 +2016,66 @@ __global__ void shade_kernel(
             GpuSpectrum sigma_s_eff = sigma_s * density;
             throughput = throughput * tr_spectrum * sigma_s_eff * (1.0f / pdf_t);
             
-            // Scatter Direction (Isotropic)
-            GpuVec3 new_dir = random_unit_vector(seed);
+            // Volume NEE (Next Event Estimation)
+            if (scene.light_count > 0) {
+                int light_idx_idx = min(int(rand_float(seed) * scene.light_count), scene.light_count - 1);
+                int light_idx = scene.light_indices[light_idx_idx];
+                GpuSphere light_sphere = scene.spheres[light_idx];
+                
+                GpuVec3 p_vol = current_queue.origins[idx] + current_queue.directions[idx] * t_medium;
+                GpuVec3 wc = light_sphere.center - p_vol;
+                float dist_sq = wc.length_sq();
+                float radius = light_sphere.radius;
+                float radius_sq = radius * radius;
+                
+                if (dist_sq > radius_sq) {
+                    float dist = sqrtf(dist_sq);
+                    float sin_theta_max2 = radius_sq / dist_sq;
+                    float cos_theta_max = sqrtf(fmaxf(0.0f, 1.0f - sin_theta_max2));
+                    
+                    float r1 = rand_float(seed);
+                    float r2 = rand_float(seed);
+                    float cos_theta = 1.0f - r1 + r1 * cos_theta_max;
+                    float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - cos_theta * cos_theta));
+                    float phi = 6.2831853f * r2;
+                    
+                    GpuVec3 w = wc * (1.0f / dist);
+                    GpuVec3 u = (fabsf(w.x) > 0.9f) ? GpuVec3(0, 1, 0) : GpuVec3(1, 0, 0);
+                    u = u.cross(w).normalize();
+                    GpuVec3 v = w.cross(u);
+                    GpuVec3 l_dir = (u * cosf(phi) * sin_theta + v * sinf(phi) * sin_theta + w * cos_theta).normalize();
+                    
+                    float phase_val = eval_henyey_greenstein(current_queue.directions[idx].dot(l_dir), anisotropy);
+                    float solid_angle = 6.2831853f * (1.0f - cos_theta_max);
+                    float pdf = 1.0f / (solid_angle * scene.light_count);
+                    
+                    float M_dot_D = -wc.dot(l_dir);
+                    float c_val = dist_sq - radius_sq;
+                    float t_to_light = -M_dot_D - sqrtf(fmaxf(0.0f, M_dot_D * M_dot_D - c_val));
+                    
+                    if (t_to_light > 1e-4f) {
+                         GpuSpectrum tr_light;
+                         tr_light.values.x = expf(-sigma_t.values.x * t_to_light);
+                         tr_light.values.y = expf(-sigma_t.values.y * t_to_light);
+                         tr_light.values.z = expf(-sigma_t.values.z * t_to_light);
+                         
+                         GpuSpectrum L_e = scene.materials[light_sphere.material_index].emission;
+                         GpuSpectrum contribution = throughput * L_e * phase_val * tr_light * (1.0f / pdf);
+                         
+                         int s_idx = atomicAdd(shadow_queue.count, 1);
+                         if (s_idx < shadow_queue.capacity) {
+                             shadow_queue.origins[s_idx] = p_vol;
+                             shadow_queue.directions[s_idx] = l_dir;
+                             shadow_queue.max_dist[s_idx] = t_to_light - 1e-4f;
+                             shadow_queue.radiance[s_idx] = contribution;
+                             shadow_queue.pixel_indices[s_idx] = pixel_index;
+                         }
+                    }
+                }
+            }
+            
+            // Scatter Direction (Isotropic/Anisotropic)
+            GpuVec3 new_dir = sample_henyey_greenstein(current_queue.directions[idx], anisotropy, seed);
             GpuVec3 new_origin = current_queue.origins[idx] + current_queue.directions[idx] * t_medium;
             
             // Enqueue
@@ -2408,6 +2570,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
                       const float* cam_look,
                       float fov,
                       float medium_density,
+                      float medium_anisotropy,
                       GpuSpectrum medium_scattering,
                       GpuSpectrum medium_absorption,
                       float medium_max_distance) {
@@ -2712,8 +2875,9 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
     scene.light_indices = d_light_indices;
     scene.light_count = (int)host_light_indices.size();
     
-    // Medium Setup
+    // Scene Medium
     scene.medium_density = medium_density;
+    scene.medium_anisotropy = medium_anisotropy;
     scene.medium_scattering = medium_scattering;
     scene.medium_absorption = medium_absorption;
     scene.medium_max_distance = medium_max_distance;

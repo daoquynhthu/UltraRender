@@ -239,6 +239,7 @@ struct GpuMaterial {
     
     // Phase 3: Volume / SSS
     float medium_density;     // 0.0 = Surface only, > 0.0 = Volumetric/SSS
+    float medium_anisotropy;  // g factor for Henyey-Greenstein
     GpuSpectrum medium_scattering; // Color of the medium (sigma_s)
     GpuSpectrum medium_absorption; // Absorption of the medium (sigma_a)
     
@@ -295,6 +296,7 @@ struct GpuScene {
     
     // Global Homogeneous Medium (Volumetric Fog)
     float medium_density = 0.0f;
+    float medium_anisotropy = 0.0f; // 0.0 = Isotropic
     GpuSpectrum medium_scattering;
     GpuSpectrum medium_absorption;
     float medium_max_distance = 0.0f;

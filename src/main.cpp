@@ -17,6 +17,7 @@ int main(int argc, char* argv[]) {
     // 1. Parse Arguments
     std::string scene_path_or_name = "procedural_demo";
     std::string output_filename_override = "";
+    std::string output_dir_str = "";
     int spp = 100; 
     int cli_width = 0;
     int cli_height = 0;
@@ -27,6 +28,8 @@ int main(int argc, char* argv[]) {
             spp = std::stoi(argv[++i]);
         } else if ((arg == "-o" || arg == "--output") && i + 1 < argc) {
             output_filename_override = argv[++i];
+        } else if ((arg == "-d" || arg == "--output-dir") && i + 1 < argc) {
+            output_dir_str = argv[++i];
         } else if (arg == "--scene" && i + 1 < argc) {
             scene_path_or_name = argv[++i];
         } else if (arg == "--width" && i + 1 < argc) {
@@ -73,14 +76,33 @@ int main(int argc, char* argv[]) {
     
     // 5. Render
     RenderSettings settings;
-    // Prioritize CLI overrides -> Scene File -> Default
-    if (cli_width > 0) settings.width = cli_width;
-    else if (scene.width > 0) settings.width = scene.width;
-    else settings.width = 1280;
+    
+    // Resolution Priority: Scene File > CLI > Default
+    // 1. Determine Width
+    if (scene.width > 0) {
+        if (cli_width > 0 && cli_width != scene.width) {
+            std::cerr << "[Main] Warning: Resolution width conflict! Scene (" << scene.width 
+                      << ") != CLI (" << cli_width << "). Using Scene value." << std::endl;
+        }
+        settings.width = scene.width;
+    } else if (cli_width > 0) {
+        settings.width = cli_width;
+    } else {
+        settings.width = 1280;
+    }
 
-    if (cli_height > 0) settings.height = cli_height;
-    else if (scene.height > 0) settings.height = scene.height;
-    else settings.height = 720;
+    // 2. Determine Height
+    if (scene.height > 0) {
+        if (cli_height > 0 && cli_height != scene.height) {
+            std::cerr << "[Main] Warning: Resolution height conflict! Scene (" << scene.height 
+                      << ") != CLI (" << cli_height << "). Using Scene value." << std::endl;
+        }
+        settings.height = scene.height;
+    } else if (cli_height > 0) {
+        settings.height = cli_height;
+    } else {
+        settings.height = 720;
+    }
     
     settings.spp = spp;
     
@@ -88,9 +110,16 @@ int main(int argc, char* argv[]) {
     engine->render(settings);
     
     // 6. Save Output
-    std::filesystem::path output_dir = std::filesystem::current_path() / "output";
+    std::filesystem::path output_dir;
+    if (!output_dir_str.empty()) {
+        output_dir = output_dir_str;
+    } else {
+        // Default to project root "output" folder as requested
+        output_dir = std::filesystem::current_path() / "output";
+    }
+
     if (!std::filesystem::exists(output_dir)) {
-        std::filesystem::create_directory(output_dir);
+        std::filesystem::create_directories(output_dir);
     }
     
     std::string output_filename;

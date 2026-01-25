@@ -19,6 +19,7 @@ public:
 
         // Store medium
         medium_density_ = scene.medium_density;
+        medium_anisotropy_ = scene.medium_anisotropy;
         auto to_gpu_vec3_local = [](const Vec3& v) { return ure::gpu::GpuVec3(v.x, v.y, v.z); };
         medium_scattering_ = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3_local(scene.medium_scattering));
         medium_absorption_ = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3_local(scene.medium_absorption));
@@ -50,6 +51,7 @@ public:
             
             // Phase 3: Volume / SSS
             gpu_mat.medium_density = mat->medium_density;
+            gpu_mat.medium_anisotropy = mat->medium_anisotropy;
             gpu_mat.medium_scattering = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(mat->medium_scattering));
             gpu_mat.medium_absorption = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(mat->medium_absorption));
             
@@ -180,6 +182,7 @@ public:
             cam_look,
             current_scene_camera_.fov,
             medium_density_,
+            medium_anisotropy_,
             medium_scattering_,
             medium_absorption_,
             medium_max_distance_
@@ -199,6 +202,7 @@ private:
     
     // Medium parameters
     float medium_density_ = 0.0f;
+    float medium_anisotropy_ = 0.0f;
     ure::gpu::GpuSpectrum medium_scattering_;
     ure::gpu::GpuSpectrum medium_absorption_;
     float medium_max_distance_ = 0.0f;
