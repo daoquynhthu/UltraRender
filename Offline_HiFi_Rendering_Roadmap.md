@@ -110,6 +110,11 @@
 
 ## 4. 实施路线图 (Milestones)
 
+*   **Phase 0: 实时交互视口 (Immediate Priority)**
+    *   集成 GLFW/SDL2 窗口系统。
+    *   实现 CUDA-OpenGL 互操作，在窗口中实时显示渲染结果。
+    *   添加基础的 FPS 相机控制（WASD + 鼠标）。
+
 *   **Phase 1: 基础夯实 (Current - Q2)**
     *   完善光谱/偏振路径追踪核心 (已完成部分)。
     *   建立基于 Python 的场景加载与参数化接口。
