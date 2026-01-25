@@ -8,41 +8,41 @@
 namespace ure::scene {
 
 /**
- * @brief 形状求交结果 (仅几何信息)
+ * @brief Shape Intersection Result (Geometry only)
  */
 struct ShapeIntersection {
-    float t;            // 射线参数
-    core::Point3f p;    // 交点位置
-    core::Normal3f n;   // 几何法线
-    core::Point2f uv;   // UV 坐标
+    float t;            // Ray parameter
+    core::Point3f p;    // Intersection point
+    core::Normal3f n;   // Geometric normal
+    core::Point2f uv;   // UV coordinates
 };
 
 /**
- * @brief 几何形状抽象基类
+ * @brief Geometric Shape Abstract Base Class
  */
 class Shape {
 public:
     virtual ~Shape() = default;
 
     /**
-     * @brief 射线-形状求交测试
+     * @brief Ray-Shape Intersection Test
      */
     virtual std::optional<ShapeIntersection> intersect(const core::Rayf& ray) const = 0;
 
     /**
-     * @brief 快速遮挡测试
+     * @brief Fast Occlusion Test
      */
     virtual bool occluded(const core::Rayf& ray) const {
         return intersect(ray).has_value();
     }
 
     /**
-     * @brief 获取形状表面积
+     * @brief Get Shape Surface Area
      */
     virtual float area() const = 0;
 
     /**
-     * @brief 获取形状包围盒
+     * @brief Get Shape Bounding Box
      */
     virtual core::AABB bounds() const = 0;
 };

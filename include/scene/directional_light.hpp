@@ -11,14 +11,14 @@ namespace ure::scene {
  */
 class DirectionalLight : public Light {
 public:
-    DirectionalLight(const core::Vec3f& dir, const spectral::Spectrum& L)
+    DirectionalLight(const ure::core::Vec3f& dir, const spectral::Spectrum& L)
         : dir_(dir.normalize()), L_(L) {}
 
-    LightSample sample_li(const core::Point3f& /*ref*/, const core::Point2f& /*u*/, const float* lambdas) const override {
+    LightSample sample_li(const ure::core::Point3f& /*ref*/, const ure::core::Point2f& /*u*/, const float* lambdas) const override {
         LightSample ls;
         ls.wi = -dir_;
         ls.pdf = 1.0f;
-        ls.p = core::Point3f(0, 0, 0); // 虚拟位置
+        ls.p = ure::core::Point3f(0, 0, 0); // 虚拟位置
         ls.is_delta = true;
         ls.L = L_;
         // 确保 ls.L 关联了正确的波长
@@ -26,16 +26,16 @@ public:
         return ls;
     }
 
-    float pdf_li(const core::Point3f& /*ref*/, const core::Vec3f& /*wi*/) const override {
+    float pdf_li(const ure::core::Point3f& /*ref*/, const ure::core::Vec3f& /*wi*/) const override {
         return 0.0f;
     }
 
-    spectral::Spectrum le(const core::Interaction& /*isect*/, const core::Vec3f& /*wo*/, const float* /*lambdas*/) const override {
+    spectral::Spectrum le(const ure::core::Interaction& /*isect*/, const ure::core::Vec3f& /*wo*/, const float* /*lambdas*/) const override {
         return spectral::Spectrum(0.0f);
     }
 
 private:
-    core::Vec3f dir_;
+    ure::core::Vec3f dir_;
     spectral::Spectrum L_;
 };
 

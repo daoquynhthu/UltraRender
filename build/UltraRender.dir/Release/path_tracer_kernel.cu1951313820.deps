@@ -169,3 +169,4 @@ E:\Render Engine\include\gpu\bvh_builder.hpp
 E:\Render Engine\include\gpu\gpu_driver.hpp
 E:\Render Engine\include\gpu\gpu_scene_loader.hpp
 E:\Render Engine\include\gpu\gpu_structs.hpp
+E:\Render Engine\include\gpu\path_tracer_sampling.cuh

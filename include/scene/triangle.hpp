@@ -5,8 +5,8 @@
 namespace ure::scene {
 
 /**
- * @brief 三角形形状
- * 实现 Möller-Trumbore 高效求交算法
+ * @brief Triangle Shape
+ * Implements Möller-Trumbore intersection algorithm
  */
 class Triangle : public Shape {
 public:

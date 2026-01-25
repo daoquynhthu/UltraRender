@@ -25,11 +25,10 @@ public:
     }
 };
 
-// 别名
+// Aliases
 using Rayf = Ray<float>;
 using Rayd = Ray<double>;
 
-// 为了配合 Ray，我们需要在 vector.hpp 中定义 Point3 别名，或者在这里直接用 Vec3
-// 已经在 vector.hpp 中定义了 Point3f/d
+// Point3 aliases are defined in vector.hpp
 
 } // namespace ure::core

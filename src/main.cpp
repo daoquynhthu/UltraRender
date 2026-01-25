@@ -118,7 +118,8 @@ int main(int argc, char* argv[]) {
         pixels[i].z = buffer[i*3 + 2];
     }
     
-    ure::io::ImageSaver::save_bmp(output_path.string(), settings.width, settings.height, pixels);
+    // Use ACES Tone Mapping by default for better color reproduction
+    ure::io::ImageSaver::save_bmp(output_path.string(), settings.width, settings.height, pixels, ure::io::ToneMapType::ACES, 1.0f);
     std::cout << "[Main] Done!" << std::endl;
 
     return 0;

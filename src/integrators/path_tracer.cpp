@@ -1,5 +1,4 @@
 #include "../../include/integrators/path_tracer.hpp"
-#include "../../include/io/image_saver.hpp"
 #include <iostream>
 #include <execution>
 #include <mutex>
@@ -8,10 +7,12 @@
 namespace ure::integrators {
 
 PathTracer::PathTracer(int width, int height, int spp) 
-    : width_(width), height_(height), spp_(spp), rng_(std::random_device{}()) {}
+    : width_(width), height_(height), spp_(spp), rng_(std::random_device{}()) {
+    framebuffer_.resize(width_ * height_);
+}
 
 void PathTracer::render(const scene::Scene& scene, const core::Camera& camera) {
-    std::vector<core::Vec3f> framebuffer(width_ * height_);
+    std::fill(framebuffer_.begin(), framebuffer_.end(), core::Vec3f(0.0f));
     std::atomic<int> completed_rows(0);
     std::mutex cout_mutex;
 
@@ -40,22 +41,9 @@ void PathTracer::render(const scene::Scene& scene, const core::Camera& camera) {
             }
             core::Vec3f final_pixel = pixel_rgb / (float)spp_;
 
-            // Tone Mapping (Reinhard)
-            // C = C / (1 + C)
-            final_pixel.x = final_pixel.x / (1.0f + final_pixel.x);
-            final_pixel.y = final_pixel.y / (1.0f + final_pixel.y);
-            final_pixel.z = final_pixel.z / (1.0f + final_pixel.z);
-
-            // Double Gamma Correction Fix: 
-            // Removed local Gamma correction because ImageSaver applies it again.
-            // We only output Linear Tone-Mapped values here.
-
-            framebuffer[y * width_ + x] = final_pixel;
-
-            // if (x == width_ / 2 && y == height_ / 2) {
-            //     std::lock_guard<std::mutex> lock(cout_mutex);
-            //     std::cout << "\n[Debug] Center Pixel (Linear ToneMapped): " << final_pixel.x << ", " << final_pixel.y << ", " << final_pixel.z << std::endl;
-            // }
+            // Store Linear RGB (No Tone Mapping, No Gamma)
+            // Tone mapping and Gamma correction will be applied in ImageSaver
+            framebuffer_[y * width_ + x] = final_pixel;
         }
 
         // 更新进度条
@@ -81,9 +69,6 @@ void PathTracer::render(const scene::Scene& scene, const core::Camera& camera) {
     std::for_each(std::execution::par, row_indices.begin(), row_indices.end(), render_row);
 
     std::cout << "\nRendering: 100% - Done!          " << std::endl;
-    
-    io::ImageSaver::save_ppm("output/output.ppm", width_, height_, framebuffer);
-    io::ImageSaver::save_bmp("output/output.bmp", width_, height_, framebuffer);
 }
 
 spectral::Spectrum PathTracer::trace(const scene::Scene& scene, core::Rayf ray, std::mt19937& local_rng, const float* lambdas) {

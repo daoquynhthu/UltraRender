@@ -1319,7 +1319,7 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
                 
                 // Update Ray
                 r.origin = r.origin + r.direction * scatter_dist;
-                r.direction = random_in_unit_sphere(seed); // Isotropic Phase Function
+                r.direction = random_unit_vector(seed); // Isotropic Phase Function
                 
                 // Depolarize in volume (multiple scattering)
                 current_stokes = StokesVector(1.0f, 0.0f, 0.0f, 0.0f); 

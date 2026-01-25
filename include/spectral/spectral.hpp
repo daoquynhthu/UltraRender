@@ -188,7 +188,7 @@ public:
         
         // 蒙特卡洛积分： (Max - Min) / N * Sum(L_i * CIE(lambda_i))
         // 假设 lambdas 是在 [kLambdaMin, kLambdaMax] 均匀采样的
-        float domain_width = kLambdaMax - kLambdaMin;
+        constexpr float domain_width = kLambdaMax - kLambdaMin;
         
         // 归一化系数：CIE Y 曲线的积分面积约为 106.856
         // 我们需要除以这个面积，使得等能白光 (SPD=1) 的 Y 值归一化为 1.0 (或接近 1.0 的值)

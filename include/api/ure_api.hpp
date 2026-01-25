@@ -125,6 +125,7 @@ public:
 class RenderEngineFactory {
 public:
     static std::unique_ptr<IRenderEngine> create_gpu_engine();
+    static std::unique_ptr<IRenderEngine> create_cpu_engine();
 };
 
 } // namespace ure

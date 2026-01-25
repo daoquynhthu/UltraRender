@@ -1,4 +1,4 @@
-# UltraRender 渲染引擎项目交接技术文档
+<!-- # UltraRender 渲染引擎项目交接技术文档
 
 ## 1. 项目概述
 本引擎是一个基于物理（PBR）的**偏振光谱路径追踪渲染引擎**。它在整个渲染管线中使用光谱功率分布（SPD）和 Stokes 矢量来计算能量传输，能够真实模拟色散（Dispersion）、偏振（Polarization）以及薄膜干涉（Thin-film Interference）等复杂物理现象。
@@ -41,4 +41,4 @@
 ## 5. 构建与运行
 - **构建**: 使用 CMake 构建，依赖支持 C++20 的编译器。
 - **运行**: `./UltraRender.exe [scene_name]` (如 `test` 或 `quick`)。
-- **输出**: 默认输出为 `output.ppm` 和 `output.bmp`。
+- **输出**: 默认输出为 `output.ppm` 和 `output.bmp`。 -->

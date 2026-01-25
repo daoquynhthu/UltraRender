@@ -5,7 +5,7 @@
 namespace ure::scene {
 
 /**
- * @brief 理想球体形状
+ * @brief Ideal Sphere Shape
  */
 class Sphere : public Shape {
 public:

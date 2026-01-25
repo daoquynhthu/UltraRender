@@ -44,7 +44,7 @@ public:
         return result;
     }
 
-    // 向量变换
+    // Vector transformation
     constexpr Vec3<T> transform_vector(const Vec3<T>& v) const {
         return {
             m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z,

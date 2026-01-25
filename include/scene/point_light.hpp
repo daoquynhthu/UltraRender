@@ -9,10 +9,10 @@ namespace ure::scene {
  */
 class PointLight : public Light {
 public:
-    PointLight(const core::Point3f& p, const spectral::Spectrum& I)
+    PointLight(const ure::core::Point3f& p, const spectral::Spectrum& I)
         : p_(p), intensity_(I) {}
 
-    LightSample sample_li(const core::Point3f& ref, const core::Point2f& /*u*/, const float* lambdas) const override {
+    LightSample sample_li(const ure::core::Point3f& ref, const ure::core::Point2f& /*u*/, const float* lambdas) const override {
         LightSample ls;
         ls.p = p_;
         ls.wi = (p_ - ref).normalize();
@@ -24,16 +24,16 @@ public:
         return ls;
     }
 
-    float pdf_li(const core::Point3f& /*ref*/, const core::Vec3f& /*wi*/) const override {
+    float pdf_li(const ure::core::Point3f& /*ref*/, const ure::core::Vec3f& /*wi*/) const override {
         return 0.0f; // 点光源无法被 BSDF 采样随机击中
     }
 
-    spectral::Spectrum le(const core::Interaction& /*isect*/, const core::Vec3f& /*wo*/, const float* /*lambdas*/) const override {
+    spectral::Spectrum le(const ure::core::Interaction& /*isect*/, const ure::core::Vec3f& /*wo*/, const float* /*lambdas*/) const override {
         return spectral::Spectrum(0.0f); // 点光源没有几何面积，无法直接击中
     }
 
 private:
-    core::Point3f p_;
+    ure::core::Point3f p_;
     spectral::Spectrum intensity_; // 辐射强度 (W/sr)
 };
 

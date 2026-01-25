@@ -1,13 +1,17 @@
 #pragma once
 
 #include "vector.hpp"
+#include "ray.hpp"
 #include <algorithm>
 #include <limits>
 
 namespace ure::core {
 
+#undef min
+#undef max
+
 /**
- * @brief 轴对齐包围盒 (Axis-Aligned Bounding Box)
+ * @brief Axis-Aligned Bounding Box (AABB)
  */
 struct AABB {
     Point3f min{std::numeric_limits<float>::max()};

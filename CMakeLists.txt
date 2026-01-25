@@ -26,8 +26,7 @@ list(REMOVE_DUPLICATES ENGINE_SOURCES_CPP)
 list(REMOVE_ITEM ENGINE_SOURCES_CPP "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/gpu_driver_stub.cpp")
 
 # --- CUDA 支持配置 ---
-include(CheckLanguage)
-check_language(CUDA)
+enable_language(CUDA OPTIONAL)
 
 if(CMAKE_CUDA_COMPILER)
     message(STATUS "CUDA Compiler found: ${CMAKE_CUDA_COMPILER}")
@@ -59,10 +58,22 @@ if(CMAKE_CUDA_COMPILER)
     )
 else()
     message(STATUS "CUDA Compiler NOT found. Building in CPU-only mode.")
-    # 如果找不到 CUDA，使用桩代码
+    
+    # Exclude GPU-specific files
+    list(FILTER ENGINE_SOURCES_CPP EXCLUDE REGEX ".*/src/gpu/.*")
+    list(FILTER ENGINE_SOURCES_CPP EXCLUDE REGEX ".*/src/api/gpu_engine_impl.cpp")
+
+    # Add CPU engine implementation
+    list(APPEND ENGINE_SOURCES_CPP "${CMAKE_CURRENT_SOURCE_DIR}/src/api/cpu_engine_impl.cpp")
+
+    # Keep gpu_driver_stub.cpp if needed by other components, or exclude it if cpu_engine_impl is enough.
+    # gpu_driver_stub.cpp implements ure::gpu::is_gpu_available.
+    # If we exclude src/gpu/.*, we exclude stub too.
+    # But we don't need it since cpu_engine_impl.cpp handles factory logic.
+    # list(APPEND ENGINE_SOURCES_CPP "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/gpu_driver_stub.cpp")
+
     set(FINAL_SOURCES 
         ${ENGINE_SOURCES_CPP}
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/gpu_driver_stub.cpp"
     )
 endif()
 
@@ -77,7 +88,7 @@ foreach(source_file ${FINAL_SOURCES})
     if(source_file MATCHES "\\.cpp$")
         if(MSVC)
             # 添加 /wd4819 以抑制编码警告（虽然我们已经用了 /utf-8，但有时第三方头文件仍会触发）
-            set_source_files_properties(${source_file} PROPERTIES COMPILE_OPTIONS "/W4;/permissive-;/utf-8;/EHsc;/wd4819")
+            set_source_files_properties(${source_file} PROPERTIES COMPILE_OPTIONS "/W4;/utf-8;/EHsc;/wd4819")
         else()
             set_source_files_properties(${source_file} PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-pedantic")
         endif()
@@ -98,6 +109,20 @@ set_target_properties(UltraRender PROPERTIES
 if(MSVC)
     target_link_options(UltraRender PRIVATE "/NODEFAULTLIB:LIBCMT")
 endif()
+
+# --- Testing Configuration ---
+enable_testing()
+
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  URL https://github.com/google/googletest/archive/refs/heads/main.zip
+)
+# For Windows: Prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+add_subdirectory(tests)
 
 message(STATUS "Ultra Render Engine Project Configured.")
 message(STATUS "Sources: ${FINAL_SOURCES}")

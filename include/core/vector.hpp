@@ -52,7 +52,7 @@ public:
         return (i == 0) ? x : (i == 1 ? y : z);
     }
 
-    // 基础运算
+    // Basic operations
     constexpr Vec3 operator+(const Vec3& v) const { return Vec3(x + v.x, y + v.y, z + v.z); }
     constexpr Vec3 operator-(const Vec3& v) const { return Vec3(x - v.x, y - v.y, z - v.z); }
     constexpr Vec3 operator*(const Vec3& v) const { return Vec3(x * v.x, y * v.y, z * v.z); }
@@ -70,7 +70,7 @@ public:
 
     constexpr Vec3 operator-() const { return Vec3(-x, -y, -z); }
 
-    // 向量运算
+    // Vector operations
     constexpr T dot(const Vec3& v) const { return x * v.x + y * v.y + z * v.z; }
     
     constexpr Vec3 cross(const Vec3& v) const {
@@ -89,7 +89,7 @@ public:
         return len > 0 ? *this / len : Vec3(0);
     }
 
-    // 常用工具
+    // Common tools
     static constexpr Vec3 min(const Vec3& a, const Vec3& b) {
         return Vec3(std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z));
     }
@@ -112,7 +112,7 @@ using Point2d = Vec2<double>;
 using Vec2f = Vec2<float>;
 using Vec2d = Vec2<double>;
 
-// 别名
+// Aliases
 template <typename T>
 using Point3 = Vec3<T>;
 
@@ -125,7 +125,7 @@ using Point3f = Point3<float>;
 using Point3d = Point3<double>;
 using Normal3f = Normal3<float>;
 
-// 外部运算符
+// External operators
 template <typename T>
 constexpr Vec3<T> operator*(T s, const Vec3<T>& v) { return v * s; }
 

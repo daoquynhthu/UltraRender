@@ -6,21 +6,21 @@
 namespace ure::core {
 
 /**
- * @brief 相机抽象基类
+ * @brief Camera abstract base class
  */
 class Camera {
 public:
     virtual ~Camera() = default;
 
     /**
-     * @brief 根据屏幕坐标生成射线
-     * @param raster_pos 屏幕空间坐标 [0, width] x [0, height]
+     * @brief Generate ray from screen coordinates
+     * @param raster_pos Screen space coordinates [0, width] x [0, height]
      */
     virtual Rayf generate_ray(const Point2f& raster_pos) const = 0;
 };
 
 /**
- * @brief 针孔相机 (Pinhole Camera)
+ * @brief Pinhole Camera
  */
 class PinholeCamera : public Camera {
 public:
@@ -31,13 +31,13 @@ public:
 private:
     Point3f origin;
     Point3f lower_left_corner;
-    Vec3f horizontal;
-    Vec3f vertical;
-    Vec3f u, v, w;
+    ure::core::Vec3f horizontal;
+    ure::core::Vec3f vertical;
+    ure::core::Vec3f u, v, w;
 };
 
 /**
- * @brief 薄透镜相机 (Thin-Lens Camera) - 支持景深 (DoF)
+ * @brief Thin-Lens Camera - Supports Depth of Field (DoF)
  */
 class ThinLensCamera : public Camera {
 public:
@@ -55,9 +55,9 @@ private:
 
     Point3f origin;
     Point3f lower_left_corner;
-    Vec3f horizontal;
-    Vec3f vertical;
-    Vec3f u, v, w;
+    ure::core::Vec3f horizontal;
+    ure::core::Vec3f vertical;
+    ure::core::Vec3f u, v, w;
     float lens_radius;
 };
 

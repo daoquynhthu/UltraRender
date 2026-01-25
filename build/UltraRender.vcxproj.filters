@@ -4,6 +4,9 @@
     <ClCompile Include="E:\Render Engine\src\accelerators\bvh_accelerator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\api\cpu_engine_impl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="E:\Render Engine\src\api\gpu_engine_impl.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -183,6 +186,18 @@
       <Filter>Source Files</Filter>
     </CudaCompile>
     <CudaCompile Include="..\src\gpu\path_tracer_kernel.cu">
+      <Filter>Source Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\gpu\path_tracer_material.cu">
+      <Filter>Source Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\gpu\path_tracer_raygen.cu">
+      <Filter>Source Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\gpu\path_tracer_denoise.cu">
+      <Filter>Source Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\gpu\path_tracer_post.cu">
       <Filter>Source Files</Filter>
     </CudaCompile>
   </ItemGroup>

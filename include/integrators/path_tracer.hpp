@@ -28,6 +28,8 @@ public:
 
     void render(const scene::Scene& scene, const core::Camera& camera) override;
 
+    const std::vector<core::Vec3f>& get_framebuffer() const { return framebuffer_; }
+
 private:
     spectral::Spectrum trace(const scene::Scene& scene, core::Rayf ray, std::mt19937& local_rng, const float* lambdas);
     spectral::Spectrum sample_direct_light(const scene::Scene& scene, const core::Interaction& isect, std::mt19937& local_rng, const float* lambdas);
@@ -37,6 +39,7 @@ private:
 
     int width_, height_, spp_;
     std::mt19937 rng_;
+    std::vector<core::Vec3f> framebuffer_;
 };
 
 } // namespace ure::integrators

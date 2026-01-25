@@ -8,12 +8,14 @@ C:/msys64/mingw64/share/cmake/Modules/CMakeLanguageInformation.cmake
 C:/msys64/mingw64/share/cmake/Modules/CMakeRCInformation.cmake
 C:/msys64/mingw64/share/cmake/Modules/CMakeSystemSpecificInformation.cmake
 C:/msys64/mingw64/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake
-C:/msys64/mingw64/share/cmake/Modules/CheckLanguage.cmake
 C:/msys64/mingw64/share/cmake/Modules/Compiler/CMakeCommonCompilerMacros.cmake
 C:/msys64/mingw64/share/cmake/Modules/Compiler/MSVC-CXX.cmake
 C:/msys64/mingw64/share/cmake/Modules/Compiler/MSVC.cmake
 C:/msys64/mingw64/share/cmake/Modules/Compiler/NVIDIA-CUDA.cmake
 C:/msys64/mingw64/share/cmake/Modules/Compiler/NVIDIA.cmake
+C:/msys64/mingw64/share/cmake/Modules/ExternalProject/shared_internal_commands.cmake
+C:/msys64/mingw64/share/cmake/Modules/FetchContent.cmake
+C:/msys64/mingw64/share/cmake/Modules/FetchContent/CMakeLists.cmake.in
 C:/msys64/mingw64/share/cmake/Modules/Internal/CMakeCXXLinkerInformation.cmake
 C:/msys64/mingw64/share/cmake/Modules/Internal/CMakeCommonLinkerInformation.cmake
 C:/msys64/mingw64/share/cmake/Modules/Linker/MSVC-CXX.cmake

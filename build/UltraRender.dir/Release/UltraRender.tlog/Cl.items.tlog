@@ -1,4 +1,5 @@
 E:\Render Engine\src\accelerators\bvh_accelerator.cpp;E:\Render Engine\build\UltraRender.dir\Release\bvh_accelerator.obj
+E:\Render Engine\src\api\cpu_engine_impl.cpp;E:\Render Engine\build\UltraRender.dir\Release\cpu_engine_impl.obj
 E:\Render Engine\src\api\gpu_engine_impl.cpp;E:\Render Engine\build\UltraRender.dir\Release\gpu_engine_impl.obj
 E:\Render Engine\src\api\procedural.cpp;E:\Render Engine\build\UltraRender.dir\Release\procedural.obj
 E:\Render Engine\src\api\scene_parser.cpp;E:\Render Engine\build\UltraRender.dir\Release\scene_parser.obj
