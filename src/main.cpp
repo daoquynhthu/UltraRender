@@ -9,6 +9,35 @@
 
 using namespace ure;
 
+// Helper to save image
+void save_current_frame(IRenderEngine* engine, int width, int height, const std::string& path) {
+    const auto& buffer = engine->get_frame_buffer();
+    std::vector<ure::core::Vec3f> pixels(width * height);
+    
+    // Safety check
+    if (buffer.size() < pixels.size() * 3) return;
+
+    for (size_t i = 0; i < pixels.size(); ++i) {
+        pixels[i].x = buffer[i*3 + 0];
+        pixels[i].y = buffer[i*3 + 1];
+        pixels[i].z = buffer[i*3 + 2];
+    }
+    
+    // Use temp file for atomic-like write to avoid partial reads by frontend
+    std::string temp_path = path + ".tmp";
+    ure::io::ImageSaver::save_bmp(temp_path, width, height, pixels, ure::io::ToneMapType::ACES, 1.0f);
+    
+    try {
+        // On Windows, std::filesystem::rename might fail if target exists, so we remove it first
+        if (std::filesystem::exists(path)) {
+            std::filesystem::remove(path);
+        }
+        std::filesystem::rename(temp_path, path);
+    } catch (const std::exception& e) {
+        std::cerr << "[Main] Error updating output file: " << e.what() << std::endl;
+    }
+}
+
 int main(int argc, char* argv[]) {
     std::cout << "========================================" << std::endl;
     std::cout << "   UltraRender Engine - Procedural MVP  " << std::endl;
@@ -18,14 +47,14 @@ int main(int argc, char* argv[]) {
     std::string scene_path_or_name = "procedural_demo";
     std::string output_filename_override = "";
     std::string output_dir_str = "";
-    int spp = 100; 
+    int cli_spp = 0; 
     int cli_width = 0;
     int cli_height = 0;
     
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if ((arg == "-s" || arg == "--spp") && i + 1 < argc) {
-            spp = std::stoi(argv[++i]);
+            cli_spp = std::stoi(argv[++i]);
         } else if ((arg == "-o" || arg == "--output") && i + 1 < argc) {
             output_filename_override = argv[++i];
         } else if ((arg == "-d" || arg == "--output-dir") && i + 1 < argc) {
@@ -46,7 +75,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    std::cout << "[Main] Target: " << scene_path_or_name << ", SPP: " << spp << std::endl;
+    std::cout << "[Main] Target: " << scene_path_or_name << ", SPP (CLI): " << cli_spp << std::endl;
 
     // 2. Build Scene
     Scene scene;
@@ -69,14 +98,7 @@ int main(int argc, char* argv[]) {
     // 3. Initialize Engine
     std::cout << "[Main] Initializing GPU Engine..." << std::endl;
     auto engine = RenderEngineFactory::create_gpu_engine();
-    
-    // 4. Load Scene
-    std::cout << "[Main] Loading Scene Data..." << std::endl;
-    engine->load_scene(scene);
-    
-    // 5. Render
-    RenderSettings settings;
-    
+
     // Resolution Priority: Scene File > CLI > Default
     // 1. Determine Width
     if (scene.width > 0) {
@@ -84,11 +106,10 @@ int main(int argc, char* argv[]) {
             std::cerr << "[Main] Warning: Resolution width conflict! Scene (" << scene.width 
                       << ") != CLI (" << cli_width << "). Using Scene value." << std::endl;
         }
-        settings.width = scene.width;
     } else if (cli_width > 0) {
-        settings.width = cli_width;
+        scene.width = cli_width;
     } else {
-        settings.width = 1280;
+        scene.width = 1280;
     }
 
     // 2. Determine Height
@@ -97,24 +118,41 @@ int main(int argc, char* argv[]) {
             std::cerr << "[Main] Warning: Resolution height conflict! Scene (" << scene.height 
                       << ") != CLI (" << cli_height << "). Using Scene value." << std::endl;
         }
-        settings.height = scene.height;
     } else if (cli_height > 0) {
-        settings.height = cli_height;
+        scene.height = cli_height;
     } else {
-        settings.height = 720;
+        scene.height = 720;
     }
     
+    // 3. Determine SPP (Priority: CLI > Scene > Default)
+    int spp = 100; // Default
+    if (cli_spp > 0) {
+        spp = cli_spp;
+        if (scene.spp > 0 && scene.spp != cli_spp) {
+            std::cerr << "[Main] Warning: SPP conflict! CLI (" << cli_spp 
+                      << ") overrides Scene (" << scene.spp << ")." << std::endl;
+        }
+    } else if (scene.spp > 0) {
+        spp = scene.spp;
+    }
+
+    // 4. Load Scene
+    std::cout << "[Main] Loading Scene Data..." << std::endl;
+    engine->load_scene(scene);
+    
+    // 5. Render Loop (Interactive / Progressive)
+    RenderSettings settings;
+    settings.width = scene.width;
+    settings.height = scene.height;
     settings.spp = spp;
+
+    std::cout << "[Main] Starting Render Loop: " << settings.width << "x" << settings.height << " @ " << settings.spp << " SPP" << std::endl;
     
-    std::cout << "[Main] Rendering " << settings.width << "x" << settings.height << " @ " << settings.spp << " SPP..." << std::endl;
-    engine->render(settings);
-    
-    // 6. Save Output
+    // Prepare output path
     std::filesystem::path output_dir;
     if (!output_dir_str.empty()) {
         output_dir = output_dir_str;
     } else {
-        // Default to project root "output" folder as requested
         output_dir = std::filesystem::current_path() / "output";
     }
 
@@ -132,24 +170,40 @@ int main(int argc, char* argv[]) {
         }
         output_filename = filename_base + ".bmp";
     }
-    
     std::filesystem::path output_path = output_dir / output_filename;
-    
-    std::cout << "[Main] Saving output to: " << output_path.string() << std::endl;
+    std::string output_path_str = output_path.string();
 
-    const auto& buffer = engine->get_frame_buffer();
-    
-    // Convert to internal Vec3f for ImageSaver
-    std::vector<ure::core::Vec3f> pixels(settings.width * settings.height);
-    for (size_t i = 0; i < pixels.size(); ++i) {
-        pixels[i].x = buffer[i*3 + 0];
-        pixels[i].y = buffer[i*3 + 1];
-        pixels[i].z = buffer[i*3 + 2];
+    // Reset accumulation before starting
+    engine->reset_accumulation();
+
+    auto start_time = std::chrono::steady_clock::now();
+    auto last_save_time = std::chrono::steady_clock::now();
+    int current_spp = 0;
+
+    while (current_spp < spp) {
+        current_spp = engine->render_pass();
+        
+        // Console Progress Update
+        if (current_spp % 10 == 0 || current_spp == spp) {
+             std::cout << "\r[Main] Progress: " << current_spp << "/" << spp << " SPP" << std::flush;
+        }
+
+        // Periodic Save (e.g., every 2 seconds or at specific milestones)
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(now - last_save_time).count();
+        
+        // Save if: 
+        // 1. More than 1 second passed since last save AND we have made progress
+        // 2. OR it's the very first few samples (for quick feedback)
+        // 3. OR it's the final sample
+        if (elapsed_seconds >= 1 || current_spp == 1 || current_spp == 10 || current_spp == spp) {
+            save_current_frame(engine.get(), settings.width, settings.height, output_path_str);
+            last_save_time = now;
+        }
     }
     
-    // Use ACES Tone Mapping by default for better color reproduction
-    ure::io::ImageSaver::save_bmp(output_path.string(), settings.width, settings.height, pixels, ure::io::ToneMapType::ACES, 1.0f);
-    std::cout << "[Main] Done!" << std::endl;
+    std::cout << std::endl << "[Main] Render Finished!" << std::endl;
+    std::cout << "[Main] Final Output saved to: " << output_path_str << std::endl;
 
     return 0;
 }

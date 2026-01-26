@@ -1,0 +1,10 @@
+# CMake generation dependency list for this directory.
+C:/msys64/mingw64/share/cmake/Modules/CheckCSourceCompiles.cmake
+C:/msys64/mingw64/share/cmake/Modules/CheckIncludeFile.cmake
+C:/msys64/mingw64/share/cmake/Modules/CheckLibraryExists.cmake
+C:/msys64/mingw64/share/cmake/Modules/FindPackageHandleStandardArgs.cmake
+C:/msys64/mingw64/share/cmake/Modules/FindPackageMessage.cmake
+C:/msys64/mingw64/share/cmake/Modules/FindThreads.cmake
+E:/Render Engine/build_gui/_deps/googletest-src/googlemock/CMakeLists.txt
+E:/Render Engine/build_gui/_deps/googletest-src/googlemock/cmake/gmock.pc.in
+E:/Render Engine/build_gui/_deps/googletest-src/googlemock/cmake/gmock_main.pc.in

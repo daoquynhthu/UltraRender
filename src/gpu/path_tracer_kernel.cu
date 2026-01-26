@@ -99,6 +99,12 @@ __device__ float schlick(float cosine, float ref_idx) {
     return r0 + (1.0f - r0) * powf((1.0f - cosine), 5.0f);
 }
 
+__device__ inline float power_heuristic(float f_pdf, float g_pdf) {
+    float f2 = f_pdf * f_pdf;
+    float g2 = g_pdf * g_pdf;
+    return f2 / (f2 + g2 + 1e-10f);
+}
+
 __device__ bool hit_sphere(const GpuSphere& sphere, const GpuRay& r, float t_min, float t_max, float& t, GpuVec3& p, GpuVec3& n, int& mat_idx) {
     GpuVec3 oc = r.origin - sphere.center;
     float a = r.direction.dot(r.direction);
@@ -267,7 +273,7 @@ __device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float
     return hit_anything;
 }
 
-__device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& p_out, GpuVec3& n_out, GpuVec3& ng_out, GpuVec2& uv_out, int& mat_idx_out) {
+__device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& p_out, GpuVec3& n_out, GpuVec3& ng_out, GpuVec2& uv_out, int& mat_idx_out, int& type_out, int& index_out) {
     float t_closest = t_max;
     bool hit_anything = false;
     float t_temp;
@@ -284,6 +290,8 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
             n_out = n_temp;
             ng_out = n_temp; // Spheres have perfect geometry
             mat_idx_out = mat_idx_temp;
+            type_out = 0; // Sphere
+            index_out = i;
             
             // Spherical UV mapping (simple)
             // p_temp is point on sphere. center is scene.spheres[i].center
@@ -319,6 +327,8 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
                 ng_out = ng_mesh;
                 mat_idx_out = mesh.material_index;
                 uv_out = uv_mesh;
+                type_out = 1; // Mesh
+                index_out = i;
             }
         } else {
             // Linear Fallback
@@ -746,7 +756,9 @@ __device__ bool scatter(
     int sample_index,
     int pixel_index,
     int depth,
-    int& spectral_channel // 0: None, 1: R, 2: G, 3: B
+    int& spectral_channel, // 0: None, 1: R, 2: G, 3: B
+    float ior_outside = 1.0f,
+    float ior_inside = 1.0f
 ) {
     out_pdf = 0.0f;
     // LDS Sampling
@@ -901,6 +913,7 @@ __device__ bool scatter(
         
         float G1_L = smith_G1(NdotL, k);
         float microfacet_weight = (G1_L * VdotH) / fmaxf(1e-6f, NdotH * NdotV);
+        if (microfacet_weight > 10.0f) microfacet_weight = 10.0f; // Clamp to suppress fireflies
         
         float base_r = use_albedo_fresnel ? 1.0f : mat.albedo.values.x;
         float base_g = use_albedo_fresnel ? 1.0f : mat.albedo.values.y;
@@ -1006,9 +1019,27 @@ __device__ bool scatter(
 
             // Mask attenuation and boost
             float b_val = 1.0f;
-            if (b_val > dispersion_clamp) b_val = dispersion_clamp; 
+            // Removed pre-clamp, will clamp final attenuation instead
             
-            attenuation = GpuSpectrum(b_val);
+            if (mat.dispersion > 0.0f) {
+                // Apply Spectral Peaking: Boost 3x on first split and LOCK channel
+                if (spectral_channel == 0) {
+                    b_val *= 3.0f;
+                    spectral_channel = channel + 1; // 1:R, 2:G, 3:B
+                }
+                
+                // Apply Color Mask
+                if (channel == 0) attenuation = GpuSpectrum(b_val, 0.0f, 0.0f);
+                else if (channel == 1) attenuation = GpuSpectrum(0.0f, b_val, 0.0f);
+                else attenuation = GpuSpectrum(0.0f, 0.0f, b_val);
+            } else {
+                attenuation = GpuSpectrum(b_val);
+            }
+
+            // Apply global dispersion clamp to final attenuation
+            if (attenuation.values.x > dispersion_clamp) attenuation.values.x = dispersion_clamp;
+            if (attenuation.values.y > dispersion_clamp) attenuation.values.y = dispersion_clamp;
+            if (attenuation.values.z > dispersion_clamp) attenuation.values.z = dispersion_clamp;
         }
 
         bool front_face = r_in.direction.dot(n) < 0;
@@ -1016,7 +1047,7 @@ __device__ bool scatter(
 
         // Micro-jitter normal to smooth out singular caustics (anti-firefly for perfect dielectrics)
         if (mat.type == MaterialType::Dielectric) {
-            float jitter_scale = mat.roughness * 0.002f;
+            float jitter_scale = fmaxf(mat.roughness, 0.05f) * 0.005f; // Force min roughness for jitter
             if (jitter_scale > 0.0f) {
                 GpuVec3 jitter = sample_unit_vector_lds(r_bsdf_1, r_bsdf_2) * jitter_scale; 
                 normal = (normal + jitter).normalize();
@@ -1048,8 +1079,11 @@ __device__ bool scatter(
         rotate_stokes(stokes, 2.0f * phi_in);
 
         // 2. Calculate Fresnel Coefficients
-        float eta_i = front_face ? 1.0f : refraction_ratio;
-        float eta_t = front_face ? refraction_ratio : 1.0f;
+        // Use passed IORs to support nested dielectrics (e.g. Water in Glass)
+        // If front_face (Entering): eta_i = ior_outside, eta_t = refraction_ratio (current mat)
+        // If !front_face (Exiting): eta_i = refraction_ratio, eta_t = ior_outside (next mat from stack)
+        float eta_i = front_face ? ior_outside : refraction_ratio;
+        float eta_t = front_face ? refraction_ratio : ior_outside;
         
         GpuVec3 unit_direction = r_in.direction.normalize();
         float cos_theta_i = fminf((-unit_direction).dot(normal), 1.0f);
@@ -1165,11 +1199,11 @@ __device__ bool scatter(
             float transmit_prob = 1.0f - reflect_prob;
             apply_mueller_transmission_dielectric(stokes, ts, tp, (eta_t * cos_theta_t) / (eta_i * cos_theta_i));
             
-            float eta_ratio = eta_t / eta_i;
-            float radiance_scale = eta_ratio * eta_ratio;
-            if (radiance_scale > 1.5f) radiance_scale = 1.5f;
-            stokes = stokes * radiance_scale;
-            attenuation = attenuation * radiance_scale;
+            // Flux Conservation: Scale = 1.0 (Removed radiance scaling)
+            // This prevents dark artifacts for high IOR (e.g. Diamond IOR 2.4 -> scale 5.76 clamped to 1.5 was causing energy loss)
+            // float eta_ratio = eta_t / eta_i;
+            // float radiance_scale = eta_ratio * eta_ratio;
+            // attenuation = attenuation * radiance_scale;
 
             // Normalize by transmit_prob
             float pdf = fmaxf(1e-6f, transmit_prob);
@@ -1291,15 +1325,23 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
     int spectral_channel = 0; // 0: None, 1: R, 2: G, 3: B
 
     // Phase 3: Volume / SSS Tracking
-    // -1: Global Medium (Air/Vacuum)
-    // >=0: Inside Material (SSS)
+    // Stack-based medium tracking for nested dielectrics
+    int medium_stack[8];
+    int stack_ptr = 0; // Points to next free slot. 0 means empty (Global Medium)
+
     int current_medium_mat_idx = -1;
 
     int depth = 0;
     // Increase max_depth to prevent black artifacts in dielectrics (TIR trapping)
     int max_depth = 50; 
     
+    float last_bsdf_pdf = 0.0f;
+    bool last_bounce_specular = true;
+
     while (depth < max_depth) {
+        // Update active medium from stack
+        current_medium_mat_idx = (stack_ptr > 0) ? medium_stack[stack_ptr - 1] : -1;
+
         float t;
         GpuVec3 p, n, ng;
         GpuVec2 uv;
@@ -1337,7 +1379,8 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
         float max_sigma_t = fmaxf(sigma_t.values.x, fmaxf(sigma_t.values.y, sigma_t.values.z));
 
         // 2. Intersect Scene (Geometry)
-        bool hit_surface = world_hit(scene, r, current_t_min, FLT_MAX, t, p, n, ng, uv, mat_idx);
+        int hit_type; int hit_index;
+        bool hit_surface = world_hit(scene, r, current_t_min, FLT_MAX, t, p, n, ng, uv, mat_idx, hit_type, hit_index);
         float hit_distance = hit_surface ? t : FLT_MAX;
 
         // 3. Sample Volume Interaction
@@ -1406,7 +1449,8 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
                             GpuVec3 p_dummy, n_dummy, ng_dummy;
                             GpuVec2 uv_dummy;
                             int mat_dummy;
-                            bool occluded = world_hit(scene, GpuRay(p_vol, l_dir, 1e-4f, t_to_light - 1e-4f), 1e-4f, t_to_light - 1e-4f, t_dummy, p_dummy, n_dummy, ng_dummy, uv_dummy, mat_dummy);
+                            int type_dummy, index_dummy;
+                            bool occluded = world_hit(scene, GpuRay(p_vol, l_dir, 1e-4f, t_to_light - 1e-4f), 1e-4f, t_to_light - 1e-4f, t_dummy, p_dummy, n_dummy, ng_dummy, uv_dummy, mat_dummy, type_dummy, index_dummy);
                             
                             if (!occluded) {
                                 GpuSpectrum tr_light;
@@ -1460,20 +1504,109 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
         if (hit_surface) {
             GpuMaterial mat = scene.materials[mat_idx];
             
-            // Add emission from the material we just hit
+            // ---------------------------------------------------------
+            // 1. Emission (Implicit Hit) with MIS
+            // ---------------------------------------------------------
             GpuSpectrum emitted = mat.emission;
+            if (emitted.to_rgb().length_sq() > 0.0f) {
+                float mis_weight = 1.0f;
+                
+                // If not the first bounce and previous bounce was non-specular, use MIS
+                if (depth > 0 && !last_bounce_specular && scene.light_count > 0) {
+                    float light_pdf = 0.0f;
+                    
+                    // Check if the hit object is a known light source
+                    // For now, we only support Sphere lights in NEE, so we check if hit is a Sphere
+                    if (hit_type == 0) { 
+                        GpuSphere sph = scene.spheres[hit_index];
+                        float area = 4.0f * 3.14159265f * sph.radius * sph.radius;
+                        float dist_sq = hit_distance * hit_distance;
+                        float cos_theta = fmaxf(0.0f, n.dot(-r.direction));
+                        
+                        if (cos_theta > 1e-6f) {
+                            // PDF conversion from Area to Solid Angle
+                            light_pdf = (1.0f / scene.light_count) * (1.0f / area) * (dist_sq / cos_theta);
+                        }
+                    }
+                    
+                    mis_weight = power_heuristic(last_bsdf_pdf, light_pdf);
+                }
+                
+                GpuSpectrum contribution = accumulated_color * emitted * mis_weight;
+                
+                float max_radiance = (depth == 0) ? 1000.0f : 20.0f; 
+                contribution.values.x = fminf(contribution.values.x, max_radiance);
+                contribution.values.y = fminf(contribution.values.y, max_radiance);
+                contribution.values.z = fminf(contribution.values.z, max_radiance);
+                
+                final_color = final_color + contribution;
+            }
+
+            // ---------------------------------------------------------
+            // 2. Next Event Estimation (Direct Light Sampling)
+            // ---------------------------------------------------------
+            // Only for non-specular materials
+            bool is_specular = (mat.type == MaterialType::Metal && mat.roughness <= 0.02f) || mat.type == MaterialType::Dielectric;
             
-            // Indirect Clamping (Firefly Removal) - Apply to Contribution, not Throughput
-            GpuSpectrum contribution = accumulated_color * emitted;
-            
-            // Allow higher dynamic range for primary hit, clamp more aggressively for indirect
-            float max_radiance = (depth == 0) ? 1000.0f : 20.0f; 
-            
-            contribution.values.x = fminf(contribution.values.x, max_radiance);
-            contribution.values.y = fminf(contribution.values.y, max_radiance);
-            contribution.values.z = fminf(contribution.values.z, max_radiance);
-            
-            final_color = final_color + contribution;
+            if (scene.light_count > 0 && !is_specular) {
+                // Pick a random light
+                int light_idx_idx = min(int(rand_float(seed) * scene.light_count), scene.light_count - 1);
+                int light_idx = scene.light_indices[light_idx_idx];
+                GpuSphere light_sphere = scene.spheres[light_idx];
+                
+                GpuVec3 wc = light_sphere.center - p;
+                float dist_sq = wc.length_sq();
+                float radius = light_sphere.radius;
+                float radius_sq = radius * radius;
+                
+                if (dist_sq > radius_sq) {
+                    float dist = sqrtf(dist_sq);
+                    float sin_theta_max2 = radius_sq / dist_sq;
+                    float cos_theta_max = sqrtf(fmaxf(0.0f, 1.0f - sin_theta_max2));
+                    
+                    float r1 = rand_float(seed);
+                    float r2 = rand_float(seed);
+                    float cos_theta = 1.0f - r1 + r1 * cos_theta_max;
+                    float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - cos_theta * cos_theta));
+                    float phi = 6.2831853f * r2;
+                    
+                    GpuVec3 w = wc * (1.0f / dist);
+                    GpuVec3 u = (fabsf(w.x) > 0.9f) ? GpuVec3(0, 1, 0) : GpuVec3(1, 0, 0);
+                    u = u.cross(w).normalize();
+                    GpuVec3 v = w.cross(u);
+                    GpuVec3 l_dir = (u * cosf(phi) * sin_theta + v * sinf(phi) * sin_theta + w * cos_theta).normalize();
+                    
+                    float cos_surf = fmaxf(0.0f, n.dot(l_dir));
+                    if (cos_surf > 0.0f) {
+                        float solid_angle = 6.2831853f * (1.0f - cos_theta_max);
+                        float light_pdf = 1.0f / (solid_angle * scene.light_count);
+                        
+                        // Visibility Check
+                        float M_dot_D = -wc.dot(l_dir);
+                        float c_val = dist_sq - radius_sq;
+                        float t_to_light = -M_dot_D - sqrtf(fmaxf(0.0f, M_dot_D * M_dot_D - c_val));
+
+                        if (t_to_light > 1e-4f) {
+                            float t_dummy;
+                            GpuVec3 p_dummy, n_dummy, ng_dummy;
+                            GpuVec2 uv_dummy;
+                            int mat_dummy, type_dummy, index_dummy;
+                            
+                            bool occluded = world_hit(scene, GpuRay(p + n * 1e-4f, l_dir, 1e-4f, t_to_light - 1e-3f), 1e-4f, t_to_light - 1e-3f, t_dummy, p_dummy, n_dummy, ng_dummy, uv_dummy, mat_dummy, type_dummy, index_dummy);
+                            
+                            if (!occluded) {
+                                GpuSpectrum L_e = scene.materials[light_sphere.material_index].emission;
+                                GpuSpectrum f_r = eval_bsdf(mat, p, n, -r.direction, l_dir);
+                                float bsdf_pdf = pdf_bsdf(mat, n, -r.direction, l_dir);
+                                float mis_weight = power_heuristic(light_pdf, bsdf_pdf);
+                                
+                                GpuSpectrum ne_contrib = accumulated_color * L_e * f_r * cos_surf * (mis_weight / light_pdf);
+                                final_color = final_color + ne_contrib;
+                            }
+                        }
+                    }
+                }
+            }
 
             GpuRay scattered;
             GpuSpectrum attenuation;
@@ -1481,25 +1614,71 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
             // Pass default dispersion clamp (10.0f) for megakernel path
             // Reduced from 20.0f to reduce fireflies in caustics
             float pdf_val = 0.0f;
-            if (scatter(r, mat, p, n, uv, accumulated_color, attenuation, scattered, current_stokes, seed, pdf_val, 10.0f, sample_index, pixel_index, depth, spectral_channel)) {
+
+            // Determine IOR of the surrounding medium (ior_outside parameter)
+            // If Entering (front_face): ior_outside is the medium we are IN (Stack Top)
+            // If Exiting (!front_face): ior_outside is the medium we are GOING TO (Stack Top - 1)
+            
+            bool is_entering = r.direction.dot(ng) < 0.0f; // Geometric normal determines entry/exit
+            
+            float ior_surrounding = 1.0f;
+            int surrounding_mat_idx = -1;
+            
+            if (is_entering) {
+                surrounding_mat_idx = (stack_ptr > 0) ? medium_stack[stack_ptr - 1] : -1;
+            } else {
+                // Exiting: We expect to pop the current material, so look at what's below it
+                surrounding_mat_idx = (stack_ptr > 1) ? medium_stack[stack_ptr - 2] : -1;
+            }
+            
+            if (surrounding_mat_idx >= 0) {
+                GpuMaterial surr_mat = scene.materials[surrounding_mat_idx];
+                ior_surrounding = surr_mat.ior;
+                
+                // Apply Dispersion to surrounding IOR if needed
+                if (surr_mat.dispersion > 0.0f && spectral_channel > 0) {
+                     float lambda = 550.0f; // Default Green
+                     if (spectral_channel == 1) lambda = 650.0f; // Red
+                     else if (spectral_channel == 2) lambda = 550.0f; // Green
+                     else if (spectral_channel == 3) lambda = 450.0f; // Blue
+                     
+                     float inv_lambda2 = 1.0f / (lambda * lambda);
+                     float inv_ref2 = 1.0f / (550.0f * 550.0f);
+                     float offset = (inv_lambda2 - inv_ref2) * 4e5f;
+                     ior_surrounding += surr_mat.dispersion * offset;
+                }
+            }
+
+            if (scatter(r, mat, p, n, uv, accumulated_color, attenuation, scattered, current_stokes, seed, pdf_val, 10.0f, sample_index, pixel_index, depth, spectral_channel, ior_surrounding)) {
                 accumulated_color = accumulated_color * attenuation;
                 
-                // Track Medium Enter/Exit for SSS
+                // Track Medium Enter/Exit for Dielectrics
                 if (mat.type == MaterialType::Dielectric) {
+                    // Check if we transmitted (Refracted)
                     float in_dot = r.direction.dot(ng);
                     float out_dot = scattered.direction.dot(ng);
                     
-                    // If signs match, we transmitted through the surface (Refraction)
                     if ((in_dot * out_dot) > 0.0f) {
+                        // Transmitted
                         if (in_dot < 0.0f) {
-                            // Entering
-                            current_medium_mat_idx = mat_idx;
+                            // Entering: Push to stack
+                            if (stack_ptr < 8) {
+                                medium_stack[stack_ptr++] = mat_idx;
+                            }
                         } else {
-                            // Exiting
-                            current_medium_mat_idx = -1;
+                            // Exiting: Pop from stack if it matches
+                            if (stack_ptr > 0) {
+                                // Ideal: Pop the specific material. 
+                                // Simple: Pop top if it matches current mat_idx.
+                                // If top doesn't match (e.g. overlapping geometry issue), we should probably scan or just pop top.
+                                // For robust nested dielectrics, usually we assume strict nesting.
+                                if (medium_stack[stack_ptr - 1] == mat_idx) {
+                                    stack_ptr--;
+                                }
+                            }
                         }
                     }
-                    // Else Reflected: Medium stays the same
+                    // Else Reflected: Stack stays the same
                 }
 
                 // Robust NaN check (checking first value as proxy)
@@ -1508,6 +1687,12 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
                     break; 
                 }
                 
+                // Update MIS state for next bounce
+                last_bsdf_pdf = pdf_val;
+                
+                // Specular threshold should match NEE check (Roughness <= 0.02 is treated as specular)
+                last_bounce_specular = (mat.type == MaterialType::Dielectric) || (mat.type == MaterialType::Metal && mat.roughness <= 0.02f);
+
                 r = scattered;
                 depth++;
 
@@ -1654,14 +1839,18 @@ __global__ void extend_kernel(
     GpuVec3 p, n, ng;
     GpuVec2 uv;
     int mat_idx;
+    int hit_type;
+    int hit_index;
     
-    if (world_hit(scene, r, t_min, FLT_MAX, t, p, n, ng, uv, mat_idx)) {
+    if (world_hit(scene, r, t_min, FLT_MAX, t, p, n, ng, uv, mat_idx, hit_type, hit_index)) {
         hit_queue.t[idx] = t;
         hit_queue.p[idx] = p;
         hit_queue.n[idx] = n;
         hit_queue.ng[idx] = ng; 
         hit_queue.uv[idx] = uv;
         hit_queue.mat_ids[idx] = mat_idx;
+        hit_queue.hit_types[idx] = hit_type;
+        hit_queue.hit_indices[idx] = hit_index;
     } else {
         hit_queue.mat_ids[idx] = -1; // Miss
     }
@@ -1861,8 +2050,9 @@ __global__ void extend_shadow_kernel(
         GpuVec3 p, n, ng;
         GpuVec2 uv;
         int mat_idx;
+        int type_dummy; int index_dummy;
         
-        if (!world_hit(scene, r, 1e-3f, remaining_dist - 1e-3f, t, p, n, ng, uv, mat_idx)) {
+        if (!world_hit(scene, r, 1e-3f, remaining_dist - 1e-3f, t, p, n, ng, uv, mat_idx, type_dummy, index_dummy)) {
             break;
         }
         
@@ -2102,13 +2292,15 @@ __global__ void shade_kernel(
             tr_vals.y = expf(-sigma_t.values.y * t_hit);
             tr_vals.z = expf(-sigma_t.values.z * t_hit);
             
-            // Division by probability of NOT scattering?
-            // prob_no_scatter = exp(-sigma_t_avg * t_hit)
-            float prob_no_scatter = expf(-sigma_t_avg * t_hit);
+            // Probability of NOT scattering (t_medium > t_hit)
+            // P(t > t_hit) = (1/3) * sum( exp(-sigma_t[i] * t_hit) )
+            float prob_no_scatter = (tr_vals.x + tr_vals.y + tr_vals.z) / 3.0f;
             
             // Robustness: Avoid division by zero
             if (prob_no_scatter > 1e-6f) {
                 throughput = throughput * GpuSpectrum::from_rgb(tr_vals) * (1.0f / prob_no_scatter);
+            } else {
+                throughput = GpuSpectrum(0.0f);
             }
         }
     }
@@ -2450,6 +2642,8 @@ void alloc_hit_queue(HitQueue& q, int capacity) {
     cudaMalloc(&q.ng, capacity * sizeof(GpuVec3));
     cudaMalloc(&q.uv, capacity * sizeof(GpuVec2));
     cudaMalloc(&q.mat_ids, capacity * sizeof(int));
+    cudaMalloc(&q.hit_types, capacity * sizeof(int));
+    cudaMalloc(&q.hit_indices, capacity * sizeof(int));
 }
 
 void free_hit_queue(HitQueue& q) {
@@ -2459,6 +2653,8 @@ void free_hit_queue(HitQueue& q) {
     cudaFree(q.ng);
     cudaFree(q.uv);
     cudaFree(q.mat_ids);
+    cudaFree(q.hit_types);
+    cudaFree(q.hit_indices);
 }
 
 void alloc_shadow_queue(ShadowQueue& q, int capacity) {
@@ -2560,6 +2756,487 @@ __global__ void adaptive_render_kernel(
     accum_buffer[pixel_index] = accum_buffer[pixel_index] + batch_color;
     accum_sq_buffer[pixel_index] = accum_sq_buffer[pixel_index] + batch_sq;
     sample_counts[pixel_index] += batch_samples;
+}
+
+// --- Interactive API Implementation ---
+
+static void compute_aabb(const std::vector<float>& vertices, GpuVec3& min_pt, GpuVec3& max_pt) {
+    min_pt = GpuVec3(1e30f, 1e30f, 1e30f);
+    max_pt = GpuVec3(-1e30f, -1e30f, -1e30f);
+    if (vertices.empty()) return;
+
+    for (size_t i = 0; i < vertices.size(); i += 3) {
+        float x = vertices[i];
+        float y = vertices[i+1];
+        float z = vertices[i+2];
+        if (x < min_pt.x) min_pt.x = x;
+        if (y < min_pt.y) min_pt.y = y;
+        if (z < min_pt.z) min_pt.z = z;
+        if (x > max_pt.x) max_pt.x = x;
+        if (y > max_pt.y) max_pt.y = y;
+        if (z > max_pt.z) max_pt.z = z;
+    }
+    // Add small epsilon padding
+    float padding = 1e-3f;
+    min_pt = min_pt - GpuVec3(padding, padding, padding);
+    max_pt = max_pt + GpuVec3(padding, padding, padding);
+}
+
+struct GpuContext {
+    int width;
+    int height;
+    int current_spp;
+    
+    // Buffers
+    GpuVec3* d_output;          // Final Resolve Buffer (LDR/HDR)
+    GpuVec3* d_accum_buffer;    // Accumulation Buffer (HDR)
+    GpuVec3* d_accum_sq_buffer; // Variance Buffer
+    int* d_sample_counts;       // Per-pixel counts
+    
+    GpuVec3* d_normal_buffer;   // Albedo/Normal for denoising
+    GpuVec3* d_albedo_buffer;
+    
+    // Wavefront Queues
+    RayQueue queueA, queueB;
+    HitQueue hitQueue;
+    ShadowQueue shadowQueue;
+    
+    // Scene Data Pointers
+    GpuMaterial* d_materials;
+    GpuSphere* d_spheres;
+    GpuMesh* d_meshes;
+    GpuTexture* d_textures;
+    int* d_light_indices;
+    
+    // Scene Counts
+    int material_count;
+    int sphere_count;
+    int mesh_count;
+    int texture_count;
+    int light_count;
+    
+    // Camera
+    GpuCamera camera;
+    
+    // Medium
+    float medium_density;
+    float medium_anisotropy;
+    GpuSpectrum medium_scattering;
+    GpuSpectrum medium_absorption;
+    float medium_max_distance;
+    
+    // Cleanup Lists
+    std::vector<void*> pointers_to_free;
+    std::vector<cudaArray_t> arrays_to_free;
+    std::vector<cudaTextureObject_t> tex_objs_to_free;
+};
+
+GpuContext* init_gpu_renderer(int width, int height,
+                              const std::vector<ure::gpu::RenderMesh>& meshes,
+                              const std::vector<ure::gpu::GpuSphere>& spheres,
+                              const std::vector<ure::gpu::GpuMaterial>& materials) {
+    GpuContext* ctx = new GpuContext();
+    ctx->width = width;
+    ctx->height = height;
+    ctx->current_spp = 0;
+    
+    // Initialize default medium (vacuum)
+    ctx->medium_density = 0.0f;
+    ctx->medium_anisotropy = 0.0f;
+    ctx->medium_scattering = GpuSpectrum(0.0f);
+    ctx->medium_absorption = GpuSpectrum(0.0f);
+    ctx->medium_max_distance = 1e6f;
+    
+    std::cout << "[GPU] Allocating memory for " << width << "x" << height << " interactive session..." << std::endl;
+
+    size_t framebuffer_size = width * height * sizeof(GpuVec3);
+    cudaMalloc(&ctx->d_output, framebuffer_size);
+    cudaMalloc(&ctx->d_accum_buffer, framebuffer_size);
+    cudaMalloc(&ctx->d_accum_sq_buffer, framebuffer_size); // Not used yet but allocated
+    cudaMalloc(&ctx->d_sample_counts, width * height * sizeof(int));
+    
+    cudaMemset(ctx->d_accum_buffer, 0, framebuffer_size);
+    cudaMemset(ctx->d_accum_sq_buffer, 0, framebuffer_size);
+    cudaMemset(ctx->d_sample_counts, 0, width * height * sizeof(int));
+
+    // Allocate Feature Buffers for Denoising
+    cudaMalloc(&ctx->d_normal_buffer, framebuffer_size);
+    cudaMemset(ctx->d_normal_buffer, 0, framebuffer_size);
+    cudaMalloc(&ctx->d_albedo_buffer, framebuffer_size);
+    cudaMemset(ctx->d_albedo_buffer, 0, framebuffer_size);
+    
+    // Queues
+    int max_rays = width * height;
+    alloc_ray_queue(ctx->queueA, max_rays);
+    alloc_ray_queue(ctx->queueB, max_rays);
+    alloc_hit_queue(ctx->hitQueue, max_rays);
+    alloc_shadow_queue(ctx->shadowQueue, max_rays);
+    
+    // Scene Setup
+    bool use_default_geometry = spheres.empty() && meshes.empty();
+    GpuHostScene host_scene = load_default_scene(!use_default_geometry);
+    
+    std::vector<GpuMaterial>& host_materials = host_scene.materials;
+    if (!materials.empty()) {
+        host_materials.insert(host_materials.end(), materials.begin(), materials.end());
+    }
+    
+    cudaMalloc(&ctx->d_materials, host_materials.size() * sizeof(GpuMaterial));
+    cudaMemcpy(ctx->d_materials, host_materials.data(), host_materials.size() * sizeof(GpuMaterial), cudaMemcpyHostToDevice);
+    ctx->material_count = (int)host_materials.size();
+    
+    // Spheres
+    std::vector<GpuSphere> host_spheres = spheres;
+    if (spheres.empty() && meshes.empty()) {
+        host_spheres = host_scene.spheres;
+    }
+    cudaMalloc(&ctx->d_spheres, host_spheres.size() * sizeof(GpuSphere));
+    cudaMemcpy(ctx->d_spheres, host_spheres.data(), host_spheres.size() * sizeof(GpuSphere), cudaMemcpyHostToDevice);
+    ctx->sphere_count = (int)host_spheres.size();
+    
+    // Meshes
+    std::vector<GpuMesh> host_gpu_meshes;
+    
+    // Input Meshes
+    for (const auto& input_mesh : meshes) {
+        GpuMesh mesh;
+        mesh.triangle_count = (int)input_mesh.indices.size() / 3;
+        mesh.material_index = input_mesh.material_index;
+        
+        if (!input_mesh.uvs.empty()) {
+             size_t uv_size = input_mesh.uvs.size() * sizeof(float);
+             GpuVec2* d_uv;
+             cudaMalloc(&d_uv, uv_size);
+             cudaMemcpy(d_uv, input_mesh.uvs.data(), uv_size, cudaMemcpyHostToDevice);
+             mesh.uvs = d_uv;
+             ctx->pointers_to_free.push_back(d_uv);
+        } else { mesh.uvs = nullptr; }
+
+        if (!input_mesh.normals.empty()) {
+             size_t n_size = input_mesh.normals.size() * sizeof(float);
+             GpuVec3* d_n;
+             cudaMalloc(&d_n, n_size);
+             cudaMemcpy(d_n, input_mesh.normals.data(), n_size, cudaMemcpyHostToDevice);
+             mesh.normals = d_n;
+             ctx->pointers_to_free.push_back(d_n);
+        } else { mesh.normals = nullptr; }
+
+        compute_aabb(input_mesh.vertices, mesh.min_pt, mesh.max_pt);
+
+        std::vector<int> temp_indices = input_mesh.indices;
+        std::vector<GpuBvhNode> build_nodes;
+        MeshBvhBuilder::build(input_mesh.vertices, temp_indices, build_nodes);
+
+        if (!build_nodes.empty()) {
+             size_t bvh_size = build_nodes.size() * sizeof(GpuBvhNode);
+             GpuBvhNode* d_nodes;
+             cudaMalloc(&d_nodes, bvh_size);
+             cudaMemcpy(d_nodes, build_nodes.data(), bvh_size, cudaMemcpyHostToDevice);
+             mesh.bvh_nodes = d_nodes;
+             mesh.bvh_node_count = (int)build_nodes.size();
+             ctx->pointers_to_free.push_back(d_nodes);
+        } else { mesh.bvh_nodes = nullptr; mesh.bvh_node_count = 0; }
+
+        size_t v_size = input_mesh.vertices.size() * sizeof(float);
+        GpuVec3* d_v;
+        cudaMalloc(&d_v, v_size);
+        cudaMemcpy(d_v, input_mesh.vertices.data(), v_size, cudaMemcpyHostToDevice);
+        mesh.vertices = d_v;
+        ctx->pointers_to_free.push_back(d_v);
+
+        size_t i_size = temp_indices.size() * sizeof(int);
+        int* d_i;
+        cudaMalloc(&d_i, i_size);
+        cudaMemcpy(d_i, temp_indices.data(), i_size, cudaMemcpyHostToDevice);
+        mesh.indices = d_i;
+        ctx->pointers_to_free.push_back(d_i);
+        
+        host_gpu_meshes.push_back(mesh);
+    }
+    
+    // Scene Meshes
+    for (auto& hm : host_scene.meshes) {
+        GpuMesh mesh;
+        mesh.triangle_count = (int)hm.indices.size() / 3;
+        mesh.material_index = hm.material_index;
+        compute_aabb(hm.vertices, mesh.min_pt, mesh.max_pt);
+        std::vector<GpuBvhNode> build_nodes;
+        MeshBvhBuilder::build(hm.vertices, hm.indices, build_nodes);
+        if (!build_nodes.empty()) {
+             size_t bvh_size = build_nodes.size() * sizeof(GpuBvhNode);
+             GpuBvhNode* d_nodes;
+             cudaMalloc(&d_nodes, bvh_size);
+             cudaMemcpy(d_nodes, build_nodes.data(), bvh_size, cudaMemcpyHostToDevice);
+             mesh.bvh_nodes = d_nodes;
+             mesh.bvh_node_count = (int)build_nodes.size();
+             ctx->pointers_to_free.push_back(d_nodes);
+        } else { mesh.bvh_nodes = nullptr; mesh.bvh_node_count = 0; }
+        size_t v_size = hm.vertices.size() * sizeof(float);
+        GpuVec3* d_v;
+        cudaMalloc(&d_v, v_size);
+        cudaMemcpy(d_v, hm.vertices.data(), v_size, cudaMemcpyHostToDevice);
+        mesh.vertices = d_v;
+        ctx->pointers_to_free.push_back(d_v);
+        if (!hm.normals.empty()) {
+            size_t n_size = hm.normals.size() * sizeof(float);
+            GpuVec3* d_n;
+            cudaMalloc(&d_n, n_size);
+            cudaMemcpy(d_n, hm.normals.data(), n_size, cudaMemcpyHostToDevice);
+            mesh.normals = d_n;
+            ctx->pointers_to_free.push_back(d_n);
+        } else { mesh.normals = nullptr; }
+        if (!hm.uvs.empty()) {
+            size_t uv_size = hm.uvs.size() * sizeof(float);
+            GpuVec2* d_uv;
+            cudaMalloc(&d_uv, uv_size);
+            cudaMemcpy(d_uv, hm.uvs.data(), uv_size, cudaMemcpyHostToDevice);
+            mesh.uvs = d_uv;
+            ctx->pointers_to_free.push_back(d_uv);
+        } else { mesh.uvs = nullptr; }
+        size_t i_size = hm.indices.size() * sizeof(int);
+        int* d_i;
+        cudaMalloc(&d_i, i_size);
+        cudaMemcpy(d_i, hm.indices.data(), i_size, cudaMemcpyHostToDevice);
+        mesh.indices = d_i;
+        ctx->pointers_to_free.push_back(d_i);
+        host_gpu_meshes.push_back(mesh);
+    }
+    
+    cudaMalloc(&ctx->d_meshes, host_gpu_meshes.size() * sizeof(GpuMesh));
+    cudaMemcpy(ctx->d_meshes, host_gpu_meshes.data(), host_gpu_meshes.size() * sizeof(GpuMesh), cudaMemcpyHostToDevice);
+    ctx->mesh_count = (int)host_gpu_meshes.size();
+    
+    // Textures
+    std::vector<GpuTexture> host_gpu_textures;
+    for (const auto& h_tex : host_scene.textures) {
+        GpuTexture d_tex;
+        d_tex.width = h_tex.width;
+        d_tex.height = h_tex.height;
+        size_t size_bytes = h_tex.width * h_tex.height * sizeof(GpuSpectrum);
+        cudaMallocManaged(&d_tex.data, size_bytes);
+        std::vector<GpuSpectrum> temp_spec(h_tex.width * h_tex.height);
+        std::vector<float4> temp_float4(h_tex.width * h_tex.height);
+        for(size_t i=0; i < temp_spec.size(); ++i) {
+             float r = h_tex.data[i*3+0];
+             float g = h_tex.data[i*3+1];
+             float b = h_tex.data[i*3+2];
+             temp_spec[i] = GpuSpectrum::from_rgb(GpuVec3(r, g, b));
+             temp_float4[i] = make_float4(r, g, b, 1.0f);
+        }
+        cudaMemcpy(d_tex.data, temp_spec.data(), size_bytes, cudaMemcpyHostToDevice);
+        ctx->pointers_to_free.push_back(d_tex.data);
+
+        cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float4>();
+        cudaArray_t cuArray;
+        checkCudaErrors(cudaMallocArray(&cuArray, &channelDesc, d_tex.width, d_tex.height));
+        ctx->arrays_to_free.push_back(cuArray);
+        checkCudaErrors(cudaMemcpy2DToArray(cuArray, 0, 0, temp_float4.data(), d_tex.width * sizeof(float4), d_tex.width * sizeof(float4), d_tex.height, cudaMemcpyHostToDevice));
+        
+        struct cudaResourceDesc resDesc;
+        memset(&resDesc, 0, sizeof(resDesc));
+        resDesc.resType = cudaResourceTypeArray;
+        resDesc.res.array.array = cuArray;
+        struct cudaTextureDesc texDesc;
+        memset(&texDesc, 0, sizeof(texDesc));
+        texDesc.addressMode[0] = cudaAddressModeWrap;
+        texDesc.addressMode[1] = cudaAddressModeWrap;
+        texDesc.filterMode = cudaFilterModeLinear;
+        texDesc.readMode = cudaReadModeElementType;
+        texDesc.normalizedCoords = 1;
+        checkCudaErrors(cudaCreateTextureObject(&d_tex.texObj, &resDesc, &texDesc, NULL));
+        ctx->tex_objs_to_free.push_back(d_tex.texObj);
+        host_gpu_textures.push_back(d_tex);
+    }
+    
+    if (!host_gpu_textures.empty()) {
+        cudaMalloc(&ctx->d_textures, host_gpu_textures.size() * sizeof(GpuTexture));
+        cudaMemcpy(ctx->d_textures, host_gpu_textures.data(), host_gpu_textures.size() * sizeof(GpuTexture), cudaMemcpyHostToDevice);
+        ctx->pointers_to_free.push_back(ctx->d_textures);
+    } else { ctx->d_textures = nullptr; }
+    ctx->texture_count = (int)host_gpu_textures.size();
+    
+    // Light Indices
+    std::vector<int> host_light_indices;
+    for (int i = 0; i < host_spheres.size(); ++i) {
+        int mat_idx = host_spheres[i].material_index;
+        if (mat_idx >= 0 && mat_idx < host_materials.size()) {
+            const auto& mat = host_materials[mat_idx];
+            if (mat.emission.values.x > 1e-4f || mat.emission.values.y > 1e-4f || mat.emission.values.z > 1e-4f) {
+                host_light_indices.push_back(i);
+            }
+        }
+    }
+    if (!host_light_indices.empty()) {
+        cudaMalloc(&ctx->d_light_indices, host_light_indices.size() * sizeof(int));
+        cudaMemcpy(ctx->d_light_indices, host_light_indices.data(), host_light_indices.size() * sizeof(int), cudaMemcpyHostToDevice);
+    } else { ctx->d_light_indices = nullptr; }
+    ctx->light_count = (int)host_light_indices.size();
+    
+    return ctx;
+}
+
+void update_camera_gpu(GpuContext* ctx, const float* cam_pos, const float* cam_look, float fov) {
+    GpuVec3 lookfrom(0, 3, 12);
+    if (cam_pos) lookfrom = GpuVec3(cam_pos[0], cam_pos[1], cam_pos[2]);
+
+    GpuVec3 lookat(0, 1, 0);
+    if (cam_look) lookat = GpuVec3(cam_look[0], cam_look[1], cam_look[2]);
+
+    float vfov = (fov > 0) ? fov : 40.0f;
+    float theta = vfov * 3.14159265358979323846f / 180.0f;
+    float h = tan(theta / 2.0f);
+    float aspect_ratio = float(ctx->width) / float(ctx->height);
+    float viewport_height = 2.0f * h;
+    float viewport_width = aspect_ratio * viewport_height;
+    
+    GpuVec3 vup(0, 1, 0);
+    GpuVec3 w = (lookfrom - lookat).normalize();
+    GpuVec3 u = vup.cross(w).normalize();
+    GpuVec3 v = w.cross(u);
+    float focus_dist = 18.0f;
+
+    ctx->camera.origin = lookfrom;
+    ctx->camera.horizontal = u * viewport_width * focus_dist;
+    ctx->camera.vertical = v * viewport_height * focus_dist;
+    ctx->camera.lower_left_corner = ctx->camera.origin - ctx->camera.horizontal * 0.5f - ctx->camera.vertical * 0.5f - w * focus_dist;
+    
+    reset_accumulation_gpu(ctx);
+}
+
+void update_medium_gpu(GpuContext* ctx, float medium_density, float medium_anisotropy, GpuSpectrum medium_scattering, GpuSpectrum medium_absorption, float medium_max_distance) {
+    ctx->medium_density = medium_density;
+    ctx->medium_anisotropy = medium_anisotropy;
+    ctx->medium_scattering = medium_scattering;
+    ctx->medium_absorption = medium_absorption;
+    ctx->medium_max_distance = medium_max_distance;
+    reset_accumulation_gpu(ctx);
+}
+
+void reset_accumulation_gpu(GpuContext* ctx) {
+    size_t framebuffer_size = ctx->width * ctx->height * sizeof(GpuVec3);
+    cudaMemset(ctx->d_accum_buffer, 0, framebuffer_size);
+    cudaMemset(ctx->d_sample_counts, 0, ctx->width * ctx->height * sizeof(int));
+    ctx->current_spp = 0;
+}
+
+void free_gpu_renderer(GpuContext* ctx) {
+    if (!ctx) return;
+    
+    cudaFree(ctx->d_output);
+    cudaFree(ctx->d_accum_buffer);
+    cudaFree(ctx->d_accum_sq_buffer);
+    cudaFree(ctx->d_sample_counts);
+    cudaFree(ctx->d_normal_buffer);
+    cudaFree(ctx->d_albedo_buffer);
+    
+    cudaFree(ctx->d_materials);
+    cudaFree(ctx->d_spheres);
+    cudaFree(ctx->d_meshes);
+    cudaFree(ctx->d_light_indices);
+    
+    free_ray_queue(ctx->queueA);
+    free_ray_queue(ctx->queueB);
+    free_hit_queue(ctx->hitQueue);
+    free_shadow_queue(ctx->shadowQueue);
+    
+    for (void* ptr : ctx->pointers_to_free) cudaFree(ptr);
+    for (auto a : ctx->arrays_to_free) cudaFreeArray(a);
+    for (auto t : ctx->tex_objs_to_free) cudaDestroyTextureObject(t);
+    
+    delete ctx;
+}
+
+int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
+    GpuScene scene;
+    scene.spheres = ctx->d_spheres;
+    scene.sphere_count = ctx->sphere_count;
+    scene.meshes = ctx->d_meshes;
+    scene.mesh_count = ctx->mesh_count;
+    scene.materials = ctx->d_materials;
+    scene.material_count = ctx->material_count;
+    scene.textures = ctx->d_textures;
+    scene.texture_count = ctx->texture_count;
+    scene.light_indices = ctx->d_light_indices;
+    scene.light_count = ctx->light_count;
+    
+    scene.medium_density = ctx->medium_density;
+    scene.medium_anisotropy = ctx->medium_anisotropy;
+    scene.medium_scattering = ctx->medium_scattering;
+    scene.medium_absorption = ctx->medium_absorption;
+    scene.medium_max_distance = ctx->medium_max_distance;
+    
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((ctx->width + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                   (ctx->height + threadsPerBlock.y - 1) / threadsPerBlock.y);
+
+    for (int s = 0; s < samples_per_pass; ++s) {
+        int current_global_sample = ctx->current_spp + s;
+        
+        // 1. Generate Rays
+        int initial_count = ctx->width * ctx->height;
+        cudaMemcpy(ctx->queueA.count, &initial_count, sizeof(int), cudaMemcpyHostToDevice);
+        
+        generate_rays_kernel<<<numBlocks, threadsPerBlock>>>(
+            ctx->queueA, ctx->width, ctx->height, ctx->camera, current_global_sample, ctx->d_sample_counts
+        );
+        checkCudaErrors(cudaGetLastError());
+        
+        RayQueue* current_q = &ctx->queueA;
+        RayQueue* next_q = &ctx->queueB;
+        
+        for (int depth = 0; depth < 50; ++depth) {
+             int ray_count = 0;
+             cudaMemcpy(&ray_count, current_q->count, sizeof(int), cudaMemcpyDeviceToHost);
+             if (ray_count == 0) break;
+             
+             int num_threads = 256;
+             int num_blocks = (ray_count + num_threads - 1) / num_threads;
+             
+             extend_kernel<<<num_blocks, num_threads>>>(*current_q, ctx->hitQueue, scene);
+             
+             cudaMemset(next_q->count, 0, sizeof(int));
+             cudaMemset(ctx->shadowQueue.count, 0, sizeof(int));
+             
+             float current_dispersion_clamp = (current_global_sample < 100) ? 5.0f : 20.0f;
+             float current_rr_min_prob = (current_global_sample < 100) ? 0.1f : 0.05f;
+             
+             shade_kernel<<<num_blocks, num_threads>>>(*current_q, ctx->hitQueue, *next_q, ctx->shadowQueue, ctx->d_accum_buffer, ctx->d_normal_buffer, ctx->d_albedo_buffer, scene, current_global_sample, current_dispersion_clamp, current_rr_min_prob);
+             
+             int shadow_count = 0;
+             cudaMemcpy(&shadow_count, ctx->shadowQueue.count, sizeof(int), cudaMemcpyDeviceToHost);
+             if (shadow_count > 0) {
+                 int s_blocks = (shadow_count + num_threads - 1) / num_threads;
+                 extend_shadow_kernel<<<s_blocks, num_threads>>>(ctx->shadowQueue, ctx->d_accum_buffer, scene);
+             }
+             
+             RayQueue* temp = current_q;
+             current_q = next_q;
+             next_q = temp;
+        }
+    }
+    
+    ctx->current_spp += samples_per_pass;
+    return ctx->current_spp;
+}
+
+void copy_frame_buffer_gpu(GpuContext* ctx, float* host_buffer) {
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((ctx->width + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                   (ctx->height + threadsPerBlock.y - 1) / threadsPerBlock.y);
+                   
+    // Resolve
+    resolve_framebuffer_kernel<<<numBlocks, threadsPerBlock>>>(
+        ctx->d_accum_buffer,
+        ctx->d_sample_counts,
+        ctx->d_output, 
+        ctx->width,
+        ctx->height
+    );
+    checkCudaErrors(cudaDeviceSynchronize());
+    
+    // Simple copy for now (Denoiser/FXAA can be added here)
+    size_t framebuffer_size = ctx->width * ctx->height * sizeof(GpuVec3);
+    cudaMemcpy(host_buffer, ctx->d_output, framebuffer_size, cudaMemcpyDeviceToHost);
 }
 
 void render_frame_gpu(float* output_buffer, int width, int height, int samples_per_pixel,

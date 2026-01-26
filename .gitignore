@@ -1,6 +1,25 @@
-output/*
+# Build
+build/
+bin/
+lib/
+*.exe
+*.obj
+*.pdb
+*.tlog
+*.idb
+*.ilk
+*.suo
+*.user
+*.db
+*.opendb
 
-build/*
-build_ninja/*
-build_vs4/*
-build_vs/*
+# Output
+output/
+*.bmp
+*.png
+*.jpg
+crash_log.txt
+
+# VS
+.vs/
+out/

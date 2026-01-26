@@ -1,0 +1,5 @@
+if(EXISTS "E:/Render Engine/build_gui/tests/interactive_test[1]_tests.cmake")
+  include("E:/Render Engine/build_gui/tests/interactive_test[1]_tests.cmake")
+else()
+  add_test(interactive_test_NOT_BUILT interactive_test_NOT_BUILT)
+endif()

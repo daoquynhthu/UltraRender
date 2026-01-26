@@ -1,4 +1,3 @@
-
 project(UltraRenderTests)
 
 # Locate sources to test
@@ -55,10 +54,32 @@ if(MSVC)
     target_link_options(integration_tests PRIVATE "/NODEFAULTLIB:LIBCMT")
 endif()
 
+# Interactive API Test
+add_executable(interactive_test
+    test_interactive_api.cpp
+    "${CMAKE_SOURCE_DIR}/src/api/gpu_engine_impl.cpp"
+    "${CMAKE_SOURCE_DIR}/src/gpu/gpu_driver_stub.cpp"
+)
+
+target_include_directories(interactive_test PRIVATE 
+    "${CMAKE_SOURCE_DIR}/include"
+    ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+)
+
+target_link_libraries(interactive_test 
+    GTest::gtest_main
+)
+
+if(MSVC)
+    target_compile_options(interactive_test PRIVATE "/EHsc" "/utf-8" "/wd4819")
+    target_link_options(interactive_test PRIVATE "/NODEFAULTLIB:LIBCMT")
+endif()
+
 # Register Tests
 include(GoogleTest)
 gtest_discover_tests(unit_tests)
 gtest_discover_tests(integration_tests)
+gtest_discover_tests(interactive_test)
 
 add_executable(repro
     "${CMAKE_SOURCE_DIR}/repro.cpp"

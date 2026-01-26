@@ -1,0 +1,7 @@
+add_test([=[SceneFactoryTest.CreateTestScene]=]  [==[E:/Render Engine/build_gui/tests/Release/integration_tests.exe]==] [==[--gtest_filter=SceneFactoryTest.CreateTestScene]==] --gtest_also_run_disabled_tests)
+set_tests_properties([=[SceneFactoryTest.CreateTestScene]=]  PROPERTIES WORKING_DIRECTORY [==[E:/Render Engine/build_gui/tests]==] SKIP_REGULAR_EXPRESSION [==[\[  SKIPPED \]]==])
+add_test([=[SceneFactoryTest.CreateQuickScene]=]  [==[E:/Render Engine/build_gui/tests/Release/integration_tests.exe]==] [==[--gtest_filter=SceneFactoryTest.CreateQuickScene]==] --gtest_also_run_disabled_tests)
+set_tests_properties([=[SceneFactoryTest.CreateQuickScene]=]  PROPERTIES WORKING_DIRECTORY [==[E:/Render Engine/build_gui/tests]==] SKIP_REGULAR_EXPRESSION [==[\[  SKIPPED \]]==])
+add_test([=[SceneFactoryTest.UnknownSceneFallback]=]  [==[E:/Render Engine/build_gui/tests/Release/integration_tests.exe]==] [==[--gtest_filter=SceneFactoryTest.UnknownSceneFallback]==] --gtest_also_run_disabled_tests)
+set_tests_properties([=[SceneFactoryTest.UnknownSceneFallback]=]  PROPERTIES WORKING_DIRECTORY [==[E:/Render Engine/build_gui/tests]==] SKIP_REGULAR_EXPRESSION [==[\[  SKIPPED \]]==])
+set(  integration_tests_TESTS SceneFactoryTest.CreateTestScene SceneFactoryTest.CreateQuickScene SceneFactoryTest.UnknownSceneFallback)

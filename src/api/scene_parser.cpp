@@ -62,6 +62,11 @@ Scene SceneParser::parse_file(const std::string& filepath) {
             ss >> w >> h;
             builder.set_resolution(w, h);
         }
+        else if (command == "spp") {
+            int spp;
+            ss >> spp;
+            builder.set_spp(spp);
+        }
         else if (command == "medium") {
              // medium density <d> scatter <r> <g> <b> absorb <r> <g> <b> max_dist <dist> g <g>
              float density = 0.0f;

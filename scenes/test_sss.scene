@@ -1,0 +1,43 @@
+# SSS Test Scene
+resolution 2560 1600
+spp 1000
+
+# Camera
+camera pos 0 2 5 lookat 0 0.5 0 fov 45
+
+# Materials
+define_material mat_floor lambertian 0.5 0.5 0.5
+define_material mat_light light 30 30 30
+
+# SSS Materials
+# Wax: High scattering, low absorption, warm color
+# Density=10, Scat=0.9,0.6,0.4, Abs=0.01,0.1,0.2
+define_material mat_wax dielectric 1.5 0 0 0 1.5 0
+medium mat_wax density 2.0 scattering 0.9 0.6 0.3 absorption 0.01 0.1 0.3 anisotropy 0.8 max_dist 10.0
+
+# Marble: High density, white scattering
+define_material mat_marble dielectric 1.5 0 0 0 1.5 0
+medium mat_marble density 5.0 scattering 0.9 0.9 0.9 absorption 0.001 0.001 0.001 anisotropy 0.0 max_dist 10.0
+
+# Thin/Edge Test Material (Blue Glass/SSS)
+define_material mat_blue_sss dielectric 1.5 0 0 0 1.5 0
+medium mat_blue_sss density 1.0 scattering 0.2 0.4 0.9 absorption 0.1 0.05 0.01 anisotropy 0.5 max_dist 10.0
+
+# Geometry
+# Floor
+add_entity sphere mat_floor 0 -100.5 -1 100 100 100
+
+# Light (Back/Top)
+add_entity sphere mat_light 2 5 -2 1 1 1
+
+# Objects
+# Wax Sphere
+add_entity sphere mat_wax -1.5 0.5 0 1 1 1
+
+# Marble Sphere
+add_entity sphere mat_marble 1.5 0.5 0 1 1 1
+
+# Thin Plate (Mesh Cube for non-uniform scaling)
+# Unit cube scaled to be thin (0.05 thickness)
+# Pos: 0, 1.0, 2.0. Scale: 1.0, 1.0, 0.05
+add_entity cube mat_blue_sss 0 1.0 2.0 1.0 1.0 0.05

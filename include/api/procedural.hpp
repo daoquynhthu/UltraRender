@@ -16,6 +16,7 @@ public:
 
     SceneBuilder& set_camera(Vec3 pos, Vec3 look_at, float fov);
     SceneBuilder& set_resolution(int width, int height);
+    SceneBuilder& set_spp(int spp);
     SceneBuilder& set_medium(float density, Vec3 scattering, Vec3 absorption, float max_dist, float anisotropy = 0.0f);
     
     // Primitive Generators

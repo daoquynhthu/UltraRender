@@ -338,6 +338,8 @@ struct HitQueue {
     GpuVec3* ng; // Geometric Normal
     GpuVec2* uv; // Texture coordinates
     int* mat_ids;
+    int* hit_types; // 0 = Sphere, 1 = Mesh
+    int* hit_indices; // Index in spheres[] or meshes[]
 };
 
 } // namespace ure::gpu

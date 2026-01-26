@@ -37,6 +37,11 @@ SceneBuilder& SceneBuilder::set_resolution(int width, int height) {
     return *this;
 }
 
+SceneBuilder& SceneBuilder::set_spp(int spp) {
+    scene_.spp = spp;
+    return *this;
+}
+
 SceneBuilder& SceneBuilder::set_medium(float density, Vec3 scattering, Vec3 absorption, float max_dist, float anisotropy) {
     scene_.medium_density = density;
     scene_.medium_scattering = scattering;

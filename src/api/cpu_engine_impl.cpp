@@ -175,6 +175,28 @@ public:
     const std::vector<float>& get_frame_buffer() const override {
         return final_buffer_;
     }
+
+    // Interactive API implementations (Stub for CPU)
+    int render_pass() override {
+        // CPU interactive rendering not yet implemented
+        // We could implement a progressive loop here by modifying PathTracer,
+        // but for now we just warn.
+        // std::cerr << "[CpuRenderEngine] Interactive render_pass not supported on CPU." << std::endl;
+        return 0;
+    }
+
+    void reset_accumulation() override {
+        // Nothing to do
+    }
+
+    void update_camera(const Camera& camera) override {
+        api_camera_ = camera;
+        // In a real implementation, we would update the internal camera and reset accumulation
+    }
+
+    int get_current_spp() const override {
+        return 0; // Not tracking SPP in CPU engine yet
+    }
 };
 
 std::unique_ptr<IRenderEngine> RenderEngineFactory::create_cpu_engine() {

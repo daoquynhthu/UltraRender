@@ -1,0 +1,84 @@
+# ninja log v7
+545	3633	7909683067457268	CMakeFiles/UltraRender.dir/src/scene/sphere.cpp.obj	d91579b6a5aa935a
+588	3575	7909683067884140	CMakeFiles/UltraRender.dir/src/scene/triangle.cpp.obj	f5b552be261eceb1
+136	2660	7909683063353481	CMakeFiles/UltraRender.dir/src/api/procedural.cpp.obj	f47f3fa9dd5d31ba
+320	3461	7909683065200001	CMakeFiles/UltraRender.dir/src/materials/lambertian.cpp.obj	7c739915278870f6
+340	3693	7909683065401156	CMakeFiles/UltraRender.dir/src/materials/layered_bsdf.cpp.obj	4804120b03a830af
+899	3777	7909683070993743	tests/CMakeFiles/unit_tests.dir/__/src/api/procedural.cpp.obj	6033bd14994f633
+403	3747	7909683066029904	CMakeFiles/UltraRender.dir/src/scene/mesh.cpp.obj	c9ffd0805af276e
+365	3709	7909683065646494	CMakeFiles/UltraRender.dir/src/scene/camera.cpp.obj	712c9092784a9dc6
+1150	4213	7909683073502630	tests/CMakeFiles/unit_tests.dir/__/src/materials/lambertian.cpp.obj	954b1e5c23843ca8
+432	4344	7909683066326741	CMakeFiles/UltraRender.dir/src/scene/obj_loader.cpp.obj	fbb6fc70f38d51f4
+74	3711	7909683062748580	CMakeFiles/UltraRender.dir/src/accelerators/bvh_accelerator.cpp.obj	79804ea91a1fcf52
+471	4279	7909683066700409	CMakeFiles/UltraRender.dir/src/scene/scene.cpp.obj	5aa4cc75d2420ea
+806	4542	7909683070066681	tests/CMakeFiles/unit_tests.dir/__/src/accelerators/bvh_accelerator.cpp.obj	93c1f06b0a947f80
+162	4074	7909683063617893	CMakeFiles/UltraRender.dir/src/api/scene_parser.cpp.obj	93a4c203099598a2
+945	4721	7909683071450899	tests/CMakeFiles/unit_tests.dir/__/src/api/scene_parser.cpp.obj	6c5eebdffb96429c
+50	4099	7909683062491779	_deps/googletest-build/googletest/CMakeFiles/gtest_main.dir/src/gtest_main.cc.obj	2bff1e350b7e8c38
+759	5030	7909683069600052	tests/CMakeFiles/unit_tests.dir/unit/test_matrix.cpp.obj	d9a3714afca76e5c
+723	5137	7909683069240087	tests/CMakeFiles/unit_tests.dir/unit/test_vector.cpp.obj	dfdb64c804737065
+507	5383	7909683067071511	CMakeFiles/UltraRender.dir/src/scene/scene_factory.cpp.obj	cc1a0cd266b1d6f0
+675	5226	7909683068754571	_deps/googletest-build/googlemock/CMakeFiles/gmock_main.dir/src/gmock_main.cc.obj	9e0111ef9d9e05e0
+33	6086	7909683062331658	_deps/googletest-build/googlemock/CMakeFiles/gmock.dir/src/gmock-all.cc.obj	b8831e7f3f64ab46
+20	10233	7909683062193572	_deps/googletest-build/googletest/CMakeFiles/gtest.dir/src/gtest-all.cc.obj	7e615fe9f3c5894d
+124	1921	7909683421266338	CMakeFiles/UltraRender.dir/src/io/image_saver.cpp.obj	6cac20807e3fba2c
+21	783	7909683420234346	lib/libgtest.a	faf1e6a3cf37a026
+310	2301	7909683423109414	tests/CMakeFiles/unit_tests.dir/__/src/io/image_saver.cpp.obj	4f85dc937daf9b5f
+575	2514	7909683425757572	tests/CMakeFiles/unit_tests.dir/__/src/scene/sphere.cpp.obj	eb5642db889337a6
+360	2556	7909683423624233	tests/CMakeFiles/unit_tests.dir/__/src/materials/layered_bsdf.cpp.obj	6968fdf0e0146a7
+606	2524	7909683426074278	tests/CMakeFiles/unit_tests.dir/__/src/scene/triangle.cpp.obj	7741c92b0bc6c43c
+407	2600	7909683424096561	tests/CMakeFiles/unit_tests.dir/__/src/scene/camera.cpp.obj	6444c05eba2fda61
+433	2686	7909683424359789	tests/CMakeFiles/unit_tests.dir/__/src/scene/mesh.cpp.obj	9f32221c9793fe66
+510	3128	7909683425127948	tests/CMakeFiles/unit_tests.dir/__/src/scene/scene.cpp.obj	e79dec205fb4298a
+478	3053	7909683424800160	tests/CMakeFiles/unit_tests.dir/__/src/scene/obj_loader.cpp.obj	4fce15601496a9d2
+149	2934	7909683421503231	CMakeFiles/UltraRender.dir/src/main.cpp.obj	d0626c5f89e04c2
+98	3240	7909683420987818	CMakeFiles/UltraRender.dir/src/integrators/path_tracer.cpp.obj	7edbf467a3cd4aeb
+283	3568	7909683422852990	tests/CMakeFiles/unit_tests.dir/__/src/integrators/path_tracer.cpp.obj	b3fb33bcde08b2d7
+542	4008	7909683425441223	tests/CMakeFiles/unit_tests.dir/__/src/scene/scene_factory.cpp.obj	41cc8d9187951b0c
+107	399	7909683773408532	lib/libgmock.a	afa32c770bd51e12
+134	361	7909683773685358	lib/libgtest_main.a	f6794484d2ff62fd
+338	556	7909677678879762	lib/libgmock_main.a	787461ebd4b059a8
+4	606	7909685184358163	build.ninja	2e9a45d09641fc42
+4	606	7909685184075605	E:/Render Engine/build_vs/cmake_install.cmake	2e9a45d09641fc42
+4	606	7909685184109823	E:/Render Engine/build_vs/_deps/googletest-build/cmake_install.cmake	2e9a45d09641fc42
+4	606	7909685184164088	E:/Render Engine/build_vs/_deps/googletest-build/googlemock/cmake_install.cmake	2e9a45d09641fc42
+4	606	7909685184234815	E:/Render Engine/build_vs/_deps/googletest-build/googletest/cmake_install.cmake	2e9a45d09641fc42
+4	606	7909685184279415	E:/Render Engine/build_vs/tests/cmake_install.cmake	2e9a45d09641fc42
+4	606	7909685184090782	E:/Render Engine/build_vs/CTestTestfile.cmake	2e9a45d09641fc42
+4	606	7909685184119851	E:/Render Engine/build_vs/_deps/googletest-build/CTestTestfile.cmake	2e9a45d09641fc42
+4	606	7909685184185707	E:/Render Engine/build_vs/_deps/googletest-build/googlemock/CTestTestfile.cmake	2e9a45d09641fc42
+4	606	7909685184250017	E:/Render Engine/build_vs/_deps/googletest-build/googletest/CTestTestfile.cmake	2e9a45d09641fc42
+4	606	7909685184294620	E:/Render Engine/build_vs/tests/CTestTestfile.cmake	2e9a45d09641fc42
+1634	2730	7909684442918976	tests/unit_tests.exe	5d87e4c983304522
+1634	2730	7909684442918976	tests/unit_tests[1]_tests.cmake	5d87e4c983304522
+1634	2730	7909684442918976	E:/Render Engine/build_vs/tests/unit_tests[1]_tests.cmake	5d87e4c983304522
+15	1633	7909684415895064	tests/CMakeFiles/unit_tests.dir/unit/test_image_saver.cpp.obj	b0bcf18affa563f5
+3	574	7909685184358163	build.ninja	2e9a45d09641fc42
+3	574	7909685184358163	E:/Render Engine/build_vs/cmake_install.cmake	2e9a45d09641fc42
+3	574	7909685184358163	E:/Render Engine/build_vs/_deps/googletest-build/cmake_install.cmake	2e9a45d09641fc42
+3	574	7909685184358163	E:/Render Engine/build_vs/_deps/googletest-build/googlemock/cmake_install.cmake	2e9a45d09641fc42
+3	574	7909685184358163	E:/Render Engine/build_vs/_deps/googletest-build/googletest/cmake_install.cmake	2e9a45d09641fc42
+3	574	7909685184358163	E:/Render Engine/build_vs/tests/cmake_install.cmake	2e9a45d09641fc42
+3	574	7909685184358163	E:/Render Engine/build_vs/CTestTestfile.cmake	2e9a45d09641fc42
+3	574	7909685184358163	E:/Render Engine/build_vs/_deps/googletest-build/CTestTestfile.cmake	2e9a45d09641fc42
+3	574	7909685184358163	E:/Render Engine/build_vs/_deps/googletest-build/googlemock/CTestTestfile.cmake	2e9a45d09641fc42
+3	574	7909685184358163	E:/Render Engine/build_vs/_deps/googletest-build/googletest/CTestTestfile.cmake	2e9a45d09641fc42
+3	574	7909685184358163	E:/Render Engine/build_vs/tests/CTestTestfile.cmake	2e9a45d09641fc42
+147	1294	7909685186262079	tests/CMakeFiles/unit_tests.dir/__/src/scene/sphere.cpp.obj	eb5642db889337a6
+179	1305	7909685186589872	tests/CMakeFiles/unit_tests.dir/__/src/scene/triangle.cpp.obj	7741c92b0bc6c43c
+71	1421	7909685185502078	tests/CMakeFiles/unit_tests.dir/__/src/scene/mesh.cpp.obj	9f32221c9793fe66
+49	1634	7909685185270957	tests/CMakeFiles/unit_tests.dir/__/src/accelerators/bvh_accelerator.cpp.obj	93c1f06b0a947f80
+96	1651	7909685185751381	tests/CMakeFiles/unit_tests.dir/__/src/scene/obj_loader.cpp.obj	4fce15601496a9d2
+14	1826	7909685184925452	tests/CMakeFiles/unit_tests.dir/unit/test_ray.cpp.obj	1748a5afd20b20df
+27	1914	7909685185060777	tests/CMakeFiles/unit_tests.dir/unit/test_aabb.cpp.obj	5503fe66c2d4f563
+121	2294	7909685185995736	tests/CMakeFiles/unit_tests.dir/__/src/scene/scene_factory.cpp.obj	41cc8d9187951b0c
+2294	3258	7909685217254548	tests/unit_tests.exe	18dad6f17374ff31
+2294	3258	7909685217254548	tests/unit_tests[1]_tests.cmake	18dad6f17374ff31
+2294	3258	7909685217254548	E:/Render Engine/build_vs/tests/unit_tests[1]_tests.cmake	18dad6f17374ff31
+190	447	7909686490291398	lib/libgmock_main.a	787461ebd4b059a8
+127	1250	7909686489659423	CMakeFiles/UltraRender.dir/src/scene/sphere.cpp.obj	d91579b6a5aa935a
+147	1295	7909686489860989	CMakeFiles/UltraRender.dir/src/scene/triangle.cpp.obj	f5b552be261eceb1
+67	1329	7909686489062647	CMakeFiles/UltraRender.dir/src/scene/mesh.cpp.obj	c9ffd0805af276e
+9	1472	7909686488482420	CMakeFiles/UltraRender.dir/src/accelerators/bvh_accelerator.cpp.obj	79804ea91a1fcf52
+87	1600	7909686489259842	CMakeFiles/UltraRender.dir/src/scene/obj_loader.cpp.obj	fbb6fc70f38d51f4
+108	2211	7909686489467065	CMakeFiles/UltraRender.dir/src/scene/scene_factory.cpp.obj	cc1a0cd266b1d6f0
