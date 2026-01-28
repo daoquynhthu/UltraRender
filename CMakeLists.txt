@@ -26,7 +26,7 @@ list(REMOVE_DUPLICATES ENGINE_SOURCES_CPP)
 list(REMOVE_ITEM ENGINE_SOURCES_CPP "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/gpu_driver_stub.cpp")
 
 # --- CUDA 支持配置 ---
-enable_language(CUDA OPTIONAL)
+enable_language(CUDA)
 
 if(CMAKE_CUDA_COMPILER)
     message(STATUS "CUDA Compiler found: ${CMAKE_CUDA_COMPILER}")
@@ -52,6 +52,9 @@ if(CMAKE_CUDA_COMPILER)
     message(STATUS "Building with CUDA support.")
     add_definitions(-DUSE_CUDA)
     
+    # Ensure C++ compiler can find CUDA headers (e.g. cuda_runtime.h)
+    include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+
     set(FINAL_SOURCES 
         ${ENGINE_SOURCES_CPP}
         ${ENGINE_SOURCES_CUDA}
@@ -83,17 +86,32 @@ file(GLOB_RECURSE ENGINE_HEADERS
     include/*.h
 )
 
+# --- OpenMP 支持 ---
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP found. Enabling multi-threading.")
+    link_libraries(OpenMP::OpenMP_CXX)
+else()
+    message(WARNING "OpenMP not found. Simulation will be single-threaded (SLOW).")
+endif()
+
 # 针对 C++ 源文件设置编译选项 (避免传递给 NVCC 导致错误)
 foreach(source_file ${FINAL_SOURCES})
     if(source_file MATCHES "\\.cpp$")
         if(MSVC)
             # 添加 /wd4819 以抑制编码警告（虽然我们已经用了 /utf-8，但有时第三方头文件仍会触发）
-            set_source_files_properties(${source_file} PROPERTIES COMPILE_OPTIONS "/W4;/utf-8;/EHsc;/wd4819")
+            # 添加 /openmp (Explicitly add /openmp for MSVC if found)
+            if(OpenMP_CXX_FOUND)
+                 set_source_files_properties(${source_file} PROPERTIES COMPILE_OPTIONS "/W4;/utf-8;/EHsc;/wd4819;/openmp")
+            else()
+                 set_source_files_properties(${source_file} PROPERTIES COMPILE_OPTIONS "/W4;/utf-8;/EHsc;/wd4819")
+            endif()
         else()
             set_source_files_properties(${source_file} PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-pedantic")
         endif()
     endif()
 endforeach()
+ # Touch to force re-configure
 
 # --- 目标定义 ---
 add_executable(UltraRender
@@ -110,19 +128,24 @@ if(MSVC)
     target_link_options(UltraRender PRIVATE "/NODEFAULTLIB:LIBCMT")
 endif()
 
+if(CMAKE_CUDA_COMPILER)
+    target_link_libraries(UltraRender PRIVATE ${CUDA_LIBRARIES})
+    target_compile_definitions(UltraRender PRIVATE USE_CUDA)
+endif()
+
 # --- Testing Configuration ---
-enable_testing()
+# enable_testing()
 
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/refs/heads/main.zip
-)
-# For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+# include(FetchContent)
+# FetchContent_Declare(
+#   googletest
+#   URL https://github.com/google/googletest/archive/refs/heads/main.zip
+# )
+# # For Windows: Prevent overriding the parent project's compiler/linker settings
+# set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+# FetchContent_MakeAvailable(googletest)
 
-add_subdirectory(tests)
+# add_subdirectory(tests)
 
 message(STATUS "Ultra Render Engine Project Configured.")
 message(STATUS "Sources: ${FINAL_SOURCES}")

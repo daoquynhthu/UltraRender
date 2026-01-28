@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <map>
+#include <tuple>
 
 namespace ure {
 
@@ -25,6 +27,7 @@ public:
         cached_meshes_.clear();
         cached_spheres_.clear();
         cached_materials_.clear();
+        std::vector<ure::gpu::GpuInstance> instances;
         
         // Store camera
         current_scene_camera_ = scene.camera;
@@ -74,96 +77,142 @@ public:
             return material_offset + (int)cached_materials_.size() - 1;
         };
 
-        // 1. Handle Entities (Meshes)
+        // Map to track unique meshes
+        std::map<std::shared_ptr<Mesh>, int> mesh_map;
+
+        // 1. Handle Entities (Instances)
         for (const auto& entity : scene.entities) {
             if (!entity.mesh) continue;
             
-            ure::gpu::RenderMesh mesh;
-            
-            // Apply transform: T * R * S * v
+            int mesh_idx = -1;
+            auto it = mesh_map.find(entity.mesh);
+            if (it != mesh_map.end()) {
+                mesh_idx = it->second;
+            } else {
+                // Create new RenderMesh (Raw, no transform)
+                ure::gpu::RenderMesh mesh;
+                
+                // Copy vertices
+                for (const auto& v : entity.mesh->vertices) {
+                    mesh.vertices.push_back(v.position.x);
+                    mesh.vertices.push_back(v.position.y);
+                    mesh.vertices.push_back(v.position.z);
+                    
+                    mesh.normals.push_back(v.normal.x);
+                    mesh.normals.push_back(v.normal.y);
+                    mesh.normals.push_back(v.normal.z);
+                    
+                    mesh.uvs.push_back(v.uv.u);
+                    mesh.uvs.push_back(v.uv.v);
+                }
+                
+                mesh.indices = entity.mesh->indices;
+                mesh.material_index = -1; // Material is handled by Instance
+                
+                cached_meshes_.push_back(mesh);
+                mesh_idx = (int)cached_meshes_.size() - 1;
+                mesh_map[entity.mesh] = mesh_idx;
+            }
+
+            // Create Instance
+            ure::gpu::GpuInstance inst;
+            inst.mesh_index = mesh_idx;
+            inst.material_index = cache_material(entity.material);
+
+            // Calculate Transform Matrices
             float rx = entity.rotation.x * 3.14159f / 180.0f;
             float ry = entity.rotation.y * 3.14159f / 180.0f;
             float rz = entity.rotation.z * 3.14159f / 180.0f;
-
             float cx = cos(rx), sx = sin(rx);
             float cy = cos(ry), sy = sin(ry);
             float cz = cos(rz), sz = sin(rz);
 
+            // Basis vectors for Rotation
+            auto compute_rot = [&](float x, float y, float z) {
+                // Rx
+                float y1 = y*cx - z*sx;
+                float z1 = y*sx + z*cx;
+                // Ry
+                float x2 = x*cy + z1*sy;
+                float z2 = -x*sy + z1*cy;
+                // Rz
+                float x3 = x2*cz - y1*sz;
+                float y3 = x2*sz + y1*cz;
+                return ure::gpu::GpuVec3(x3, y3, z2);
+            };
+
+            ure::gpu::GpuVec3 r0 = compute_rot(1,0,0);
+            ure::gpu::GpuVec3 r1 = compute_rot(0,1,0);
+            ure::gpu::GpuVec3 r2 = compute_rot(0,0,1);
+
+            // Fill Transform Matrix (T * R * S)
+            inst.transform.m[0][0] = r0.x * entity.scale.x; inst.transform.m[0][1] = r1.x * entity.scale.y; inst.transform.m[0][2] = r2.x * entity.scale.z; inst.transform.m[0][3] = entity.position.x;
+            inst.transform.m[1][0] = r0.y * entity.scale.x; inst.transform.m[1][1] = r1.y * entity.scale.y; inst.transform.m[1][2] = r2.y * entity.scale.z; inst.transform.m[1][3] = entity.position.y;
+            inst.transform.m[2][0] = r0.z * entity.scale.x; inst.transform.m[2][1] = r1.z * entity.scale.y; inst.transform.m[2][2] = r2.z * entity.scale.z; inst.transform.m[2][3] = entity.position.z;
+            inst.transform.m[3][0] = 0;                     inst.transform.m[3][1] = 0;                     inst.transform.m[3][2] = 0;                     inst.transform.m[3][3] = 1;
+
+            // Fill Inverse Transform Matrix (S^-1 * R^T * T^-1)
+            float isx = 1.0f / entity.scale.x;
+            float isy = 1.0f / entity.scale.y;
+            float isz = 1.0f / entity.scale.z;
+
+            // Linear part: S^-1 * R^T
+            inst.inverse_transform.m[0][0] = r0.x * isx; inst.inverse_transform.m[0][1] = r0.y * isx; inst.inverse_transform.m[0][2] = r0.z * isx;
+            inst.inverse_transform.m[1][0] = r1.x * isy; inst.inverse_transform.m[1][1] = r1.y * isy; inst.inverse_transform.m[1][2] = r1.z * isy;
+            inst.inverse_transform.m[2][0] = r2.x * isz; inst.inverse_transform.m[2][1] = r2.y * isz; inst.inverse_transform.m[2][2] = r2.z * isz;
+            
+            // Translation part: - (Linear * Pos)
+            float tx = -(inst.inverse_transform.m[0][0]*entity.position.x + inst.inverse_transform.m[0][1]*entity.position.y + inst.inverse_transform.m[0][2]*entity.position.z);
+            float ty = -(inst.inverse_transform.m[1][0]*entity.position.x + inst.inverse_transform.m[1][1]*entity.position.y + inst.inverse_transform.m[1][2]*entity.position.z);
+            float tz = -(inst.inverse_transform.m[2][0]*entity.position.x + inst.inverse_transform.m[2][1]*entity.position.y + inst.inverse_transform.m[2][2]*entity.position.z);
+            
+            inst.inverse_transform.m[0][3] = tx;
+            inst.inverse_transform.m[1][3] = ty;
+            inst.inverse_transform.m[2][3] = tz;
+            inst.inverse_transform.m[3][0] = 0; inst.inverse_transform.m[3][1] = 0; inst.inverse_transform.m[3][2] = 0; inst.inverse_transform.m[3][3] = 1;
+
+            // Compute World AABB
+            // 1. Find local AABB
+            float min_x = 1e30f, min_y = 1e30f, min_z = 1e30f;
+            float max_x = -1e30f, max_y = -1e30f, max_z = -1e30f;
             for (const auto& v : entity.mesh->vertices) {
-                // Scale
-                float x = v.position.x * entity.scale.x;
-                float y = v.position.y * entity.scale.y;
-                float z = v.position.z * entity.scale.z;
-                
-                // Rotate X
-                float y1 = y * cx - z * sx;
-                float z1 = y * sx + z * cx;
-                y = y1; z = z1;
-
-                // Rotate Y
-                float x2 = x * cy + z * sy;
-                float z2 = -x * sy + z * cy;
-                x = x2; z = z2;
-
-                // Rotate Z
-                float x3 = x * cz - y * sz;
-                float y3 = x * sz + y * cz;
-                x = x3; y = y3;
-                
-                // Translate
-                x += entity.position.x;
-                y += entity.position.y;
-                z += entity.position.z;
-                
-                mesh.vertices.push_back(x);
-                mesh.vertices.push_back(y);
-                mesh.vertices.push_back(z);
-
-                // Normal Transform (Inverse Transpose of Scale * Rotate)
-                // Since Rotate is orthogonal, R^-T = R.
-                // Scale is diagonal, S^-T = S^-1.
-                // So N' = R * S^-1 * N
-                
-                float nx = v.normal.x / entity.scale.x;
-                float ny = v.normal.y / entity.scale.y;
-                float nz = v.normal.z / entity.scale.z;
-
-                // Rotate X
-                float ny1 = ny * cx - nz * sx;
-                float nz1 = ny * sx + nz * cx;
-                ny = ny1; nz = nz1;
-
-                // Rotate Y
-                float nx2 = nx * cy + nz * sy;
-                float nz2 = -nx * sy + nz * cy;
-                nx = nx2; nz = nz2;
-
-                // Rotate Z
-                float nx3 = nx * cz - ny * sz;
-                float ny3 = nx * sz + ny * cz;
-                nx = nx3; ny = ny3;
-
-                // Normalize
-                float len = sqrtf(nx*nx + ny*ny + nz*nz);
-                if (len > 1e-6f) {
-                    float inv_len = 1.0f / len;
-                    nx *= inv_len;
-                    ny *= inv_len;
-                    nz *= inv_len;
-                }
-
-                mesh.normals.push_back(nx);
-                mesh.normals.push_back(ny);
-                mesh.normals.push_back(nz);
-
-                // UVs
-                mesh.uvs.push_back(v.uv.u);
-                mesh.uvs.push_back(v.uv.v);
+                if (v.position.x < min_x) min_x = v.position.x;
+                if (v.position.y < min_y) min_y = v.position.y;
+                if (v.position.z < min_z) min_z = v.position.z;
+                if (v.position.x > max_x) max_x = v.position.x;
+                if (v.position.y > max_y) max_y = v.position.y;
+                if (v.position.z > max_z) max_z = v.position.z;
             }
             
-            mesh.indices = entity.mesh->indices;
-            mesh.material_index = cache_material(entity.material);
-            cached_meshes_.push_back(mesh);
+            // 2. Transform 8 corners
+            ure::gpu::GpuVec3 corners[8];
+            corners[0] = {min_x, min_y, min_z};
+            corners[1] = {max_x, min_y, min_z};
+            corners[2] = {min_x, max_y, min_z};
+            corners[3] = {max_x, max_y, min_z};
+            corners[4] = {min_x, min_y, max_z};
+            corners[5] = {max_x, min_y, max_z};
+            corners[6] = {min_x, max_y, max_z};
+            corners[7] = {max_x, max_y, max_z};
+            
+            float w_min_x = 1e30f, w_min_y = 1e30f, w_min_z = 1e30f;
+            float w_max_x = -1e30f, w_max_y = -1e30f, w_max_z = -1e30f;
+            
+            for (int k=0; k<8; ++k) {
+                ure::gpu::GpuVec3 p = corners[k];
+                ure::gpu::GpuVec3 tp = inst.transform.transform_point(p);
+                if (tp.x < w_min_x) w_min_x = tp.x;
+                if (tp.y < w_min_y) w_min_y = tp.y;
+                if (tp.z < w_min_z) w_min_z = tp.z;
+                if (tp.x > w_max_x) w_max_x = tp.x;
+                if (tp.y > w_max_y) w_max_y = tp.y;
+                if (tp.z > w_max_z) w_max_z = tp.z;
+            }
+            
+            inst.min_pt = {w_min_x, w_min_y, w_min_z};
+            inst.max_pt = {w_max_x, w_max_y, w_max_z};
+            
+            instances.push_back(inst);
         }
 
         // 2. Handle Analytical Spheres
@@ -179,7 +228,7 @@ public:
         int w = (scene.width > 0) ? scene.width : 1920;
         int h = (scene.height > 0) ? scene.height : 1080;
 
-        gpu_context_ = ure::gpu::init_gpu_renderer(w, h, cached_meshes_, cached_spheres_, cached_materials_);
+        gpu_context_ = ure::gpu::init_gpu_renderer(w, h, cached_meshes_, instances, cached_spheres_, cached_materials_);
         
         // Setup Camera
         float cam_pos[3] = {current_scene_camera_.position.x, current_scene_camera_.position.y, current_scene_camera_.position.z};

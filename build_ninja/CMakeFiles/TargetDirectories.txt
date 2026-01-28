@@ -1,3 +1,0 @@
-E:/Render Engine/build_ninja/CMakeFiles/UltraRender.dir
-E:/Render Engine/build_ninja/CMakeFiles/edit_cache.dir
-E:/Render Engine/build_ninja/CMakeFiles/rebuild_cache.dir

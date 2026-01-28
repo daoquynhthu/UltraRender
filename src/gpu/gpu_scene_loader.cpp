@@ -180,7 +180,7 @@ GpuHostScene load_default_scene(bool has_mesh) {
     // 4: Light Source (High Emission)
     scene.materials.push_back(MaterialLibrary::bright_light());
     
-    // 5: Mesh Material (Blue-ish) - Always add it now for the cube
+    // 5: Mesh Material (Blue-ish)
     scene.materials.push_back(MaterialLibrary::blue_mesh());
     
     // 6: Diamond (High Dispersion)
@@ -199,11 +199,7 @@ GpuHostScene load_default_scene(bool has_mesh) {
         // 2. Back Right: Metal Sphere
         scene.spheres.push_back({GpuVec3(2.5f, 1.0f, -1.0f), 1.0f, 2});
         
-        // 3. Front Center: Diamond Cube (Prism effect)
-        // Using Cube instead of Sphere for better dispersion
-        // Positioned closer to camera and ground
-        // Rotated 45 degrees on X and Y to stand on corner (Prism shape)
-        add_cube(scene, GpuVec3(0.0f, 1.5f, 2.0f), 2.0f, 6, GpuVec3(45, 45, 0)); 
+        // 3. Front Center: Diamond Cube - REMOVED
 
         // Light Source
         // Decreased radius to 1.0 for Sharper Caustics/Shadows

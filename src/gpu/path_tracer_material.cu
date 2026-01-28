@@ -5,6 +5,9 @@
 #include "gpu/gpu_structs.hpp"
 #include "gpu/path_tracer_sampling.cuh"
 
+// Suppress "function was declared but never referenced" warning
+#pragma diag_suppress 177
+
 namespace ure::gpu {
 
 static __device__ inline GpuVec3 reflect(const GpuVec3& v, const GpuVec3& n) {
@@ -638,7 +641,7 @@ static __device__ inline bool scatter(
 
         return (scattered.direction.dot(N) > 0);
     } else if (mat.type == MaterialType::Dielectric) {
-        attenuation = GpuSpectrum::from_rgb(GpuVec3(1.0f, 1.0f, 1.0f));
+        attenuation = mat.albedo; // Use material albedo for tint
         float refraction_ratio = mat.ior; 
 
         if (mat.dispersion > 0.0f || mat.thin_film_thickness > 0.0f) {

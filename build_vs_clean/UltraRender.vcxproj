@@ -1,0 +1,888 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="MinSizeRel|x64">
+      <Configuration>MinSizeRel</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{E0824DBE-7E1C-35EF-88F1-A6D42743004A}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <Platform>x64</Platform>
+    <ProjectName>UltraRender</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 13.0.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">E:\Render Engine\build_vs_clean\bin\Debug\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">UltraRender.dir\Debug\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">UltraRender</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.exe</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">E:\Render Engine\build_vs_clean\bin\Release\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">UltraRender.dir\Release\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">UltraRender</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.exe</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">E:\Render Engine\build_vs_clean\bin\MinSizeRel\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">UltraRender.dir\MinSizeRel\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">UltraRender</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">.exe</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">E:\Render Engine\build_vs_clean\bin\RelWithDebInfo\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">UltraRender.dir\RelWithDebInfo\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">UltraRender</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">.exe</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</GenerateManifest>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>E:\Render Engine\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <Optimization>Disabled</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;USE_CUDA;CMAKE_INTDIR="Debug"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_DEBUG;_WINDOWS;USE_CUDA;CMAKE_INTDIR=\"Debug\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>E:\Render Engine\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <CudaCompile>
+      <Include>E:\Render Engine\include;%(Include)</Include>
+      <Defines>%(Defines);_WINDOWS;USE_CUDA;CMAKE_INTDIR="Debug"</Defines>
+      <AdditionalOptions>%(AdditionalOptions) -std=c++20 --generate-code=arch=compute_75,code=[compute_75,sm_75] -Xcompiler="/EHsc -Ob0 -Zi"</AdditionalOptions>
+      <CodeGeneration></CodeGeneration>
+      <CompileOut>$(IntDir)%(Filename).obj</CompileOut>
+      <CudaRuntime>Static</CudaRuntime>
+      <GPUDebugInfo>false</GPUDebugInfo>
+      <Optimization>Od</Optimization>
+      <Runtime>MDd</Runtime>
+      <RuntimeChecks>RTC1</RuntimeChecks>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <UseHostInclude>false</UseHostInclude>
+    </CudaCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>E:\Render Engine\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <Link>
+      <AdditionalDependencies>cudadevrt.lib;cudart_static.lib;C:\vcpkg\installed\x64-windows\lib\*.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/lib/x64;C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/lib/x64/$(Configuration);C:/vcpkg/installed/x64-windows/lib;C:/vcpkg/installed/x64-windows/lib/$(Configuration);C:/vcpkg/installed/x64-windows/lib/manual-link;C:/vcpkg/installed/x64-windows/lib/manual-link/$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <DataExecutionPrevention></DataExecutionPrevention>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>LIBCMT;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImageHasSafeExceptionHandlers></ImageHasSafeExceptionHandlers>
+      <ImportLibrary>E:/Render Engine/build_vs_clean/Debug/UltraRender.lib</ImportLibrary>
+      <LinkErrorReporting></LinkErrorReporting>
+      <ProgramDataBaseFile>E:/Render Engine/build_vs_clean/bin/Debug/UltraRender.pdb</ProgramDataBaseFile>
+      <RandomizedBaseAddress></RandomizedBaseAddress>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <CudaLink>
+      <AdditionalOptions>-forward-unknown-to-host-compiler -Wno-deprecated-gpu-targets -Xcompiler=/NODEFAULTLIB:LIBCMT</AdditionalOptions>
+      <PerformDeviceLink>false</PerformDeviceLink>
+    </CudaLink>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>E:\Render Engine\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;USE_CUDA;CMAKE_INTDIR="Release"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;USE_CUDA;CMAKE_INTDIR=\"Release\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>E:\Render Engine\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <CudaCompile>
+      <Include>E:\Render Engine\include;%(Include)</Include>
+      <Defines>%(Defines);_WINDOWS;NDEBUG;USE_CUDA;CMAKE_INTDIR="Release"</Defines>
+      <AdditionalOptions>%(AdditionalOptions) -std=c++20 --generate-code=arch=compute_75,code=[compute_75,sm_75] -Xcompiler="/EHsc -Ob2"</AdditionalOptions>
+      <CodeGeneration></CodeGeneration>
+      <CompileOut>$(IntDir)%(Filename).obj</CompileOut>
+      <CudaRuntime>Static</CudaRuntime>
+      <GPUDebugInfo>false</GPUDebugInfo>
+      <Optimization>O2</Optimization>
+      <Runtime>MD</Runtime>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <UseHostInclude>false</UseHostInclude>
+    </CudaCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>E:\Render Engine\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <Link>
+      <AdditionalDependencies>cudadevrt.lib;cudart_static.lib;C:\vcpkg\installed\x64-windows\lib\*.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/lib/x64;C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/lib/x64/$(Configuration);C:/vcpkg/installed/x64-windows/lib;C:/vcpkg/installed/x64-windows/lib/$(Configuration);C:/vcpkg/installed/x64-windows/lib/manual-link;C:/vcpkg/installed/x64-windows/lib/manual-link/$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <DataExecutionPrevention></DataExecutionPrevention>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>LIBCMT;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImageHasSafeExceptionHandlers></ImageHasSafeExceptionHandlers>
+      <ImportLibrary>E:/Render Engine/build_vs_clean/Release/UltraRender.lib</ImportLibrary>
+      <LinkErrorReporting></LinkErrorReporting>
+      <ProgramDataBaseFile>E:/Render Engine/build_vs_clean/bin/Release/UltraRender.pdb</ProgramDataBaseFile>
+      <RandomizedBaseAddress></RandomizedBaseAddress>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <CudaLink>
+      <AdditionalOptions>-forward-unknown-to-host-compiler -Wno-deprecated-gpu-targets -Xcompiler=/NODEFAULTLIB:LIBCMT</AdditionalOptions>
+      <PerformDeviceLink>false</PerformDeviceLink>
+    </CudaLink>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>E:\Render Engine\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <Optimization>MinSpace</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;USE_CUDA;CMAKE_INTDIR="MinSizeRel"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;USE_CUDA;CMAKE_INTDIR=\"MinSizeRel\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>E:\Render Engine\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <CudaCompile>
+      <Include>E:\Render Engine\include;%(Include)</Include>
+      <Defines>%(Defines);_WINDOWS;NDEBUG;USE_CUDA;CMAKE_INTDIR="MinSizeRel"</Defines>
+      <AdditionalOptions>%(AdditionalOptions) -std=c++20 --generate-code=arch=compute_75,code=[compute_75,sm_75] -Xcompiler="/EHsc -Ob1"</AdditionalOptions>
+      <CodeGeneration></CodeGeneration>
+      <CompileOut>$(IntDir)%(Filename).obj</CompileOut>
+      <CudaRuntime>Static</CudaRuntime>
+      <GPUDebugInfo>false</GPUDebugInfo>
+      <Optimization>O1</Optimization>
+      <Runtime>MD</Runtime>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <UseHostInclude>false</UseHostInclude>
+    </CudaCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>E:\Render Engine\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <Link>
+      <AdditionalDependencies>cudadevrt.lib;cudart_static.lib;C:\vcpkg\installed\x64-windows\lib\*.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/lib/x64;C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/lib/x64/$(Configuration);C:/vcpkg/installed/x64-windows/lib;C:/vcpkg/installed/x64-windows/lib/$(Configuration);C:/vcpkg/installed/x64-windows/lib/manual-link;C:/vcpkg/installed/x64-windows/lib/manual-link/$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <DataExecutionPrevention></DataExecutionPrevention>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>LIBCMT;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImageHasSafeExceptionHandlers></ImageHasSafeExceptionHandlers>
+      <ImportLibrary>E:/Render Engine/build_vs_clean/MinSizeRel/UltraRender.lib</ImportLibrary>
+      <LinkErrorReporting></LinkErrorReporting>
+      <ProgramDataBaseFile>E:/Render Engine/build_vs_clean/bin/MinSizeRel/UltraRender.pdb</ProgramDataBaseFile>
+      <RandomizedBaseAddress></RandomizedBaseAddress>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <CudaLink>
+      <AdditionalOptions>-forward-unknown-to-host-compiler -Wno-deprecated-gpu-targets -Xcompiler=/NODEFAULTLIB:LIBCMT</AdditionalOptions>
+      <PerformDeviceLink>false</PerformDeviceLink>
+    </CudaLink>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>E:\Render Engine\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;USE_CUDA;CMAKE_INTDIR="RelWithDebInfo"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;USE_CUDA;CMAKE_INTDIR=\"RelWithDebInfo\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>E:\Render Engine\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <CudaCompile>
+      <Include>E:\Render Engine\include;%(Include)</Include>
+      <Defines>%(Defines);_WINDOWS;NDEBUG;USE_CUDA;CMAKE_INTDIR="RelWithDebInfo"</Defines>
+      <AdditionalOptions>%(AdditionalOptions) -std=c++20 --generate-code=arch=compute_75,code=[compute_75,sm_75] -Xcompiler="/EHsc -Ob1 -Zi"</AdditionalOptions>
+      <CodeGeneration></CodeGeneration>
+      <CompileOut>$(IntDir)%(Filename).obj</CompileOut>
+      <CudaRuntime>Static</CudaRuntime>
+      <GPUDebugInfo>false</GPUDebugInfo>
+      <Optimization>O2</Optimization>
+      <Runtime>MD</Runtime>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <UseHostInclude>false</UseHostInclude>
+    </CudaCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>E:\Render Engine\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <Link>
+      <AdditionalDependencies>cudadevrt.lib;cudart_static.lib;C:\vcpkg\installed\x64-windows\lib\*.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/lib/x64;C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/lib/x64/$(Configuration);C:/vcpkg/installed/x64-windows/lib;C:/vcpkg/installed/x64-windows/lib/$(Configuration);C:/vcpkg/installed/x64-windows/lib/manual-link;C:/vcpkg/installed/x64-windows/lib/manual-link/$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <DataExecutionPrevention></DataExecutionPrevention>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>LIBCMT;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImageHasSafeExceptionHandlers></ImageHasSafeExceptionHandlers>
+      <ImportLibrary>E:/Render Engine/build_vs_clean/RelWithDebInfo/UltraRender.lib</ImportLibrary>
+      <LinkErrorReporting></LinkErrorReporting>
+      <ProgramDataBaseFile>E:/Render Engine/build_vs_clean/bin/RelWithDebInfo/UltraRender.pdb</ProgramDataBaseFile>
+      <RandomizedBaseAddress></RandomizedBaseAddress>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <CudaLink>
+      <AdditionalOptions>-forward-unknown-to-host-compiler -Wno-deprecated-gpu-targets -Xcompiler=/NODEFAULTLIB:LIBCMT</AdditionalOptions>
+      <PerformDeviceLink>false</PerformDeviceLink>
+    </CudaLink>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="E:\Render Engine\CMakeLists.txt">
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule E:/Render Engine/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+C:\msys64\mingw64\bin\cmake.exe "-SE:/Render Engine" "-BE:/Render Engine/build_vs_clean" --check-stamp-file "E:/Render Engine/build_vs_clean/CMakeFiles/generate.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\msys64\mingw64\share\cmake\Modules\CMakeCUDACompiler.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeCUDACompilerABI.cu;C:\msys64\mingw64\share\cmake\Modules\CMakeCUDAInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeCXXCompiler.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeCXXCompilerABI.cpp;C:\msys64\mingw64\share\cmake\Modules\CMakeCXXInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeCommonLanguageInclude.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeCompilerIdDetection.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCUDACompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCXXCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompilerABI.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompilerId.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompilerSupport.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineRCCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineSystem.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeFindBinUtils.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeGenericSystem.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeInitializeConfigs.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeLanguageInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeParseImplicitIncludeInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeParseImplicitLinkInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeParseLibraryArchitecture.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeRCCompiler.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeRCInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeSystem.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeSystemSpecificInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeSystemSpecificInitialize.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestCUDACompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestCXXCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestCompilerCommon.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestRCCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\ADSP-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\ARMCC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\ARMClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\AppleClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Borland-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Bruce-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Clang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Clang-DetermineCompilerInternal.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Compaq-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Compaq-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Cray-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\CrayClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Diab-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Embarcadero-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Fujitsu-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\FujitsuClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\GHS-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\GNU-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\GNU-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\HP-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\HP-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IAR-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMCPP-C-DetermineVersionInternal.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMCPP-CXX-DetermineVersionInternal.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMClang-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMClang-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Intel-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IntelLLVM-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\LCC-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\LCC-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\MSVC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVHPC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVIDIA-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVIDIA-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVIDIA.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\OpenWatcom-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\OrangeC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\PGI-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\PathScale-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Renesas-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SCO-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SDCC-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SunPro-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SunPro-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\TI-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\TIClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Tasking-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\TinyCC-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\VisualAge-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\VisualAge-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Watcom-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XL-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XL-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XLClang-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XLClang-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\zOS-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\zOS-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CompilerId\VS-10.vcxproj.in;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAArchitecturesAll.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAArchitecturesNative.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAArchitecturesValidate.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAFilterImplicitLibs.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDALinkerInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeDetermineLinkerId.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeInspectCUDALinker.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeInspectCXXLinker.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeNVCCFilterImplicitInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeNVCCParseImplicitInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\FeatureTesting.cmake;C:\msys64\mingw64\share\cmake\Modules\Linker\MSVC-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Linker\MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Linker\MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Linker\Windows-MSVC-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Linker\Windows-MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-Determine-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-Initialize.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-NVIDIA-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\WindowsPaths.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeCUDACompiler.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeCXXCompiler.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeRCCompiler.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeSystem.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">E:\Render Engine\build_vs_clean\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building Custom Rule E:/Render Engine/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+C:\msys64\mingw64\bin\cmake.exe "-SE:/Render Engine" "-BE:/Render Engine/build_vs_clean" --check-stamp-file "E:/Render Engine/build_vs_clean/CMakeFiles/generate.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\msys64\mingw64\share\cmake\Modules\CMakeCUDACompiler.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeCUDACompilerABI.cu;C:\msys64\mingw64\share\cmake\Modules\CMakeCUDAInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeCXXCompiler.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeCXXCompilerABI.cpp;C:\msys64\mingw64\share\cmake\Modules\CMakeCXXInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeCommonLanguageInclude.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeCompilerIdDetection.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCUDACompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCXXCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompilerABI.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompilerId.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompilerSupport.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineRCCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineSystem.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeFindBinUtils.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeGenericSystem.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeInitializeConfigs.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeLanguageInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeParseImplicitIncludeInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeParseImplicitLinkInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeParseLibraryArchitecture.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeRCCompiler.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeRCInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeSystem.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeSystemSpecificInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeSystemSpecificInitialize.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestCUDACompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestCXXCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestCompilerCommon.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestRCCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\ADSP-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\ARMCC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\ARMClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\AppleClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Borland-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Bruce-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Clang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Clang-DetermineCompilerInternal.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Compaq-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Compaq-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Cray-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\CrayClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Diab-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Embarcadero-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Fujitsu-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\FujitsuClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\GHS-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\GNU-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\GNU-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\HP-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\HP-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IAR-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMCPP-C-DetermineVersionInternal.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMCPP-CXX-DetermineVersionInternal.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMClang-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMClang-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Intel-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IntelLLVM-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\LCC-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\LCC-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\MSVC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVHPC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVIDIA-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVIDIA-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVIDIA.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\OpenWatcom-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\OrangeC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\PGI-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\PathScale-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Renesas-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SCO-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SDCC-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SunPro-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SunPro-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\TI-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\TIClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Tasking-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\TinyCC-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\VisualAge-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\VisualAge-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Watcom-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XL-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XL-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XLClang-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XLClang-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\zOS-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\zOS-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CompilerId\VS-10.vcxproj.in;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAArchitecturesAll.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAArchitecturesNative.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAArchitecturesValidate.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAFilterImplicitLibs.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDALinkerInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeDetermineLinkerId.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeInspectCUDALinker.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeInspectCXXLinker.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeNVCCFilterImplicitInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeNVCCParseImplicitInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\FeatureTesting.cmake;C:\msys64\mingw64\share\cmake\Modules\Linker\MSVC-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Linker\MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Linker\MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Linker\Windows-MSVC-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Linker\Windows-MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-Determine-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-Initialize.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-NVIDIA-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\WindowsPaths.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeCUDACompiler.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeCXXCompiler.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeRCCompiler.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeSystem.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">E:\Render Engine\build_vs_clean\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Building Custom Rule E:/Render Engine/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+C:\msys64\mingw64\bin\cmake.exe "-SE:/Render Engine" "-BE:/Render Engine/build_vs_clean" --check-stamp-file "E:/Render Engine/build_vs_clean/CMakeFiles/generate.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\msys64\mingw64\share\cmake\Modules\CMakeCUDACompiler.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeCUDACompilerABI.cu;C:\msys64\mingw64\share\cmake\Modules\CMakeCUDAInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeCXXCompiler.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeCXXCompilerABI.cpp;C:\msys64\mingw64\share\cmake\Modules\CMakeCXXInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeCommonLanguageInclude.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeCompilerIdDetection.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCUDACompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCXXCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompilerABI.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompilerId.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompilerSupport.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineRCCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineSystem.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeFindBinUtils.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeGenericSystem.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeInitializeConfigs.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeLanguageInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeParseImplicitIncludeInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeParseImplicitLinkInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeParseLibraryArchitecture.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeRCCompiler.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeRCInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeSystem.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeSystemSpecificInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeSystemSpecificInitialize.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestCUDACompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestCXXCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestCompilerCommon.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestRCCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\ADSP-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\ARMCC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\ARMClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\AppleClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Borland-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Bruce-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Clang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Clang-DetermineCompilerInternal.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Compaq-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Compaq-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Cray-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\CrayClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Diab-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Embarcadero-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Fujitsu-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\FujitsuClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\GHS-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\GNU-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\GNU-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\HP-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\HP-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IAR-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMCPP-C-DetermineVersionInternal.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMCPP-CXX-DetermineVersionInternal.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMClang-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMClang-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Intel-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IntelLLVM-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\LCC-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\LCC-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\MSVC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVHPC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVIDIA-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVIDIA-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVIDIA.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\OpenWatcom-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\OrangeC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\PGI-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\PathScale-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Renesas-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SCO-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SDCC-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SunPro-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SunPro-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\TI-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\TIClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Tasking-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\TinyCC-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\VisualAge-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\VisualAge-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Watcom-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XL-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XL-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XLClang-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XLClang-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\zOS-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\zOS-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CompilerId\VS-10.vcxproj.in;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAArchitecturesAll.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAArchitecturesNative.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAArchitecturesValidate.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAFilterImplicitLibs.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDALinkerInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeDetermineLinkerId.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeInspectCUDALinker.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeInspectCXXLinker.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeNVCCFilterImplicitInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeNVCCParseImplicitInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\FeatureTesting.cmake;C:\msys64\mingw64\share\cmake\Modules\Linker\MSVC-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Linker\MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Linker\MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Linker\Windows-MSVC-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Linker\Windows-MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-Determine-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-Initialize.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-NVIDIA-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\WindowsPaths.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeCUDACompiler.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeCXXCompiler.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeRCCompiler.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeSystem.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">E:\Render Engine\build_vs_clean\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Building Custom Rule E:/Render Engine/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+C:\msys64\mingw64\bin\cmake.exe "-SE:/Render Engine" "-BE:/Render Engine/build_vs_clean" --check-stamp-file "E:/Render Engine/build_vs_clean/CMakeFiles/generate.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\msys64\mingw64\share\cmake\Modules\CMakeCUDACompiler.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeCUDACompilerABI.cu;C:\msys64\mingw64\share\cmake\Modules\CMakeCUDAInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeCXXCompiler.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeCXXCompilerABI.cpp;C:\msys64\mingw64\share\cmake\Modules\CMakeCXXInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeCommonLanguageInclude.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeCompilerIdDetection.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCUDACompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCXXCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompilerABI.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompilerId.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineCompilerSupport.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineRCCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeDetermineSystem.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeFindBinUtils.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeGenericSystem.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeInitializeConfigs.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeLanguageInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeParseImplicitIncludeInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeParseImplicitLinkInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeParseLibraryArchitecture.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeRCCompiler.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeRCInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeSystem.cmake.in;C:\msys64\mingw64\share\cmake\Modules\CMakeSystemSpecificInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeSystemSpecificInitialize.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestCUDACompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestCXXCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestCompilerCommon.cmake;C:\msys64\mingw64\share\cmake\Modules\CMakeTestRCCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\ADSP-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\ARMCC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\ARMClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\AppleClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Borland-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Bruce-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Clang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Clang-DetermineCompilerInternal.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Compaq-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Compaq-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Cray-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\CrayClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Diab-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Embarcadero-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Fujitsu-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\FujitsuClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\GHS-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\GNU-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\GNU-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\HP-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\HP-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IAR-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMCPP-C-DetermineVersionInternal.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMCPP-CXX-DetermineVersionInternal.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMClang-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IBMClang-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Intel-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\IntelLLVM-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\LCC-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\LCC-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\MSVC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVHPC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVIDIA-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVIDIA-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\NVIDIA.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\OpenWatcom-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\OrangeC-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\PGI-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\PathScale-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Renesas-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SCO-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SDCC-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SunPro-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\SunPro-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\TI-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\TIClang-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Tasking-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\TinyCC-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\VisualAge-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\VisualAge-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\Watcom-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XL-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XL-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XLClang-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\XLClang-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\zOS-C-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\Compiler\zOS-CXX-DetermineCompiler.cmake;C:\msys64\mingw64\share\cmake\Modules\CompilerId\VS-10.vcxproj.in;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAArchitecturesAll.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAArchitecturesNative.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAArchitecturesValidate.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDAFilterImplicitLibs.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCUDALinkerInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeDetermineLinkerId.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeInspectCUDALinker.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeInspectCXXLinker.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeNVCCFilterImplicitInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\CMakeNVCCParseImplicitInfo.cmake;C:\msys64\mingw64\share\cmake\Modules\Internal\FeatureTesting.cmake;C:\msys64\mingw64\share\cmake\Modules\Linker\MSVC-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Linker\MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Linker\MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Linker\Windows-MSVC-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Linker\Windows-MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-Determine-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-Initialize.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-MSVC-CXX.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-MSVC.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows-NVIDIA-CUDA.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\Windows.cmake;C:\msys64\mingw64\share\cmake\Modules\Platform\WindowsPaths.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeCUDACompiler.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeCXXCompiler.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeRCCompiler.cmake;E:\Render Engine\build_vs_clean\CMakeFiles\4.1.1\CMakeSystem.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">E:\Render Engine\build_vs_clean\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="E:\Render Engine\src\accelerators\bvh_accelerator.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\api\cpu_engine_impl.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\api\gpu_engine_impl.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\api\procedural.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\api\scene_parser.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\gpu\bvh_builder.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\gpu\gpu_scene_loader.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\integrators\path_tracer.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\io\image_saver.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\main.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\materials\lambertian.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\materials\layered_bsdf.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\physics\fluid_system.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\physics\marching_cubes.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\physics\physics_world.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\scene\camera.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\scene\mesh.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\scene\obj_loader.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\scene\scene.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\scene\scene_factory.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\scene\sphere.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="E:\Render Engine\src\scene\triangle.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Level4</WarningLevel>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalOptions) /utf-8</AdditionalOptions>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Sync</ExceptionHandling>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Level4</WarningLevel>
+    </ClCompile>
+    <CudaCompile Include="..\src\gpu\gpu_driver.cu" />
+    <CudaCompile Include="..\src\gpu\path_tracer_kernel.cu" />
+    <CudaCompile Include="..\src\gpu\path_tracer_material.cu" />
+    <CudaCompile Include="..\src\gpu\path_tracer_raygen.cu" />
+    <CudaCompile Include="..\src\gpu\path_tracer_denoise.cu" />
+    <CudaCompile Include="..\src\gpu\path_tracer_post.cu" />
+    <ClInclude Include="E:\Render Engine\include\accelerators\accelerator.hpp" />
+    <ClInclude Include="E:\Render Engine\include\accelerators\bvh_accelerator.hpp" />
+    <ClInclude Include="E:\Render Engine\include\accelerators\cpu_accelerator.hpp" />
+    <ClInclude Include="E:\Render Engine\include\accelerators\gpu_accelerator.hpp" />
+    <ClInclude Include="E:\Render Engine\include\api\procedural.hpp" />
+    <ClInclude Include="E:\Render Engine\include\api\scene_parser.hpp" />
+    <ClInclude Include="E:\Render Engine\include\api\ure_api.hpp" />
+    <ClInclude Include="E:\Render Engine\include\core\aabb.hpp" />
+    <ClInclude Include="E:\Render Engine\include\core\interaction.hpp" />
+    <ClInclude Include="E:\Render Engine\include\core\matrix.hpp" />
+    <ClInclude Include="E:\Render Engine\include\core\quaternion.hpp" />
+    <ClInclude Include="E:\Render Engine\include\core\ray.hpp" />
+    <ClInclude Include="E:\Render Engine\include\core\vector.hpp" />
+    <ClInclude Include="E:\Render Engine\include\gpu\bvh_builder.hpp" />
+    <ClInclude Include="E:\Render Engine\include\gpu\gpu_driver.hpp" />
+    <ClInclude Include="E:\Render Engine\include\gpu\gpu_scene_loader.hpp" />
+    <ClInclude Include="E:\Render Engine\include\gpu\gpu_structs.hpp" />
+    <ClInclude Include="E:\Render Engine\include\gpu\material_library.hpp" />
+    <ClInclude Include="E:\Render Engine\include\integrators\path_tracer.hpp" />
+    <ClInclude Include="E:\Render Engine\include\io\image_saver.hpp" />
+    <ClInclude Include="E:\Render Engine\include\materials\bsdf.hpp" />
+    <ClInclude Include="E:\Render Engine\include\materials\dielectric.hpp" />
+    <ClInclude Include="E:\Render Engine\include\materials\lambertian.hpp" />
+    <ClInclude Include="E:\Render Engine\include\materials\layered_bsdf.hpp" />
+    <ClInclude Include="E:\Render Engine\include\materials\microfacet.hpp" />
+    <ClInclude Include="E:\Render Engine\include\physics\collider.hpp" />
+    <ClInclude Include="E:\Render Engine\include\physics\fluid_system.hpp" />
+    <ClInclude Include="E:\Render Engine\include\physics\marching_cubes.hpp" />
+    <ClInclude Include="E:\Render Engine\include\physics\physics_events.hpp" />
+    <ClInclude Include="E:\Render Engine\include\physics\physics_world.hpp" />
+    <ClInclude Include="E:\Render Engine\include\physics\rigid_body.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\area_light.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\camera.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\cube_helper.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\directional_light.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\light.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\mesh.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\obj_loader.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\point_light.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\primitive.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\scene.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\scene_factory.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\shape.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\sphere.hpp" />
+    <ClInclude Include="E:\Render Engine\include\scene\triangle.hpp" />
+    <ClInclude Include="E:\Render Engine\include\spectral\cie_data.hpp" />
+    <ClInclude Include="E:\Render Engine\include\spectral\spectral.hpp" />
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <ProjectReference Include="E:\Render Engine\build_vs_clean\ZERO_CHECK.vcxproj">
+      <Project>{DF97E718-E7AF-35B4-B4F3-094A41EB4071}</Project>
+      <Name>ZERO_CHECK</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 13.0.targets" />
+  </ImportGroup>
+</Project>

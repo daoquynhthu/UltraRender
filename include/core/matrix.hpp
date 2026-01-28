@@ -44,6 +44,16 @@ public:
         return result;
     }
 
+    constexpr Matrix4x4 transpose() const {
+        Matrix4x4 result;
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                result.m[i][j] = m[j][i];
+            }
+        }
+        return result;
+    }
+
     // Vector transformation
     constexpr Vec3<T> transform_vector(const Vec3<T>& v) const {
         return {

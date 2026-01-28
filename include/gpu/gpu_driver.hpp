@@ -21,6 +21,7 @@ struct RenderMesh {
 // Legacy One-Shot Render
 void render_frame_gpu(float* output_buffer, int width, int height, int samples_per_pixel,
                       const std::vector<RenderMesh>& meshes,
+                      const std::vector<GpuInstance>& instances,
                       const std::vector<GpuSphere>& spheres,
                       const std::vector<GpuMaterial>& materials,
                       const float* cam_pos = nullptr,
@@ -39,6 +40,7 @@ struct GpuContext; // Opaque handle to GPU resources
 // Initialize GPU resources (allocate buffers, upload static scene data)
 GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<RenderMesh>& meshes,
+                              const std::vector<GpuInstance>& instances,
                               const std::vector<GpuSphere>& spheres,
                               const std::vector<GpuMaterial>& materials);
 

@@ -304,10 +304,112 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
         }
     }
 
+    // Check Instances
+    for (int i = 0; i < scene.instance_count; ++i) {
+        const GpuInstance& inst = scene.instances[i];
+        
+        // AABB Check in World Space
+        if (!hit_aabb(r, inst.min_pt, inst.max_pt, t_min, t_closest)) {
+            continue;
+        }
+
+        // Transform Ray to Object Space
+        GpuRay r_obj = r;
+        r_obj.origin = inst.inverse_transform.transform_point(r.origin);
+        r_obj.direction = inst.inverse_transform.transform_vector(r.direction);
+        
+        // Scale t_min/t_closest?
+        // t is invariant under linear transformation if we assume P(t) = O + t*D mapping holds.
+        // P_world = M * P_obj => O_w + t*D_w = M(O_o + t*D_o) = M*O_o + t*M*D_o.
+        // Matches O_w = M*O_o and D_w = M*D_o.
+        // So t is the same.
+        
+        const GpuMesh& mesh = scene.meshes[inst.mesh_index];
+        
+        float t_mesh;
+        GpuVec3 ng_mesh, ns_mesh;
+        GpuVec2 uv_mesh;
+        bool hit_mesh = false;
+
+        if (mesh.bvh_node_count > 0) {
+             hit_mesh = hit_bvh(mesh, r_obj, t_min, t_closest, t_mesh, ng_mesh, ns_mesh, uv_mesh);
+        } else {
+             // Fallback for small meshes without BVH (if any)
+             // Simple linear scan over triangles
+             for (int j = 0; j < mesh.triangle_count; ++j) {
+                int i0 = mesh.indices[j * 3 + 0];
+                int i1 = mesh.indices[j * 3 + 1];
+                int i2 = mesh.indices[j * 3 + 2];
+                GpuVec3 v0 = mesh.vertices[i0];
+                GpuVec3 v1 = mesh.vertices[i1];
+                GpuVec3 v2 = mesh.vertices[i2];
+                
+                const GpuVec3* n0_ptr = mesh.normals ? &mesh.normals[i0] : nullptr;
+                const GpuVec3* n1_ptr = mesh.normals ? &mesh.normals[i1] : nullptr;
+                const GpuVec3* n2_ptr = mesh.normals ? &mesh.normals[i2] : nullptr;
+
+                float t_tri, u_tri, v_tri;
+                GpuVec3 ng_tri, ns_tri;
+                if (hit_triangle(r_obj, v0, v1, v2, n0_ptr, n1_ptr, n2_ptr, t_min, t_closest, t_tri, ng_tri, ns_tri, u_tri, v_tri)) {
+                    hit_mesh = true;
+                    t_closest = t_tri; // Update local closest for this mesh search
+                    t_mesh = t_tri;
+                    ng_mesh = ng_tri;
+                    ns_mesh = ns_tri;
+                    
+                    if (mesh.uvs) {
+                        GpuVec2 uv0 = mesh.uvs[i0];
+                        GpuVec2 uv1 = mesh.uvs[i1];
+                        GpuVec2 uv2 = mesh.uvs[i2];
+                        float w_tri = 1.0f - u_tri - v_tri;
+                        uv_mesh = uv0 * w_tri + uv1 * u_tri + uv2 * v_tri;
+                    } else {
+                        uv_mesh = GpuVec2(0.0f, 0.0f);
+                    }
+                }
+             }
+        }
+
+        if (hit_mesh) {
+            hit_anything = true;
+            t_closest = t_mesh; // Update global closest
+            t_out = t_mesh;
+            
+            // P_out = world ray at t
+            p_out = r.at(t_mesh);
+            
+            // Transform Normals to World Space
+            // N_world = Transpose(InvM) * N_obj
+            // We use the inverse transform matrix (InvM) and apply its transpose
+            float nx = ns_mesh.x; float ny = ns_mesh.y; float nz = ns_mesh.z;
+            ns_mesh.x = inst.inverse_transform.m[0][0] * nx + inst.inverse_transform.m[1][0] * ny + inst.inverse_transform.m[2][0] * nz;
+            ns_mesh.y = inst.inverse_transform.m[0][1] * nx + inst.inverse_transform.m[1][1] * ny + inst.inverse_transform.m[2][1] * nz;
+            ns_mesh.z = inst.inverse_transform.m[0][2] * nx + inst.inverse_transform.m[1][2] * ny + inst.inverse_transform.m[2][2] * nz;
+            ns_mesh = ns_mesh.normalize();
+
+            nx = ng_mesh.x; ny = ng_mesh.y; nz = ng_mesh.z;
+            ng_mesh.x = inst.inverse_transform.m[0][0] * nx + inst.inverse_transform.m[1][0] * ny + inst.inverse_transform.m[2][0] * nz;
+            ng_mesh.y = inst.inverse_transform.m[0][1] * nx + inst.inverse_transform.m[1][1] * ny + inst.inverse_transform.m[2][1] * nz;
+            ng_mesh.z = inst.inverse_transform.m[0][2] * nx + inst.inverse_transform.m[1][2] * ny + inst.inverse_transform.m[2][2] * nz;
+            ng_mesh = ng_mesh.normalize();
+            
+            n_out = ns_mesh;
+            ng_out = ng_mesh;
+            
+            mat_idx_out = (inst.material_index >= 0) ? inst.material_index : mesh.material_index;
+            uv_out = uv_mesh;
+            type_out = 2; // Instance
+            index_out = i;
+        }
+    }
+
     // Check Meshes (AABB + BVH Optimized)
     for (int i = 0; i < scene.mesh_count; ++i) {
         GpuMesh& mesh = scene.meshes[i];
         
+        // Skip hidden meshes (e.g. instance prototypes with material_index -1)
+        if (mesh.material_index < 0) continue;
+
         // AABB Check (Mesh Level)
         if (!hit_aabb(r, mesh.min_pt, mesh.max_pt, t_min, t_closest)) {
             continue;
@@ -2805,6 +2907,7 @@ struct GpuContext {
     GpuMaterial* d_materials;
     GpuSphere* d_spheres;
     GpuMesh* d_meshes;
+    GpuInstance* d_instances;
     GpuTexture* d_textures;
     int* d_light_indices;
     
@@ -2812,6 +2915,7 @@ struct GpuContext {
     int material_count;
     int sphere_count;
     int mesh_count;
+    int instance_count;
     int texture_count;
     int light_count;
     
@@ -2833,6 +2937,7 @@ struct GpuContext {
 
 GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<ure::gpu::RenderMesh>& meshes,
+                              const std::vector<ure::gpu::GpuInstance>& instances,
                               const std::vector<ure::gpu::GpuSphere>& spheres,
                               const std::vector<ure::gpu::GpuMaterial>& materials) {
     GpuContext* ctx = new GpuContext();
@@ -2873,7 +2978,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     alloc_shadow_queue(ctx->shadowQueue, max_rays);
     
     // Scene Setup
-    bool use_default_geometry = spheres.empty() && meshes.empty();
+    bool use_default_geometry = spheres.empty() && meshes.empty() && instances.empty();
     GpuHostScene host_scene = load_default_scene(!use_default_geometry);
     
     std::vector<GpuMaterial>& host_materials = host_scene.materials;
@@ -3005,6 +3110,19 @@ GpuContext* init_gpu_renderer(int width, int height,
     cudaMalloc(&ctx->d_meshes, host_gpu_meshes.size() * sizeof(GpuMesh));
     cudaMemcpy(ctx->d_meshes, host_gpu_meshes.data(), host_gpu_meshes.size() * sizeof(GpuMesh), cudaMemcpyHostToDevice);
     ctx->mesh_count = (int)host_gpu_meshes.size();
+    
+    // Instances
+    std::vector<GpuInstance> host_instances = instances;
+    // If we have instances in the host scene (future proofing), we might merge them here
+    // For now, just use the passed instances
+    
+    if (!host_instances.empty()) {
+        cudaMalloc(&ctx->d_instances, host_instances.size() * sizeof(GpuInstance));
+        cudaMemcpy(ctx->d_instances, host_instances.data(), host_instances.size() * sizeof(GpuInstance), cudaMemcpyHostToDevice);
+    } else {
+        ctx->d_instances = nullptr;
+    }
+    ctx->instance_count = (int)host_instances.size();
     
     // Textures
     std::vector<GpuTexture> host_gpu_textures;
@@ -3152,6 +3270,8 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.sphere_count = ctx->sphere_count;
     scene.meshes = ctx->d_meshes;
     scene.mesh_count = ctx->mesh_count;
+    scene.instances = ctx->d_instances;
+    scene.instance_count = ctx->instance_count;
     scene.materials = ctx->d_materials;
     scene.material_count = ctx->material_count;
     scene.textures = ctx->d_textures;
@@ -3241,6 +3361,7 @@ void copy_frame_buffer_gpu(GpuContext* ctx, float* host_buffer) {
 
 void render_frame_gpu(float* output_buffer, int width, int height, int samples_per_pixel,
                       const std::vector<ure::gpu::RenderMesh>& meshes,
+                      const std::vector<ure::gpu::GpuInstance>& instances,
                       const std::vector<ure::gpu::GpuSphere>& spheres,
                       const std::vector<ure::gpu::GpuMaterial>& materials,
                       const float* cam_pos,
@@ -3259,7 +3380,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
 
     // Setup Materials
     // Only load default geometry if no input geometry is provided
-    bool use_default_geometry = spheres.empty() && meshes.empty();
+    bool use_default_geometry = spheres.empty() && meshes.empty() && instances.empty();
     GpuHostScene host_scene = load_default_scene(!use_default_geometry);
     
     std::vector<GpuMaterial>& host_materials = host_scene.materials;
@@ -3276,7 +3397,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
     std::vector<GpuSphere> host_spheres = spheres;
     
     // Fallback: If no input geometry, use default scene spheres
-    if (spheres.empty() && meshes.empty()) {
+    if (spheres.empty() && meshes.empty() && instances.empty()) {
         host_spheres = host_scene.spheres;
     }
 
@@ -3453,6 +3574,15 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
     cudaMalloc(&d_meshes, host_gpu_meshes.size() * sizeof(GpuMesh));
     cudaMemcpy(d_meshes, host_gpu_meshes.data(), host_gpu_meshes.size() * sizeof(GpuMesh), cudaMemcpyHostToDevice);
 
+    // Setup Instances
+    GpuInstance* d_instances = nullptr;
+    if (!instances.empty()) {
+        size_t inst_size = instances.size() * sizeof(GpuInstance);
+        cudaMalloc(&d_instances, inst_size);
+        cudaMemcpy(d_instances, instances.data(), inst_size, cudaMemcpyHostToDevice);
+        pointers_to_free.push_back(d_instances);
+    }
+
     // Setup Textures
     std::vector<GpuTexture> host_gpu_textures;
     std::vector<cudaArray_t> arrays_to_free;
@@ -3545,6 +3675,8 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
     scene.sphere_count = (int)host_spheres.size();
     scene.meshes = d_meshes;
     scene.mesh_count = (int)host_gpu_meshes.size();
+    scene.instances = d_instances;
+    scene.instance_count = (int)instances.size();
     scene.materials = d_materials;
     scene.material_count = (int)host_materials.size();
     scene.textures = d_textures;

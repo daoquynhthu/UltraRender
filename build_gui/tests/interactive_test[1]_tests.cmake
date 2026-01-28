@@ -1,7 +1,0 @@
-add_test([=[InteractiveApiTest.Initialization]=]  [==[E:/Render Engine/build_gui/tests/Release/interactive_test.exe]==] [==[--gtest_filter=InteractiveApiTest.Initialization]==] --gtest_also_run_disabled_tests)
-set_tests_properties([=[InteractiveApiTest.Initialization]=]  PROPERTIES WORKING_DIRECTORY [==[E:/Render Engine/build_gui/tests]==] SKIP_REGULAR_EXPRESSION [==[\[  SKIPPED \]]==])
-add_test([=[InteractiveApiTest.RenderPassLoop]=]  [==[E:/Render Engine/build_gui/tests/Release/interactive_test.exe]==] [==[--gtest_filter=InteractiveApiTest.RenderPassLoop]==] --gtest_also_run_disabled_tests)
-set_tests_properties([=[InteractiveApiTest.RenderPassLoop]=]  PROPERTIES WORKING_DIRECTORY [==[E:/Render Engine/build_gui/tests]==] SKIP_REGULAR_EXPRESSION [==[\[  SKIPPED \]]==])
-add_test([=[InteractiveApiTest.CameraUpdate]=]  [==[E:/Render Engine/build_gui/tests/Release/interactive_test.exe]==] [==[--gtest_filter=InteractiveApiTest.CameraUpdate]==] --gtest_also_run_disabled_tests)
-set_tests_properties([=[InteractiveApiTest.CameraUpdate]=]  PROPERTIES WORKING_DIRECTORY [==[E:/Render Engine/build_gui/tests]==] SKIP_REGULAR_EXPRESSION [==[\[  SKIPPED \]]==])
-set(  interactive_test_TESTS InteractiveApiTest.Initialization InteractiveApiTest.RenderPassLoop InteractiveApiTest.CameraUpdate)

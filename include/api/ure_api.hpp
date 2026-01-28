@@ -58,6 +58,39 @@ struct Material {
     std::shared_ptr<Texture> albedo_texture;
 };
 
+// Physics Configuration
+struct RigidBodyConfig {
+    bool enabled = false;
+    float mass = 0.0f; // 0 = static
+    float friction = 0.5f;
+    float restitution = 0.5f;
+    float linear_damping = 0.01f;
+    float angular_damping = 0.01f;
+    Vec3 velocity = {0,0,0}; // Initial velocity
+    std::string collider_type = "none"; // box, sphere, plane, mesh
+    Vec3 collider_size = {1,1,1}; // For box
+    float collider_radius = 0.5f; // For sphere
+    int material_id = 0; // 0=Default, 1=Metal, 2=Wood, 3=Glass
+};
+
+struct FluidConfig {
+    bool enabled = false;
+    Vec3 bounds_min = {-5,-5,-5};
+    Vec3 bounds_max = {5,5,5};
+    float particle_spacing = 0.1f;
+    // Simple fill volume for demo
+    Vec3 fill_min = {-1,-1,-1};
+    Vec3 fill_max = {1,0,1};
+};
+
+struct PhysicsConfig {
+    bool enabled = false;
+    float dt = 1.0f / 60.0f;
+    int total_frames = 180;
+    int spp_per_frame = 32;
+    FluidConfig fluid;
+};
+
 struct Mesh {
     std::vector<Vertex> vertices;
     std::vector<int> indices;
@@ -69,6 +102,7 @@ struct RenderEntity {
     Vec3 position = {0,0,0};
     Vec3 scale = {1,1,1};
     Vec3 rotation = {0,0,0}; // Euler angles in degrees
+    RigidBodyConfig rigid_body; // Physics properties
 };
 
 struct Camera {
@@ -91,6 +125,7 @@ struct Scene {
     std::vector<RenderEntity> entities;
     std::vector<SphereEntity> spheres;
     Camera camera;
+    PhysicsConfig physics; // Physics Settings
     Vec3 background_color = {0,0,0};
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f; // g

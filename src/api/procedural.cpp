@@ -4,22 +4,26 @@
 namespace ure {
 
 SceneBuilder& SceneBuilder::add_entity(std::shared_ptr<Mesh> mesh, std::shared_ptr<Material> mat, 
-                        Vec3 pos, Vec3 scale, Vec3 rot) {
+                        Vec3 pos, Vec3 scale, Vec3 rot, RigidBodyConfig rb_config) {
     RenderEntity entity;
     entity.mesh = mesh;
     entity.material = mat;
     entity.position = pos;
     entity.scale = scale;
     entity.rotation = rot;
+    entity.rigid_body = rb_config;
     scene_.entities.push_back(entity);
     return *this;
 }
 
-SceneBuilder& SceneBuilder::add_sphere(Vec3 center, float radius, std::shared_ptr<Material> mat) {
+SceneBuilder& SceneBuilder::add_sphere(Vec3 center, float radius, std::shared_ptr<Material> mat, RigidBodyConfig rb_config) {
+    (void)rb_config; // Unused parameter
     SphereEntity sphere;
     sphere.center = center;
     sphere.radius = radius;
     sphere.material = mat;
+    // rb_config is ignored for analytical spheres as they are static-only in this implementation
+    // Use create_sphere() + add_entity() for physics-enabled spheres
     scene_.spheres.push_back(sphere);
     return *this;
 }
@@ -49,6 +53,23 @@ SceneBuilder& SceneBuilder::set_medium(float density, Vec3 scattering, Vec3 abso
     scene_.medium_max_distance = max_dist;
     scene_.medium_anisotropy = anisotropy;
     return *this;
+}
+
+SceneBuilder& SceneBuilder::set_physics_enabled(bool enabled, float dt, int frames, int spp_per_frame) {
+    scene_.physics.enabled = enabled;
+    scene_.physics.dt = dt;
+    scene_.physics.total_frames = frames;
+    scene_.physics.spp_per_frame = spp_per_frame;
+    return *this;
+}
+
+SceneBuilder& SceneBuilder::set_fluid_config(const FluidConfig& config) {
+    scene_.physics.fluid = config;
+    return *this;
+}
+
+int SceneBuilder::get_entity_count() const {
+    return (int)scene_.entities.size();
 }
 
 Scene SceneBuilder::build() {
@@ -214,9 +235,9 @@ std::shared_ptr<Mesh> SceneBuilder::create_cylinder(float radius, float height, 
     }
 
     // 2. Top Cap
-    int top_center_idx = mesh->vertices.size();
+    int top_center_idx = (int)mesh->vertices.size();
     add_vert(0, h, 0, 0, 1, 0, 0.5f, 0.5f); // Center
-    int top_start = mesh->vertices.size();
+    int top_start = (int)mesh->vertices.size();
     
     for (int i = 0; i <= segments; ++i) {
         float theta = (float)i / segments * 2.0f * 3.14159265f;
@@ -235,9 +256,9 @@ std::shared_ptr<Mesh> SceneBuilder::create_cylinder(float radius, float height, 
     }
 
     // 3. Bottom Cap
-    int bot_center_idx = mesh->vertices.size();
+    int bot_center_idx = (int)mesh->vertices.size();
     add_vert(0, -h, 0, 0, -1, 0, 0.5f, 0.5f); // Center
-    int bot_start = mesh->vertices.size();
+    int bot_start = (int)mesh->vertices.size();
 
     for (int i = 0; i <= segments; ++i) {
         float theta = (float)i / segments * 2.0f * 3.14159265f;
@@ -271,7 +292,7 @@ std::shared_ptr<Mesh> SceneBuilder::create_cup(float radius, float height, float
     };
 
     // 1. Outer Side (Normals Out)
-    int outer_start = mesh->vertices.size();
+    int outer_start = (int)mesh->vertices.size();
     for (int i = 0; i <= segments; ++i) {
         float theta = (float)i / segments * 2.0f * 3.14159265f;
         float c = cosf(theta), s = sinf(theta);
@@ -289,7 +310,7 @@ std::shared_ptr<Mesh> SceneBuilder::create_cup(float radius, float height, float
     }
 
     // 2. Inner Side (Normals In)
-    int inner_start = mesh->vertices.size();
+    int inner_start = (int)mesh->vertices.size();
     for (int i = 0; i <= segments; ++i) {
         float theta = (float)i / segments * 2.0f * 3.14159265f;
         float c = cosf(theta), s = sinf(theta);
@@ -312,7 +333,7 @@ std::shared_ptr<Mesh> SceneBuilder::create_cup(float radius, float height, float
     }
 
     // 3. Rim (Annulus at Top)
-    int rim_start = mesh->vertices.size();
+    int rim_start = (int)mesh->vertices.size();
     for (int i = 0; i <= segments; ++i) {
         float theta = (float)i / segments * 2.0f * 3.14159265f;
         float c = cosf(theta), s = sinf(theta);
@@ -330,9 +351,9 @@ std::shared_ptr<Mesh> SceneBuilder::create_cup(float radius, float height, float
     }
 
     // 4. Inner Bottom (Disk facing up at y_bot_in)
-    int in_bot_center = mesh->vertices.size();
+    int in_bot_center = (int)mesh->vertices.size();
     add_vert(0, y_bot_in, 0, 0, 1, 0);
-    int in_bot_start = mesh->vertices.size();
+    int in_bot_start = (int)mesh->vertices.size();
     for (int i = 0; i <= segments; ++i) {
         float theta = (float)i / segments * 2.0f * 3.14159265f;
         add_vert(r_in * cosf(theta), y_bot_in, r_in * sinf(theta), 0, 1, 0);
@@ -344,9 +365,9 @@ std::shared_ptr<Mesh> SceneBuilder::create_cup(float radius, float height, float
     }
 
     // 5. Outer Bottom (Disk facing down at y_bot_out)
-    int out_bot_center = mesh->vertices.size();
+    int out_bot_center = (int)mesh->vertices.size();
     add_vert(0, y_bot_out, 0, 0, -1, 0);
-    int out_bot_start = mesh->vertices.size();
+    int out_bot_start = (int)mesh->vertices.size();
     for (int i = 0; i <= segments; ++i) {
         float theta = (float)i / segments * 2.0f * 3.14159265f;
         add_vert(r_out * cosf(theta), y_bot_out, r_out * sinf(theta), 0, -1, 0);

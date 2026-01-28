@@ -60,6 +60,45 @@ struct GpuVec3 {
     __host__ __device__ friend GpuVec3 operator*(float s, const GpuVec3& v) { return v * s; }
 };
 
+struct GpuMat4 {
+    float m[4][4];
+    
+    __host__ __device__ GpuMat4() {
+        for(int i=0; i<4; ++i) for(int j=0; j<4; ++j) m[i][j] = (i==j)?1.0f:0.0f;
+    }
+    
+    __host__ __device__ static GpuMat4 identity() { return GpuMat4(); }
+
+    __host__ __device__ GpuVec3 transform_point(const GpuVec3& p) const {
+        float x = m[0][0]*p.x + m[0][1]*p.y + m[0][2]*p.z + m[0][3];
+        float y = m[1][0]*p.x + m[1][1]*p.y + m[1][2]*p.z + m[1][3];
+        float z = m[2][0]*p.x + m[2][1]*p.y + m[2][2]*p.z + m[2][3];
+        float w = m[3][0]*p.x + m[3][1]*p.y + m[3][2]*p.z + m[3][3];
+        if (fabsf(w) > 1e-6f) { 
+            float invW = 1.0f / w;
+            x *= invW; y *= invW; z *= invW; 
+        }
+        return GpuVec3(x, y, z);
+    }
+
+    __host__ __device__ GpuVec3 transform_vector(const GpuVec3& v) const {
+        // Vectors ignore translation (w=0)
+        float x = m[0][0]*v.x + m[0][1]*v.y + m[0][2]*v.z;
+        float y = m[1][0]*v.x + m[1][1]*v.y + m[1][2]*v.z;
+        float z = m[2][0]*v.x + m[2][1]*v.y + m[2][2]*v.z;
+        return GpuVec3(x, y, z);
+    }
+    
+    // Transform normal using Transpose of this matrix
+    // Use this when 'this' is the Inverse Transform Matrix to get World Normal from Object Normal
+    __host__ __device__ GpuVec3 transform_normal(const GpuVec3& n) const {
+         float x = m[0][0]*n.x + m[1][0]*n.y + m[2][0]*n.z;
+         float y = m[0][1]*n.x + m[1][1]*n.y + m[2][1]*n.z;
+         float z = m[0][2]*n.x + m[1][2]*n.y + m[2][2]*n.z;
+         return GpuVec3(x, y, z);
+    }
+};
+
 // Phase 3: Polarization Support (Beyond Ray Optics)
 struct StokesVector {
     // S0, S1, S2, S3 (or I, Q, U, V)
@@ -271,22 +310,38 @@ struct GpuMesh {
     GpuVec2* uvs;
     int* indices;
     int triangle_count;
-    int material_index;
+    int material_index; // Default material
     
-    // AABB Bounds
+    // AABB Bounds (Object Space)
     GpuVec3 min_pt;
     GpuVec3 max_pt;
     
-    // BVH Data
+    // BVH Data (Object Space)
     GpuBvhNode* bvh_nodes;
     int bvh_node_count;
+};
+
+struct GpuInstance {
+    GpuMat4 transform;
+    GpuMat4 inverse_transform;
+    int mesh_index;
+    int material_index; // -1 means use mesh material
+    
+    // World Space AABB (Updated dynamically)
+    GpuVec3 min_pt;
+    GpuVec3 max_pt;
 };
 
 struct GpuScene {
     GpuSphere* spheres;
     int sphere_count;
-    GpuMesh* meshes;
+    
+    GpuMesh* meshes; // Asset Storage
     int mesh_count;
+    
+    GpuInstance* instances; // Scene Graph Nodes
+    int instance_count;
+    
     GpuMaterial* materials;
     int material_count;
     GpuTexture* textures;

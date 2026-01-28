@@ -84,6 +84,40 @@ Scene SceneParser::parse_file(const std::string& filepath) {
              }
              builder.set_medium(density, scattering, absorption, max_dist, anisotropy);
         }
+        else if (command == "physics") {
+            // physics enabled <0/1> dt <float> frames <int> spp <int>
+            bool enabled = false;
+            float dt = 1.0f/60.0f;
+            int frames = 180;
+            int spp_per_frame = 32;
+            
+            std::string token;
+            while (ss >> token) {
+                if (token == "enabled") ss >> enabled;
+                else if (token == "dt") ss >> dt;
+                else if (token == "frames") ss >> frames;
+                else if (token == "spp") ss >> spp_per_frame;
+            }
+            builder.set_physics_enabled(enabled, dt, frames, spp_per_frame);
+        }
+        else if (command == "fluid") {
+            // fluid enabled <0/1> spacing <float> bounds <min> <max> fill <min> <max>
+            FluidConfig config;
+            std::string token;
+            while (ss >> token) {
+                if (token == "enabled") ss >> config.enabled;
+                else if (token == "spacing") ss >> config.particle_spacing;
+                else if (token == "bounds") {
+                    ss >> config.bounds_min.x >> config.bounds_min.y >> config.bounds_min.z;
+                    ss >> config.bounds_max.x >> config.bounds_max.y >> config.bounds_max.z;
+                }
+                else if (token == "fill") {
+                    ss >> config.fill_min.x >> config.fill_min.y >> config.fill_min.z;
+                    ss >> config.fill_max.x >> config.fill_max.y >> config.fill_max.z;
+                }
+            }
+            builder.set_fluid_config(config);
+        }
         else if (command == "define_material") {
             // define_material <name> <type> [params...]
             std::string name, type_str;
@@ -163,14 +197,11 @@ Scene SceneParser::parse_file(const std::string& filepath) {
             ss.clear();
 
             std::shared_ptr<Mesh> mesh;
+            bool is_analytical_sphere = false;
             
             if (type == "sphere") {
-                 // Use analytical sphere optimization
-                 // Base radius is 0.5, so radius = 0.5 * scale.x
-                 if (materials.count(mat_name)) {
-                     builder.add_sphere(pos, 0.5f * scale.x, materials[mat_name]);
-                 }
-                 continue; // Skip standard entity add
+                 is_analytical_sphere = true;
+                 // Don't continue yet, wait for physics parsing
             }
             else if (type == "quad") mesh = SceneBuilder::create_quad();
             else if (type == "cube") mesh = SceneBuilder::create_cube();
@@ -203,8 +234,48 @@ Scene SceneParser::parse_file(const std::string& filepath) {
                 mesh = SceneBuilder::create_torus(major_r, minor_r, major_seg, minor_seg);
             }
 
+            // Parse optional physics parameters
+            ss.clear(); // Clear any failbits
+            RigidBodyConfig rb_config;
+            std::string extra_token;
+            while (ss >> extra_token) {
+                 if (extra_token == "mass") ss >> rb_config.mass;
+                 else if (extra_token == "friction") ss >> rb_config.friction;
+                 else if (extra_token == "restitution") ss >> rb_config.restitution;
+                 else if (extra_token == "damping") ss >> rb_config.linear_damping;
+                 else if (extra_token == "velocity") ss >> rb_config.velocity.x >> rb_config.velocity.y >> rb_config.velocity.z;
+                 else if (extra_token == "material_id") ss >> rb_config.material_id;
+                 else if (extra_token == "collider") {
+                     ss >> rb_config.collider_type;
+                     if (rb_config.collider_type == "box") {
+                         ss >> rb_config.collider_size.x >> rb_config.collider_size.y >> rb_config.collider_size.z;
+                     } else if (rb_config.collider_type == "sphere") {
+                         ss >> rb_config.collider_radius;
+                     }
+                 }
+            }
+            
+            if (rb_config.mass > 0.0f || rb_config.collider_type != "none") {
+                rb_config.enabled = true;
+            }
+
+            if (is_analytical_sphere) {
+                if (rb_config.enabled) {
+                    // Fallback to Mesh Sphere for Physics Entities
+                    // Default mesh sphere has radius 0.5, which matches analytical base radius.
+                    // So we can preserve the scale.
+                    mesh = SceneBuilder::create_sphere(); 
+                } else {
+                    // Use optimized analytical sphere for static non-physics objects
+                    if (materials.count(mat_name)) {
+                        builder.add_sphere(pos, 0.5f * scale.x, materials[mat_name]);
+                    }
+                    continue;
+                }
+            }
+
             if (mesh && materials.count(mat_name)) {
-                builder.add_entity(mesh, materials[mat_name], pos, scale, rot);
+                builder.add_entity(mesh, materials[mat_name], pos, scale, rot, rb_config);
             } else {
                 if (!materials.count(mat_name)) {
                     std::cerr << "[SceneParser] Warning: Material '" << mat_name << "' not found." << std::endl;

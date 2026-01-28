@@ -18,10 +18,27 @@ void run_gpu_test() {
 // Stub implementations for interactive API
 GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<RenderMesh>& meshes,
+                              const std::vector<GpuInstance>& instances,
                               const std::vector<GpuSphere>& spheres,
                               const std::vector<GpuMaterial>& materials) {
     std::cout << "[GPU Stub] init_gpu_renderer called\n";
     return new GpuContext();
+}
+
+void render_frame_gpu(float* output_buffer, int width, int height, int samples_per_pixel,
+                      const std::vector<RenderMesh>& meshes,
+                      const std::vector<GpuInstance>& instances,
+                      const std::vector<GpuSphere>& spheres,
+                      const std::vector<GpuMaterial>& materials,
+                      const float* cam_pos,
+                      const float* cam_look,
+                      float fov,
+                      float medium_density,
+                      float medium_anisotropy,
+                      GpuSpectrum medium_scattering,
+                      GpuSpectrum medium_absorption,
+                      float medium_max_distance) {
+    std::cout << "[GPU Stub] render_frame_gpu called (Not Implemented)\n";
 }
 
 void free_gpu_renderer(GpuContext* ctx) {

@@ -1,74 +1,74 @@
 # 渲染引擎开发交接文档 (Handover Documentation)
 
-**日期**: 2026-01-25
-**当前阶段**: 阶段三：超越几何光学 (Beyond Ray Optics) - 优化与稳定化
+**日期**: 2026-01-27
+**当前阶段**: 阶段四：物理与流体模拟 (Physics & Fluid Simulation) - 验证与集成
 
 ## 1. 项目现状概述
-本项目已从基础的 GPU 路径追踪器演进为**偏振感知 (Polarization-aware)** 与 **光谱感知 (Spectral-aware)** 的物理渲染引擎。
-目前已完成 Wavefront 架构的初步重构，并成功引入了 Stokes-Mueller 偏振体系和薄膜干涉模型。
+本项目已从纯光学渲染引擎扩展为**物理-光学混合引擎**。
+目前已集成基于 SPH (Smoothed Particle Hydrodynamics) 的流体模拟系统和 Marching Cubes 等值面提取算法，实现了流体与刚体的双向耦合。
 **最新进展**: 
-- **编译修复**: 全面修复了 Windows/MSVC 环境下的编码与编译器检测问题，确保了开发环境的稳定性。
-- **体积光修复**: 修正了体积散射采样算法，解决了高采样下的能量丢失问题。
-- **渲染质量**: 引入 ACES 色调映射，进一步提升最终成像的视觉动态范围。
+- **流体系统**: 实现了基于空间哈希 (Spatial Hashing) 的 SPH 流体求解器，支持数千粒子的实时模拟。
+- **等值面生成**: 集成了 Marching Cubes 算法，将流体粒子转化为动态网格。
+- **物理-声学接口**: 定义了物理事件监听接口，支持碰撞事件的外部响应（如声学反馈）。
+- **演示场景**: 构建了 "Glass Cup" 演示，包含流体、刚体（球/盒）与静态容器的交互。
 
 ## 2. 近期关键变更 (Recent Changes)
 
-### 2.1 物理核心修复 (Critical Physics Fixes)
-- **体积散射采样 (Volume Scattering)**: 修正了各向同性相位函数的采样逻辑。原 `random_in_unit_sphere`（体采样）错误地引入了平均长度 < 1 的方向向量，导致光线在体积内“滞留”并能量衰减。现已替换为 `random_unit_vector`（面采样），彻底解决了体积雾在高 SPP 下消失的问题。
-- **辐射亮度缩放 (Radiance Scaling)**: 修正了折射过程中的亮度缩放公式。遵循 Veach/PBRT 标准，亮度随折射率平方比 $(\eta_i / \eta_t)^2$ 变化，彻底解决了水体/玻璃异常发亮的问题。
-- **金属反射奇点 (Singularity Handling)**: 修复了视线与法线平行（垂直入射）时的数学奇点。通过增加对 `s_axis` 长度和 `fresnel_reflectance` 的鲁棒性检查，消除了金属球反射中心的黑色空洞。
-- **能量钳制优化 (Clamping Strategy)**: 将 `max_radiance` 阈值从 20.0 提升至 1000.0，允许高动态范围的焦散光线通过，恢复了玻璃杯底部的真实集光效果。
-- **金属可见法线采样 (Visible Normal Sampling)**: 金属散射改为可见法线采样，缓解视角边缘微表面欠采样导致的暗边问题。
+### 2.1 流体与物理系统 (New Physics Core)
+- **SPH 流体求解器**: 
+  - 实现文件: [`src/physics/fluid_system.cpp`](src/physics/fluid_system.cpp)
+  - 采用 Tait 方程计算压力，支持流体不可压缩性。
+  - 使用空间哈希网格 (Spatial Hashing) 优化邻域搜索，从 $O(N^2)$ 降低至 $O(N)$。
+- **Marching Cubes 网格化**:
+  - 实现文件: [`src/physics/marching_cubes.cpp`](src/physics/marching_cubes.cpp)
+  - **关键修复**: 修复了 `triTable` 处理逻辑，移除了错误的绕序反转 (Winding Inversion)，恢复了标准的 CCW 绕序，解决了流体几何反向/不可见的问题。
+  - **稳定性**: 增加了对 `triTable` 的安全边界检查，防止了缓冲区溢出导致的崩溃。
+- **刚体动力学**:
+  - 实现了基础的刚体碰撞响应（冲量法），支持 Sphere-Sphere, Sphere-Box, Sphere-Plane 碰撞。
+  - 集成了 `IPhysicsEventListener` 接口，用于将物理碰撞事件（冲量、材质ID）广播给声学模块。
 
-### 2.2 几何与场景增强
-- **高精度过程化网格**: 将 `glass_cup.scene` 中的杯子和水柱细分精度从 64 提升至 256，消除了折射下的多边形棱角伪影。
-- **接触面优化**: 微调了水柱半径 (0.748 -> 0.752) 和底部位置，使其略微嵌入玻璃壁，消除了因微小空气隙导致的全内反射 (TIR) 伪影，模拟了真实的水-玻璃润湿界面。
+### 2.2 渲染与可视化
+- **动态网格更新**: 在 `main.cpp` 的渲染循环中，每帧调用 Marching Cubes 生成新网格并更新到场景实体（Entity Index 9）。
+- **演示场景 (Glass Cup)**:
+  - 场景包含：地板 (0)、静态玻璃杯壁 (1-5)、动态盒子 (6)、动态球体 (7-8)、流体 (9)。
+  - 粒子数量：8788 个。
 
-### 2.3 偏振与波动光学 (Phase 3)
-- **Stokes 矢量追踪**: 每一条光线现在携带一个 4 分量的 Stokes 矢量，用于描述光的偏振状态。
-- **Mueller 矩阵集成**: 
-  - 实现了电介质（Dielectric）的反射/折射 Mueller 矩阵，包含全反射（TIR）下的相位偏移。
-  - 实现了金属（Conductor）的复数 Fresnel Mueller 矩阵，支持基于 $n, k$ 值的精确偏振渲染。
-- **薄膜干涉 (Thin-film Interference)**: 
-  - 实现了完整的 **Airy Summation** 公式，替代了简化的余弦模型，正确模拟多重反射干涉。
-  - 增加了基于 UV 坐标的重力厚度调制，模拟真实的薄膜厚度不均匀性。
+### 2.3 遗留问题与已知缺陷 (Known Issues - High Priority)
+**1. 性能优化 (Performance)**:
+- **Marching Cubes 分辨率**: 目前已提升至 **128**，流体表面更加平滑。但在高分辨率下生成网格的开销较大，影响帧率。建议考虑异步计算或 GPU 加速。
 
-### 2.5 工程与构建修复 (Engineering Fixes)
-- **编译稳定性**: 
-  - 强制添加 `/utf-8` 编译选项，解决 MSVC 在中文环境下的源码解析错误。
-  - 修复 `CMakeLists.txt` 中 CUDA Host Compiler 的路径检测逻辑。
-- **混合架构支持**: 引入 `IRenderEngine` 接口与 `CpuRenderEngine` 实现，支持无 GPU 环境下的 CPU 渲染回退（虽然性能较低，但保证了调试可行性）。
-- **测试覆盖**: 增加了 `SceneFactory` 的集成测试，确保场景加载逻辑的稳定性。
+**2. 已修复问题 (Resolved)**:
+- **流体几何异常/不可见**: 通过修正 Marching Cubes 的 `invertTriTable` 逻辑（移除错误的绕序反转）以及调整 Isolevel (200.0f) 和 Padding (0.2f)，流体现在可见且形状符合物理规律。
 
-## 3. 核心代码结构
+## 3. 核心代码结构更新
 
 | 文件路径 | 说明 |
 | :--- | :--- |
-| [`src/gpu/path_tracer_kernel.cu`](src/gpu/path_tracer_kernel.cu) | **核心渲染内核**。包含 Stokes 矢量操作、Mueller 矩阵计算、薄膜干涉算法及修复后的物理逻辑。 |
-| [`src/api/scene_parser.cpp`](src/api/scene_parser.cpp) | **场景解析器**。支持新材质参数和圆环实体的加载。 |
-| [`src/api/procedural.cpp`](src/api/procedural.cpp) | **过程几何生成**。包含新增的 Torus 生成逻辑及高精度圆柱/杯子生成。 |
-| [`include/gpu/gpu_structs.hpp`](include/gpu/gpu_structs.hpp) | **GPU 数据结构**。新增 `StokesVector` 和 `GpuSpectrum` 扩展。 |
+| [`src/physics/fluid_system.cpp`](src/physics/fluid_system.cpp) | **SPH 流体核心**。包含密度/压力计算、力累加、时间积分。 |
+| [`src/physics/marching_cubes.cpp`](src/physics/marching_cubes.cpp) | **等值面生成**。包含 Paul Bourke 查找表和三角化逻辑。 |
+| [`src/physics/physics_world.cpp`](src/physics/physics_world.cpp) | **物理世界主管**。管理刚体、流体步进及碰撞分发。 |
+| [`src/main.cpp`](src/main.cpp) | **主程序**。包含 Glass Cup 演示场景构建和物理-渲染主循环。 |
 
 ## 4. 下一步开发任务 (For the Successor)
 
-### 4.1 渲染质量攻坚
-- **直接光照采样 (NEE)**: 目前主要依赖间接光采样，导致阴影噪点较高。需尽快实现 Next Event Estimation，对光源进行显式采样。
-- **低差异序列 (LDS)**: 引入 Sobol 或 Halton 序列替代伪随机数，提升收敛速度。
+### 4.1 紧急修复
+- **性能优化**: 目前 Marching Cubes 分辨率已达 128，需关注实时性能。建议优化网格生成的内存占用或采用 GPU 加速。
+- **材质调优**: 验证流体材质 (Glass/Water) 在不同光照下的表现，确保视觉效果真实。
 
 ### 4.2 功能扩展
-- **模拟物理引擎 (Simulation Physics)**: 用户表达了对物理引擎的兴趣，可能需要探索刚体动力学或流体模拟与渲染的结合。
-- **分层采样**: 对像素和透镜进行分层采样，减少抗锯齿噪点。
-- **体积光与次表面散射 (Volume/SSS)**: 
-  - **已完成**: GPU 内核中的基础体积散射逻辑修复（各向同性采样）。
-  - **待完成**: 材质结构扩展、场景解析的完整对接，以及 SSS (Subsurface Scattering) 的专用积分器实现。
+- **双向耦合优化**: 目前流体对刚体的浮力/阻力计算较为基础，需进一步完善。
+- **声学集成**: Mock 声学模块已就位，需对接真实的声学传播/混响算法。
 
-## 5. 构建与运行
+## 5. 构建与运行 (Build & Run)
+**注意**: 必须使用 Visual Studio 2022 生成器。
+
 ```powershell
-# 构建
-cmake --build build --config Release
+# 清理并重新构建
+mkdir build_vs
+cd build_vs
+cmake .. -G "Visual Studio 17 2022" -A x64
+cmake --build . --config Release
 
-# 运行玻璃杯测试场景 (推荐)
-./build/bin/Release/UltraRender.exe scenes/glass_cup.scene
+# 运行物理演示 (Glass Cup Demo)
+.\Release\UltraRender.exe --physics --width 800 --height 600
 ```
-
-祝好运！
