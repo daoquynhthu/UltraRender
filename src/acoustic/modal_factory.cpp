@@ -31,15 +31,15 @@ void ModalFactory::generate_modes(ModalModel& model, const AcousticMaterial& mat
     float Ly = std::max(dimensions.y, 0.1f);
     float Lz = std::max(dimensions.z, 0.1f);
     
-    // Increase mode count for more detail if needed, but 2x2x2 is basic
-    // For "First Principles", we might want more modes? 
-    // User asked to continue developing, so let's stick to current logic but maybe prepare for expansion.
-    // Keeping nx, ny, nz <= 2 for now to match previous logic, but this is where we'd expand.
-    
-    for (int nx = 0; nx <= 2; ++nx) {
-        for (int ny = 0; ny <= 2; ++ny) {
-            for (int nz = 0; nz <= 2; ++nz) {
+    // Increase mode count for richer, less synthetic sound
+    // Expanding to 5x5x5 modes
+    for (int nx = 0; nx <= 5; ++nx) {
+        for (int ny = 0; ny <= 5; ++ny) {
+            for (int nz = 0; nz <= 5; ++nz) {
                 if (nx == 0 && ny == 0 && nz == 0) continue;
+                
+                // Limit total order to avoid explosion of high-frequency garbage
+                if (nx + ny + nz > 8) continue;
                 
                 float term_x = (float)nx / Lx;
                 float term_y = (float)ny / Ly;
@@ -53,7 +53,9 @@ void ModalFactory::generate_modes(ModalModel& model, const AcousticMaterial& mat
                 freq *= rand_detune;
 
                 // Damping
-                float damping = (std::numbers::pi_v<float> * freq * mat.loss_factor);
+                // Add base damping (air resistance) to prevent infinite sustain at low frequencies
+                float base_damping = 2.0f; 
+                float damping = base_damping + (std::numbers::pi_v<float> * freq * mat.loss_factor);
                 
                 // High frequency damping
                 // For Glass: Relax this to allow crisp high notes

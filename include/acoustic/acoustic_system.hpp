@@ -11,6 +11,10 @@
 #include <memory>
 
 namespace ure {
+namespace physics {
+    class PhysicsWorld;
+}
+
 namespace acoustic {
 
 // The main acoustic system
@@ -30,8 +34,12 @@ public:
     // Returns a vector of samples (interleaved stereo L, R, L, R...)
     std::vector<float> generate_samples(float duration, int sample_rate);
 
-    // Register a rigid body's acoustic model
+    // Register a rigid body for acoustic simulation
+    // dimensions: Used to estimate mode frequencies (L, W, H)
     void register_body(int body_id, const AcousticMaterial& mat, const ure::core::Vec3<float>& dimensions);
+
+    // Register material properties for Ray Tracing (e.g. for static walls)
+    void register_material(int material_id, const AcousticMaterial& mat);
 
     // Set listener transform for spatial audio
     void set_listener(const ure::core::Vec3<float>& pos, const ure::core::Vec3<float>& forward, const ure::core::Vec3<float>& up);

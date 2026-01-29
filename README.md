@@ -35,14 +35,14 @@ UltraRender 不仅仅是一个图形渲染器，而是一个**物理光学模拟
 - [x] **Material ID & Uber-Shader**: 已彻底抛弃虚函数，实现基于 Material Type 的分支调度。
 - [x] **Megakernel -> Wavefront 重构**: 正在拆分光线生成、求交、着色逻辑。
 - [x] **光谱并行化**: 已引入 `GpuSpectrum` 结构，准备进行 Wavelength Packet 矢量化计算。
-- [ ] **显存外光谱纹理**: 实现 TB 级光谱数据的流式加载 (Streaming)。
+- [x] **显存外光谱纹理**: 实现 TB 级光谱数据的流式加载 (Streaming)。
 
 ### 阶段三：超越几何光学 (Beyond Ray Optics) [进行中]
 - [x] **偏振光渲染 (Polarization)**: 引入 Stokes 矢量与 Mueller 矩阵，模拟天空偏振、全反射相位偏移。
 - [x] **光谱金属材质**: 支持基于波长的复折射率 (n, k) 渲染（金、铜、铝等预设）。
 - [x] **薄膜干涉 (Thin-film Interference)**: 实现了完整的 Airy Summation 公式，支持多重反射干涉，并增加了基于 UV 的重力厚度调制。
 - [x] **体积光与次表面散射 (Volume/SSS)**: 已完成内核与场景解析联动，支持全局雾与材质内部 SSS (均质介质)。
-- [ ] **波动光学接口 (Wave Optics)**: 探索在微观尺度引入波动方程，精确模拟昆虫翅膀的结构色 (Structural Color)。
+- [] **波动光学接口 (Wave Optics)**: 探索在微观尺度引入波动方程，精确模拟昆虫翅膀的结构色 (Structural Color)。
 - [ ] **荧光与磷光 (Fluorescence & Phosphorescence)**: 支持波长偏移 (Wavelength Shifting) 的材质路径追踪。
 
 ### 阶段四：AI 物理融合 (AI-Physics Hybrid) [远期]

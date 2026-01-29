@@ -9,6 +9,8 @@
 
 #include "core/ray.hpp"
 
+namespace ure { namespace acoustic { class AcousticSystem; } }
+
 namespace ure::physics {
 
 struct RayCastHit {
@@ -47,10 +49,14 @@ public:
     
     std::shared_ptr<FluidSystem> get_fluid_system() { return fluid_system; }
 
+    std::shared_ptr<ure::acoustic::AcousticSystem> get_acoustic_system() const { return acoustic_system; }
+    void set_acoustic_system(std::shared_ptr<ure::acoustic::AcousticSystem> system) { acoustic_system = system; }
+
 private:
     std::vector<std::shared_ptr<RigidBody>> bodies;
     std::vector<std::shared_ptr<Collider>> colliders;
     std::shared_ptr<FluidSystem> fluid_system;
+    std::shared_ptr<ure::acoustic::AcousticSystem> acoustic_system;
     std::vector<IPhysicsEventListener*> listeners;
     ure::core::Vec3<float> gravity;
 

@@ -23,13 +23,19 @@ struct ModalMode {
     int nx, ny, nz;
 };
 
-// Acoustic properties of a material (for procedural modal generation)
+// Acoustic properties of a material
 struct AcousticMaterial {
     std::string name;
+    // Mechanical properties (for Modal Synthesis)
     float density;         // kg/m^3
     float youngs_modulus;  // Pa
     float poisson_ratio;   // dimensionless
     float loss_factor;     // internal damping
+    
+    // Surface properties (for Ray Tracing)
+    float absorption_coeff = 0.1f; // 0.0 = perfect reflector, 1.0 = perfect absorber
+    float scattering_coeff = 0.1f; // 0.0 = perfect specular, 1.0 = perfect diffuse
+    float transmission_coeff = 0.0f; // 0.0 = opaque, >0 = transparent
 };
 
 // Represents the acoustic model of a rigid body
@@ -65,6 +71,9 @@ struct ActiveSoundInstance {
     // DSP State (Delay Line)
     std::vector<float> signal_history;
     size_t history_cursor = 0;
+    
+    // Smooth delay state for Doppler
+    float current_delay_samples = 0.0f;
 };
 
 // Registry of acoustic properties (prototypes)

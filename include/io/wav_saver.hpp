@@ -1,6 +1,8 @@
 #pragma once
-#include <string>
+
+#include "core/vector.hpp"
 #include <vector>
+#include <string>
 
 namespace ure {
 namespace io {

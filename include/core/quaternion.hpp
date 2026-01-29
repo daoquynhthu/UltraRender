@@ -3,6 +3,7 @@
 #include "vector.hpp"
 #include "matrix.hpp"
 #include <cmath>
+#include <concepts>
 
 namespace ure::core {
 

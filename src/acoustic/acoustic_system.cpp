@@ -1,5 +1,6 @@
 #include "acoustic/acoustic_system.hpp"
 #include "physics/rigid_body.hpp"
+#include "physics/physics_world.hpp"
 #include <iostream>
 #include <algorithm>
 #include <numbers>
@@ -68,7 +69,9 @@ void AcousticSystem::on_collision(const ure::physics::CollisionEvent& event) {
 
         // Use impulse directly as excitation force
         std::cout << "[Acoustic] Excited Body (MatID: " << mat_id << ") Impulse: " << event.impulse_magnitude << std::endl;
-        excite_modes(instance->model, event.impulse_magnitude, local_point, instance->dimensions);
+        
+        // Reduced gain from 0.1 to 0.025 to compensate for higher mode count (5x5x5) and prevent clipping
+        excite_modes(instance->model, event.impulse_magnitude * 0.25f, local_point, instance->dimensions);
     };
 
     if (has_a) handle_body(event.body_a, id_a);
@@ -76,6 +79,7 @@ void AcousticSystem::on_collision(const ure::physics::CollisionEvent& event) {
 }
 
 void AcousticSystem::update(float dt) {
+    (void)dt; // Unused parameter
     // Update Ray Tracing for Paths (Throttled: every 5 frames ~ 12Hz)
     static int frame_counter = 0;
     if (ray_tracer && (frame_counter++ % 5 == 0)) {
@@ -138,6 +142,17 @@ void AcousticSystem::register_body(int body_id, const AcousticMaterial& mat, con
     proto.model = model;
     proto.dimensions = dimensions;
     model_prototypes[body_id] = proto;
+    
+    // Update Ray Tracer
+    if (ray_tracer) {
+        ray_tracer->set_material(body_id, mat);
+    }
+}
+
+void AcousticSystem::register_material(int material_id, const AcousticMaterial& mat) {
+    if (ray_tracer) {
+        ray_tracer->set_material(material_id, mat);
+    }
 }
 
 void AcousticSystem::excite_modes(ModalModel& model, float impulse, const ure::core::Vec3<float>& local_point, const ure::core::Vec3<float>& dimensions) {

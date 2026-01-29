@@ -55,10 +55,17 @@ std::pair<float, float> SpatialProcessor::process_and_mix(std::vector<ActiveSoun
         
         // --- 3. Spatial Mixing (Multi-Path) ---
         if (instance.paths.empty()) {
-            // Fallback: Simple Direct Path (No Occlusion/Delay for robustness)
-            // Used when RayTracer hasn't run yet or fails
+            // Fallback: Simple Direct Path
             float dist = (instance.body->position - listener.position).length();
-            float attn = 1.0f / (1.0f + dist * 0.5f); // Simple rollover
+            float target_delay = dist / 343.0f * sample_rate;
+            
+            // Smooth delay update (One-pole filter for Doppler)
+            // Tau = 0.05s -> Alpha ~ 0.0005 at 44.1kHz
+            float alpha = 0.0005f;
+            if (instance.current_delay_samples < 0.1f) instance.current_delay_samples = target_delay; // Init
+            instance.current_delay_samples += (target_delay - instance.current_delay_samples) * alpha;
+            
+            float attn = 1.0f / (1.0f + dist * 0.5f); 
             
             // Panning
             float pan = 0.0f;
@@ -69,74 +76,80 @@ std::pair<float, float> SpatialProcessor::process_and_mix(std::vector<ActiveSoun
             float pan_l = 0.7f - 0.3f * pan;
             float pan_r = 0.7f + 0.3f * pan;
             
-            sample_l += raw_sample * attn * pan_l;
-            sample_r += raw_sample * attn * pan_r;
+            // Read with linear interpolation
+            float read_pos = (float)instance.history_cursor - instance.current_delay_samples;
+            int r0 = (int)std::floor(read_pos);
+            float frac = read_pos - r0;
+            
+            // Wrap indices
+            int buf_size = (int)instance.signal_history.size();
+            auto get_sample = [&](int idx) {
+                while (idx < 0) idx += buf_size;
+                while (idx >= buf_size) idx -= buf_size;
+                return instance.signal_history[idx];
+            };
+            
+            float val = get_sample(r0) * (1.0f - frac) + get_sample(r0 + 1) * frac;
+            
+            sample_l += val * attn * pan_l;
+            sample_r += val * attn * pan_r;
             
         } else {
             // Use Ray-Traced Paths
+            // Use the first path (shortest) to drive the main Doppler delay
+            float main_dist = instance.paths[0].total_distance;
+            float target_main_delay = main_dist / 343.0f * sample_rate;
+            
+            // Smooth
+            float alpha = 0.0005f;
+             if (instance.current_delay_samples < 0.1f) instance.current_delay_samples = target_main_delay;
+            instance.current_delay_samples += (target_main_delay - instance.current_delay_samples) * alpha;
+            
             for (const auto& path : instance.paths) {
-                // Calculate Delay
-                float delay_sec = path.total_distance / 343.0f;
-                int delay_samples = (int)(delay_sec * sample_rate);
+                // Calculate relative delay offset from main path
+                // This ensures all paths share the smooth Doppler shift of the main path
+                // while maintaining their relative timing structure.
+                float dist_offset = path.total_distance - main_dist;
+                float delay_offset = dist_offset / 343.0f * sample_rate;
                 
-                // Read from history (Circular Buffer)
-                // read_idx = write_idx - delay
-                int read_idx = (int)instance.history_cursor - delay_samples;
+                float effective_delay = instance.current_delay_samples + delay_offset;
                 
-                // Wrap around
+                // Read with lerp
+                float read_pos = (float)instance.history_cursor - effective_delay;
+                int r0 = (int)std::floor(read_pos);
+                float frac = read_pos - r0;
+                
                 int buf_size = (int)instance.signal_history.size();
-                while (read_idx < 0) read_idx += buf_size;
-                while (read_idx >= buf_size) read_idx -= buf_size; // Should not happen with positive delay
+                auto get_sample = [&](int idx) {
+                    while (idx < 0) idx += buf_size;
+                    while (idx >= buf_size) idx -= buf_size;
+                    return instance.signal_history[idx];
+                };
                 
-                float delayed_signal = instance.signal_history[read_idx];
+                float val = get_sample(r0) * (1.0f - frac) + get_sample(r0 + 1) * frac;
                 
                 // Attenuation: 1/r law + material absorption
                 float dist = std::max(0.1f, path.total_distance);
                 float gain = path.attenuation * (1.0f / dist); 
                 
-                // Air Absorption (High freq rolloff approximation via gain reduction)
-                // -0.005 dB per meter approx? 
-                // Let's use simple exp decay
+                // Air Absorption
                 gain *= std::exp(-0.05f * dist); 
                 
-                // Panning (Based on arrival direction)
-                // Direction of the last segment (from last bounce/source TO listener)
-                // path.points has [Source, Bounce1, ..., Listener]
-                // Direction = (Listener - PrevPoint).normalize()
+                // Panning based on arrival direction
                 ure::core::Vec3<float> arrival_dir;
                 if (path.points.size() >= 2) {
                     ure::core::Vec3<float> prev_point = path.points[path.points.size()-2];
                     arrival_dir = (listener.position - prev_point).normalize();
                 } else {
-                    // Should not happen, fallback to forward
                     arrival_dir = listener.forward;
                 }
-                
-                // Pan: Dot product with Right vector
-                // If arrival is from Right (dot > 0), Right channel louder.
-                // arrival_dir is pointing AT listener. 
-                // Wait. Panning usually based on "Source Direction" (Listener -> Source).
-                // If sound comes FROM Right, arrival_dir is (-1, 0, 0) (Left).
-                // So (Listener - Source) is (1, 0, 0) (Right).
-                // My logic: arrival_dir = Listener - PrevPoint. 
-                // Example: Source at (10,0,0), Listener at (0,0,0).
-                // PrevPoint = (10,0,0). Listener = (0,0,0).
-                // arrival_dir = (-10, 0, 0) normalized -> (-1, 0, 0).
-                // listener.right = (1, 0, 0).
-                // dot = -1.
-                // Sound coming from Right should map to Right channel.
-                // If dot is -1, it means "Coming from Right".
-                // So pan = -dot.
-                // Let's verify: 
-                // Source is Right. arrival_dir is Left. dot is -1.
-                // pan = -(-1) = 1. (Full Right). Correct.
                 
                 float pan = -arrival_dir.dot(listener.right);
                 float pan_l = 0.7f - 0.3f * pan;
                 float pan_r = 0.7f + 0.3f * pan;
                 
-                sample_l += delayed_signal * gain * pan_l;
-                sample_r += delayed_signal * gain * pan_r;
+                sample_l += val * gain * pan_l;
+                sample_r += val * gain * pan_r;
             }
         }
         

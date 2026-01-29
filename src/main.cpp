@@ -14,6 +14,8 @@
 #include "physics/physics_events.hpp"
 #include "physics/marching_cubes.hpp"
 #include "acoustic/acoustic_system.hpp"
+#include "io/wav_saver.hpp"
+#include "core/quaternion.hpp"
 
 using namespace ure;
 
@@ -163,7 +165,7 @@ int main(int argc, char* argv[]) {
     std::shared_ptr<ure::physics::PhysicsWorld> physics_world;
     
     // Acoustic System
-    ure::acoustic::AcousticSystem acoustic_system;
+    auto acoustic_system = std::make_shared<ure::acoustic::AcousticSystem>();
 
     // Map to track dynamic entities for visual updates
     struct DynamicBody {
@@ -189,13 +191,14 @@ int main(int argc, char* argv[]) {
             physics_world = std::make_shared<ure::physics::PhysicsWorld>();
             
             // Register Acoustic System
-            physics_world->register_listener(&acoustic_system);
+            physics_world->register_listener(acoustic_system.get());
+            
+            // Link Acoustic System to Physics World (for Ray Tracing)
+            acoustic_system->set_physics_world(physics_world.get());
             
             // Define some acoustic materials (IDs must match scene/logic)
             // ID 1: Metal, ID 2: Wood, ID 3: Glass
-            acoustic_system.register_body(1, {"Metal", 7800.0f, 200e9f, 0.33f, 0.001f}, {1.0f, 1.0f, 1.0f});
-            acoustic_system.register_body(2, {"Wood", 700.0f, 10e9f, 0.4f, 0.05f}, {1.0f, 1.0f, 1.0f});
-            acoustic_system.register_body(3, {"Glass", 2500.0f, 70e9f, 0.2f, 0.0002f}, {1.0f, 1.0f, 1.0f});
+            // Removed hardcoded registration here. Will be handled per-entity.
 
             // Initialize Fluid System
             if (scene.physics.fluid.enabled) {
@@ -359,27 +362,39 @@ int main(int argc, char* argv[]) {
                     }
                     
                     // Track dynamic bodies
+                    // Define Acoustic Props first
+                    ure::acoustic::AcousticMaterial mat_props;
+                    int mid = entity.rigid_body.material_id;
+                    
+                    if (mid == 3 || (mid == 0 && entity.material && entity.material->type == MaterialType::Dielectric)) {
+                        // Glass: Low absorption, High transmission
+                        mat_props = {"Glass", 2500.0f, 70e9f, 0.2f, 0.003f, 0.05f, 0.05f, 0.9f};
+                    } else if (mid == 1 || (mid == 0 && entity.material && entity.material->type == MaterialType::Metal)) {
+                        // Metal: Very low absorption
+                        // Increased damping from 0.001 to 0.005 to reduce ringing
+                        mat_props = {"Metal", 7800.0f, 200e9f, 0.33f, 0.005f, 0.02f, 0.1f, 0.0f};
+                    } else if (mid == 2 || (mid == 0 && entity.material && entity.material->type == MaterialType::Lambertian)) {
+                        // Wood
+                        mat_props = {"Wood", 700.0f, 10e9f, 0.4f, 0.05f, 0.4f, 0.5f, 0.0f};
+                    } else if (mid == 4) {
+                        // Concrete Wall (Hard, reflective)
+                        mat_props = {"Concrete", 2400.0f, 30e9f, 0.2f, 0.01f, 0.1f, 0.3f, 0.0f};
+                    } else if (mid == 5) {
+                        // Carpet/Ground (Soft, absorptive)
+                        mat_props = {"Carpet", 100.0f, 0.1e9f, 0.4f, 0.5f, 0.8f, 0.6f, 0.0f};
+                    } else {
+                        mat_props = {"Generic", 1000.0f, 1e9f, 0.3f, 0.1f, 0.2f, 0.2f, 0.0f};
+                    }
+
+                    // Register Material for Ray Tracer (Static & Dynamic)
+                    acoustic_system->register_material(mid, mat_props);
+
                     if (entity.rigid_body.mass > 0.0f) {
                         dynamic_bodies.push_back({(int)i, rb});
                         std::cout << "[Main] Registered Dynamic Body for Entity " << i 
                                   << " (Mass: " << entity.rigid_body.mass << ")" << std::endl;
                         
-                        // Register for Acoustic System
-                        ure::acoustic::AcousticMaterial mat_props;
-                        int mid = entity.rigid_body.material_id;
-                        
-                        if (mid == 3 || (mid == 0 && entity.material && entity.material->type == MaterialType::Dielectric)) {
-                            // Reduced damping for crisper glass sound (0.002 -> 0.0002)
-                            // Fix: Increased damping to 0.003f to prevent "bell-like" infinite sustain.
-                            mat_props = {"Glass", 2500.0f, 70e9f, 0.2f, 0.003f};
-                        } else if (mid == 1 || (mid == 0 && entity.material && entity.material->type == MaterialType::Metal)) {
-                            mat_props = {"Metal", 7800.0f, 200e9f, 0.33f, 0.001f};
-                        } else if (mid == 2 || (mid == 0 && entity.material && entity.material->type == MaterialType::Lambertian)) {
-                            mat_props = {"Wood", 700.0f, 10e9f, 0.4f, 0.05f};
-                        } else {
-                            mat_props = {"Generic", 1000.0f, 1e9f, 0.3f, 0.1f};
-                        }
-                        
+                        // Register for Acoustic System (Modal Synthesis)
                         ure::core::Vec3<float> dims = {1.0f, 1.0f, 1.0f};
                         if (entity.rigid_body.collider_type == "box") {
                             dims = {entity.rigid_body.collider_size.x, entity.rigid_body.collider_size.y, entity.rigid_body.collider_size.z};
@@ -389,24 +404,14 @@ int main(int argc, char* argv[]) {
                         }
                         
                         // Use material_id as body_id (simplified)
-                        // Need to ensure unique IDs if multiple bodies share material. 
-                        // But AcousticSystem currently uses ID as key. 
-                        // If we use material_id, all glass spheres share the same model. That's fine for now.
-                        // Actually, we should use entity index or something unique.
-                        // But CollisionEvent gives RigidBody*, which has material_id.
-                        // If we want unique sounds per body, we need unique IDs in RigidBody.
-                        // For now, let's use material_id but we might overwrite dimensions if they differ.
-                        // Ideally, we assign a unique ID to each RigidBody and map it.
-                        // But RigidBody struct only has material_id.
-                        // Let's stick to material_id for this demo.
-                        acoustic_system.register_body(entity.rigid_body.material_id, mat_props, dims);
+                        acoustic_system->register_body(mid, mat_props, dims);
                     }
-                }
+            }
             }
             
             // Also register Acoustic System listener here for loaded scenes!
             if (physics_world) {
-                physics_world->register_listener(&acoustic_system);
+                physics_world->register_listener(acoustic_system.get());
             }
         }
     } else {
@@ -424,16 +429,16 @@ int main(int argc, char* argv[]) {
             physics_world = std::make_shared<PhysicsWorld>();
 
             // Register Acoustic System
-            physics_world->register_listener(&acoustic_system);
+            physics_world->register_listener(acoustic_system.get());
             
             // Define default materials
             // Metal: Low damping (long ring), High stiffness
-            acoustic_system.register_body(1, {"Metal", 7800.0f, 200e9f, 0.33f, 0.001f}, {1.0f, 1.0f, 1.0f});
+            // Increased damping from 0.001 to 0.005
+            acoustic_system->register_body(1, {"Metal", 7800.0f, 200e9f, 0.33f, 0.005f}, {1.0f, 1.0f, 1.0f});
             // Wood: High damping (thud), Low stiffness
-            acoustic_system.register_body(2, {"Wood", 700.0f, 10e9f, 0.4f, 0.05f}, {1.0f, 1.0f, 1.0f});
-            // Glass: Medium damping (ping), Medium stiffness. 
-            // Fix: Increased damping to 0.003f to prevent "bell-like" infinite sustain.
-            acoustic_system.register_body(3, {"Glass", 2500.0f, 70e9f, 0.2f, 0.003f}, {1.0f, 1.0f, 1.0f});
+            acoustic_system->register_body(2, {"Wood", 700.0f, 10e9f, 0.4f, 0.05f, 0.2f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f});
+            // Glass: High stiffness, Low damping, Transparent to sound (Refraction test)
+            acoustic_system->register_body(3, {"Glass", 2500.0f, 70e9f, 0.24f, 0.002f, 0.05f, 0.1f, 0.8f}, {1.0f, 1.0f, 1.0f});
         
         // 1. Setup Physics World (Glass Cup Demo)
         // Floor (Static Plane)
@@ -881,11 +886,11 @@ int main(int argc, char* argv[]) {
         ure::core::Vec3<float> cam_up(scene.camera.up.x, scene.camera.up.y, scene.camera.up.z);
         // Manual subtraction to avoid operator lookup issues
         ure::core::Vec3<float> cam_forward(cam_look.x - cam_pos.x, cam_look.y - cam_pos.y, cam_look.z - cam_pos.z);
-        acoustic_system.set_listener(cam_pos, cam_forward, cam_up);
+        acoustic_system->set_listener(cam_pos, cam_forward, cam_up);
         
         // Link Physics World for Ray Tracing
         if (physics_world) {
-            acoustic_system.set_physics_world(physics_world.get());
+            acoustic_system->set_physics_world(physics_world.get());
         }
         
         std::cout << "[Main] Spatial Audio Listener set at: " << cam_pos.x << ", " << cam_pos.y << ", " << cam_pos.z << std::endl;
@@ -958,7 +963,7 @@ int main(int argc, char* argv[]) {
                     physics_world->step(dt);
                     
                     // 2. Synthesize Audio
-                    std::vector<float> frame_audio = acoustic_system.generate_samples(dt, sample_rate);
+                    std::vector<float> frame_audio = acoustic_system->generate_samples(dt, sample_rate);
                     audio_buffer.insert(audio_buffer.end(), frame_audio.begin(), frame_audio.end());
                     
                     std::cout << " Done. (Audio Samples: " << frame_audio.size() << ")" << std::endl;
