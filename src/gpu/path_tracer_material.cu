@@ -44,6 +44,8 @@ static __device__ inline bool hit_sphere(const GpuSphere& sphere, const GpuRay& 
         if (temp < t_max && temp > t_min) {
             t = temp;
             p = r.at(t);
+            // Project p to the sphere surface for improved precision
+            p = sphere.center + (p - sphere.center).normalize() * sphere.radius;
             n = (p - sphere.center) * (1.0f / sphere.radius);
             mat_idx = sphere.material_index;
             return true;
@@ -52,6 +54,8 @@ static __device__ inline bool hit_sphere(const GpuSphere& sphere, const GpuRay& 
         if (temp < t_max && temp > t_min) {
             t = temp;
             p = r.at(t);
+            // Project p to the sphere surface for improved precision
+            p = sphere.center + (p - sphere.center).normalize() * sphere.radius;
             n = (p - sphere.center) * (1.0f / sphere.radius);
             mat_idx = sphere.material_index;
             return true;
@@ -497,9 +501,9 @@ static __device__ inline bool scatter(
         scattered.direction = scatter_direction.normalize();
         
         GpuVec3 offset = (scattered.direction.dot(n) > 0.0f) ? n : -n;
-        scattered.origin = p + offset * 1e-3f; 
+        scattered.origin = p + offset * 1e-4f; 
         
-        scattered.t_min = 1e-3f; 
+        scattered.t_min = 1e-4f; 
         scattered.t_max = FLT_MAX;
         attenuation = mat.albedo;
         
@@ -634,9 +638,10 @@ static __device__ inline bool scatter(
 
         rotate_stokes(stokes, 2.0f * phi_out);
         
+        // Use Robust Offset based on scatter direction and geometric normal N (not H)
         GpuVec3 offset = (scattered.direction.dot(N) > 0.0f) ? N : -N;
-        scattered.origin = p + offset * 1e-3f; 
-        scattered.t_min = 1e-3f;
+        scattered.origin = p + offset * 1e-4f; 
+        scattered.t_min = 1e-4f;
         scattered.t_max = FLT_MAX;
 
         return (scattered.direction.dot(N) > 0);
@@ -836,8 +841,8 @@ static __device__ inline bool scatter(
         rotate_stokes(stokes, 2.0f * phi_out);
 
         GpuVec3 offset = (scattered.direction.dot(n) > 0.0f) ? n : -n;
-        scattered.origin = p + offset * 1e-3f; 
-        scattered.t_min = 1e-3f;
+        scattered.origin = p + offset * 1e-4f; 
+        scattered.t_min = 1e-4f;
         scattered.t_max = FLT_MAX;
         
         return true;
@@ -855,8 +860,8 @@ static __device__ inline bool scatter(
         scattered.direction = scatter_direction.normalize();
         
         GpuVec3 offset = (scattered.direction.dot(n) > 0.0f) ? n : -n;
-        scattered.origin = p + offset * 1e-3f;
-        scattered.t_min = 1e-3f;
+        scattered.origin = p + offset * 1e-4f;
+        scattered.t_min = 1e-4f;
         scattered.t_max = FLT_MAX;
         return true;
     }

@@ -185,30 +185,30 @@ struct alignas(16) GpuSpectrum {
         wavelengths = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
     }
 
-    __host__ __device__ GpuSpectrum operator*(const GpuSpectrum& other) const {
-        GpuSpectrum res;
-        res.values = values * other.values;
-        res.wavelengths = wavelengths;
-        return res;
-    }
-
     __host__ __device__ GpuSpectrum operator+(const GpuSpectrum& other) const {
         GpuSpectrum res;
-        res.values = values + other.values;
+        res.values = make_float4(values.x + other.values.x, values.y + other.values.y, values.z + other.values.z, values.w + other.values.w);
         res.wavelengths = wavelengths;
         return res;
     }
 
     __host__ __device__ GpuSpectrum operator-(const GpuSpectrum& other) const {
         GpuSpectrum res;
-        res.values = values - other.values;
+        res.values = make_float4(values.x - other.values.x, values.y - other.values.y, values.z - other.values.z, values.w - other.values.w);
         res.wavelengths = wavelengths;
         return res;
     }
     
     __host__ __device__ GpuSpectrum operator*(float s) const {
         GpuSpectrum res;
-        res.values = values * s;
+        res.values = make_float4(values.x * s, values.y * s, values.z * s, values.w * s);
+        res.wavelengths = wavelengths;
+        return res;
+    }
+    
+    __host__ __device__ GpuSpectrum operator*(const GpuSpectrum& other) const {
+        GpuSpectrum res;
+        res.values = make_float4(values.x * other.values.x, values.y * other.values.y, values.z * other.values.z, values.w * other.values.w);
         res.wavelengths = wavelengths;
         return res;
     }

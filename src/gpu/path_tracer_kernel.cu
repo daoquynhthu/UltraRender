@@ -9,6 +9,7 @@
 
 #include "gpu/gpu_driver.hpp"
 #include "gpu/gpu_structs.hpp"
+#include "gpu/gpu_spectrum_utils.cuh"
 #include "gpu/path_tracer_sampling.cuh"
 #include "gpu/gpu_scene_loader.hpp"
 #include "gpu/bvh_builder.hpp"
@@ -25,6 +26,8 @@ void check_cuda(cudaError_t result, char const *const func, const char *const fi
 }
 
 namespace ure::gpu {
+
+using namespace ure::gpu;
 
 __global__ void resolve_framebuffer_kernel(
     GpuVec3* accum_buffer,
@@ -117,6 +120,8 @@ __device__ bool hit_sphere(const GpuSphere& sphere, const GpuRay& r, float t_min
         if (temp < t_max && temp > t_min) {
             t = temp;
             p = r.at(t);
+            // Project p to the sphere surface for improved precision
+            p = sphere.center + (p - sphere.center).normalize() * sphere.radius;
             n = (p - sphere.center) * (1.0f / sphere.radius);
             mat_idx = sphere.material_index;
             return true;
@@ -125,6 +130,8 @@ __device__ bool hit_sphere(const GpuSphere& sphere, const GpuRay& r, float t_min
         if (temp < t_max && temp > t_min) {
             t = temp;
             p = r.at(t);
+            // Project p to the sphere surface for improved precision
+            p = sphere.center + (p - sphere.center).normalize() * sphere.radius;
             n = (p - sphere.center) * (1.0f / sphere.radius);
             mat_idx = sphere.material_index;
             return true;
@@ -273,7 +280,7 @@ __device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float
     return hit_anything;
 }
 
-__device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& p_out, GpuVec3& n_out, GpuVec3& ng_out, GpuVec2& uv_out, int& mat_idx_out, int& type_out, int& index_out) {
+__device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& p_out, GpuVec3& n_out, GpuVec3& ng_out, GpuVec2& uv_out, int& mat_idx_out, int& type_out, int& index_out, bool ignore_lights = false) {
     float t_closest = t_max;
     bool hit_anything = false;
     float t_temp;
@@ -282,6 +289,8 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
 
     // Check Spheres
     for (int i = 0; i < scene.sphere_count; ++i) {
+        if (ignore_lights && scene.materials[scene.spheres[i].material_index].type == MaterialType::Light) continue;
+        
         if (hit_sphere(scene.spheres[i], r, t_min, t_closest, t_temp, p_temp, n_temp, mat_idx_temp)) {
             hit_anything = true;
             t_closest = t_temp;
@@ -307,6 +316,9 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
     // Check Instances
     for (int i = 0; i < scene.instance_count; ++i) {
         const GpuInstance& inst = scene.instances[i];
+        
+        // Note: For instances, we'd need to check mesh material if we wanted to ignore lights.
+        // But lights are usually spheres in this engine.
         
         // AABB Check in World Space
         if (!hit_aabb(r, inst.min_pt, inst.max_pt, t_min, t_closest)) {
@@ -802,17 +814,19 @@ __device__ float pdf_bsdf(const GpuMaterial& mat, const GpuVec3& n, const GpuVec
     return 0.0f;
 }
 
-__device__ GpuSpectrum eval_bsdf(const GpuMaterial& mat, const GpuVec3& p, const GpuVec3& n, const GpuVec3& wo, const GpuVec3& wi) {
+__device__ GpuSpectrum eval_bsdf(const GpuMaterial& mat, const GpuVec3& p, const GpuVec3& n, const GpuVec3& wo, const GpuVec3& wi, float4 wavelengths) {
+    GpuSpectrum albedo_spec = rgb_to_spectrum(mat.albedo.to_rgb(), wavelengths);
+    
     if (mat.type == MaterialType::Lambertian) {
         float cosine = n.dot(wi);
         if (cosine > 0.0f) {
-            return mat.albedo * 0.318309886f;
+            return albedo_spec * 0.318309886f;
         }
     } else if (mat.type == MaterialType::Cloth) {
         float cosine = n.dot(wi);
         if (cosine > 0.0f) {
             float intensity = get_cloth_intensity(p);
-            return mat.albedo * intensity * 0.318309886f;
+            return albedo_spec * intensity * 0.318309886f;
         }
     } else if (mat.type == MaterialType::Metal) {
         GpuVec3 V = wo;
@@ -831,17 +845,32 @@ __device__ GpuSpectrum eval_bsdf(const GpuMaterial& mat, const GpuVec3& p, const
         float D = ggx_D(NdotH, mat.roughness);
         
         float rough = fmaxf(0.001f, mat.roughness);
-        float k = (rough + 1.0f);
-        k = (k * k) * 0.125f;
-        float G = smith_G(NdotV, NdotL, k);
+        float k_val = (rough + 1.0f);
+        k_val = (k_val * k_val) * 0.125f;
+        float G = smith_G(NdotV, NdotL, k_val);
         
-        // Approx Fresnel (Schlick)
-        float one_minus = powf(1.0f - fmaxf(0.0f, VdotH), 5.0f);
-        // Note: Assuming mat.albedo is F0
-        GpuSpectrum F0 = mat.albedo;
-        GpuSpectrum F = F0 + (GpuSpectrum(1.0f) - F0) * one_minus;
+        // Correct Spectral Fresnel for eval_bsdf
+        GpuSpectrum fresnel_spec;
+        fresnel_spec.wavelengths = wavelengths;
         
-        return F * (D * G / (4.0f * NdotV * NdotL));
+        bool use_albedo_fresnel = (mat.extinction.values.x * mat.extinction.values.x + mat.extinction.values.y * mat.extinction.values.y + mat.extinction.values.z * mat.extinction.values.z) < 1e-8f;
+        
+        if (use_albedo_fresnel) {
+            GpuSpectrum F0_spec = rgb_to_spectrum(mat.albedo.to_rgb(), wavelengths);
+            float one_minus = powf(1.0f - fmaxf(0.0f, VdotH), 5.0f);
+            GpuSpectrum one_spec(1.0f);
+            one_spec.wavelengths = wavelengths;
+            fresnel_spec = F0_spec + (one_spec - F0_spec) * one_minus;
+        } else {
+            GpuSpectrum K_spec = rgb_to_spectrum(mat.extinction.to_rgb(), wavelengths);
+            float n_val = mat.ior;
+            fresnel_spec.values.x = conductor_fresnel_reflectance(n_val, K_spec.values.x, VdotH);
+            fresnel_spec.values.y = conductor_fresnel_reflectance(n_val, K_spec.values.y, VdotH);
+            fresnel_spec.values.z = conductor_fresnel_reflectance(n_val, K_spec.values.z, VdotH);
+            fresnel_spec.values.w = conductor_fresnel_reflectance(n_val, K_spec.values.w, VdotH);
+        }
+        
+        return fresnel_spec * (D * G / (4.0f * NdotV * NdotL));
     } else if (mat.type == MaterialType::Dielectric) {
         // Delta distribution -> BSDF is Dirac Delta (cannot evaluate as function)
         return GpuSpectrum(0.0f);
@@ -893,13 +922,16 @@ __device__ bool scatter(
         scattered.direction = scatter_direction.normalize(); // Normalize for consistent t
         
         // Offset along normal. For Lambertian, always scatter OUT.
-        // Use Robust Offset: push in direction of scatter to prevent self-intersection
-        GpuVec3 offset = (scattered.direction.dot(n) > 0.0f) ? n : -n;
-        scattered.origin = p + offset * 1e-3f; 
+        // Use Robust Adaptive Offset to prevent self-intersection at grazing angles
+        GpuVec3 offset_dir = (scattered.direction.dot(n) > 0.0f) ? n : -n;
+        float adaptive_eps = 1e-4f / fmaxf(0.01f, fabsf(scattered.direction.dot(n)));
+        scattered.origin = p + offset_dir * adaptive_eps; 
         
-        scattered.t_min = 1e-3f; 
+        scattered.t_min = adaptive_eps; 
         scattered.t_max = FLT_MAX;
-        attenuation = mat.albedo;
+        
+        // Fix: Use spectral upsampling for attenuation to match throughput wavelengths
+        attenuation = rgb_to_spectrum(mat.albedo.to_rgb(), current_throughput.wavelengths);
         
         // Phase 3: Lambertian reflection depolarizes light
         // I remains (handled by attenuation), Q=U=V=0
@@ -1017,44 +1049,47 @@ __device__ bool scatter(
         float microfacet_weight = (G1_L * VdotH) / fmaxf(1e-6f, NdotH * NdotV);
         if (microfacet_weight > 10.0f) microfacet_weight = 10.0f; // Clamp to suppress fireflies
         
-        float base_r = use_albedo_fresnel ? 1.0f : mat.albedo.values.x;
-        float base_g = use_albedo_fresnel ? 1.0f : mat.albedo.values.y;
-        float base_b = use_albedo_fresnel ? 1.0f : mat.albedo.values.z;
-        
-        float tf_boost = 1.0f;
-        // Thin-film interference for metal
-        if (effective_thickness > 0.0f) {
-            // Calculate thin film for all channels
-            float r_base_r = mat.albedo.values.x;
-            float r_base_g = mat.albedo.values.y;
-            float r_base_b = mat.albedo.values.z;
-            
-            float R_tf_r = get_thin_film_interference(650.0f, effective_thickness, mat.thin_film_ior, cos_theta_h, r_base_r);
-            float R_tf_g = get_thin_film_interference(550.0f, effective_thickness, mat.thin_film_ior, cos_theta_h, r_base_g);
-            float R_tf_b = get_thin_film_interference(450.0f, effective_thickness, mat.thin_film_ior, cos_theta_h, r_base_b);
+        // Correct Spectral Metal logic:
+        // Either use Schlick (Albedo) or Physical (n, k).
+        // We calculate a single 'fresnel_spec' that ALREADY contains the color.
+        GpuSpectrum fresnel_spec;
+        fresnel_spec.wavelengths = current_throughput.wavelengths;
 
-            // Calculate per-channel boost
-            float boost_r = R_tf_r / fmaxf(1e-6f, r_base_r);
-            float boost_g = R_tf_g / fmaxf(1e-6f, r_base_g);
-            float boost_b = R_tf_b / fmaxf(1e-6f, r_base_b);
+        if (use_albedo_fresnel) {
+            // Upsample F0 (Albedo) to spectrum
+            GpuSpectrum F0_spec = rgb_to_spectrum(mat.albedo.to_rgb(), fresnel_spec.wavelengths);
+            float one_minus = powf(1.0f - cos_theta_h, 5.0f);
             
-            // Use average boost for Stokes intensity modulation (approximation)
-            tf_boost = (boost_r + boost_g + boost_b) / 3.0f;
-            
-            stokes.I *= tf_boost;
-            stokes.Q *= tf_boost;
-            stokes.U *= tf_boost;
-            stokes.V *= tf_boost;
-            
-            // Update albedo with thin film effect directly
-            attenuation.values.x = base_r * boost_r * fresnel_r * microfacet_weight;
-            attenuation.values.y = base_g * boost_g * fresnel_g * microfacet_weight;
-            attenuation.values.z = base_b * boost_b * fresnel_b * microfacet_weight;
+            // F = F0 + (1 - F0) * (1 - cos)^5
+            GpuSpectrum one_spec(1.0f);
+            one_spec.wavelengths = fresnel_spec.wavelengths;
+            fresnel_spec = F0_spec + (one_spec - F0_spec) * one_minus;
         } else {
-            // Standard Metal
-            attenuation.values.x = base_r * fresnel_r * microfacet_weight;
-            attenuation.values.y = base_g * fresnel_g * microfacet_weight;
-            attenuation.values.z = base_b * fresnel_b * microfacet_weight;
+            // Upsample K (extinction) to spectrum for the 4 wavelengths
+            GpuSpectrum K_spec = rgb_to_spectrum(mat.extinction.to_rgb(), fresnel_spec.wavelengths);
+            
+            // Calculate physical Fresnel for each wavelength
+            // Note: n_val is assumed constant (mat.ior)
+            fresnel_spec.values.x = conductor_fresnel_reflectance(n_val, K_spec.values.x, cos_theta_h);
+            fresnel_spec.values.y = conductor_fresnel_reflectance(n_val, K_spec.values.y, cos_theta_h);
+            fresnel_spec.values.z = conductor_fresnel_reflectance(n_val, K_spec.values.z, cos_theta_h);
+            fresnel_spec.values.w = conductor_fresnel_reflectance(n_val, K_spec.values.w, cos_theta_h);
+        }
+
+        if (effective_thickness > 0.0f) {
+            // Spectral thin film
+            GpuSpectrum tf_spec;
+            tf_spec.wavelengths = current_throughput.wavelengths;
+            // Use RGB channels of base_rgb for thin film weighting as an approximation
+            GpuVec3 base_rgb = mat.albedo.to_rgb();
+            tf_spec.values.x = get_thin_film_interference(tf_spec.wavelengths.x, effective_thickness, mat.thin_film_ior, cos_theta_h, base_rgb.z);
+            tf_spec.values.y = get_thin_film_interference(tf_spec.wavelengths.y, effective_thickness, mat.thin_film_ior, cos_theta_h, base_rgb.y);
+            tf_spec.values.z = get_thin_film_interference(tf_spec.wavelengths.z, effective_thickness, mat.thin_film_ior, cos_theta_h, base_rgb.x);
+            tf_spec.values.w = get_thin_film_interference(tf_spec.wavelengths.w, effective_thickness, mat.thin_film_ior, cos_theta_h, base_rgb.x);
+            
+            attenuation = tf_spec * fresnel_spec * microfacet_weight;
+        } else {
+            attenuation = fresnel_spec * microfacet_weight;
         }
 
         // Phase 3: Rotate Stokes to Outgoing Reference Frame (Missing Logic Fixed)
@@ -1077,10 +1112,11 @@ __device__ bool scatter(
         rotate_stokes(stokes, 2.0f * phi_out);
         
         // Final Setup for Metal
-        // Use Robust Offset based on scatter direction and geometric normal N (not H)
-        GpuVec3 offset = (scattered.direction.dot(N) > 0.0f) ? N : -N;
-        scattered.origin = p + offset * 1e-3f; 
-        scattered.t_min = 1e-3f;
+        // Use Robust Adaptive Offset based on scatter direction and geometric normal N (not H)
+        GpuVec3 offset_dir = (scattered.direction.dot(N) > 0.0f) ? N : -N;
+        float adaptive_eps = 1e-4f / fmaxf(0.01f, fabsf(scattered.direction.dot(N)));
+        scattered.origin = p + offset_dir * adaptive_eps; 
+        scattered.t_min = adaptive_eps;
         scattered.t_max = FLT_MAX;
 
         out_pdf = pdf_bsdf(mat, n, -r_in.direction, scattered.direction);
@@ -1089,7 +1125,9 @@ __device__ bool scatter(
         return (scattered.direction.dot(N) > 0);
     } else if (mat.type == MaterialType::Dielectric) {
         // Default to white for reflection/base
-        attenuation = GpuSpectrum::from_rgb(GpuVec3(1.0f, 1.0f, 1.0f));
+        attenuation = GpuSpectrum(1.0f);
+        attenuation.wavelengths = current_throughput.wavelengths;
+        
         float refraction_ratio = mat.ior; 
 
         // Dispersion and Thin-Film Wavelength Sampling Logic
@@ -1338,11 +1376,12 @@ __device__ bool scatter(
         rotate_stokes(stokes, 2.0f * phi_out);
 
         // Final Setup
-        // Use Robust Offset based on scatter direction and original normal 'n'
+        // Use Robust Adaptive Offset based on scatter direction and original normal 'n'
         // This handles both Reflection (same side) and Refraction (opposite side) correctly
-        GpuVec3 offset = (scattered.direction.dot(n) > 0.0f) ? n : -n;
-        scattered.origin = p + offset * 1e-3f; 
-        scattered.t_min = 1e-3f;
+        GpuVec3 offset_dir = (scattered.direction.dot(n) > 0.0f) ? n : -n;
+        float adaptive_eps = 1e-4f / fmaxf(0.01f, fabsf(scattered.direction.dot(n)));
+        scattered.origin = p + offset_dir * adaptive_eps; 
+        scattered.t_min = adaptive_eps;
         scattered.t_max = FLT_MAX;
         
         return true;
@@ -1358,10 +1397,11 @@ __device__ bool scatter(
         
         scattered.direction = scatter_direction.normalize();
         
-        // Use Robust Offset
-        GpuVec3 offset = (scattered.direction.dot(n) > 0.0f) ? n : -n;
-        scattered.origin = p + offset * 1e-3f;
-        scattered.t_min = 1e-3f;
+        // Use Robust Adaptive Offset
+        GpuVec3 offset_dir = (scattered.direction.dot(n) > 0.0f) ? n : -n;
+        float adaptive_eps = 1e-4f / fmaxf(0.01f, fabsf(scattered.direction.dot(n)));
+        scattered.origin = p + offset_dir * adaptive_eps;
+        scattered.t_min = adaptive_eps;
         scattered.t_max = FLT_MAX;
         
         out_pdf = pdf_bsdf(mat, n, -r_in.direction, scattered.direction);
@@ -1552,7 +1592,7 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
                             GpuVec2 uv_dummy;
                             int mat_dummy;
                             int type_dummy, index_dummy;
-                            bool occluded = world_hit(scene, GpuRay(p_vol, l_dir, 1e-4f, t_to_light - 1e-4f), 1e-4f, t_to_light - 1e-4f, t_dummy, p_dummy, n_dummy, ng_dummy, uv_dummy, mat_dummy, type_dummy, index_dummy);
+                            bool occluded = world_hit(scene, GpuRay(p_vol, l_dir, 1e-4f, t_to_light - 1e-4f), 1e-4f, t_to_light - 1e-4f, t_dummy, p_dummy, n_dummy, ng_dummy, uv_dummy, mat_dummy, type_dummy, index_dummy, true);
                             
                             if (!occluded) {
                                 GpuSpectrum tr_light;
@@ -1694,11 +1734,11 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
                             GpuVec2 uv_dummy;
                             int mat_dummy, type_dummy, index_dummy;
                             
-                            bool occluded = world_hit(scene, GpuRay(p + n * 1e-4f, l_dir, 1e-4f, t_to_light - 1e-3f), 1e-4f, t_to_light - 1e-3f, t_dummy, p_dummy, n_dummy, ng_dummy, uv_dummy, mat_dummy, type_dummy, index_dummy);
+                            bool occluded = world_hit(scene, GpuRay(p + n * 1e-4f, l_dir, 1e-4f, t_to_light - 1e-4f), 1e-4f, t_to_light - 1e-4f, t_dummy, p_dummy, n_dummy, ng_dummy, uv_dummy, mat_dummy, type_dummy, index_dummy, true);
                             
                             if (!occluded) {
-                                GpuSpectrum L_e = scene.materials[light_sphere.material_index].emission;
-                                GpuSpectrum f_r = eval_bsdf(mat, p, n, -r.direction, l_dir);
+                            GpuSpectrum L_e = emission_to_spectrum(scene.materials[light_sphere.material_index].emission.to_rgb(), accumulated_color.wavelengths);
+                                GpuSpectrum f_r = eval_bsdf(mat, p, n, -r.direction, l_dir, accumulated_color.wavelengths);
                                 float bsdf_pdf = pdf_bsdf(mat, n, -r.direction, l_dir);
                                 float mis_weight = power_heuristic(light_pdf, bsdf_pdf);
                                 
@@ -1836,13 +1876,19 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
             
             if (alignment > sun_focus) {
                 // Hit the sun
-                final_color = final_color + accumulated_color * GpuSpectrum::from_rgb(GpuVec3(sun_intensity, sun_intensity, sun_intensity));
+                GpuSpectrum sun_spec = emission_to_spectrum(GpuVec3(sun_intensity, sun_intensity, sun_intensity), accumulated_color.wavelengths);
+                final_color = final_color + accumulated_color * sun_spec;
             } else {
-                // Sky Ambient (Blue-ish gradient)
-                // Use a darker sky to emphasize the sun and point light
                 float t_sky = 0.5f * (unit_direction.y + 1.0f);
-                GpuVec3 sky_color = (1.0f - t_sky) * GpuVec3(0.05f, 0.05f, 0.05f) + t_sky * GpuVec3(0.2f, 0.2f, 0.4f);
-                final_color = final_color + accumulated_color * GpuSpectrum::from_rgb(sky_color);
+                GpuVec3 sky_color;
+                if (scene.medium_density > 1e-6f) {
+                    float sky_luma = 0.05f + 0.15f * t_sky;
+                    sky_color = GpuVec3(sky_luma, sky_luma, sky_luma);
+                } else {
+                    sky_color = (1.0f - t_sky) * GpuVec3(0.05f, 0.05f, 0.05f) + t_sky * GpuVec3(0.2f, 0.2f, 0.4f);
+                }
+                GpuSpectrum sky_spec = emission_to_spectrum(sky_color, accumulated_color.wavelengths);
+                final_color = final_color + accumulated_color * sky_spec;
             }
             break;
         }
@@ -1850,7 +1896,8 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
     
     if (depth == max_depth) return GpuVec3(0,0,0);
     
-    return final_color.to_rgb();
+    GpuVec3 xyz = spectrum_to_xyz(final_color);
+    return xyz_to_rgb(xyz);
 }
 
 // ==========================================
@@ -1881,6 +1928,21 @@ __global__ void generate_rays_kernel(
     // Combine sample_index and pixel_index
     unsigned int seed = wang_hash(1984 + pixel_index + sample_index * width * height);
     
+    // Stratified Wavelength Sampling
+    // Sample 4 wavelengths evenly across the visible spectrum [kLambdaMin, kLambdaMax]
+    // Uses a common offset for all 4 bins per ray to ensure good stratification
+    float4 ray_wavelengths;
+    {
+        float domain = GpuSpectrum::kLambdaMax - GpuSpectrum::kLambdaMin;
+        float bin_width = domain / 4.0f;
+        float offset = rand_float(seed); // Random jitter within each bin
+        
+        ray_wavelengths.x = GpuSpectrum::kLambdaMin + (0.0f + offset) * bin_width;
+        ray_wavelengths.y = GpuSpectrum::kLambdaMin + (1.0f + offset) * bin_width;
+        ray_wavelengths.z = GpuSpectrum::kLambdaMin + (2.0f + offset) * bin_width;
+        ray_wavelengths.w = GpuSpectrum::kLambdaMin + (3.0f + offset) * bin_width;
+    }
+
     // Tent Filter for High Quality Anti-Aliasing (Strict Quality Mode)
     // Uses Halton Sequence (LDS) for faster convergence
     // Dimensions 0 and 1 for Pixel Jitter
@@ -1909,6 +1971,7 @@ __global__ void generate_rays_kernel(
     // We trace one path (Hero Wavelength driven) but accumulate contribution for all RGB channels.
     // This eliminates color noise at the cost of slight spectral blurring (biased but consistent).
     GpuSpectrum initial_throughput = GpuSpectrum(1.0f); 
+    initial_throughput.wavelengths = ray_wavelengths;
     
     queue.throughputs[ray_index] = initial_throughput;
     queue.stokes[ray_index] = StokesVector(1.0f, 0.0f, 0.0f, 0.0f); // Phase 3: Unpolarized
@@ -1934,8 +1997,7 @@ __global__ void extend_kernel(
     r.direction = ray_queue.directions[idx];
     
     // Consistent epsilon with megakernel
-    int depth = ray_queue.depths[idx];
-    float t_min = (depth == 0) ? 1e-3f : 1e-3f; 
+    float t_min = 1e-4f; 
     
     float t;
     GpuVec3 p, n, ng;
@@ -1958,8 +2020,8 @@ __global__ void extend_kernel(
     }
 }
 
-__device__ GpuSpectrum sample_texture(const GpuScene& scene, int tex_idx, float u, float v) {
-    if (tex_idx < 0 || tex_idx >= scene.texture_count) return GpuSpectrum::from_rgb(GpuVec3(1,0,1)); // Error pink
+__device__ GpuSpectrum sample_texture(const GpuScene& scene, int tex_idx, float u, float v, float4 wavelengths) {
+    if (tex_idx < 0 || tex_idx >= scene.texture_count) return rgb_to_spectrum(GpuVec3(1,0,1), wavelengths); // Error pink
     
     // Pointer arithmetic to get texture
     GpuTexture tex = scene.textures[tex_idx];
@@ -1967,10 +2029,10 @@ __device__ GpuSpectrum sample_texture(const GpuScene& scene, int tex_idx, float 
     // Hardware Texture Sampling
     if (tex.texObj) {
         float4 val = tex2D<float4>(tex.texObj, u, v);
-        return GpuSpectrum::from_rgb(GpuVec3(val.x, val.y, val.z));
+        return rgb_to_spectrum(GpuVec3(val.x, val.y, val.z), wavelengths);
     }
 
-    if (!tex.data) return GpuSpectrum::from_rgb(GpuVec3(0,0,0));
+    if (!tex.data) return rgb_to_spectrum(GpuVec3(0,0,0), wavelengths);
     
     // Wrap UVs
     u = u - floorf(u);
@@ -1989,10 +2051,10 @@ __device__ GpuSpectrum sample_texture(const GpuScene& scene, int tex_idx, float 
     
     // Bilinear Interpolation
     // Unified Memory Access here - this "pages in" data if not resident
-    GpuSpectrum c00 = tex.data[y0 * tex.width + x0];
-    GpuSpectrum c10 = tex.data[y0 * tex.width + x1];
-    GpuSpectrum c01 = tex.data[y1 * tex.width + x0];
-    GpuSpectrum c11 = tex.data[y1 * tex.width + x1];
+    GpuSpectrum c00 = rgb_to_spectrum(tex.data[y0 * tex.width + x0].to_rgb(), wavelengths);
+    GpuSpectrum c10 = rgb_to_spectrum(tex.data[y0 * tex.width + x1].to_rgb(), wavelengths);
+    GpuSpectrum c01 = rgb_to_spectrum(tex.data[y1 * tex.width + x0].to_rgb(), wavelengths);
+    GpuSpectrum c11 = rgb_to_spectrum(tex.data[y1 * tex.width + x1].to_rgb(), wavelengths);
     
     GpuSpectrum c0 = c00 * (1.0f - dx) + c10 * dx;
     GpuSpectrum c1 = c01 * (1.0f - dx) + c11 * dx;
@@ -2127,7 +2189,7 @@ __device__ bool any_hit(const GpuScene& scene, const GpuRay& r, float t_min, flo
     return false;
 }
 
-// Shadow extension kernel
+// Shadow extension kernel (Visibility & Transmission)
 __global__ void extend_shadow_kernel(
     ShadowQueue shadow_queue,
     GpuVec3* accum_buffer,
@@ -2142,11 +2204,8 @@ __global__ void extend_shadow_kernel(
     int pixel_index = shadow_queue.pixel_indices[idx];
     GpuSpectrum radiance = shadow_queue.radiance[idx];
 
-    GpuRay r;
-    r.origin = origin;
-    r.direction = direction;
+    GpuRay r(origin, direction, 1e-4f, max_dist);
     
-    float remaining_dist = max_dist;
     for (int pass = 0; pass < 8; ++pass) {
         float t;
         GpuVec3 p, n, ng;
@@ -2154,66 +2213,54 @@ __global__ void extend_shadow_kernel(
         int mat_idx;
         int type_dummy; int index_dummy;
         
-        if (!world_hit(scene, r, 1e-3f, remaining_dist - 1e-3f, t, p, n, ng, uv, mat_idx, type_dummy, index_dummy)) {
+        if (!world_hit(scene, r, 1e-4f, r.t_max, t, p, n, ng, uv, mat_idx, type_dummy, index_dummy, true)) {
+            // Unoccluded visibility!
             break;
         }
         
         GpuMaterial mat = scene.materials[mat_idx];
-        GpuVec3 emission_rgb = mat.emission.to_rgb();
-        if (emission_rgb.length_sq() > 0.0f) {
-            break;
+        
+        // If we hit a light, the shadow ray is not blocked (it reached its destination)
+        if (mat.type == MaterialType::Light) {
+            r.origin = p + r.direction * 1e-4f;
+            r.t_max -= (t + 1e-4f);
+            if (r.t_max <= 1e-4f) break;
+            continue;
         }
         
+        // If we hit an opaque object, the shadow ray is blocked
         if (mat.type != MaterialType::Dielectric) {
             return;
         }
         
-        bool front_face = r.direction.dot(n) < 0.0f;
-        GpuVec3 normal = front_face ? n : -n;
-        float eta_i = front_face ? 1.0f : mat.ior;
-        float eta_t = front_face ? mat.ior : 1.0f;
-        float eta = eta_i / eta_t;
-        
-        float cos_theta = fminf((-r.direction).dot(normal), 1.0f);
-        float sin_theta2 = fmaxf(0.0f, 1.0f - cos_theta * cos_theta);
-        bool cannot_refract = eta * eta * sin_theta2 > 1.0f;
-        
-        float r0 = (eta_t - eta_i) / (eta_t + eta_i);
-        r0 *= r0;
-        float fresnel = r0 + (1.0f - r0) * powf(1.0f - cos_theta, 5.0f);
+        // Handle transparency (Dielectrics)
+        float cos_theta = fminf(fabsf(r.direction.dot(n)), 1.0f);
+        float fresnel = schlick(cos_theta, mat.ior);
         float transmission = 1.0f - fresnel;
         
-        radiance = radiance * (mat.albedo * transmission);
-        GpuVec3 radiance_rgb = radiance.to_rgb();
-        if (!isfinite(radiance_rgb.x) || !isfinite(radiance_rgb.y) || !isfinite(radiance_rgb.z)) {
-            return;
-        }
+        // Apply attenuation
+        GpuSpectrum albedo_spec = rgb_coeff_to_spectrum(mat.albedo.to_rgb(), radiance.wavelengths);
+        radiance = radiance * (albedo_spec * transmission);
         
-        if (cannot_refract) {
-            return;
-        }
+        // Check for total energy loss
+        GpuVec3 rgb_check = xyz_to_rgb(spectrum_to_xyz(radiance));
+        if (fmaxf(rgb_check.x, fmaxf(rgb_check.y, rgb_check.z)) < 1e-5f) return;
         
-        GpuVec3 refracted;
-        refract(r.direction, normal, eta, refracted);
-        r.direction = refracted.normalize();
-        
-        float advance = t + 1e-3f;
-        remaining_dist -= advance;
-        if (remaining_dist <= 1e-3f) {
-            return;
-        }
-        
-        r.origin = p + r.direction * 1e-3f;
+        // Continue through the object in a STRAIGHT line
+        r.origin = p + r.direction * 1e-4f;
+        r.t_max -= (t + 1e-4f);
+        if (r.t_max <= 1e-4f) break;
     }
     
-    // Unoccluded - Add Contribution
-    GpuVec3 rgb = radiance.to_rgb();
+    // Add contribution
+    GpuVec3 xyz = spectrum_to_xyz(radiance);
+    GpuVec3 rgb = xyz_to_rgb(xyz);
     
-    // Clamping for fireflies (NEE can be bright)
+    // Safety clamp
     float max_val = 1000.0f;
-    if (rgb.x > max_val) rgb.x = max_val;
-    if (rgb.y > max_val) rgb.y = max_val;
-    if (rgb.z > max_val) rgb.z = max_val;
+    rgb.x = fminf(rgb.x, max_val);
+    rgb.y = fminf(rgb.y, max_val);
+    rgb.z = fminf(rgb.z, max_val);
 
     if (isfinite(rgb.x) && isfinite(rgb.y) && isfinite(rgb.z)) {
         atomicAdd(&accum_buffer[pixel_index].x, rgb.x);
@@ -2271,7 +2318,8 @@ __global__ void shade_kernel(
     
     // Simple monochromatic approximation for distance sampling
     GpuSpectrum sigma_t = (sigma_s + sigma_a) * density;
-    float sigma_t_avg = (sigma_t.values.x + sigma_t.values.y + sigma_t.values.z) / 3.0f;
+    GpuVec3 sigma_t_rgb = sigma_t.to_rgb();
+    float sigma_t_avg = (sigma_t_rgb.x + sigma_t_rgb.y + sigma_t_rgb.z) / 3.0f;
     
     if (sigma_t_avg > 1e-4f) {
         float r_dist = rand_float(seed);
@@ -2290,22 +2338,15 @@ __global__ void shade_kernel(
             // Weight = Tr / pdf_t
             
             GpuVec3 tr_vals;
-            tr_vals.x = expf(-sigma_t.values.x * t_medium);
-            tr_vals.y = expf(-sigma_t.values.y * t_medium);
-            tr_vals.z = expf(-sigma_t.values.z * t_medium);
+            tr_vals.x = expf(-sigma_t_rgb.x * t_medium);
+            tr_vals.y = expf(-sigma_t_rgb.y * t_medium);
+            tr_vals.z = expf(-sigma_t_rgb.z * t_medium);
             
             float pdf_t = sigma_t_avg * expf(-sigma_t_avg * t_medium);
             
-            GpuSpectrum tr_spectrum = GpuSpectrum::from_rgb(tr_vals);
-            // throughput = throughput * tr_spectrum * (1.0f / pdf_t) * sigma_s * density; // Wait, sigma_s is per unit distance, need density?
-            // sigma_s struct already includes density? No, multiplied above.
+            GpuSpectrum tr_spectrum = rgb_coeff_to_spectrum(tr_vals, throughput.wavelengths);
             
-            // Correct Logic:
-            // sigma_s_eff = sigma_s * density
-            // sigma_t_eff = sigma_t * density
-            // Throughput *= (Tr * sigma_s_eff) / pdf_t
-            
-            GpuSpectrum sigma_s_eff = sigma_s * density;
+            GpuSpectrum sigma_s_eff = rgb_coeff_to_spectrum(sigma_s.to_rgb(), throughput.wavelengths) * density;
             throughput = throughput * tr_spectrum * sigma_s_eff * (1.0f / pdf_t);
             
             // Volume NEE (Next Event Estimation)
@@ -2346,12 +2387,13 @@ __global__ void shade_kernel(
                     float t_to_light = -M_dot_D - sqrtf(fmaxf(0.0f, M_dot_D * M_dot_D - c_val));
                     
                     if (t_to_light > 1e-4f) {
-                         GpuSpectrum tr_light;
-                         tr_light.values.x = expf(-sigma_t.values.x * t_to_light);
-                         tr_light.values.y = expf(-sigma_t.values.y * t_to_light);
-                         tr_light.values.z = expf(-sigma_t.values.z * t_to_light);
+                         GpuVec3 tr_light_vals;
+                         tr_light_vals.x = expf(-sigma_t_rgb.x * t_to_light);
+                         tr_light_vals.y = expf(-sigma_t_rgb.y * t_to_light);
+                         tr_light_vals.z = expf(-sigma_t_rgb.z * t_to_light);
                          
-                         GpuSpectrum L_e = scene.materials[light_sphere.material_index].emission;
+                         GpuSpectrum tr_light = rgb_coeff_to_spectrum(tr_light_vals, throughput.wavelengths);
+                         GpuSpectrum L_e = emission_to_spectrum(scene.materials[light_sphere.material_index].emission.to_rgb(), throughput.wavelengths);
                          GpuSpectrum contribution = throughput * L_e * phase_val * tr_light * (1.0f / pdf);
                          
                          int s_idx = atomicAdd(shadow_queue.count, 1);
@@ -2400,7 +2442,8 @@ __global__ void shade_kernel(
             
             // Robustness: Avoid division by zero
             if (prob_no_scatter > 1e-6f) {
-                throughput = throughput * GpuSpectrum::from_rgb(tr_vals) * (1.0f / prob_no_scatter);
+                GpuSpectrum tr_spec = rgb_coeff_to_spectrum(tr_vals, throughput.wavelengths);
+                throughput = throughput * tr_spec * (1.0f / prob_no_scatter);
             } else {
                 throughput = GpuSpectrum(0.0f);
             }
@@ -2411,10 +2454,21 @@ __global__ void shade_kernel(
         // Miss: Sky color
         GpuVec3 unit_direction = current_queue.directions[idx].normalize();
         float t_sky = 0.5f * (unit_direction.y + 1.0f);
-        GpuVec3 sky_color = (1.0f - t_sky) * GpuVec3(0.05f, 0.05f, 0.05f) + t_sky * GpuVec3(0.2f, 0.2f, 0.4f);
+        GpuVec3 sky_color;
+        if (scene.medium_density > 1e-6f || current_medium_idx != -1) {
+            float sky_luma = 0.05f + 0.15f * t_sky;
+            sky_color = GpuVec3(sky_luma, sky_luma, sky_luma);
+        } else {
+            sky_color = (1.0f - t_sky) * GpuVec3(0.05f, 0.05f, 0.05f) + t_sky * GpuVec3(0.2f, 0.2f, 0.4f);
+        }
         
-        GpuSpectrum contribution = throughput * GpuSpectrum::from_rgb(sky_color);
-        GpuVec3 rgb = contribution.to_rgb();
+        // Use full spectral pipeline for sky
+        GpuSpectrum sky_spectrum = emission_to_spectrum(sky_color, throughput.wavelengths);
+        GpuSpectrum contribution = throughput * sky_spectrum;
+        
+        GpuVec3 xyz = spectrum_to_xyz(contribution);
+        GpuVec3 rgb = xyz_to_rgb(xyz);
+
         if (isfinite(rgb.x) && isfinite(rgb.y) && isfinite(rgb.z)) {
             atomicAdd(&accum_buffer[pixel_index].x, rgb.x);
             atomicAdd(&accum_buffer[pixel_index].y, rgb.y);
@@ -2433,7 +2487,7 @@ __global__ void shade_kernel(
     // Texture Sampling (Out-of-Core / Unified Memory)
     if (mat.texture_index != -1) {
         GpuVec2 uv = hit_queue.uv[idx];
-        GpuSpectrum tex_color = sample_texture(scene, mat.texture_index, uv.u, uv.v);
+        GpuSpectrum tex_color = sample_texture(scene, mat.texture_index, uv.u, uv.v, throughput.wavelengths);
         mat.albedo = mat.albedo * tex_color;
     }
     
@@ -2485,8 +2539,11 @@ __global__ void shade_kernel(
         }
         
         if (mis_weight > 0.0f) {
-            GpuSpectrum contribution = throughput * mat.emission * mis_weight;
-            GpuVec3 rgb = contribution.to_rgb();
+            GpuSpectrum emission_spectrum = emission_to_spectrum(mat.emission.to_rgb(), throughput.wavelengths);
+            GpuSpectrum contribution = throughput * emission_spectrum * mis_weight;
+            
+            GpuVec3 xyz = spectrum_to_xyz(contribution);
+            GpuVec3 rgb = xyz_to_rgb(xyz);
             
             if (depth > 0) {
                  // Relaxed clamp for Caustics
@@ -2567,10 +2624,10 @@ __global__ void shade_kernel(
                  pdf *= (1.0f / scene.light_count);
                  
                  // Light Emission
-                 GpuSpectrum L_e = scene.materials[light_sphere.material_index].emission;
+                 GpuSpectrum L_e = emission_to_spectrum(scene.materials[light_sphere.material_index].emission.to_rgb(), throughput.wavelengths);
                  
                  // BRDF (Lambertian = albedo / PI)
-                 GpuSpectrum f_r = eval_bsdf(mat, p, n, -current_queue.directions[idx], l_dir);
+                 GpuSpectrum f_r = eval_bsdf(mat, p, n, -current_queue.directions[idx], l_dir, throughput.wavelengths);
                  
                  // MIS Weight (Power Heuristic)
                  float pdf_mat = pdf_bsdf(mat, n, -current_queue.directions[idx], l_dir);
@@ -2593,18 +2650,22 @@ __global__ void shade_kernel(
                         // Phase 3: Volumetric Shadow Attenuation
                         if (sigma_t_avg > 1e-4f) {
                              GpuVec3 tr_vals;
-                             tr_vals.x = expf(-sigma_t.values.x * t_hit);
-                             tr_vals.y = expf(-sigma_t.values.y * t_hit);
-                             tr_vals.z = expf(-sigma_t.values.z * t_hit);
-                             contribution = contribution * GpuSpectrum::from_rgb(tr_vals);
+                             tr_vals.x = expf(-sigma_t_rgb.x * t_hit);
+                             tr_vals.y = expf(-sigma_t_rgb.y * t_hit);
+                             tr_vals.z = expf(-sigma_t_rgb.z * t_hit);
+                             
+                             GpuSpectrum tr_spec = rgb_coeff_to_spectrum(tr_vals, throughput.wavelengths);
+                             contribution = contribution * tr_spec;
                         }
 
                         // Queue Shadow Ray
                         int s_idx = atomicAdd(shadow_queue.count, 1);
                         if (s_idx < shadow_queue.capacity) {
-                            shadow_queue.origins[s_idx] = p + ng * 1e-4f;
+                            // Robust Adaptive Offset
+                            float adaptive_eps = 1e-4f / fmaxf(0.01f, ng.dot(l_dir));
+                            shadow_queue.origins[s_idx] = p + ng * adaptive_eps;
                             shadow_queue.directions[s_idx] = l_dir;
-                            shadow_queue.max_dist[s_idx] = t_hit - 1e-4f; 
+                            shadow_queue.max_dist[s_idx] = t_hit - adaptive_eps; 
                             shadow_queue.radiance[s_idx] = contribution;
                             shadow_queue.pixel_indices[s_idx] = pixel_index;
                         }
@@ -2643,7 +2704,8 @@ __global__ void shade_kernel(
 
                 // Russian Roulette
                 if (depth > 3) {
-                    GpuVec3 rgb = new_throughput.to_rgb();
+                    GpuVec3 xyz = spectrum_to_xyz(new_throughput);
+                    GpuVec3 rgb = xyz_to_rgb(xyz);
                     float max_comp = fmaxf(rgb.x, fmaxf(rgb.y, rgb.z));
                     
                     // Fix: Probability must be clamped to 1.0
