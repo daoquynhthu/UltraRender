@@ -44,6 +44,7 @@ struct Material {
     float roughness = 0.5f;
     float ior = 1.45f;
     float dispersion = 0.0f;
+    Vec3 metal_eta = {0.0f, 0.0f, 0.0f};
     Vec3 extinction = {0.0f, 0.0f, 0.0f}; // For metals (Conductors)
     float thin_film_thickness = 0.0f;    // In nanometers
     float thin_film_ior = 1.0f;

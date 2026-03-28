@@ -34,14 +34,7 @@ void PhysicsWorld::step(float dt) {
     integrate(dt);
     
     if (fluid_system) {
-        // Fluid Sub-stepping for stability (CFL Condition)
-        // With stiffness ~3000, speed of sound Cs ~ 55 m/s
-        // h ~ 0.08 m
-        // CFL limit dt < 0.4 * h / Cs ~ 0.4 * 0.08 / 55 ~ 0.00058 s
-        // Frame dt is usually 1/60 ~ 0.016 s, or warmup dt 0.01 s
-        // We need at least 30 sub-steps to be safe.
-        // Let's use 32 sub-steps to be absolutely sure.
-        int fluid_sub_steps = 32; 
+        int fluid_sub_steps = fluid_system->recommend_substeps(dt);
         float fluid_dt = dt / fluid_sub_steps;
         
         for (int i = 0; i < fluid_sub_steps; ++i) {

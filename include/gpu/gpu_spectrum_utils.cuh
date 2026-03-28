@@ -127,7 +127,7 @@ __device__ inline GpuSpectrum rgb_coeff_to_spectrum(const GpuVec3& rgb, float4 w
 }
 
 __device__ inline GpuSpectrum emission_to_spectrum(const GpuVec3& rgb, float4 wavelengths) {
-    return rgb_coeff_to_spectrum(rgb, wavelengths);
+    return rgb_to_spectrum(rgb, wavelengths);
 }
 
 } // namespace ure::gpu

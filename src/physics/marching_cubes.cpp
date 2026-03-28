@@ -407,26 +407,40 @@ std::shared_ptr<ure::Mesh> MarchingCubes::generate(const FluidSystem& fluid, con
                     int i1 = inverted_tri[i+1];
                     int i2 = inverted_tri[i+2];
                     
-                    // Add vertices
-                    // Calculate normals (gradient)
-                    ure::core::Vec3<float> n0 = fluid.get_normal_at(vertlist[i0]);
-                    ure::core::Vec3<float> n1 = fluid.get_normal_at(vertlist[i1]);
-                    ure::core::Vec3<float> n2 = fluid.get_normal_at(vertlist[i2]);
+                    ure::core::Vec3<float> p0 = vertlist[i0];
+                    ure::core::Vec3<float> p1 = vertlist[i1];
+                    ure::core::Vec3<float> p2 = vertlist[i2];
+                    ure::core::Vec3<float> face_n = (p1 - p0).cross(p2 - p0).normalize();
+
+                    ure::core::Vec3<float> n0 = fluid.get_normal_at(p0);
+                    ure::core::Vec3<float> n1 = fluid.get_normal_at(p1);
+                    ure::core::Vec3<float> n2 = fluid.get_normal_at(p2);
+
+                    if (n0.length_sq() < 1e-10f) n0 = face_n; else n0 = n0.normalize();
+                    if (n1.length_sq() < 1e-10f) n1 = face_n; else n1 = n1.normalize();
+                    if (n2.length_sq() < 1e-10f) n2 = face_n; else n2 = n2.normalize();
+
+                    ure::core::Vec3<float> avg_n = (n0 + n1 + n2).normalize();
+                    if (face_n.dot(avg_n) < 0.0f) {
+                        std::swap(p1, p2);
+                        std::swap(n1, n2);
+                        face_n = face_n * -1.0f;
+                    }
                     
                     int base_idx = (int)mesh->vertices.size();
                     
                     ure::Vertex v0;
-                    v0.position = {vertlist[i0].x, vertlist[i0].y, vertlist[i0].z};
+                    v0.position = {p0.x, p0.y, p0.z};
                     v0.normal = {n0.x, n0.y, n0.z};
                     v0.uv = {0,0};
                     
                     ure::Vertex v1;
-                    v1.position = {vertlist[i1].x, vertlist[i1].y, vertlist[i1].z};
+                    v1.position = {p1.x, p1.y, p1.z};
                     v1.normal = {n1.x, n1.y, n1.z};
                     v1.uv = {0,0};
                     
                     ure::Vertex v2;
-                    v2.position = {vertlist[i2].x, vertlist[i2].y, vertlist[i2].z};
+                    v2.position = {p2.x, p2.y, p2.z};
                     v2.normal = {n2.x, n2.y, n2.z};
                     v2.uv = {0,0};
 

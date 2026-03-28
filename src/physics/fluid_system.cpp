@@ -11,7 +11,26 @@ namespace ure::physics {
 
 using ure::core::Vec3;
 
-FluidSystem::FluidSystem() {}
+namespace {
+
+float clampf(float v, float lo, float hi) {
+    return std::max(lo, std::min(v, hi));
+}
+
+unsigned int lcg_next(unsigned int& state) {
+    state = state * 1664525u + 1013904223u;
+    return state;
+}
+
+float lcg_float01(unsigned int& state) {
+    return (lcg_next(state) & 0x00ffffffu) / float(0x01000000u);
+}
+
+}
+
+FluidSystem::FluidSystem() {
+    configure_rest_state(particle_spacing, bounds_min, bounds_max);
+}
 
 void FluidSystem::add_particle(const Vec3<float>& position) {
     FluidParticle p;
@@ -22,6 +41,156 @@ void FluidSystem::add_particle(const Vec3<float>& position) {
     p.pressure = 0;
     p.id = (int)particles.size();
     particles.push_back(p);
+}
+
+void FluidSystem::clear_particles() {
+    particles.clear();
+}
+
+float FluidSystem::compute_calibrated_mass(float spacing) const {
+    float h = std::max(spacing * 2.0f, 1e-4f);
+    float h2 = h * h;
+    float kernel_sum = 0.0f;
+    float coeff = 315.0f / (64.0f * M_PI * std::pow(h, 9.0f));
+
+    for (int x = -1; x <= 1; ++x) {
+        for (int y = -1; y <= 1; ++y) {
+            for (int z = -1; z <= 1; ++z) {
+                float dx = spacing * x;
+                float dy = spacing * y;
+                float dz = spacing * z;
+                float r2 = dx * dx + dy * dy + dz * dz;
+                if (r2 <= h2) {
+                    float diff = h2 - r2;
+                    kernel_sum += coeff * diff * diff * diff;
+                }
+            }
+        }
+    }
+
+    if (kernel_sum < 1e-6f) return 0.02f;
+    return target_density / kernel_sum;
+}
+
+void FluidSystem::configure_rest_state(float spacing,
+                                       const Vec3<float>& new_bounds_min,
+                                       const Vec3<float>& new_bounds_max) {
+    particle_spacing = std::max(spacing, 1e-3f);
+    particle_radius = particle_spacing * 0.5f;
+    bounds_min = new_bounds_min;
+    bounds_max = new_bounds_max;
+    smoothing_radius = particle_spacing * 2.0f;
+    cell_size = smoothing_radius;
+    particle_mass = compute_calibrated_mass(particle_spacing);
+}
+
+int FluidSystem::seed_box_volume(const Vec3<float>& fill_min,
+                                 const Vec3<float>& fill_max,
+                                 float spacing,
+                                 float jitter_fraction,
+                                 unsigned int seed) {
+    float step = std::max(spacing, 1e-3f);
+    float jitter = clampf(jitter_fraction, 0.0f, 1.0f);
+    int created = 0;
+    unsigned int rng = seed;
+
+    for (float x = fill_min.x; x <= fill_max.x; x += step) {
+        for (float y = fill_min.y; y <= fill_max.y; y += step) {
+            for (float z = fill_min.z; z <= fill_max.z; z += step) {
+                float jx = (lcg_float01(rng) - 0.5f) * step * jitter;
+                float jy = (lcg_float01(rng) - 0.5f) * step * jitter;
+                float jz = (lcg_float01(rng) - 0.5f) * step * jitter;
+
+                Vec3<float> pos(
+                    clampf(x + jx, fill_min.x, fill_max.x),
+                    clampf(y + jy, fill_min.y, fill_max.y),
+                    clampf(z + jz, fill_min.z, fill_max.z)
+                );
+                add_particle(pos);
+                ++created;
+            }
+        }
+    }
+
+    return created;
+}
+
+void FluidSystem::relax_initial_distribution(const std::vector<std::shared_ptr<Collider>>& colliders,
+                                             int iterations) {
+    if (particles.empty()) return;
+
+    std::vector<Vec3<float>> deltas(particles.size(), Vec3<float>(0, 0, 0));
+    float desired_spacing = std::max(particle_spacing, 1e-4f);
+
+    for (int iter = 0; iter < iterations; ++iter) {
+        build_spatial_grid();
+
+        #pragma omp parallel
+        {
+            std::vector<int> neighbors;
+            neighbors.reserve(64);
+
+            #pragma omp for
+            for (int i = 0; i < (int)particles.size(); ++i) {
+                const auto& pi = particles[i];
+                get_neighbor_particles(i, neighbors);
+
+                Vec3<float> correction(0, 0, 0);
+                int count = 0;
+
+                for (int neighbor_idx : neighbors) {
+                    if (neighbor_idx == i) continue;
+
+                    const auto& pj = particles[neighbor_idx];
+                    Vec3<float> r = pi.position - pj.position;
+                    float dist = r.length();
+
+                    if (dist > 1e-5f && dist < desired_spacing) {
+                        float overlap = desired_spacing - dist;
+                        correction = correction + r * ((0.5f * overlap) / dist);
+                        ++count;
+                    }
+                }
+
+                if (count > 0) {
+                    deltas[i] = correction * (1.0f / count);
+                } else {
+                    deltas[i] = Vec3<float>(0, 0, 0);
+                }
+            }
+        }
+
+        for (int i = 0; i < (int)particles.size(); ++i) {
+            particles[i].position = particles[i].position + deltas[i];
+        }
+
+        resolve_collisions(colliders);
+        resolve_boundaries();
+    }
+
+    for (auto& p : particles) {
+        p.velocity = Vec3<float>(0, 0, 0);
+        p.force = Vec3<float>(0, 0, 0);
+    }
+
+    build_spatial_grid();
+}
+
+int FluidSystem::recommend_substeps(float frame_dt) const {
+    if (frame_dt <= 0.0f) return 1;
+
+    float max_vel = 0.0f;
+    for (const auto& p : particles) {
+        max_vel = std::max(max_vel, p.velocity.length());
+    }
+
+    float sound_speed = std::sqrt(std::max(pressure_stiffness, 1.0f));
+    float characteristic_speed = std::max(max_vel + sound_speed, 1.0f);
+    float max_dt = 0.4f * smoothing_radius / characteristic_speed;
+    if (max_dt <= 1e-6f) return 64;
+
+    int substeps = (int)std::ceil(frame_dt / max_dt);
+    return std::max(1, std::min(substeps, 128));
 }
 
 void FluidSystem::build_spatial_grid() {
@@ -91,7 +260,9 @@ void FluidSystem::update(float dt) {
     compute_density_pressure();
     compute_forces();
     integrate(dt);
-    compute_particle_shift(dt); // PST: Regularize particle distribution
+    if (enable_particle_shifting) {
+        compute_particle_shift(dt);
+    }
     resolve_boundaries();
 }
 
@@ -267,16 +438,14 @@ void FluidSystem::integrate(float dt) {
         Vec3<float> acceleration = p.force * (1.0f / particle_mass);
         p.velocity = p.velocity + acceleration * dt;
 
-        // Global Velocity Damping (Air Resistance / Viscosity)
-        // This prevents energy runaway
-        p.velocity = p.velocity * 0.99f;
+        float damping_factor = clampf(1.0f - damping * dt, 0.0f, 1.0f);
+        p.velocity = p.velocity * damping_factor;
 
-        // Hard Velocity Clamp (Safety Brake)
-        // Prevents tunneling and explosions
         float v_len = p.velocity.length();
-        const float MAX_VELOCITY = 3.0f; // Reduced to 3.0 m/s for small scale stability
-        if (v_len > MAX_VELOCITY) {
-            p.velocity = p.velocity * (MAX_VELOCITY / v_len);
+        float max_velocity = 0.5f * smoothing_radius / std::max(dt, 1e-5f);
+        max_velocity = std::max(max_velocity, 3.0f);
+        if (v_len > max_velocity) {
+            p.velocity = p.velocity * (max_velocity / v_len);
         }
 
         p.position = p.position + p.velocity * dt;
@@ -377,7 +546,6 @@ Vec3<float> FluidSystem::get_normal_at(const Vec3<float>& pos) const {
 }
 
 void FluidSystem::resolve_collisions(const std::vector<std::shared_ptr<Collider>>& colliders) {
-    float particle_radius = 0.02f; // Reduced from 0.05f to minimize gap
     float restitution = 0.5f;
 
     // Hard Boundary Clamp (Safety Net)
@@ -443,7 +611,7 @@ void FluidSystem::resolve_collisions(const std::vector<std::shared_ptr<Collider>
                     p.velocity = p_vel_new;
 
                     // Two-way Coupling: Apply impulse to Rigid Body
-                    if (collider->body && !collider->body->is_static) {
+                    if (enable_two_way_coupling && collider->body && !collider->body->is_static) {
                         Vec3<float> impulse = delta_v * -particle_mass;
                         
                         // Clamp impulse to prevent instability
@@ -501,7 +669,7 @@ void FluidSystem::resolve_collisions(const std::vector<std::shared_ptr<Collider>
                         p.velocity = p.velocity - n * (1.0f + restitution) * v_dot_n;
 
                         // Two-way Coupling: Apply impulse to Rigid Body
-                        if (collider->body && !collider->body->is_static) {
+                        if (enable_two_way_coupling && collider->body && !collider->body->is_static) {
                             Vec3<float> delta_v = p.velocity - prev_vel;
                             Vec3<float> impulse = delta_v * particle_mass;
                             

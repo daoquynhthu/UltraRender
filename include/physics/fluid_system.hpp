@@ -23,11 +23,25 @@ public:
     FluidSystem();
     
     void add_particle(const ure::core::Vec3<float>& position);
+    void clear_particles();
+    void configure_rest_state(float spacing,
+                              const ure::core::Vec3<float>& new_bounds_min,
+                              const ure::core::Vec3<float>& new_bounds_max);
+    int seed_box_volume(const ure::core::Vec3<float>& fill_min,
+                        const ure::core::Vec3<float>& fill_max,
+                        float spacing,
+                        float jitter_fraction = 0.0f,
+                        unsigned int seed = 1337u);
+    void relax_initial_distribution(const std::vector<std::shared_ptr<Collider>>& colliders,
+                                    int iterations = 6);
+    int recommend_substeps(float frame_dt) const;
     void update(float dt);
     void resolve_collisions(const std::vector<std::shared_ptr<Collider>>& colliders);
     
     const std::vector<FluidParticle>& get_particles() const { return particles; }
     std::vector<FluidParticle>& get_particles_mutable() { return particles; }
+    float get_particle_spacing() const { return particle_spacing; }
+    float get_particle_radius() const { return particle_radius; }
 
     // SPH Parameters
     float smoothing_radius = 0.1f;   // h (Will be set based on spacing)
@@ -39,6 +53,8 @@ public:
     float damping = 0.05f; // Very low air drag
     
     float boundary_restitution = 0.5f; // Wall bounce
+    bool enable_particle_shifting = false;
+    bool enable_two_way_coupling = false;
 
     // Helper for visualization
     float get_density_at(const ure::core::Vec3<float>& pos) const;
@@ -51,8 +67,10 @@ private:
 
     // Spatial Hashing / Grid
     std::vector<std::vector<int>> grid;
-    int grid_res_x, grid_res_y, grid_res_z;
-    float cell_size;
+    int grid_res_x = 0, grid_res_y = 0, grid_res_z = 0;
+    float cell_size = 0.1f;
+    float particle_spacing = 0.05f;
+    float particle_radius = 0.025f;
     
     void build_spatial_grid();
     int get_grid_index(const ure::core::Vec3<float>& pos) const;
@@ -70,6 +88,7 @@ private:
 
     // Advanced SPH
     void compute_particle_shift(float dt);
+    float compute_calibrated_mass(float spacing) const;
 };
 
 } // namespace physics

@@ -205,105 +205,43 @@ int main(int argc, char* argv[]) {
                  auto fluid_system = physics_world->get_fluid_system();
                  if (fluid_system) {
                      std::cout << "[Main] Initializing Fluid System from Scene..." << std::endl;
-                     fluid_system->bounds_min = ure::core::Vec3<float>(scene.physics.fluid.bounds_min.x, scene.physics.fluid.bounds_min.y, scene.physics.fluid.bounds_min.z);
-                     fluid_system->bounds_max = ure::core::Vec3<float>(scene.physics.fluid.bounds_max.x, scene.physics.fluid.bounds_max.y, scene.physics.fluid.bounds_max.z);
-                     
-                     // OVERRIDE for High-Fidelity Simulation
-                     float spacing = scene.physics.fluid.particle_spacing; // Optimization: Reduced count for interactive speed (~7k particles)
-                      
-                     // --- Fluid Mass Calibration (Systemic Fix) ---
-                     // Instead of guessing mass, we calculate the exact mass required to produce
-                     // target_density (1000) when particles are at perfect rest spacing.
-                     // Density = Mass * Sum(W_poly6(r))
-                     // Mass = TargetDensity / Sum(W_poly6)
-                     float kernel_sum = 0.0f;
-                     float h_calib = spacing * 2.0f;
-                     fluid_system->smoothing_radius = h_calib;
-
-                     // Sample a 3x3x3 grid of neighbors
-                     for (int x = -1; x <= 1; ++x) {
-                         for (int y = -1; y <= 1; ++y) {
-                             for (int z = -1; z <= 1; ++z) {
-                                 float dx = (float)x * spacing;
-                                 float dy = (float)y * spacing;
-                                 float dz = (float)z * spacing;
-                                 float r2 = dx*dx + dy*dy + dz*dz;
-                                 float h2 = h_calib * h_calib;
-                                 
-                                 // Poly6 Kernel logic
-                                 if (r2 <= h2) {
-                                     float term = h2 - r2;
-                                     // Coeff: 315 / (64 * pi * h^9)
-                                     float coeff = 315.0f / (64.0f * 3.1415926f * (float)std::pow(h_calib, 9));
-                                     kernel_sum += coeff * term * term * term;
-                                 }
-                             }
-                         }
-                     }
-                     
-                     // Safety check
-                     if (kernel_sum < 1e-5f) kernel_sum = 1.0f; 
-                     
-                     // Calibrated Mass
-                     float calibrated_mass = 1000.0f / kernel_sum;
-                     fluid_system->particle_mass = calibrated_mass;
+                    fluid_system->clear_particles();
+                    ure::core::Vec3<float> fluid_bounds_min(scene.physics.fluid.bounds_min.x, scene.physics.fluid.bounds_min.y, scene.physics.fluid.bounds_min.z);
+                    ure::core::Vec3<float> fluid_bounds_max(scene.physics.fluid.bounds_max.x, scene.physics.fluid.bounds_max.y, scene.physics.fluid.bounds_max.z);
+                    float spacing = scene.physics.fluid.particle_spacing;
+                    fluid_system->configure_rest_state(spacing, fluid_bounds_min, fluid_bounds_max);
                      
                      std::cout << "[Main] Systemic Calibration (Scene):" << std::endl;
                      std::cout << "  - Spacing: " << spacing << std::endl;
-                     std::cout << "  - Kernel Sum (Lattice): " << kernel_sum << std::endl;
-                     std::cout << "  - Calibrated Mass: " << calibrated_mass << std::endl;
+                    std::cout << "  - Calibrated Mass: " << fluid_system->particle_mass << std::endl;
                     
                     // High-Fidelity Params
                     fluid_system->target_density = 1000.0f;
-                    fluid_system->pressure_stiffness = 500.0f; // Lower stiffness to reduce explosion risk
-                    fluid_system->viscosity_coefficient = 10.0f; // High viscosity for stability
+                    fluid_system->pressure_stiffness = 500.0f;
+                    fluid_system->viscosity_coefficient = 10.0f;
                     fluid_system->surface_tension_coefficient = 0.05f;
+                    fluid_system->enable_particle_shifting = false;
+                    fluid_system->enable_two_way_coupling = false;
                     
                     std::cout << "[Main] High-Res Fluid Config (Scene): Spacing=" << spacing 
                               << " Mass=" << fluid_system->particle_mass 
                               << " H=" << fluid_system->smoothing_radius << std::endl;
                     
-                    if (spacing <= 0.001f) spacing = 0.1f;
-                    
-                    int p_count = 0;
-                    // Robust Initialization: Poisson Disk-like Sampling
-                    // Instead of a perfect grid, we use a rejection sampling or stratified jitter to fill the volume
-                    // This breaks the "columnar" artifact at the root.
-                    
-                    std::cout << "[Main] Initializing particles with Robust Random Distribution..." << std::endl;
-                    
-                    // Actually, let's stick to Grid but with HEAVY Jitter (Random Position in Cell)
-                    // This is Stratified Sampling.
-                    for (float x = scene.physics.fluid.fill_min.x; x <= scene.physics.fluid.fill_max.x; x += spacing) {
-                        for (float y = scene.physics.fluid.fill_min.y; y <= scene.physics.fluid.fill_max.y; y += spacing) {
-                            for (float z = scene.physics.fluid.fill_min.z; z <= scene.physics.fluid.fill_max.z; z += spacing) {
-                                
-                                // Pure Random Position within the cell [x, x+spacing]
-                                float rx = (float)rand() / RAND_MAX;
-                                float ry = (float)rand() / RAND_MAX;
-                                float rz = (float)rand() / RAND_MAX;
-                                
-                                float pos_x = x + rx * spacing * 0.9f; // 0.9 to leave a tiny gap maybe?
-                                float pos_y = y + ry * spacing * 0.9f;
-                                float pos_z = z + rz * spacing * 0.9f;
-                                
-                                // Ensure it's inside valid bounds (strictly)
-                                if (pos_x > scene.physics.fluid.fill_max.x) continue;
-                                if (pos_y > scene.physics.fluid.fill_max.y) continue;
-                                if (pos_z > scene.physics.fluid.fill_max.z) continue;
-
-                                fluid_system->add_particle(ure::core::Vec3<float>(pos_x, pos_y, pos_z));
-                                p_count++;
-                            }
-                        }
-                    }
-                     std::cout << "[Main] Created " << p_count << " fluid particles." << std::endl;
+                    std::cout << "[Main] Initializing particles with deterministic jittered volume fill..." << std::endl;
+                    int p_count = fluid_system->seed_box_volume(
+                        ure::core::Vec3<float>(scene.physics.fluid.fill_min.x, scene.physics.fluid.fill_min.y, scene.physics.fluid.fill_min.z),
+                        ure::core::Vec3<float>(scene.physics.fluid.fill_max.x, scene.physics.fluid.fill_max.y, scene.physics.fluid.fill_max.z),
+                        spacing,
+                        0.1f,
+                        1337u
+                    );
+                    std::cout << "[Main] Created " << p_count << " fluid particles." << std::endl;
                      
                      // Create Fluid Entity for Visualization
                      auto mesh_fluid = std::make_shared<Mesh>();
                      auto mat_fluid = std::make_shared<Material>();
                      mat_fluid->type = MaterialType::Dielectric; // Water
-                     mat_fluid->albedo = {0.6f, 0.85f, 0.98f}; // Clear with blue tint
+                     mat_fluid->albedo = {0.96f, 0.98f, 0.99f};
                     mat_fluid->roughness = 0.02f;
                     mat_fluid->ior = 1.33f;
                      
@@ -532,77 +470,26 @@ int main(int argc, char* argv[]) {
         auto fluid_system = physics_world->get_fluid_system();
         if (fluid_system) {
             std::cout << "[Main] Initializing Fluid System (Cup)..." << std::endl;
-            // Expand global bounds to allow cup interaction
-            fluid_system->bounds_min = {-5, -5, -5};
-            fluid_system->bounds_max = {5, 5, 5};
-            
-            // Create fluid filling the cup partially
-            // Cup interior: [-1, 1] x [-1, 1] x [-1, 1]
-            // Fill bottom half: y from -0.9 to 0.0
-            
-            // HIGH RESOLUTION PHYSICS SETTINGS (User Request: "High Compute Cost OK")
-            float spacing = 0.035f; // ~8x more particles than 0.07f
-            
-            // --- Fluid Mass Calibration (Systemic Fix) ---
-            // Instead of guessing mass, we calculate the exact mass required to produce
-            // target_density (1000) when particles are at perfect rest spacing.
-            // Density = Mass * Sum(W_poly6(r))
-            // Mass = TargetDensity / Sum(W_poly6)
-            float kernel_sum = 0.0f;
-            float h = spacing * 2.0f;
-            fluid_system->smoothing_radius = h;
+            fluid_system->clear_particles();
+            float spacing = 0.035f;
+            fluid_system->configure_rest_state(spacing, {-5, -5, -5}, {5, 5, 5});
 
-            // Sample a 3x3x3 grid of neighbors
-            for (int x = -1; x <= 1; ++x) {
-                for (int y = -1; y <= 1; ++y) {
-                    for (int z = -1; z <= 1; ++z) {
-                        float dx = (float)x * spacing;
-                        float dy = (float)y * spacing;
-                        float dz = (float)z * spacing;
-                        float r2 = dx*dx + dy*dy + dz*dz;
-                        float h2 = h * h;
-                        
-                        // Poly6 Kernel logic
-                        if (r2 <= h2) {
-                            float term = h2 - r2;
-                            // Coeff: 315 / (64 * pi * h^9)
-                            float coeff = 315.0f / (64.0f * 3.1415926f * (float)std::pow(h, 9));
-                            kernel_sum += coeff * term * term * term;
-                        }
-                    }
-                }
-            }
+            std::cout << "[Main] Derived Fluid Calibration:" << std::endl;
+            std::cout << "  - Spacing: " << spacing << std::endl;
+            std::cout << "  - Calibrated Mass: " << fluid_system->particle_mass << std::endl;
             
-            // Safety check
-            if (kernel_sum < 1e-5f) kernel_sum = 1.0f; 
-            
-            // Calibrated Mass
-            float calibrated_mass = 1000.0f / kernel_sum;
-            
-            std::cout << "[Main] Systemic Calibration:" << std::endl;
-            std::cout << "  - Kernel Sum (Lattice): " << kernel_sum << std::endl;
-            std::cout << "  - Old Mass Formula: " << (1000.0f * std::pow(spacing, 3)) << std::endl;
-            std::cout << "  - Calibrated Mass: " << calibrated_mass << std::endl;
-            
-            fluid_system->particle_mass = calibrated_mass;
-            
-            // Update other params for stability with small mass
             fluid_system->target_density = 1000.0f;
-            fluid_system->pressure_stiffness = 3000.0f; // Stiff water
-            fluid_system->viscosity_coefficient = 0.002f; // Low viscosity for splashes
-            fluid_system->surface_tension_coefficient = 0.05f; // Moderate surface tension
+            fluid_system->pressure_stiffness = 3000.0f;
+            fluid_system->viscosity_coefficient = 0.002f;
+            fluid_system->surface_tension_coefficient = 0.05f;
+            fluid_system->enable_particle_shifting = false;
+            fluid_system->enable_two_way_coupling = false;
 
             std::cout << "[Main] High-Res Fluid Config: Spacing=" << spacing 
                       << " Mass=" << fluid_system->particle_mass 
                       << " H=" << fluid_system->smoothing_radius << std::endl;
 
-            for (float x = -0.9f; x <= 0.9f; x += spacing) {
-                for (float y = -0.9f; y <= 0.0f; y += spacing) {
-                    for (float z = -0.9f; z <= 0.9f; z += spacing) {
-                        fluid_system->add_particle(ure::core::Vec3<float>(x, y, z));
-                    }
-                }
-            }
+            fluid_system->seed_box_volume({-0.9f, -0.9f, -0.9f}, {0.9f, 0.0f, 0.9f}, spacing, 0.1f, 2026u);
             std::cout << "[Main] Created " << fluid_system->get_particles().size() << " fluid particles." << std::endl;
         }
 
@@ -744,98 +631,12 @@ int main(int argc, char* argv[]) {
     std::cout << "[Main] Initializing GPU Engine..." << std::endl;
     auto engine = RenderEngineFactory::create_gpu_engine();
 
-    // Warmup Phase (Settle Fluid)
+    // Fluid Initialization Pass
     if (scene.physics.fluid.enabled && physics_world) {
-        std::cout << "[Main] Warming up fluid simulation (60 frames) to settle particles..." << std::endl;
-        float warmup_dt = 0.01f;
         auto fluid_system = physics_world->get_fluid_system();
-        
-        // Save original stiffness
-        float original_stiffness = fluid_system->pressure_stiffness;
-        
-        // Start with very low stiffness to allow particles to settle without exploding
-        // Then ramp up to full stiffness
-        
-        // Freeze Rigid Bodies during warmup to prevent them from falling into the settling fluid
-        std::cout << "[Main] Freezing rigid bodies during warmup..." << std::endl;
-        std::vector<float> original_masses;
-        for (auto& db : dynamic_bodies) {
-            std::cout << "  - Freezing Body " << db.entity_index << " (Mass: " << db.body->mass << ")" << std::endl;
-            original_masses.push_back(db.body->mass);
-            db.body->set_mass(0.0f); // Make static
-            db.body->velocity = {0,0,0};
-            db.body->angular_velocity = {0,0,0};
-        }
-        // Legacy body support
-        float s1_mass = 0, s2_mass = 0, box_mass = 0;
-        if (sphere1_body) { s1_mass = sphere1_body->mass; sphere1_body->set_mass(0); }
-        if (sphere2_body) { s2_mass = sphere2_body->mass; sphere2_body->set_mass(0); }
-        if (box_body) { box_mass = box_body->mass; box_body->set_mass(0); }
-
-        for (int i = 0; i < 60; ++i) { // 60 Frames for proper settling
-             // Linear Ramp of Stiffness: 100 -> Original
-             float progress = (float)i / 60.0f;
-             fluid_system->pressure_stiffness = 100.0f + (original_stiffness - 100.0f) * progress;
-
-             physics_world->step(warmup_dt);
-             
-             // Damping: Reduce velocity of all fluid particles to prevent explosion
-             if (fluid_system) {
-                 for (auto& p : fluid_system->get_particles_mutable()) {
-                     p.velocity = p.velocity * 0.5f; // Strong damping
-                 }
-             }
-             
-             if (i % 10 == 0) std::cout << "." << std::flush;
-        }
-        // Restore full stiffness
-        fluid_system->pressure_stiffness = original_stiffness;
-
-        // Unfreeze Rigid Bodies
-        std::cout << "[Main] Unfreezing rigid bodies..." << std::endl;
-        for (size_t i = 0; i < dynamic_bodies.size(); ++i) {
-            float m = original_masses[i];
-            if (m <= 0.0f) m = 5.0f; // FORCE SAFE MASS if original was 0
-            std::cout << "  - Restoring Body " << dynamic_bodies[i].entity_index << " to Mass: " << m << std::endl;
-            dynamic_bodies[i].body->set_mass(m);
-            dynamic_bodies[i].body->is_sleeping = false;
-        }
-        if (sphere1_body) sphere1_body->set_mass(s1_mass);
-        if (sphere2_body) sphere2_body->set_mass(s2_mass);
-        if (box_body) box_body->set_mass(box_mass);
-        std::cout << " Done." << std::endl;
-        
-        // Unfreeze and Reset Rigid Bodies
-        std::cout << "[Main] Restoring Rigid Bodies..." << std::endl;
-        for (size_t k = 0; k < dynamic_bodies.size(); ++k) {
-            auto& db = dynamic_bodies[k];
-            db.body->set_mass(original_masses[k]); // Restore mass
-            
-            if (db.entity_index < scene.entities.size()) {
-                const auto& ent = scene.entities[db.entity_index];
-                
-                // Reset Position (Force them back to start, just in case)
-                db.body->position = ure::core::Vec3<float>(ent.position.x, ent.position.y, ent.position.z);
-                db.body->orientation = euler_to_quat(ure::core::Vec3<float>(ent.rotation.x, ent.rotation.y, ent.rotation.z));
-                db.body->velocity = ure::core::Vec3<float>(ent.rigid_body.velocity.x, ent.rigid_body.velocity.y, ent.rigid_body.velocity.z);
-                db.body->angular_velocity = ure::core::Vec3<float>(0, 0, 0);
-                db.body->force_accumulator = ure::core::Vec3<float>(0, 0, 0);
-                db.body->torque_accumulator = ure::core::Vec3<float>(0, 0, 0);
-            }
-        }
-        
-        // Restore legacy bodies
-        if (sphere1_body) { 
-            sphere1_body->set_mass(s1_mass); 
-            // Reset position if needed (assuming scene index 7 for sphere1)
-            if (scene.entities.size() > 7) {
-                 sphere1_body->position = ure::core::Vec3<float>(scene.entities[7].position.x, scene.entities[7].position.y, scene.entities[7].position.z);
-                 sphere1_body->velocity = {0,0,0};
-            }
-        }
-        if (sphere2_body) sphere2_body->set_mass(s2_mass);
-        if (box_body) box_body->set_mass(box_mass);
-        
+        std::cout << "[Main] Relaxing initial fluid particle distribution..." << std::endl;
+        fluid_system->relax_initial_distribution(physics_world->get_colliders(), 8);
+        std::cout << "[Main] Fluid initialization pass complete." << std::endl;
     }
 
     // Resolution Priority: Scene File > CLI > Default
@@ -1000,7 +801,7 @@ int main(int argc, char* argv[]) {
                         // Generate Mesh
         // Isolevel adjusted to reduce blob artifacts. Target density is 1000.
         // Higher isolevel = tighter surface, less blobby.
-        float isolevel = 300.0f; 
+        float isolevel = fs->target_density * 0.5f;
         auto fluid_mesh = ure::physics::MarchingCubes::generate(*fs, mc_min, mc_max, 128, isolevel);
                         std::cout << " Done. (Triangles: " << fluid_mesh->indices.size() / 3 << ")" << std::endl;
                         

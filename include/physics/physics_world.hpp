@@ -46,6 +46,7 @@ public:
 
     // Getters for external systems (like Acoustics) to query state
     const std::vector<std::shared_ptr<RigidBody>>& get_bodies() const { return bodies; }
+    const std::vector<std::shared_ptr<Collider>>& get_colliders() const { return colliders; }
     
     std::shared_ptr<FluidSystem> get_fluid_system() { return fluid_system; }
 

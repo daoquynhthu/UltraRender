@@ -60,6 +60,7 @@ public:
             gpu_mat.emission = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(mat->emission));
             gpu_mat.roughness = mat->roughness;
             gpu_mat.ior = mat->ior;
+            gpu_mat.metal_eta = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(mat->metal_eta));
             gpu_mat.dispersion = mat->dispersion;
             gpu_mat.thin_film_thickness = mat->thin_film_thickness;
             gpu_mat.thin_film_ior = mat->thin_film_ior;

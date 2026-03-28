@@ -271,6 +271,7 @@ struct GpuMaterial {
     GpuSpectrum albedo;
     float roughness;
     float ior;
+    GpuSpectrum metal_eta;
     GpuSpectrum extinction; // For metals (Conductor)
     float dispersion; // 0.0 = no dispersion. High values (~0.05) = strong dispersion.
     float thin_film_thickness;

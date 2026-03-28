@@ -157,6 +157,9 @@ Scene SceneParser::parse_file(const std::string& filepath) {
                 if (extra_token == "thin_film") {
                     ss >> mat->thin_film_thickness >> mat->thin_film_ior;
                 }
+                else if (extra_token == "eta_rgb") {
+                    ss >> mat->metal_eta.x >> mat->metal_eta.y >> mat->metal_eta.z;
+                }
                 else if (extra_token == "density") {
                     ss >> mat->medium_density;
                 }

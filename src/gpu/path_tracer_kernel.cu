@@ -862,12 +862,18 @@ __device__ GpuSpectrum eval_bsdf(const GpuMaterial& mat, const GpuVec3& p, const
             one_spec.wavelengths = wavelengths;
             fresnel_spec = F0_spec + (one_spec - F0_spec) * one_minus;
         } else {
-            GpuSpectrum K_spec = rgb_to_spectrum(mat.extinction.to_rgb(), wavelengths);
-            float n_val = mat.ior;
-            fresnel_spec.values.x = conductor_fresnel_reflectance(n_val, K_spec.values.x, VdotH);
-            fresnel_spec.values.y = conductor_fresnel_reflectance(n_val, K_spec.values.y, VdotH);
-            fresnel_spec.values.z = conductor_fresnel_reflectance(n_val, K_spec.values.z, VdotH);
-            fresnel_spec.values.w = conductor_fresnel_reflectance(n_val, K_spec.values.w, VdotH);
+            GpuSpectrum K_spec = rgb_coeff_to_spectrum(mat.extinction.to_rgb(), wavelengths);
+            bool use_spectral_eta = (mat.metal_eta.values.x * mat.metal_eta.values.x +
+                                     mat.metal_eta.values.y * mat.metal_eta.values.y +
+                                     mat.metal_eta.values.z * mat.metal_eta.values.z) > 1e-8f;
+            GpuSpectrum eta_spec = use_spectral_eta
+                ? rgb_coeff_to_spectrum(mat.metal_eta.to_rgb(), wavelengths)
+                : GpuSpectrum(mat.ior);
+            eta_spec.wavelengths = wavelengths;
+            fresnel_spec.values.x = conductor_fresnel_reflectance(eta_spec.values.x, K_spec.values.x, VdotH);
+            fresnel_spec.values.y = conductor_fresnel_reflectance(eta_spec.values.y, K_spec.values.y, VdotH);
+            fresnel_spec.values.z = conductor_fresnel_reflectance(eta_spec.values.z, K_spec.values.z, VdotH);
+            fresnel_spec.values.w = conductor_fresnel_reflectance(eta_spec.values.w, K_spec.values.w, VdotH);
         }
         
         return fresnel_spec * (D * G / (4.0f * NdotV * NdotL));
@@ -963,15 +969,17 @@ __device__ bool scatter(
         // but we calculate attenuation for ALL channels to prevent color noise.
         int channel = sample_index % 3;
         
-        float n_val = mat.ior;
-        
         // Calculate Extinction for all channels
         float k_r = mat.extinction.values.x;
         float k_g = mat.extinction.values.y;
         float k_b = mat.extinction.values.z;
+        float eta_r = mat.metal_eta.values.x > 1e-8f ? mat.metal_eta.values.x : mat.ior;
+        float eta_g = mat.metal_eta.values.y > 1e-8f ? mat.metal_eta.values.y : mat.ior;
+        float eta_b = mat.metal_eta.values.z > 1e-8f ? mat.metal_eta.values.z : mat.ior;
         
         // Use the selected channel for Stokes/Geometric interactions
         float k_val = (channel == 0) ? k_r : ((channel == 1) ? k_g : k_b);
+        float eta_val = (channel == 0) ? eta_r : ((channel == 1) ? eta_g : eta_b);
         
         // Phase 3: Polarization for Metal (Conductor)
         // Treat as reflection off microfacet H
@@ -1008,7 +1016,7 @@ __device__ bool scatter(
         
         bool use_albedo_fresnel = (k_r * k_r + k_g * k_g + k_b * k_b) < 1e-8f;
         if (!use_albedo_fresnel) {
-            apply_mueller_reflection_conductor(stokes, n_val, k_val, cos_theta_h);
+            apply_mueller_reflection_conductor(stokes, eta_val, k_val, cos_theta_h);
         }
         
         float fresnel_r;
@@ -1023,9 +1031,9 @@ __device__ bool scatter(
             fresnel_g = f0_g + (1.0f - f0_g) * one_minus;
             fresnel_b = f0_b + (1.0f - f0_b) * one_minus;
         } else {
-            fresnel_r = conductor_fresnel_reflectance(n_val, k_r, cos_theta_h);
-            fresnel_g = conductor_fresnel_reflectance(n_val, k_g, cos_theta_h);
-            fresnel_b = conductor_fresnel_reflectance(n_val, k_b, cos_theta_h);
+            fresnel_r = conductor_fresnel_reflectance(eta_r, k_r, cos_theta_h);
+            fresnel_g = conductor_fresnel_reflectance(eta_g, k_g, cos_theta_h);
+            fresnel_b = conductor_fresnel_reflectance(eta_b, k_b, cos_theta_h);
         }
         float NdotV = N.dot(V);
         float NdotL = N.dot(scattered.direction);
@@ -1066,14 +1074,19 @@ __device__ bool scatter(
             fresnel_spec = F0_spec + (one_spec - F0_spec) * one_minus;
         } else {
             // Upsample K (extinction) to spectrum for the 4 wavelengths
-            GpuSpectrum K_spec = rgb_to_spectrum(mat.extinction.to_rgb(), fresnel_spec.wavelengths);
+            GpuSpectrum K_spec = rgb_coeff_to_spectrum(mat.extinction.to_rgb(), fresnel_spec.wavelengths);
+            bool use_spectral_eta = (mat.metal_eta.values.x * mat.metal_eta.values.x +
+                                     mat.metal_eta.values.y * mat.metal_eta.values.y +
+                                     mat.metal_eta.values.z * mat.metal_eta.values.z) > 1e-8f;
+            GpuSpectrum eta_spec = use_spectral_eta
+                ? rgb_coeff_to_spectrum(mat.metal_eta.to_rgb(), fresnel_spec.wavelengths)
+                : GpuSpectrum(mat.ior);
+            eta_spec.wavelengths = fresnel_spec.wavelengths;
             
-            // Calculate physical Fresnel for each wavelength
-            // Note: n_val is assumed constant (mat.ior)
-            fresnel_spec.values.x = conductor_fresnel_reflectance(n_val, K_spec.values.x, cos_theta_h);
-            fresnel_spec.values.y = conductor_fresnel_reflectance(n_val, K_spec.values.y, cos_theta_h);
-            fresnel_spec.values.z = conductor_fresnel_reflectance(n_val, K_spec.values.z, cos_theta_h);
-            fresnel_spec.values.w = conductor_fresnel_reflectance(n_val, K_spec.values.w, cos_theta_h);
+            fresnel_spec.values.x = conductor_fresnel_reflectance(eta_spec.values.x, K_spec.values.x, cos_theta_h);
+            fresnel_spec.values.y = conductor_fresnel_reflectance(eta_spec.values.y, K_spec.values.y, cos_theta_h);
+            fresnel_spec.values.z = conductor_fresnel_reflectance(eta_spec.values.z, K_spec.values.z, cos_theta_h);
+            fresnel_spec.values.w = conductor_fresnel_reflectance(eta_spec.values.w, K_spec.values.w, cos_theta_h);
         }
 
         if (effective_thickness > 0.0f) {

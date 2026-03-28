@@ -18,6 +18,24 @@ The correct response is not more local tuning. The correct response is to separa
 - visualization
 - validation
 
+## Non-Negotiable Principle
+
+Complex parameter calibration must never be done manually.
+
+That means:
+
+- no hand-tuned mass formulas in scene code
+- no scene-local stiffness rituals
+- no hidden warmup-only constants that act like solver patches
+- no visually chosen isolevels without a density-field definition behind them
+
+If a parameter is important, it must be:
+
+- derived from solver quantities
+- computed from geometry or spacing
+- selected by a documented preset
+- or validated by an automated benchmark
+
 ## Current System Map
 
 ### Core Files
@@ -34,7 +52,7 @@ The correct response is not more local tuning. The correct response is to separa
 The fluid path currently works like this:
 
 1. `PhysicsWorld::step()` advances rigid bodies
-2. the fluid system is sub-stepped 32 times per frame
+2. the fluid system is sub-stepped based on solver-aware stability criteria
 3. each fluid sub-step calls:
    - spatial grid build
    - density / pressure computation
