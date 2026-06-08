@@ -2193,7 +2193,12 @@ __global__ void shade_kernel(
             int spectral_channel = (flag >> 1) & 3;
 
             float pdf_val = 0.0f;
-            if (scatter(r_in, mat, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, pdf_val, dispersion_clamp, sample_index, pixel_index, depth, spectral_channel)) {
+            float ior_outside = 1.0f;
+            bool front_face = r_in.direction.dot(ng) < 0.0f;
+            if (front_face && current_medium_idx >= 0) {
+                ior_outside = scene.materials[current_medium_idx].ior;
+            }
+            if (scatter(r_in, mat, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, pdf_val, dispersion_clamp, sample_index, pixel_index, depth, spectral_channel, ior_outside)) {
                 GpuSpectrum new_throughput = throughput * attenuation;
                 
                 // Robust NaN check

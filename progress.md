@@ -67,20 +67,43 @@
 - **Review**: 完整性检查通过 — 无悬空引用，所有 12 个被调函数在 include 前已定义
 - **备注**: 两个 minor issue 已记录（ior_inside 未使用、第二个调用点使用默认 IOR 1.0）
 
-### [Phase 1 Step 1.5] AGENTS.md + 提交
+### [提交] Phase 1 snapshot
 
-- **Phase**: Phase 1 (能量守恒 + scatter 统一)
+- **提交**: `5327cdf` — `phase1: unify two diverged scatter() implementations`
+- **包含**: 5 files, +108/-1019
+- **备注**: AGENTS.md + material.cu + kernel.cu + CMakeLists.txt + progress.md
+
+### [Phase 2 Step 2.1] 传递 ior_outside 给 shade_kernel 的 scatter 调用
+
+- **Phase**: Phase 2 (嵌套 IOR + NEE Dielectric)
 - **状态**: ✅ 完成
 - **变更**:
-  - AGENTS.md 新增 §5 Conversation Compaction Rule：每次 compact 后必须重读 AGENTS.md
-  - 更新 progress.md 记录全部 Phase 1 工作
-- **提交**: （本次提交）
+  - kernel.cu line ~2196: scatter 调用前增加 `ior_outside` 计算
+  - 使用 `current_medium_idx` 确定外部介质 IOR（进入时有效）
+  - 增加 `front_face` 判断：仅在进入表面时使用 `current_medium_idx`
+  - 退出时 `ior_outside = 1.0f`（vacuum），与介质跟踪的退出逻辑一致
+- **验证**: 构建成功 UltraRender.exe 链接通过
+- **Review**: reviewer 发现初始版本缺少 front_face 判断 → 退出时 eta_i=eta_t 折射不弯曲 → 已修复
+- **备注**: 嵌套介质退出到非 vacuum 的场景仍需完整介质栈（不在本阶段范围）
+
+### [Phase 2 Step 2.2] 评估 NEE Dielectric
+
+- **Phase**: Phase 2 (嵌套 IOR + NEE Dielectric)
+- **状态**: ✅ 完成（无需改代码）
+- **评估结论**:
+  - NEE 显式跳过 Dielectric（line 2071 条件中未包含 Dielectric）
+  - `eval_bsdf()` 对 Dielectric 返回 0（delta BSDF 无法用 NEE 采样）
+  - `pdf_bsdf()` 对 Dielectric 返回 0
+  - 以上行为**正确** — 完美镜面 BSDF 不能通过随机方向重要性采样
+  - Dielectric 的光照贡献来自 BSDF 采样链（散射路径命中光源）
+  - 两处 NEE（path_trace + shade_kernel）对 Dielectric 处理一致
+- **备注**: 若未来引入粗糙电介质 BSDF，NEE 需相应更新
 
 ### 当前进度
 
 ```
 Phase 1: [████] 全部完成
-Phase 2: [   ] 未开始
+Phase 2: [██··] Step 2.1-2.2 完成
 Phase 3: [   ] 未开始
 Phase 4: [   ] 未开始
 ```
