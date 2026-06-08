@@ -1,0 +1,13 @@
+resolution 640 360
+spp 500
+
+camera pos 0 1.5 4.0 lookat 0 0.7 0 fov 35
+
+define_image img_validation ..\output\scene_ir_smoke_v6.bmp srgb
+define_texture tex_validation img_validation 0
+
+define_material mat_preview lambertian 1.0 1.0 1.0 0.5 base_color_tex tex_validation
+define_material mat_light light 12.0 12.0 12.0
+
+add_entity quad mat_preview 0 0 0 2.8 1.8 1.0 0 0 0
+add_entity sphere mat_light 0 3 2 0.8 0.8 0.8

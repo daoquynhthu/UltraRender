@@ -1,0 +1,32 @@
+resolution 2560 1600
+camera pos 0 2 8 lookat 0 0.5 0 fov 40
+
+# Fog removed for direct comparison against volume_test.scene
+
+# Materials
+define_material light_mat light 50 50 50
+define_material floor_mat lambertian 0.5 0.5 0.5 0.1
+define_material wall_mat lambertian 0.8 0.8 0.8 0.1
+
+# SSS Material: Reduced density for translucency
+# density 1.0 means mean free path is ~1.0 unit (radius of sphere)
+define_material sss_mat dielectric 1.0 1.0 1.0 0.1 1.5 density 1.0 scatter 0.9 0.2 0.2 absorb 0.01 0.5 0.5 g 0.5
+
+# Reference Glass Material
+define_material glass_mat dielectric 1.0 1.0 1.0 0.0 1.5
+
+# Scene Objects
+# Light - Moved behind to create backlighting/shafts
+add_entity sphere light_mat 0 3 -2 0.8
+
+# Floor
+add_entity cube floor_mat 0 -1 0 10 0.2 10
+
+# Back Wall (Removed or moved far back to not block light)
+# add_entity cube wall_mat 0 2 -5 10 5 0.2
+
+# SSS Sphere (Left)
+add_entity sphere sss_mat -1.2 0.5 0 1.5
+
+# Glass Sphere (Right)
+add_entity sphere glass_mat 1.2 0.5 0 1.5

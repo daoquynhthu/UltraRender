@@ -1,6 +1,7 @@
 #include "../../include/io/image_saver.hpp"
 #include <fstream>
 #include <cmath>
+#include <cstdint>
 #include <algorithm>
 
 namespace ure::io {

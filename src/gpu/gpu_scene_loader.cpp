@@ -1,5 +1,6 @@
 #include "../../include/gpu/gpu_scene_loader.hpp"
 #include "../../include/gpu/material_library.hpp"
+#include <cmath>
 
 namespace ure::gpu {
 
@@ -147,9 +148,10 @@ HostTexture create_spectral_test_texture() {
 GpuHostScene load_default_scene(bool has_mesh) {
     GpuHostScene scene;
     
-    // Create and add texture
-    HostTexture tex = create_spectral_test_texture();
-    scene.textures.push_back(tex);
+    if (!has_mesh) {
+        HostTexture tex = create_spectral_test_texture();
+        scene.textures.push_back(tex);
+    }
 
     // Use Material Library for templates
     // 0: Ground (Replaced with Gray Lambertian)

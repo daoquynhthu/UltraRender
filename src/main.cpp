@@ -160,6 +160,8 @@ int main(int argc, char* argv[]) {
 
     // 2. Build Scene
     Scene scene;
+    ure::scene_ir::SceneIR scene_ir;
+    bool has_scene_ir = false;
     
     // Physics World (Shared Pointer to keep it alive)
     std::shared_ptr<ure::physics::PhysicsWorld> physics_world;
@@ -182,7 +184,9 @@ int main(int argc, char* argv[]) {
     
     if (std::filesystem::exists(scene_path_or_name)) {
         std::cout << "[Main] Parsing scene file: " << scene_path_or_name << std::endl;
-        scene = SceneParser::parse_file(scene_path_or_name);
+        scene_ir = SceneParser::parse_file_to_ir(scene_path_or_name);
+        has_scene_ir = true;
+        scene = ure::scene_ir::to_legacy_scene(scene_ir);
 
         // Check for physics configuration in scene
         if (scene.physics.enabled) {
@@ -678,7 +682,12 @@ int main(int argc, char* argv[]) {
 
     // 4. Load Scene
     std::cout << "[Main] Loading Scene Data..." << std::endl;
-    engine->load_scene(scene);
+    bool use_scene_ir_for_engine = has_scene_ir && !enable_physics;
+    if (use_scene_ir_for_engine) {
+        engine->load_scene_ir(scene_ir);
+    } else {
+        engine->load_scene(scene);
+    }
     
     // Set Spatial Audio Listener
     {

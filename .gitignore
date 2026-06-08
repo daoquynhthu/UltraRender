@@ -23,3 +23,12 @@ crash_log.txt
 # VS
 .vs/
 out/
+
+# Build directories
+build_gpu/
+build_vs/
+build_vs4/
+build_vs_clean/
+
+# GUI build artifacts
+gui/**/obj/

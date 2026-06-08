@@ -1,4 +1,5 @@
 #include "api/ure_api.hpp"
+#include "api/scene_ir_compiler.hpp"
 #include <iostream>
 #include <vector>
 #include <memory>
@@ -12,6 +13,10 @@ public:
         // Stub
         (void)scene;
         std::cout << "[CpuRenderEngine] Scene loaded (Stub)." << std::endl;
+    }
+
+    void load_scene_ir(const scene_ir::SceneIR& scene_ir) override {
+        load_scene(SceneIrCompiler::compile_legacy(scene_ir));
     }
 
     void render(const RenderSettings& settings) override {

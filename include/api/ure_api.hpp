@@ -7,6 +7,10 @@
 
 namespace ure {
 
+namespace scene_ir {
+struct SceneIR;
+}
+
 // Basic Math Types
 struct Vec3 { 
     float x, y, z; 
@@ -152,6 +156,7 @@ public:
     
     // Load scene data into internal engine representation (e.g. upload to GPU)
     virtual void load_scene(const Scene& scene) = 0;
+    virtual void load_scene_ir(const scene_ir::SceneIR& scene_ir) = 0;
     
     // Execute rendering
     // Legacy blocking render, should be implemented using render_pass loop

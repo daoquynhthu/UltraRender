@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <cmath>
 
 namespace ure::gpu {
 
@@ -285,6 +286,8 @@ struct GpuMaterial {
     
     GpuSpectrum emission;
     int texture_index = -1; // -1 means no texture
+    int roughness_texture_index = -1;
+    int emission_texture_index = -1;
 };
 
 struct GpuSphere {

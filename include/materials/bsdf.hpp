@@ -2,6 +2,7 @@
 
 #include "../core/vector.hpp"
 #include "../spectral/spectral.hpp"
+#include <cstdint>
 #include <bitset>
 
 namespace ure::core {

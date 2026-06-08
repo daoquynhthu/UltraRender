@@ -1,15 +1,13 @@
 #pragma once
-#include <string>
-#include "ure_api.hpp"
-#include "procedural.hpp"
+
 #include "scene/scene_ir.hpp"
+#include <string>
 
 namespace ure {
 
-class SceneParser {
+class SceneFrontend {
 public:
-    static Scene parse_file(const std::string& filepath);
     static scene_ir::SceneIR parse_file_to_ir(const std::string& filepath);
 };
 
-}
+} // namespace ure

@@ -2498,10 +2498,20 @@ __global__ void shade_kernel(
     GpuMaterial mat = scene.materials[mat_idx];
 
     // Texture Sampling (Out-of-Core / Unified Memory)
+    GpuVec2 hit_uv = hit_queue.uv[idx];
     if (mat.texture_index != -1) {
-        GpuVec2 uv = hit_queue.uv[idx];
-        GpuSpectrum tex_color = sample_texture(scene, mat.texture_index, uv.u, uv.v, throughput.wavelengths);
+        GpuSpectrum tex_color = sample_texture(scene, mat.texture_index, hit_uv.u, hit_uv.v, throughput.wavelengths);
         mat.albedo = mat.albedo * tex_color;
+    }
+    if (mat.roughness_texture_index != -1) {
+        GpuSpectrum tex_roughness = sample_texture(scene, mat.roughness_texture_index, hit_uv.u, hit_uv.v, throughput.wavelengths);
+        GpuVec3 tex_rgb = tex_roughness.to_rgb();
+        float tex_value = fminf(1.0f, fmaxf(0.0f, (tex_rgb.x + tex_rgb.y + tex_rgb.z) / 3.0f));
+        mat.roughness = fminf(1.0f, fmaxf(0.001f, mat.roughness * tex_value));
+    }
+    if (mat.emission_texture_index != -1) {
+        GpuSpectrum tex_emission = sample_texture(scene, mat.emission_texture_index, hit_uv.u, hit_uv.v, throughput.wavelengths);
+        mat.emission = mat.emission * tex_emission;
     }
     
     GpuVec3 p = hit_queue.p[idx];
@@ -3014,7 +3024,8 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<ure::gpu::RenderMesh>& meshes,
                               const std::vector<ure::gpu::GpuInstance>& instances,
                               const std::vector<ure::gpu::GpuSphere>& spheres,
-                              const std::vector<ure::gpu::GpuMaterial>& materials) {
+                              const std::vector<ure::gpu::GpuMaterial>& materials,
+                              const std::vector<ure::gpu::HostTexture>& textures) {
     GpuContext* ctx = new GpuContext();
     ctx->width = width;
     ctx->height = height;
@@ -3055,6 +3066,9 @@ GpuContext* init_gpu_renderer(int width, int height,
     // Scene Setup
     bool use_default_geometry = spheres.empty() && meshes.empty() && instances.empty();
     GpuHostScene host_scene = load_default_scene(!use_default_geometry);
+    if (!textures.empty()) {
+        host_scene.textures.insert(host_scene.textures.end(), textures.begin(), textures.end());
+    }
     
     std::vector<GpuMaterial>& host_materials = host_scene.materials;
     if (!materials.empty()) {

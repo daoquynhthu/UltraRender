@@ -1,10 +1,18 @@
 cmake_minimum_required(VERSION 3.25)
-project(UltraRenderEngine LANGUAGES CXX)
+project(UltraRenderEngine LANGUAGES CXX CUDA)
 
 # --- 基础配置 ---
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
+# CI does not have a physical GPU, so avoid the "native" probe.
+# The build targets a broad set of common architectures instead.
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES "all-major")
+endif()
 
 # 编译选项
 # (Moved to set_source_files_properties below)
@@ -25,60 +33,26 @@ list(REMOVE_DUPLICATES ENGINE_SOURCES_CPP)
 # 移除 gpu_driver_stub.cpp，默认假设我们可能要用 CUDA
 list(REMOVE_ITEM ENGINE_SOURCES_CPP "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/gpu_driver_stub.cpp")
 
-# --- CUDA 支持配置 ---
-enable_language(CUDA)
+message(STATUS "CUDA Compiler found: ${CMAKE_CUDA_COMPILER}")
 
-if(CMAKE_CUDA_COMPILER)
-    message(STATUS "CUDA Compiler found: ${CMAKE_CUDA_COMPILER}")
-    enable_language(CUDA)
-    
-    # 设置 CUDA 架构 (Native 表示针对当前机器编译，性能最佳)
-    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES "native")
-    endif()
+set(ENGINE_SOURCES_CUDA
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/gpu_driver.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_kernel.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_material.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_raygen.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_denoise.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_post.cu"
+)
 
-    # 设置 CUDA 标准
-    set(CMAKE_CUDA_STANDARD 20) # CUDA 13 支持 C++20
+message(STATUS "Building with CUDA support.")
 
-    set(ENGINE_SOURCES_CUDA
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/gpu_driver.cu"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_kernel.cu"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_material.cu"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_raygen.cu"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_denoise.cu"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_post.cu"
-    )
-    
-    message(STATUS "Building with CUDA support.")
-    add_definitions(-DUSE_CUDA)
-    
-    # Ensure C++ compiler can find CUDA headers (e.g. cuda_runtime.h)
-    include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+# Ensure C++ compiler can find CUDA headers (e.g. cuda_runtime.h)
+include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
-    set(FINAL_SOURCES 
-        ${ENGINE_SOURCES_CPP}
-        ${ENGINE_SOURCES_CUDA}
-    )
-else()
-    message(STATUS "CUDA Compiler NOT found. Building in CPU-only mode.")
-    
-    # Exclude GPU-specific files
-    list(FILTER ENGINE_SOURCES_CPP EXCLUDE REGEX ".*/src/gpu/.*")
-    list(FILTER ENGINE_SOURCES_CPP EXCLUDE REGEX ".*/src/api/gpu_engine_impl.cpp")
-
-    # Add CPU engine implementation
-    list(APPEND ENGINE_SOURCES_CPP "${CMAKE_CURRENT_SOURCE_DIR}/src/api/cpu_engine_impl.cpp")
-
-    # Keep gpu_driver_stub.cpp if needed by other components, or exclude it if cpu_engine_impl is enough.
-    # gpu_driver_stub.cpp implements ure::gpu::is_gpu_available.
-    # If we exclude src/gpu/.*, we exclude stub too.
-    # But we don't need it since cpu_engine_impl.cpp handles factory logic.
-    # list(APPEND ENGINE_SOURCES_CPP "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/gpu_driver_stub.cpp")
-
-    set(FINAL_SOURCES 
-        ${ENGINE_SOURCES_CPP}
-    )
-endif()
+set(FINAL_SOURCES
+    ${ENGINE_SOURCES_CPP}
+    ${ENGINE_SOURCES_CUDA}
+)
 
 # 核心头文件
 file(GLOB_RECURSE ENGINE_HEADERS

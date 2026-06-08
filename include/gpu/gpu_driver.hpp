@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include "gpu/gpu_scene_loader.hpp"
 #include "gpu/gpu_structs.hpp"
 
 // Disable C4819 warning for MSVC (encoding issue)
@@ -42,7 +43,8 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<RenderMesh>& meshes,
                               const std::vector<GpuInstance>& instances,
                               const std::vector<GpuSphere>& spheres,
-                              const std::vector<GpuMaterial>& materials);
+                              const std::vector<GpuMaterial>& materials,
+                              const std::vector<HostTexture>& textures = {});
 
 // Cleanup GPU resources
 void free_gpu_renderer(GpuContext* ctx);
