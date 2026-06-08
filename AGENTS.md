@@ -105,7 +105,11 @@ E:\Render Engine\
 - Reference render tests: render a scene at fixed SPP, compare with stored reference image
 - Error tolerance: 1e-4f for unit tests, 0.5% perceptual difference for reference renders
 
-## 5. Workflow
+## 5. Conversation Compaction Rule
+
+After every conversation compaction (tool merge, context reset, or session resume), the agent **must read this file (AGENTS.md) in full** before taking any actions. This ensures all governance rules remain in effect across sessions.
+
+## 6. Workflow
 
 Every work session must follow this sequence:
 
@@ -162,7 +166,7 @@ PLAN → IMPLEMENT → VERIFY → REVIEW → REPORT → COMMIT
 - Each entry has: timestamp, phase, sub-step, status, notes
 - Timestamp format: `YYYY-MM-DD HH:MM`
 
-## 6. What NOT To Do
+## 7. What NOT To Do
 
 - ❌ Do NOT modify files in `src/integrators/` (CPU path is OBSOLETE)
 - ❌ Do NOT change `kNumWavelengths` from 4 (that is a future upgrade)
@@ -172,7 +176,7 @@ PLAN → IMPLEMENT → VERIFY → REVIEW → REPORT → COMMIT
 - ❌ Do NOT ignore failing tests
 - ❌ Do NOT remove dead code without verifying it is actually dead
 
-## 7. Communication
+## 8. Communication
 
 - Use Chinese for status reports to the user (they prefer it)
 - Use English for code, comments, and AGENTS.md

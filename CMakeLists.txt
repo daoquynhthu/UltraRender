@@ -38,7 +38,6 @@ message(STATUS "CUDA Compiler found: ${CMAKE_CUDA_COMPILER}")
 set(ENGINE_SOURCES_CUDA
     "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/gpu_driver.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_kernel.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_material.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_raygen.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_denoise.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/gpu/path_tracer_post.cu"
