@@ -99,11 +99,37 @@
   - 两处 NEE（path_trace + shade_kernel）对 Dielectric 处理一致
 - **备注**: 若未来引入粗糙电介质 BSDF，NEE 需相应更新
 
+### [Phase 3 全部完成] GPU 测试基础设施 + math 头提取
+
+- **Phase**: Phase 3 (GPU 测试 + math 提取)
+- **状态**: ✅ 完成
+- **提交**: `54233a6` — Phase 3: GPU test infrastructure + math function extraction
+- **变更**:
+  - `include/gpu/gpu_math_functions.cuh` — ggx_D、smith_G1、schlick、power_heuristic 从 kernel.cu 提取至独立头
+  - `tests/gpu/test_framework.cuh` — CHECK / CHECK_CUDA / REQUIRE_GPU / RUN_TEST 宏框架
+  - `tests/gpu/test_device.cu` — CUDA 设备检测测试
+  - `tests/gpu/test_math_functions.cu` — GPU math 函数 kernel 测试（3 项）
+  - `tests/gpu/test_spectral_pipeline.cu` — RGB spectrum roundtrip 一致性测试（5 项）
+  - `tests/gpu/test_render_basic.cu` — 最小渲染管线测试（ray-sphere intersection + emissive shade + NEE shadow，28+1+8 项）
+  - `tests/gpu/CMakeLists.txt` — GPU 测试构建配置
+  - 根 `CMakeLists.txt` — 添加 `add_subdirectory(tests/gpu)` 条件块
+  - `src/gpu/path_tracer_kernel.cu` — math 函数替换为 `#include "gpu/gpu_math_functions.cuh"`
+- **验证**:
+  - `gpu_test_device`: RTX 5060 Laptop / CC 12.0 / 8 GB / 26 SMs — ✅ PASS
+  - `gpu_test_math`: 3 sub-tests, 33 assertions — ✅ PASS
+  - `gpu_test_spectral`: 5 sub-tests, 5 assertions — ✅ PASS
+  - `gpu_test_render`: 3 sub-tests, 37 assertions — ✅ PASS
+- **Review**:
+  - light position 从 (3,0,0) 修正为 (-2,0,2) 解决 NEE cos_surf=0 问题（光源在可见表面背后）
+  - MSVC /EHsc 选项通过 `$<COMPILE_LANGUAGE:CXX>` 生成器表达式限制仅对 C++ 编译生效
+  - `link_libraries` 中移除 CUDA 相关 MSVC 选项冲突
+- **下一步**: Phase 4 — 代码模块化（漂移访问器抽象、raygen 提取、数学函数集中管理）
+
 ### 当前进度
 
 ```
 Phase 1: [████] 全部完成
-Phase 2: [██··] Step 2.1-2.2 完成
-Phase 3: [   ] 未开始
-Phase 4: [   ] 未开始
+Phase 2: [████] 全部完成（含 commit）
+Phase 3: [████] 全部完成（含 commit）
+Phase 4: [    ] 未开始
 ```

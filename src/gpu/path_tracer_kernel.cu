@@ -97,31 +97,7 @@ __device__ bool refract(const GpuVec3& uv, const GpuVec3& n, float etai_over_eta
     return true;
 }
 
-__device__ inline float ggx_D(float NdotH, float a) {
-    float a2 = a * a;
-    float denom = NdotH * NdotH * (a2 - 1.0f) + 1.0f;
-    return a2 / (3.14159265f * denom * denom);
-}
-
-__device__ inline float smith_G1(float NdotV, float k) {
-    return NdotV / (NdotV * (1.0f - k) + k);
-}
-
-__device__ inline float smith_G(float NdotV, float NdotL, float k) {
-    return smith_G1(NdotV, k) * smith_G1(NdotL, k);
-}
-
-__device__ float schlick(float cosine, float ref_idx) {
-    float r0 = (1.0f - ref_idx) / (1.0f + ref_idx);
-    r0 = r0 * r0;
-    return r0 + (1.0f - r0) * powf((1.0f - cosine), 5.0f);
-}
-
-__device__ inline float power_heuristic(float f_pdf, float g_pdf) {
-    float f2 = f_pdf * f_pdf;
-    float g2 = g_pdf * g_pdf;
-    return f2 / (f2 + g2 + 1e-10f);
-}
+#include "gpu/gpu_math_functions.cuh"
 
 __device__ bool hit_sphere(const GpuSphere& sphere, const GpuRay& r, float t_min, float t_max, float& t, GpuVec3& p, GpuVec3& n, int& mat_idx) {
     GpuVec3 oc = r.origin - sphere.center;

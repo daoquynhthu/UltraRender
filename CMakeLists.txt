@@ -106,6 +106,11 @@ if(CMAKE_CUDA_COMPILER)
     target_compile_definitions(UltraRender PRIVATE USE_CUDA)
 endif()
 
+# --- GPU Testing (conditional on CUDA) ---
+if(CMAKE_CUDA_COMPILER)
+    add_subdirectory(tests/gpu)
+endif()
+
 # --- Testing Configuration ---
 # enable_testing()
 

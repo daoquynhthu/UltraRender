@@ -11,7 +11,7 @@
 ```
 UltraRender
 ├── GPU 路径 (主开发目标)
-│   ├── include/gpu/         — 数据结构 + 设备工具函数 (7 个文件)
+│   ├── include/gpu/         — 数据结构 + 设备工具函数 (8 个文件)
 │   └── src/gpu/             — CUDA 实现 (6 个 .cu 文件)
 ├── CPU 路径 (src/integrators/) — 已标记 OBSOLETE，冻结不改
 ├── API 层 (src/api/)        — 场景加载 + 渲染引擎实现
@@ -25,9 +25,9 @@ render_frame_gpu()                   ← gpu_driver.cu (host 端)
   └─ wavefront 循环 (per-sample)
        ├─ generate_rays_kernel       ← path_tracer_kernel.cu (定义在 kernel 内部)
        ├─ extend_kernel              ← path_tracer_kernel.cu (定义在 kernel 内部)
-       ├─ shade_kernel               ← path_tracer_kernel.cu
-       │    ├─ 散射 scatter() ①  ← kernel.cu:1807 → 调用旧版 scatter (line 887)
-       │    └─ 散射 scatter() ②  ← kernel.cu:2719 → 调用旧版 scatter (line 887)
+        ├─ shade_kernel               ← path_tracer_kernel.cu
+        │    ├─ 散射 scatter() ①  ← kernel.cu:1807 → material.cu scatter() via #include
+        │    └─ 散射 scatter() ②  ← kernel.cu:2719 → material.cu scatter() via #include
        ├─ extend_shadow_kernel       ← path_tracer_kernel.cu
        └─ resolve_framebuffer_kernel ← path_tracer_post.cu
 ```
@@ -42,6 +42,7 @@ render_frame_gpu()                   ← gpu_driver.cu (host 端)
 |------|------|------|------|
 | `include/gpu/gpu_structs.hpp` | 404 | GpuVec3, GpuSpectrum, StokesVector, RayQueue, GpuMaterial 等 | 整洁，设计合理 |
 | `include/gpu/gpu_spectrum_utils.cuh` | 133 | CIE 匹配函数, spectrum↔RGB 转换 | 三类语义上映射齐全 |
+| `include/gpu/gpu_math_functions.cuh` | ~35 | ggx_D, smith_G1, schlick, power_heuristic | Phase 3 从 kernel.cu 提取 |
 | `include/gpu/gpu_driver.hpp` | 77 | Host API 声明 | 清晰，有 Interactive API |
 | `include/gpu/gpu_scene_loader.hpp` | - | Device 端场景结构 | 正常 |
 | `include/gpu/bvh_builder.hpp` | - | BVH 构建 | 正常 |
@@ -60,7 +61,6 @@ render_frame_gpu()                   ← gpu_driver.cu (host 端)
 
 | 文件 | 行数 | 问题 |
 |------|------|------|
-| **`src/gpu/path_tracer_material.cu`** | 871 | **死代码** — 改进版 `scatter()` 加了 `static`，从未被 kernel 调用；内含正确的 dielectric 能量守恒修复，但未生效 |
 | **`src/gpu/path_tracer_raygen.cu`** | 9 | **空壳** — 只有 `namespace ure::gpu { }`，无任何代码 |
 
 ---
@@ -79,14 +79,11 @@ render_frame_gpu()                   ← gpu_driver.cu (host 端)
 **material.cu 中已有修复**: `src/gpu/path_tracer_material.cu:812-816` 包含 `radiance_scale` 并加了 1.5x 钳位
 **修复状态**: ❌ 未修复
 
-### Bug #2 (严重) — 两个 `scatter()` 分裂，新版本未使用
+### ~~Bug #2 (严重) — 两个 `scatter()` 分裂~~ ✅ 已修复 (Phase 1+3)
 
-| 版本 | 位置 | 调用者 | 状态 |
-|------|------|--------|------|
-| 旧版 | `kernel.cu:887` | `shade_kernel` 两处调用 | **实际在跑** |
-| 新版 | `material.cu:475` | 无人 | **死代码** |
-
-新版缺少 `out_pdf` 输出参数，即使整合也要先加回。
+旧版 `kernel.cu:887` scatter() 已删除，material.cu scatter() 通过 `#include "path_tracer_material.cu"` 接入 kernel.cu。
+Phase 1 添加了 `out_pdf` 参数，Phase 3 通过提取 math 函数 + GPU 测试验证。
+**修复提交**: `54233a6`
 
 ### Bug #3 (中等) — NEE + Dielectric BSDF 评估为 0
 
@@ -112,7 +109,7 @@ render_frame_gpu()                   ← gpu_driver.cu (host 端)
 
 | 组件 | 文档提及 | 代码 | 差距 |
 |------|---------|------|------|
-| GPU 测试 | GPU_Roadmap 隐含需要 | 无 | ❌ 零测试 |
+| GPU 测试 | GPU_Roadmap 隐含需要 | 4 个 .cu 测试文件 | ✅ Phase 3 完成 |
 | 参考渲染对比 | - | 无 | ❌ 无基线 |
 | 高通道光谱 (N≥32) | GPU_Roadmap §2.4 | 4 通道 | ⚠️ 精度限制 |
 | BDPT 双向路径追踪 | Offline_Roadmap §2.1 | 无 | ❌ 未实现 |
@@ -148,7 +145,10 @@ render_frame_gpu()                   ← gpu_driver.cu (host 端)
 | `tests/unit/test_image_saver.cpp` | 单元 | 图片输出 | ✅ 通过 |
 | `tests/integration/test_scene_factory.cpp` | 集成 | 场景构建 | ✅ 通过 |
 | `tests/test_interactive_api.cpp` | 集成 | 交互 API | ✅ 通过 |
-| **GPU kernel 测试** | - | - | ❌ **完全缺失** |
+| `tests/gpu/test_device.cu` | GPU 集成 | CUDA 设备检测 | ✅ 通过 |
+| `tests/gpu/test_math_functions.cu` | GPU 单元 | ggx_D, smith_G1, schlick, power_heuristic | ✅ 通过 |
+| `tests/gpu/test_spectral_pipeline.cu` | GPU 集成 | RGB 光谱往返一致性 | ✅ 通过 |
+| `tests/gpu/test_render_basic.cu` | GPU 集成 | ray-sphere intersection + emissive shade + NEE shadow | ✅ 通过 |
 
 ---
 
