@@ -29,6 +29,9 @@ namespace ure::gpu {
 
 using namespace ure::gpu;
 
+// Forward declared from path_tracer_raygen.cu
+__global__ void generate_rays_kernel(RayQueue queue, int width, int height, GpuCamera camera, int sample_index, int* sample_counts);
+
 __global__ void resolve_framebuffer_kernel(
     GpuVec3* accum_buffer,
     int* sample_counts,
@@ -1370,86 +1373,6 @@ __device__ GpuVec3 path_trace(GpuRay& r, GpuScene scene, unsigned int& seed, int
 // Wavefront Kernels
 // ==========================================
 
-__global__ void generate_rays_kernel(
-    RayQueue queue,
-    int width,
-    int height,
-    GpuCamera camera,
-    int sample_index,
-    int* sample_counts
-) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int j = blockIdx.y * blockDim.y + threadIdx.y;
-    
-    if (i >= width || j >= height) return;
-    
-    int pixel_index = j * width + i;
-    int ray_index = pixel_index; 
-    
-    if (sample_counts) {
-        sample_counts[pixel_index] += 1;
-    }
-    
-    // Initialize Seed using Wang Hash
-    // Combine sample_index and pixel_index
-    unsigned int seed = wang_hash(1984 + pixel_index + sample_index * width * height);
-    
-    // Stratified Wavelength Sampling
-    // Sample 4 wavelengths evenly across the visible spectrum [kLambdaMin, kLambdaMax]
-    // Uses a common offset for all 4 bins per ray to ensure good stratification
-    float4 ray_wavelengths;
-    {
-        float domain = GpuSpectrum::kLambdaMax - GpuSpectrum::kLambdaMin;
-        float bin_width = domain / 4.0f;
-        float offset = rand_float(seed); // Random jitter within each bin
-        
-        ray_wavelengths.x = GpuSpectrum::kLambdaMin + (0.0f + offset) * bin_width;
-        ray_wavelengths.y = GpuSpectrum::kLambdaMin + (1.0f + offset) * bin_width;
-        ray_wavelengths.z = GpuSpectrum::kLambdaMin + (2.0f + offset) * bin_width;
-        ray_wavelengths.w = GpuSpectrum::kLambdaMin + (3.0f + offset) * bin_width;
-    }
-
-    // Tent Filter for High Quality Anti-Aliasing (Strict Quality Mode)
-    // Uses Halton Sequence (LDS) for faster convergence
-    // Dimensions 0 and 1 for Pixel Jitter
-    float r1 = sample_dimension(sample_index, pixel_index, 0);
-    float r2 = sample_dimension(sample_index, pixel_index, 1);
-    
-    // Reserve Dimensions 2 and 3 for Lens Sampling (Stratified)
-    // Even if camera is pinhole, we reserve these to align with scatter offsets
-    // float r3 = sample_dimension(sample_index, pixel_index, 2);
-    // float r4 = sample_dimension(sample_index, pixel_index, 3);
-    
-    float dx = (r1 < 0.5f) ? sqrtf(2.0f * r1) - 1.0f : 1.0f - sqrtf(2.0f * (1.0f - r1));
-    float dy = (r2 < 0.5f) ? sqrtf(2.0f * r2) - 1.0f : 1.0f - sqrtf(2.0f * (1.0f - r2));
-
-    float u = (float(i) + 0.5f + dx) / float(width);
-    float v = (float(height - 1 - j) + 0.5f + dy) / float(height);
-    
-    GpuRay r;
-    r.origin = camera.origin;
-    r.direction = (camera.lower_left_corner + u * camera.horizontal + v * camera.vertical - camera.origin).normalize();
-    
-    queue.origins[ray_index] = r.origin;
-    queue.directions[ray_index] = r.direction;
-
-    // Initialize Throughput with Full Spectral Weight (Deterministic)
-    // We trace one path (Hero Wavelength driven) but accumulate contribution for all RGB channels.
-    // This eliminates color noise at the cost of slight spectral blurring (biased but consistent).
-    GpuSpectrum initial_throughput = GpuSpectrum(1.0f); 
-    initial_throughput.wavelengths = ray_wavelengths;
-    
-    queue.throughputs[ray_index] = initial_throughput;
-    queue.stokes[ray_index] = StokesVector(1.0f, 0.0f, 0.0f, 0.0f); // Phase 3: Unpolarized
-    queue.medium_indices[ray_index] = -1; // Phase 3: Start in Global Medium
-    queue.seeds[ray_index] = seed;
-    queue.pixel_indices[ray_index] = pixel_index;
-    queue.depths[ray_index] = 0;
-    queue.flags[ray_index] = 1; // Treat primary ray as "specular" so we see lights directly
-    
-    // We set count on host before launch
-}
-
 __global__ void extend_kernel(
     RayQueue ray_queue,
     HitQueue hit_queue,
@@ -1735,6 +1658,8 @@ __global__ void extend_shadow_kernel(
     }
 }
 
+// ============================= SHADE KERNEL =============================
+
 __global__ void shade_kernel(
     RayQueue current_queue,
     HitQueue hit_queue,
@@ -1758,7 +1683,7 @@ __global__ void shade_kernel(
     unsigned int seed = current_queue.seeds[idx];
     int flag = current_queue.flags[idx];
     
-    // Phase 3: Volume / SSS Integration
+    // --- Volume / Medium Setup ---
     int current_medium_idx = current_queue.medium_indices[idx];
     float t_hit = (mat_idx != -1) ? hit_queue.t[idx] : 1e30f;
     
@@ -1793,6 +1718,7 @@ __global__ void shade_kernel(
         
         if (t_medium < t_hit) {
             
+            // --- Volume Scatter Path ---
             // Transmittance & PDF Weight
             // Weight = (sigma_s / sigma_t) * Phase(w) / PDF(w)
             // Isotropic: Phase = 1/4pi, PDF = 1/4pi -> Cancel out.
@@ -1896,7 +1822,7 @@ __global__ void shade_kernel(
              }
              return; // Skip surface shading
         } else {
-             // Surface Hit - Apply Transmittance up to t_hit
+             // --- Surface Hit Path — Apply Transmittance up to t_hit ---
             GpuVec3 tr_vals;
             tr_vals.x = expf(-sigma_t.values.x * t_hit);
             tr_vals.y = expf(-sigma_t.values.y * t_hit);
@@ -2042,7 +1968,7 @@ __global__ void shade_kernel(
     // Max Depth Check
     if (depth >= 50) return;
 
-    // Next Event Estimation (NEE)
+    // --- NEE: Next Event Estimation ---
     // Only for non-specular materials (Lambertian, Cloth, Rough Metal)
     if (scene.light_count > 0 && (mat.type == MaterialType::Lambertian || mat.type == MaterialType::Cloth || (mat.type == MaterialType::Metal && mat.roughness > 0.02f))) {
         // LDS for Light Sampling
@@ -2151,7 +2077,7 @@ __global__ void shade_kernel(
         }
     }
     
-    // Scatter (Standard BSDF Sampling)
+    // --- BSDF Scatter ---
     GpuRay r_in;
     r_in.origin = current_queue.origins[idx];
     r_in.direction = current_queue.directions[idx];
@@ -2249,6 +2175,8 @@ __global__ void shade_kernel(
         }
     }
 }
+
+// ============================= END SHADE KERNEL =============================
 
 // Helper functions
 void alloc_ray_queue(RayQueue& q, int capacity) {

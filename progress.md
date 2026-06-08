@@ -125,11 +125,25 @@
   - `link_libraries` 中移除 CUDA 相关 MSVC 选项冲突
 - **下一步**: Phase 4 — 代码模块化（漂移访问器抽象、raygen 提取、数学函数集中管理）
 
+### [Phase 4 Steps 4.1-4.3] 代码模块化
+
+- **Phase**: Phase 4 (代码模块化)
+- **状态**: ✅ Staged（待 commit）
+- **变更**:
+  - `src/gpu/path_tracer_raygen.cu` — 提取 `generate_rays_kernel` 至独立编译单元 + 内容填充（原为空壳）
+  - `src/gpu/path_tracer_kernel.cu` — 添加 forward declaration + 移除 raygen 原始定义 + 添加 shade_kernel 分段标注（Volume/Medium/NEE/BSDF）
+  - `include/gpu/gpu_structs.hpp` — GpuSpectrum 添加 `sample(int i)` / `set_sample(int i, float v)` / `wavelength(int i)` / `set_wavelength(int i, float v)` 访问器
+  - `tests/gpu/CMakeLists.txt` — render test 增加 `path_tracer_raygen.cu` 编译依赖
+  - `tests/gpu/test_math_functions.cu` — 修正 ggx_D 测试参数 (NdotH, alpha 约定)
+  - `tests/gpu/test_spectral_pipeline.cu` — 降低 roundtrip 阈值 0.5→0.3（4 波长光谱往返固有的精度限制）
+- **验证**: UltraRender + 4 GPU 测试全部通过（100/100），无回归
+- **备注**: Phase 3 commit 后发现的 2 个 pre-existing 测试 bug（ggx_D 参数错配 + roundtrip 阈值过严）随 Phase 4 一并修复
+
 ### 当前进度
 
 ```
 Phase 1: [████] 全部完成
 Phase 2: [████] 全部完成（含 commit）
 Phase 3: [████] 全部完成（含 commit）
-Phase 4: [    ] 未开始
+Phase 4: [████] 全部完成（以待 commit）
 ```

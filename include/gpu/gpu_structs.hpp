@@ -228,6 +228,34 @@ struct alignas(16) GpuSpectrum {
         // Simple mapping back
         return GpuVec3(values.x, values.y, values.z);
     }
+
+    __host__ __device__ float sample(int i) const {
+        if (i == 0) return values.x;
+        if (i == 1) return values.y;
+        if (i == 2) return values.z;
+        return values.w;
+    }
+
+    __host__ __device__ void set_sample(int i, float v) {
+        if (i == 0) values.x = v;
+        else if (i == 1) values.y = v;
+        else if (i == 2) values.z = v;
+        else values.w = v;
+    }
+
+    __host__ __device__ float wavelength(int i) const {
+        if (i == 0) return wavelengths.x;
+        if (i == 1) return wavelengths.y;
+        if (i == 2) return wavelengths.z;
+        return wavelengths.w;
+    }
+
+    __host__ __device__ void set_wavelength(int i, float v) {
+        if (i == 0) wavelengths.x = v;
+        else if (i == 1) wavelengths.y = v;
+        else if (i == 2) wavelengths.z = v;
+        else wavelengths.w = v;
+    }
 };
 
 struct GpuRay {

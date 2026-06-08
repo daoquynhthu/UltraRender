@@ -11,7 +11,7 @@ namespace ure::gpu {
 __global__ void test_ggx_D_kernel(float* out) {
     out[0] = ggx_D(1.0f, 0.1f);
     out[1] = ggx_D(0.5f, 0.5f);
-    out[2] = ggx_D(0.0f, 1.0f);
+    out[2] = ggx_D(1.0f, 1.0f);
 }
 
 __global__ void test_smith_G1_kernel(float* out) {
@@ -45,7 +45,7 @@ static int test_ggx_D() {
     CHECK_CUDA(cudaFree(d_out));
     CHECK_FLOAT_EQ(h_out[0], 31.830f, 0.01f);
     CHECK_FLOAT_EQ(h_out[1], 0.1205f, 0.01f);
-    CHECK_FLOAT_EQ(h_out[2], 0.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[2], 0.3183f, 0.01f);
     return 0;
 }
 

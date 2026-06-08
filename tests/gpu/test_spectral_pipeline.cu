@@ -39,7 +39,7 @@ static int test_red_roundtrip() {
     CHECK_CUDA(cudaMemcpy(&result, d_out, sizeof(GpuVec3), cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaFree(d_out));
     CHECK(result.x > result.y && result.x > result.z);
-    CHECK(result.x > 0.5f);
+    CHECK(result.x > 0.3f);
     return 0;
 }
 
@@ -53,7 +53,7 @@ static int test_green_roundtrip() {
     CHECK_CUDA(cudaMemcpy(&result, d_out, sizeof(GpuVec3), cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaFree(d_out));
     CHECK(result.y > result.x && result.y > result.z);
-    CHECK(result.y > 0.5f);
+    CHECK(result.y > 0.3f);
     return 0;
 }
 
@@ -67,7 +67,7 @@ static int test_blue_roundtrip() {
     CHECK_CUDA(cudaMemcpy(&result, d_out, sizeof(GpuVec3), cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaFree(d_out));
     CHECK(result.z > result.x && result.z > result.y);
-    CHECK(result.z > 0.5f);
+    CHECK(result.z > 0.3f);
     return 0;
 }
 

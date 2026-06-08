@@ -27,6 +27,7 @@ if(CMAKE_CUDA_COMPILER)
     set(GPU_RENDER_DEPS
         "${CMAKE_SOURCE_DIR}/src/gpu/gpu_scene_loader.cpp"
         "${CMAKE_SOURCE_DIR}/src/gpu/bvh_builder.cpp"
+        "${CMAKE_SOURCE_DIR}/src/gpu/path_tracer_raygen.cu"
         "${CMAKE_SOURCE_DIR}/src/gpu/path_tracer_denoise.cu"
         "${CMAKE_SOURCE_DIR}/src/gpu/path_tracer_post.cu"
     )
