@@ -27,9 +27,9 @@ GpuHardwareInfo query_hardware(int device_id) {
     info.max_threads_per_block = get_attr(cudaDevAttrMaxThreadsPerBlock, actual_device);
     info.warp_size = get_attr(cudaDevAttrWarpSize, actual_device);
 
-    size_t total = 0;
-    cudaMemGetInfo(NULL, &total);
-    info.total_global_memory = total;
+    size_t free_mem = 0, total_mem = 0;
+    cudaMemGetInfo(&free_mem, &total_mem);
+    info.total_global_memory = total_mem;
 
     info.l1_cache_per_sm = 0;
 

@@ -35,8 +35,31 @@ Phase P 全部 8 个子步骤完成（P.1–P.8），外加 API 工业化改造�
 [GPU Basic Render Test]      PASS (37 assertions)
 [GPU Math Functions]         PASS (27 assertions)
 [GPU Spectral Pipeline]      PASS (30 assertions)
+[GPU Device Test]            PASS (6 assertions)
+[GPU Hardware Config Test]   PASS (17 assertions)
 [World/ECS Test]             PASS (39 assertions, host)
-Total: 199 GPU + 39 host = 238 assertions, 0 failures
+Total: 183 GPU + 39 host = 222 assertions, 0 failures
+```
+
+## 2026-06-09 — Phase 0 收尾（硬件检测 + 自动配置）
+
+### 交付物
+
+| 改动 | 文件 | 说明 |
+|------|------|------|
+| 修复 `query_hardware()` 总显存查询 | `libs/ure_core/src/gpu_hardware.cu` | `cudaMemGetInfo` 第二参数获取 total（而非误用 `cudaDevAttrTotalGlobalMemory`，该属性 CUDA 13.0 不存在） |
+| 新增 `auto_configure()` 接口 | `libs/ure_core/include/ure/gpu_auto_config.hpp` | 从旧 `include/gpu/render_config.hpp` 移植：`auto_select_wavelengths/auto_select_queue_capacity/auto_select_wg_size/auto_configure/print_render_config` |
+| 测试迁移至模块路径 | `tests/gpu/test_hardware.cu` | include 改为 `ure/gpu_hardware.hpp` + `ure/gpu_auto_config.hpp`，调用 `ure::auto_configure()`（而非旧 `ure::gpu::auto_configure`） |
+
+### 真实硬件检测结果
+
+```
+device:     NVIDIA GeForce RTX 5060 Laptop GPU
+CC:         12.0
+SMs:        26
+VRAM:       8.0 GB
+Bandwidth:  384.0 GB/s
+Auto-Cfg:   N=64, queue=2073600
 ```
 
 ### 外部应用使用示例

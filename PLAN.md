@@ -839,7 +839,7 @@ N 来自 `RenderConfig.num_wavelengths`，与 Phase 0 AutoConfig 正交。
 旧 Phase 3: ████████████ 已完成 (6187cf1)
 旧 Phase 4: ████████████ 已完成 (c335ab0)
 
-新 Phase 0: ████████░░░░ 文件已创建 (待 Phase F 后重定位)
+新 Phase 0: ████████████ 已完成 (gpu_hardware.cu fix + auto_configure 移植 + 测试通过)
 新 Phase F: ████████████ 已完成 (F.1-F.5)
 新 Phase P: ████████████ 已完成 (P.1-P.8 全部完成)
 新 Phase G: ░░░░░░░░░░░░ 未开始

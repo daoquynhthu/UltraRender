@@ -1,6 +1,6 @@
 #include "test_framework.cuh"
-#include "../../include/gpu/gpu_hardware.hpp"
-#include "../../include/gpu/render_config.hpp"
+#include "ure/gpu_hardware.hpp"
+#include "ure/gpu_auto_config.hpp"
 
 static int test_query_hardware() {
     REQUIRE_GPU();
@@ -21,7 +21,7 @@ static int test_auto_configure_low_vram() {
     hw.max_threads_per_block = 1024;
     hw.warp_size = 32;
 
-    auto cfg = ure::gpu::auto_configure(hw, 1920, 1080, 128);
+    auto cfg = ure::auto_configure(hw, 1920, 1080, 128);
     CHECK(cfg.num_wavelengths == 8);
     CHECK(cfg.queue_capacity > 0);
     CHECK(cfg.wg_size == 8);
@@ -36,7 +36,7 @@ static int test_auto_configure_medium_vram() {
     hw.max_threads_per_block = 1024;
     hw.warp_size = 32;
 
-    auto cfg = ure::gpu::auto_configure(hw, 1920, 1080, 128);
+    auto cfg = ure::auto_configure(hw, 1920, 1080, 128);
     CHECK(cfg.num_wavelengths == 64);
     CHECK(cfg.queue_capacity > 0);
     CHECK(cfg.wg_size == 32);
@@ -51,7 +51,7 @@ static int test_auto_configure_high_vram() {
     hw.max_threads_per_block = 1024;
     hw.warp_size = 32;
 
-    auto cfg = ure::gpu::auto_configure(hw, 1920, 1080, 256);
+    auto cfg = ure::auto_configure(hw, 1920, 1080, 256);
     CHECK(cfg.num_wavelengths == 128);
     CHECK(cfg.queue_capacity > 0);
     CHECK(cfg.wg_size == 32);
@@ -66,7 +66,7 @@ static int test_auto_configure_ultra_vram() {
     hw.max_threads_per_block = 1024;
     hw.warp_size = 32;
 
-    auto cfg = ure::gpu::auto_configure(hw, 3840, 2160, 512);
+    auto cfg = ure::auto_configure(hw, 3840, 2160, 512);
     CHECK(cfg.num_wavelengths == 512);
     CHECK(cfg.wg_size == 32);
     printf("  ultra VRAM (80 GB): N=%d, queue=%d\n", cfg.num_wavelengths, cfg.queue_capacity);
@@ -77,7 +77,7 @@ static int test_auto_configure_scene_N_lower_than_hw_max() {
     ure::gpu::GpuHardwareInfo hw = {};
     hw.total_global_memory = 24ULL * 1024 * 1024 * 1024;
 
-    auto cfg = ure::gpu::auto_configure(hw, 1920, 1080, 16);
+    auto cfg = ure::auto_configure(hw, 1920, 1080, 16);
     CHECK(cfg.num_wavelengths == 16);
     return 0;
 }
