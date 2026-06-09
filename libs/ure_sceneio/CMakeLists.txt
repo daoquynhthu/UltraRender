@@ -1,4 +1,5 @@
 add_library(ure_sceneio STATIC
+    src/scene_io_api.cpp
     src/gltf_scene_frontend.cpp
     src/scene_ir_frontend.cpp
     src/scene_frontend.cpp
@@ -17,7 +18,10 @@ add_library(ure_sceneio STATIC
     src/obj_loader.cpp
 )
 
-target_include_directories(ure_sceneio PUBLIC include)
+target_include_directories(ure_sceneio PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 target_link_libraries(ure_sceneio PUBLIC ure_types ure_core)
 
 if(MSVC)
@@ -25,3 +29,8 @@ if(MSVC)
         $<$<COMPILE_LANGUAGE:CXX>:/W4;/utf-8;/EHsc;/wd4819>
     )
 endif()
+
+install(TARGETS ure_sceneio EXPORT UltraRender_Targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

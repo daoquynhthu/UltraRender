@@ -55,6 +55,48 @@ public:
         );
     }
 
+    // From Euler angles (degrees, ZYX convention: yaw, pitch, roll)
+    static Quaternion from_euler_zyx(T yaw_deg, T pitch_deg, T roll_deg) {
+        constexpr T PI = T(3.14159265358979323846);
+        T cy = std::cos(yaw_deg   * T(0.5) * PI / T(180));
+        T sy = std::sin(yaw_deg   * T(0.5) * PI / T(180));
+        T cp = std::cos(pitch_deg * T(0.5) * PI / T(180));
+        T sp = std::sin(pitch_deg * T(0.5) * PI / T(180));
+        T cr = std::cos(roll_deg  * T(0.5) * PI / T(180));
+        T sr = std::sin(roll_deg  * T(0.5) * PI / T(180));
+        return Quaternion(
+            cr * cp * cy + sr * sp * sy,
+            sr * cp * cy - cr * sp * sy,
+            cr * sp * cy + sr * cp * sy,
+            cr * cp * sy - sr * sp * cy
+        );
+    }
+
+    static Quaternion from_euler_zyx(const Vec3<T>& euler_deg) {
+        return from_euler_zyx(euler_deg.z, euler_deg.y, euler_deg.x);
+    }
+
+    // To Euler angles (degrees, ZYX convention)
+    Vec3<T> to_euler_zyx() const {
+        constexpr T PI = T(3.14159265358979323846);
+        Vec3<T> euler;
+        T sinr_cosp = T(2) * (w * x + y * z);
+        T cosr_cosp = T(1) - T(2) * (x * x + y * y);
+        euler.x = std::atan2(sinr_cosp, cosr_cosp);
+        T sinp = T(2) * (w * y - z * x);
+        if (std::abs(sinp) >= T(1))
+            euler.y = std::copysign(PI / T(2), sinp);
+        else
+            euler.y = std::asin(sinp);
+        T siny_cosp = T(2) * (w * z + x * y);
+        T cosy_cosp = T(1) - T(2) * (y * y + z * z);
+        euler.z = std::atan2(siny_cosp, cosy_cosp);
+        euler.x = euler.x * T(180) / PI;
+        euler.y = euler.y * T(180) / PI;
+        euler.z = euler.z * T(180) / PI;
+        return euler;
+    }
+
     Vec3<T> rotate(const Vec3<T>& v) const {
         // q * v * q_inv
         // Optimized implementation

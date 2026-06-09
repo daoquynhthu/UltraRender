@@ -5,6 +5,8 @@
 #include "gpu/gpu_structs.hpp"
 #include "gpu/path_tracer_sampling.cuh"
 
+using namespace ure::gpu;
+
 __device__ inline bool scatter(
     const GpuRay& r_in, const GpuMaterial& mat, const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
     const GpuSpectrum& current_throughput,

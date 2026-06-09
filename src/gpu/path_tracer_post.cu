@@ -3,6 +3,8 @@
 #include <math.h>
 #include "gpu/gpu_structs.hpp"
 
+using namespace ure::gpu;
+
 namespace ure::gpu {
 
 __global__ void resolve_framebuffer_kernel(

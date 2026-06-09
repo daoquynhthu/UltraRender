@@ -8,7 +8,10 @@ add_library(ure_physics STATIC
     src/modal_factory.cpp
 )
 
-target_include_directories(ure_physics PUBLIC include)
+target_include_directories(ure_physics PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 target_link_libraries(ure_physics PUBLIC ure_types)
 
 if(MSVC)
@@ -16,3 +19,8 @@ if(MSVC)
         $<$<COMPILE_LANGUAGE:CXX>:/W4;/utf-8;/EHsc;/wd4819>
     )
 endif()
+
+install(TARGETS ure_physics EXPORT UltraRender_Targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

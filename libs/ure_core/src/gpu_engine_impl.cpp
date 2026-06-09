@@ -1,7 +1,7 @@
-#include "ure/ure_api.hpp"
+#include "ure/render.hpp"
 #include "ure/gpu_scene_compiler.hpp"
 #include "ure/gpu_driver.hpp"
-#include "ure/tranform_ring_buffer.hpp"
+#include "ure/transform_ring_buffer.hpp"
 #include <iostream>
 #include <vector>
 #include <cassert>
@@ -25,7 +25,7 @@ public:
             load_compiled_scene(compiled);
             initialized_ = true;
         } else {
-            update_transforms(compiled);
+            update_transforms_internal(compiled);
         }
     }
 
@@ -35,8 +35,35 @@ public:
             load_compiled_scene(compiled);
             initialized_ = true;
         } else {
-            update_transforms(compiled);
+            update_transforms_internal(compiled);
         }
+    }
+
+    void load_scene_once(const Scene& scene) override {
+        CompiledGpuScene compiled = GpuSceneCompiler::compile_legacy(scene);
+        load_compiled_scene(compiled);
+        initialized_ = true;
+    }
+
+    void update_transforms(const gpu::GpuInstanceTransform* transforms, int count) override {
+        assert(gpu_context_ != nullptr && "update_transforms: no GPU context");
+        assert(count == transform_ring_buffer_.instance_count && "update_transforms: instance count mismatch");
+
+        // Write external transforms into current write frame
+        gpu::GpuInstanceTransform* dst = transform_ring_buffer_.begin_write();
+        assert(dst != nullptr);
+        std::memcpy(dst, transforms, count * sizeof(gpu::GpuInstanceTransform));
+        transform_ring_buffer_.end_write();
+
+        // Upload the read frame (lags write by 1-2 frames)
+        int upload_count = 0;
+        const gpu::GpuInstanceTransform* src = transform_ring_buffer_.begin_read(upload_count);
+        gpu::update_instance_transforms_gpu(gpu_context_, src, upload_count);
+        transform_ring_buffer_.end_read();
+
+        // Advance write frame for next physics step
+        transform_ring_buffer_.advance();
+        reset_accumulation();
     }
 
     void render(const RenderSettings& settings) override {
@@ -89,7 +116,7 @@ public:
         return current_spp_;
     }
 
-    const std::vector<float>& get_frame_buffer() const override {
+    const std::vector<float>& get_framebuffer() const override {
         if (gpu_context_) {
             // Update the buffer before returning
             ure::gpu::copy_frame_buffer_gpu(gpu_context_, const_cast<float*>(frame_buffer_.data()));
@@ -117,7 +144,7 @@ private:
         assert(gpu_context_ != nullptr && "init_gpu_renderer failed -- check CUDA state");
         
         // Phase P.3: initialize ring buffer with all frames from compiled instances
-        tranform_ring_buffer_.init_from_instances(compiled.instances);
+        transform_ring_buffer_.init_from_instances(compiled.instances);
 
         // Setup Camera
         float cam_pos[3] = {current_scene_camera_.position.x, current_scene_camera_.position.y, current_scene_camera_.position.z};
@@ -138,12 +165,12 @@ private:
         current_spp_ = 0;
     }
 
-    void update_transforms(const CompiledGpuScene& compiled) {
-        assert(gpu_context_ != nullptr && "update_transforms: no GPU context");
-        assert((int)compiled.instances.size() == tranform_ring_buffer_.instance_count && "update_transforms: instance count changed on hot-update; full re-init required");
+    void update_transforms_internal(const CompiledGpuScene& compiled) {
+        assert(gpu_context_ != nullptr && "update_transforms_internal: no GPU context");
+        assert((int)compiled.instances.size() == transform_ring_buffer_.instance_count && "update_transforms_internal: instance count changed on hot-update; full re-init required");
         
         // Write compiled transforms into current write frame
-        ure::gpu::GpuInstanceTransform* dst = tranform_ring_buffer_.begin_write();
+        ure::gpu::GpuInstanceTransform* dst = transform_ring_buffer_.begin_write();
         assert(dst != nullptr);
         for (size_t i = 0; i < compiled.instances.size(); ++i) {
             dst[i].transform = compiled.instances[i].transform;
@@ -151,17 +178,16 @@ private:
             dst[i].min_pt = compiled.instances[i].min_pt;
             dst[i].max_pt = compiled.instances[i].max_pt;
         }
-        tranform_ring_buffer_.end_write();
+        transform_ring_buffer_.end_write();
         
         // Upload the read frame (lags write by 1-2 frames)
         int count = 0;
-        const ure::gpu::GpuInstanceTransform* src = tranform_ring_buffer_.begin_read(count);
+        const ure::gpu::GpuInstanceTransform* src = transform_ring_buffer_.begin_read(count);
         ure::gpu::update_instance_transforms_gpu(gpu_context_, src, count);
-        tranform_ring_buffer_.end_read();
+        transform_ring_buffer_.end_read();
         
         // Advance write frame for next physics step
-        tranform_ring_buffer_.advance();
-        
+        transform_ring_buffer_.advance();
         reset_accumulation();
     }
 
@@ -184,10 +210,14 @@ private:
     bool initialized_;
 
     // Phase P.3: triple-buffer for transforms (writer=physics, reader=render)
-    ure::gpu::TransformRingBuffer tranform_ring_buffer_;
+    ure::gpu::TransformRingBuffer transform_ring_buffer_;
 };
 
 std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_engine() {
+    return std::make_unique<GpuRenderEngine>();
+}
+
+std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_renderer() {
     return std::make_unique<GpuRenderEngine>();
 }
 

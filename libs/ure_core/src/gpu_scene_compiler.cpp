@@ -143,6 +143,60 @@ ure::gpu::GpuMaterial compile_material(const std::shared_ptr<scene_ir::MaterialN
                                  emission_texture_index);
 }
 
+} // anonymous namespace (material helpers)
+
+// ── free functions ──
+void compile_instance_transform(const core::Vec3f& position,
+                                const core::Vec3f& scale,
+                                const core::Quat& rotation,
+                                ure::gpu::GpuInstanceTransform& out) {
+    core::Matrix4x4f rot_mat = rotation.to_matrix();
+    ure::gpu::GpuVec3 r0 = {rot_mat.m[0][0], rot_mat.m[1][0], rot_mat.m[2][0]};
+    ure::gpu::GpuVec3 r1 = {rot_mat.m[0][1], rot_mat.m[1][1], rot_mat.m[2][1]};
+    ure::gpu::GpuVec3 r2 = {rot_mat.m[0][2], rot_mat.m[1][2], rot_mat.m[2][2]};
+    out.transform.m[0][0] = r0.x * scale.x; out.transform.m[0][1] = r1.x * scale.y; out.transform.m[0][2] = r2.x * scale.z; out.transform.m[0][3] = position.x;
+    out.transform.m[1][0] = r0.y * scale.x; out.transform.m[1][1] = r1.y * scale.y; out.transform.m[1][2] = r2.y * scale.z; out.transform.m[1][3] = position.y;
+    out.transform.m[2][0] = r0.z * scale.x; out.transform.m[2][1] = r1.z * scale.y; out.transform.m[2][2] = r2.z * scale.z; out.transform.m[2][3] = position.z;
+    out.transform.m[3][0] = 0; out.transform.m[3][1] = 0; out.transform.m[3][2] = 0; out.transform.m[3][3] = 1;
+    float isx = 1.0f / scale.x, isy = 1.0f / scale.y, isz = 1.0f / scale.z;
+    out.inverse_transform.m[0][0] = r0.x * isx; out.inverse_transform.m[0][1] = r0.y * isx; out.inverse_transform.m[0][2] = r0.z * isx;
+    out.inverse_transform.m[1][0] = r1.x * isy; out.inverse_transform.m[1][1] = r1.y * isy; out.inverse_transform.m[1][2] = r1.z * isy;
+    out.inverse_transform.m[2][0] = r2.x * isz; out.inverse_transform.m[2][1] = r2.y * isz; out.inverse_transform.m[2][2] = r2.z * isz;
+    float tx = -(out.inverse_transform.m[0][0] * position.x + out.inverse_transform.m[0][1] * position.y + out.inverse_transform.m[0][2] * position.z);
+    float ty = -(out.inverse_transform.m[1][0] * position.x + out.inverse_transform.m[1][1] * position.y + out.inverse_transform.m[1][2] * position.z);
+    float tz = -(out.inverse_transform.m[2][0] * position.x + out.inverse_transform.m[2][1] * position.y + out.inverse_transform.m[2][2] * position.z);
+    out.inverse_transform.m[0][3] = tx; out.inverse_transform.m[1][3] = ty; out.inverse_transform.m[2][3] = tz;
+    out.inverse_transform.m[3][0] = 0; out.inverse_transform.m[3][1] = 0; out.inverse_transform.m[3][2] = 0; out.inverse_transform.m[3][3] = 1;
+}
+
+void GpuSceneCompiler::build_instance_transform(const core::Vec3f& position,
+                                                const core::Vec3f& scale,
+                                                const core::Quat& rotation,
+                                                const std::shared_ptr<Mesh>& mesh,
+                                                gpu::GpuInstanceTransform& out) {
+    compile_instance_transform(position, scale, rotation, out);
+
+    // Compute world-space AABB from mesh local bounds
+    if (mesh && !mesh->vertices.empty()) {
+        float min_x = 1e30f, min_y = 1e30f, min_z = 1e30f;
+        float max_x = -1e30f, max_y = -1e30f, max_z = -1e30f;
+        for (const auto& v : mesh->vertices) {
+            float wx = out.transform.m[0][0]*v.position.x + out.transform.m[0][1]*v.position.y + out.transform.m[0][2]*v.position.z + out.transform.m[0][3];
+            float wy = out.transform.m[1][0]*v.position.x + out.transform.m[1][1]*v.position.y + out.transform.m[1][2]*v.position.z + out.transform.m[1][3];
+            float wz = out.transform.m[2][0]*v.position.x + out.transform.m[2][1]*v.position.y + out.transform.m[2][2]*v.position.z + out.transform.m[2][3];
+            min_x = (std::min)(min_x, wx); min_y = (std::min)(min_y, wy); min_z = (std::min)(min_z, wz);
+            max_x = (std::max)(max_x, wx); max_y = (std::max)(max_y, wy); max_z = (std::max)(max_z, wz);
+        }
+        out.min_pt = {min_x, min_y, min_z};
+        out.max_pt = {max_x, max_y, max_z};
+    } else {
+        out.min_pt = {0, 0, 0};
+        out.max_pt = {0, 0, 0};
+    }
+}
+
+namespace {
+
 void compile_transform(const core::Vec3f& position,
                        const core::Vec3f& scale,
                        const core::Quat& rotation,

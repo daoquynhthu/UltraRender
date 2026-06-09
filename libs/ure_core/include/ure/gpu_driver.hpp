@@ -3,6 +3,7 @@
 #include <vector>
 #include "ure/gpu_scene_loader.hpp"
 #include "ure/gpu_structs.hpp"
+#include "ure/instance_transform.hpp"
 
 // Disable C4819 warning for MSVC (encoding issue)
 #pragma warning(disable: 4819)

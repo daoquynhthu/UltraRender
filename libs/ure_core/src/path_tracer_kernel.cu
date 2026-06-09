@@ -17,6 +17,92 @@
 
 #define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__ )
 
+// ===== Diagnostic Logging Pipeline =====
+#define DEBUG_ENABLED 0
+
+#if DEBUG_ENABLED
+#define MAX_DEBUG_ENTRIES 4096
+struct DebugEntry {
+    int thread_id;
+    int block_id;
+    int msg_code;
+    int ival;
+    unsigned long long pval1;
+    unsigned long long pval2;
+    float fval;
+};
+// Global device pointer for easy kernel access
+__device__ DebugEntry* g_debug_log = nullptr;
+__device__ int* g_debug_count = nullptr;
+
+#define DEVICE_LOG(code_, ival_, p1_, p2_, fv_) do { \
+    if (g_debug_count) { \
+        int _i_ = atomicAdd(g_debug_count, 1); \
+        if (_i_ < MAX_DEBUG_ENTRIES) { \
+            g_debug_log[_i_].thread_id = threadIdx.x + blockIdx.x * blockDim.x; \
+            g_debug_log[_i_].block_id = blockIdx.x; \
+            g_debug_log[_i_].msg_code = (int)(code_); \
+            g_debug_log[_i_].ival = (int)(ival_); \
+            g_debug_log[_i_].pval1 = (unsigned long long)(p1_); \
+            g_debug_log[_i_].pval2 = (unsigned long long)(p2_); \
+            g_debug_log[_i_].fval = (float)(fv_); \
+        } \
+    } \
+} while(0)
+
+void init_debug_log() {
+    DebugEntry* h_entries = nullptr;
+    int* h_count = nullptr;
+    cudaMallocHost(&h_entries, MAX_DEBUG_ENTRIES * sizeof(DebugEntry)); // pinned = survives GPU faults
+    cudaMallocHost(&h_count, sizeof(int));
+    memset(h_entries, 0, MAX_DEBUG_ENTRIES * sizeof(DebugEntry));
+    memset(h_count, 0, sizeof(int));
+    cudaMemcpyToSymbol(g_debug_log, &h_entries, sizeof(DebugEntry*));
+    cudaMemcpyToSymbol(g_debug_count, &h_count, sizeof(int*));
+}
+
+void flush_debug_log() {
+    DebugEntry* h_entries = nullptr;
+    int* h_count = nullptr;
+    cudaMemcpyFromSymbol(&h_entries, g_debug_log, sizeof(DebugEntry*));
+    cudaMemcpyFromSymbol(&h_count, g_debug_count, sizeof(int*));
+    if (!h_entries || !h_count) { printf("DEBUG LOG: not initialized\n"); return; }
+    int count = *h_count;
+    if (count == 0) { printf("DEBUG LOG: empty\n"); return; }
+    if (count > MAX_DEBUG_ENTRIES) count = MAX_DEBUG_ENTRIES;
+    int show = (count > 200) ? 200 : count;
+    printf("\n===== DEBUG LOG (%d total, showing %d) =====\n", count, show);
+    for (int i = 0; i < show; ++i) {
+        auto& e = h_entries[i];
+        if (e.msg_code == 0) break; // uninitialized entry
+        const char* codes[] = {"ENTRY","SCENE","SPHERE","INST","MESH","HIT","MISS","QUEUE","PTR"};
+        const char* c = (e.msg_code >= 0 && e.msg_code < 9) ? codes[e.msg_code] : "???";
+        printf("[%s][T%d/B%d] iv=%d p1=0x%llx p2=0x%llx fv=%.3f\n",
+               c, e.thread_id, e.block_id, e.ival, e.pval1, e.pval2, e.fval);
+    }
+    memset(h_count, 0, sizeof(int));
+}
+
+void free_debug_log() {
+    DebugEntry* h_entries = nullptr;
+    int* h_count = nullptr;
+    cudaMemcpyFromSymbol(&h_entries, g_debug_log, sizeof(DebugEntry*));
+    cudaMemcpyFromSymbol(&h_count, g_debug_count, sizeof(int*));
+    if (h_entries) cudaFreeHost(h_entries);
+    if (h_count) cudaFreeHost(h_count);
+    h_entries = nullptr; h_count = nullptr;
+    cudaMemcpyToSymbol(g_debug_log, &h_entries, sizeof(DebugEntry*));
+    cudaMemcpyToSymbol(g_debug_count, &h_count, sizeof(int*));
+}
+
+#else
+#define DEVICE_LOG(code, ival, p1, p2, fv) do {} while(0)
+#define init_debug_log() do {} while(0)
+#define flush_debug_log() do {} while(0)
+#define free_debug_log() do {} while(0)
+#endif
+// ===== End Diagnostic Logging =====
+
 void check_cuda(cudaError_t result, char const *const func, const char *const file, int const line) {
     if (result) {
         std::cerr << "CUDA error = " << static_cast<unsigned int>(result) << " at " <<
@@ -409,6 +495,7 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
     }
 
     // Check Meshes (AABB + BVH Optimized)
+    DEVICE_LOG(4, scene.mesh_count, (unsigned long long)scene.meshes, 0, 0);
     for (int i = 0; i < scene.mesh_count; ++i) {
         GpuMesh& mesh = scene.meshes[i];
         
@@ -1378,7 +1465,8 @@ __global__ void extend_kernel(
     GpuScene scene
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= *ray_queue.count) return;
+    int ray_count_local = *ray_queue.count;
+    if (idx >= ray_count_local) return;
     
     GpuRay r;
     r.origin = ray_queue.origins[idx];
@@ -2378,6 +2466,7 @@ struct GpuContext {
     GpuSphere* d_spheres;
     GpuMesh* d_meshes;
     GpuInstance* d_instances;            // Legacy (desc + xform combined)
+    GpuInstanceDesc* d_instance_descs;   // Phase P.7: separate desc array (proper 8B stride)
     GpuInstanceTransform* d_instance_transforms; // Phase P.1: dynamic transforms
     GpuTexture* d_textures;
     int* d_light_indices;
@@ -2441,6 +2530,8 @@ GpuContext* init_gpu_renderer(int width, int height,
     cudaMemset(ctx->d_normal_buffer, 0, framebuffer_size);
     cudaMalloc(&ctx->d_albedo_buffer, framebuffer_size);
     cudaMemset(ctx->d_albedo_buffer, 0, framebuffer_size);
+    
+    init_debug_log();
     
     // Queues
     int max_rays = width * height;
@@ -2582,8 +2673,13 @@ GpuContext* init_gpu_renderer(int width, int height,
         host_gpu_meshes.push_back(mesh);
     }
     
-    cudaMalloc(&ctx->d_meshes, host_gpu_meshes.size() * sizeof(GpuMesh));
-    cudaMemcpy(ctx->d_meshes, host_gpu_meshes.data(), host_gpu_meshes.size() * sizeof(GpuMesh), cudaMemcpyHostToDevice);
+    {
+        size_t mesh_bytes = host_gpu_meshes.size() * sizeof(GpuMesh);
+        if (mesh_bytes == 0) mesh_bytes = sizeof(GpuMesh); // avoid nullptr from zero-size cudaMalloc
+        cudaMalloc(&ctx->d_meshes, mesh_bytes);
+        if (!host_gpu_meshes.empty())
+            cudaMemcpy(ctx->d_meshes, host_gpu_meshes.data(), host_gpu_meshes.size() * sizeof(GpuMesh), cudaMemcpyHostToDevice);
+    }
     ctx->mesh_count = (int)host_gpu_meshes.size();
     
     // Instances
@@ -2591,10 +2687,29 @@ GpuContext* init_gpu_renderer(int width, int height,
     // If we have instances in the host scene (future proofing), we might merge them here
     // For now, just use the passed instances
     
-    if (!host_instances.empty()) {
-        cudaMalloc(&ctx->d_instances, host_instances.size() * sizeof(GpuInstance));
-        cudaMemcpy(ctx->d_instances, host_instances.data(), host_instances.size() * sizeof(GpuInstance), cudaMemcpyHostToDevice);
-        // Phase P.1: build separate transform buffer from GpuInstance fields (field-by-field copy avoids layout dependency)
+    {
+        size_t inst_bytes = host_instances.size() * sizeof(GpuInstance);
+        if (inst_bytes == 0) inst_bytes = sizeof(GpuInstance);
+        cudaMalloc(&ctx->d_instances, inst_bytes);
+        if (!host_instances.empty())
+            cudaMemcpy(ctx->d_instances, host_instances.data(), host_instances.size() * sizeof(GpuInstance), cudaMemcpyHostToDevice);
+    }
+    {
+        // Phase P.7: allocate separate GpuInstanceDesc array (8B stride instead of 160B)
+        size_t desc_bytes = host_instances.size() * sizeof(GpuInstanceDesc);
+        if (desc_bytes == 0) desc_bytes = sizeof(GpuInstanceDesc);
+        cudaMalloc(&ctx->d_instance_descs, desc_bytes);
+        if (!host_instances.empty()) {
+            std::vector<GpuInstanceDesc> host_descs(host_instances.size());
+            for (size_t i = 0; i < host_instances.size(); ++i) {
+                host_descs[i].mesh_index = host_instances[i].mesh_index;
+                host_descs[i].material_index = host_instances[i].material_index;
+            }
+            cudaMemcpy(ctx->d_instance_descs, host_descs.data(), desc_bytes, cudaMemcpyHostToDevice);
+        }
+        ctx->pointers_to_free.push_back(ctx->d_instance_descs);
+    }
+    {
         std::vector<GpuInstanceTransform> host_transforms(host_instances.size());
         for (size_t i = 0; i < host_instances.size(); ++i) {
             host_transforms[i].transform = host_instances[i].transform;
@@ -2602,17 +2717,12 @@ GpuContext* init_gpu_renderer(int width, int height,
             host_transforms[i].min_pt = host_instances[i].min_pt;
             host_transforms[i].max_pt = host_instances[i].max_pt;
         }
-        cudaMalloc(&ctx->d_instance_transforms, host_transforms.size() * sizeof(GpuInstanceTransform));
-        assert(ctx->d_instance_transforms != nullptr && "init_gpu_renderer: d_instance_transforms allocation failed");
-        cudaMemcpy(ctx->d_instance_transforms, host_transforms.data(), host_transforms.size() * sizeof(GpuInstanceTransform), cudaMemcpyHostToDevice);
-        {
-            cudaError_t err = cudaGetLastError();
-            assert(err == cudaSuccess && "init_gpu_renderer: d_instance_transforms upload failed");
-        }
+        size_t xform_bytes = host_transforms.size() * sizeof(GpuInstanceTransform);
+        if (xform_bytes == 0) xform_bytes = sizeof(GpuInstanceTransform);
+        cudaMalloc(&ctx->d_instance_transforms, xform_bytes);
+        if (!host_transforms.empty())
+            cudaMemcpy(ctx->d_instance_transforms, host_transforms.data(), xform_bytes, cudaMemcpyHostToDevice);
         ctx->pointers_to_free.push_back(ctx->d_instance_transforms);
-    } else {
-        ctx->d_instances = nullptr;
-        ctx->d_instance_transforms = nullptr;
     }
     ctx->instance_count = (int)host_instances.size();
     
@@ -2658,11 +2768,14 @@ GpuContext* init_gpu_renderer(int width, int height,
         host_gpu_textures.push_back(d_tex);
     }
     
-    if (!host_gpu_textures.empty()) {
-        cudaMalloc(&ctx->d_textures, host_gpu_textures.size() * sizeof(GpuTexture));
-        cudaMemcpy(ctx->d_textures, host_gpu_textures.data(), host_gpu_textures.size() * sizeof(GpuTexture), cudaMemcpyHostToDevice);
+    {
+        size_t tex_bytes = host_gpu_textures.size() * sizeof(GpuTexture);
+        if (tex_bytes == 0) tex_bytes = sizeof(GpuTexture);
+        cudaMalloc(&ctx->d_textures, tex_bytes);
+        if (!host_gpu_textures.empty())
+            cudaMemcpy(ctx->d_textures, host_gpu_textures.data(), host_gpu_textures.size() * sizeof(GpuTexture), cudaMemcpyHostToDevice);
         ctx->pointers_to_free.push_back(ctx->d_textures);
-    } else { ctx->d_textures = nullptr; }
+    }
     ctx->texture_count = (int)host_gpu_textures.size();
     
     // Light Indices
@@ -2753,6 +2866,7 @@ void free_gpu_renderer(GpuContext* ctx) {
     for (auto a : ctx->arrays_to_free) cudaFreeArray(a);
     for (auto t : ctx->tex_objs_to_free) cudaDestroyTextureObject(t);
     
+    free_debug_log();
     delete ctx;
 }
 
@@ -2763,7 +2877,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.meshes = ctx->d_meshes;
     scene.mesh_count = ctx->mesh_count;
     scene.instances = ctx->d_instances;
-    scene.instance_descs = reinterpret_cast<GpuInstanceDesc*>(ctx->d_instances);
+    scene.instance_descs = ctx->d_instance_descs;
     scene.instance_transforms = ctx->d_instance_transforms;
     scene.instance_count = ctx->instance_count;
     scene.materials = ctx->d_materials;
@@ -2788,39 +2902,45 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         
         // 1. Generate Rays
         int initial_count = ctx->width * ctx->height;
-        cudaMemcpy(ctx->queueA.count, &initial_count, sizeof(int), cudaMemcpyHostToDevice);
+        checkCudaErrors(cudaMemcpy(ctx->queueA.count, &initial_count, sizeof(int), cudaMemcpyHostToDevice));
         
         generate_rays_kernel<<<numBlocks, threadsPerBlock>>>(
             ctx->queueA, ctx->width, ctx->height, ctx->camera, current_global_sample, ctx->d_sample_counts
         );
         checkCudaErrors(cudaGetLastError());
+        checkCudaErrors(cudaDeviceSynchronize());
         
         RayQueue* current_q = &ctx->queueA;
         RayQueue* next_q = &ctx->queueB;
         
         for (int depth = 0; depth < 50; ++depth) {
              int ray_count = 0;
-             cudaMemcpy(&ray_count, current_q->count, sizeof(int), cudaMemcpyDeviceToHost);
+             checkCudaErrors(cudaMemcpy(&ray_count, current_q->count, sizeof(int), cudaMemcpyDeviceToHost));
              if (ray_count == 0) break;
              
              int num_threads = 256;
              int num_blocks = (ray_count + num_threads - 1) / num_threads;
              
-             extend_kernel<<<num_blocks, num_threads>>>(*current_q, ctx->hitQueue, scene);
+              extend_kernel<<<num_blocks, num_threads>>>(*current_q, ctx->hitQueue, scene);
+             checkCudaErrors(cudaGetLastError());
+             checkCudaErrors(cudaDeviceSynchronize());
              
-             cudaMemset(next_q->count, 0, sizeof(int));
-             cudaMemset(ctx->shadowQueue.count, 0, sizeof(int));
+             checkCudaErrors(cudaMemset(next_q->count, 0, sizeof(int)));
+             checkCudaErrors(cudaMemset(ctx->shadowQueue.count, 0, sizeof(int)));
              
              float current_dispersion_clamp = (current_global_sample < 100) ? 5.0f : 20.0f;
              float current_rr_min_prob = (current_global_sample < 100) ? 0.1f : 0.05f;
              
              shade_kernel<<<num_blocks, num_threads>>>(*current_q, ctx->hitQueue, *next_q, ctx->shadowQueue, ctx->d_accum_buffer, ctx->d_normal_buffer, ctx->d_albedo_buffer, scene, current_global_sample, current_dispersion_clamp, current_rr_min_prob);
+             checkCudaErrors(cudaGetLastError());
+             checkCudaErrors(cudaDeviceSynchronize());
              
              int shadow_count = 0;
-             cudaMemcpy(&shadow_count, ctx->shadowQueue.count, sizeof(int), cudaMemcpyDeviceToHost);
+             checkCudaErrors(cudaMemcpy(&shadow_count, ctx->shadowQueue.count, sizeof(int), cudaMemcpyDeviceToHost));
              if (shadow_count > 0) {
                  int s_blocks = (shadow_count + num_threads - 1) / num_threads;
                  extend_shadow_kernel<<<s_blocks, num_threads>>>(ctx->shadowQueue, ctx->d_accum_buffer, scene);
+                 checkCudaErrors(cudaGetLastError());
              }
              
              RayQueue* temp = current_q;
@@ -2829,6 +2949,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         }
     }
     
+    checkCudaErrors(cudaDeviceSynchronize());
     ctx->current_spp += samples_per_pass;
     return ctx->current_spp;
 }
@@ -3085,11 +3206,24 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
     // Setup Instances
     GpuInstance* d_instances = nullptr;
     GpuInstanceTransform* d_instance_transforms = nullptr;
+    GpuInstanceDesc* d_instance_descs = nullptr;
     if (!instances.empty()) {
         size_t inst_size = instances.size() * sizeof(GpuInstance);
         cudaMalloc(&d_instances, inst_size);
         cudaMemcpy(d_instances, instances.data(), inst_size, cudaMemcpyHostToDevice);
         pointers_to_free.push_back(d_instances);
+        // Phase P.7: separate instance_descs array (8B stride, not 160B)
+        {
+            size_t desc_size = instances.size() * sizeof(GpuInstanceDesc);
+            cudaMalloc(&d_instance_descs, desc_size);
+            std::vector<GpuInstanceDesc> descs(instances.size());
+            for (size_t i = 0; i < instances.size(); ++i) {
+                descs[i].mesh_index = instances[i].mesh_index;
+                descs[i].material_index = instances[i].material_index;
+            }
+            cudaMemcpy(d_instance_descs, descs.data(), desc_size, cudaMemcpyHostToDevice);
+            pointers_to_free.push_back(d_instance_descs);
+        }
         // Phase P.1: separate transform buffer (field-by-field copy avoids layout dependency)
         std::vector<GpuInstanceTransform> xforms(instances.size());
         for (size_t i = 0; i < instances.size(); ++i) {
@@ -3196,7 +3330,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
     scene.meshes = d_meshes;
     scene.mesh_count = (int)host_gpu_meshes.size();
     scene.instances = d_instances;
-    scene.instance_descs = reinterpret_cast<GpuInstanceDesc*>(d_instances);
+    scene.instance_descs = d_instance_descs;
     scene.instance_transforms = d_instance_transforms;
     scene.instance_count = (int)instances.size();
     scene.materials = d_materials;

@@ -2,9 +2,8 @@
 
 #include "ure/core/vector.hpp"
 #include "ure/core/quaternion.hpp"
-#include "ure/scene/camera.hpp"
 #include "ure/render_config.hpp"
-#include "ure/scene/mesh.hpp"
+#include "ure/ure_api.hpp"
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
@@ -32,7 +31,7 @@ struct TransformComponent {
 };
 
 struct GeometryComponent {
-    std::shared_ptr<scene::Mesh> mesh;
+    std::shared_ptr<Mesh> mesh;
     int material_index = 0;
 };
 
@@ -59,9 +58,19 @@ struct World {
     std::vector<PhysicsComponent>   physics;
     std::vector<AudioComponent>     audio;
 
+    // Material table (indexed by GeometryComponent::material_index)
+    std::vector<std::shared_ptr<Material>> material_table;
+
+    // Physics config (mirrors Scene::physics)
+    PhysicsConfig physics_config;
+
     // Global state
     RenderConfig render_config;
-    std::unique_ptr<core::Camera> camera;
+    Camera camera;
+    core::Vec3f background_color = {0,0,0};
+    int width = 0;
+    int height = 0;
+    int spp = 0;
 
     // ── Entity lifecycle ──
 

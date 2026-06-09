@@ -16,6 +16,7 @@ if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
 endif()
 
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+include(GNUInstallDirs)
 
 # --- New modular build ---
 if(NOT UR_USE_OLD_LEGACY_BUILD)
@@ -98,6 +99,30 @@ else()
         add_subdirectory(tests/gpu)
     endif()
 endif()
+
+# ── Install / Export for find_package() support ──
+include(CMakePackageConfigHelpers)
+
+set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR})
+
+configure_package_config_file(
+    cmake/UltraRenderConfig.cmake.in
+    ${CMAKE_BINARY_DIR}/UltraRenderConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/UltraRender
+    PATH_VARS INCLUDE_INSTALL_DIR
+)
+
+install(
+    FILES ${CMAKE_BINARY_DIR}/UltraRenderConfig.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/UltraRender
+)
+
+install(
+    EXPORT UltraRender_Targets
+    FILE UltraRenderTargets.cmake
+    NAMESPACE UltraRender::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/UltraRender
+)
 
 message(STATUS "UltraRender v${PROJECT_VERSION} configured.")
 message(STATUS "  Modular build: ${UR_USE_OLD_LEGACY_BUILD}")

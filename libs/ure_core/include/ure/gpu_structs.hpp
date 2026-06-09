@@ -353,18 +353,9 @@ struct GpuMesh {
     int bvh_node_count;
 };
 
-// Phase P.1: Split static instance description from dynamic per-frame transform.
-struct GpuInstanceDesc {
-    int mesh_index;
-    int material_index; // -1 means use mesh material
-};
-
-struct GpuInstanceTransform {
-    GpuMat4 transform;
-    GpuMat4 inverse_transform;
-    GpuVec3 min_pt;
-    GpuVec3 max_pt;
-};
+// Phase P.1: Independent desc and transform files (referenced from GpuScene below)
+#include "ure/instance_desc.hpp"
+#include "ure/instance_transform.hpp"
 
 // Legacy (kept for backward compatibility with render_frame_gpu)
 // Layout: GpuInstanceDesc (8B) + GpuInstanceTransform (152B) = 160B total

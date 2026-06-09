@@ -1,7 +1,7 @@
 #include "test_framework.cuh"
 #include <ure/gpu_driver.hpp>
 #include <ure/gpu_structs.hpp>
-#include <ure/tranform_ring_buffer.hpp>
+#include <ure/transform_ring_buffer.hpp>
 
 // --- Layout verification (host-side) ---
 // GpuInstance layout:

@@ -1,4 +1,5 @@
 add_library(ure_core STATIC
+    src/ure_c_api.cpp
     src/path_tracer_kernel.cu
     src/path_tracer_raygen.cu
     src/path_tracer_denoise.cu
@@ -11,9 +12,13 @@ add_library(ure_core STATIC
     src/scene_ir_compiler.cpp
     src/bvh_builder.cpp
     src/bvh_accelerator.cpp
+    src/world_scene_builder.cpp
+    src/render_api.cpp
 )
 
-target_include_directories(ure_core PUBLIC include
+target_include_directories(ure_core PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../ure_sceneio/include"
 )
@@ -33,3 +38,17 @@ set_target_properties(ure_core PROPERTIES
     CUDA_STANDARD 20
     CUDA_STANDARD_REQUIRED ON
 )
+
+target_compile_options(ure_core PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>
+)
+
+install(TARGETS ure_core EXPORT UltraRender_Targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    PATTERN "*.cuh" EXCLUDE
+    PATTERN "*.cu" EXCLUDE
+)
+
+

@@ -5,6 +5,8 @@
 #include "gpu/gpu_structs.hpp"
 #include "gpu/path_tracer_sampling.cuh"
 
+using namespace ure::gpu;
+
 namespace ure::gpu {
 
 __global__ void generate_rays_kernel(

@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"E:/Render Engine/build_vs/_deps/googletest-subbuild/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

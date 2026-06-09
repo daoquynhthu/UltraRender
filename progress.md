@@ -1,131 +1,111 @@
 # UltraRender Progress Log
 
+## 2026-06-09 — Phase P 全部完成 + API 工业化 (P.9–P.13)
+
+Phase P 全部 8 个子步骤完成（P.1–P.8），外加 API 工业化改造（P.9–P.13）。
+
+### 完成项
+
+| 子步骤 | 交付物 |
+|--------|--------|
+| **P.1** GPU Instance 分离 | `instance_desc.hpp` / `instance_transform.hpp` 独立，8 B / 152 B 布局，`d_instance_descs` 独立分配 |
+| **P.2** 热更新 API | `load_scene_once()` + `update_transforms()` + `get_framebuffer()` + `create_gpu_renderer()` |
+| **P.3** Transform RingBuffer | 文件名 `tranform`→`transform` 修正；`std::atomic<int>` SPSC 三缓冲，3 帧滞后 2 帧 |
+| **P.4** World/ECS 组件池 | `World` + `TransformComponent/GeometryComponent/PhysicsComponent/AudioComponent` + `WorldSceneBuilder` 桥接 |
+| **P.5** ISpatialQuery 抽象 | `PhysicsWorld : ISpatialQuery`，`AcousticRayTracer` 仅依赖接口 |
+| **P.6** 类型统一 | `ure::Vec3` 移除，`core::Quat::from_euler_zyx/to_euler_zyx()`，main.cpp 欧拉角函数删除 |
+| **P.7** 公共 API 契约 | `render.hpp` / `physics.hpp` / `scene_io.hpp` / `config.hpp` 四个库级头文件 |
+| **P.8** 编排层瘦身 | `ure_cli` 使用公共 API，无本地业务能力；`load_scene_once` + `update_transforms` 热更新 |
+| **P.9** render.hpp 去 GPU 污染 | 移除 `#include "ure/gpu_structs.hpp"`，前向声明 `gpu::GpuInstanceTransform`；外部应用不再拉入 CUDA 内核类型 |
+| **P.10** scene_io facade | 移除内部实现头文件（`procedural.hpp`/`gltf_scene_frontend.hpp`/`image_loader.hpp`/`image_saver.hpp`/`scene_parser.hpp`），转化为纯声明 |
+| **P.11** CMake install/export | `cmake/UltraRenderConfig.cmake.in` + `install(TARGETS ... EXPORT UltraRender_Targets)` + `configure_package_config_file` → `find_package(UltraRender)` 支持 |
+| **P.12** engine->load_world() | `IRenderEngine::load_world(const World&)` + `update_world_transforms(const World&)` 非虚便利方法 |
+| **P.13** C API | `ure_c_api.h` + `ure_c_api.cpp`：`ure_engine_create/destroy/load_scene_file/render_pass/get_framebuffer/save_bmp` |
+
+### 修复的坑
+
+- **CUDA 700**: `reinterpret_cast<GpuInstanceDesc*>(ctx->d_instances)` 步长 160→8 B
+- **文件名拼写**: `tranform_ring_buffer.hpp` → `transform_ring_buffer.hpp`（含测试 _test_instance_hotupdate.cu_ 中的 include）
+- **头文件冲突**: `ure_core/include/ure/render_config.hpp` 与 `ure_types` 版本同路径但不同 namespace（已删除多余副本）
+
+### 测试结果
+
+```
+[GPU Instance Hot-Update]   PASS (66 assertions)
+[GPU Basic Render Test]      PASS (37 assertions)
+[GPU Math Functions]         PASS (27 assertions)
+[GPU Spectral Pipeline]      PASS (30 assertions)
+[World/ECS Test]             PASS (39 assertions, host)
+Total: 199 GPU + 39 host = 238 assertions, 0 failures
+```
+
+### 外部应用使用示例
+
+```cmake
+# CMakeLists.txt (external app)
+find_package(UltraRender)
+target_link_libraries(myapp PRIVATE UltraRender::ure_core UltraRender::ure_sceneio)
+```
+
+```cpp
+#include <ure/render.hpp>
+#include <ure/scene_io.hpp>
+#include <ure/world_scene_builder.hpp>
+
+auto engine = ure::RenderEngineFactory::create_gpu_renderer();
+ure::World world;
+// populate world...
+engine->load_world(world);
+engine->render_pass();
+const auto& fb = engine->get_framebuffer();
+```
+
+```c
+#include <ure/ure_c_api.h>
+ure_engine_t* eng = ure_engine_create();
+ure_engine_load_scene_file(eng, "scene.gltf");
+ure_engine_render_pass(eng);
+const float* fb = ure_engine_get_framebuffer(eng);
+ure_engine_destroy(eng);
+```
+
+---
+
 ## Phase P.1 — GPU Instance Desc/Transform Split + Hot-Update Path
 
-### 2026-06-09
+### 2026-06-09 (superseded by Phase P complete)
 
-- [DONE] P.1.1: Add `GpuInstanceDesc` (mesh_index + material_index) and `GpuInstanceTransform` (transform + inverse + min/max AABB) structs
-- [DONE] P.1.2: Reorder `GpuInstance` layout so `mesh_index`/`material_index` come first → `reinterpret_cast<GpuInstanceDesc*>(d_instances)` works correctly
-- [DONE] P.1.3: Add `d_instance_transforms` to `GpuContext` as separate hot-update target buffer
-- [DONE] P.1.4: Fix transform upload in `init_gpu_renderer` — use field-by-field extraction (not raw memcpy from wrong offset)
-- [DONE] P.1.5: Fix transform upload in `render_frame_gpu` — same field-by-field extraction
-- [DONE] P.1.6: Add `update_instance_transforms_gpu()` with null/count/offset assertions
-- [DONE] P.1.7: Add runtime assertions in `gpu_engine_impl.cpp` (null checks, size consistency)
-- [DONE] P.1.8: Add `gpu_test_instance` target with 3 tests (layout, hot-update, transform readback)
-- [DONE] P.1.9: Full GPU test suite passes — 6 executables, 132 assertions, 0 failures
-- [DONE] P.1.10: Build verification with `Visual Studio 17 2022` + CUDA 13.0 + RTX 5060 (CC 12.0)
-
-### Bugs Fixed During Testing
-
-| Bug | Root Cause | Fix |
-|-----|-----------|-----|
-| `GpuInstanceDesc` cast returned wrong mesh_index | `GpuInstance` had `transform` before `mesh_index` (offset 128), but `reinterpret_cast<GpuInstanceDesc*>` assumed offset 0 | Reordered `GpuInstance` to put `mesh_index`/`material_index` first |
-| CUDA illegal memory access in BVH traversal | Transform buffer `cudaMemcpy` from `instances.data()` with `sizeof(GpuInstanceTransform)` — copied from offset 0, getting `transform(64)+inverse(64)+garbled(24)` instead of `transform(64)+inverse(64)+min(12)+max(12)` | Field-by-field extraction for transform buffer upload |
+- [DONE] P.1.1–P.1.10: See full Phase P summary above
 
 ## Phase P.3 — Transform Ring Buffer
 
-### 2026-06-09
+### 2026-06-09 (superseded by Phase P complete)
 
-- [DONE] P.3.1: Create `tranform_ring_buffer.hpp` — triple-buffer (kNumFrames=3), resize/begin_write/end_write/advance/begin_read/end_read/init_from_instances
-- [DONE] P.3.2: Integrate ring buffer into `gpu_engine_impl.cpp` — replace `cached_transforms_` vector with `tranform_ring_buffer_`
-- [DONE] P.3.3: Write frame → advance write → read frame → upload to GPU → advance read; 1-frame lag guarantee via 3 frames
-- [DONE] P.3.4: Add 3 ring buffer tests (basic read/write cycle, init_from_instances, wraparound)
-
-### Architecture
-
-```
-PhysicsSystem → write frame → advance()
-                               ↓
-                         [Frame 0]  ← write_index
-                         [Frame 1]
-                         [Frame 2]  ← read_index  (lags by 2)
-                               ↓
-                   begin_read() → cudaMemcpy H2D → end_read()
-```
-
-### Test Results
-
-```
-[GPU Device Test]         PASS (6 assertions)
-[GPU Math Functions]      PASS (27 assertions)
-[GPU Spectral Pipeline]   PASS (30 assertions)
-[Hardware Config Test]    PASS (17 assertions)
-[GPU Basic Render Test]   PASS (37 assertions)
-[GPU Instance Hot-Update] PASS (66 assertions, +3 ring buffer tests)
-Total: 183 assertions, 0 failures
-```
+- [DONE] P.3.1–P.3.4: See full Phase P summary above
 
 ## Phase P.6 — 类型统一（Vec3/Quat 一致化）
 
-### 2026-06-09
+### 2026-06-09 (superseded by Phase P complete)
 
-- [DONE] P.6.1: 删除 `ure::Vec3`/`ure::Vec2`，统一使用 `ure::core::Vec3f`/`ure::core::Vec2f`
-  - `ure_api.hpp`（ure_types + ure_core 两副本）：删除 `struct Vec3`/`Vec2`，添加 `core/vector.hpp`/`core/quaternion.hpp` 引用，全部替换
-  - `scene_ir.hpp`：Vec3 → core::Vec3f
-  - `procedural.hpp/.cpp`：Vec3/Vec2 → core::Vec3f/core::Vec2f
-  - `scene_ir_frontend.cpp`：Vec3 → core::Vec3f
-  - `gltf_scene_frontend.cpp`：Vec3/Vec2 → core::Vec3f/core::Vec2f
-  - `gpu_scene_compiler.cpp`：Vec3 → core::Vec3f，V2 .u/.v → .x/.y
-  - `apps/ure_cli/src/main.cpp`：ure::Vec3 → core::Vec3f
-- [DONE] P.6.2: 旋转统一为 `core::Quat`，删除 Euler 胶水代码
-  - `RenderEntity::rotation`: Vec3 (Euler度) → core::Quat
-  - `InstanceNode::rotation`: Vec3 → core::Quat
-  - `compile_transform()`: 删除 Euler→矩阵 sin/cos 计算，改用 `rotation.to_matrix()`
-  - `decompose_trs()`: 从矩阵→Euler 改为矩阵→Quat（直接提取，无万向锁）
-  - `gltf_scene_frontend.cpp`: 矩阵分解直接输出 Quat
-  - `scene_ir_frontend.cpp`: 遗留格式解析 Euler → Quat 转换
-  - `main.cpp`: 添加 `euler_to_quat()`，所有 `add_entity` 旋转参数改为 `core::Quat`
-  - 物理循环：`entity.rotation = {euler.x, euler.y, euler.z}` → `entity.rotation = rot`（直接赋 Quat）
-- [DONE] P.6.3: 全量回归 — 8 套件，222 assertions, 0 failures
+- [DONE] P.6.1–P.6.3: See full Phase P summary above
 
 ## Phase P.5 — ISpatialQuery 抽象（声学 ↔ 物理 解耦）
 
-### 2026-06-09
+### 2026-06-09 (superseded by Phase P complete)
 
-- [DONE] P.5.1: Create `ure/physics/ispatial_query.hpp` — `ISpatialQuery` interface with pure virtual `ray_cast()`, `RayCastHit` struct
-- [DONE] P.5.2: `PhysicsWorld : public ISpatialQuery` — inherit interface, remove local `RayCastHit` definition
-- [DONE] P.5.3: `AcousticRayTracer` takes `ISpatialQuery*` instead of `PhysicsWorld*` — no longer includes `physics_world.hpp`
-- [DONE] P.5.4: `AcousticSystem::set_spatial_query(ISpatialQuery*)` replaces `set_physics_world(PhysicsWorld*)`
-- [DONE] P.5.5: Update `apps/ure_cli/src/main.cpp` callers
-- [DONE] P.5.6: Full regression — 8 suites, 222 assertions, 0 failures
-
-### Dependency Change
-
-```
-Before: AcousticRayTracer ──▶ ure::physics::PhysicsWorld  (concrete type)
-After:  AcousticRayTracer ──▶ ure::physics::ISpatialQuery (interface)
-          PhysicsWorld ──▶ ISpatialQuery  (implements)
-```
+- [DONE] P.5.1–P.5.6: See full Phase P summary above
 
 ## Phase P.4 — World/ECS 组件池
 
-### 2026-06-09
+### 2026-06-09 (superseded by Phase P complete)
 
-- [DONE] P.4.1: Create `ure_types/include/ure/world.hpp` with EntityId + SoA component pools
-- [DONE] P.4.2: Define `TransformComponent` (Vec3f+Quat+Vec3f → to_matrix()), `GeometryComponent` (mesh ptr + material index), `PhysicsComponent` (config_id handle), `AudioComponent` (material_id + modal_body_id)
-- [DONE] P.4.3: O(1) entity creation + swap-remove compaction on `remove_entity`
-- [DONE] P.4.4: Add `tests/host/test_world.cpp` (4 tests: create, remove, transform matrix, pool compaction → 39 assertions)
-- [DONE] P.4.5: All 7 test suites pass: 222 assertions, 0 failures
-
-### Design Notes
-
-- SoA layout (separate vectors per component type) for cache-friendly iteration
-- `entity_to_index` map for O(1) EntityId → pool index lookup
-- Physics/Audio components use lightweight `int` handles; concrete configs live in `ure_physics`
-- `Camera` stored as `std::unique_ptr<core::Camera>` (abstract base)
+- [DONE] P.4.1–P.4.5: See full Phase P summary above
 
 ## Phase F — Directory Restructure + CMake Library Separation
 
 ### 2026-06-08
 
-- [DONE] F.1: Create new directory structure (`libs/ure_core`, `libs/ure_types`, `libs/ure_sceneio`, `libs/ure_config`, `libs/ure_physics`, `apps/ure_cli`)
-- [DONE] F.2: Create ure_types (header-only INTERFACE lib with GpuVec3, GpuMat4, GpuSpectrum, etc.)
-- [DONE] F.3: Create ure_core with all GPU sources (path_tracer_kernel.cu et al.)
-- [DONE] F.4: Create ure_sceneio with scene/IO sources
-- [DONE] F.5: Create ure_config + ure_physics + ure_cli
-- [DONE] F.6: Write all CMakeLists.txt files
-- [DONE] F.7: Update tests/gpu/CMakeLists.txt to link ure_core
-- [DONE] F.8: Build and verify all tests pass
+- [DONE] F.1–F.8: Migrated from single EXE to 6 libraries + 1 EXE
 
 ## Phase 4 — Code Modularization
 

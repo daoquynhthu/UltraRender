@@ -3,6 +3,8 @@
 #include <math.h>
 #include "gpu/gpu_structs.hpp"
 
+using namespace ure::gpu;
+
 namespace ure::gpu {
 
 static __device__ __forceinline__ float luma(GpuVec3 rgb) {

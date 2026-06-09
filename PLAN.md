@@ -841,7 +841,7 @@ N 来自 `RenderConfig.num_wavelengths`，与 Phase 0 AutoConfig 正交。
 
 新 Phase 0: ████████░░░░ 文件已创建 (待 Phase F 后重定位)
 新 Phase F: ████████████ 已完成 (F.1-F.5)
-新 Phase P: ░░░░░░░░░░░░ 未开始
+新 Phase P: ████████████ 已完成 (P.1-P.8 全部完成)
 新 Phase G: ░░░░░░░░░░░░ 未开始
 新 Phase H: ░░░░░░░░░░░░ 未开始
 新 Phase I: ░░░░░░░░░░░░ 未开始

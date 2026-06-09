@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/UltraRenderTargets.cmake")
+
+set_and_check(UltraRender_INCLUDE_DIR "@PACKAGE_INCLUDE_INSTALL_DIR@")
+
+check_required_components(ure_types ure_core ure_sceneio ure_config ure_physics)

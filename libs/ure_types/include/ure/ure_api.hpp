@@ -141,45 +141,4 @@ struct RenderSettings {
     std::string output_path;
 };
 
-// Interface
-class IRenderEngine {
-public:
-    virtual ~IRenderEngine() = default;
-    
-    // Load scene data into internal engine representation (e.g. upload to GPU)
-    virtual void load_scene(const Scene& scene) = 0;
-    virtual void load_scene_ir(const scene_ir::SceneIR& scene_ir) = 0;
-    
-    // Execute rendering
-    // Legacy blocking render, should be implemented using render_pass loop
-    virtual void render(const RenderSettings& settings) = 0;
-    
-    // Interactive API
-    
-    // Render one pass (or a batch of samples) and accumulate to the frame buffer.
-    // Returns the current accumulated sample count (SPP).
-    virtual int render_pass() = 0;
-    
-    // Reset accumulation buffer (clear to black, reset SPP to 0).
-    // Should be called when scene/camera changes.
-    virtual void reset_accumulation() = 0;
-    
-    // Update camera parameters without reloading the entire scene.
-    // Automatically triggers reset_accumulation().
-    virtual void update_camera(const Camera& camera) = 0;
-    
-    // Get current sample count
-    virtual int get_current_spp() const = 0;
-    
-    // Get raw frame buffer (Linear RGB float)
-    virtual const std::vector<float>& get_frame_buffer() const = 0;
-};
-
-// Factory
-class RenderEngineFactory {
-public:
-    static std::unique_ptr<IRenderEngine> create_gpu_engine();
-    static std::unique_ptr<IRenderEngine> create_cpu_engine();
-};
-
 } // namespace ure

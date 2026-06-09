@@ -1,3 +1,0 @@
-E:/Render Engine/build_vs_clean/CMakeFiles/UltraRender.dir
-E:/Render Engine/build_vs_clean/CMakeFiles/ALL_BUILD.dir
-E:/Render Engine/build_vs_clean/CMakeFiles/ZERO_CHECK.dir
