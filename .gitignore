@@ -29,6 +29,9 @@ build_gpu/
 build_vs/
 build_vs4/
 build_vs_clean/
+build_modular/
+build_gpu_test/
+.build/
 
 # GUI build artifacts
 gui/**/obj/

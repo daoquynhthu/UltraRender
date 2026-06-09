@@ -1,0 +1,2 @@
+add_library(ure_types INTERFACE)
+target_include_directories(ure_types INTERFACE include)

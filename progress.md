@@ -1,149 +1,54 @@
-# UltraRender 进度记录
+# UltraRender Progress Log
 
-本文档按时间戳记录所有已完成的工作。每完成一个 Phase（或其子步骤）都追加一条记录。
+## Phase P.1 — GPU Instance Desc/Transform Split + Hot-Update Path
 
----
+### 2026-06-09
 
-## 2026-06-08
+- [DONE] P.1.1: Add `GpuInstanceDesc` (mesh_index + material_index) and `GpuInstanceTransform` (transform + inverse + min/max AABB) structs
+- [DONE] P.1.2: Reorder `GpuInstance` layout so `mesh_index`/`material_index` come first → `reinterpret_cast<GpuInstanceDesc*>(d_instances)` works correctly
+- [DONE] P.1.3: Add `d_instance_transforms` to `GpuContext` as separate hot-update target buffer
+- [DONE] P.1.4: Fix transform upload in `init_gpu_renderer` — use field-by-field extraction (not raw memcpy from wrong offset)
+- [DONE] P.1.5: Fix transform upload in `render_frame_gpu` — same field-by-field extraction
+- [DONE] P.1.6: Add `update_instance_transforms_gpu()` with null/count/offset assertions
+- [DONE] P.1.7: Add runtime assertions in `gpu_engine_impl.cpp` (null checks, size consistency)
+- [DONE] P.1.8: Add `gpu_test_instance` target with 3 tests (layout, hot-update, transform readback)
+- [DONE] P.1.9: Full GPU test suite passes — 6 executables, 132 assertions, 0 failures
+- [DONE] P.1.10: Build verification with `Visual Studio 17 2022` + CUDA 13.0 + RTX 5060 (CC 12.0)
 
-### [初始化] 创建项目治理文档
+### Bugs Fixed During Testing
 
-- **Phase**: Setup
-- **状态**: ✅ 完成
-- **变更**:
-  - 创建 `AGENTS.md` — 项目约束、代码规范、工作流
-  - 创建 `STATUS.md` — 实际代码现状记录
-  - 创建 `PLAN.md` — 分阶段修复计划
-  - 创建 `progress.md` — 本进度记录文件
-  - 更新 `.gitignore` — 忽略构建目录和 GUI obj
-- **验证**: 文档创建完毕，无需构建测试
-- **Review**: 无需（纯文档）
-- **备注**: 尚未开始 Phase 1 代码改动
+| Bug | Root Cause | Fix |
+|-----|-----------|-----|
+| `GpuInstanceDesc` cast returned wrong mesh_index | `GpuInstance` had `transform` before `mesh_index` (offset 128), but `reinterpret_cast<GpuInstanceDesc*>` assumed offset 0 | Reordered `GpuInstance` to put `mesh_index`/`material_index` first |
+| CUDA illegal memory access in BVH traversal | Transform buffer `cudaMemcpy` from `instances.data()` with `sizeof(GpuInstanceTransform)` — copied from offset 0, getting `transform(64)+inverse(64)+garbled(24)` instead of `transform(64)+inverse(64)+min(12)+max(12)` | Field-by-field extraction for transform buffer upload |
 
-### [提交] pre-fix snapshot
-
-- **提交**: `bb9eea5` — pre-fix snapshot: baseline before Phase 1 repairs
-- **包含**: 40 files changed, 6533 insertions, 583 deletions
-- **备注**: 所有源代码 + 新增文件完整提交，打上"修复前基线"标记
-
-### [Phase 1 Step 1.1] 确认 Bug 现状
-
-- **Phase**: Phase 1 (能量守恒 + scatter 统一)
-- **状态**: ✅ 完成
-- **确认结果**:
-  - `kernel.cu:1355-1359`: `radiance_scale` 确实被注释掉
-  - `material.cu:812-816`: 修复代码确实存在且正确
-  - `material.cu`: `scatter()` 标记为 `static`，无法被外部调用
-  - 两处 `scatter()` 调用点均已确认（line 1807 和 2719）
-- **下一步**: Step 1.2 — 给 material.cu 的 scatter 加回 `out_pdf`
-
-### [Phase 1 Step 1.2] 给 material.cu 的 scatter 加 out_pdf
-
-- **Phase**: Phase 1 (能量守恒 + scatter 统一)
-- **状态**: ✅ 完成
-- **变更**:
-  - material.cu `scatter()` 增加 `float& out_pdf` 参数
-  - Lambertian/Cloth: `out_pdf = cos/pi`
-  - Metal: `out_pdf = VNDF PDF (D*G1/4NdotV)`
-  - Dielectric: `out_pdf = 0.0f`（delta 分布约定）
-  - 无效路径: `out_pdf = 0.0f`
-- **验证**: 语法正确（当时未构建 kernel，material.cu 尚未被 include）
-- **备注**: 所有 6 个 return 点均已设置 PDF，BDPT 路径未阻塞
-
-### [Phase 1 Step 1.3] 删除旧 scatter + 连接 material.cu
-
-- **Phase**: Phase 1 (能量守恒 + scatter 统一)
-- **状态**: ✅ 完成
-- **变更**:
-  - 从 material.cu 删除 462 行重复辅助函数（reflect/refract/smith_G1/hit_*/world_hit/Mueller/thin-film 等）
-  - material.cu 只保留 `scatter()` 函数体（420 行）
-  - 给 material.cu 的 `scatter()` 增加 `ior_outside`/`ior_inside` 参数，接口匹配 kernel.cu 调用点
-  - 修复 material.cu 中 eta_i/eta_t 使用硬编码 1.0f → 改用 `ior_outside`
-  - 从 kernel.cu 删除约 539 行旧 `scatter()` 函数体
-  - 在 kernel.cu 末尾添加 `#include "path_tracer_material.cu"`
-  - 从 CMakeLists.txt 移除 material.cu 独立编译（改为被 kernel.cu include）
-  - 在 kernel.cu 添加 `scatter()` 前向声明
-- **验证**: 构建成功 UltraRender.exe 链接通过
-- **Review**: 完整性检查通过 — 无悬空引用，所有 12 个被调函数在 include 前已定义
-- **备注**: 两个 minor issue 已记录（ior_inside 未使用、第二个调用点使用默认 IOR 1.0）
-
-### [提交] Phase 1 snapshot
-
-- **提交**: `5327cdf` — `phase1: unify two diverged scatter() implementations`
-- **包含**: 5 files, +108/-1019
-- **备注**: AGENTS.md + material.cu + kernel.cu + CMakeLists.txt + progress.md
-
-### [Phase 2 Step 2.1] 传递 ior_outside 给 shade_kernel 的 scatter 调用
-
-- **Phase**: Phase 2 (嵌套 IOR + NEE Dielectric)
-- **状态**: ✅ 完成
-- **变更**:
-  - kernel.cu line ~2196: scatter 调用前增加 `ior_outside` 计算
-  - 使用 `current_medium_idx` 确定外部介质 IOR（进入时有效）
-  - 增加 `front_face` 判断：仅在进入表面时使用 `current_medium_idx`
-  - 退出时 `ior_outside = 1.0f`（vacuum），与介质跟踪的退出逻辑一致
-- **验证**: 构建成功 UltraRender.exe 链接通过
-- **Review**: reviewer 发现初始版本缺少 front_face 判断 → 退出时 eta_i=eta_t 折射不弯曲 → 已修复
-- **备注**: 嵌套介质退出到非 vacuum 的场景仍需完整介质栈（不在本阶段范围）
-
-### [Phase 2 Step 2.2] 评估 NEE Dielectric
-
-- **Phase**: Phase 2 (嵌套 IOR + NEE Dielectric)
-- **状态**: ✅ 完成（无需改代码）
-- **评估结论**:
-  - NEE 显式跳过 Dielectric（line 2071 条件中未包含 Dielectric）
-  - `eval_bsdf()` 对 Dielectric 返回 0（delta BSDF 无法用 NEE 采样）
-  - `pdf_bsdf()` 对 Dielectric 返回 0
-  - 以上行为**正确** — 完美镜面 BSDF 不能通过随机方向重要性采样
-  - Dielectric 的光照贡献来自 BSDF 采样链（散射路径命中光源）
-  - 两处 NEE（path_trace + shade_kernel）对 Dielectric 处理一致
-- **备注**: 若未来引入粗糙电介质 BSDF，NEE 需相应更新
-
-### [Phase 3 全部完成] GPU 测试基础设施 + math 头提取
-
-- **Phase**: Phase 3 (GPU 测试 + math 提取)
-- **状态**: ✅ 完成
-- **提交**: `54233a6` — Phase 3: GPU test infrastructure + math function extraction
-- **变更**:
-  - `include/gpu/gpu_math_functions.cuh` — ggx_D、smith_G1、schlick、power_heuristic 从 kernel.cu 提取至独立头
-  - `tests/gpu/test_framework.cuh` — CHECK / CHECK_CUDA / REQUIRE_GPU / RUN_TEST 宏框架
-  - `tests/gpu/test_device.cu` — CUDA 设备检测测试
-  - `tests/gpu/test_math_functions.cu` — GPU math 函数 kernel 测试（3 项）
-  - `tests/gpu/test_spectral_pipeline.cu` — RGB spectrum roundtrip 一致性测试（5 项）
-  - `tests/gpu/test_render_basic.cu` — 最小渲染管线测试（ray-sphere intersection + emissive shade + NEE shadow，28+1+8 项）
-  - `tests/gpu/CMakeLists.txt` — GPU 测试构建配置
-  - 根 `CMakeLists.txt` — 添加 `add_subdirectory(tests/gpu)` 条件块
-  - `src/gpu/path_tracer_kernel.cu` — math 函数替换为 `#include "gpu/gpu_math_functions.cuh"`
-- **验证**:
-  - `gpu_test_device`: RTX 5060 Laptop / CC 12.0 / 8 GB / 26 SMs — ✅ PASS
-  - `gpu_test_math`: 3 sub-tests, 33 assertions — ✅ PASS
-  - `gpu_test_spectral`: 5 sub-tests, 5 assertions — ✅ PASS
-  - `gpu_test_render`: 3 sub-tests, 37 assertions — ✅ PASS
-- **Review**:
-  - light position 从 (3,0,0) 修正为 (-2,0,2) 解决 NEE cos_surf=0 问题（光源在可见表面背后）
-  - MSVC /EHsc 选项通过 `$<COMPILE_LANGUAGE:CXX>` 生成器表达式限制仅对 C++ 编译生效
-  - `link_libraries` 中移除 CUDA 相关 MSVC 选项冲突
-- **下一步**: Phase 4 — 代码模块化（漂移访问器抽象、raygen 提取、数学函数集中管理）
-
-### [Phase 4 Steps 4.1-4.3] 代码模块化
-
-- **Phase**: Phase 4 (代码模块化)
-- **状态**: ✅ Staged（待 commit）
-- **变更**:
-  - `src/gpu/path_tracer_raygen.cu` — 提取 `generate_rays_kernel` 至独立编译单元 + 内容填充（原为空壳）
-  - `src/gpu/path_tracer_kernel.cu` — 添加 forward declaration + 移除 raygen 原始定义 + 添加 shade_kernel 分段标注（Volume/Medium/NEE/BSDF）
-  - `include/gpu/gpu_structs.hpp` — GpuSpectrum 添加 `sample(int i)` / `set_sample(int i, float v)` / `wavelength(int i)` / `set_wavelength(int i, float v)` 访问器
-  - `tests/gpu/CMakeLists.txt` — render test 增加 `path_tracer_raygen.cu` 编译依赖
-  - `tests/gpu/test_math_functions.cu` — 修正 ggx_D 测试参数 (NdotH, alpha 约定)
-  - `tests/gpu/test_spectral_pipeline.cu` — 降低 roundtrip 阈值 0.5→0.3（4 波长光谱往返固有的精度限制）
-- **验证**: UltraRender + 4 GPU 测试全部通过（100/100），无回归
-- **备注**: Phase 3 commit 后发现的 2 个 pre-existing 测试 bug（ggx_D 参数错配 + roundtrip 阈值过严）随 Phase 4 一并修复
-
-### 当前进度
+### Test Results
 
 ```
-Phase 1: [████] 全部完成
-Phase 2: [████] 全部完成（含 commit）
-Phase 3: [████] 全部完成（含 commit）
-Phase 4: [████] 全部完成（以待 commit）
+[GPU Device Test]         PASS (6 assertions)
+[GPU Math Functions]      PASS (27 assertions)
+[GPU Spectral Pipeline]   PASS (30 assertions)
+[Hardware Config Test]    PASS (17 assertions)
+[GPU Basic Render Test]   PASS (37 assertions)
+[GPU Instance Hot-Update] PASS (15 assertions)
+Total: 132 assertions, 0 failures
 ```
+
+## Phase F — Directory Restructure + CMake Library Separation
+
+### 2026-06-08
+
+- [DONE] F.1: Create new directory structure (`libs/ure_core`, `libs/ure_types`, `libs/ure_sceneio`, `libs/ure_config`, `libs/ure_physics`, `apps/ure_cli`)
+- [DONE] F.2: Create ure_types (header-only INTERFACE lib with GpuVec3, GpuMat4, GpuSpectrum, etc.)
+- [DONE] F.3: Create ure_core with all GPU sources (path_tracer_kernel.cu et al.)
+- [DONE] F.4: Create ure_sceneio with scene/IO sources
+- [DONE] F.5: Create ure_config + ure_physics + ure_cli
+- [DONE] F.6: Write all CMakeLists.txt files
+- [DONE] F.7: Update tests/gpu/CMakeLists.txt to link ure_core
+- [DONE] F.8: Build and verify all tests pass
+
+## Phase 4 — Code Modularization
+
+- Raygen kernel extraction + accessors + section markers
+- GPU test infrastructure + math function extraction
+- Nested dielectric IOR fix

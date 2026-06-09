@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux-cuda-build:
+    name: Linux CUDA Build
+    runs-on: ubuntu-24.04
+    container:
+      image: nvidia/cuda:12.6.3-devel-ubuntu24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            git \
+            ninja-build \
+            pkg-config
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CUDA_ARCHITECTURES=all-major
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Package artifact
+        run: |
+          mkdir -p dist
+          cp build/bin/UltraRender dist/UltraRender
+          tar -C dist -czf ultrarender-linux-cuda.tar.gz UltraRender
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultrarender-linux-cuda
+          path: ultrarender-linux-cuda.tar.gz
+          if-no-files-found: error

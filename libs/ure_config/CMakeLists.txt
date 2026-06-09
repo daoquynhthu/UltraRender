@@ -1,0 +1,3 @@
+add_library(ure_config INTERFACE)
+target_include_directories(ure_config INTERFACE include)
+target_link_libraries(ure_config INTERFACE ure_types)
