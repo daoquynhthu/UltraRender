@@ -83,6 +83,12 @@ void add_cube(GpuHostScene& scene, const GpuVec3& center, float size, int mat_id
         mesh.uvs.push_back(1.0f); mesh.uvs.push_back(1.0f);
         mesh.uvs.push_back(0.0f); mesh.uvs.push_back(1.0f);
 
+        // Tangents: +X direction default
+        mesh.tangents.push_back(1.0f); mesh.tangents.push_back(0.0f); mesh.tangents.push_back(0.0f);
+        mesh.tangents.push_back(1.0f); mesh.tangents.push_back(0.0f); mesh.tangents.push_back(0.0f);
+        mesh.tangents.push_back(1.0f); mesh.tangents.push_back(0.0f); mesh.tangents.push_back(0.0f);
+        mesh.tangents.push_back(1.0f); mesh.tangents.push_back(0.0f); mesh.tangents.push_back(0.0f);
+
         // Indices (Two triangles: 0,1,2 and 0,2,3)
         mesh.indices.push_back(idx_offset + 0);
         mesh.indices.push_back(idx_offset + 1);

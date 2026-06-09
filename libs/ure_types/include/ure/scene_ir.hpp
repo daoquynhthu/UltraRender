@@ -37,6 +37,12 @@ struct TextureResource {
     int uv_set = 0;
 };
 
+struct SpectralMaterialExtension {
+    int spectral_bands = 0;
+    std::string albedo_spd;
+    std::string emission_spd;
+};
+
 struct MaterialNode {
     std::string name;
     MaterialModel model = MaterialModel::Lambertian;
@@ -58,6 +64,7 @@ struct MaterialNode {
     std::shared_ptr<TextureResource> emission_texture;
     std::shared_ptr<TextureResource> normal_texture;
     float normal_scale = 1.0f;
+    std::shared_ptr<SpectralMaterialExtension> spectral_extension;
 };
 
 struct MeshResource {

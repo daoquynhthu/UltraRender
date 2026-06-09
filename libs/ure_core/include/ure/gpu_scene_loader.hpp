@@ -8,6 +8,7 @@ struct HostMesh {
     std::vector<float> vertices;
     std::vector<float> normals; // Vertex Normals
     std::vector<float> uvs; // u, v pairs
+    std::vector<float> tangents; // Vertex Tangents (normal mapping)
     std::vector<int> indices;
     int material_index;
 };

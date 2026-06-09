@@ -14,6 +14,7 @@ struct RenderMesh {
     std::vector<float> vertices;
     std::vector<float> normals;
     std::vector<float> uvs;
+    std::vector<float> tangents;
     std::vector<int> indices;
     int material_index;
     // Pre-computed AABB could be added here if we wanted to do it on CPU

@@ -340,6 +340,7 @@ struct GpuMesh {
     GpuVec3* vertices;
     GpuVec3* normals; // Vertex Normals
     GpuVec2* uvs;
+    GpuVec3* tangents; // Vertex Tangents (normal mapping)
     int* indices;
     int triangle_count;
     int material_index; // Default material

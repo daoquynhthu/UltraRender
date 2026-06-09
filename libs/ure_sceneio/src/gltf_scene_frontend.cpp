@@ -375,6 +375,7 @@ public:
 
     scene_ir::SceneIR parse() {
         if (!load_json()) return scene_;
+        if (!check_extensions()) return scene_;
         if (!load_buffers()) return scene_;
         parse_scene_nodes();
         return scene_;
@@ -397,6 +398,28 @@ private:
         buffer << file.rdbuf();
         root_ = JsonParser(buffer.str()).parse();
         return root_.type == JsonValue::Type::Object;
+    }
+
+    bool check_extensions() {
+        const JsonValue* used = get_object_value(root_, "extensionsUsed");
+        if (used && used->type == JsonValue::Type::Array) {
+            for (const auto& ext : used->array_value) {
+                if (ext.type == JsonValue::Type::String && ext.string_value == "URE_spectral_material") {
+                    has_spectral_extension_ = true;
+                }
+            }
+        }
+        const JsonValue* required = get_object_value(root_, "extensionsRequired");
+        if (required && required->type == JsonValue::Type::Array) {
+            for (const auto& ext : required->array_value) {
+                if (ext.type != JsonValue::Type::String) continue;
+                if (ext.string_value != "URE_spectral_material") {
+                    UR_LOG_ERROR(SceneIO, "Required extension '{}' is not supported.", ext.string_value);
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     bool load_buffers() {
@@ -873,16 +896,14 @@ private:
 
         if (const JsonValue* extensions = get_object_value(*material, "extensions")) {
             if (const JsonValue* spectral = get_object_value(*extensions, "URE_spectral_material")) {
+                auto ext = std::make_shared<scene_ir::SpectralMaterialExtension>();
+                ext->spectral_bands = get_int(*spectral, "spectralBands", 0);
+                ext->albedo_spd = get_string(*spectral, "albedoSPD");
+                ext->emission_spd = get_string(*spectral, "emissionSPD");
                 node->dispersion = static_cast<float>(get_number(*spectral, "dispersion", node->dispersion));
-                std::vector<float> eta = get_number_array(*spectral, "metal_eta");
-                if (eta.size() >= 3) node->metal_eta = {eta[0], eta[1], eta[2]};
-                std::vector<float> k = get_number_array(*spectral, "metal_k");
-                if (k.size() >= 3) node->metal_k = {k[0], k[1], k[2]};
-                std::string model_str = get_string(*spectral, "model", "");
-                if (model_str == "dielectric") node->model = scene_ir::MaterialModel::Dielectric;
-                else if (model_str == "metal") node->model = scene_ir::MaterialModel::Metal;
-                UR_LOG_DEBUG(SceneIO, "Parsed URE_spectral_material for '{}': model={}, dispersion={}",
-                             node->name, model_str, node->dispersion);
+                node->spectral_extension = ext;
+                UR_LOG_DEBUG(SceneIO, "Parsed URE_spectral_material for '{}': bands={}, albedoSPD='{}'",
+                             node->name, ext->spectral_bands, ext->albedo_spd);
             }
         }
 
@@ -899,6 +920,7 @@ private:
     std::map<int, std::shared_ptr<scene_ir::MaterialNode>> material_cache_;
     std::map<std::pair<int, int>, std::shared_ptr<scene_ir::ImageResource>> image_cache_;
     std::map<std::pair<int, int>, std::shared_ptr<scene_ir::TextureResource>> texture_cache_;
+    bool has_spectral_extension_ = false;
 };
 
 }

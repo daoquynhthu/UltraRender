@@ -2589,6 +2589,15 @@ GpuContext* init_gpu_renderer(int width, int height,
              ctx->pointers_to_free.push_back(d_n);
         } else { mesh.normals = nullptr; }
 
+        if (!input_mesh.tangents.empty()) {
+            size_t t_size = input_mesh.tangents.size() * sizeof(float);
+            GpuVec3* d_t;
+            cudaMalloc(&d_t, t_size);
+            cudaMemcpy(d_t, input_mesh.tangents.data(), t_size, cudaMemcpyHostToDevice);
+            mesh.tangents = d_t;
+            ctx->pointers_to_free.push_back(d_t);
+        } else { mesh.tangents = nullptr; }
+
         compute_aabb(input_mesh.vertices, mesh.min_pt, mesh.max_pt);
 
         std::vector<int> temp_indices = input_mesh.indices;
@@ -2653,6 +2662,14 @@ GpuContext* init_gpu_renderer(int width, int height,
             mesh.normals = d_n;
             ctx->pointers_to_free.push_back(d_n);
         } else { mesh.normals = nullptr; }
+        if (!hm.tangents.empty()) {
+            size_t t_size = hm.tangents.size() * sizeof(float);
+            GpuVec3* d_t;
+            cudaMalloc(&d_t, t_size);
+            cudaMemcpy(d_t, hm.tangents.data(), t_size, cudaMemcpyHostToDevice);
+            mesh.tangents = d_t;
+            ctx->pointers_to_free.push_back(d_t);
+        } else { mesh.tangents = nullptr; }
         if (!hm.uvs.empty()) {
             size_t uv_size = hm.uvs.size() * sizeof(float);
             GpuVec2* d_uv;
@@ -3086,6 +3103,17 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
              mesh.normals = nullptr;
         }
 
+        if (!input_mesh.tangents.empty()) {
+            size_t t_size = input_mesh.tangents.size() * sizeof(float);
+            GpuVec3* d_t;
+            cudaMalloc(&d_t, t_size);
+            cudaMemcpy(d_t, input_mesh.tangents.data(), t_size, cudaMemcpyHostToDevice);
+            mesh.tangents = d_t;
+            pointers_to_free.push_back(d_t);
+        } else {
+            mesh.tangents = nullptr;
+        }
+
         compute_aabb(input_mesh.vertices, mesh.min_pt, mesh.max_pt);
 
         // Build BVH
@@ -3166,6 +3194,17 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
             pointers_to_free.push_back(d_n);
         } else {
             mesh.normals = nullptr;
+        }
+
+        if (!hm.tangents.empty()) {
+            size_t t_size = hm.tangents.size() * sizeof(float);
+            GpuVec3* d_t;
+            cudaMalloc(&d_t, t_size);
+            cudaMemcpy(d_t, hm.tangents.data(), t_size, cudaMemcpyHostToDevice);
+            mesh.tangents = d_t;
+            pointers_to_free.push_back(d_t);
+        } else {
+            mesh.tangents = nullptr;
         }
 
         // Handle UVs

@@ -308,6 +308,9 @@ CompiledGpuScene GpuSceneCompiler::compile_legacy(const Scene& scene) {
                 mesh.normals.push_back(v.normal.z);
                 mesh.uvs.push_back(v.uv.x);
                 mesh.uvs.push_back(v.uv.y);
+                mesh.tangents.push_back(v.tangent.x);
+                mesh.tangents.push_back(v.tangent.y);
+                mesh.tangents.push_back(v.tangent.z);
             }
             mesh.indices = entity.mesh->indices;
             mesh.material_index = -1;
@@ -401,6 +404,9 @@ CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir) {
                 mesh.normals.push_back(v.normal.z);
                 mesh.uvs.push_back(v.uv.x);
                 mesh.uvs.push_back(v.uv.y);
+                mesh.tangents.push_back(v.tangent.x);
+                mesh.tangents.push_back(v.tangent.y);
+                mesh.tangents.push_back(v.tangent.z);
             }
             mesh.indices = instance.mesh->mesh->indices;
             mesh.material_index = -1;
