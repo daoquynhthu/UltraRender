@@ -40,7 +40,7 @@ jobs:
       - name: Package artifact
         run: |
           mkdir -p dist
-          cp build/bin/UltraRender dist/UltraRender
+          cp build/apps/ure_cli/ure_cli dist/UltraRender
           tar -C dist -czf ultrarender-linux-cuda.tar.gz UltraRender
 
       - name: Upload artifact
