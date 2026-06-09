@@ -1,4 +1,5 @@
 #include "ure/physics/acoustic/acoustic_ray_tracer.hpp"
+#include "ure/physics/rigid_body.hpp"
 #include <random>
 #include <numbers>
 #include <cmath>
@@ -7,8 +8,8 @@
 namespace ure {
 namespace acoustic {
 
-AcousticRayTracer::AcousticRayTracer(ure::physics::PhysicsWorld* physics_world)
-    : physics_world(physics_world) {}
+AcousticRayTracer::AcousticRayTracer(ure::physics::ISpatialQuery* spatial_query)
+    : spatial_query(spatial_query) {}
 
 std::vector<AcousticPath> AcousticRayTracer::trace_paths(
     const ure::core::Vec3<float>& source_pos,
@@ -63,7 +64,7 @@ std::vector<AcousticPath> AcousticRayTracer::trace_paths(
         
         // Ray cast
         ure::physics::RayCastHit hit;
-        if (physics_world->ray_cast(ray, hit, 100.0f)) {
+        if (spatial_query->ray_cast(ray, hit, 100.0f)) {
             ure::core::Vec3<float> hit_point = hit.point;
             
             // --- A. Reflection (Next Event Estimation) ---
@@ -136,7 +137,7 @@ std::vector<AcousticPath> AcousticRayTracer::trace_paths(
                      ure::core::Rayf trans_ray(hit_point - normal * 0.02f, refract_dir);
                      ure::physics::RayCastHit trans_hit;
                      
-                     if (physics_world->ray_cast(trans_ray, trans_hit, 10.0f)) {
+                     if (spatial_query->ray_cast(trans_ray, trans_hit, 10.0f)) {
                          // Connect to listener from exit point
                          ure::core::Vec3<float> exit_point = trans_hit.point;
                          
@@ -182,7 +183,7 @@ float AcousticRayTracer::check_visibility(const ure::core::Vec3<float>& p1, cons
     
     ure::physics::RayCastHit hit;
     // Check slightly less than full distance to avoid hitting the listener itself
-    if (physics_world->ray_cast(ray, hit, dist - 0.02f)) {
+    if (spatial_query->ray_cast(ray, hit, dist - 0.02f)) {
         return 0.0f; // Blocked
     }
     

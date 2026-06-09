@@ -55,6 +55,25 @@ PhysicsSystem → write frame → advance()
 Total: 183 assertions, 0 failures
 ```
 
+## Phase P.5 — ISpatialQuery 抽象（声学 ↔ 物理 解耦）
+
+### 2026-06-09
+
+- [DONE] P.5.1: Create `ure/physics/ispatial_query.hpp` — `ISpatialQuery` interface with pure virtual `ray_cast()`, `RayCastHit` struct
+- [DONE] P.5.2: `PhysicsWorld : public ISpatialQuery` — inherit interface, remove local `RayCastHit` definition
+- [DONE] P.5.3: `AcousticRayTracer` takes `ISpatialQuery*` instead of `PhysicsWorld*` — no longer includes `physics_world.hpp`
+- [DONE] P.5.4: `AcousticSystem::set_spatial_query(ISpatialQuery*)` replaces `set_physics_world(PhysicsWorld*)`
+- [DONE] P.5.5: Update `apps/ure_cli/src/main.cpp` callers
+- [DONE] P.5.6: Full regression — 8 suites, 222 assertions, 0 failures
+
+### Dependency Change
+
+```
+Before: AcousticRayTracer ──▶ ure::physics::PhysicsWorld  (concrete type)
+After:  AcousticRayTracer ──▶ ure::physics::ISpatialQuery (interface)
+          PhysicsWorld ──▶ ISpatialQuery  (implements)
+```
+
 ## Phase P.4 — World/ECS 组件池
 
 ### 2026-06-09

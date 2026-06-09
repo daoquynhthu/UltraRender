@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ure/physics/physics_world.hpp"
 #include "ure/physics/acoustic/types.hpp"
+#include "ure/physics/ispatial_query.hpp"
 #include <vector>
 #include <memory>
 #include <unordered_map>
@@ -11,7 +11,7 @@ namespace acoustic {
 
 class AcousticRayTracer {
 public:
-    AcousticRayTracer(ure::physics::PhysicsWorld* physics_world);
+    explicit AcousticRayTracer(ure::physics::ISpatialQuery* spatial_query);
     
     // Trace paths from source to listener
     // max_depth: number of bounces (0 = direct only)
@@ -24,7 +24,7 @@ public:
     );
 
 private:
-    ure::physics::PhysicsWorld* physics_world;
+    ure::physics::ISpatialQuery* spatial_query;
     
     // Helper to check visibility between two points
     // Returns transmission factor (1.0 = clear, < 1.0 = occluded)

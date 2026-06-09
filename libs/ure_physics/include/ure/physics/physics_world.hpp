@@ -4,6 +4,7 @@
 #include "ure/physics/collider.hpp"
 #include "ure/physics/physics_events.hpp"
 #include "ure/physics/fluid_system.hpp"
+#include "ure/physics/ispatial_query.hpp"
 #include <vector>
 #include <memory>
 
@@ -13,14 +14,6 @@ namespace ure { namespace acoustic { class AcousticSystem; } }
 
 namespace ure::physics {
 
-struct RayCastHit {
-    bool has_hit = false;
-    float t = std::numeric_limits<float>::infinity();
-    ure::core::Vec3<float> point;
-    ure::core::Vec3<float> normal;
-    RigidBody* body = nullptr;
-};
-
 struct CollisionManifold {
     RigidBody* body_a;
     RigidBody* body_b;
@@ -29,7 +22,7 @@ struct CollisionManifold {
     ure::core::Vec3<float> contact_point;
 };
 
-class PhysicsWorld {
+class PhysicsWorld : public ISpatialQuery {
 public:
     PhysicsWorld();
 

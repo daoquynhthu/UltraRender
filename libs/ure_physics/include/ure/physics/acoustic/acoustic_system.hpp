@@ -12,7 +12,7 @@
 
 namespace ure {
 namespace physics {
-    class PhysicsWorld;
+    class ISpatialQuery;
 }
 
 namespace acoustic {
@@ -44,8 +44,8 @@ public:
     // Set listener transform for spatial audio
     void set_listener(const ure::core::Vec3<float>& pos, const ure::core::Vec3<float>& forward, const ure::core::Vec3<float>& up);
 
-    // Set Physics World for ray tracing (occlusion/reflection)
-    void set_physics_world(ure::physics::PhysicsWorld* world);
+    // Set spatial query interface for ray tracing (occlusion/reflection)
+    void set_spatial_query(ure::physics::ISpatialQuery* query);
 
     // Get current audio sample (for visualization, mono mix of last frame)
     float get_audio_sample() const;

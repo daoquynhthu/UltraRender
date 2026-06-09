@@ -1,6 +1,6 @@
 #include "ure/physics/acoustic/acoustic_system.hpp"
 #include "ure/physics/rigid_body.hpp"
-#include "ure/physics/physics_world.hpp"
+#include "ure/physics/ispatial_query.hpp"
 #include <iostream>
 #include <algorithm>
 #include <numbers>
@@ -16,9 +16,9 @@ void AcousticSystem::set_listener(const ure::core::Vec3<float>& pos, const ure::
     spatial_processor.set_listener(pos, forward, up);
 }
 
-void AcousticSystem::set_physics_world(ure::physics::PhysicsWorld* world) {
-    if (world) {
-        ray_tracer = std::make_unique<AcousticRayTracer>(world);
+void AcousticSystem::set_spatial_query(ure::physics::ISpatialQuery* query) {
+    if (query) {
+        ray_tracer = std::make_unique<AcousticRayTracer>(query);
     } else {
         ray_tracer.reset();
     }

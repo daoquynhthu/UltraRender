@@ -198,7 +198,7 @@ int main(int argc, char* argv[]) {
             physics_world->register_listener(acoustic_system.get());
             
             // Link Acoustic System to Physics World (for Ray Tracing)
-            acoustic_system->set_physics_world(physics_world.get());
+            acoustic_system->set_spatial_query(physics_world.get());
             
             // Define some acoustic materials (IDs must match scene/logic)
             // ID 1: Metal, ID 2: Wood, ID 3: Glass
@@ -700,7 +700,7 @@ int main(int argc, char* argv[]) {
         
         // Link Physics World for Ray Tracing
         if (physics_world) {
-            acoustic_system->set_physics_world(physics_world.get());
+            acoustic_system->set_spatial_query(physics_world.get());
         }
         
         std::cout << "[Main] Spatial Audio Listener set at: " << cam_pos.x << ", " << cam_pos.y << ", " << cam_pos.z << std::endl;
