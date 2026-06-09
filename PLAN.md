@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-09 (含 Phase I: 配置系统)
+最后更新: 2026-06-10 (加入 XPU 架构宣言 + Batch Cleanup 阶段)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -23,6 +23,104 @@
 新 Phase D:     分布式集成                                          分布式
 新 Phase E:     N 通道光谱升级                                      光谱
 ```
+
+---
+
+## XPU 架构宣言
+
+### 我们已经是 XPU
+
+CPU 和 GPU 各自承担不同的职责，通过有锁或无锁队列解耦：
+
+```
+CPU (physics / scene update):
+    physics step → build_transforms → begin_write → memcpy → end_write → advance
+                                                                              │
+                                        SPSC RingBuffer (release fence chain)
+                                                                              ▼
+GPU (tracing / shading):
+    begin_read (acquire) → upload transforms → render_pass → resolve
+```
+
+这是**窄 XPU** — 只有 instance transform 走动态管线。其他场景数据（mesh、material、sphere、light_index、texture、BVH）在 `load_scene_once()` 时一次性上传，此后只读。
+
+### 核心模式：SPSC RingBuffer
+
+`TransformRingBuffer`（`libs/ure_core/include/ure/transform_ring_buffer.hpp`）定义了标准的 CPU→GPU 动态数据传输契约：
+
+```
+Writer (CPU):
+    begin_write()  → 获取当前写帧指针
+    memcpy/store   → 填充数据
+    end_write()    → atomic_thread_fence(release)
+    advance()      → write_index.store(release)
+    
+Reader (GPU host path):
+    begin_read()   → write_index.load(acquire) → 推导读帧
+    cudaMemcpy     → 上传到 GPU VRAM
+    end_read()     → 无操作（读帧始终派生自 write_index）
+```
+
+这个模式可以原样复用于任何 CPU→GPU 动态数据通道。
+
+### 当前动态能力范围
+
+| 动态数据 | 通道 | 状态 |
+|---------|------|------|
+| Instance transform | TransformRingBuffer | ✅ 已实现 |
+| 材质参数更新 | 无 | ❌ 未实现 |
+| 实例增删 | 无 | ❌ 未实现 |
+| 光源增删 | 无 | ❌ 未实现 |
+| 流体粒子 → GPU sphere 同步 | 无 | ❌ 未实现 |
+| 变形几何 / BVH 增量更新 | 无 | ❌ 未实现 |
+
+**这些缺失不是架构债** — 每个都可以通过新增一个 `XxxRingBuffer` 或 `XxxUpdateQueue` 来填补，无需改动现有代码。TransformRingBuffer 的 SPSC fence 模式是通用模板。
+
+### 动态流体的典型路径（未来参考）
+
+```
+Physics step (CPU):
+    fluid_system->step(dt)                  → 更新粒子位置
+    build_fluid_spheres(spawn, destroy)      → 计算 GPU sphere 增删
+    sphere_queue.begin_write()               → 获取写指针
+    memcpy(spawn_spheres, destroy_indices)   → 填充增删命令
+    sphere_queue.end_write() + advance()     → release fence + release store
+
+Render thread (CPU→GPU):
+    sphere_queue.begin_read()                → acquire load
+    cudaMemcpy to GPU sphere pool            → 更新
+    update_sphere_counts(new_count)          → 调整 sphere_count
+    reset_accumulation()
+```
+
+**关键原则**：CPU 永远不读 GPU 数据（除非帧结束 resolve framebuffer）。GPU 永远不写 CPU 数据。SPSC 方向始终是 **CPU → GPU**。
+
+### 为什么不扩展现有接口而用新 Queue
+
+现有 `IRenderEngine` 的 `update_transforms()` 是 `virtual` 方法，参数是裸指针 `const GpuInstanceTransform*`。扩展这个接口为 `update_materials()`、`add_instance()` 等是合理的，但：
+
+1. 每种动态数据可能需要不同的更新语义（替换 vs 追加 vs 删除）
+2. 批量写入 + SPSC 解耦比单次虚函数调用更适合高频多数据类型
+3. RingBuffer 模式天然支持多生产者（多个 CPU 线程）— 如果未来需要
+
+### 为什么不是纯 GPU 物理/声学
+
+| 放在 CPU 的原因 | 依据 |
+|----------------|------|
+| **物理/声学算法有大量分支、间接、小批量操作** — GPU SIMT 不擅长 | 碰撞检测、稀疏粒子搜索、模态合成 |
+| **场景数据已经驻留在 CPU 内存** — physics 可以读取 SceneIR 和 World | 零数据搬运 |
+| **物理步频 (~120 Hz) 和渲染步频 (~1-30 Hz) 不同** — 自然解耦 | RingBuffer 隐藏延迟 |
+| **CUDA CC 12.0 硬件调度器没有物理专用单元** | 与渲染竞争 SM 资源 |
+
+### 对大卡/多卡/分布式升级的影响
+
+| 升级场景 | XPU 架构的影响 |
+|---------|---------------|
+| **更大单卡** | 无影响。CPU 侧 unchanged，GPU 侧受益于更多 SM 和 VRAM |
+| **多卡（单节点）** | 需要每卡各自的 `GpuContext` + 各自的 RingBuffer 读取。CPU 写入一次，broadcast 到 N 个 buffer。SPSC 模式天然支持 1:N fanout |
+| **分布式（多节点）** | RingBuffer 的 shared-memory 实现需要替换为网络消息（ZeroMQ / MPI）。但 **SPSC release/acquire fence chain 的设计完全可复用**：网络接收端作为 writer，渲染线程作为 reader |
+
+**结论**：窄 XPU 不是"把架构做死了"。它是刻意选择的 CPU/GPU 分工边界，有清晰的扩展路径到全动态管线、多卡和分布式。任何未来功能都可以在不破坏现有数据路径的前提下增量添加。
 
 ---
 
