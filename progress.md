@@ -55,6 +55,23 @@ PhysicsSystem → write frame → advance()
 Total: 183 assertions, 0 failures
 ```
 
+## Phase P.4 — World/ECS 组件池
+
+### 2026-06-09
+
+- [DONE] P.4.1: Create `ure_types/include/ure/world.hpp` with EntityId + SoA component pools
+- [DONE] P.4.2: Define `TransformComponent` (Vec3f+Quat+Vec3f → to_matrix()), `GeometryComponent` (mesh ptr + material index), `PhysicsComponent` (config_id handle), `AudioComponent` (material_id + modal_body_id)
+- [DONE] P.4.3: O(1) entity creation + swap-remove compaction on `remove_entity`
+- [DONE] P.4.4: Add `tests/host/test_world.cpp` (4 tests: create, remove, transform matrix, pool compaction → 39 assertions)
+- [DONE] P.4.5: All 7 test suites pass: 222 assertions, 0 failures
+
+### Design Notes
+
+- SoA layout (separate vectors per component type) for cache-friendly iteration
+- `entity_to_index` map for O(1) EntityId → pool index lookup
+- Physics/Audio components use lightweight `int` handles; concrete configs live in `ure_physics`
+- `Camera` stored as `std::unique_ptr<core::Camera>` (abstract base)
+
 ## Phase F — Directory Restructure + CMake Library Separation
 
 ### 2026-06-08
