@@ -31,7 +31,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | P (Data Pipeline) | Done | Instance desc/transform split, RingBuffer, World/ECS, ISpatialQuery, public API |
 | H (Asset Pipeline) | Done | stb_image (BMP→stbi_loadf), SPD loader (`SPDData`/`load_spd_file`/`resample_uniform`), 6 tests |
 | Dx (Diagnostics) | Done | `ure_diag` unified logging, CUDA error abstraction, RAII timer, ~73 站点迁移 |
-| G (glTF) | Not started | glTF 2.0 full + URE_spectral_material extension |
+| G (glTF) | Done | normalTexture + tangent generation, camera parsing, URE_spectral_material extension, non-glTF fallback |
 | I (Config) | Not started | JSON + CLI11 + --verbose/--quiet |
 | A (SoA Queue) | Not started | Dynamic N wavelengths from RenderConfig |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
@@ -345,3 +345,4 @@ cmake --build build_modular --config Release --target gpu_test_hardware
 |---|---------|----------|--------------------------|
 | 1 | 2026-06-09 Dx | Phase Dx 收尾：migrate scene_factory.cpp (6处) + obj_loader.cpp (2处) | 264 tests all pass; 所有 std::cout/cerr 已清除或确认为进度条(Dx.7)/声学物理(范围外)/注释代码 |
 | 2 | 2026-06-09 Cleanup | 迁移 GPU test includes (3 files) + CMakeLists.txt 移除旧 include/ 路径; 删除旧目录 include/ src/ tests/{unit,integration} 和遗留 CMake 构建块 | 264 tests all pass; 项目完全脱离旧 monolithic 架构 |
+| 3 | 2026-06-09 Phase G | glTF 完整化: tangent 生成, camera 解析, URE_spectral_material, non-glTF fallback | 3 files changed, 142 insertions; 264 tests all pass |

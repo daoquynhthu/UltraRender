@@ -1042,7 +1042,7 @@ N 来自 `RenderConfig.num_wavelengths`，与 Phase 0 AutoConfig 正交。
 新 Phase P: ████████████ 已完成 (P.1-P.8 全部完成)
 新 Phase H: ████████████ 已完成 (stb_image + SPD loader + 测试通过)
 新 Phase Dx: ████████████ 已完成 (264 测试通过，~73 站点迁移完毕)
-新 Phase G: ░░░░░░░░░░░░ 未开始
+新 Phase G: ████████████ 已完成 (normalTexture + tangent + camera + URE_spectral_material + fallback)
 新 Phase I: ░░░░░░░░░░░░ 未开始
 新 Phase A: ░░░░░░░░░░░░ 未开始
 新 Phase B: ░░░░░░░░░░░░ 未开始
