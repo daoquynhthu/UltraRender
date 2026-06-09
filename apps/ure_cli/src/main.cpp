@@ -5,6 +5,9 @@
 #include <chrono>
 #include <iomanip>
 #include <sstream>
+
+#include <ure/log.hpp>
+
 #include "ure/core/vector.hpp"
 #include "ure/core/quaternion.hpp"
 #include "ure/ure_api.hpp"
@@ -69,15 +72,21 @@ int main(int argc, char* argv[]) {
     std::string output_dir_str;
 
     // Legacy fallback: positional arg as scene path
+    bool verbose = false, quiet = false;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
+        if (arg == "--verbose" || arg == "-v") verbose = true;
+        if (arg == "--quiet"   || arg == "-q") quiet = true;
         if (arg[0] != '-' && scene_path == "procedural_demo")
             scene_path = arg;
         if ((arg == "-d" || arg == "--output-dir") && i + 1 < argc)
             output_dir_str = argv[++i];
     }
+    if (verbose)       ure::log::set_min_level(ure::log::Level::Debug);
+    else if (quiet)    ure::log::set_min_level(ure::log::Level::Error);
+    else               ure::log::set_min_level(ure::log::Level::Info);
 
-    std::cout << "[Main] Target: " << scene_path << ", SPP: " << cli_spp << "\n";
+    UR_LOG_INFO(CLI, "Target: {}, SPP: {}", scene_path, cli_spp);
 
     // 2. Build Scene
     Scene scene;
@@ -92,14 +101,14 @@ int main(int argc, char* argv[]) {
     std::shared_ptr<physics::RigidBody> sphere1_body, sphere2_body, box_body;
 
     if (std::filesystem::exists(scene_path)) {
-        std::cout << "[Main] Parsing scene file: " << scene_path << "\n";
+        UR_LOG_INFO(CLI, "Parsing scene file: {}", scene_path);
         scene_ir = SceneParser::parse_file_to_ir(scene_path);
         has_scene_ir = true;
         scene = ure::scene_ir::to_legacy_scene(scene_ir);
 
         if (scene.physics.enabled) {
             enable_physics = true;
-            std::cout << "[Main] Scene Physics Enabled.\n";
+            UR_LOG_INFO(CLI, "Scene Physics Enabled.");
             physics_world = std::make_shared<physics::PhysicsWorld>();
             physics_world->register_listener(acoustic_system.get());
             acoustic_system->set_spatial_query(physics_world.get());
@@ -107,7 +116,7 @@ int main(int argc, char* argv[]) {
             if (scene.physics.fluid.enabled) {
                 auto fluid_system = physics_world->get_fluid_system();
                 if (fluid_system) {
-                    std::cout << "[Main] Initializing Fluid System from Scene...\n";
+                        UR_LOG_INFO(CLI, "Initializing Fluid System from Scene...");
                     fluid_system->clear_particles();
                     core::Vec3f fbmin(scene.physics.fluid.bounds_min.x, scene.physics.fluid.bounds_min.y, scene.physics.fluid.bounds_min.z);
                     core::Vec3f fbmax(scene.physics.fluid.bounds_max.x, scene.physics.fluid.bounds_max.y, scene.physics.fluid.bounds_max.z);
@@ -121,7 +130,7 @@ int main(int argc, char* argv[]) {
                     core::Vec3f ffill_min(scene.physics.fluid.fill_min.x, scene.physics.fluid.fill_min.y, scene.physics.fluid.fill_min.z);
                     core::Vec3f ffill_max(scene.physics.fluid.fill_max.x, scene.physics.fluid.fill_max.y, scene.physics.fluid.fill_max.z);
                     int p_count = fluid_system->seed_box_volume(ffill_min, ffill_max, scene.physics.fluid.particle_spacing, 0.1f, 1337u);
-                    std::cout << "[Main] Created " << p_count << " fluid particles.\n";
+                    UR_LOG_INFO(CLI, "Created {} fluid particles.", p_count);
                     auto mesh_fluid = std::make_shared<Mesh>();
                     auto mat_fluid = std::make_shared<Material>();
                     mat_fluid->type = MaterialType::Dielectric;
@@ -189,13 +198,13 @@ int main(int argc, char* argv[]) {
         }
     } else {
         if (scene_path != "procedural_demo")
-            std::cerr << "[Main] Warning: File '" << scene_path << "' not found. Falling back to procedural demo.\n";
+            UR_LOG_WARN(CLI, "File '{}' not found. Falling back to procedural demo.", scene_path);
         else
-            std::cout << "[Main] No file specified, using internal procedural fallback.\n";
+            UR_LOG_INFO(CLI, "No file specified, using internal procedural fallback.");
         SceneBuilder builder;
 
         if (enable_physics) {
-            std::cout << "[Main] Physics Demo Enabled. Preparing...\n";
+            UR_LOG_INFO(CLI, "Physics Demo Enabled. Preparing...");
             using namespace ure::physics;
             physics_world = std::make_shared<PhysicsWorld>();
             physics_world->register_listener(acoustic_system.get());
@@ -256,7 +265,7 @@ int main(int argc, char* argv[]) {
 
             auto fluid_system = physics_world->get_fluid_system();
             if (fluid_system) {
-                std::cout << "[Main] Initializing Fluid System (Cup)...\n";
+                UR_LOG_INFO(CLI, "Initializing Fluid System (Cup)...");
                 fluid_system->clear_particles();
                 float spacing = 0.035f;
                 fluid_system->configure_rest_state(spacing, {-5,-5,-5}, {5,5,5});
@@ -328,12 +337,12 @@ int main(int argc, char* argv[]) {
     }
 
     // 3. Initialize Engine
-    std::cout << "[Main] Initializing GPU Engine...\n";
+    UR_LOG_INFO(CLI, "Initializing GPU Engine...");
     auto engine = RenderEngineFactory::create_gpu_renderer();
 
     if (scene.physics.fluid.enabled && physics_world) {
         auto fluid_system = physics_world->get_fluid_system();
-        std::cout << "[Main] Relaxing initial fluid particle distribution...\n";
+        UR_LOG_INFO(CLI, "Relaxing initial fluid particle distribution...");
         fluid_system->relax_initial_distribution(physics_world->get_colliders(), 8);
     }
 
@@ -343,7 +352,7 @@ int main(int argc, char* argv[]) {
     int spp = (cli_spp > 0) ? cli_spp : ((scene.spp > 0) ? scene.spp : 100);
 
     // 4. Load Scene (first-time = full GPU upload)
-    std::cout << "[Main] Loading Scene Data...\n";
+    UR_LOG_INFO(CLI, "Loading Scene Data...");
     bool use_scene_ir = has_scene_ir && !enable_physics;
     if (use_scene_ir) {
         engine->load_scene_ir(scene_ir);
@@ -363,11 +372,11 @@ int main(int argc, char* argv[]) {
         core::Vec3f cam_forward(cam_look.x - cam_pos.x, cam_look.y - cam_pos.y, cam_look.z - cam_pos.z);
         acoustic_system->set_listener(cam_pos, cam_forward, cam_up);
         if (physics_world) acoustic_system->set_spatial_query(physics_world.get());
-        std::cout << "[Main] Spatial Audio Listener set.\n";
+        UR_LOG_INFO(CLI, "Spatial Audio Listener set.");
     }
 
     // 5. Render Loop
-    std::cout << "[Main] Starting: " << scene.width << "x" << scene.height << " @ " << spp << " SPP\n";
+    UR_LOG_INFO(CLI, "Starting: {}x{} @ {} SPP", scene.width, scene.height, spp);
 
     std::filesystem::path output_dir;
     if (!output_dir_str.empty()) {
@@ -408,9 +417,8 @@ int main(int argc, char* argv[]) {
             auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count();
             float avg = (frame > 0) ? (float)elapsed / frame : 0;
             float eta = (avg > 0) ? (total_frames - frame) * avg : 0;
-            std::cout << "[Progress] Frame " << frame+1 << "/" << total_frames
-                      << " (" << std::fixed << std::setprecision(1) << (float)(frame+1)/total_frames*100 << "%)"
-                      << " Elapsed: " << elapsed << "s ETA: " << (int)eta << "s\n";
+            UR_LOG_INFO(CLI, "Frame {}/{} ({:.1f}%) Elapsed: {}s ETA: {}s",
+                        frame+1, total_frames, (float)(frame+1)/total_frames*100, elapsed, (int)eta);
 
             // 1. Step Physics
             physics_world->step(dt);
@@ -445,7 +453,7 @@ int main(int argc, char* argv[]) {
                     world.geometries[fluid_entity_index].mesh = fluid_mesh;
                 }
                 fluid_changed = true;
-                std::cout << "  [Fluid] Triangles: " << fluid_mesh->indices.size()/3 << "\n";
+                UR_LOG_INFO(CLI, "Fluid Triangles: {}", fluid_mesh->indices.size()/3);
             }
 
             // 4. Update entity transforms from physics
@@ -467,7 +475,7 @@ int main(int argc, char* argv[]) {
             // 5. Upload to GPU
             if (has_fluid && fluid_changed) {
                 // Fluid mesh changed: need full scene reload
-                std::cout << "  [GPU] Full scene reload (fluid mesh changed)...\n";
+                UR_LOG_INFO(GPU, "Full scene reload (fluid mesh changed)...");
                 Scene updated_scene = WorldSceneBuilder::build_scene(world);
                 engine->load_scene(updated_scene);
             } else {
@@ -489,7 +497,7 @@ int main(int argc, char* argv[]) {
             std::stringstream ss;
             ss << "frame_" << std::setw(3) << std::setfill('0') << frame << ".bmp";
             save_frame(engine.get(), scene.width, scene.height, (output_dir / ss.str()).string());
-            std::cout << "  [Output] Frame " << frame+1 << " saved.\n";
+            UR_LOG_INFO(CLI, "Frame {} saved.", frame+1);
         }
 
         // Save Audio
@@ -497,9 +505,9 @@ int main(int argc, char* argv[]) {
         if (std::filesystem::exists(scene_path))
             audio_path = output_dir / (std::filesystem::path(scene_path).stem().string() + ".wav");
         ure::io::WavSaver::save(audio_path.string(), audio_buffer, sample_rate, 2);
-        std::cout << "\n[Main] Physics Simulation Complete.\n";
-        std::cout << "[Main] Frames: " << output_dir.string() << "\n";
-        std::cout << "[Main] Audio: " << audio_path.string() << "\n";
+        UR_LOG_INFO(CLI, "Physics Simulation Complete.");
+        UR_LOG_INFO(CLI, "Frames: {}", output_dir.string());
+        UR_LOG_INFO(CLI, "Audio: {}", audio_path.string());
         return 0;
     }
 
@@ -518,7 +526,7 @@ int main(int argc, char* argv[]) {
             last_save_time = now;
         }
     }
-    std::cout << "\n[Main] Render Finished!\n";
-    std::cout << "[Main] Output: " << output_path << "\n";
+    UR_LOG_INFO(CLI, "Render Finished!");
+    UR_LOG_INFO(CLI, "Output: {}", output_path);
     return 0;
 }

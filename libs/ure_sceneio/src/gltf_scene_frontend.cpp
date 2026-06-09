@@ -7,8 +7,9 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <map>
+
+#include <ure/log.hpp>
 #include <optional>
 #include <sstream>
 #include <string_view>
@@ -381,13 +382,13 @@ public:
 private:
     bool load_json() {
         if (!std::filesystem::exists(filepath_)) {
-            std::cerr << "[GltfSceneFrontend] Error: File not found: " << filepath_ << std::endl;
+            UR_LOG_ERROR(SceneIO, "File not found: {}", filepath_);
             return false;
         }
 
         std::ifstream file(filepath_, std::ios::binary);
         if (!file.is_open()) {
-            std::cerr << "[GltfSceneFrontend] Error: Could not open file " << filepath_ << std::endl;
+            UR_LOG_ERROR(SceneIO, "Could not open file {}", filepath_);
             return false;
         }
 
@@ -415,7 +416,7 @@ private:
 
             std::ifstream file(base_dir_ / uri, std::ios::binary);
             if (!file.is_open()) {
-                std::cerr << "[GltfSceneFrontend] Error: Could not open buffer " << uri << std::endl;
+                UR_LOG_ERROR(SceneIO, "Could not open buffer {}", uri);
                 return false;
             }
             buffers_[i] = std::vector<std::uint8_t>(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
@@ -692,7 +693,7 @@ private:
 
         std::string uri = get_string(*image, "uri");
         if (uri.empty() || starts_with(uri, "data:")) {
-            std::cerr << "[GltfSceneFrontend] Warning: Only external image URIs are supported right now." << std::endl;
+            UR_LOG_WARN(SceneIO, "Only external image URIs are supported right now.");
             return nullptr;
         }
 

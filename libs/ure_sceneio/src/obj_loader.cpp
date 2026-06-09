@@ -1,15 +1,15 @@
 #include "ure/scene/obj_loader.hpp"
 #include <fstream>
 #include <sstream>
-#include <iostream>
 #include <algorithm>
+#include <ure/log.hpp>
 
 namespace ure::scene {
 
 std::shared_ptr<Mesh> ObjLoader::load(const std::string& filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
-        std::cerr << "Failed to open OBJ file: " << filename << std::endl;
+        UR_LOG_ERROR(SceneIO, "Failed to open OBJ file: {}", filename);
         return nullptr;
     }
 
@@ -105,7 +105,7 @@ std::shared_ptr<Mesh> ObjLoader::load(const std::string& filename) {
         }
     }
 
-    std::cout << "Loaded OBJ: " << filename << " (" << mesh->indices.size() / 3 << " triangles)\n";
+    UR_LOG_INFO(SceneIO, "Loaded OBJ: {} ({} triangles)", filename, mesh->indices.size() / 3);
     return mesh;
 }
 

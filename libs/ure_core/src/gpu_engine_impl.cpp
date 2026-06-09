@@ -2,6 +2,9 @@
 #include "ure/gpu_scene_compiler.hpp"
 #include "ure/gpu_driver.hpp"
 #include "ure/transform_ring_buffer.hpp"
+
+#include <ure/log.hpp>
+
 #include <iostream>
 #include <vector>
 #include <cassert>
@@ -68,14 +71,14 @@ public:
 
     void render(const RenderSettings& settings) override {
         if (!gpu_context_) {
-            std::cerr << "[GpuRenderEngine] No scene loaded!" << std::endl;
+            UR_LOG_ERROR(Core, "No scene loaded!");
             return;
         }
 
         // NOTE: We assume gpu_context_ is already initialized with correct width/height from load_scene
         // If settings.width/height differ, we might need to re-init (not implemented here for speed)
 
-        std::cout << "[GpuRenderEngine] Starting render: " << settings.spp << " spp" << std::endl;
+        UR_LOG_INFO(Core, "Starting render: {} spp", settings.spp);
         
         reset_accumulation();
         

@@ -8,6 +8,9 @@
 #include <iomanip>
 #include <chrono>
 
+#include <ure/log.hpp>
+#include <ure/check_cuda.hpp>
+
 #include "ure/gpu_driver.hpp"
 #include "ure/gpu_structs.hpp"
 #include "ure/gpu_spectrum_utils.cuh"
@@ -15,10 +18,13 @@
 #include "ure/gpu_scene_loader.hpp"
 #include "ure/bvh_builder.hpp"
 
-#define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__ )
-
 // ===== Diagnostic Logging Pipeline =====
+// Enable device-side debug log when UR_LOG_LEVEL <= 1 (Trace/Debug)
+#if defined(UR_LOG_LEVEL) && UR_LOG_LEVEL <= 1
+#define DEBUG_ENABLED 1
+#else
 #define DEBUG_ENABLED 0
+#endif
 
 #if DEBUG_ENABLED
 #define MAX_DEBUG_ENTRIES 4096
@@ -66,19 +72,19 @@ void flush_debug_log() {
     int* h_count = nullptr;
     cudaMemcpyFromSymbol(&h_entries, g_debug_log, sizeof(DebugEntry*));
     cudaMemcpyFromSymbol(&h_count, g_debug_count, sizeof(int*));
-    if (!h_entries || !h_count) { printf("DEBUG LOG: not initialized\n"); return; }
+    if (!h_entries || !h_count) { UR_LOG_DEBUG(GPU, "DEBUG LOG: not initialized"); return; }
     int count = *h_count;
-    if (count == 0) { printf("DEBUG LOG: empty\n"); return; }
+    if (count == 0) { UR_LOG_DEBUG(GPU, "DEBUG LOG: empty"); return; }
     if (count > MAX_DEBUG_ENTRIES) count = MAX_DEBUG_ENTRIES;
     int show = (count > 200) ? 200 : count;
-    printf("\n===== DEBUG LOG (%d total, showing %d) =====\n", count, show);
+    UR_LOG_DEBUG(GPU, "DEVICE LOG ({} total, showing {} entries)", count, show);
     for (int i = 0; i < show; ++i) {
         auto& e = h_entries[i];
-        if (e.msg_code == 0) break; // uninitialized entry
+        if (e.msg_code == 0) break;
         const char* codes[] = {"ENTRY","SCENE","SPHERE","INST","MESH","HIT","MISS","QUEUE","PTR"};
         const char* c = (e.msg_code >= 0 && e.msg_code < 9) ? codes[e.msg_code] : "???";
-        printf("[%s][T%d/B%d] iv=%d p1=0x%llx p2=0x%llx fv=%.3f\n",
-               c, e.thread_id, e.block_id, e.ival, e.pval1, e.pval2, e.fval);
+        UR_LOG_DEBUG(GPU, "  [{}][T{}/B{}] iv={} p1=0x{:x} p2=0x{:x} fv={:.3f}",
+                     c, e.thread_id, e.block_id, e.ival, e.pval1, e.pval2, e.fval);
     }
     memset(h_count, 0, sizeof(int));
 }
@@ -102,15 +108,6 @@ void free_debug_log() {
 #define free_debug_log() do {} while(0)
 #endif
 // ===== End Diagnostic Logging =====
-
-void check_cuda(cudaError_t result, char const *const func, const char *const file, int const line) {
-    if (result) {
-        std::cerr << "CUDA error = " << static_cast<unsigned int>(result) << " at " <<
-            file << ":" << line << " '" << func << "' \n";
-        cudaDeviceReset();
-        exit(99);
-    }
-}
 
 namespace ure::gpu {
 
@@ -2513,7 +2510,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     ctx->medium_absorption = GpuSpectrum(0.0f);
     ctx->medium_max_distance = 1e6f;
     
-    std::cout << "[GPU] Allocating memory for " << width << "x" << height << " interactive session..." << std::endl;
+    UR_LOG_INFO(GPU, "Allocating memory for {}x{} interactive session...", width, height);
 
     size_t framebuffer_size = width * height * sizeof(GpuVec3);
     cudaMalloc(&ctx->d_output, framebuffer_size);
@@ -2748,9 +2745,9 @@ GpuContext* init_gpu_renderer(int width, int height,
 
         cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float4>();
         cudaArray_t cuArray;
-        checkCudaErrors(cudaMallocArray(&cuArray, &channelDesc, d_tex.width, d_tex.height));
+        UR_CUDA_CHECK(cudaMallocArray(&cuArray, &channelDesc, d_tex.width, d_tex.height));
         ctx->arrays_to_free.push_back(cuArray);
-        checkCudaErrors(cudaMemcpy2DToArray(cuArray, 0, 0, temp_float4.data(), d_tex.width * sizeof(float4), d_tex.width * sizeof(float4), d_tex.height, cudaMemcpyHostToDevice));
+        UR_CUDA_CHECK(cudaMemcpy2DToArray(cuArray, 0, 0, temp_float4.data(), d_tex.width * sizeof(float4), d_tex.width * sizeof(float4), d_tex.height, cudaMemcpyHostToDevice));
         
         struct cudaResourceDesc resDesc;
         memset(&resDesc, 0, sizeof(resDesc));
@@ -2763,7 +2760,7 @@ GpuContext* init_gpu_renderer(int width, int height,
         texDesc.filterMode = cudaFilterModeLinear;
         texDesc.readMode = cudaReadModeElementType;
         texDesc.normalizedCoords = 1;
-        checkCudaErrors(cudaCreateTextureObject(&d_tex.texObj, &resDesc, &texDesc, NULL));
+        UR_CUDA_CHECK(cudaCreateTextureObject(&d_tex.texObj, &resDesc, &texDesc, NULL));
         ctx->tex_objs_to_free.push_back(d_tex.texObj);
         host_gpu_textures.push_back(d_tex);
     }
@@ -2902,45 +2899,45 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         
         // 1. Generate Rays
         int initial_count = ctx->width * ctx->height;
-        checkCudaErrors(cudaMemcpy(ctx->queueA.count, &initial_count, sizeof(int), cudaMemcpyHostToDevice));
+        UR_CUDA_CHECK(cudaMemcpy(ctx->queueA.count, &initial_count, sizeof(int), cudaMemcpyHostToDevice));
         
         generate_rays_kernel<<<numBlocks, threadsPerBlock>>>(
             ctx->queueA, ctx->width, ctx->height, ctx->camera, current_global_sample, ctx->d_sample_counts
         );
-        checkCudaErrors(cudaGetLastError());
-        checkCudaErrors(cudaDeviceSynchronize());
+        UR_CUDA_CHECK(cudaGetLastError());
+        UR_CUDA_CHECK(cudaDeviceSynchronize());
         
         RayQueue* current_q = &ctx->queueA;
         RayQueue* next_q = &ctx->queueB;
         
         for (int depth = 0; depth < 50; ++depth) {
              int ray_count = 0;
-             checkCudaErrors(cudaMemcpy(&ray_count, current_q->count, sizeof(int), cudaMemcpyDeviceToHost));
+             UR_CUDA_CHECK(cudaMemcpy(&ray_count, current_q->count, sizeof(int), cudaMemcpyDeviceToHost));
              if (ray_count == 0) break;
              
              int num_threads = 256;
              int num_blocks = (ray_count + num_threads - 1) / num_threads;
              
               extend_kernel<<<num_blocks, num_threads>>>(*current_q, ctx->hitQueue, scene);
-             checkCudaErrors(cudaGetLastError());
-             checkCudaErrors(cudaDeviceSynchronize());
+             UR_CUDA_CHECK(cudaGetLastError());
+             UR_CUDA_CHECK(cudaDeviceSynchronize());
              
-             checkCudaErrors(cudaMemset(next_q->count, 0, sizeof(int)));
-             checkCudaErrors(cudaMemset(ctx->shadowQueue.count, 0, sizeof(int)));
+             UR_CUDA_CHECK(cudaMemset(next_q->count, 0, sizeof(int)));
+             UR_CUDA_CHECK(cudaMemset(ctx->shadowQueue.count, 0, sizeof(int)));
              
              float current_dispersion_clamp = (current_global_sample < 100) ? 5.0f : 20.0f;
              float current_rr_min_prob = (current_global_sample < 100) ? 0.1f : 0.05f;
              
              shade_kernel<<<num_blocks, num_threads>>>(*current_q, ctx->hitQueue, *next_q, ctx->shadowQueue, ctx->d_accum_buffer, ctx->d_normal_buffer, ctx->d_albedo_buffer, scene, current_global_sample, current_dispersion_clamp, current_rr_min_prob);
-             checkCudaErrors(cudaGetLastError());
-             checkCudaErrors(cudaDeviceSynchronize());
+             UR_CUDA_CHECK(cudaGetLastError());
+             UR_CUDA_CHECK(cudaDeviceSynchronize());
              
              int shadow_count = 0;
-             checkCudaErrors(cudaMemcpy(&shadow_count, ctx->shadowQueue.count, sizeof(int), cudaMemcpyDeviceToHost));
+             UR_CUDA_CHECK(cudaMemcpy(&shadow_count, ctx->shadowQueue.count, sizeof(int), cudaMemcpyDeviceToHost));
              if (shadow_count > 0) {
                  int s_blocks = (shadow_count + num_threads - 1) / num_threads;
                  extend_shadow_kernel<<<s_blocks, num_threads>>>(ctx->shadowQueue, ctx->d_accum_buffer, scene);
-                 checkCudaErrors(cudaGetLastError());
+                 UR_CUDA_CHECK(cudaGetLastError());
              }
              
              RayQueue* temp = current_q;
@@ -2949,7 +2946,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         }
     }
     
-    checkCudaErrors(cudaDeviceSynchronize());
+    UR_CUDA_CHECK(cudaDeviceSynchronize());
     ctx->current_spp += samples_per_pass;
     return ctx->current_spp;
 }
@@ -2967,7 +2964,7 @@ void copy_frame_buffer_gpu(GpuContext* ctx, float* host_buffer) {
         ctx->width,
         ctx->height
     );
-    checkCudaErrors(cudaDeviceSynchronize());
+    UR_CUDA_CHECK(cudaDeviceSynchronize());
     
     // Simple copy for now (Denoiser/FXAA can be added here)
     size_t framebuffer_size = ctx->width * ctx->height * sizeof(GpuVec3);
@@ -3001,7 +2998,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
                       GpuSpectrum medium_scattering,
                       GpuSpectrum medium_absorption,
                       float medium_max_distance) {
-    std::cout << "[GPU] Allocating memory for " << width << "x" << height << " image..." << std::endl;
+    UR_LOG_INFO(GPU, "Allocating memory for {}x{} image...", width, height);
 
     size_t framebuffer_size = width * height * sizeof(GpuVec3);
     GpuVec3* d_output;
@@ -3104,7 +3101,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
              mesh.bvh_nodes = d_nodes;
              mesh.bvh_node_count = (int)build_nodes.size();
              pointers_to_free.push_back(d_nodes);
-             std::cout << "[GPU] Built BVH for mesh: " << mesh.bvh_node_count << " nodes." << std::endl;
+             UR_LOG_INFO(GPU, "Built BVH for mesh: {} nodes.", mesh.bvh_node_count);
         } else {
              mesh.bvh_nodes = nullptr;
              mesh.bvh_node_count = 0;
@@ -3125,7 +3122,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
         pointers_to_free.push_back(d_i);
         
         host_gpu_meshes.push_back(mesh);
-        std::cout << "[GPU] Uploaded Input mesh: " << mesh.triangle_count << " triangles." << std::endl;
+        UR_LOG_INFO(GPU, "Uploaded Input mesh: {} triangles.", mesh.triangle_count);
     }
 
     // 2. Handle Scene Meshes (e.g. Blue Cube)
@@ -3191,12 +3188,9 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
         pointers_to_free.push_back(d_i);
 
         host_gpu_meshes.push_back(mesh);
-        std::cout << "[GPU] Uploaded Scene mesh: " << mesh.triangle_count << " triangles." << std::endl;
-        if (mesh.bvh_node_count > 0) {
-            std::cout << "      BVH Nodes: " << mesh.bvh_node_count << std::endl;
-        } else {
-            std::cout << "      BVH: None (Linear Scan)" << std::endl;
-        }
+        UR_LOG_INFO(GPU, "Uploaded Scene mesh: {} triangles, BVH: {} nodes.",
+                    mesh.triangle_count,
+                    mesh.bvh_node_count > 0 ? std::to_string(mesh.bvh_node_count) : "None (Linear Scan)");
     }
 
     GpuMesh* d_meshes;
@@ -3272,10 +3266,10 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
         // 2. Hardware Texture Object
         cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float4>();
         cudaArray_t cuArray;
-        checkCudaErrors(cudaMallocArray(&cuArray, &channelDesc, d_tex.width, d_tex.height));
+        UR_CUDA_CHECK(cudaMallocArray(&cuArray, &channelDesc, d_tex.width, d_tex.height));
         arrays_to_free.push_back(cuArray);
 
-        checkCudaErrors(cudaMemcpy2DToArray(cuArray, 0, 0, temp_float4.data(), d_tex.width * sizeof(float4), d_tex.width * sizeof(float4), d_tex.height, cudaMemcpyHostToDevice));
+        UR_CUDA_CHECK(cudaMemcpy2DToArray(cuArray, 0, 0, temp_float4.data(), d_tex.width * sizeof(float4), d_tex.width * sizeof(float4), d_tex.height, cudaMemcpyHostToDevice));
 
         struct cudaResourceDesc resDesc;
         memset(&resDesc, 0, sizeof(resDesc));
@@ -3290,11 +3284,11 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
         texDesc.readMode = cudaReadModeElementType;
         texDesc.normalizedCoords = 1;
 
-        checkCudaErrors(cudaCreateTextureObject(&d_tex.texObj, &resDesc, &texDesc, NULL));
+        UR_CUDA_CHECK(cudaCreateTextureObject(&d_tex.texObj, &resDesc, &texDesc, NULL));
         tex_objs_to_free.push_back(d_tex.texObj);
 
         host_gpu_textures.push_back(d_tex);
-        std::cout << "[GPU] Uploaded Spectral Texture: " << d_tex.width << "x" << d_tex.height << std::endl;
+        UR_LOG_INFO(GPU, "Uploaded Spectral Texture: {}x{}", d_tex.width, d_tex.height);
     }
 
     GpuTexture* d_textures = nullptr;
@@ -3347,7 +3341,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
     scene.medium_absorption = medium_absorption;
     scene.medium_max_distance = medium_max_distance;
 
-    std::cout << "[GPU] Found " << scene.light_count << " emissive spheres for NEE." << std::endl;
+    UR_LOG_INFO(GPU, "Found {} emissive spheres for NEE.", scene.light_count);
 
 
     // Setup Camera
@@ -3400,7 +3394,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
     dim3 numBlocks((width + threadsPerBlock.x - 1) / threadsPerBlock.x,
                    (height + threadsPerBlock.y - 1) / threadsPerBlock.y);
 
-    std::cout << "[GPU] Starting Wavefront Render Loop..." << std::endl;
+    UR_LOG_INFO(GPU, "Starting Wavefront Render Loop...");
     
     // Wavefront setup
     RayQueue queueA, queueB;
@@ -3428,8 +3422,8 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
             queueA, width, height, h_camera, s, d_sample_counts
         );
         
-        checkCudaErrors(cudaGetLastError());
-        checkCudaErrors(cudaDeviceSynchronize()); // Ensure generation finishes for debug
+        UR_CUDA_CHECK(cudaGetLastError());
+        UR_CUDA_CHECK(cudaDeviceSynchronize()); // Ensure generation finishes for debug
         
         RayQueue* current_q = &queueA;
         RayQueue* next_q = &queueB;
@@ -3466,13 +3460,13 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
                  
                  cudaError_t err_shadow = cudaGetLastError();
                  if (err_shadow != cudaSuccess) {
-                     std::cerr << "[GPU] Shadow Kernel Error: " << cudaGetErrorString(err_shadow) << std::endl;
+                     UR_LOG_ERROR(GPU, "Shadow Kernel Error: {}", cudaGetErrorString(err_shadow));
                  }
              }
              
              cudaError_t err_loop = cudaGetLastError();
              if (err_loop != cudaSuccess) {
-                 std::cerr << "[GPU] Render Loop Error at depth " << depth << ": " << cudaGetErrorString(err_loop) << std::endl;
+                 UR_LOG_ERROR(GPU, "Render Loop Error at depth {}: {}", depth, cudaGetErrorString(err_loop));
                  break;
              }
              
@@ -3506,7 +3500,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
     }
     std::cout << std::endl;
 
-    std::cout << "[GPU] Resolving Framebuffer..." << std::endl;
+    UR_LOG_INFO(GPU, "Resolving Framebuffer...");
     resolve_framebuffer_kernel<<<numBlocks, threadsPerBlock>>>(
         d_accum_buffer,
         d_sample_counts,
@@ -3514,7 +3508,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
         width,
         height
     );
-    checkCudaErrors(cudaDeviceSynchronize());
+    UR_CUDA_CHECK(cudaDeviceSynchronize());
 
     // Denoising Pass
     // Logic: For high SPP (>= 400), denoising causes unnecessary blur.
@@ -3526,7 +3520,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
     GpuVec3* d_pong = nullptr;
 
     if (enable_denoiser) {
-        std::cout << "[GPU] Denoising (A-Trous Wavelet)..." << std::endl;
+        UR_LOG_INFO(GPU, "Denoising (A-Trous Wavelet)...");
         
         // We need two buffers for ping-pong
         cudaMalloc(&d_ping, framebuffer_size);
@@ -3570,8 +3564,8 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
             0.2f,
             0.15f
         );
-        checkCudaErrors(cudaGetLastError());
-        checkCudaErrors(cudaDeviceSynchronize());
+        UR_CUDA_CHECK(cudaGetLastError());
+        UR_CUDA_CHECK(cudaDeviceSynchronize());
         
         {
             GpuVec3* temp = d_ping;
@@ -3597,8 +3591,8 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
                 n_phi,
                 p_phi
             );
-            checkCudaErrors(cudaGetLastError());
-            checkCudaErrors(cudaDeviceSynchronize());
+            UR_CUDA_CHECK(cudaGetLastError());
+            UR_CUDA_CHECK(cudaDeviceSynchronize());
         }
         
         final_denoised = (iterations % 2 == 0) ? d_ping : d_pong;
@@ -3619,12 +3613,12 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
                 0.2f,
                 0.15f
             );
-            checkCudaErrors(cudaGetLastError());
-            checkCudaErrors(cudaDeviceSynchronize());
+            UR_CUDA_CHECK(cudaGetLastError());
+            UR_CUDA_CHECK(cudaDeviceSynchronize());
             final_denoised = output;
         }
     } else {
-        std::cout << "[GPU] High SPP detected (" << samples_per_pixel << "), skipping denoiser for sharpness." << std::endl;
+        UR_LOG_INFO(GPU, "High SPP detected ({}), skipping denoiser for sharpness.", samples_per_pixel);
         final_denoised = d_output;
     }
 
@@ -3636,7 +3630,7 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
     GpuVec3* d_fxaa_out = nullptr;
 
     if (enable_fxaa) {
-        std::cout << "[GPU] Anti-Aliasing (FXAA)..." << std::endl;
+        UR_LOG_INFO(GPU, "Anti-Aliasing (FXAA)...");
         
         if (enable_denoiser) {
             d_fxaa_out = (final_denoised == d_ping) ? d_pong : d_ping;
@@ -3651,18 +3645,18 @@ void render_frame_gpu(float* output_buffer, int width, int height, int samples_p
             width,
             height
         );
-        checkCudaErrors(cudaGetLastError());
-        checkCudaErrors(cudaDeviceSynchronize());
+        UR_CUDA_CHECK(cudaGetLastError());
+        UR_CUDA_CHECK(cudaDeviceSynchronize());
         
-        std::cout << "[GPU] Copying results to host..." << std::endl;
+        UR_LOG_INFO(GPU, "Copying results to host...");
         cudaMemcpy(output_buffer, d_fxaa_out, framebuffer_size, cudaMemcpyDeviceToHost);
     } else {
-        std::cout << "[GPU] High SPP detected, skipping FXAA for maximum sharpness." << std::endl;
-        std::cout << "[GPU] Copying results to host..." << std::endl;
+        UR_LOG_INFO(GPU, "High SPP detected, skipping FXAA for maximum sharpness.");
+        UR_LOG_INFO(GPU, "Copying results to host...");
         cudaMemcpy(output_buffer, final_denoised, framebuffer_size, cudaMemcpyDeviceToHost);
     }
 
-    std::cout << "[GPU] Render Complete." << std::endl;
+    UR_LOG_INFO(GPU, "Render Complete.");
 
     if (enable_denoiser) {
         cudaFree(d_ping);

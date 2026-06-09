@@ -3,8 +3,8 @@
 #include <math.h>
 
 #include "test_framework.cuh"
-#include "gpu/gpu_structs.hpp"
-#include "gpu/gpu_math_functions.cuh"
+#include "ure/gpu_structs.hpp"
+#include "ure/gpu_math_functions.cuh"
 
 namespace ure::gpu {
 

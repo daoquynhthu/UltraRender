@@ -2,9 +2,10 @@
 #include "ure/procedural.hpp"
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 #include <unordered_map>
+
+#include <ure/log.hpp>
 
 namespace ure {
 
@@ -88,7 +89,7 @@ public:
     scene_ir::SceneIR parse() {
         std::ifstream file(filepath_);
         if (!file.is_open()) {
-            std::cerr << "[SceneParser] Error: Could not open file " << filepath_ << std::endl;
+            UR_LOG_ERROR(SceneIO, "Could not open file {}", filepath_);
             return scene_;
         }
 
@@ -306,7 +307,7 @@ private:
 
         auto it = images_.find(image_name);
         if (it == images_.end()) {
-            std::cerr << "[SceneParser] Warning: Image '" << image_name << "' not found." << std::endl;
+            UR_LOG_WARN(SceneIO, "Image '{}' not found.", image_name);
             return;
         }
 
@@ -371,7 +372,7 @@ private:
 
         if (!mesh || !materials_.count(mat_name)) {
             if (!materials_.count(mat_name)) {
-                std::cerr << "[SceneParser] Warning: Material '" << mat_name << "' not found." << std::endl;
+                UR_LOG_WARN(SceneIO, "Material '{}' not found.", mat_name);
             }
             return;
         }

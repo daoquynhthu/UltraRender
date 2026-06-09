@@ -1,4 +1,7 @@
 #include "ure/gpu_hardware.hpp"
+
+#include <ure/log.hpp>
+
 #include <algorithm>
 
 namespace ure::gpu {
@@ -42,16 +45,16 @@ GpuHardwareInfo query_hardware(int device_id) {
 }
 
 void print_hardware_info(const GpuHardwareInfo& hw) {
-    printf("[GPU Hardware]\n");
-    printf("  device_count:          %d\n", hw.device_count);
-    printf("  sm_count:              %d\n", hw.sm_count);
-    printf("  compute_capability:    %d.%d\n", hw.cc_major, hw.cc_minor);
-    printf("  global_memory:         %.1f GB\n",
-           hw.total_global_memory / (1024.0 * 1024.0 * 1024.0));
-    printf("  l1_cache_per_sm:       %zu KB\n", hw.l1_cache_per_sm / 1024);
-    printf("  max_threads_per_block: %d\n", hw.max_threads_per_block);
-    printf("  warp_size:             %d\n", hw.warp_size);
-    printf("  memory_bandwidth:      %.1f GB/s\n", hw.memory_bandwidth_gb_s);
+    UR_LOG_INFO(GPU, "Hardware info:");
+    UR_LOG_INFO(GPU, "  device_count:           {}", hw.device_count);
+    UR_LOG_INFO(GPU, "  sm_count:               {}", hw.sm_count);
+    UR_LOG_INFO(GPU, "  compute_capability:     {}.{}", hw.cc_major, hw.cc_minor);
+    UR_LOG_INFO(GPU, "  global_memory:          {:.1f} GB",
+                static_cast<double>(hw.total_global_memory) / (1024.0 * 1024.0 * 1024.0));
+    UR_LOG_INFO(GPU, "  l1_cache_per_sm:        {} KB", hw.l1_cache_per_sm / 1024);
+    UR_LOG_INFO(GPU, "  max_threads_per_block:  {}", hw.max_threads_per_block);
+    UR_LOG_INFO(GPU, "  warp_size:              {}", hw.warp_size);
+    UR_LOG_INFO(GPU, "  memory_bandwidth:       {:.1f} GB/s", static_cast<double>(hw.memory_bandwidth_gb_s));
 }
 
 }

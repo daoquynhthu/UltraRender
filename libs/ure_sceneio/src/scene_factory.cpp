@@ -7,7 +7,7 @@
 #include "ure/materials/microfacet.hpp"
 #include "ure/accelerators/bvh_accelerator.hpp"
 #include "ure/scene/obj_loader.hpp"
-#include <iostream>
+#include <ure/log.hpp>
 
 namespace ure::scene {
 
@@ -19,16 +19,16 @@ SceneFactory::SceneData SceneFactory::create_scene(const std::string& name) {
     } else if (name.ends_with(".obj")) {
         return create_obj_scene(name);
     } else {
-        std::cout << "Unknown scene name: " << name << ". Defaulting to 'test'.\n";
+        UR_LOG_WARN(SceneIO, "Unknown scene name: {}. Defaulting to 'test'.", name);
         return create_test_scene();
     }
 }
 
 void SceneFactory::list_scenes() {
-    std::cout << "Available scenes:\n";
-    std::cout << "  - test:  The original test scene with three balls (glass, metal, red).\n";
-    std::cout << "  - quick: A fast rendering scene with a single red sphere.\n";
-    std::cout << "  - *.obj: Load and render an OBJ file directly (e.g. 'model.obj').\n";
+    UR_LOG_INFO(SceneIO, "Available scenes:");
+    UR_LOG_INFO(SceneIO, "  - test:  The original test scene with three balls (glass, metal, red).");
+    UR_LOG_INFO(SceneIO, "  - quick: A fast rendering scene with a single red sphere.");
+    UR_LOG_INFO(SceneIO, "  - *.obj: Load and render an OBJ file directly (e.g. 'model.obj').");
 }
 
 SceneFactory::SceneData SceneFactory::create_test_scene() {
@@ -127,13 +127,13 @@ SceneFactory::SceneData SceneFactory::create_obj_scene(const std::string& filena
     data.spp = 16;
 
     // Load Mesh
-    std::cout << "Loading OBJ: " << filename << std::endl;
+    UR_LOG_INFO(SceneIO, "Loading OBJ: {}", filename);
     auto mesh = ObjLoader::load(filename);
     if (!mesh) {
-        std::cerr << "Failed to load mesh. Falling back to test scene.\n";
+        UR_LOG_ERROR(SceneIO, "Failed to load mesh. Falling back to test scene.");
         return create_test_scene();
     }
-    std::cout << "Loaded OBJ: " << filename << " (" << mesh->indices.size() / 3 << " triangles)\n";
+    UR_LOG_INFO(SceneIO, "Loaded OBJ: {} ({} triangles)", filename, mesh->indices.size() / 3);
 
     auto accel = std::make_unique<accelerators::BVHAccelerator>();
     
@@ -148,10 +148,8 @@ SceneFactory::SceneData SceneFactory::create_obj_scene(const std::string& filena
         auto p0 = mesh->vertices[i0];
         auto p1 = mesh->vertices[i1];
         auto p2 = mesh->vertices[i2];
-        std::cout << "Triangle 0 Vertices: " 
-                  << "(" << p0.x << "," << p0.y << "," << p0.z << ") "
-                  << "(" << p1.x << "," << p1.y << "," << p1.z << ") "
-                  << "(" << p2.x << "," << p2.y << "," << p2.z << ")\n";
+        UR_LOG_DEBUG(SceneIO, "Triangle 0 Vertices: ({},{},{}) ({},{},{}) ({},{},{})",
+                     p0.x, p0.y, p0.z, p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
     }
 
     // Add all triangles

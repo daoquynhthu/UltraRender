@@ -2,7 +2,6 @@ if(CMAKE_CUDA_COMPILER)
     message(STATUS "Building GPU tests (modular)")
 
     set(GPU_TEST_INCLUDES
-        "${CMAKE_SOURCE_DIR}/include"
         ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
     )
 

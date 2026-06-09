@@ -97,170 +97,72 @@
 
 ---
 
-## 目录树设计（目标状态）
+## 目录树（当前状态 — 旧目录已删除）
 
 ```
 E:\Render Engine\
 │
-├── CMakeLists.txt                          # 顶层: add_subdirectory() 各模块
+├── CMakeLists.txt                          # 仅含模块化构建（旧构建块已移除）
 │
 ├── cmake/
-│   └── FetchVendors.cmake                  # 下载第三方库 (stb, CLI11, json)
+│   └── UltraRenderConfig.cmake.in          # CMake package export
 │
 ├── libs/
-│   │
-│   ├── ure_types/                          # ─── 纯头文件类型库 (INTERFACE) ───
-│   │   ├── CMakeLists.txt                  # add_library(ure_types INTERFACE)
-│   │   └── include/ure/
-│   │       ├── core/
-│   │       │   ├── vector.hpp              # ⬅ include/core/vector.hpp
-│   │       │   ├── matrix.hpp              # ⬅ include/core/matrix.hpp
-│   │       │   ├── quaternion.hpp          # ⬅ include/core/quaternion.hpp
-│   │       │   ├── ray.hpp                 # ⬅ include/core/ray.hpp
-│   │       │   ├── aabb.hpp                # ⬅ include/core/aabb.hpp
-│   │       │   └── interaction.hpp         # ⬅ include/core/interaction.hpp
-│   │       ├── scene_ir.hpp                # ⬅ include/scene/scene_ir.hpp
-│   │       ├── render_config.hpp           # ⬅ Phase 0 (无 CUDA 依赖)
-│   │       └── world.hpp                   # ⬅ Phase J: World + ComponentPool (新增)
-│   │
-│   ├── ure_core/                           # ─── GPU 渲染核心 (STATIC) ───
-│   │   ├── CMakeLists.txt                  # CUDA + CXX 混合编译
-│   │   ├── include/ure/
-│   │   │   ├── api.hpp                     # GpuEngine 公共类
-│   │   │   ├── gpu_structs.hpp             # ⬅ include/gpu/gpu_structs.hpp
-│   │   │   ├── gpu_math_functions.cuh      # ⬅ include/gpu/gpu_math_functions.cuh
-│   │   │   ├── gpu_spectrum_utils.cuh      # ⬅ include/gpu/gpu_spectrum_utils.cuh
-│   │   │   ├── path_tracer_sampling.cuh    # ⬅ include/gpu/path_tracer_sampling.cuh
-│   │   │   ├── gpu_hardware.hpp            # ⬅ Phase 0 (含 CUDA 类型)
-│   │   │   ├── gpu_scene_loader.hpp        # ⬅ include/gpu/gpu_scene_loader.hpp
-│   │   │   ├── material_library.hpp        # ⬅ include/gpu/material_library.hpp
-│   │   │   ├── bvh_builder.hpp             # ⬅ include/gpu/bvh_builder.hpp
-│   │   │   ├── gpu_driver.hpp              # ⬅ include/gpu/gpu_driver.hpp
-│   │   │   ├── gpu_scene_compiler.hpp      # ⬅ include/api/gpu_scene_compiler.hpp
-│   │   │   ├── scene_ir_compiler.hpp       # ⬅ include/api/scene_ir_compiler.hpp
-│   │   │   ├── instance_desc.hpp           # ⬅ F.6: GpuInstanceDesc (新增)
-│   │   │   ├── instance_transform.hpp      # ⬅ F.6: GpuInstanceTransform (新增)
-│   │   │   └── spectral/
-│   │   │       ├── spectral.hpp            # ⬅ include/spectral/spectral.hpp
-│   │   │       └── cie_data.hpp            # ⬅ include/spectral/cie_data.hpp
-│   │   │
-│   │   └── src/
-│   │       ├── path_tracer_kernel.cu       # ⬅ src/gpu/path_tracer_kernel.cu
-│   │       ├── path_tracer_material.cu     # ⬅ src/gpu/path_tracer_material.cu
-│   │       ├── path_tracer_raygen.cu       # ⬅ src/gpu/path_tracer_raygen.cu
-│   │       ├── path_tracer_denoise.cu      # ⬅ src/gpu/path_tracer_denoise.cu
-│   │       ├── path_tracer_post.cu         # ⬅ src/gpu/path_tracer_post.cu
-│   │       ├── gpu_driver.cu               # ⬅ src/gpu/gpu_driver.cu
-│   │       ├── gpu_hardware.cu             # ⬅ Phase 0
-│   │       ├── gpu_scene_loader.cpp        # ⬅ src/gpu/gpu_scene_loader.cpp
-│   │       ├── gpu_engine_impl.cpp         # ⬅ src/api/gpu_engine_impl.cpp
-│   │       ├── gpu_scene_compiler.cpp      # ⬅ src/api/gpu_scene_compiler.cpp
-│   │       ├── scene_ir_compiler.cpp       # ⬅ src/api/scene_ir_compiler.cpp
-│   │       ├── bvh_builder.cpp             # ⬅ src/gpu/bvh_builder.cpp
-│   │       └── bvh_accelerator.cpp         # ⬅ src/accelerators/bvh_accelerator.cpp
-│   │
-│   ├── ure_sceneio/                        # ─── 场景格式 + 资产 (STATIC, 纯 C++) ───
+│   ├── ure_types/                          # 纯头文件类型库 (INTERFACE)
 │   │   ├── CMakeLists.txt
-│   │   ├── include/ure/
-│   │   │   └── scene_io.hpp                # load_scene(), load_image(), load_spd()
-│   │   └── src/
-│   │       ├── gltf_scene_frontend.cpp     # ⬅ src/api/gltf_scene_frontend.cpp
-│   │       ├── scene_ir_frontend.cpp       # ⬅ src/api/scene_ir_frontend.cpp
-│   │       ├── scene_frontend.cpp          # ⬅ src/api/scene_frontend.cpp
-│   │       ├── scene_parser.cpp            # ⬅ src/api/scene_parser.cpp
-│   │       ├── procedural.cpp              # ⬅ src/api/procedural.cpp
-│   │       ├── image_loader.cpp            # ⬅ src/io/image_loader.cpp (stb)
-│   │       ├── image_saver.cpp             # ⬅ src/io/image_saver.cpp
-│   │       ├── spd_loader.cpp              # 新建
-│   │       └── scene/
-│   │           ├── scene_ir.cpp            # ⬅ src/scene/scene_ir.cpp
-│   │           ├── scene.cpp               # ⬅ src/scene/scene.cpp
-│   │           ├── scene_factory.cpp       # ⬅ src/scene/scene_factory.cpp
-│   │           ├── camera.cpp              # ⬅ src/scene/camera.cpp
-│   │           ├── mesh.cpp                # ⬅ src/scene/mesh.cpp
-│   │           ├── sphere.cpp              # ⬅ src/scene/sphere.cpp
-│   │           ├── triangle.cpp            # ⬅ src/scene/triangle.cpp
-│   │           └── obj_loader.cpp          # ⬅ src/scene/obj_loader.cpp
+│   │   └── include/ure/{core/,world.hpp,scene_ir.hpp,render_config.hpp}
 │   │
-│   ├── ure_config/                         # ─── 配置系统 (STATIC, 纯 C++) ───
+│   ├── ure_core/                           # GPU 渲染核心 (STATIC, CUDA)
 │   │   ├── CMakeLists.txt
-│   │   ├── include/ure/
-│   │   │   └── config.hpp                  # CLI 解析 + JSON 配置 + 覆盖链
-│   │   └── src/
-│   │       └── config_parser.cpp           # 新建
+│   │   ├── include/ure/                    # gpu_structs.hpp, gpu_driver.hpp, spectral/, ...
+│   │   └── src/                            # path_tracer_kernel.cu, gpu_driver.cu, ...
 │   │
-│   └── ure_physics/                        # ─── 物理/声学 (STATIC, 纯 C++) ───
+│   ├── ure_sceneio/                        # 场景 I/O (STATIC, 纯 C++)
+│   │   ├── CMakeLists.txt
+│   │   ├── include/ure/                    # scene_io.hpp, spd_loader.hpp, ...
+│   │   └── src/                            # gltf_scene_frontend.cpp, image_loader.cpp, scene/...
+│   │
+│   ├── ure_diag/                           # 诊断系统 (STATIC, Phase Dx)
+│   │   ├── CMakeLists.txt
+│   │   ├── include/ure/                    # log.hpp, log_sink.hpp, check_cuda.hpp, timer.hpp
+│   │   └── src/log.cpp
+│   │
+│   ├── ure_config/                         # 配置系统 (STATIC, 纯 C++)
+│   │   ├── CMakeLists.txt
+│   │   ├── include/ure/config.hpp
+│   │   └── src/config_parser.cpp
+│   │
+│   └── ure_physics/                        # 物理/声学 (STATIC, 纯 C++, 可选)
 │       ├── CMakeLists.txt
-│       ├── include/ure/physics/
-│       │   ├── physics_world.hpp           # ⬅ include/physics/physics_world.hpp
-│       │   ├── fluid_system.hpp            # ⬅ include/physics/fluid_system.hpp
-│       │   ├── rigid_body.hpp              # ⬅ include/physics/rigid_body.hpp
-│       │   ├── collider.hpp                # ⬅ include/physics/collider.hpp
-│       │   ├── physics_events.hpp          # ⬅ include/physics/physics_events.hpp
-│       │   ├── marching_cubes.hpp          # ⬅ include/physics/marching_cubes.hpp
-│       │   ├── ispatial_query.hpp          # ⬅ F.9: 空间查询抽象接口 (新增)
-│       │   └── acoustic/
-│       │       ├── acoustic_system.hpp     # ⬅ include/acoustic/acoustic_system.hpp
-│       │       ├── acoustic_ray_tracer.hpp # ⬅ include/acoustic/acoustic_ray_tracer.hpp
-│       │       ├── spatial_processor.hpp   # ⬅ include/acoustic/spatial_processor.hpp
-│       │       ├── modal_factory.hpp       # ⬅ include/acoustic/modal_factory.hpp
-│       │       └── types.hpp               # ⬅ include/acoustic/types.hpp
-│       └── src/
-│           ├── physics_world.cpp           # ⬅ src/physics/physics_world.cpp
-│           ├── fluid_system.cpp            # ⬅ src/physics/fluid_system.cpp
-│           ├── marching_cubes.cpp          # ⬅ src/physics/marching_cubes.cpp
-│           ├── acoustic_system.cpp         # ⬅ src/acoustic/acoustic_system.cpp
-│           ├── acoustic_ray_tracer.cpp     # ⬅ src/acoustic/acoustic_ray_tracer.cpp
-│           ├── spatial_processor.cpp       # ⬅ src/acoustic/spatial_processor.cpp
-│           └── modal_factory.cpp           # ⬅ src/acoustic/modal_factory.cpp
+│       ├── include/ure/physics/            # physics_world.hpp, acoustic/...
+│       └── src/                            # physics_world.cpp, acoustic_system.cpp, ...
 │
-├── apps/                                    # ─── 可执行程序 ───
-│   └── ure_cli/
-│       ├── CMakeLists.txt                   # EXE, 链接 ure_core + ure_sceneio + ure_config
-│       └── src/
-│           └── main.cpp                     # ⬅ src/main.cpp (Phase J 重写: ECS 编排)
+├── apps/ure_cli/src/main.cpp               # 薄壳编排器 EXE
 │
 ├── tests/
-│   ├── gpu/                                 # ─── GPU 测试 (链接 ure_core) ───
+│   ├── gpu/                                # GPU 测试 (6 个, 183 测试)
 │   │   ├── CMakeLists.txt
 │   │   ├── test_framework.cuh
 │   │   ├── test_device.cu
+│   │   ├── test_hardware.cu
 │   │   ├── test_math_functions.cu
 │   │   ├── test_spectral_pipeline.cu
 │   │   ├── test_render_basic.cu
-│   │   └── test_hardware.cu
+│   │   └── test_instance_hotupdate.cu
 │   │
-│   └── host/                                # ─── Host 测试 (纯 C++, 链接 ure_sceneio/ure_config)
+│   └── host/                               # 主机测试 (2 个, 81 测试)
 │       ├── CMakeLists.txt
-│       ├── test_config.cpp
-│       ├── test_scene_io.cpp
-│       ├── test_spd_loader.cpp
-│       └── test_distributed_contract.cpp
+│       ├── test_world.cpp
+│       └── test_asset_pipeline.cpp
 │
-├── third_party/                             # ─── Vendored 依赖 ───
-│   ├── stb/
-│   │   ├── stb_image.h
-│   │   └── stb_image_write.h
-│   ├── CLI11/
-│   │   └── CLI11.hpp
-│   └── nlohmann/
-│       └── json.hpp
-│
-├── scenes/                                  # ─── 场景文件资源 ───
-│   ├── *.gltf / *.glb
-│   ├── *.scene                              # 遗留格式, 过渡期后废弃
-│   └── textures/
-│
-├── include/                                 # ═══ 旧目录: Phase F 前使用, 后冻结 ═══
-│   ├── gpu/  api/  scene/  io/  core/  spectral/
-│   ├── accelerators/  materials/  integrators/  physics/  acoustic/
-│   └── ...
-│
-└── src/                                     # ═══ 旧目录: Phase F 后冻结 ═══
-    ├── gpu/  api/  scene/  io/  main.cpp
-    ├── accelerators/  materials/  integrators/  physics/  acoustic/
-    └── ...
+├── third_party/stb/stb_image.h             # v2.30
+├── scenes/                                 # 场景文件
+├── docs/                                   # 文档
+├── scripts/                                # 脚本
+├── tools/                                  # 工具
+└── gui/                                    # GUI 层
 ```
+**注意：** 旧 `include/` 和 `src/` 目录已删除。所有代码仅在 `libs/` 和 `apps/` 中开发。
 
 ---
 
@@ -271,9 +173,9 @@ Phase 0 ─→ Phase F ─┬──→ Phase P ───→ Phase A ─┬──
                      │                           │            ├──→ Phase D
                      ├──→ Phase G ──┐            │            │
                      │              ├──→ Phase I └──→ Phase C ┘
-                     └──→ Phase H ──┘                         │
-                                                               ▼
-                                                            Phase E
+                     ├──→ Phase H ──┘                         │
+                     │                                        ▼
+                     └──→ Phase Dx ──────────→ (诊断系统贯穿后续所有阶段)
 ```
 
 Phase G / Phase H / Phase I / Phase C 与 Phase J 无依赖关系，可并行执行。
@@ -284,6 +186,7 @@ Phase G / Phase H / Phase I / Phase C 与 Phase J 无依赖关系，可并行执
 - **Phase F** (目录树 + CMake) → 将 Phase 0 文件迁入新位置
 - **Phase P** (运行时数据管线) → 依赖 Phase F 完成；为 Phase A/B/C 的前置
 - **Phase G/H** (格式/资产) → 依赖 Phase F 的目录结构，与 Phase J 可并行
+- **Phase Dx** (诊断管线) → 依赖 Phase F 的目录结构，依赖 Phase H 的 spd_loader 命名惯例；与 Phase G/H/I/P 均可并行
 - **Phase I** (配置) → 依赖 Phase G/H 的资产管线，与 Phase J 可并行
 - **Phase A** (SoA 队列) → 依赖 Phase P 的 Transform/World 架构 + Phase 0 的 RenderConfig
 - **Phase C** (契约) → 无依赖，可插队
@@ -711,19 +614,314 @@ struct TransformRingBuffer {
 
 ## ████████ Phase H: 资产管线 ████████
 
-**目标**: stb_image 替换 BMP-only 解析器，SPD 加载。
+**目标**: stb_image 替换 BMP-only 解析器，SPD 加载器（为 Phase E 预埋）。
 
-### Step H.1 — stb_image
+**架构上下文**: 
+- 纹理不是 display RGB，而是光谱数据传递：`HostTexture` → `GpuTexture(GpuSpectrum[])` → kernel `sample_texture()` → `rgb_to_spectrum()` → Stokes×Mueller→volume→accum
+- 引擎所有材料通道目前都用 `GpuSpectrum::from_rgb()` 上采样：albedo、emission、metal_eta、extinction、medium_scattering、medium_absorption — 均无直接 SPD 输入路径
+- 薄膜干涉的彩虹色缺失（HANDOVER_GUIDE §3.1）根因之一是光谱通道不足（4通道），SPD loader 是 Phase E N-channel 的前置基础设施
+- AcousticMaterial 是独立数据类型（density/youngs_modulus），不与渲染 Material 共用资产管线 — Phase H 不涉及
+- 流体网格（MarchingCubes）UV={0,0}，材质由编排层外部指派 — Phase H 不涉及
 
-`third_party/stb/stb_image.h` + `stb_image_write.h`。支持 PNG/JPG/BMP/TGA/HDR/EXR。
+### Step H.1 — stb_image 替换 BMP-only 解析器
 
-### Step H.2 — SPD 加载器
+`third_party/stb/stb_image.h`（仅 header-only，不包含 stb_image_write）。
 
-格式: `wavelength value` 每行。插值到 `RenderConfig.num_wavelengths`。
+替换 `image_loader.cpp` 中 86 行 BMP 手动解析器为 `stbi_loadf(path, &w, &h, &ch, 3)`。
 
-### Step H.3 — 错误处理 + 搜索路径
+支持格式：PNG / JPG / BMP / TGA / HDR。
 
-加载失败 → 粉色棋盘格 + 日志。搜索路径: glTF 相对目录 + `URE_TEXTURE_PATH`。
+**数据流不变**:
+```
+stbi_loadf → float RGB → HostTexture {width, height, vector<float>}
+  → apply_image_color_space(sRGB→linear)     ← 已有
+  → GpuSceneCompiler::compile() cache_texture  ← 已有，不动
+  → GPU upload: GpuSpectrum::from_rgb → cudaArray<float4> + texObj  ← 已有，不动
+  → kernel: sample_texture() → rgb_to_spectrum()  ← 已有，不动
+```
+
+CMake：给 `ure_sceneio` 加 `target_include_directories(... PRIVATE ${CMAKE_SOURCE_DIR}/third_party)`。
+
+### Step H.2 — SPD 加载器（为 Phase E 预埋）
+
+新建 `libs/ure_sceneio/src/spd_loader.cpp` + `libs/ure_sceneio/include/ure/spd_loader.hpp`。
+
+接口：
+```cpp
+namespace ure::spectral {
+
+struct SPDData {
+    std::vector<float> lambdas;  // 波长 (nm)
+    std::vector<float> values;   // 功率值
+};
+
+SPDData load_spd_file(const std::string& path);
+
+// 重采样到 N 个均匀波长，范围 [lambda_min, lambda_max]
+std::vector<float> resample_uniform(const SPDData& spd, int n,
+                                    float lambda_min = 400.0f,
+                                    float lambda_max = 700.0f);
+
+}
+```
+
+现有 `scene_io.hpp` 的 `load_spd(path)` 调用内部 `load_spd_file` + `resample_uniform`，默认输出 `kNumWavelengths=4` 点。
+
+格式：每行 `波长 值`（空格/Tab分隔，`#` 开头注释行跳过，空行跳过）。
+
+**Phase E 兼容性**: `resample_uniform` 的 `n` 参数运行时可变，Phase E 将 `kNumWavelengths` 从 4→16/64 时无需改解析逻辑。
+
+### Step H.3 — 缺失纹理回退（内建，不改 kernel）
+
+- CPU 端：`load_image` 失败 → `stbi_failure_reason()` 日志 + return false → `cache_texture` 保持 `texture_index = -1`
+- kernel 端（已有）：`sample_texture()` 遇 `tex_idx < 0` → 粉色错误返回
+- **不新增 pink checkerboard 生成代码**：引擎不需要 DCC 式视觉反馈，静默回退到 material.albedo 更符合光谱渲染器哲学
+
+### Step H.4 — 测试
+
+| 测试 | 覆盖 |
+|------|------|
+| `test_stb_image_loader` | 加载 PNG/JPG/HDR → HostTexture 宽高/数据正确 |
+| `test_spd_loader` | 创建临时 .spd 文件 → 加载 → 重采样 → 值正确 |
+| `test_missing_texture` | 错误路径 → false + `texture_index` 保持 -1 |
+
+---
+
+## ████████ Phase Dx: 分级全局统一诊断日志管理系统 ████████
+
+**目标**: 建立全引擎统一的分级诊断日志系统，消除 ~225 处散落 `std::cerr`/`std::cout`/`printf`，提供结构化日志、CUDA 错误抽象、RAII 性能计时器、运行期级别控制。
+
+**范围约束**: 本阶段仅处理光学/渲染核心模块（`ure_core`、`ure_sceneio`、`ure_config`、`ure_cli`）的诊断迁移。声学（`ure_physics/acoustic`）和物理（`ure_physics/physics`）模块的诊断迁移保留为扩展点，Phase Dx 定义完 API 后不做迁移。
+
+**可扩展设计**:  
+- `Tag` 枚举预留 `Physics` / `Acoustic` 值，但本阶段不迁移对应模块
+- `log_sink.hpp` 的 `Sink` 接口是多态设计，后续可新增网络 sink、数据库 sink 等
+- `check_cuda.hpp` 的策略枚举（`Log` / `Return` / `Abort`）保留扩展，后续可增加 `Retry` 策略
+- 日志格式字符串由 `log_impl()` 集中控制，不会因后续新增模块而碎片化
+
+### 架构
+
+```
+libs/ure_diag/ (header-only INTERFACE, 零依赖)
+├── CMakeLists.txt
+└── include/ure/
+    ├── log.hpp           # 日志核心: Level, Tag, UR_LOG_* 宏
+    ├── log_sink.hpp      # ConsoleSink, FileSink, MultiSink, CallbackSink
+    ├── check_cuda.hpp    # UR_CUDA_CHECK / UR_CUDA_TRY / UR_CUDA_LOG
+    └── timer.hpp         # ScopedTimer, ManualTimer
+```
+
+所有 lib 的 CMakeLists.txt 加 `target_link_libraries(... PUBLIC ure_diag)`。
+
+### Step Dx.1 — 日志核心 API (`log.hpp`)
+
+```cpp
+namespace ure::log {
+
+enum class Level : uint8_t { Trace, Debug, Info, Warn, Error, Fatal };
+enum class Tag  : uint8_t { None, CLI, GPU, SceneIO, Config, Core,
+                            Physics, Acoustic, Test };  // Physics/Acoustic 预留
+
+void set_min_level(Level lvl) noexcept;
+Level min_level() noexcept;
+
+// 内部实现，通过宏调用
+void log_impl(Level level, Tag tag, std::string_view msg,
+              const std::source_location& loc = std::source_location::current());
+
+} // namespace ure::log
+```
+
+**双重过滤机制**:
+- **编译期**: `#define UR_LOG_LEVEL`（CMake 传入），`if constexpr` 完全消除低于阈级的调用，零指令开销
+- **运行期**: `set_min_level()`，用于 `--verbose` / `--quiet` 切换
+
+**宏接口**:
+```cpp
+#define UR_LOG_TRACE(tag, ...)  UR_LOG_IF(Trace, tag, __VA_ARGS__)
+#define UR_LOG_DEBUG(tag, ...)  UR_LOG_IF(Debug, tag, __VA_ARGS__)
+#define UR_LOG_INFO(tag, ...)   UR_LOG_IF(Info,  tag, __VA_ARGS__)
+#define UR_LOG_WARN(tag, ...)   UR_LOG_IF(Warn,  tag, __VA_ARGS__)
+#define UR_LOG_ERROR(tag, ...)  UR_LOG_IF(Error, tag, __VA_ARGS__)
+#define UR_LOG_FATAL(tag, ...)  UR_LOG_IF(Fatal, tag, __VA_ARGS__)
+```
+
+**编译期级别控制**:
+```cmake
+# CMakeLists.txt
+target_compile_definitions(ure_diag INTERFACE
+    $<$<CONFIG:Debug>:UR_LOG_LEVEL=0>    # Debug: Trace+
+    $<$<CONFIG:Release>:UR_LOG_LEVEL=2>  # Release: Info+
+)
+```
+
+**输出格式**（ConsoleSink 用 `std::print`，C++23）:
+```
+[2026-06-09 15:30:01.234][INFO ][GPU] Uploaded mesh: teapot (24576 tris)
+[2026-06-09 15:30:01.345][WARN ][SceneIO] Texture not found: spds/gold.spd
+[2026-06-09 15:30:01.456][ERROR][Core] CUDA error 2 in 'cudaMalloc'
+```
+
+**控制台颜色**（Windows `SetConsoleTextAttribute`）:
+
+| Level | 颜色 |
+|-------|------|
+| Trace | 灰 (FOREGROUND_INTENSITY) |
+| Debug | 青 (GREEN\|BLUE\|INTENSITY) |
+| Info | 白 (默认) |
+| Warn | 黄 (RED\|GREEN\|INTENSITY) |
+| Error | 红 (RED\|INTENSITY) |
+| Fatal | 红底白字 |
+
+### Step Dx.2 — 输出目标 (`log_sink.hpp`)
+
+```cpp
+namespace ure::log {
+
+class Sink {
+public:
+    virtual ~Sink() = default;
+    virtual void write(Level level, Tag tag,
+                       const char* file, int line, const char* func,
+                       std::string_view message) = 0;
+    virtual void flush() {}
+};
+
+class ConsoleSink : public Sink { /* stderr, 彩色输出 */ };
+class FileSink    : public Sink { /* 文件轮转: max_bytes + max_files */ };
+class MultiSink   : public Sink { /* 组合多个 sink */ };
+class CallbackSink : public Sink { /* std::function 回调，供 Python/C# 绑定 */ };
+
+} // namespace ure::log
+```
+
+### Step Dx.3 — CUDA 错误检查统一接口 (`check_cuda.hpp`)
+
+```cpp
+namespace ure::diag {
+
+enum class CudaPolicy { Log, Return, Abort };
+
+// 单行调用宏，自动捕获 source_location
+cudaError_t cuda_check(cudaError_t err,
+                       const std::source_location& loc = std::source_location::current(),
+                       CudaPolicy policy = CudaPolicy::Abort);
+
+} // namespace ure::diag
+
+#define UR_CUDA_CHECK(expr)  ure::diag::cuda_check((expr), std::source_location::current(), ure::diag::CudaPolicy::Abort)
+#define UR_CUDA_TRY(expr)    ure::diag::cuda_check((expr), std::source_location::current(), ure::diag::CudaPolicy::Return)
+#define UR_CUDA_LOG(expr)    ure::diag::cuda_check((expr), std::source_location::current(), ure::diag::CudaPolicy::Log)
+```
+
+替换 `path_tracer_kernel.cu` 中现有 `check_cuda()` + `checkCudaErrors` 宏，消除 `exit(99)` 硬编码。
+测试文件保持现有 `CHECK_CUDA()` 宏（有 `g_tests_failed` 计数器），不做替换。
+
+### Step Dx.4 — RAII 作用域计时器 (`timer.hpp`)
+
+```cpp
+namespace ure::diag {
+
+template <typename Clock = std::chrono::high_resolution_clock>
+class ScopedTimer {
+    const char* name_;
+    ure::log::Tag tag_;
+    Clock::time_point start_;
+public:
+    ScopedTimer(const char* name, ure::log::Tag tag);
+    ~ScopedTimer();  // 析构时自动用 UR_LOG_INFO 记录耗时
+};
+
+} // namespace ure::diag
+
+#define UR_SCOPE_TIMER(tag)  ure::diag::ScopedTimer _ure_timer(__FUNCTION__, tag)
+```
+
+用法:
+```cpp
+void upload_scene() {
+    UR_SCOPE_TIMER(ure::log::Tag::GPU);
+    // ... → 析构时: [INFO][GPU] upload_scene completed in 342.5 ms
+}
+```
+
+提供 `ManualTimer` 支持手动 start/stop 和区间测量。
+
+### Step Dx.5 — CMake + 目录集成
+
+- 新建 `libs/ure_diag/CMakeLists.txt`（`add_library(ure_diag INTERFACE)`）
+- 顶层 `CMakeLists.txt` 加 `add_subdirectory(libs/ure_diag)`（在 `ure_types` 之后，在其他 lib 之前）
+- 每个下游 lib 加 `target_link_libraries(... PUBLIC ure_diag)`
+- 现有 `check_cuda()` 定义从 `path_tracer_kernel.cu` 移到 `check_cuda.hpp`
+
+### Step Dx.6 — 批量迁移现有输出（光学模块）
+
+| 批次 | 文件 | 旧模式 | 新模式 | 约改数 |
+|------|------|--------|--------|:------:|
+| a | `spd_loader.cpp`, `image_loader.cpp` | `std::cerr << "[H] WARNING:"` | `UR_LOG_WARN(SceneIO, ...)` | 3 |
+| b | `scene_ir_frontend.cpp`, `gltf_scene_frontend.cpp` | `std::cerr << "[SceneParser] Error/Warning"` | `UR_LOG_ERROR/WARN(SceneIO, ...)` | 9 |
+| c | `gpu_engine_impl.cpp` | `std::cerr/cout` | `UR_LOG_ERROR/INFO(Core, ...)` | 4 |
+| d | `path_tracer_kernel.cu`（主机端 25 处） | `std::cout/cerr` + 手动 chrono | `UR_LOG_*(GPU, ...)` + `UR_SCOPE_TIMER` | 25 |
+| e | `gpu_driver.cu`, `gpu_hardware.cu` | `printf/cout` | `UR_LOG_*(GPU, ...)` | 10 |
+| f | `gpu_driver_stub.cpp` | `std::cout` | `UR_LOG_*(GPU, ...)` | 6 |
+| g | `apps/ure_cli/src/main.cpp` | `std::cout` + 手动 chrono | `UR_LOG_*(CLI, ...)` + `UR_SCOPE_TIMER` | 22 |
+| h | 旧目录 `src/`（~80 处） | `std::cerr/cout` | **不动**（冻结） | 0 |
+| | **小计（光学模块）** | | | **~79** |
+
+**声学/物理模块不做迁移**（预留 `Tag::Physics` / `Tag::Acoustic`，后期按需接入）。
+
+### Step Dx.7 — 进度条处理
+
+进度条（`\r` 覆盖输出）保留独立于日志系统的行为：
+- 日志走 `stderr`（彩色，不可覆盖）
+- 进度条走 `stdout`（`\r` 覆盖 + `std::print("...")` + `fflush`）
+- 两者不冲突
+
+### Step Dx.8 — CLI 日志控制
+
+在 `apps/ure_cli/src/main.cpp` 接入 `--verbose` / `--quiet`（Phase I 配置系统的一部分）：
+
+```cpp
+if (verbose)       ure::log::set_min_level(ure::log::Level::Debug);
+else if (quiet)    ure::log::set_min_level(ure::log::Level::Error);
+else               ure::log::set_min_level(ure::log::Level::Info);
+```
+
+### Step Dx.9 — 启用 DEVICE_LOG 并接入主机日志
+
+现有 `path_tracer_kernel.cu` 的 `DEVICE_LOG` / `flush_debug_log`（`#define DEBUG_ENABLED 0` 禁用中）：
+- `DEBUG_ENABLED` 改为与 `UR_LOG_LEVEL` 联动（`UR_LOG_LEVEL <= 1` 时启用）
+- `flush_debug_log` 输出从 `printf` 改为调用 `UR_LOG_DEBUG(GPU, ...)`
+
+### 标签映射（光学模块迁移前后）
+
+| 当前标签 | 新 `Tag` 枚举 | 新格式示例 |
+|----------|--------------|-----------|
+| `[H]` | `SceneIO` | `[SceneIO]` |
+| `[SceneParser]` | `SceneIO` | `[SceneIO]` |
+| `[GltfSceneFrontend]` | `SceneIO` | `[SceneIO]` |
+| `[WavSaver]` | `SceneIO` | `[SceneIO]` |
+| `[GPU]` | `GPU` | `[GPU]` |
+| `[GpuRenderEngine]` | `Core` | `[Core]` |
+| `[GPU Hardware]` | `GPU` | `[GPU]` |
+| `[GPU Stub]` | `GPU` | `[GPU]` |
+| `[Main]` | `CLI` | `[CLI]` |
+| `[Progress]` | `CLI` | `[CLI]` |
+| `[Step]` | `CLI` | `[CLI]` |
+| `[CRITICAL ERROR]` | `Core` | `[Core]` + `FATAL` |
+| `[Output]` | `CLI` | `[CLI]` |
+| `[Fluid]` | `CLI` | `[CLI]` |
+| `[Acoustic]` | **预留** | 本阶段不动 |
+| `[Physics]` | **预留** | 本阶段不动 |
+
+### 完成判据
+
+1. `libs/ure_diag/` 编译通过，所有下游 lib 成功链接
+2. 全部 45 主机测试 + 183 GPU 测试通过（测试文件自身输出保持不变）
+3. 迁移后的输出格式统一为 `[timestamp][LEVEL][Tag] message`
+4. Release 编译中 Trace/Debug 调用被完全编译消除（反汇编验证或 size diff）
+5. `--verbose` 显示 Debug 消息，`--quiet` 仅显示 Error+
+6. 声学/物理模块无任何诊断代码被修改
 
 ---
 
@@ -842,14 +1040,17 @@ N 来自 `RenderConfig.num_wavelengths`，与 Phase 0 AutoConfig 正交。
 新 Phase 0: ████████████ 已完成 (gpu_hardware.cu fix + auto_configure 移植 + 测试通过)
 新 Phase F: ████████████ 已完成 (F.1-F.5)
 新 Phase P: ████████████ 已完成 (P.1-P.8 全部完成)
+新 Phase H: ████████████ 已完成 (stb_image + SPD loader + 测试通过)
+新 Phase Dx: ████████████ 已完成 (264 测试通过，~73 站点迁移完毕)
 新 Phase G: ░░░░░░░░░░░░ 未开始
-新 Phase H: ░░░░░░░░░░░░ 未开始
 新 Phase I: ░░░░░░░░░░░░ 未开始
 新 Phase A: ░░░░░░░░░░░░ 未开始
 新 Phase B: ░░░░░░░░░░░░ 未开始
 新 Phase C: ░░░░░░░░░░░░ 未开始
 新 Phase D: ░░░░░░░░░░░░ 未开始
 新 Phase E: ░░░░░░░░░░░░ 未开始
+
+旧目录清理: ████████████ 已完成 (include/ + src/ + tests/{unit,integration} 删除; CMakeLists.txt 遗留构建块移除)
 ```
 
 ## 预估总工期
@@ -861,6 +1062,7 @@ N 来自 `RenderConfig.num_wavelengths`，与 Phase 0 AutoConfig 正交。
 | Phase P | 8 天 | Phase F | 运行时数据管线 |
 | Phase G | 5 天 | Phase F | 与 H/P 可并行 |
 | Phase H | 4 天 | Phase F | 与 G/P 可并行 |
+| Phase Dx | 6.5 天 | Phase F+H | 诊断系统，与 G/H/I/P 可并行；仅限光学模块 |
 | Phase I | 4 天 | Phase G+H | 与 P 可并行 |
 | Phase A | 5 天 | Phase P+0 | SoA 队列 |
 | Phase B | 4 天 | Phase A | 多 GPU |
@@ -881,6 +1083,7 @@ N 来自 `RenderConfig.num_wavelengths`，与 Phase 0 AutoConfig 正交。
 | 嵌套介质 IOR | 已在 kernel.cu → ure_core | 零冲突 |
 | Mueller 矩阵 | Phase E Step E.5 | 零冲突 |
 | SPD 输入 | Phase H, ure_sceneio | 零冲突 |
+| 统一诊断日志系统 | Phase Dx, ure_diag | 零冲突 — 增量替换，不改功能 |
 | RGB→高斯上采样 | gpu_spectrum_utils.cuh → ure_core | 零冲突 |
 | 物理/声学 | ure_physics 独立库 + ISpatialQuery | 零冲突 |
 | ECS/World 数据模型 | Phase P, ure_types | 零冲突 |
@@ -896,22 +1099,22 @@ Phase 0 (硬件检测)
     ▼
 Phase F (目录树+CMake)
     │ F.1-F.5: 已完成 (2026-06-09)
-    ├──────────┬──────────┬──────────┐
-    ▼          ▼          ▼          ▼
-Phase P    Phase G    Phase H    Phase I
-(管线)     (glTF)     (资产管线)  (配置,可并行)
-    │          │          │
-    ├──────────┴──────────┘
-    ▼
-Phase A (SoA 队列)
-    │
-    ├─────────────────┐
-    ▼                 ▼
-Phase B (多GPU)   Phase C (分布式契约)
-    │                 │
-    ├────────┬────────┘
-    ▼        ▼
-Phase D (分布式集成)
+    ├──────────┬──────────┬──────────┬──────────┐
+    ▼          ▼          ▼          ▼          ▼
+Phase P    Phase G    Phase H    Phase Dx   Phase I
+(管线)     (glTF)     (资产管线)  (诊断系统)  (配置)
+    │          │          │          │
+    ├──────────┴──────────┘          │
+    ▼                               │
+Phase A (SoA 队列)                  │
+    │                               │
+    ├─────────────────┐             │
+    ▼                 ▼             │
+Phase B (多GPU)   Phase C (分布式)  │
+    │                 │             │
+    ├────────┬────────┘             │
+    ▼        ▼                      ▼
+Phase D (分布式集成)        (Dx 诊断贯穿后续所有阶段)
     │
     ▼
 Phase E (N通道光谱)
@@ -920,6 +1123,7 @@ Phase E (N通道光谱)
 并行建议:
 - Phase G / H / I 可同步进行，无交叉依赖
 - Phase P 与 Phase G / H / I 无依赖关系
+- Phase Dx 与 Phase G / H / I / P 均可并行，是对现有诊断输出的增量式替换，不影响渲染管线
 - Phase C（契约）可随时插入，无依赖
 - 建议优先推进 Phase P，因为此后所有渲染核心改造 (A/B/E) 都依赖它
 

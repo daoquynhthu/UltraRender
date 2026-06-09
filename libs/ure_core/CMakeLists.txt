@@ -22,7 +22,7 @@ target_include_directories(ure_core PUBLIC
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../ure_sceneio/include"
 )
-target_link_libraries(ure_core PUBLIC ure_types)
+target_link_libraries(ure_core PUBLIC ure_types ure_diag)
 
 if(MSVC)
     target_compile_options(ure_core PRIVATE

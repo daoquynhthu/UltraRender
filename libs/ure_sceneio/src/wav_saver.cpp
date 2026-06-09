@@ -1,8 +1,9 @@
 #include "ure/wav_saver.hpp"
 #include <fstream>
-#include <iostream>
 #include <algorithm>
 #include <cmath>
+
+#include <ure/log.hpp>
 
 namespace ure {
 namespace io {
@@ -10,7 +11,7 @@ namespace io {
 bool WavSaver::save(const std::string& filename, const std::vector<float>& samples, int sample_rate, int num_channels) {
     std::ofstream file(filename, std::ios::binary);
     if (!file.is_open()) {
-        std::cerr << "[WavSaver] Error: Could not open file " << filename << " for writing." << std::endl;
+        UR_LOG_ERROR(SceneIO, "WavSaver: Could not open file {} for writing.", filename);
         return false;
     }
 

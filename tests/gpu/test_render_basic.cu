@@ -3,9 +3,9 @@
 #include <stdlib.h>
 
 #include "test_framework.cuh"
-#include "gpu/gpu_structs.hpp"
+#include "ure/gpu_structs.hpp"
 
-#include "../../src/gpu/path_tracer_kernel.cu"
+#include "../../libs/ure_core/src/path_tracer_kernel.cu"
 
 using namespace ure::gpu;
 

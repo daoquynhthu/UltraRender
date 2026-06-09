@@ -1,6 +1,8 @@
 #include "ure/gpu_driver.hpp"
 #include <cuda_runtime.h>
-#include <iostream>
+
+#include <ure/log.hpp>
+
 #include <vector>
 
 namespace ure::gpu {
@@ -22,7 +24,7 @@ bool is_gpu_available() {
 }
 
 void run_gpu_test() {
-    std::cout << "[GPU] Starting Self-Test..." << std::endl;
+    UR_LOG_INFO(GPU, "Starting Self-Test...");
 
     int n = 256;
     int* d_data;
@@ -43,9 +45,9 @@ void run_gpu_test() {
     }
 
     if (success) {
-        std::cout << "[GPU] Self-Test Passed! Kernel execution verified." << std::endl;
+        UR_LOG_INFO(GPU, "Self-Test Passed! Kernel execution verified.");
     } else {
-        std::cerr << "[GPU] Self-Test Failed!" << std::endl;
+        UR_LOG_ERROR(GPU, "Self-Test Failed!");
     }
 
     cudaFree(d_data);

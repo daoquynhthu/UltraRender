@@ -2,8 +2,8 @@
 #include <stdio.h>
 
 #include "test_framework.cuh"
-#include "gpu/gpu_structs.hpp"
-#include "gpu/gpu_spectrum_utils.cuh"
+#include "ure/gpu_structs.hpp"
+#include "ure/gpu_spectrum_utils.cuh"
 
 using namespace ure::gpu;
 

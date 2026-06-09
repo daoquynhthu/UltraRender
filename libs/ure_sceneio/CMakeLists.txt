@@ -7,6 +7,7 @@ add_library(ure_sceneio STATIC
     src/procedural.cpp
     src/image_loader.cpp
     src/image_saver.cpp
+    src/spd_loader.cpp
     src/wav_saver.cpp
     src/scene_ir.cpp
     src/scene.cpp
@@ -22,7 +23,10 @@ target_include_directories(ure_sceneio PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-target_link_libraries(ure_sceneio PUBLIC ure_types ure_core)
+target_include_directories(ure_sceneio PRIVATE
+    ${CMAKE_SOURCE_DIR}/third_party
+)
+target_link_libraries(ure_sceneio PUBLIC ure_types ure_core ure_diag)
 
 if(MSVC)
     target_compile_options(ure_sceneio PRIVATE

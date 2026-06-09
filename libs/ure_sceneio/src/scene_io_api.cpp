@@ -3,6 +3,7 @@
 #include "ure/gltf_scene_frontend.hpp"
 #include "ure/image_loader.hpp"
 #include "ure/image_saver.hpp"
+#include "ure/spd_loader.hpp"
 
 namespace ure::scene_io {
 
@@ -25,8 +26,9 @@ bool save_bmp(const std::string& path,
 }
 
 std::vector<float> load_spd(const std::string& path) {
-    (void)path;
-    return {};
+    auto raw = spectral::load_spd_file(path);
+    if (raw.lambdas.empty()) return {};
+    return spectral::resample_uniform(raw);
 }
 
 } // namespace ure::scene_io

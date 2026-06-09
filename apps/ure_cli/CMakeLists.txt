@@ -4,6 +4,7 @@ target_link_libraries(ure_cli PRIVATE
     ure_core
     ure_sceneio
     ure_config
+    ure_diag
 )
 
 if(TARGET ure_physics)
