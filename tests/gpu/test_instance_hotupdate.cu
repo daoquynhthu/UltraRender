@@ -1,6 +1,7 @@
 #include "test_framework.cuh"
 #include <ure/gpu_driver.hpp>
 #include <ure/gpu_structs.hpp>
+#include <ure/tranform_ring_buffer.hpp>
 
 // --- Layout verification (host-side) ---
 // GpuInstance layout:
@@ -212,11 +213,163 @@ static int test_gpu_transform_readback() {
     return 0;
 }
 
+// --- TransformRingBuffer tests ---
+
+static int test_ring_buffer_basic() {
+    ure::gpu::TransformRingBuffer rb;
+    
+    // Start empty
+    CHECK(rb.instance_count == 0);
+    CHECK(rb.write_index == 0);
+    CHECK(rb.read_index == 0);
+    
+    rb.resize(4);
+    CHECK(rb.instance_count == 4);
+    CHECK(rb.write_index == 0);
+    // read_index should lag: (0 + 2) % 3 = 2
+    CHECK(rb.read_index == 2);
+    
+    // Write values into frame 0
+    {
+        ure::gpu::GpuInstanceTransform* w = rb.begin_write();
+        CHECK(w != nullptr);
+        CHECK(rb.write_count() == 4);
+        for (int i = 0; i < 4; ++i)
+            w[i].transform.m[0][0] = (float)(i + 1);
+        rb.end_write();
+    }
+    
+    // Read frame 2 (not yet written, should be identity from resize)
+    {
+        int count = 0;
+        const ure::gpu::GpuInstanceTransform* r = rb.begin_read(count);
+        CHECK(count == 4);
+        for (int i = 0; i < 4; ++i) {
+            CHECK_FLOAT_EQ(r[i].transform.m[0][0], 1.0f, 1e-6f);
+            CHECK_FLOAT_EQ(r[i].transform.m[0][1], 0.0f, 1e-6f);
+        }
+        rb.end_read();  // read_index moves: (2+1)%3 = 0
+    }
+    CHECK(rb.read_index == 0);
+    
+    // Advance write: write_index 0→1
+    rb.advance();
+    CHECK(rb.write_index == 1);
+    CHECK(rb.read_index == 0);  // unchanged
+    
+    // Write values into frame 1
+    {
+        ure::gpu::GpuInstanceTransform* w = rb.begin_write();
+        for (int i = 0; i < 4; ++i)
+            w[i].transform.m[0][0] = (float)(i + 10);
+        rb.end_write();
+    }
+    
+    // Advance write: write_index 1→2
+    rb.advance();
+    CHECK(rb.write_index == 2);
+    
+    // Read frame 0 (first write, values 1..4)
+    {
+        int count = 0;
+        const ure::gpu::GpuInstanceTransform* r = rb.begin_read(count);
+        CHECK(count == 4);
+        for (int i = 0; i < 4; ++i)
+            CHECK_FLOAT_EQ(r[i].transform.m[0][0], (float)(i + 1), 1e-6f);
+        rb.end_read();  // read_index moves: (0+1)%3 = 1
+    }
+    CHECK(rb.read_index == 1);
+    
+    // Read frame 1 (second write, values 10..13)
+    {
+        int count = 0;
+        const ure::gpu::GpuInstanceTransform* r = rb.begin_read(count);
+        CHECK(count == 4);
+        for (int i = 0; i < 4; ++i)
+            CHECK_FLOAT_EQ(r[i].transform.m[0][0], (float)(i + 10), 1e-6f);
+        rb.end_read();  // read_index moves: (1+1)%3 = 2
+    }
+    CHECK(rb.read_index == 2);
+    
+    return 0;
+}
+
+static int test_ring_buffer_init_from_instances() {
+    std::vector<ure::gpu::GpuInstance> insts(2);
+    insts[0].mesh_index = 0;
+    insts[0].transform.m[0][3] = 1.0f;
+    insts[0].inverse_transform.m[0][3] = -1.0f;
+    insts[0].min_pt = {0,0,0};
+    insts[0].max_pt = {1,1,1};
+    
+    insts[1].mesh_index = 1;
+    insts[1].transform.m[0][3] = 5.0f;
+    insts[1].inverse_transform.m[0][3] = -5.0f;
+    insts[1].min_pt = {10,10,10};
+    insts[1].max_pt = {20,20,20};
+    
+    ure::gpu::TransformRingBuffer rb;
+    rb.init_from_instances(insts);
+    
+    CHECK(rb.instance_count == 2);
+    
+    // All 3 frames should have the same initial data
+    for (int f = 0; f < 3; ++f) {
+        CHECK_FLOAT_EQ(rb.frames[f][0].transform.m[0][3], 1.0f, 1e-6f);
+        CHECK_FLOAT_EQ(rb.frames[f][0].inverse_transform.m[0][3], -1.0f, 1e-6f);
+        CHECK_FLOAT_EQ(rb.frames[f][1].transform.m[0][3], 5.0f, 1e-6f);
+        CHECK_FLOAT_EQ(rb.frames[f][1].inverse_transform.m[0][3], -5.0f, 1e-6f);
+    }
+    
+    // Write index at 0, read index lags at 2
+    CHECK(rb.write_index == 0);
+    CHECK(rb.read_index == 2);
+    
+    return 0;
+}
+
+static int test_ring_buffer_wraparound() {
+    ure::gpu::TransformRingBuffer rb;
+    rb.resize(1);
+    
+    // Cycle write_index around 0→1→2→0 and verify no crash
+    for (int cycle = 0; cycle < 6; ++cycle) {
+            ure::gpu::GpuInstanceTransform* w = rb.begin_write();
+        w[0].transform.m[0][0] = (float)cycle;
+        rb.end_write();
+        rb.advance();
+    }
+    // write_index: 0→1→2→0→1→2 = index 2 after 6 advances
+    CHECK(rb.write_index == (6 % 3)); // 0
+    
+    // After 6 advances, read_index still at initial 2
+    int count = 0;
+        const ure::gpu::GpuInstanceTransform* r = rb.begin_read(count);
+    CHECK(count == 1);
+    rb.end_read();
+    // read_index = (2+1)%3 = 0
+    
+    // Advance read around: 0→1→2→0
+    r = rb.begin_read(count);
+    rb.end_read(); // index 1
+    r = rb.begin_read(count);
+    rb.end_read(); // index 2
+    r = rb.begin_read(count);
+    rb.end_read(); // index 0
+    
+    CHECK(rb.read_index == 0);
+    
+    return 0;
+}
+
 int main() {
     printf("[GPU Instance Hot-Update Test]\n");
     RUN_TEST(test_instance_layout);
     RUN_TEST(test_gpu_hot_update_identity);
     RUN_TEST(test_gpu_transform_readback);
+    RUN_TEST(test_ring_buffer_basic);
+    RUN_TEST(test_ring_buffer_init_from_instances);
+    RUN_TEST(test_ring_buffer_wraparound);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;
 }

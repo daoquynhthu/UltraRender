@@ -22,6 +22,27 @@
 | `GpuInstanceDesc` cast returned wrong mesh_index | `GpuInstance` had `transform` before `mesh_index` (offset 128), but `reinterpret_cast<GpuInstanceDesc*>` assumed offset 0 | Reordered `GpuInstance` to put `mesh_index`/`material_index` first |
 | CUDA illegal memory access in BVH traversal | Transform buffer `cudaMemcpy` from `instances.data()` with `sizeof(GpuInstanceTransform)` — copied from offset 0, getting `transform(64)+inverse(64)+garbled(24)` instead of `transform(64)+inverse(64)+min(12)+max(12)` | Field-by-field extraction for transform buffer upload |
 
+## Phase P.3 — Transform Ring Buffer
+
+### 2026-06-09
+
+- [DONE] P.3.1: Create `tranform_ring_buffer.hpp` — triple-buffer (kNumFrames=3), resize/begin_write/end_write/advance/begin_read/end_read/init_from_instances
+- [DONE] P.3.2: Integrate ring buffer into `gpu_engine_impl.cpp` — replace `cached_transforms_` vector with `tranform_ring_buffer_`
+- [DONE] P.3.3: Write frame → advance write → read frame → upload to GPU → advance read; 1-frame lag guarantee via 3 frames
+- [DONE] P.3.4: Add 3 ring buffer tests (basic read/write cycle, init_from_instances, wraparound)
+
+### Architecture
+
+```
+PhysicsSystem → write frame → advance()
+                               ↓
+                         [Frame 0]  ← write_index
+                         [Frame 1]
+                         [Frame 2]  ← read_index  (lags by 2)
+                               ↓
+                   begin_read() → cudaMemcpy H2D → end_read()
+```
+
 ### Test Results
 
 ```
@@ -30,8 +51,8 @@
 [GPU Spectral Pipeline]   PASS (30 assertions)
 [Hardware Config Test]    PASS (17 assertions)
 [GPU Basic Render Test]   PASS (37 assertions)
-[GPU Instance Hot-Update] PASS (15 assertions)
-Total: 132 assertions, 0 failures
+[GPU Instance Hot-Update] PASS (66 assertions, +3 ring buffer tests)
+Total: 183 assertions, 0 failures
 ```
 
 ## Phase F — Directory Restructure + CMake Library Separation

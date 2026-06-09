@@ -1,6 +1,7 @@
 #include "ure/ure_api.hpp"
 #include "ure/gpu_scene_compiler.hpp"
 #include "ure/gpu_driver.hpp"
+#include "ure/tranform_ring_buffer.hpp"
 #include <iostream>
 #include <vector>
 #include <cassert>
@@ -115,8 +116,8 @@ private:
         gpu_context_ = ure::gpu::init_gpu_renderer(compiled.width, compiled.height, cached_meshes_, compiled.instances, cached_spheres_, cached_materials_, compiled.textures);
         assert(gpu_context_ != nullptr && "init_gpu_renderer failed -- check CUDA state");
         
-        // Cache transforms for hot-update path
-        cache_transforms(compiled.instances);
+        // Phase P.3: initialize ring buffer with all frames from compiled instances
+        tranform_ring_buffer_.init_from_instances(compiled.instances);
 
         // Setup Camera
         float cam_pos[3] = {current_scene_camera_.position.x, current_scene_camera_.position.y, current_scene_camera_.position.z};
@@ -139,25 +140,29 @@ private:
 
     void update_transforms(const CompiledGpuScene& compiled) {
         assert(gpu_context_ != nullptr && "update_transforms: no GPU context");
-        assert((int)compiled.instances.size() == (int)cached_transforms_.size() && "update_transforms: instance count changed on hot-update; full re-init required");
-        cache_transforms(compiled.instances);
-        ure::gpu::update_instance_transforms_gpu(
-            gpu_context_,
-            cached_transforms_.data(),
-            (int)cached_transforms_.size()
-        );
-        reset_accumulation();
-    }
-
-    void cache_transforms(const std::vector<ure::gpu::GpuInstance>& instances) {
-        cached_transforms_.resize(instances.size());
-        assert(cached_transforms_.size() == instances.size() && "cache_transforms: resize failed");
-        for (size_t i = 0; i < instances.size(); ++i) {
-            cached_transforms_[i].transform = instances[i].transform;
-            cached_transforms_[i].inverse_transform = instances[i].inverse_transform;
-            cached_transforms_[i].min_pt = instances[i].min_pt;
-            cached_transforms_[i].max_pt = instances[i].max_pt;
+        assert((int)compiled.instances.size() == tranform_ring_buffer_.instance_count && "update_transforms: instance count changed on hot-update; full re-init required");
+        
+        // Write compiled transforms into current write frame
+        ure::gpu::GpuInstanceTransform* dst = tranform_ring_buffer_.begin_write();
+        assert(dst != nullptr);
+        for (size_t i = 0; i < compiled.instances.size(); ++i) {
+            dst[i].transform = compiled.instances[i].transform;
+            dst[i].inverse_transform = compiled.instances[i].inverse_transform;
+            dst[i].min_pt = compiled.instances[i].min_pt;
+            dst[i].max_pt = compiled.instances[i].max_pt;
         }
+        tranform_ring_buffer_.end_write();
+        
+        // Upload the read frame (lags write by 1-2 frames)
+        int count = 0;
+        const ure::gpu::GpuInstanceTransform* src = tranform_ring_buffer_.begin_read(count);
+        ure::gpu::update_instance_transforms_gpu(gpu_context_, src, count);
+        tranform_ring_buffer_.end_read();
+        
+        // Advance write frame for next physics step
+        tranform_ring_buffer_.advance();
+        
+        reset_accumulation();
     }
 
     std::vector<float> frame_buffer_;
@@ -178,8 +183,8 @@ private:
     int current_spp_ = 0;
     bool initialized_;
 
-    // Phase P.1: cached transforms for hot-update path
-    std::vector<ure::gpu::GpuInstanceTransform> cached_transforms_;
+    // Phase P.3: triple-buffer for transforms (writer=physics, reader=render)
+    ure::gpu::TransformRingBuffer tranform_ring_buffer_;
 };
 
 std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_engine() {
