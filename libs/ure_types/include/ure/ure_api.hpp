@@ -26,6 +26,7 @@ struct Vertex {
     core::Vec3f position;
     core::Vec3f normal;
     core::Vec2f uv;
+    core::Vec3f tangent = {1.0f, 0.0f, 0.0f};
 };
 
 struct Texture {

@@ -1,4 +1,5 @@
 #include "ure/gltf_scene_frontend.hpp"
+#include "ure/scene_parser.hpp"
 
 #include <algorithm>
 #include <array>
@@ -462,6 +463,11 @@ private:
             instantiate_mesh(mesh_index, world, get_string(*node, "name", "gltf_node_" + std::to_string(node_index)));
         }
 
+        int camera_index = get_int(*node, "camera", -1);
+        if (camera_index >= 0) {
+            parse_camera(camera_index, world, get_string(*node, "name", "gltf_camera"));
+        }
+
         const JsonValue* children = get_object_value(*node, "children");
         if (!children || children->type != JsonValue::Type::Array) return;
         for (const JsonValue& child : children->array_value) {
@@ -469,6 +475,31 @@ private:
                 parse_node(static_cast<int>(child.number_value), world);
             }
         }
+    }
+
+    void parse_camera(int camera_index, const Mat4& world, const std::string& name) {
+        const JsonValue* cameras = get_object_value(root_, "cameras");
+        const JsonValue* camera = cameras ? get_array_value(*cameras, camera_index) : nullptr;
+        if (!camera || camera->type != JsonValue::Type::Object) return;
+
+        std::string camera_type = get_string(*camera, "type", "perspective");
+        if (camera_type != "perspective") return;
+
+        core::Vec3f position = {world.m[12], world.m[13], world.m[14]};
+        core::Vec3f forward = normalize_vec3({-world.m[8], -world.m[9], -world.m[10]});
+        core::Vec3f look_at = {position.x + forward.x, position.y + forward.y, position.z + forward.z};
+
+        if (const JsonValue* perspective = get_object_value(*camera, "perspective")) {
+            scene_.camera.fov = static_cast<float>(get_number(*perspective, "yfov", 0.785f) * 180.0 / 3.14159265f);
+            scene_.camera.aspect_ratio = static_cast<float>(
+                get_number(*perspective, "aspectRatio", 16.0 / 9.0));
+        }
+
+        scene_.camera.position = position;
+        scene_.camera.look_at = look_at;
+        scene_.camera.up = {0.0f, 1.0f, 0.0f};
+        UR_LOG_DEBUG(SceneIO, "Parsed camera '{}' at ({:.2f},{:.2f},{:.2f}) fov={}",
+                     name, position.x, position.y, position.z, scene_.camera.fov);
     }
 
     Mat4 parse_node_transform(const JsonValue& node) {
@@ -524,6 +555,75 @@ private:
         }
     }
 
+    void generate_tangents(std::vector<Vertex>& vertices, const std::vector<int>& indices) {
+        int vcount = static_cast<int>(vertices.size());
+        std::vector<core::Vec3f> tangents(vcount, {0.0f, 0.0f, 0.0f});
+        std::vector<float> tan_weights(vcount, 0.0f);
+
+        for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+            int i0 = indices[i], i1 = indices[i + 1], i2 = indices[i + 2];
+            const auto& p0 = vertices[i0].position;
+            const auto& p1 = vertices[i1].position;
+            const auto& p2 = vertices[i2].position;
+            const auto& uv0 = vertices[i0].uv;
+            const auto& uv1 = vertices[i1].uv;
+            const auto& uv2 = vertices[i2].uv;
+
+            core::Vec3f e1 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
+            core::Vec3f e2 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
+
+            float du1 = uv1.x - uv0.x, dv1 = uv1.y - uv0.y;
+            float du2 = uv2.x - uv0.x, dv2 = uv2.y - uv0.y;
+
+            float r = 1.0f / (du1 * dv2 - dv1 * du2 + 1e-8f);
+            core::Vec3f tangent = {
+                (e1.x * dv2 - e2.x * dv1) * r,
+                (e1.y * dv2 - e2.y * dv1) * r,
+                (e1.z * dv2 - e2.z * dv1) * r,
+            };
+
+            float len = std::sqrt(tangent.x * tangent.x + tangent.y * tangent.y + tangent.z * tangent.z);
+            if (len > 1e-8f) {
+                tangent = {tangent.x / len, tangent.y / len, tangent.z / len};
+            }
+
+            float weight = std::abs(du1 * dv2 - dv1 * du2);
+            tangents[i0] = {tangents[i0].x + tangent.x * weight,
+                            tangents[i0].y + tangent.y * weight,
+                            tangents[i0].z + tangent.z * weight};
+            tangents[i1] = {tangents[i1].x + tangent.x * weight,
+                            tangents[i1].y + tangent.y * weight,
+                            tangents[i1].z + tangent.z * weight};
+            tangents[i2] = {tangents[i2].x + tangent.x * weight,
+                            tangents[i2].y + tangent.y * weight,
+                            tangents[i2].z + tangent.z * weight};
+            tan_weights[i0] += weight;
+            tan_weights[i1] += weight;
+            tan_weights[i2] += weight;
+        }
+
+        for (int i = 0; i < vcount; ++i) {
+            if (tan_weights[i] > 1e-8f) {
+                float inv_w = 1.0f / tan_weights[i];
+                core::Vec3f t = {tangents[i].x * inv_w, tangents[i].y * inv_w, tangents[i].z * inv_w};
+                const auto& n = vertices[i].normal;
+                // Gram-Schmidt orthogonalize against normal
+                float dot = t.x * n.x + t.y * n.y + t.z * n.z;
+                vertices[i].tangent = {t.x - dot * n.x, t.y - dot * n.y, t.z - dot * n.z};
+                float len = std::sqrt(vertices[i].tangent.x * vertices[i].tangent.x +
+                                      vertices[i].tangent.y * vertices[i].tangent.y +
+                                      vertices[i].tangent.z * vertices[i].tangent.z);
+                if (len > 1e-8f) {
+                    vertices[i].tangent = {vertices[i].tangent.x / len,
+                                            vertices[i].tangent.y / len,
+                                            vertices[i].tangent.z / len};
+                }
+            } else {
+                vertices[i].tangent = {1.0f, 0.0f, 0.0f};
+            }
+        }
+    }
+
     std::shared_ptr<Mesh> build_mesh_from_primitive(const JsonValue& primitive) {
         const JsonValue* attributes = get_object_value(primitive, "attributes");
         if (!attributes || attributes->type != JsonValue::Type::Object) return nullptr;
@@ -567,6 +667,9 @@ private:
                 : core::Vec2f{0.0f, 0.0f};
         }
         mesh->indices = std::move(indices);
+        if (!uvs.empty() && !normals.empty()) {
+            generate_tangents(mesh->vertices, mesh->indices);
+        }
         return mesh;
     }
 
@@ -762,6 +865,27 @@ private:
             }
         }
 
+        if (const JsonValue* normal_tex = get_object_value(*material, "normalTexture")) {
+            int texture_index = get_int(*normal_tex, "index", -1);
+            node->normal_texture = get_texture(texture_index, scene_ir::ImageColorSpace::Linear, node->name + "_normal");
+            node->normal_scale = static_cast<float>(get_number(*normal_tex, "scale", 1.0));
+        }
+
+        if (const JsonValue* extensions = get_object_value(*material, "extensions")) {
+            if (const JsonValue* spectral = get_object_value(*extensions, "URE_spectral_material")) {
+                node->dispersion = static_cast<float>(get_number(*spectral, "dispersion", node->dispersion));
+                std::vector<float> eta = get_number_array(*spectral, "metal_eta");
+                if (eta.size() >= 3) node->metal_eta = {eta[0], eta[1], eta[2]};
+                std::vector<float> k = get_number_array(*spectral, "metal_k");
+                if (k.size() >= 3) node->metal_k = {k[0], k[1], k[2]};
+                std::string model_str = get_string(*spectral, "model", "");
+                if (model_str == "dielectric") node->model = scene_ir::MaterialModel::Dielectric;
+                else if (model_str == "metal") node->model = scene_ir::MaterialModel::Metal;
+                UR_LOG_DEBUG(SceneIO, "Parsed URE_spectral_material for '{}': model={}, dispersion={}",
+                             node->name, model_str, node->dispersion);
+            }
+        }
+
         scene_.add_material(node);
         material_cache_[material_index] = node;
         return node;
@@ -780,6 +904,21 @@ private:
 }
 
 scene_ir::SceneIR GltfSceneFrontend::parse_file_to_ir(const std::string& filepath) {
+    std::string ext = std::filesystem::path(filepath).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+
+    if (ext != ".gltf" && ext != ".glb") {
+        UR_LOG_WARN(SceneIO, "Non-glTF file '{}' (extension {}); falling back to legacy scene parser.", filepath, ext);
+        auto legacy_ir = SceneParser::parse_file_to_ir(filepath);
+        return legacy_ir;
+    }
+
+    if (ext == ".glb") {
+        UR_LOG_ERROR(SceneIO, "GLB (binary glTF) is not yet supported; file: {}", filepath);
+        return {};
+    }
+
     return MinimalGltfFrontend(filepath).parse();
 }
 

@@ -56,6 +56,8 @@ struct MaterialNode {
     std::shared_ptr<TextureResource> base_color_texture;
     std::shared_ptr<TextureResource> roughness_texture;
     std::shared_ptr<TextureResource> emission_texture;
+    std::shared_ptr<TextureResource> normal_texture;
+    float normal_scale = 1.0f;
 };
 
 struct MeshResource {
