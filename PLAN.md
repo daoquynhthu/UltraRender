@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-09 (含 Phase P: 运行时数据管线)
+最后更新: 2026-06-09 (含 Phase I: 配置系统)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -1042,7 +1042,7 @@ N 来自 `RenderConfig.num_wavelengths`，与 Phase 0 AutoConfig 正交。
 新 Phase P: ████████████ 已完成 (P.1-P.8 全部完成)
 新 Phase H: ████████████ 已完成 (stb_image + SPD loader + 测试通过)
 新 Phase Dx: ████████████ 已完成 (264 测试通过，~73 站点迁移完毕)
-新 Phase G: ████████████ 已完成 (normalTexture + tangent + camera + URE_spectral_material + fallback)
+新 Phase G: ████████████ 已完成 (审计修复 5 项差距 + 全方位测试: host 11 用例/55 检查 + GPU 3 用例/21 检查; 全绿)
 新 Phase I: ░░░░░░░░░░░░ 未开始
 新 Phase A: ░░░░░░░░░░░░ 未开始
 新 Phase B: ░░░░░░░░░░░░ 未开始
@@ -1060,7 +1060,7 @@ N 来自 `RenderConfig.num_wavelengths`，与 Phase 0 AutoConfig 正交。
 | Phase 0 | 3 天 | 无 | 纯新增 |
 | Phase F | 5 天 | Phase 0 | 搬文件+CMake |
 | Phase P | 8 天 | Phase F | 运行时数据管线 |
-| Phase G | 5 天 | Phase F | 与 H/P 可并行 |
+| Phase G | 6 天 | Phase F | 与 H/P 可并行 (含审计修复 + 测试) |
 | Phase H | 4 天 | Phase F | 与 G/P 可并行 |
 | Phase Dx | 6.5 天 | Phase F+H | 诊断系统，与 G/H/I/P 可并行；仅限光学模块 |
 | Phase I | 4 天 | Phase G+H | 与 P 可并行 |

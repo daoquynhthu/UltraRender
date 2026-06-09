@@ -1,54 +1,120 @@
 #include "ure/config.hpp"
-#include <cstring>
-#include <cstdlib>
+#include <CLI11/CLI11.hpp>
+#include <nlohmann/json.hpp>
+#include <fstream>
+#include <iostream>
 
 namespace ure::config {
 
-std::optional<RenderConfig> load_config(const std::string& path) {
-    // TODO: Phase I — real JSON config parser
-    (void)path;
-    return std::nullopt; // Not implemented yet
-}
+using json = nlohmann::json;
 
-RenderConfig parse_cli(int argc, char** argv, const RenderConfig& base) {
-    RenderConfig cfg = base;
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        auto next = [&]() -> std::string {
-            if (i + 1 < argc) return argv[++i];
-            return "";
-        };
-        if (arg == "-s" || arg == "--spp") {
-            cfg.spp = std::stoi(next());
-        } else if (arg == "-o" || arg == "--output") {
-            cfg.output_path = next();
-        } else if (arg == "--width") {
-            cfg.width = std::stoi(next());
-        } else if (arg == "--height") {
-            cfg.height = std::stoi(next());
-        } else if (arg == "--scene") {
-            cfg.scene_path = next();
-        } else if (arg == "--fov") {
-            cfg.fov = std::stof(next());
-        } else if (arg == "--physics") {
-            cfg.physics_enabled = true;
-        } else if (arg == "--audio") {
-            cfg.enable_audio = true;
-        } else if (arg == "--cam-pos") {
-            if (i + 3 < argc) {
-                cfg.camera_pos.x = std::stof(argv[++i]);
-                cfg.camera_pos.y = std::stof(argv[++i]);
-                cfg.camera_pos.z = std::stof(argv[++i]);
-            }
-        } else if (arg == "--cam-look") {
-            if (i + 3 < argc) {
-                cfg.camera_look.x = std::stof(argv[++i]);
-                cfg.camera_look.y = std::stof(argv[++i]);
-                cfg.camera_look.z = std::stof(argv[++i]);
-            }
+RenderConfig load_config(const std::string& path) {
+    RenderConfig cfg;
+    std::ifstream f(path);
+    if (!f.is_open()) {
+        std::cerr << "[config] Warning: could not open '" << path << "', using defaults.\n";
+        return cfg;
+    }
+    try {
+        json j;
+        f >> j;
+        if (j.contains("spectral")) {
+            auto& s = j["spectral"];
+            if (s.contains("bands")) cfg.spectral.bands = s["bands"].get<int>();
+            if (s.contains("spd_search_paths"))
+                cfg.spectral.spd_search_paths = s["spd_search_paths"].get<std::vector<std::string>>();
         }
+        if (j.contains("renderer")) {
+            auto& r = j["renderer"];
+            if (r.contains("max_depth")) cfg.renderer.max_depth = r["max_depth"].get<int>();
+            if (r.contains("rr_min_prob")) cfg.renderer.rr_min_prob = r["rr_min_prob"].get<double>();
+            if (r.contains("spp")) cfg.renderer.spp = r["spp"].get<int>();
+        }
+        if (j.contains("output")) {
+            auto& o = j["output"];
+            if (o.contains("file")) cfg.output.file = o["file"].get<std::string>();
+            if (o.contains("tonemap")) cfg.output.tonemap = o["tonemap"].get<std::string>();
+            if (o.contains("format")) cfg.output.format = o["format"].get<std::string>();
+        }
+        if (j.contains("gpu")) {
+            auto& g = j["gpu"];
+            if (g.contains("device_ids"))
+                cfg.gpu.device_ids = g["device_ids"].get<std::vector<int>>();
+            if (g.contains("wavefront_capacity"))
+                cfg.gpu.wavefront_capacity = g["wavefront_capacity"].get<int>();
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[config] JSON parse error in '" << path << "': " << e.what() << "\n";
     }
     return cfg;
+}
+
+CliResult parse_cli(int argc, char** argv) {
+    CliResult result;
+    CLI::App app{"UltraRender Engine - GPU Path Tracer"};
+    app.require_subcommand(1);
+
+    bool verbose = false, quiet = false;
+    app.add_flag("-v,--verbose", verbose, "Verbose output (Debug level)");
+    app.add_flag("-q,--quiet", quiet, "Quiet output (Error+ only)");
+
+    auto* render_cmd = app.add_subcommand("render", "Render a scene file");
+    std::string scene_render, config_render, output_render;
+    int spp_render = 0, width_render = 0, height_render = 0;
+    bool physics = false, audio = false;
+    render_cmd->add_option("scene", scene_render, "Path to scene file (glTF)")->required();
+    render_cmd->add_option("-c,--config", config_render, "Path to JSON config file");
+    render_cmd->add_option("--spp", spp_render, "Samples per pixel");
+    render_cmd->add_option("--width", width_render, "Render width");
+    render_cmd->add_option("--height", height_render, "Render height");
+    render_cmd->add_option("-o,--output", output_render, "Output image path");
+    render_cmd->add_flag("--physics", physics, "Enable physics simulation");
+    render_cmd->add_flag("--audio", audio, "Enable audio rendering");
+
+    auto* info_cmd = app.add_subcommand("info", "Print scene information");
+    std::string scene_info;
+    info_cmd->add_option("scene", scene_info, "Path to scene file")->required();
+
+    app.add_subcommand("list-devices", "List available CUDA devices");
+
+    auto* validate_cmd = app.add_subcommand("validate", "Validate a scene file");
+    std::string scene_validate;
+    validate_cmd->add_option("scene", scene_validate, "Path to scene file")->required();
+
+    try {
+        app.parse(argc, argv);
+    } catch (const CLI::ParseError& e) {
+        std::exit(app.exit(e));
+    }
+
+    result.verbose = verbose;
+    result.quiet = quiet;
+
+    if (*render_cmd) {
+        result.command = CliCommand::Render;
+        result.scene_path = scene_render;
+        result.config_path = config_render;
+        RenderConfig cfg;
+        if (!config_render.empty())
+            cfg = load_config(config_render);
+        if (spp_render > 0) cfg.renderer.spp = spp_render;
+        if (width_render > 0) cfg.width = width_render;
+        if (height_render > 0) cfg.height = height_render;
+        if (!output_render.empty()) cfg.output.file = output_render;
+        cfg.physics_enabled = physics;
+        cfg.enable_audio = audio;
+        cfg.scene_path = scene_render;
+        result.config = cfg;
+    } else if (*info_cmd) {
+        result.command = CliCommand::Info;
+        result.scene_path = scene_info;
+    } else if (*validate_cmd) {
+        result.command = CliCommand::Validate;
+        result.scene_path = scene_validate;
+    } else {
+        result.command = CliCommand::ListDevices;
+    }
+    return result;
 }
 
 } // namespace ure::config

@@ -31,8 +31,8 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | P (Data Pipeline) | Done | Instance desc/transform split, RingBuffer, World/ECS, ISpatialQuery, public API |
 | H (Asset Pipeline) | Done | stb_image (BMP→stbi_loadf), SPD loader (`SPDData`/`load_spd_file`/`resample_uniform`), 6 tests |
 | Dx (Diagnostics) | Done | `ure_diag` unified logging, CUDA error abstraction, RAII timer, ~73 站点迁移 |
-| G (glTF) | Done | normalTexture + tangent generation, camera parsing, URE_spectral_material extension, non-glTF fallback |
-| I (Config) | Not started | JSON + CLI11 + --verbose/--quiet |
+| G (glTF) | Done | normalTexture + tangent generation, camera parsing, URE_spectral_material extension, non-glTF fallback; audit fix (5 gaps), comprehensive tests (11 host + 3 GPU) |
+| I (Config) | Done | JSON config, CLI11 subcommands (render/info/list-devices/validate), override chain |
 | A (SoA Queue) | Not started | Dynamic N wavelengths from RenderConfig |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
@@ -115,8 +115,9 @@ E:\Render Engine\
 │   ├── ure_diag/                    # Diagnostics (STATIC, Phase Dx completed)
 │   │   ├── include/ure/             # log.hpp, log_sink.hpp, check_cuda.hpp, timer.hpp
 │   │   └── src/log.cpp              # Global state + sink routing
-│   ├── ure_config/                  # Config (STATIC, pure C++, planned Phase I)
-│   │   └── include/ure/             # config.hpp
+│   ├── ure_config/                  # Config (STATIC, pure C++, Phase I done)
+│   │   ├── include/ure/             # config.hpp (RenderConfig, CliCommand, parse_cli, load_config)
+│   │   └── src/config_impl.cpp      # JSON parser (nlohmann) + CLI11 subcommands
 │   └── ure_physics/                 # Physics/Acoustic (STATIC, pure C++, optional)
 │       └── include/ure/physics/     # physics_world.hpp, acoustic/...
 │
@@ -126,19 +127,21 @@ E:\Render Engine\
 ├── tests/
 │   ├── host/                        # Host tests (pure C++)
 │   │   ├── test_world.cpp           #   39 tests (world/ECS)
-│   │   └── test_asset_pipeline.cpp  #   42 tests (BMP, SPD, missing texture)
-│   └── gpu/                         # GPU tests (CUDA, 183 total, 6 files)
+│   │   ├── test_asset_pipeline.cpp  #   42 tests (BMP, SPD, missing texture)
+│   │   └── test_gltf_frontend.cpp   #   55 checks (11 test cases, Phase G coverage)
+│   └── gpu/                         # GPU tests (CUDA, 204+ total, 7 files)
 │       ├── test_device.cu           # Device query & properties
 │       ├── test_hardware.cu         # Hardware config + auto_configure
 │       ├── test_math_functions.cu   # GPU math correctness
 │       ├── test_spectral_pipeline.cu# Spectral sampling + RGB conversion
 │       ├── test_render_basic.cu     # Basic rendering pipeline
-│       └── test_instance_hotupdate.cu# Transform hot-update
+│       ├── test_instance_hotupdate.cu# Transform hot-update
+│       └── test_gpu_tangents.cu    #   21 checks (tangent upload, null fallback)
 │
 ├── third_party/
 │   ├── stb/stb_image.h              # v2.30, header-only (no stb_image_write)
-│   ├── CLI11/CLI11.hpp              # (not yet downloaded)
-│   └── nlohmann/json.hpp            # (not yet downloaded)
+│   ├── CLI11/CLI11.hpp              # CLI11 v2.x (header-only)
+│   └── nlohmann/json.hpp            # nlohmann/json v3.x (header-only)
 │
 ├── scenes/                          # Scene files (.gltf, .glb, .scene legacy)
 ├── cmake/                           # CMake modules (UltraRenderConfig.cmake.in)
@@ -168,6 +171,7 @@ cmake --build build_modular --config Release
 # Run host tests
 & "E:\Render Engine\build_modular\tests\host\Release\test_world.exe"
 & "E:\Render Engine\build_modular\tests\host\Release\test_asset_pipeline.exe"
+& "E:\Render Engine\build_modular\tests\host\Release\test_gltf_frontend.exe"
 
 # Run GPU tests
 & "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_device.exe"
@@ -176,6 +180,15 @@ cmake --build build_modular --config Release
 & "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_spectral.exe"
 & "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_render.exe"
 & "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_instance.exe"
+& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_tangents.exe"
+
+# Build+run a single host test (RelWithDebInfo, faster than Debug)
+cmake --build build_modular --config RelWithDebInfo --target test_gltf_frontend
+& "E:\Render Engine\build_modular\tests\host\RelWithDebInfo\test_gltf_frontend.exe"
+
+# Build+run a single GPU test
+cmake --build build_modular --config RelWithDebInfo --target gpu_test_tangents
+& "E:\Render Engine\build_modular\tests\gpu\RelWithDebInfo\gpu_test_tangents.exe"
 ```
 
 ### Current Test Inventory
@@ -189,7 +202,9 @@ cmake --build build_modular --config Release
 | GPU (Spectral) | ~30 | `tests/gpu/test_spectral_pipeline.cu` | Direct EXE |
 | GPU (Render) | ~30 | `tests/gpu/test_render_basic.cu` | Direct EXE |
 | GPU (Hot-Update) | ~33 | `tests/gpu/test_instance_hotupdate.cu` | Direct EXE |
-| **Total** | **~228** | | |
+| Host (glTF Frontend) | 55 | `tests/host/test_gltf_frontend.cpp` | Direct EXE |
+| GPU (Tangents) | 21 | `tests/gpu/test_gpu_tangents.cu` | Direct EXE |
+| **Total** | **~340** | | |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -346,3 +361,5 @@ cmake --build build_modular --config Release --target gpu_test_hardware
 | 1 | 2026-06-09 Dx | Phase Dx 收尾：migrate scene_factory.cpp (6处) + obj_loader.cpp (2处) | 264 tests all pass; 所有 std::cout/cerr 已清除或确认为进度条(Dx.7)/声学物理(范围外)/注释代码 |
 | 2 | 2026-06-09 Cleanup | 迁移 GPU test includes (3 files) + CMakeLists.txt 移除旧 include/ 路径; 删除旧目录 include/ src/ tests/{unit,integration} 和遗留 CMake 构建块 | 264 tests all pass; 项目完全脱离旧 monolithic 架构 |
 | 3 | 2026-06-09 Phase G | Phase G audit: 修正 URE_spectral_material 匹配 PLAN 规范 (SpectralMaterialExtension), extensionsUsed/Required 校验, tangent GPU 上传管线 (4 处) | 8 files, 92 insertions; 185 tests all pass |
+| 4 | 2026-06-09 Phase G Tests | 编写全方位 Phase G 测试: host (11 cases, 55 checks) + GPU (3 cases, 21 checks); 修复 JSON 数组未闭合 bug; 全局 CMAKE_CUDA_FLAGS + /wd4819 消除 C4819 警告 | 2 test files + 2 CMakeLists.txt + 1 root CMakeLists.txt; host + GPU 全部通过 |
+| 5 | 2026-06-09 Phase I | 配置系统: 下载 CLI11+json.hpp → third_party; 实现 JSON 四段配置(spectral/renderer/output/gpu); CLI11 子命令(render/info/list-devices/validate); 覆盖链(CLI > JSON > defaults); 重构 main.cpp 为 subcommand dispatch | 340 tests all pass; ure_config CMakeLists 链接 third_party; 保留完整 physics demo loop; `ure_cli list-devices` 输出 RTX 5060 Laptop GPU CC 12.0 8150 MB |

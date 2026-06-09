@@ -41,8 +41,14 @@ if(CMAKE_CUDA_COMPILER)
     target_include_directories(gpu_test_instance PRIVATE ${GPU_TEST_INCLUDES})
     target_link_libraries(gpu_test_instance PRIVATE ure_core)
 
+    add_executable(gpu_test_tangents
+        test_gpu_tangents.cu
+    )
+    target_include_directories(gpu_test_tangents PRIVATE ${GPU_TEST_INCLUDES})
+    target_link_libraries(gpu_test_tangents PRIVATE ure_core)
+
     if(MSVC)
-        foreach(gpu_test gpu_test_device gpu_test_math gpu_test_spectral gpu_test_hardware gpu_test_render gpu_test_instance)
+        foreach(gpu_test gpu_test_device gpu_test_math gpu_test_spectral gpu_test_hardware gpu_test_render gpu_test_instance gpu_test_tangents)
             target_compile_options(${gpu_test} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/EHsc;/utf-8;/wd4819>")
         endforeach()
     endif()
@@ -54,7 +60,8 @@ if(CMAKE_CUDA_COMPILER)
         COMMAND gpu_test_hardware
         COMMAND gpu_test_render
         COMMAND gpu_test_instance
-        DEPENDS gpu_test_device gpu_test_math gpu_test_spectral gpu_test_hardware gpu_test_render gpu_test_instance
+        COMMAND gpu_test_tangents
+        DEPENDS gpu_test_device gpu_test_math gpu_test_spectral gpu_test_hardware gpu_test_render gpu_test_instance gpu_test_tangents
         COMMENT "Running all GPU tests"
     )
 endif()

@@ -6,6 +6,8 @@
 #include <iomanip>
 #include <sstream>
 
+#include <cuda_runtime.h>
+
 #include <ure/log.hpp>
 
 #include "ure/core/vector.hpp"
@@ -51,37 +53,20 @@ struct DynamicBody {
 };
 
 // ================================================================
+//  Render subcommand
+// ================================================================
+static int cmd_render(const ure::config::CliResult& cli) {
+    const auto& cfg = cli.config;
 
-int main(int argc, char* argv[]) {
-    srand(static_cast<unsigned int>(time(0)));
-    std::cout << "========================================\n"
-              << "   UltraRender Engine - Modular MVP\n"
-              << "========================================\n";
-
-    // 1. Parse arguments via public API
-    ure::config::RenderConfig cfg;
-    if (argc > 1) {
-        cfg = ure::config::parse_cli(argc, argv);
-    }
     bool enable_physics = cfg.physics_enabled;
     std::string scene_path = cfg.scene_path.empty() ? "procedural_demo" : cfg.scene_path;
-    int cli_spp = cfg.spp;
+    int cli_spp = cfg.renderer.spp;
     int cli_width = cfg.width;
     int cli_height = cfg.height;
-    std::string output_filename_override = cfg.output_path;
-    std::string output_dir_str;
+    std::string output_filename_override = cfg.output.file;
 
-    // Legacy fallback: positional arg as scene path
-    bool verbose = false, quiet = false;
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg == "--verbose" || arg == "-v") verbose = true;
-        if (arg == "--quiet"   || arg == "-q") quiet = true;
-        if (arg[0] != '-' && scene_path == "procedural_demo")
-            scene_path = arg;
-        if ((arg == "-d" || arg == "--output-dir") && i + 1 < argc)
-            output_dir_str = argv[++i];
-    }
+    // Legacy fallback: positional arg as scene path (handled by CLI11 now)
+    bool verbose = cli.verbose, quiet = cli.quiet;
     if (verbose)       ure::log::set_min_level(ure::log::Level::Debug);
     else if (quiet)    ure::log::set_min_level(ure::log::Level::Error);
     else               ure::log::set_min_level(ure::log::Level::Info);
@@ -379,9 +364,9 @@ int main(int argc, char* argv[]) {
     UR_LOG_INFO(CLI, "Starting: {}x{} @ {} SPP", scene.width, scene.height, spp);
 
     std::filesystem::path output_dir;
-    if (!output_dir_str.empty()) {
-        output_dir = output_dir_str;
-    } else if (enable_physics && std::filesystem::exists(scene_path)) {
+    std::string output_dir_str;
+    // check for -d/--output-dir is no longer directly parsed; use default
+    if (enable_physics && std::filesystem::exists(scene_path)) {
         output_dir = std::filesystem::current_path() / "output" / std::filesystem::path(scene_path).stem().string();
     } else {
         output_dir = std::filesystem::current_path() / "output";
@@ -474,12 +459,10 @@ int main(int argc, char* argv[]) {
 
             // 5. Upload to GPU
             if (has_fluid && fluid_changed) {
-                // Fluid mesh changed: need full scene reload
                 UR_LOG_INFO(GPU, "Full scene reload (fluid mesh changed)...");
                 Scene updated_scene = WorldSceneBuilder::build_scene(world);
                 engine->load_scene(updated_scene);
             } else {
-                // Hot-update: only transforms
                 WorldSceneBuilder::build_transforms(world, transforms);
                 engine->update_transforms(transforms.data(), (int)transforms.size());
             }
@@ -528,5 +511,113 @@ int main(int argc, char* argv[]) {
     }
     UR_LOG_INFO(CLI, "Render Finished!");
     UR_LOG_INFO(CLI, "Output: {}", output_path);
+    return 0;
+}
+
+// ================================================================
+//  Info subcommand
+// ================================================================
+static int cmd_info(const std::string& scene_path) {
+    if (!std::filesystem::exists(scene_path)) {
+        std::cerr << "Error: file not found: " << scene_path << "\n";
+        return 1;
+    }
+    try {
+        auto ir = SceneParser::parse_file_to_ir(scene_path);
+        std::cout << "Scene: " << scene_path << "\n";
+        std::cout << "  Meshes:     " << ir.meshes.size() << "\n";
+        std::cout << "  Materials:  " << ir.materials.size() << "\n";
+        std::cout << "  Instances:  " << ir.instances.size() << "\n";
+        std::cout << "  Spheres:    " << ir.spheres.size() << "\n";
+        std::cout << "  Textures:   " << ir.textures.size() << "\n";
+        std::cout << "  Images:     " << ir.images.size() << "\n";
+        std::cout << "  Width:      " << ir.width << "\n";
+        std::cout << "  Height:     " << ir.height << "\n";
+        std::cout << "  SPP:        " << ir.spp << "\n";
+        std::cout << "  Physics:    " << (ir.physics.enabled ? "enabled" : "disabled") << "\n";
+    } catch (const std::exception& e) {
+        std::cerr << "Error parsing scene: " << e.what() << "\n";
+        return 1;
+    }
+    return 0;
+}
+
+// ================================================================
+//  List-Devices subcommand
+// ================================================================
+static int cmd_list_devices() {
+    int count = 0;
+    auto err = cudaGetDeviceCount(&count);
+    if (err != cudaSuccess) {
+        std::cerr << "CUDA error: " << cudaGetErrorString(err) << "\n";
+        return 1;
+    }
+    std::cout << "Found " << count << " CUDA device(s):\n";
+    for (int i = 0; i < count; ++i) {
+        cudaDeviceProp props{};
+        if (cudaGetDeviceProperties(&props, i) == cudaSuccess) {
+            std::cout << "  [" << i << "] " << props.name
+                      << "  CC " << props.major << "." << props.minor
+                      << "  " << (props.totalGlobalMem >> 20) << " MB\n";
+        }
+    }
+    return 0;
+}
+
+// ================================================================
+//  Validate subcommand
+// ================================================================
+static int cmd_validate(const std::string& scene_path) {
+    if (!std::filesystem::exists(scene_path)) {
+        std::cerr << "Error: file not found: " << scene_path << "\n";
+        return 1;
+    }
+    try {
+        auto ir = SceneParser::parse_file_to_ir(scene_path);
+        std::cout << "Valid: " << scene_path << "\n";
+        std::cout << "  " << ir.meshes.size() << " meshes, "
+                  << ir.materials.size() << " materials, "
+                  << ir.instances.size() << " instances, "
+                  << ir.spheres.size() << " spheres\n";
+        bool ok = true;
+        for (size_t i = 0; i < ir.meshes.size(); ++i) {
+            auto& m = ir.meshes[i];
+            if (!m->mesh || m->mesh->vertices.empty()) {
+                std::cerr << "  Warning: mesh " << i << " (" << m->name << ") has no positions\n";
+                ok = false;
+            }
+        }
+        if (ok) std::cout << "  No issues found.\n";
+        return ok ? 0 : 1;
+    } catch (const std::exception& e) {
+        std::cerr << "Validation FAILED: " << e.what() << "\n";
+        return 1;
+    }
+}
+
+// ================================================================
+
+int main(int argc, char* argv[]) {
+    srand(static_cast<unsigned int>(time(0)));
+    auto cli = ure::config::parse_cli(argc, argv);
+
+    ure::log::set_min_level(
+        cli.verbose ? ure::log::Level::Debug :
+        cli.quiet   ? ure::log::Level::Error :
+                      ure::log::Level::Info);
+
+    switch (cli.command) {
+        case ure::config::CliCommand::Render:
+            std::cout << "========================================\n"
+                      << "   UltraRender Engine - Modular MVP\n"
+                      << "========================================\n";
+            return cmd_render(cli);
+        case ure::config::CliCommand::Info:
+            return cmd_info(cli.scene_path);
+        case ure::config::CliCommand::ListDevices:
+            return cmd_list_devices();
+        case ure::config::CliCommand::Validate:
+            return cmd_validate(cli.scene_path);
+    }
     return 0;
 }

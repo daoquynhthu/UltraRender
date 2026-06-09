@@ -6,6 +6,11 @@ target_include_directories(ure_config PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
+
+target_include_directories(ure_config PRIVATE
+    ${CMAKE_SOURCE_DIR}/third_party
+)
+
 target_link_libraries(ure_config PUBLIC ure_types ure_diag)
 
 if(MSVC)
