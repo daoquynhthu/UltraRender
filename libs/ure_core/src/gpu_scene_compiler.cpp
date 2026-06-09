@@ -8,24 +8,24 @@ namespace ure {
 
 namespace {
 
-ure::gpu::GpuVec3 to_gpu_vec3(const Vec3& v) {
+ure::gpu::GpuVec3 to_gpu_vec3(const core::Vec3f& v) {
     return ure::gpu::GpuVec3(v.x, v.y, v.z);
 }
 
 ure::gpu::GpuMaterial compile_material_node(scene_ir::MaterialModel model,
-                                            const Vec3& albedo,
-                                            const Vec3& emission,
+                                            const core::Vec3f& albedo,
+                                            const core::Vec3f& emission,
                                             float roughness,
                                             float ior,
-                                            const Vec3& metal_eta,
+                                            const core::Vec3f& metal_eta,
                                             float dispersion,
                                             float thin_film_thickness,
                                             float thin_film_ior,
                                             float medium_density,
                                             float medium_anisotropy,
-                                            const Vec3& medium_scattering,
-                                            const Vec3& medium_absorption,
-                                            const Vec3& extinction,
+                                            const core::Vec3f& medium_scattering,
+                                            const core::Vec3f& medium_absorption,
+                                            const core::Vec3f& extinction,
                                             int texture_index = -1,
                                             int roughness_texture_index = -1,
                                             int emission_texture_index = -1) {
@@ -143,30 +143,15 @@ ure::gpu::GpuMaterial compile_material(const std::shared_ptr<scene_ir::MaterialN
                                  emission_texture_index);
 }
 
-void compile_transform(const Vec3& position,
-                       const Vec3& scale,
-                       const Vec3& rotation,
+void compile_transform(const core::Vec3f& position,
+                       const core::Vec3f& scale,
+                       const core::Quat& rotation,
                        ure::gpu::GpuInstance& inst) {
-    float rx = rotation.x * 3.14159f / 180.0f;
-    float ry = rotation.y * 3.14159f / 180.0f;
-    float rz = rotation.z * 3.14159f / 180.0f;
-    float cx = cos(rx), sx = sin(rx);
-    float cy = cos(ry), sy = sin(ry);
-    float cz = cos(rz), sz = sin(rz);
+    core::Matrix4x4f rot_mat = rotation.to_matrix();
 
-    auto compute_rot = [&](float x, float y, float z) {
-        float y1 = y * cx - z * sx;
-        float z1 = y * sx + z * cx;
-        float x2 = x * cy + z1 * sy;
-        float z2 = -x * sy + z1 * cy;
-        float x3 = x2 * cz - y1 * sz;
-        float y3 = x2 * sz + y1 * cz;
-        return ure::gpu::GpuVec3(x3, y3, z2);
-    };
-
-    ure::gpu::GpuVec3 r0 = compute_rot(1, 0, 0);
-    ure::gpu::GpuVec3 r1 = compute_rot(0, 1, 0);
-    ure::gpu::GpuVec3 r2 = compute_rot(0, 0, 1);
+    ure::gpu::GpuVec3 r0 = {rot_mat.m[0][0], rot_mat.m[1][0], rot_mat.m[2][0]};
+    ure::gpu::GpuVec3 r1 = {rot_mat.m[0][1], rot_mat.m[1][1], rot_mat.m[2][1]};
+    ure::gpu::GpuVec3 r2 = {rot_mat.m[0][2], rot_mat.m[1][2], rot_mat.m[2][2]};
 
     inst.transform.m[0][0] = r0.x * scale.x; inst.transform.m[0][1] = r1.x * scale.y; inst.transform.m[0][2] = r2.x * scale.z; inst.transform.m[0][3] = position.x;
     inst.transform.m[1][0] = r0.y * scale.x; inst.transform.m[1][1] = r1.y * scale.y; inst.transform.m[1][2] = r2.y * scale.z; inst.transform.m[1][3] = position.y;
@@ -267,8 +252,8 @@ CompiledGpuScene GpuSceneCompiler::compile_legacy(const Scene& scene) {
                 mesh.normals.push_back(v.normal.x);
                 mesh.normals.push_back(v.normal.y);
                 mesh.normals.push_back(v.normal.z);
-                mesh.uvs.push_back(v.uv.u);
-                mesh.uvs.push_back(v.uv.v);
+                mesh.uvs.push_back(v.uv.x);
+                mesh.uvs.push_back(v.uv.y);
             }
             mesh.indices = entity.mesh->indices;
             mesh.material_index = -1;
@@ -360,8 +345,8 @@ CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir) {
                 mesh.normals.push_back(v.normal.x);
                 mesh.normals.push_back(v.normal.y);
                 mesh.normals.push_back(v.normal.z);
-                mesh.uvs.push_back(v.uv.u);
-                mesh.uvs.push_back(v.uv.v);
+                mesh.uvs.push_back(v.uv.x);
+                mesh.uvs.push_back(v.uv.y);
             }
             mesh.indices = instance.mesh->mesh->indices;
             mesh.material_index = -1;

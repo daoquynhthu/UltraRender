@@ -262,7 +262,7 @@ struct Mat4 {
         return out;
     }
 
-    static Mat4 translation(const Vec3& t) {
+    static Mat4 translation(const core::Vec3f& t) {
         Mat4 out = identity();
         out.m[12] = t.x;
         out.m[13] = t.y;
@@ -270,7 +270,7 @@ struct Mat4 {
         return out;
     }
 
-    static Mat4 scale(const Vec3& s) {
+    static Mat4 scale(const core::Vec3f& s) {
         Mat4 out = identity();
         out.m[0] = s.x;
         out.m[5] = s.y;
@@ -318,48 +318,49 @@ Mat4 operator*(const Mat4& a, const Mat4& b) {
     return out;
 }
 
-Vec3 normalize_vec3(const Vec3& v) {
+core::Vec3f normalize_vec3(const core::Vec3f& v) {
     float len = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
     if (len <= 1e-8f) return {0, 0, 0};
     return {v.x / len, v.y / len, v.z / len};
 }
 
-void decompose_trs(const Mat4& matrix, Vec3& position, Vec3& scale, Vec3& rotation_deg) {
+void decompose_trs(const Mat4& matrix, core::Vec3f& position, core::Vec3f& scale, core::Quat& rotation) {
     position = {matrix.m[12], matrix.m[13], matrix.m[14]};
 
-    Vec3 col0 = {matrix.m[0], matrix.m[1], matrix.m[2]};
-    Vec3 col1 = {matrix.m[4], matrix.m[5], matrix.m[6]};
-    Vec3 col2 = {matrix.m[8], matrix.m[9], matrix.m[10]};
-
-    auto length = [](const Vec3& v) {
+    auto length = [](const core::Vec3f& v) {
         return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
     };
 
-    scale = {length(col0), length(col1), length(col2)};
+    core::Vec3f r0 = {matrix.m[0], matrix.m[1], matrix.m[2]};
+    core::Vec3f r1 = {matrix.m[4], matrix.m[5], matrix.m[6]};
+    core::Vec3f r2 = {matrix.m[8], matrix.m[9], matrix.m[10]};
+
+    scale.x = length(r0);
+    scale.y = length(r1);
+    scale.z = length(r2);
     if (scale.x <= 1e-8f) scale.x = 1.0f;
     if (scale.y <= 1e-8f) scale.y = 1.0f;
     if (scale.z <= 1e-8f) scale.z = 1.0f;
 
-    col0 = normalize_vec3(col0);
-    col1 = normalize_vec3(col1);
-    col2 = normalize_vec3(col2);
+    r0 = r0 / scale.x;
+    r1 = r1 / scale.y;
+    r2 = r2 / scale.z;
 
-    float sy = std::clamp(col2.x, -1.0f, 1.0f);
-    float ry = std::asin(sy);
-    float cy = std::cos(ry);
-
-    float rx = 0.0f;
-    float rz = 0.0f;
-    if (std::fabs(cy) > 1e-5f) {
-        rx = std::atan2(-col2.y, col2.z);
-        rz = std::atan2(-col1.x, col0.x);
+    // Matrix → quaternion
+    float trace = r0.x + r1.y + r2.z;
+    if (trace > 0.0f) {
+        float s = 0.5f / std::sqrt(trace + 1.0f);
+        rotation = core::Quat(0.25f / s, (r1.z - r2.y) * s, (r2.x - r0.z) * s, (r0.y - r1.x) * s);
+    } else if (r0.x > r1.y && r0.x > r2.z) {
+        float s = 2.0f * std::sqrt(1.0f + r0.x - r1.y - r2.z);
+        rotation = core::Quat((r1.z - r2.y) / s, 0.25f * s, (r0.y + r1.x) / s, (r2.x + r0.z) / s);
+    } else if (r1.y > r2.z) {
+        float s = 2.0f * std::sqrt(1.0f + r1.y - r0.x - r2.z);
+        rotation = core::Quat((r2.x - r0.z) / s, (r0.y + r1.x) / s, 0.25f * s, (r1.z + r2.y) / s);
     } else {
-        rx = std::atan2(col1.z, col1.y);
-        rz = 0.0f;
+        float s = 2.0f * std::sqrt(1.0f + r2.z - r0.x - r1.y);
+        rotation = core::Quat((r0.y - r1.x) / s, (r2.x + r0.z) / s, (r1.z + r2.y) / s, 0.25f * s);
     }
-
-    constexpr float radians_to_degrees = 57.2957795f;
-    rotation_deg = {rx * radians_to_degrees, ry * radians_to_degrees, rz * radians_to_degrees};
 }
 
 class MinimalGltfFrontend {
@@ -475,8 +476,8 @@ private:
             return Mat4::from_array(matrix_values);
         }
 
-        Vec3 translation = {0, 0, 0};
-        Vec3 scale = {1, 1, 1};
+        core::Vec3f translation = {0, 0, 0};
+        core::Vec3f scale = {1, 1, 1};
         auto translation_values = get_number_array(node, "translation");
         if (translation_values.size() >= 3) translation = {translation_values[0], translation_values[1], translation_values[2]};
         auto scale_values = get_number_array(node, "scale");
@@ -558,11 +559,11 @@ private:
         for (int i = 0; i < vertex_count; ++i) {
             mesh->vertices[i].position = {positions[i * 3 + 0], positions[i * 3 + 1], positions[i * 3 + 2]};
             mesh->vertices[i].normal = normals.size() >= static_cast<std::size_t>((i + 1) * 3)
-                ? Vec3{normals[i * 3 + 0], normals[i * 3 + 1], normals[i * 3 + 2]}
-                : Vec3{0.0f, 0.0f, 1.0f};
+                ? core::Vec3f{normals[i * 3 + 0], normals[i * 3 + 1], normals[i * 3 + 2]}
+                : core::Vec3f{0.0f, 0.0f, 1.0f};
             mesh->vertices[i].uv = uvs.size() >= static_cast<std::size_t>((i + 1) * 2)
-                ? Vec2{uvs[i * 2 + 0], uvs[i * 2 + 1]}
-                : Vec2{0.0f, 0.0f};
+                ? core::Vec2f{uvs[i * 2 + 0], uvs[i * 2 + 1]}
+                : core::Vec2f{0.0f, 0.0f};
         }
         mesh->indices = std::move(indices);
         return mesh;

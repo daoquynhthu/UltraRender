@@ -10,15 +10,15 @@ namespace ure {
 class SceneBuilder {
 public:
     SceneBuilder& add_entity(std::shared_ptr<Mesh> mesh, std::shared_ptr<Material> mat, 
-                            Vec3 pos = {0,0,0}, Vec3 scale = {1,1,1}, Vec3 rot = {0,0,0},
+                            core::Vec3f pos = {0,0,0}, core::Vec3f scale = {1,1,1}, core::Quat rot = {},
                             RigidBodyConfig rb_config = {});
     
-    SceneBuilder& add_sphere(Vec3 center, float radius, std::shared_ptr<Material> mat, RigidBodyConfig rb_config = {});
+    SceneBuilder& add_sphere(core::Vec3f center, float radius, std::shared_ptr<Material> mat, RigidBodyConfig rb_config = {});
 
-    SceneBuilder& set_camera(Vec3 pos, Vec3 look_at, float fov);
+    SceneBuilder& set_camera(core::Vec3f pos, core::Vec3f look_at, float fov);
     SceneBuilder& set_resolution(int width, int height);
     SceneBuilder& set_spp(int spp);
-    SceneBuilder& set_medium(float density, Vec3 scattering, Vec3 absorption, float max_dist, float anisotropy = 0.0f);
+    SceneBuilder& set_medium(float density, core::Vec3f scattering, core::Vec3f absorption, float max_dist, float anisotropy = 0.0f);
     
     // Physics
     SceneBuilder& set_physics_enabled(bool enabled, float dt = 1.0f/60.0f, int frames = 180, int spp_per_frame = 32);

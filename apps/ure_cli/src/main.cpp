@@ -52,6 +52,18 @@ ure::core::Vec3<float> quat_to_euler(const ure::core::Quat& q) {
     return euler;
 }
 
+// Euler degrees → quaternion (legacy scene compatibility)
+static core::Quat euler_to_quat(float x, float y, float z) {
+    constexpr float PI = 3.14159265359f;
+    float cx = std::cos(x * 0.5f * PI / 180.0f);
+    float sx = std::sin(x * 0.5f * PI / 180.0f);
+    float cy = std::cos(y * 0.5f * PI / 180.0f);
+    float sy = std::sin(y * 0.5f * PI / 180.0f);
+    float cz = std::cos(z * 0.5f * PI / 180.0f);
+    float sz = std::sin(z * 0.5f * PI / 180.0f);
+    return {cx*cy*cz + sx*sy*sz, sx*cy*cz - cx*sy*sz, cx*sy*cz + sx*cy*sz, cx*cy*sz - sx*sy*cz};
+}
+
 // Helper to convert Euler Angles (Degrees) to Quaternion
 ure::core::Quat euler_to_quat(const ure::core::Vec3<float>& euler) {
     const float PI = 3.14159265359f;
@@ -253,7 +265,7 @@ int main(int argc, char* argv[]) {
                      fluid_ent.mesh = mesh_fluid;
                      fluid_ent.material = mat_fluid;
                      fluid_ent.scale = {1,1,1};
-                     fluid_ent.position = {0,0,0};
+                     fluid_ent.position = {};
                      
                      scene.entities.push_back(fluid_ent);
                      fluid_entity_index = (int)scene.entities.size() - 1;
@@ -545,37 +557,37 @@ int main(int argc, char* argv[]) {
         mat_light->emission = {20.0f, 20.0f, 20.0f};
 
         // Visual Floor (Entity 0)
-        builder.add_entity(mesh_quad, mat_floor, {0, -1.05f, 0}, {20, 1, 20}, {0, 0, 0});
+        builder.add_entity(mesh_quad, mat_floor, {0, -1.05f, 0}, {20, 1, 20}, {});
         
         // Visual Cup Walls (Entities 1-5)
         // Bottom
-        builder.add_entity(mesh_cube, mat_glass, {0, -1.05f, 0}, {2.2f, 0.1f, 2.2f}, {0,0,0});
+        builder.add_entity(mesh_cube, mat_glass, {0, -1.05f, 0}, {2.2f, 0.1f, 2.2f}, {});
         // Left
-        builder.add_entity(mesh_cube, mat_glass, {-1.05f, 0, 0}, {0.1f, 2.0f, 2.2f}, {0,0,0});
+        builder.add_entity(mesh_cube, mat_glass, {-1.05f, 0, 0}, {0.1f, 2.0f, 2.2f}, {});
         // Right
-        builder.add_entity(mesh_cube, mat_glass, {1.05f, 0, 0}, {0.1f, 2.0f, 2.2f}, {0,0,0});
+        builder.add_entity(mesh_cube, mat_glass, {1.05f, 0, 0}, {0.1f, 2.0f, 2.2f}, {});
         // Front
-        builder.add_entity(mesh_cube, mat_glass, {0, 0, 1.05f}, {2.0f, 2.0f, 0.1f}, {0,0,0});
+        builder.add_entity(mesh_cube, mat_glass, {0, 0, 1.05f}, {2.0f, 2.0f, 0.1f}, {});
         // Back
-        builder.add_entity(mesh_cube, mat_glass, {0, 0, -1.05f}, {2.0f, 2.0f, 0.1f}, {0,0,0});
+        builder.add_entity(mesh_cube, mat_glass, {0, 0, -1.05f}, {2.0f, 2.0f, 0.1f}, {});
 
         // Visual Box (Entity 6) -> Needs scaling to 0.6 (0.3 extents)
-        ure::Vec3 box_pos(box_body->position.x, box_body->position.y, box_body->position.z);
-        builder.add_entity(mesh_cube, mat_box, box_pos, {0.6f, 0.6f, 0.6f}, {0, 0, 0});
+        ure::core::Vec3f box_pos(box_body->position.x, box_body->position.y, box_body->position.z);
+        builder.add_entity(mesh_cube, mat_box, box_pos, {0.6f, 0.6f, 0.6f}, {});
 
         // Visual Sphere 1 (Entity 7)
-        ure::Vec3 s1_pos(sphere1_body->position.x, sphere1_body->position.y, sphere1_body->position.z);
-        builder.add_entity(mesh_sphere, mat_sphere1, s1_pos, {1, 1, 1}, {0, 0, 0});
+        ure::core::Vec3f s1_pos(sphere1_body->position.x, sphere1_body->position.y, sphere1_body->position.z);
+        builder.add_entity(mesh_sphere, mat_sphere1, s1_pos, {1, 1, 1}, {});
 
         // Visual Sphere 2 (Entity 8)
-        ure::Vec3 s2_pos(sphere2_body->position.x, sphere2_body->position.y, sphere2_body->position.z);
-        builder.add_entity(mesh_sphere, mat_sphere2, s2_pos, {1, 1, 1}, {0, 0, 0});
+        ure::core::Vec3f s2_pos(sphere2_body->position.x, sphere2_body->position.y, sphere2_body->position.z);
+        builder.add_entity(mesh_sphere, mat_sphere2, s2_pos, {1, 1, 1}, {});
         
         // Fluid Entity (Dynamic Index)
         auto mesh_fluid = std::make_shared<Mesh>();
         fluid_entity_index = builder.get_entity_count();
         std::cout << "[Main] Fluid Entity Index assigned: " << fluid_entity_index << std::endl;
-        builder.add_entity(mesh_fluid, water_mat, {0,0,0}, {1,1,1}, {0,0,0});
+        builder.add_entity(mesh_fluid, water_mat, {}, {1,1,1}, {});
 
         // Light (Entity 10)
         builder.add_sphere({0, 10, 0}, 1.0f, mat_light);
@@ -607,20 +619,20 @@ int main(int argc, char* argv[]) {
     
             // 2. Build Scene using Instances
             // Floor
-            builder.add_entity(mesh_quad, mat_floor, {0, -1.0f, 0}, {20, 20, 1}, {-90, 0, 0});
+            builder.add_entity(mesh_quad, mat_floor, {0, -1.0f, 0}, {20, 20, 1}, euler_to_quat(-90, 0, 0));
     
             // Instanced Cubes (Same mesh, different transforms)
             for (int i = -3; i <= 3; ++i) {
                 float x = i * 2.5f;
                 float angle = i * 15.0f;
                 // Alternating materials if desired, but here we test geometry reuse
-                builder.add_entity(mesh_cube, mat_red, {x, 0.0f, 0.0f}, {1, 1, 1}, {0, angle, 0});
+                builder.add_entity(mesh_cube, mat_red, {x, 0.0f, 0.0f}, {1, 1, 1}, euler_to_quat(0, angle, 0));
             }
     
             // Instanced Spheres (Glass)
-            builder.add_entity(mesh_sphere, mat_glass, {0, 1.5f, 3.0f}, {1.5f, 1.5f, 1.5f}, {0, 0, 0});
-            builder.add_entity(mesh_sphere, mat_glass, {-3.0f, 1.0f, 3.0f}, {1.0f, 1.0f, 1.0f}, {0, 0, 0});
-            builder.add_entity(mesh_sphere, mat_glass, {3.0f, 1.0f, 3.0f}, {1.0f, 1.0f, 1.0f}, {0, 0, 0});
+            builder.add_entity(mesh_sphere, mat_glass, {0, 1.5f, 3.0f}, {1.5f, 1.5f, 1.5f}, {});
+            builder.add_entity(mesh_sphere, mat_glass, {-3.0f, 1.0f, 3.0f}, {1.0f, 1.0f, 1.0f}, {});
+            builder.add_entity(mesh_sphere, mat_glass, {3.0f, 1.0f, 3.0f}, {1.0f, 1.0f, 1.0f}, {});
     
             // Light
             builder.add_sphere({0, 8, 0}, 1.0f, mat_light);
@@ -826,8 +838,7 @@ int main(int argc, char* argv[]) {
                             ure::core::Vec3<float> pos = db.body->position;
                             ure::core::Quat rot = db.body->orientation;
                             scene.entities[db.entity_index].position = {pos.x, pos.y, pos.z};
-                            ure::core::Vec3<float> euler = quat_to_euler(rot);
-                            scene.entities[db.entity_index].rotation = {euler.x, euler.y, euler.z};
+                            scene.entities[db.entity_index].rotation = rot;
                         }
                     }
 
@@ -837,22 +848,19 @@ int main(int argc, char* argv[]) {
                         ure::core::Vec3<float> pos_box = box_body->position;
                         ure::core::Quat rot_box = box_body->orientation;
                         scene.entities[6].position = {pos_box.x, pos_box.y, pos_box.z};
-                        ure::core::Vec3<float> euler_box = quat_to_euler(rot_box);
-                        scene.entities[6].rotation = {euler_box.x, euler_box.y, euler_box.z};
+                        scene.entities[6].rotation = rot_box;
 
                         // Update Sphere 1 (Entity 7)
                         ure::core::Vec3<float> pos1 = sphere1_body->position;
                         ure::core::Quat rot1 = sphere1_body->orientation;
                         scene.entities[7].position = {pos1.x, pos1.y, pos1.z};
-                        ure::core::Vec3<float> euler1 = quat_to_euler(rot1);
-                        scene.entities[7].rotation = {euler1.x, euler1.y, euler1.z};
+                        scene.entities[7].rotation = rot1;
 
                         // Update Sphere 2 (Entity 8)
                         ure::core::Vec3<float> pos2 = sphere2_body->position;
                         ure::core::Quat rot2 = sphere2_body->orientation;
                         scene.entities[8].position = {pos2.x, pos2.y, pos2.z};
-                        ure::core::Vec3<float> euler2 = quat_to_euler(rot2);
-                        scene.entities[8].rotation = {euler2.x, euler2.y, euler2.z};
+                        scene.entities[8].rotation = rot2;
                     }
                     
                     // 3. Update Scene in Engine

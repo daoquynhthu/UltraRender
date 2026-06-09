@@ -117,8 +117,8 @@ public:
 
 private:
     void parse_camera(std::stringstream& ss) {
-        Vec3 pos = {0, 0, 10};
-        Vec3 lookat = {0, 0, 0};
+        core::Vec3f pos = {0, 0, 10};
+        core::Vec3f lookat = {0, 0, 0};
         float fov = 45.0f;
         std::string first_token;
         if (ss >> first_token) {
@@ -152,8 +152,8 @@ private:
 
     void parse_medium(std::stringstream& ss) {
         float density = 0.0f;
-        Vec3 scattering = {0, 0, 0};
-        Vec3 absorption = {0, 0, 0};
+        core::Vec3f scattering = {0, 0, 0};
+        core::Vec3f absorption = {0, 0, 0};
         float max_dist = 0.0f;
         float anisotropy = 0.0f;
         std::string token;
@@ -319,14 +319,29 @@ private:
         std::string mat_name;
         ss >> type >> mat_name;
 
-        Vec3 pos = {0, 0, 0};
-        Vec3 scale = {1, 1, 1};
-        Vec3 rot = {0, 0, 0};
+        core::Vec3f pos = {0, 0, 0};
+        core::Vec3f scale = {1, 1, 1};
+        core::Quat rot = {};
 
         if (ss >> pos.x >> pos.y >> pos.z) {
             if (ss >> scale.x >> scale.y >> scale.z) {
-                if (!(ss >> rot.x >> rot.y >> rot.z)) {
+                float rx, ry, rz;
+                if (!(ss >> rx >> ry >> rz)) {
                     ss.clear();
+                } else {
+                    // Legacy format: read Euler degrees, convert to quaternion
+                    float cx = std::cos(rx * 0.5f * 3.14159f / 180.0f);
+                    float sx = std::sin(rx * 0.5f * 3.14159f / 180.0f);
+                    float cy = std::cos(ry * 0.5f * 3.14159f / 180.0f);
+                    float sy = std::sin(ry * 0.5f * 3.14159f / 180.0f);
+                    float cz = std::cos(rz * 0.5f * 3.14159f / 180.0f);
+                    float sz = std::sin(rz * 0.5f * 3.14159f / 180.0f);
+                    rot = core::Quat(
+                        cx*cy*cz + sx*sy*sz,  // w
+                        sx*cy*cz - cx*sy*sz,  // x
+                        cx*sy*cz + sx*cy*sz,  // y
+                        cx*cy*sz - sx*sy*cz   // z
+                    );
                 }
             } else {
                 ss.clear();

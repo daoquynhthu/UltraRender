@@ -40,19 +40,19 @@ struct TextureResource {
 struct MaterialNode {
     std::string name;
     MaterialModel model = MaterialModel::Lambertian;
-    Vec3 base_color = {0.8f, 0.8f, 0.8f};
+    core::Vec3f base_color = {0.8f, 0.8f, 0.8f};
     float roughness = 0.5f;
     float ior = 1.45f;
     float dispersion = 0.0f;
-    Vec3 metal_eta = {0.0f, 0.0f, 0.0f};
-    Vec3 metal_k = {0.0f, 0.0f, 0.0f};
+    core::Vec3f metal_eta = {0.0f, 0.0f, 0.0f};
+    core::Vec3f metal_k = {0.0f, 0.0f, 0.0f};
     float thin_film_thickness = 0.0f;
     float thin_film_ior = 1.0f;
-    Vec3 emission = {0.0f, 0.0f, 0.0f};
+    core::Vec3f emission = {0.0f, 0.0f, 0.0f};
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f;
-    Vec3 medium_scattering = {0.0f, 0.0f, 0.0f};
-    Vec3 medium_absorption = {0.0f, 0.0f, 0.0f};
+    core::Vec3f medium_scattering = {0.0f, 0.0f, 0.0f};
+    core::Vec3f medium_absorption = {0.0f, 0.0f, 0.0f};
     std::shared_ptr<TextureResource> base_color_texture;
     std::shared_ptr<TextureResource> roughness_texture;
     std::shared_ptr<TextureResource> emission_texture;
@@ -65,7 +65,7 @@ struct MeshResource {
 
 struct SphereResource {
     std::string name;
-    Vec3 center = {0, 0, 0};
+    core::Vec3f center = {0, 0, 0};
     float radius = 0.5f;
 };
 
@@ -73,15 +73,15 @@ struct InstanceNode {
     std::string name;
     std::shared_ptr<MeshResource> mesh;
     std::shared_ptr<MaterialNode> material;
-    Vec3 position = {0, 0, 0};
-    Vec3 scale = {1, 1, 1};
-    Vec3 rotation = {0, 0, 0};
+    core::Vec3f position = {0, 0, 0};
+    core::Vec3f scale = {1, 1, 1};
+    core::Quat rotation = {};
     RigidBodyConfig rigid_body;
 };
 
 struct SphereNode {
     std::string name;
-    Vec3 center = {0, 0, 0};
+    core::Vec3f center = {0, 0, 0};
     float radius = 0.5f;
     std::shared_ptr<MaterialNode> material;
 };
@@ -95,11 +95,11 @@ struct SceneIR {
     std::vector<SphereNode> spheres;
     Camera camera;
     PhysicsConfig physics;
-    Vec3 background_color = {0, 0, 0};
+    core::Vec3f background_color = {0, 0, 0};
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f;
-    Vec3 medium_scattering = {0.0f, 0.0f, 0.0f};
-    Vec3 medium_absorption = {0.0f, 0.0f, 0.0f};
+    core::Vec3f medium_scattering = {0.0f, 0.0f, 0.0f};
+    core::Vec3f medium_absorption = {0.0f, 0.0f, 0.0f};
     float medium_max_distance = 50.0f;
     int width = 0;
     int height = 0;

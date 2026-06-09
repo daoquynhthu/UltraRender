@@ -4,7 +4,7 @@
 namespace ure {
 
 SceneBuilder& SceneBuilder::add_entity(std::shared_ptr<Mesh> mesh, std::shared_ptr<Material> mat, 
-                        Vec3 pos, Vec3 scale, Vec3 rot, RigidBodyConfig rb_config) {
+                         core::Vec3f pos, core::Vec3f scale, core::Quat rot, RigidBodyConfig rb_config) {
     RenderEntity entity;
     entity.mesh = mesh;
     entity.material = mat;
@@ -16,7 +16,7 @@ SceneBuilder& SceneBuilder::add_entity(std::shared_ptr<Mesh> mesh, std::shared_p
     return *this;
 }
 
-SceneBuilder& SceneBuilder::add_sphere(Vec3 center, float radius, std::shared_ptr<Material> mat, RigidBodyConfig rb_config) {
+SceneBuilder& SceneBuilder::add_sphere(core::Vec3f center, float radius, std::shared_ptr<Material> mat, RigidBodyConfig rb_config) {
     (void)rb_config; // Unused parameter
     SphereEntity sphere;
     sphere.center = center;
@@ -28,7 +28,7 @@ SceneBuilder& SceneBuilder::add_sphere(Vec3 center, float radius, std::shared_pt
     return *this;
 }
 
-SceneBuilder& SceneBuilder::set_camera(Vec3 pos, Vec3 look_at, float fov) {
+SceneBuilder& SceneBuilder::set_camera(core::Vec3f pos, core::Vec3f look_at, float fov) {
     scene_.camera.position = pos;
     scene_.camera.look_at = look_at;
     scene_.camera.fov = fov;
@@ -46,7 +46,7 @@ SceneBuilder& SceneBuilder::set_spp(int spp) {
     return *this;
 }
 
-SceneBuilder& SceneBuilder::set_medium(float density, Vec3 scattering, Vec3 absorption, float max_dist, float anisotropy) {
+SceneBuilder& SceneBuilder::set_medium(float density, core::Vec3f scattering, core::Vec3f absorption, float max_dist, float anisotropy) {
     scene_.medium_density = density;
     scene_.medium_scattering = scattering;
     scene_.medium_absorption = absorption;
@@ -163,9 +163,9 @@ std::shared_ptr<Mesh> SceneBuilder::create_sphere(float radius, int slices, int 
             float y = radius * cosf(phi); // Y is up
             float z = radius * sinf(phi) * sinf(theta);
 
-            Vec3 pos = {x, y, z};
-            Vec3 norm = {x/radius, y/radius, z/radius}; // Normalized if radius > 0
-            Vec2 uv = {u, 1.0f - v}; // Flip V usually
+            core::Vec3f pos = {x, y, z};
+            core::Vec3f norm = {x/radius, y/radius, z/radius}; // Normalized if radius > 0
+            core::Vec2f uv = {u, 1.0f - v}; // Flip V usually
 
             mesh->vertices.push_back({pos, norm, uv});
         }
@@ -404,9 +404,9 @@ std::shared_ptr<Mesh> SceneBuilder::create_torus(float major_radius, float minor
             float ny = sin_phi;
             float nz = cos_phi * sin_theta;
 
-            Vec3 pos = {x, y, z};
-            Vec3 norm = {nx, ny, nz};
-            Vec2 uv = {(float)i / major_segments, (float)j / minor_segments};
+            core::Vec3f pos = {x, y, z};
+            core::Vec3f norm = {nx, ny, nz};
+            core::Vec2f uv = {(float)i / major_segments, (float)j / minor_segments};
 
             mesh->vertices.push_back({pos, norm, uv});
         }

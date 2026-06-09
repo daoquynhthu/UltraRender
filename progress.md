@@ -55,6 +55,29 @@ PhysicsSystem → write frame → advance()
 Total: 183 assertions, 0 failures
 ```
 
+## Phase P.6 — 类型统一（Vec3/Quat 一致化）
+
+### 2026-06-09
+
+- [DONE] P.6.1: 删除 `ure::Vec3`/`ure::Vec2`，统一使用 `ure::core::Vec3f`/`ure::core::Vec2f`
+  - `ure_api.hpp`（ure_types + ure_core 两副本）：删除 `struct Vec3`/`Vec2`，添加 `core/vector.hpp`/`core/quaternion.hpp` 引用，全部替换
+  - `scene_ir.hpp`：Vec3 → core::Vec3f
+  - `procedural.hpp/.cpp`：Vec3/Vec2 → core::Vec3f/core::Vec2f
+  - `scene_ir_frontend.cpp`：Vec3 → core::Vec3f
+  - `gltf_scene_frontend.cpp`：Vec3/Vec2 → core::Vec3f/core::Vec2f
+  - `gpu_scene_compiler.cpp`：Vec3 → core::Vec3f，V2 .u/.v → .x/.y
+  - `apps/ure_cli/src/main.cpp`：ure::Vec3 → core::Vec3f
+- [DONE] P.6.2: 旋转统一为 `core::Quat`，删除 Euler 胶水代码
+  - `RenderEntity::rotation`: Vec3 (Euler度) → core::Quat
+  - `InstanceNode::rotation`: Vec3 → core::Quat
+  - `compile_transform()`: 删除 Euler→矩阵 sin/cos 计算，改用 `rotation.to_matrix()`
+  - `decompose_trs()`: 从矩阵→Euler 改为矩阵→Quat（直接提取，无万向锁）
+  - `gltf_scene_frontend.cpp`: 矩阵分解直接输出 Quat
+  - `scene_ir_frontend.cpp`: 遗留格式解析 Euler → Quat 转换
+  - `main.cpp`: 添加 `euler_to_quat()`，所有 `add_entity` 旋转参数改为 `core::Quat`
+  - 物理循环：`entity.rotation = {euler.x, euler.y, euler.z}` → `entity.rotation = rot`（直接赋 Quat）
+- [DONE] P.6.3: 全量回归 — 8 套件，222 assertions, 0 failures
+
 ## Phase P.5 — ISpatialQuery 抽象（声学 ↔ 物理 解耦）
 
 ### 2026-06-09

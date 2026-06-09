@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ure/core/vector.hpp"
+#include "ure/core/quaternion.hpp"
 #include <vector>
 #include <string>
 #include <memory>
@@ -11,16 +13,6 @@ namespace scene_ir {
 struct SceneIR;
 }
 
-// Basic Math Types
-struct Vec3 { 
-    float x, y, z; 
-    Vec3(float _x=0, float _y=0, float _z=0) : x(_x), y(_y), z(_z) {}
-};
-struct Vec2 { 
-    float u, v; 
-    Vec2(float _u=0, float _v=0) : u(_u), v(_v) {}
-};
-
 // Enums
 enum class MaterialType {
     Lambertian,
@@ -31,9 +23,9 @@ enum class MaterialType {
 
 // Data Structures
 struct Vertex {
-    Vec3 position;
-    Vec3 normal;
-    Vec2 uv;
+    core::Vec3f position;
+    core::Vec3f normal;
+    core::Vec2f uv;
 };
 
 struct Texture {
@@ -44,21 +36,21 @@ struct Texture {
 
 struct Material {
     MaterialType type = MaterialType::Lambertian;
-    Vec3 albedo = {0.8f, 0.8f, 0.8f};
+    core::Vec3f albedo = {0.8f, 0.8f, 0.8f};
     float roughness = 0.5f;
     float ior = 1.45f;
     float dispersion = 0.0f;
-    Vec3 metal_eta = {0.0f, 0.0f, 0.0f};
-    Vec3 extinction = {0.0f, 0.0f, 0.0f}; // For metals (Conductors)
+    core::Vec3f metal_eta = {0.0f, 0.0f, 0.0f};
+    core::Vec3f extinction = {0.0f, 0.0f, 0.0f}; // For metals (Conductors)
     float thin_film_thickness = 0.0f;    // In nanometers
     float thin_film_ior = 1.0f;
-    Vec3 emission = {0.0f, 0.0f, 0.0f};
+    core::Vec3f emission = {0.0f, 0.0f, 0.0f};
     
     // Phase 3: Volume / SSS (Physical parameters)
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f; // g
-    Vec3 medium_scattering = {0.0f, 0.0f, 0.0f};
-    Vec3 medium_absorption = {0.0f, 0.0f, 0.0f};
+    core::Vec3f medium_scattering = {0.0f, 0.0f, 0.0f};
+    core::Vec3f medium_absorption = {0.0f, 0.0f, 0.0f};
     
     std::shared_ptr<Texture> albedo_texture;
 };
@@ -71,21 +63,21 @@ struct RigidBodyConfig {
     float restitution = 0.5f;
     float linear_damping = 0.01f;
     float angular_damping = 0.01f;
-    Vec3 velocity = {0,0,0}; // Initial velocity
+    core::Vec3f velocity = {0,0,0}; // Initial velocity
     std::string collider_type = "none"; // box, sphere, plane, mesh
-    Vec3 collider_size = {1,1,1}; // For box
+    core::Vec3f collider_size = {1,1,1}; // For box
     float collider_radius = 0.5f; // For sphere
     int material_id = 0; // 0=Default, 1=Metal, 2=Wood, 3=Glass
 };
 
 struct FluidConfig {
     bool enabled = false;
-    Vec3 bounds_min = {-5,-5,-5};
-    Vec3 bounds_max = {5,5,5};
+    core::Vec3f bounds_min = {-5,-5,-5};
+    core::Vec3f bounds_max = {5,5,5};
     float particle_spacing = 0.1f;
     // Simple fill volume for demo
-    Vec3 fill_min = {-1,-1,-1};
-    Vec3 fill_max = {1,0,1};
+    core::Vec3f fill_min = {-1,-1,-1};
+    core::Vec3f fill_max = {1,0,1};
 };
 
 struct PhysicsConfig {
@@ -104,16 +96,16 @@ struct Mesh {
 struct RenderEntity {
     std::shared_ptr<Mesh> mesh;
     std::shared_ptr<Material> material;
-    Vec3 position = {0,0,0};
-    Vec3 scale = {1,1,1};
-    Vec3 rotation = {0,0,0}; // Euler angles in degrees
+    core::Vec3f position = {0,0,0};
+    core::Vec3f scale = {1,1,1};
+    core::Quat rotation = {}; // Quaternion
     RigidBodyConfig rigid_body; // Physics properties
 };
 
 struct Camera {
-    Vec3 position = {0, 0, 10};
-    Vec3 look_at = {0, 0, 0};
-    Vec3 up = {0, 1, 0};
+    core::Vec3f position = {0, 0, 10};
+    core::Vec3f look_at = {0, 0, 0};
+    core::Vec3f up = {0, 1, 0};
     float fov = 45.0f;
     float aspect_ratio = 16.0f / 9.0f;
     float aperture = 0.0f;
@@ -121,7 +113,7 @@ struct Camera {
 };
 
 struct SphereEntity {
-    Vec3 center;
+    core::Vec3f center;
     float radius;
     std::shared_ptr<Material> material;
 };
@@ -131,11 +123,11 @@ struct Scene {
     std::vector<SphereEntity> spheres;
     Camera camera;
     PhysicsConfig physics; // Physics Settings
-    Vec3 background_color = {0,0,0};
+    core::Vec3f background_color = {0,0,0};
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f; // g
-    Vec3 medium_scattering = {0.0f, 0.0f, 0.0f};
-    Vec3 medium_absorption = {0.0f, 0.0f, 0.0f};
+    core::Vec3f medium_scattering = {0.0f, 0.0f, 0.0f};
+    core::Vec3f medium_absorption = {0.0f, 0.0f, 0.0f};
     float medium_max_distance = 50.0f;
     int width = 0;  // 0 means use default or CLI override
     int height = 0;
