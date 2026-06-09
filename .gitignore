@@ -15,9 +15,11 @@ lib/
 
 # Output
 output/
+test_output/
 *.bmp
 *.png
 *.jpg
+*.wav
 crash_log.txt
 
 # VS
@@ -35,3 +37,4 @@ build_gpu_test/
 
 # GUI build artifacts
 gui/**/obj/
+gui/**/bin/
