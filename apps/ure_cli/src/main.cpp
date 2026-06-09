@@ -6,9 +6,11 @@
 #include <iomanip>
 #include <sstream>
 
-#include <cuda_runtime.h>
-
 #include <ure/log.hpp>
+
+#ifdef USE_CUDA
+#include <cuda_runtime.h>
+#endif
 
 #include "ure/core/vector.hpp"
 #include "ure/core/quaternion.hpp"
@@ -64,12 +66,6 @@ static int cmd_render(const ure::config::CliResult& cli) {
     int cli_width = cfg.width;
     int cli_height = cfg.height;
     std::string output_filename_override = cfg.output.file;
-
-    // Legacy fallback: positional arg as scene path (handled by CLI11 now)
-    bool verbose = cli.verbose, quiet = cli.quiet;
-    if (verbose)       ure::log::set_min_level(ure::log::Level::Debug);
-    else if (quiet)    ure::log::set_min_level(ure::log::Level::Error);
-    else               ure::log::set_min_level(ure::log::Level::Info);
 
     UR_LOG_INFO(CLI, "Target: {}, SPP: {}", scene_path, cli_spp);
 
@@ -387,9 +383,9 @@ static int cmd_render(const ure::config::CliResult& cli) {
 
     // ── Physics Render Loop ──
     if (enable_physics && physics_world) {
-        float dt = (scene.physics.dt > 0) ? scene.physics.dt : (1.0f / 60.0f);
-        int total_frames = (scene.physics.total_frames > 0) ? scene.physics.total_frames : 180;
-        int spp_per_frame = (scene.physics.spp_per_frame > 0) ? scene.physics.spp_per_frame : 64;
+        float dt = (cfg.physics_dt > 0) ? cfg.physics_dt : ((scene.physics.dt > 0) ? scene.physics.dt : 1.0f / 60.0f);
+        int total_frames = (cfg.physics_frames > 0) ? cfg.physics_frames : ((scene.physics.total_frames > 0) ? scene.physics.total_frames : 180);
+        int spp_per_frame = (cfg.physics_spp_per_frame > 0) ? cfg.physics_spp_per_frame : ((scene.physics.spp_per_frame > 0) ? scene.physics.spp_per_frame : 64);
         std::vector<float> audio_buffer;
         int sample_rate = 44100;
 
@@ -546,6 +542,7 @@ static int cmd_info(const std::string& scene_path) {
 //  List-Devices subcommand
 // ================================================================
 static int cmd_list_devices() {
+#ifdef USE_CUDA
     int count = 0;
     auto err = cudaGetDeviceCount(&count);
     if (err != cudaSuccess) {
@@ -562,6 +559,10 @@ static int cmd_list_devices() {
         }
     }
     return 0;
+#else
+    std::cout << "CUDA not available (compiled without USE_CUDA)\n";
+    return 0;
+#endif
 }
 
 // ================================================================

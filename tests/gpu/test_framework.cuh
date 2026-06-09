@@ -46,6 +46,15 @@ static int g_test_result = 0;
     g_tests_passed++; \
 } while(0)
 
+// RAII guard for device memory (ensures cleanup on early return)
+struct DeviceMem {
+    void* ptr = nullptr;
+    explicit DeviceMem(void* p) : ptr(p) {}
+    ~DeviceMem() { if (ptr) cudaFree(ptr); }
+    DeviceMem(const DeviceMem&) = delete;
+    DeviceMem& operator=(const DeviceMem&) = delete;
+};
+
 inline bool has_cuda_gpu() {
     int count = 0;
     cudaError_t err = cudaGetDeviceCount(&count);

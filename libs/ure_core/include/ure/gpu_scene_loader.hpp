@@ -19,6 +19,8 @@ struct HostTexture {
     std::vector<float> data; // RGB floats (3 floats per pixel)
 };
 
+inline constexpr int kDefaultMaterialCount = 7;
+
 struct GpuHostScene {
     std::vector<GpuMaterial> materials;
     std::vector<GpuSphere> spheres;

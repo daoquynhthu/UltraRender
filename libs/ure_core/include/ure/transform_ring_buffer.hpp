@@ -13,15 +13,20 @@ namespace ure::gpu {
 //   PhysicsThread (writer): begin_write() -> fill -> end_write() -> advance()
 //   RenderThread  (reader): begin_read()  -> upload -> end_read()
 //
-// Three frames guarantee read_index never catches write_index.
-// At most 1-frame lag: read_index == (write_index + 2) % 3.
-// Uses std::atomic for write_index/read_index (SPSC safe).
+// Three frames guarantee the reader never reads the frame being written.
+// The reader always reads frame (write_index + 2) % 3, i.e. the frame
+// written TWO advances ago — at most 1-frame lag.
+//
+// Memory ordering (SPSC):
+//   Writer: data stores → atomic_thread_fence(release) → write_index.store(release)
+//   Reader: write_index.load(acquire) → derives read frame → data loads
+//   This establishes a proper happens-before chain: the reader's acquire on
+//   write_index synchronizes with the writer's release on the same atomic.
 
 struct TransformRingBuffer {
     static constexpr int kNumFrames = 3;
 
     std::atomic<int> write_index{0};
-    std::atomic<int> read_index{0};
     int instance_count = 0;
 
     std::vector<GpuInstanceTransform> frames[kNumFrames];
@@ -33,37 +38,43 @@ struct TransformRingBuffer {
             frames[i].resize(count);
         }
         write_index.store(0, std::memory_order_release);
-        read_index.store((0 + 2) % kNumFrames, std::memory_order_release);
     }
 
     // --- Physics side (writer) ---
 
     GpuInstanceTransform* begin_write() {
         assert(instance_count > 0);
-        return frames[write_index.load(std::memory_order_acquire)].data();
+        return frames[write_index.load(std::memory_order_relaxed)].data();
     }
 
     int write_count() const { return instance_count; }
 
     void end_write() {
-        // std::atomic_thread_fence(std::memory_order_release) — implicit in advance()
+        std::atomic_thread_fence(std::memory_order_release);
     }
 
     void advance() {
-        int next = (write_index.load(std::memory_order_acquire) + 1) % kNumFrames;
+        int next = (write_index.load(std::memory_order_relaxed) + 1) % kNumFrames;
         write_index.store(next, std::memory_order_release);
     }
 
     // --- Render side (reader) ---
+    //
+    // Reader derives read frame from write_index:
+    //   read_frame = (write_index + kNumFrames - 1) % kNumFrames
+    // i.e. the frame written TWO advances ago (triple buffer invariant).
+    // Acquire on write_index pairs with writer's release fence + store.
 
     const GpuInstanceTransform* begin_read(int& out_count) const {
         out_count = instance_count;
-        return frames[read_index.load(std::memory_order_acquire)].data();
+        int w = write_index.load(std::memory_order_acquire);
+        int r = (w + kNumFrames - 1) % kNumFrames;
+        return frames[r].data();
     }
 
     void end_read() {
-        int next = (read_index.load(std::memory_order_acquire) + 1) % kNumFrames;
-        read_index.store(next, std::memory_order_release);
+        // No-op: read frame is always derived from write_index.
+        // Next begin_read() will reload write_index.
     }
 
     void init_from_instances(const std::vector<GpuInstance>& instances) {
@@ -78,7 +89,10 @@ struct TransformRingBuffer {
         }
     }
 
-    const GpuInstanceTransform* data() const { return frames[read_index.load(std::memory_order_acquire)].data(); }
+    const GpuInstanceTransform* data() const {
+        int w = write_index.load(std::memory_order_acquire);
+        return frames[(w + kNumFrames - 1) % kNumFrames].data();
+    }
     int size() const { return instance_count; }
 };
 

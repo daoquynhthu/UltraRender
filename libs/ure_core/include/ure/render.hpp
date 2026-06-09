@@ -67,8 +67,6 @@ class RenderEngineFactory {
 public:
     static std::unique_ptr<IRenderEngine> create_gpu_renderer();
     static std::unique_ptr<IRenderEngine> create_gpu_engine(); // backward compat alias
-
-    static std::unique_ptr<IRenderEngine> create_cpu_engine();
 };
 
 } // namespace ure

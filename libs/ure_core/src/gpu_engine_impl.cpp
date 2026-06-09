@@ -52,27 +52,28 @@ public:
         assert(gpu_context_ != nullptr && "update_transforms: no GPU context");
         assert(count == transform_ring_buffer_.instance_count && "update_transforms: instance count mismatch");
 
-        // Write external transforms into current write frame
+        // Step 1: Write new transforms into current write frame
         gpu::GpuInstanceTransform* dst = transform_ring_buffer_.begin_write();
         assert(dst != nullptr);
         std::memcpy(dst, transforms, count * sizeof(gpu::GpuInstanceTransform));
         transform_ring_buffer_.end_write();
 
-        // Upload the read frame (lags write by 1-2 frames)
+        // Step 2: Advance write index (release fence + release store)
+        transform_ring_buffer_.advance();
+
+        // Step 3: Read safe frame (lags by 1 full cycle) and upload to GPU
         int upload_count = 0;
         const gpu::GpuInstanceTransform* src = transform_ring_buffer_.begin_read(upload_count);
         gpu::update_instance_transforms_gpu(gpu_context_, src, upload_count);
         transform_ring_buffer_.end_read();
 
-        // Advance write frame for next physics step
-        transform_ring_buffer_.advance();
         reset_accumulation();
     }
 
     void render(const RenderSettings& settings) override {
         if (!gpu_context_) {
             UR_LOG_ERROR(Core, "No scene loaded!");
-            return;
+            throw std::runtime_error("render() called with no scene loaded");
         }
 
         // NOTE: We assume gpu_context_ is already initialized with correct width/height from load_scene
@@ -121,7 +122,6 @@ public:
 
     const std::vector<float>& get_framebuffer() const override {
         if (gpu_context_) {
-            // Update the buffer before returning
             ure::gpu::copy_frame_buffer_gpu(gpu_context_, const_cast<float*>(frame_buffer_.data()));
         }
         return frame_buffer_;
@@ -216,12 +216,12 @@ private:
     ure::gpu::TransformRingBuffer transform_ring_buffer_;
 };
 
-std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_engine() {
+std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_renderer() {
     return std::make_unique<GpuRenderEngine>();
 }
 
-std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_renderer() {
-    return std::make_unique<GpuRenderEngine>();
+std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_engine() {
+    return create_gpu_renderer();
 }
 
 }

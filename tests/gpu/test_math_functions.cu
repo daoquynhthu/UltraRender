@@ -39,10 +39,10 @@ static int test_ggx_D() {
     float h_out[3] = {};
     float* d_out = nullptr;
     CHECK_CUDA(cudaMalloc(&d_out, 3 * sizeof(float)));
+    DeviceMem _d(d_out);
     ure::gpu::test_ggx_D_kernel<<<1, 1>>>(d_out);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaMemcpy(h_out, d_out, 3 * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK_CUDA(cudaFree(d_out));
     CHECK_FLOAT_EQ(h_out[0], 31.830f, 0.01f);
     CHECK_FLOAT_EQ(h_out[1], 0.1205f, 0.01f);
     CHECK_FLOAT_EQ(h_out[2], 0.3183f, 0.01f);
@@ -54,10 +54,10 @@ static int test_smith_G1() {
     float h_out[3] = {};
     float* d_out = nullptr;
     CHECK_CUDA(cudaMalloc(&d_out, 3 * sizeof(float)));
+    DeviceMem _d(d_out);
     ure::gpu::test_smith_G1_kernel<<<1, 1>>>(d_out);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaMemcpy(h_out, d_out, 3 * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK_CUDA(cudaFree(d_out));
     CHECK_FLOAT_EQ(h_out[0], 1.0f, 1e-5f);
     CHECK_FLOAT_EQ(h_out[1], 0.90909f, 0.001f);
     CHECK_FLOAT_EQ(h_out[2], 0.0f, 1e-6f);
@@ -69,10 +69,10 @@ static int test_schlick() {
     float h_out[3] = {};
     float* d_out = nullptr;
     CHECK_CUDA(cudaMalloc(&d_out, 3 * sizeof(float)));
+    DeviceMem _d(d_out);
     ure::gpu::test_schlick_kernel<<<1, 1>>>(d_out);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaMemcpy(h_out, d_out, 3 * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK_CUDA(cudaFree(d_out));
     float r0 = (0.5f / 2.5f) * (0.5f / 2.5f);
     CHECK_FLOAT_EQ(h_out[0], r0, 0.001f);
     CHECK_FLOAT_EQ(h_out[2], 1.0f, 1e-5f);
@@ -84,10 +84,10 @@ static int test_power_heuristic() {
     float h_out[3] = {};
     float* d_out = nullptr;
     CHECK_CUDA(cudaMalloc(&d_out, 3 * sizeof(float)));
+    DeviceMem _d(d_out);
     ure::gpu::test_power_heuristic_kernel<<<1, 1>>>(d_out);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaMemcpy(h_out, d_out, 3 * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK_CUDA(cudaFree(d_out));
     CHECK_FLOAT_EQ(h_out[0], 0.5f, 1e-5f);
     CHECK_FLOAT_EQ(h_out[1], 1.0f, 1e-5f);
     CHECK_FLOAT_EQ(h_out[2], 0.0f, 1e-5f);

@@ -53,6 +53,14 @@ if(CMAKE_CUDA_COMPILER)
         endforeach()
     endif()
 
+    add_test(NAME gpu_device COMMAND gpu_test_device)
+    add_test(NAME gpu_math COMMAND gpu_test_math)
+    add_test(NAME gpu_spectral COMMAND gpu_test_spectral)
+    add_test(NAME gpu_hardware COMMAND gpu_test_hardware)
+    add_test(NAME gpu_render COMMAND gpu_test_render)
+    add_test(NAME gpu_instance COMMAND gpu_test_instance)
+    add_test(NAME gpu_tangents COMMAND gpu_test_tangents)
+
     add_custom_target(gpu_tests
         COMMAND gpu_test_device
         COMMAND gpu_test_math

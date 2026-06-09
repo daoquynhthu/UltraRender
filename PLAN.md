@@ -959,6 +959,58 @@ CLI args > JSON file > defaults
 
 ---
 
+## ████████ Batch Cleanup: 审计修复 ████████
+
+**目标**: 修复全方位审计发现的 20 Critical + 20 Moderate 问题。
+
+### Batch 1 — 行为 bug 修复 ✅
+
+| ID | 问题 | 修复 |
+|----|------|------|
+| C1 | buffer bounds/index check (glTF frontend) | 越界验证 |
+| C2 | index 越界 (glTF frontend) | size 检查 |
+| C3 | stod try-catch (glTF frontend) | 异常捕获 |
+| C5 | FileSink::rotate 首轮 crash | 空目录守卫 |
+| C6 | 物理参数字段数据丢失 | `merge_physics_params` |
+| C12 | test 逆矩阵错误 | 显式求逆 |
+| C15 | 假警报 | 确认已有实现 |
+
+### Batch 2 — 简单修复 ✅
+
+| ID | 问题 | 修复 |
+|----|------|------|
+| C4 | int 溢出 (image_loader) | cast 检查 |
+| C7 | const_cast minor | 移除 |
+| C9 | hardcoded 7 → `kDefaultMaterialCount` | 常量替换 |
+| C11 | GPU 测试 error path 内存泄漏 | `DeviceMem` RAII guard |
+| C14 | GPU 测试未注册 CTest | 7 个 `add_test()` |
+| M6 | `cuda_runtime.h` 无 `#ifdef USE_CUDA` | 守卫 |
+| M7 | 冗余日志设置 | 删除 |
+| M8 | `create_cpu_engine()` 死声明 | 删除 |
+| M9 | `create_gpu_engine` 委托 | 别名 |
+
+### Batch 2b — 架构级修复 ✅
+
+| ID | 问题 | 修复 |
+|----|------|------|
+| C8 | AABB 全 vertex 遍历每帧 | 改为计算 local AABB + 8 corner 变换 (O(N*21) → O(N*6+24)) |
+| C10 | RingBuffer memory ordering | 消除 read_index，从 write_index 推导；`end_write()` 加 release fence；`begin_read()` acquire load |
+| M10 | `render()` 静默 no-op | 改为 `throw std::runtime_error` |
+
+### Batch 3 — 待办 (质量提升)
+
+M1-M5, M11-M20。
+
+### Batch 4 — 待办 (测试补充)
+
+m1-m8。
+
+### Batch 2b 余留 (架构/RAII 级)
+
+C13 (循环依赖), C11 已在 Batch 2 修复。
+
+---
+
 ## ████████ Phase A: SoA 队列 + RenderConfig 集成 ████████
 
 **目标**: 队列分配使用 RenderConfig，光谱维度动态化。

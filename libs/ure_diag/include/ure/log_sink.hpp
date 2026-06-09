@@ -141,10 +141,12 @@ class FileSink : public Sink {
         for (int i = max_files_ - 1; i > 0; --i) {
             std::string old_name = std::format("{}.{}", base_path_, i);
             std::string new_name = std::format("{}.{}", base_path_, i + 1);
-            std::filesystem::rename(old_name, new_name);
+            if (std::filesystem::exists(old_name))
+                std::filesystem::rename(old_name, new_name);
         }
         std::string next_name = std::format("{}.{}", base_path_, 1);
-        std::filesystem::rename(base_path_, next_name);
+        if (std::filesystem::exists(base_path_))
+            std::filesystem::rename(base_path_, next_name);
         file_.open(base_path_, std::ios::app);
         bytes_written_ = 0;
     }

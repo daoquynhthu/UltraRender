@@ -161,7 +161,11 @@ private:
             if (!(std::isdigit(static_cast<unsigned char>(c)) || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E')) break;
             ++pos_;
         }
-        value.number_value = std::stod(std::string(source_.substr(start, pos_ - start)));
+        try {
+            value.number_value = std::stod(std::string(source_.substr(start, pos_ - start)));
+        } catch (...) {
+            value.number_value = 0.0;
+        }
         return value;
     }
 
@@ -585,6 +589,7 @@ private:
 
         for (size_t i = 0; i + 2 < indices.size(); i += 3) {
             int i0 = indices[i], i1 = indices[i + 1], i2 = indices[i + 2];
+            if (i0 >= vcount || i1 >= vcount || i2 >= vcount) continue;
             const auto& p0 = vertices[i0].position;
             const auto& p1 = vertices[i1].position;
             const auto& p2 = vertices[i2].position;
@@ -722,6 +727,8 @@ private:
         std::size_t stride = static_cast<std::size_t>(get_int(*buffer_view, "byteStride", static_cast<int>(component_size * component_count)));
         out.resize(static_cast<std::size_t>(count) * component_count, 0.0f);
 
+        std::size_t end_byte = byte_offset + stride * static_cast<std::size_t>(count - 1) + component_size * component_count;
+        if (end_byte > buffer.size()) return out;
         for (int i = 0; i < count; ++i) {
             const std::uint8_t* ptr = buffer.data() + byte_offset + stride * i;
             for (int c = 0; c < component_count; ++c) {
@@ -770,6 +777,8 @@ private:
         std::size_t byte_offset = static_cast<std::size_t>(get_int(*buffer_view, "byteOffset", 0) + get_int(*accessor, "byteOffset", 0));
         out.resize(count, 0);
 
+        std::size_t end_byte = byte_offset + static_cast<std::size_t>(count) * component_size;
+        if (end_byte > buffer.size()) return out;
         for (int i = 0; i < count; ++i) {
             const std::uint8_t* ptr = buffer.data() + byte_offset + static_cast<std::size_t>(i) * component_size;
             if (component_type == 5125) {

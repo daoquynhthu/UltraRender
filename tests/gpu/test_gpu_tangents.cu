@@ -38,6 +38,7 @@ static int test_tangent_upload_readback() {
     GpuVec3* d_readback;
     GpuVec3 h_readback[3];
     CHECK_CUDA(cudaMalloc(&d_readback, 3 * sizeof(GpuVec3)));
+    DeviceMem _d(d_readback);
     CHECK_CUDA(cudaMemset(d_readback, 0, 3 * sizeof(GpuVec3)));
 
     render_pass_gpu(ctx, 1);
@@ -58,7 +59,6 @@ static int test_tangent_upload_readback() {
         CHECK_FLOAT_EQ(h_readback[i].z, 0.0f, 1e-4f);
     }
 
-    CHECK_CUDA(cudaFree(d_readback));
     free_gpu_renderer(ctx);
     return 0;
 }

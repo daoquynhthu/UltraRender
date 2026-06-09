@@ -1,4 +1,5 @@
 #include "ure/gpu_scene_compiler.hpp"
+#include "ure/gpu_scene_loader.hpp"
 #include "ure/image_loader.hpp"
 #include <algorithm>
 #include <cmath>
@@ -176,16 +177,36 @@ void GpuSceneCompiler::build_instance_transform(const core::Vec3f& position,
                                                 gpu::GpuInstanceTransform& out) {
     compile_instance_transform(position, scale, rotation, out);
 
-    // Compute world-space AABB from mesh local bounds
     if (mesh && !mesh->vertices.empty()) {
+        // Compute local-space AABB from vertices (cheap: min/max only, no matrix multiply)
+        float l_min_x = 1e30f, l_min_y = 1e30f, l_min_z = 1e30f;
+        float l_max_x = -1e30f, l_max_y = -1e30f, l_max_z = -1e30f;
+        for (const auto& v : mesh->vertices) {
+            l_min_x = (std::min)(l_min_x, v.position.x);
+            l_min_y = (std::min)(l_min_y, v.position.y);
+            l_min_z = (std::min)(l_min_z, v.position.z);
+            l_max_x = (std::max)(l_max_x, v.position.x);
+            l_max_y = (std::max)(l_max_y, v.position.y);
+            l_max_z = (std::max)(l_max_z, v.position.z);
+        }
+
+        // Transform 8 corners of local AABB to world space (constant time)
+        gpu::GpuVec3 corners[8] = {
+            {l_min_x, l_min_y, l_min_z}, {l_max_x, l_min_y, l_min_z},
+            {l_min_x, l_max_y, l_min_z}, {l_max_x, l_max_y, l_min_z},
+            {l_min_x, l_min_y, l_max_z}, {l_max_x, l_min_y, l_max_z},
+            {l_min_x, l_max_y, l_max_z}, {l_max_x, l_max_y, l_max_z}
+        };
         float min_x = 1e30f, min_y = 1e30f, min_z = 1e30f;
         float max_x = -1e30f, max_y = -1e30f, max_z = -1e30f;
-        for (const auto& v : mesh->vertices) {
-            float wx = out.transform.m[0][0]*v.position.x + out.transform.m[0][1]*v.position.y + out.transform.m[0][2]*v.position.z + out.transform.m[0][3];
-            float wy = out.transform.m[1][0]*v.position.x + out.transform.m[1][1]*v.position.y + out.transform.m[1][2]*v.position.z + out.transform.m[1][3];
-            float wz = out.transform.m[2][0]*v.position.x + out.transform.m[2][1]*v.position.y + out.transform.m[2][2]*v.position.z + out.transform.m[2][3];
-            min_x = (std::min)(min_x, wx); min_y = (std::min)(min_y, wy); min_z = (std::min)(min_z, wz);
-            max_x = (std::max)(max_x, wx); max_y = (std::max)(max_y, wy); max_z = (std::max)(max_z, wz);
+        for (int k = 0; k < 8; ++k) {
+            gpu::GpuVec3 tp = out.transform.transform_point(corners[k]);
+            min_x = (std::min)(min_x, tp.x);
+            min_y = (std::min)(min_y, tp.y);
+            min_z = (std::min)(min_z, tp.z);
+            max_x = (std::max)(max_x, tp.x);
+            max_y = (std::max)(max_y, tp.y);
+            max_z = (std::max)(max_z, tp.z);
         }
         out.min_pt = {min_x, min_y, min_z};
         out.max_pt = {max_x, max_y, max_z};
@@ -276,7 +297,7 @@ CompiledGpuScene GpuSceneCompiler::compile_legacy(const Scene& scene) {
     compiled.width = scene.width > 0 ? scene.width : 1920;
     compiled.height = scene.height > 0 ? scene.height : 1080;
 
-    int material_offset = 7;
+    int material_offset = gpu::kDefaultMaterialCount;
     std::map<std::shared_ptr<Material>, int> material_map;
     auto cache_material = [&](const std::shared_ptr<Material>& mat) -> int {
         if (!mat) return 0;
@@ -370,7 +391,7 @@ CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir) {
         return index;
     };
 
-    int material_offset = 7;
+    int material_offset = gpu::kDefaultMaterialCount;
     std::map<std::shared_ptr<scene_ir::MaterialNode>, int> material_map;
     auto cache_material = [&](const std::shared_ptr<scene_ir::MaterialNode>& mat) -> int {
         if (!mat) return 0;
