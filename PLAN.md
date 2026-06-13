@@ -20,7 +20,7 @@
 新 Phase A:     SoA 队列 + RenderConfig 集成                        渲染
 新 Phase B:     多 GPU 单机                                         已完成
 新 Phase C:     分布式契约标准化                                    已完成
-新 Phase D:     分布式集成                                          分布式
+新 Phase D:     分布式集成                                          已完成
 新 Phase E:     N 通道光谱升级                                      已完成
 远期 Phase S:   Session API + 脚本化                                已完成
 远期 Phase M:   材质系统                                             未开始
@@ -1206,6 +1206,8 @@ void merge_partial_framebuffer(DistributedFrameBuffer& accum, const DistributedF
 
 **目标**: 连接分布式契约到传输层。MPI 后端示例 + 文件 I/O 后端。
 
+完成状态（2026-06-13）: 已完成当前无外部依赖的文件 I/O backend。`distributed_file_io.hpp/.cpp` 定义 sample-range 和 framebuffer 二进制交换格式，包含 magic/version、尺寸、sample count 和 payload 校验；读入 framebuffer 使用 owning `DistributedFrameBufferStorage`，merge workflow 复用 Phase C 的 Release-safe `merge_partial_framebuffer()` 契约。当前不引入 MPI/ZeroMQ 依赖，后续网络后端只需替换 transport，不改变分布式数据契约。`test_distributed_file_io` 覆盖 sample range roundtrip、framebuffer roundtrip、文件级合并、坏 magic/截断 payload、无效 range 和 null framebuffer；targeted gate 35/0，build warning/error scan 为空。
+
 ---
 
 ## ████████ Phase E: N 通道光谱升级 ████████
@@ -1377,7 +1379,7 @@ void merge_partial_framebuffer(DistributedFrameBuffer& accum, const DistributedF
 新 Phase A: ████████████ 已完成 (SoA 队列 + RenderConfig 集成; 13/13 CTest 全绿)
 新 Phase B: ████████████ 已完成 (`MultiGpuContext` + sample-space partition + merged framebuffer copy; single-GPU API unchanged)
 新 Phase C: ████████████ 已完成 (sample range partition + deterministic framebuffer merge + Release-safe validation; gpu_test_contract 145/0)
-新 Phase D: ░░░░░░░░░░░░ 未开始
+新 Phase D: ████████████ 已完成 (file I/O backend + checked range/framebuffer serialization + merge workflow; test_distributed_file_io 35/0)
 新 Phase E: ██████████ 完成（E.0-E.4 已完成；E.5 C1-C6 已完成 medium/IOR transition、conductor material semantics、transport reciprocity + boundary furnace、explicit wavelength PDF + D65/equal-energy/RR photometry、transitional API static audit、full Release build + 17/17 CTest + warning/error scan + search gate）
 远期 Phase S: ████████████ 已完成 (`RenderSession` + `SceneDiff` + progressive worker + AOV + C ABI + pyure mutation workflow; test_session 188/0, test_pyure_smoke 通过)
 远期 Phase M: ░░░░░░░░░░░░ 未开始 (材质节点图 / MaterialX / 预设库；依赖 Phase E + S 稳定边界)

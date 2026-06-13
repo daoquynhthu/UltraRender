@@ -36,6 +36,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | A (SoA Queue) | Done | Dynamic N wavelengths from RenderConfig, SoA spectral queues/materials |
 | B (Multi-GPU) | Done | `MultiGpuContext`, sample-space partitioning, per-device render contexts, merged framebuffer copy |
 | C (Distributed Contract) | Done | Sample range partitioning, deterministic framebuffer merge, Release-safe validation |
+| D (Distributed Integration) | Done | File backend for sample-range/framebuffer exchange and merge workflow |
 | E (N-Channel Spectral) | Done | Runtime-N spectral pipeline, SPD input, spectral lane split, Mueller/dispersion closure |
 | S (Session API) | Done | `RenderSession`, `SceneDiff`, AOVs, C ABI, pyure progressive/mutation workflow |
 | M (Material System) | Not started | Node graph / MaterialX design remains planned after stable spectral/session baseline |
@@ -209,6 +210,7 @@ cmake --build build_modular --config RelWithDebInfo --target gpu_test_tangents
 | Host (Asset Pipeline) | 48 | `tests/host/test_asset_pipeline.cpp` | Direct EXE |
 | Host (glTF Frontend) | 185 | `tests/host/test_gltf_frontend.cpp` | Direct EXE |
 | Host (Session API) | 188 | `tests/host/test_session.cpp` | Direct EXE |
+| Host (Distributed File I/O) | 35 | `tests/host/test_distributed_file_io.cpp` | Direct EXE |
 | Host (Python API smoke) | 1 CTest | `tests/host/test_pyure_smoke.py` | Python/CTest |
 | GPU (Device) | ~30 | `tests/gpu/test_device.cu` | Direct EXE |
 | GPU (Hardware) | 17 | `tests/gpu/test_hardware.cu` | Direct EXE |
@@ -222,7 +224,7 @@ cmake --build build_modular --config RelWithDebInfo --target gpu_test_tangents
 | GPU (Polarization) | 126 | `tests/gpu/test_gpu_polarization.cu` | Direct EXE |
 | GPU (Volume) | CTest target | `tests/gpu/test_gpu_volume.cu` | Direct EXE |
 | GPU (Distributed Contract) | CTest target | `tests/gpu/test_distributed_contract.cu` | Direct EXE |
-| **CTest total** | **17/17 passing** | `build_modular` | `ctest -C Release` |
+| **CTest total** | **18/18 passing** | `build_modular` | `ctest -C Release` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values

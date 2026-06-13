@@ -20,6 +20,10 @@ add_executable(test_session test_session.cpp)
 target_link_libraries(test_session PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_session COMMAND test_session)
 
+add_executable(test_distributed_file_io test_distributed_file_io.cpp)
+target_link_libraries(test_distributed_file_io PRIVATE ure_core ure_diag)
+add_test(NAME test_distributed_file_io COMMAND test_distributed_file_io)
+
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
     add_test(NAME test_pyure_smoke
