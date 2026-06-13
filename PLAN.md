@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-13 (Phase S mutation API batch: C ABI + pyure high-level mutation helpers)
+最后更新: 2026-06-13 (Phase B/C/S status consolidation and Phase C contract hardening)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -18,10 +18,12 @@
 新 Phase H:     资产管线 (stb_image + SPD)                          IO
 新 Phase I:     配置系统 (JSON + CLI11 + 子命令)                     CLI
 新 Phase A:     SoA 队列 + RenderConfig 集成                        渲染
-新 Phase B:     多 GPU 单机                                         渲染
-新 Phase C:     分布式契约标准化                                    分布式
+新 Phase B:     多 GPU 单机                                         已完成
+新 Phase C:     分布式契约标准化                                    已完成
 新 Phase D:     分布式集成                                          分布式
 新 Phase E:     N 通道光谱升级                                      已完成
+远期 Phase S:   Session API + 脚本化                                已完成
+远期 Phase M:   材质系统                                             未开始
 ```
 
 ---
@@ -1180,6 +1182,8 @@ Queue throughputs 从 `GpuSpectrum[]` 改为 `float spectral_vals[], spectral_wa
 
 `GpuEngine` 单 GPU 接口不变。
 
+完成状态（2026-06-13）: 已完成当前单机多 GPU 边界。`gpu_multi_driver.hpp/.cu` 提供 `MultiGpuContext`、`init_multi_gpu_renderer()`、`render_pass_multi_gpu()`、`copy_frame_buffer_multi_gpu()` 和 `free_multi_gpu_renderer()`；每个 GPU 持有独立 `GpuContext`，按 sample-space offset 分配 disjoint sample slice，device 0 合并 per-device accumulation/sample-count buffers 后复用现有 framebuffer copy path。`RenderConfig::num_gpus_to_use` 控制使用数量，并保留单 GPU renderer API 不变。当前硬件/CI 只有单卡，因此验证以 Release build + 17/17 CTest + warning/error scan 覆盖编译和单卡兼容；真实多卡性能/peer-copy topology benchmark 留作 Phase K 性能验证，不作为 Phase B API 完成阻塞。
+
 ---
 
 ## ████████ Phase C: 分布式契约 ████████
@@ -1187,12 +1191,14 @@ Queue throughputs 从 `GpuSpectrum[]` 改为 `float spectral_vals[], spectral_wa
 **目标**: 定义分布式渲染数据契约，不涉及网络实现。
 
 ```cpp
-struct DistributedSampleRange { int node_id, sample_start, sample_count, width, height; };
+struct DistributedSampleRange { int node_id, node_count, sample_start, sample_count, total_samples, width, height; };
 struct DistributedFrameBuffer { int width, height, total_samples; float* data; };
+DistributedSampleRange make_sample_range(int node_id, int node_count, int total_samples, int width, int height);
+bool validate_sample_range(const DistributedSampleRange& range);
 void merge_partial_framebuffer(DistributedFrameBuffer& accum, const DistributedFrameBuffer& incoming);
 ```
 
-单元测试验证合并顺序无关性。
+完成状态（2026-06-13）: 已完成。契约包含 deterministic sample-range partition、range validation、framebuffer dimension/null/sample-count/overflow validation，以及 order-independent accumulated RGB merge。Release 下不再依赖 `assert` 阻断错误输入；非法输入会抛出标准异常，避免分布式节点静默合并错误帧。`gpu_test_contract` 覆盖分片完整无重叠、非法分片、merge 交换律/结合律/单位元、尺寸不匹配、空 data、负 sample count 和 sample count overflow；当前 targeted gate 为 145/0，build warning/error scan 为空。
 
 ---
 
@@ -1369,10 +1375,12 @@ void merge_partial_framebuffer(DistributedFrameBuffer& accum, const DistributedF
 新 Phase G: ████████████ 已完成 (审计修复 5 项差距 + 全方位测试: host 11 用例/55 检查 + GPU 3 用例/21 检查; 全绿)
 新 Phase I: ████████████ 已完成 (JSON + CLI11 + 子命令 + 覆盖链)
 新 Phase A: ████████████ 已完成 (SoA 队列 + RenderConfig 集成; 13/13 CTest 全绿)
-新 Phase B: ░░░░░░░░░░░░ 未开始
-新 Phase C: ░░░░░░░░░░░░ 未开始
+新 Phase B: ████████████ 已完成 (`MultiGpuContext` + sample-space partition + merged framebuffer copy; single-GPU API unchanged)
+新 Phase C: ████████████ 已完成 (sample range partition + deterministic framebuffer merge + Release-safe validation; gpu_test_contract 145/0)
 新 Phase D: ░░░░░░░░░░░░ 未开始
 新 Phase E: ██████████ 完成（E.0-E.4 已完成；E.5 C1-C6 已完成 medium/IOR transition、conductor material semantics、transport reciprocity + boundary furnace、explicit wavelength PDF + D65/equal-energy/RR photometry、transitional API static audit、full Release build + 17/17 CTest + warning/error scan + search gate）
+远期 Phase S: ████████████ 已完成 (`RenderSession` + `SceneDiff` + progressive worker + AOV + C ABI + pyure mutation workflow; test_session 188/0, test_pyure_smoke 通过)
+远期 Phase M: ░░░░░░░░░░░░ 未开始 (材质节点图 / MaterialX / 预设库；依赖 Phase E + S 稳定边界)
 
 旧目录清理: ████████████ 已完成 (include/ + src/ + tests/{unit,integration} 删除; CMakeLists.txt 遗留构建块移除)
 ```

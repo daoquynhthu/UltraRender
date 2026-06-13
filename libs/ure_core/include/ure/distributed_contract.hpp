@@ -7,8 +7,10 @@ namespace ure::gpu {
 // Describes which sample range a node should render.
 struct DistributedSampleRange {
     int node_id;
+    int node_count;
     int sample_start;   // first sample index (inclusive)
     int sample_count;   // number of samples to render
+    int total_samples;
     int width;          // image width (pixels)
     int height;         // image height (pixels)
 };
@@ -22,8 +24,14 @@ struct DistributedFrameBuffer {
     float* data;        // owned externally, length = width * height * 3
 };
 
-// Merge `incoming` into `accum` — order-independent, commutative, associative.
-// accum.data[p] += incoming.data[p]; accum.total_samples += incoming.total_samples.
+DistributedSampleRange make_sample_range(int node_id,
+                                          int node_count,
+                                          int total_samples,
+                                          int width,
+                                          int height);
+
+bool validate_sample_range(const DistributedSampleRange& range);
+
 void merge_partial_framebuffer(DistributedFrameBuffer& accum,
                                const DistributedFrameBuffer& incoming);
 
