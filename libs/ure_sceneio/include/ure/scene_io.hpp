@@ -2,6 +2,7 @@
 
 #include "ure/ure_api.hpp"
 #include "ure/scene_ir.hpp"
+#include "ure/render_config.hpp"
 #include <string>
 #include <vector>
 
@@ -23,7 +24,9 @@ bool save_bmp(const std::string& path,
               const std::vector<core::Vec3f>& pixels,
               int width, int height);
 
-// SPD file loading (placeholder — returns empty spectrum)
+// SPD file loading
 std::vector<float> load_spd(const std::string& path);
+std::vector<float> load_spd(const std::string& path, int num_wavelengths);
+std::vector<float> load_spd(const std::string& path, const RenderConfig& config);
 
 } // namespace ure::scene_io

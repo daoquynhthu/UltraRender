@@ -102,18 +102,6 @@ __device__ inline GpuVec3 sample_unit_vector_lds(float r1, float r2) {
     return GpuVec3(r * cosf(theta), r * sinf(theta), z);
 }
 
-__device__ inline GpuVec3 random_in_unit_sphere(unsigned int& seed) {
-    float theta = 6.28318530718f * rand_float(seed);
-    float phi = acosf(2.0f * rand_float(seed) - 1.0f);
-    float r = cbrtf(rand_float(seed));
-    float sin_phi = sinf(phi);
-    return GpuVec3(
-        r * sin_phi * cosf(theta),
-        r * sin_phi * sinf(theta),
-        r * cosf(phi)
-    );
-}
-
 __device__ inline GpuVec3 random_unit_vector(unsigned int& seed) {
     float theta = 6.28318530718f * rand_float(seed);
     float z = 2.0f * rand_float(seed) - 1.0f;

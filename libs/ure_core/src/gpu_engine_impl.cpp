@@ -1,19 +1,27 @@
 #include "ure/render.hpp"
+#include "ure/gpu_context.hpp"
 #include "ure/gpu_scene_compiler.hpp"
 #include "ure/gpu_driver.hpp"
 #include "ure/transform_ring_buffer.hpp"
+#include "ure/render_config.hpp"
 
 #include <ure/log.hpp>
 
-#include <iostream>
+#include <array>
 #include <vector>
 #include <cassert>
+#include <stdexcept>
 
 namespace ure {
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4324)
+#endif
+
 class GpuRenderEngine : public IRenderEngine {
 public:
-    GpuRenderEngine() : initialized_(false) {}
+    explicit GpuRenderEngine(const RenderConfig& cfg = RenderConfig{}) : config_(cfg), initialized_(false) {}
 
     ~GpuRenderEngine() {
         if (gpu_context_) {
@@ -33,7 +41,7 @@ public:
     }
 
     void load_scene_ir(const scene_ir::SceneIR& scene_ir) override {
-        CompiledGpuScene compiled = GpuSceneCompiler::compile(scene_ir);
+        CompiledGpuScene compiled = GpuSceneCompiler::compile(scene_ir, config_);
         if (!initialized_) {
             load_compiled_scene(compiled);
             initialized_ = true;
@@ -44,6 +52,18 @@ public:
 
     void load_scene_once(const Scene& scene) override {
         CompiledGpuScene compiled = GpuSceneCompiler::compile_legacy(scene);
+        load_compiled_scene(compiled);
+        initialized_ = true;
+    }
+
+    void reload_scene(const Scene& scene) override {
+        CompiledGpuScene compiled = GpuSceneCompiler::compile_legacy(scene);
+        load_compiled_scene(compiled);
+        initialized_ = true;
+    }
+
+    void reload_scene_ir(const scene_ir::SceneIR& scene_ir) override {
+        CompiledGpuScene compiled = GpuSceneCompiler::compile(scene_ir, config_);
         load_compiled_scene(compiled);
         initialized_ = true;
     }
@@ -70,6 +90,25 @@ public:
         reset_accumulation();
     }
 
+    void update_materials(const gpu::GpuMaterialData* materials, int count) override {
+        if (!gpu_context_) {
+            throw std::runtime_error("update_materials: no GPU context");
+        }
+        if (count != static_cast<int>(cached_materials_.size())) {
+            throw std::runtime_error("update_materials: material count changed; full scene reload required");
+        }
+        if (count > 0 && !materials) {
+            throw std::runtime_error("update_materials: null material pointer");
+        }
+        if (count > 0) {
+            cached_materials_.assign(materials, materials + count);
+        } else {
+            cached_materials_.clear();
+        }
+        ure::gpu::update_materials_gpu(gpu_context_, cached_materials_.data(), count, ure::gpu::kDefaultMaterialCount);
+        reset_accumulation();
+    }
+
     void render(const RenderSettings& settings) override {
         if (!gpu_context_) {
             UR_LOG_ERROR(Core, "No scene loaded!");
@@ -86,10 +125,9 @@ public:
         while (current_spp_ < settings.spp) {
             render_pass();
             if (current_spp_ % 10 == 0) {
-                 std::cout << "\rSPP: " << current_spp_ << " / " << settings.spp << std::flush;
+                UR_LOG_INFO(Core, "SPP: {} / {}", current_spp_, settings.spp);
             }
         }
-        std::cout << std::endl;
         
         // Copy to host buffer
         ure::gpu::copy_frame_buffer_gpu(gpu_context_, frame_buffer_.data());
@@ -120,11 +158,56 @@ public:
         return current_spp_;
     }
 
+    void get_framebuffer_size(int& out_width, int& out_height) const override {
+        out_width = gpu_context_ ? gpu_context_->width : 0;
+        out_height = gpu_context_ ? gpu_context_->height : 0;
+    }
+
     const std::vector<float>& get_framebuffer() const override {
         if (gpu_context_) {
             ure::gpu::copy_frame_buffer_gpu(gpu_context_, const_cast<float*>(frame_buffer_.data()));
         }
         return frame_buffer_;
+    }
+
+    const std::vector<float>& get_aov(AovType type) const override {
+        if (type == AovType::Beauty) {
+            return get_framebuffer();
+        }
+        std::vector<float>& buffer = aov_buffers_[static_cast<int>(type)];
+        if (!gpu_context_) {
+            buffer.clear();
+            return buffer;
+        }
+
+        const int channels = aov_channel_count(type);
+        if (channels == 0) {
+            buffer.clear();
+            return buffer;
+        }
+
+        const size_t pixel_count = static_cast<size_t>(gpu_context_->width) * static_cast<size_t>(gpu_context_->height);
+        buffer.resize(pixel_count * static_cast<size_t>(channels));
+        switch (type) {
+        case AovType::Normal:
+            ure::gpu::copy_normal_buffer_gpu(gpu_context_, buffer.data());
+            break;
+        case AovType::Albedo:
+            ure::gpu::copy_albedo_buffer_gpu(gpu_context_, buffer.data());
+            break;
+        case AovType::Depth:
+            ure::gpu::copy_depth_buffer_gpu(gpu_context_, buffer.data());
+            break;
+        case AovType::Uv:
+            ure::gpu::copy_uv_buffer_gpu(gpu_context_, buffer.data());
+            break;
+        case AovType::MotionVector:
+            ure::gpu::copy_motion_vector_buffer_gpu(gpu_context_, buffer.data());
+            break;
+        case AovType::Beauty:
+            break;
+        }
+        return buffer;
     }
 
 private:
@@ -143,7 +226,7 @@ private:
         medium_absorption_ = compiled.medium_absorption;
         medium_max_distance_ = compiled.medium_max_distance;
 
-        gpu_context_ = ure::gpu::init_gpu_renderer(compiled.width, compiled.height, cached_meshes_, compiled.instances, cached_spheres_, cached_materials_, compiled.textures);
+        gpu_context_ = ure::gpu::init_gpu_renderer(compiled.width, compiled.height, cached_meshes_, compiled.instances, cached_spheres_, cached_materials_, compiled.textures, config_);
         assert(gpu_context_ != nullptr && "init_gpu_renderer failed -- check CUDA state");
         
         // Phase P.3: initialize ring buffer with all frames from compiled instances
@@ -165,6 +248,7 @@ private:
 
         // Prepare Host Buffer
         frame_buffer_.resize(compiled.width * compiled.height * 3);
+        for (auto& buffer : aov_buffers_) buffer.clear();
         current_spp_ = 0;
     }
 
@@ -195,9 +279,10 @@ private:
     }
 
     std::vector<float> frame_buffer_;
+    mutable std::array<std::vector<float>, 6> aov_buffers_;
     std::vector<ure::gpu::RenderMesh> cached_meshes_;
     std::vector<ure::gpu::GpuSphere> cached_spheres_;
-    std::vector<ure::gpu::GpuMaterial> cached_materials_;
+    std::vector<ure::gpu::GpuMaterialData> cached_materials_;
     Camera current_scene_camera_;
     
     // Medium parameters
@@ -212,12 +297,22 @@ private:
     int current_spp_ = 0;
     bool initialized_;
 
+    RenderConfig config_;
+
     // Phase P.3: triple-buffer for transforms (writer=physics, reader=render)
     ure::gpu::TransformRingBuffer transform_ring_buffer_;
 };
 
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+
 std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_renderer() {
     return std::make_unique<GpuRenderEngine>();
+}
+
+std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_renderer(const RenderConfig& config) {
+    return std::make_unique<GpuRenderEngine>(config);
 }
 
 std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_engine() {

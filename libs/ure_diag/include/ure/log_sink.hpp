@@ -173,9 +173,9 @@ public:
             tag_part = std::format("[{}]", ure::log::tag_str(tag));
         }
 
-        std::string line_out = std::format("{}[{}]{} {} ({}:{})\n",
+        std::string line_out = std::format("{}[{}]{} {} ({}:{}:{})\n",
                                            timestamp, level_str(level).data(), tag_part,
-                                           message, func, line);
+                                           message, file, func, line);
         file_ << line_out;
         bytes_written_ += line_out.size();
 

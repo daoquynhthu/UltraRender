@@ -7,8 +7,12 @@
 #include <string>
 #include <cstdint>
 #include <cstring>
+#include <stdexcept>
 
+#include <ure/gpu_scene_compiler.hpp>
 #include <ure/gltf_scene_frontend.hpp>
+#include <ure/render.hpp>
+#include <ure/render_config.hpp>
 #include <ure/scene_ir.hpp>
 
 static int g_passed = 0, g_failed = 0;
@@ -220,9 +224,178 @@ static int test_ure_spectral_extension() {
     CHECK(mat->name == "spectral_gold");
     CHECK(mat->spectral_extension != nullptr);
     CHECK(mat->spectral_extension->spectral_bands == 64);
-    CHECK(mat->spectral_extension->albedo_spd == "textures/gold.spd");
-    CHECK(mat->spectral_extension->emission_spd == "lights/d65.spd");
+    CHECK(mat->spectral_extension->albedo_spd.find("textures") != std::string::npos);
+    CHECK(mat->spectral_extension->albedo_spd.find("gold.spd") != std::string::npos);
+    CHECK(mat->spectral_extension->emission_spd.find("lights") != std::string::npos);
+    CHECK(mat->spectral_extension->emission_spd.find("d65.spd") != std::string::npos);
     CHECK_FLOAT_EQ(mat->dispersion, 0.15f, 1e-6f);
+    return 0;
+}
+
+static int test_spectral_spd_compiles_runtime_n() {
+    std::filesystem::create_directories("textures");
+    std::filesystem::create_directories("lights");
+    {
+        std::ofstream spd("textures/gold.spd");
+        spd << "360 0.36\n830 0.83\n";
+    }
+    {
+        std::ofstream spd("lights/d65.spd");
+        spd << "360 1.0\n830 2.0\n";
+    }
+
+    std::string gltf = R"({
+  "asset": {"version": "2.0"},
+  "extensionsUsed": ["URE_spectral_material"],
+  "scene": 0,
+  "scenes": [{"nodes": [0]}],
+  "nodes": [{"mesh": 0}],
+  "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "NORMAL": 1}, "indices": 2, "material": 0}]}],
+  "materials": [{
+    "name": "spectral_runtime_n",
+    "emissiveFactor": [1.0, 1.0, 1.0],
+    "extensions": {
+      "URE_spectral_material": {
+        "spectralBands": 64,
+        "albedoSPD": "textures/gold.spd",
+        "emissionSPD": "lights/d65.spd"
+      }
+    }
+  }],
+  "buffers": [{
+    "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAABAAIA",
+    "byteLength": 78
+  }],
+  "bufferViews": [
+    {"buffer": 0, "byteOffset": 0, "byteLength": 36},
+    {"buffer": 0, "byteOffset": 36, "byteLength": 36},
+    {"buffer": 0, "byteOffset": 72, "byteLength": 6}
+  ],
+  "accessors": [
+    {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"},
+    {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3"},
+    {"bufferView": 2, "componentType": 5123, "count": 3, "type": "SCALAR"}
+  ]
+})";
+
+    std::string path = write_temp(gltf, ".gltf");
+    auto scene = ure::GltfSceneFrontend::parse_file_to_ir(path);
+    scene.width = 4;
+    scene.height = 4;
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    auto compiled = ure::GpuSceneCompiler::compile(scene, config);
+
+    CHECK(compiled.materials.size() == 1);
+    const auto& mat = compiled.materials[0];
+    for (int c = 0; c < config.num_wavelengths; ++c) {
+        float lambda = ure::gpu::kSpectralLambdaMin +
+                       (static_cast<float>(c) + 0.5f) *
+                           ((ure::gpu::kSpectralLambdaMax - ure::gpu::kSpectralLambdaMin) /
+                            static_cast<float>(config.num_wavelengths));
+        CHECK_FLOAT_EQ(mat.albedo.values[c], lambda * 0.001f, 1e-5f);
+        CHECK_FLOAT_EQ(mat.emission.values[c],
+                       1.0f + (lambda - ure::gpu::kSpectralLambdaMin) /
+                                  (ure::gpu::kSpectralLambdaMax - ure::gpu::kSpectralLambdaMin),
+                       1e-5f);
+        CHECK_FLOAT_EQ(mat.albedo.wavelengths[c], lambda, 1e-5f);
+        CHECK_FLOAT_EQ(mat.emission.wavelengths[c], lambda, 1e-5f);
+    }
+
+    auto engine = ure::RenderEngineFactory::create_gpu_renderer(config);
+    engine->load_scene_ir(scene);
+    CHECK(engine->render_pass() == 1);
+    const auto& framebuffer = engine->get_framebuffer();
+    CHECK(framebuffer.size() == 4 * 4 * 3);
+    for (float value : framebuffer) {
+        CHECK(std::isfinite(value));
+    }
+
+    bool rejected = false;
+    try {
+        ure::RenderConfig invalid = config;
+        invalid.num_wavelengths = ure::gpu::kMaxSpectralChannels + 1;
+        (void)ure::GpuSceneCompiler::compile(scene, invalid);
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+
+    std::filesystem::remove(path);
+    std::filesystem::remove("textures/gold.spd");
+    std::filesystem::remove("lights/d65.spd");
+    std::filesystem::remove("textures");
+    std::filesystem::remove("lights");
+    return 0;
+}
+
+static int test_rgb_fallback_compiles_to_runtime_n_spectrum() {
+    auto mat = std::make_shared<ure::scene_ir::MaterialNode>();
+    mat->model = ure::scene_ir::MaterialModel::Lambertian;
+    mat->base_color = {1.0f, 0.0f, 0.0f};
+    mat->emission = {1.0f, 0.0f, 0.0f};
+
+    ure::scene_ir::SceneIR scene;
+    ure::scene_ir::SphereNode sphere;
+    sphere.material = mat;
+    scene.spheres.push_back(sphere);
+
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    auto compiled = ure::GpuSceneCompiler::compile(scene, config);
+    CHECK(compiled.materials.size() == 1);
+
+    const auto& compiled_mat = compiled.materials[0];
+    CHECK(compiled_mat.albedo.values[0] < 1e-5f);
+    CHECK(compiled_mat.albedo.values[1] < 1e-5f);
+    CHECK(compiled_mat.albedo.values[4] > 0.9f);
+    CHECK(compiled_mat.albedo.values[7] > 0.9f);
+    CHECK(compiled_mat.emission.values[4] > compiled_mat.emission.values[1]);
+    for (int c = 0; c < config.num_wavelengths; ++c) {
+        CHECK(compiled_mat.albedo.wavelengths[c] > 0.0f);
+        CHECK(compiled_mat.emission.wavelengths[c] == compiled_mat.albedo.wavelengths[c]);
+    }
+    return 0;
+}
+
+static int test_metal_coefficients_compile_as_physical_carriers() {
+    auto measured = std::make_shared<ure::scene_ir::MaterialNode>();
+    measured->model = ure::scene_ir::MaterialModel::Metal;
+    measured->base_color = {0.9f, 0.2f, 0.1f};
+    measured->metal_eta = {2.0f, 3.0f, 4.0f};
+    measured->metal_k = {5.0f, 6.0f, 7.0f};
+
+    auto fallback = std::make_shared<ure::scene_ir::MaterialNode>();
+    fallback->model = ure::scene_ir::MaterialModel::Metal;
+    fallback->base_color = {0.25f, 0.5f, 0.75f};
+    fallback->metal_eta = {8.0f, 9.0f, 10.0f};
+    fallback->metal_k = {0.0f, 0.0f, 0.0f};
+
+    ure::scene_ir::SceneIR scene;
+    ure::scene_ir::SphereNode s0;
+    s0.material = measured;
+    scene.spheres.push_back(s0);
+    ure::scene_ir::SphereNode s1;
+    s1.material = fallback;
+    scene.spheres.push_back(s1);
+
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    auto compiled = ure::GpuSceneCompiler::compile(scene, config);
+    CHECK(compiled.materials.size() == 2);
+
+    const auto& measured_gpu = compiled.materials[0];
+    CHECK_FLOAT_EQ(measured_gpu.metal_eta.values[0], 4.0f, 1e-6f);
+    CHECK_FLOAT_EQ(measured_gpu.extinction.values[0], 7.0f, 1e-6f);
+    CHECK_FLOAT_EQ(measured_gpu.metal_eta.values[7], 2.0f, 1e-6f);
+    CHECK_FLOAT_EQ(measured_gpu.extinction.values[7], 5.0f, 1e-6f);
+    CHECK(measured_gpu.extinction.values[3] > 5.0f);
+
+    const auto& fallback_gpu = compiled.materials[1];
+    for (int c = 0; c < config.num_wavelengths; ++c) {
+        CHECK_FLOAT_EQ(fallback_gpu.extinction.values[c], 0.0f, 1e-6f);
+        CHECK(fallback_gpu.albedo.values[c] >= 0.25f);
+    }
     return 0;
 }
 
@@ -421,6 +594,9 @@ int main() {
     failed += run("test_tangent_generation",              test_tangent_generation);
     failed += run("test_pbr_material",                    test_pbr_material);
     failed += run("test_ure_spectral_extension",           test_ure_spectral_extension);
+    failed += run("test_spectral_spd_compiles_runtime_n",  test_spectral_spd_compiles_runtime_n);
+    failed += run("test_rgb_fallback_compiles_to_runtime_n_spectrum", test_rgb_fallback_compiles_to_runtime_n_spectrum);
+    failed += run("test_metal_coefficients_compile_as_physical_carriers", test_metal_coefficients_compile_as_physical_carriers);
     failed += run("test_extensions_required_rejected",     test_extensions_required_rejected);
     failed += run("test_extensions_used_spectral",         test_extensions_used_spectral);
     failed += run("test_camera_parsing",                  test_camera_parsing);

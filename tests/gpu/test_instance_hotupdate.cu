@@ -1,6 +1,8 @@
 #include "test_framework.cuh"
+#include <ure/gpu_context.hpp>
 #include <ure/gpu_driver.hpp>
 #include <ure/gpu_structs.hpp>
+#include <ure/log.hpp>
 #include <ure/transform_ring_buffer.hpp>
 
 // --- Layout verification (host-side) ---
@@ -59,8 +61,8 @@ static int test_gpu_hot_update_identity() {
     }
     
     // Default material (Lambertian)
-    std::vector<ure::gpu::GpuMaterial> materials(1);
-    materials[0].type = ure::gpu::MaterialType::Lambertian;
+    std::vector<ure::gpu::GpuMaterialData> materials(1);
+    materials[0].header.type = ure::gpu::MaterialType::Lambertian;
     materials[0].albedo = ure::gpu::GpuSpectrum(0.8f, 0.8f, 0.8f);
     
     // One instance with known transform
@@ -105,14 +107,6 @@ static int test_gpu_hot_update_identity() {
     std::vector<float> fb(64 * 64 * 3);
     ure::gpu::copy_frame_buffer_gpu(ctx, fb.data());
     
-    // Verify the buffer has valid data (no NaN, no inf)
-    bool has_valid_data = false;
-    for (int i = 0; i < 64 * 64 * 3; ++i) {
-        if (fb[i] > 0.0f) {
-            has_valid_data = true;
-            break;
-        }
-    }
     // Note: With translation of 100 units, the triangle is far from camera,
     // so the buffer may be all zeros (no intersection). This is expected.
     // What matters is that the render completed without crash or CUDA error.
@@ -147,8 +141,8 @@ static int test_gpu_transform_readback() {
         mesh.material_index = 0;
         meshes.push_back(mesh);
     }
-    std::vector<ure::gpu::GpuMaterial> materials(1);
-    materials[0].type = ure::gpu::MaterialType::Lambertian;
+    std::vector<ure::gpu::GpuMaterialData> materials(1);
+    materials[0].header.type = ure::gpu::MaterialType::Lambertian;
     materials[0].albedo = ure::gpu::GpuSpectrum(0.5f,0.5f,0.5f);
     
     std::vector<ure::gpu::GpuInstance> instances(1);
@@ -165,6 +159,7 @@ static int test_gpu_transform_readback() {
     // Allocate host+device memory for transform readback
     ure::gpu::GpuInstanceTransform* d_readback;
     ure::gpu::GpuInstanceTransform h_readback;
+    ure::gpu::GpuInstanceTransform h_previous;
     CHECK_CUDA(cudaMalloc(&d_readback, sizeof(ure::gpu::GpuInstanceTransform)));
     DeviceMem _d(d_readback);
     CHECK_CUDA(cudaMemset(d_readback, 0, sizeof(ure::gpu::GpuInstanceTransform)));
@@ -188,6 +183,18 @@ static int test_gpu_transform_readback() {
     updated[0].max_pt = {2, 1, 1};
     
     ure::gpu::update_instance_transforms_gpu(ctx, updated.data(), 1);
+
+    CHECK_CUDA(cudaMemcpy(&h_previous, ctx->d_previous_instance_transforms, sizeof(ure::gpu::GpuInstanceTransform), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(h_previous.transform.m[0][0], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_previous.inverse_transform.m[0][0], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_previous.min_pt.x, -1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_previous.max_pt.x, 1.0f, 1e-6f);
+
+    CHECK_CUDA(cudaMemcpy(&h_readback, ctx->d_instance_transforms, sizeof(ure::gpu::GpuInstanceTransform), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(h_readback.transform.m[0][0], 2.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_readback.inverse_transform.m[0][0], 0.5f, 1e-6f);
+    CHECK_FLOAT_EQ(h_readback.min_pt.x, -2.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_readback.max_pt.x, 2.0f, 1e-6f);
     
     // Render and verify no CUDA error
     int spp = ure::gpu::render_pass_gpu(ctx, 1);
@@ -337,6 +344,7 @@ static int test_ring_buffer_wraparound() {
 }
 
 int main() {
+    ure::log::set_min_level(ure::log::Level::Warn);
     printf("[GPU Instance Hot-Update Test]\n");
     RUN_TEST(test_instance_layout);
     RUN_TEST(test_gpu_hot_update_identity);

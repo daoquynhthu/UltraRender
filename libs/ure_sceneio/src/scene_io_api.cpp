@@ -26,9 +26,17 @@ bool save_bmp(const std::string& path,
 }
 
 std::vector<float> load_spd(const std::string& path) {
+    return load_spd(path, RenderConfig{}.num_wavelengths);
+}
+
+std::vector<float> load_spd(const std::string& path, int num_wavelengths) {
     auto raw = spectral::load_spd_file(path);
     if (raw.lambdas.empty()) return {};
-    return spectral::resample_uniform(raw);
+    return spectral::resample_uniform(raw, num_wavelengths);
+}
+
+std::vector<float> load_spd(const std::string& path, const RenderConfig& config) {
+    return load_spd(path, config.num_wavelengths);
 }
 
 } // namespace ure::scene_io

@@ -21,6 +21,7 @@ bool load_image_rgb32f(const std::string& file_path, gpu::HostTexture& out_textu
 
     out_texture.width = w;
     out_texture.height = h;
+    out_texture.channels = 3;
     out_texture.data.assign(data, data + static_cast<size_t>(w) * static_cast<size_t>(h) * 3);
     stbi_image_free(data);
     return true;

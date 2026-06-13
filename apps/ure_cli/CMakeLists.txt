@@ -13,5 +13,8 @@ if(TARGET ure_physics)
 endif()
 
 if(MSVC)
+    target_compile_options(ure_cli PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:/utf-8;/EHsc>
+    )
     target_link_options(ure_cli PRIVATE /NODEFAULTLIB:LIBCMT)
 endif()

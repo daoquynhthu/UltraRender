@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include "ure/gpu_structs.hpp"
+#include "ure/host_texture.hpp"
 
 namespace ure::gpu {
 
@@ -13,16 +14,10 @@ struct HostMesh {
     int material_index;
 };
 
-struct HostTexture {
-    int width;
-    int height;
-    std::vector<float> data; // RGB floats (3 floats per pixel)
-};
-
 inline constexpr int kDefaultMaterialCount = 7;
 
 struct GpuHostScene {
-    std::vector<GpuMaterial> materials;
+    std::vector<GpuMaterialData> materials;
     std::vector<GpuSphere> spheres;
     std::vector<HostMesh> meshes;
     std::vector<HostTexture> textures;

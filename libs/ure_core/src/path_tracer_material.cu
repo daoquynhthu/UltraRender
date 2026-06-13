@@ -3,12 +3,12 @@
 #include <float.h>
 #include <math.h>
 #include "ure/gpu_structs.hpp"
+#include "ure/gpu_material_helpers.cuh"
 #include "ure/path_tracer_sampling.cuh"
 
-using namespace ure::gpu;
-
 __device__ inline bool scatter(
-    const GpuRay& r_in, const GpuMaterial& mat, const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
+    const GpuRay& r_in, const GpuMaterial& mat, const GpuSpectrum& albedo, const GpuSpectrum& extinction, const GpuSpectrum& metal_eta,
+    const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
     const GpuSpectrum& current_throughput,
     GpuSpectrum& attenuation, GpuRay& scattered, StokesVector& stokes, unsigned int& seed,
     float& out_pdf,
@@ -16,14 +16,18 @@ __device__ inline bool scatter(
     int sample_index,
     int pixel_index,
     int depth,
-    int& spectral_channel,
+    int num_spec,
     float ior_outside,
-    float ior_inside
+    float ior_inside,
+    int spectral_mode,
+    int active_channel
 ) {
+    (void)ior_inside;
     int dim_offset = 4 + depth * 6;
     float r_bsdf_1 = sample_dimension(sample_index, pixel_index, dim_offset + 0);
     float r_bsdf_2 = sample_dimension(sample_index, pixel_index, dim_offset + 1);
     float r_bsdf_3 = sample_dimension(sample_index, pixel_index, dim_offset + 2);
+    float r_bsdf_4 = sample_dimension(sample_index, pixel_index, dim_offset + 3);
 
     float effective_thickness = mat.thin_film_thickness;
     if (effective_thickness > 0.0f) {
@@ -43,7 +47,7 @@ __device__ inline bool scatter(
         
         scattered.t_min = 1e-4f; 
         scattered.t_max = FLT_MAX;
-        attenuation = mat.albedo;
+        attenuation = albedo;
         
         stokes.Q = 0.0f;
         stokes.U = 0.0f;
@@ -63,16 +67,6 @@ __device__ inline bool scatter(
         GpuVec3 L = reflect(-V, H);
         
         scattered.direction = L.normalize();
-        
-        int channel = sample_index % 3;
-        
-        float n_val = mat.ior;
-        
-        float k_r = mat.extinction.values.x;
-        float k_g = mat.extinction.values.y;
-        float k_b = mat.extinction.values.z;
-        
-        float k_val = (channel == 0) ? k_r : ((channel == 1) ? k_g : k_b);
         
         GpuVec3 ref_in = get_reference_frame(r_in.direction);
         
@@ -98,16 +92,59 @@ __device__ inline bool scatter(
         rotate_stokes(stokes, 2.0f * phi_in);
         
         float cos_theta_h = fmaxf(0.0f, V.dot(H));
+        float conductor_reflectance[kMaxSpectralChannels];
+        ConductorMaterialSemantics conductor = eval_conductor_material_semantics(metal_eta, extinction, num_spec);
+        for (int c = 0; c < num_spec; ++c) {
+            conductor_reflectance[c] = eval_metal_reflectance_for_channel(
+                conductor,
+                albedo.values[c],
+                metal_eta.values[c],
+                extinction.values[c],
+                mat.ior,
+                current_throughput.wavelengths[c],
+                effective_thickness,
+                mat.thin_film_ior,
+                cos_theta_h);
+        }
         
         float stokes_I_in = stokes.I;
-        apply_mueller_reflection_conductor(stokes, n_val, k_val, cos_theta_h);
-        float stokes_I_out = stokes.I;
-        
-        float fresnel_reflectance = 0.0f;
-        if (stokes_I_in > 1e-6f) {
-             fresnel_reflectance = stokes_I_out / stokes_I_in;
+        int stokes_channel = spectral_mode == SpectralRayModeLane
+            ? min(max(active_channel, 0), num_spec - 1)
+            : min(max(num_spec / 2, 0), num_spec - 1);
+        if (conductor.measured_conductor) {
+            float eta_c = conductor_eta_for_channel(conductor, metal_eta, mat.ior, stokes_channel);
+            if (effective_thickness > 0.0f) {
+                ThinFilmBoundary film = eval_thin_film_conductor_boundary(
+                    current_throughput.wavelengths[stokes_channel],
+                    effective_thickness,
+                    1.0f,
+                    mat.thin_film_ior,
+                    eta_c,
+                    extinction.values[stokes_channel],
+                    cos_theta_h);
+                apply_mueller_reflection_boundary(stokes, film.rs, film.rp, film.Rs, film.Rp);
+            } else {
+                apply_mueller_reflection_conductor(stokes, eta_c, extinction.values[stokes_channel], cos_theta_h);
+            }
+        } else if (effective_thickness > 0.0f) {
+            float eta_equiv = conductor_f0_eta_from_albedo(albedo.values[stokes_channel]);
+            ThinFilmBoundary film = eval_thin_film_boundary(
+                current_throughput.wavelengths[stokes_channel],
+                effective_thickness,
+                1.0f,
+                mat.thin_film_ior,
+                eta_equiv,
+                cos_theta_h);
+            apply_mueller_reflection_boundary(stokes, film.rs, film.rp, film.Rs, film.Rp);
         } else {
-             fresnel_reflectance = 1.0f; 
+            float r = sqrtf(fmaxf(0.0f, conductor_reflectance[stokes_channel]));
+            apply_mueller_reflection_boundary(stokes, c_make(r, 0.0f), c_make(-r, 0.0f), r * r, r * r);
+        }
+        float stokes_I_out = stokes.I;
+
+        float stokes_scale = 1.0f;
+        if (stokes_I_in > 1e-6f) {
+             stokes_scale = stokes_I_out / stokes_I_in;
         }
 
         float NdotV = N.dot(V);
@@ -129,36 +166,19 @@ __device__ inline bool scatter(
         k = (k * k) * 0.125f;
         
         float G1_L = smith_G1(NdotL, k);
-        float microfacet_weight = (G1_L * VdotH) / fmaxf(1e-6f, NdotH * NdotV);
+        float microfacet_weight = G1_L;
         
-        float tf_boost = 1.0f;
         if (effective_thickness > 0.0f) {
-            float r_base_r = mat.albedo.values.x;
-            float r_base_g = mat.albedo.values.y;
-            float r_base_b = mat.albedo.values.z;
-            
-            float R_tf_r = get_thin_film_interference(650.0f, effective_thickness, mat.thin_film_ior, cos_theta_h, r_base_r);
-            float R_tf_g = get_thin_film_interference(550.0f, effective_thickness, mat.thin_film_ior, cos_theta_h, r_base_g);
-            float R_tf_b = get_thin_film_interference(450.0f, effective_thickness, mat.thin_film_ior, cos_theta_h, r_base_b);
-
-            float boost_r = R_tf_r / fmaxf(1e-6f, r_base_r);
-            float boost_g = R_tf_g / fmaxf(1e-6f, r_base_g);
-            float boost_b = R_tf_b / fmaxf(1e-6f, r_base_b);
-            
-            tf_boost = (boost_r + boost_g + boost_b) / 3.0f;
-            
-            stokes.I *= tf_boost;
-            stokes.Q *= tf_boost;
-            stokes.U *= tf_boost;
-            stokes.V *= tf_boost;
-            
-            attenuation.values.x = mat.albedo.values.x * boost_r * fresnel_reflectance * microfacet_weight;
-            attenuation.values.y = mat.albedo.values.y * boost_g * fresnel_reflectance * microfacet_weight;
-            attenuation.values.z = mat.albedo.values.z * boost_b * fresnel_reflectance * microfacet_weight;
+            for (int c = 0; c < num_spec; ++c) {
+                attenuation.values[c] = conductor_reflectance[c] * microfacet_weight;
+            }
         } else {
-            attenuation.values.x = mat.albedo.values.x * fresnel_reflectance * microfacet_weight;
-            attenuation.values.y = mat.albedo.values.y * fresnel_reflectance * microfacet_weight;
-            attenuation.values.z = mat.albedo.values.z * fresnel_reflectance * microfacet_weight;
+            for (int c = 0; c < num_spec; ++c) {
+                attenuation.values[c] = conductor_reflectance[c] * microfacet_weight;
+            }
+        }
+        if (stokes_scale <= 0.0f) {
+            stokes = StokesVector(0.0f, 0.0f, 0.0f, 0.0f);
         }
 
         GpuVec3 ref_out = get_reference_frame(scattered.direction);
@@ -196,37 +216,7 @@ __device__ inline bool scatter(
         }
         return (scattered.direction.dot(N) > 0);
     } else if (mat.type == MaterialType::Dielectric) {
-        attenuation = mat.albedo; // Use material albedo for tint
-        float refraction_ratio = mat.ior; 
-
-        if (mat.dispersion > 0.0f || mat.thin_film_thickness > 0.0f) {
-            int channel;
-            if (spectral_channel > 0) {
-                channel = spectral_channel - 1;
-            } else {
-                float r_spec = sample_dimension(sample_index, pixel_index, dim_offset + 6);
-                channel = min(int(r_spec * 3.0f), 2);
-            }
-
-            float lambda = 550.0f;
-            
-            if (channel == 0) lambda = 650.0f;
-            else if (channel == 1) lambda = 550.0f;
-            else lambda = 450.0f;
-
-            if (mat.dispersion > 0.0f) {
-                float inv_lambda2 = 1.0f / (lambda * lambda);
-                float inv_ref2 = 1.0f / (550.0f * 550.0f);
-                float offset = (inv_lambda2 - inv_ref2) * 4e5f;
-                refraction_ratio = mat.ior + mat.dispersion * offset;
-                if (refraction_ratio < 1.01f) refraction_ratio = 1.01f;
-            }
-
-            float b_val = 1.0f;
-            if (b_val > dispersion_clamp) b_val = dispersion_clamp; 
-            
-            attenuation = GpuSpectrum(b_val);
-        }
+        attenuation = albedo; // Use material albedo for tint
 
         bool front_face = r_in.direction.dot(n) < 0;
         GpuVec3 normal = front_face ? n : -n;
@@ -257,99 +247,69 @@ __device__ inline bool scatter(
         
         rotate_stokes(stokes, 2.0f * phi_in);
 
-        float eta_i = front_face ? ior_outside : refraction_ratio;
-        float eta_t = front_face ? refraction_ratio : ior_outside;
-        
         GpuVec3 unit_direction = r_in.direction.normalize();
         float cos_theta_i = fminf((-unit_direction).dot(normal), 1.0f);
-        float sin_theta_i = sqrtf(fmaxf(0.0f, 1.0f - cos_theta_i * cos_theta_i));
-        float sin_theta_t = (eta_i / eta_t) * sin_theta_i;
-        
-        bool is_tir = sin_theta_t >= 1.0f;
-        float cos_theta_t = is_tir ? 0.0f : sqrtf(fmaxf(0.0f, 1.0f - sin_theta_t * sin_theta_t));
 
-        float rs = 1.0f, rp = 1.0f;
-        float ts = 0.0f, tp = 0.0f;
+        float Is = stokes_s_intensity(stokes);
+        float Ip = stokes_p_intensity(stokes);
 
-        if (!is_tir) {
-            float n1c1 = eta_i * cos_theta_i;
-            float n2c2 = eta_t * cos_theta_t;
-            float n2c1 = eta_t * cos_theta_i;
-            float n1c2 = eta_i * cos_theta_t;
-            
-            rs = (n1c1 - n2c2) / (n1c1 + n2c2);
-            rp = (n2c1 - n1c2) / (n2c1 + n1c2);
-            
-            ts = (2.0f * n1c1) / (n1c1 + n2c2);
-            tp = (2.0f * n1c1) / (n2c1 + n1c2);
+        float R_vals[kMaxSpectralChannels], T_vals[kMaxSpectralChannels];
+        float eta_i_vals[kMaxSpectralChannels], eta_t_vals[kMaxSpectralChannels];
+        float reflect_prob = 0.0f;
+        for (int c = 0; c < num_spec; ++c) {
+            float lambda = current_throughput.wavelengths[c];
+            float material_ior = dispersed_dielectric_ior(mat.ior, mat.dispersion, lambda, dispersion_clamp);
+
+            float eta_i_c = front_face ? ior_outside : material_ior;
+            float eta_t_c = front_face ? material_ior : ior_outside;
+            eta_i_vals[c] = eta_i_c;
+            eta_t_vals[c] = eta_t_c;
+
+            DielectricSurfaceBoundary surface_c = eval_dielectric_surface_boundary(
+                lambda, effective_thickness, eta_i_c, mat.thin_film_ior, eta_t_c, cos_theta_i);
+            if (surface_c.tir) {
+                R_vals[c] = 1.0f;
+                T_vals[c] = 0.0f;
+                reflect_prob += R_vals[c];
+                continue;
+            }
+
+            float R_c = (surface_c.Rs * Is + surface_c.Rp * Ip) / (stokes.I + 1e-6f);
+            float T_c = (surface_c.Ts * Is + surface_c.Tp * Ip) / (stokes.I + 1e-6f);
+            R_vals[c] = fminf(1.0f, fmaxf(0.0f, R_c));
+            T_vals[c] = fminf(1.0f, fmaxf(0.0f, T_c));
+            reflect_prob += R_vals[c];
         }
+        reflect_prob = fminf(1.0f, fmaxf(0.0f, reflect_prob / float(num_spec)));
 
-        float Is = 0.5f * (stokes.I - stokes.Q);
-        float Ip = 0.5f * (stokes.I + stokes.Q);
-        
-        float Rs = rs * rs;
-        float Rp = rp * rp;
-        
-        float reflect_prob = (Rs * Is + Rp * Ip) / (stokes.I + 1e-6f);
+        int hero_channel = (int)floorf(r_bsdf_4 * float(num_spec));
+        if (hero_channel < 0) hero_channel = 0;
+        if (hero_channel >= num_spec) hero_channel = num_spec - 1;
+        float eta_i = eta_i_vals[hero_channel];
+        float eta_t = eta_t_vals[hero_channel];
+        DielectricSurfaceBoundary hero_surface = eval_dielectric_surface_boundary(
+            current_throughput.wavelengths[hero_channel],
+            effective_thickness,
+            eta_i,
+            mat.thin_film_ior,
+            eta_t,
+            cos_theta_i);
+        bool is_tir = hero_surface.tir;
         if (is_tir) reflect_prob = 1.0f;
 
-        GpuVec3 R_spectral(1.0f, 1.0f, 1.0f); 
-        GpuVec3 T_spectral(1.0f, 1.0f, 1.0f);
-        bool has_thin_film = (!is_tir && effective_thickness > 0.0f);
-
-        if (has_thin_film) {
-            float R_r = get_dielectric_thin_film_reflectance(650.0f, effective_thickness, mat.thin_film_ior, eta_i, eta_t, cos_theta_i);
-            float R_g = get_dielectric_thin_film_reflectance(550.0f, effective_thickness, mat.thin_film_ior, eta_i, eta_t, cos_theta_i);
-            float R_b = get_dielectric_thin_film_reflectance(450.0f, effective_thickness, mat.thin_film_ior, eta_i, eta_t, cos_theta_i);
-            
-            R_spectral = GpuVec3(R_r, R_g, R_b);
-            T_spectral = GpuVec3(1.0f - R_r, 1.0f - R_g, 1.0f - R_b);
-            
-            reflect_prob = (R_r + R_g + R_b) / 3.0f;
-        }
-
         GpuVec3 out_direction;
-        float delta = 0.0f;
-
         if (r_bsdf_3 < reflect_prob) {
             out_direction = reflect(unit_direction, normal);
+            apply_mueller_reflection_boundary(stokes, hero_surface.rs, hero_surface.rp, hero_surface.Rs, hero_surface.Rp);
             
-            if (is_tir) {
-                float n_rel = eta_t / eta_i;
-                float sin2_i = sin_theta_i * sin_theta_i;
-                float cos_i = cos_theta_i;
-                float term = sqrtf(fmaxf(0.0f, sin2_i - n_rel * n_rel));
-                
-                float phase_s = 2.0f * atan2f(term, cos_i);
-                float phase_p = 2.0f * atan2f(term, n_rel * n_rel * cos_i);
-                delta = phase_s - phase_p;
-                
-                apply_mueller_reflection_dielectric(stokes, 1.0f, 1.0f, delta);
-            } else {
-                apply_mueller_reflection_dielectric(stokes, rs, rp);
-            }
-            
-            if (has_thin_film) {
-                attenuation.values.x *= R_spectral.x;
-                attenuation.values.y *= R_spectral.y;
-                attenuation.values.z *= R_spectral.z;
-            } else {
-                attenuation = attenuation * reflect_prob;
-            }
+            for (int c = 0; c < num_spec; ++c) attenuation.values[c] *= R_vals[c];
 
             float pdf = fmaxf(1e-6f, reflect_prob);
             stokes = stokes * (1.0f / pdf);
             attenuation = attenuation * (1.0f / pdf);
         } else {
-            GpuSpectrum transmission_color = mat.albedo;
-            
-            if (has_thin_film) {
-                 transmission_color.values.x *= T_spectral.x;
-                 transmission_color.values.y *= T_spectral.y;
-                 transmission_color.values.z *= T_spectral.z;
-            } else {
-                transmission_color = transmission_color * (1.0f - reflect_prob);
-            }
+            GpuSpectrum transmission_color = albedo;
+            for (int c = 0; c < num_spec; ++c) transmission_color.values[c] *= T_vals[c];
             attenuation = transmission_color;
 
             GpuVec3 perp = (eta_i / eta_t) * (unit_direction + cos_theta_i * normal);
@@ -357,11 +317,12 @@ __device__ inline bool scatter(
             out_direction = perp + para;
             
             float transmit_prob = 1.0f - reflect_prob;
-            apply_mueller_transmission_dielectric(stokes, ts, tp, (eta_t * cos_theta_t) / (eta_i * cos_theta_i));
+            apply_mueller_transmission_boundary(stokes, hero_surface.ts, hero_surface.tp, hero_surface.Ts, hero_surface.Tp, hero_surface.eta_jacobian);
             
-            float eta_ratio = eta_t / eta_i;
-            float radiance_scale = eta_ratio * eta_ratio;
-            if (radiance_scale > 1.5f) radiance_scale = 1.5f;
+            float radiance_scale = select_boundary_transport_scale(
+                hero_surface.radiance_scale,
+                hero_surface.importance_scale,
+                BoundaryTransportMode::Radiance);
             stokes = stokes * radiance_scale;
             attenuation = attenuation * radiance_scale;
 
@@ -403,7 +364,7 @@ __device__ inline bool scatter(
         
         float intensity = 0.75f + noise * 0.25f;
         
-        attenuation = mat.albedo * intensity;
+        attenuation = albedo * intensity;
         
         GpuVec3 scatter_direction = n + sample_unit_vector_lds(r_bsdf_1, r_bsdf_2);
         if (scatter_direction.length_sq() < 1e-16f) scatter_direction = n;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ure/gpu_scene_loader.hpp"
+#include "ure/host_texture.hpp"
 #include "ure/scene_ir.hpp"
 #include <string>
 

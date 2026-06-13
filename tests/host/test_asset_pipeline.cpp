@@ -6,6 +6,7 @@
 #include <string>
 
 #include <ure/image_loader.hpp>
+#include <ure/scene_io.hpp>
 #include <ure/spd_loader.hpp>
 
 static int g_passed = 0, g_failed = 0;
@@ -128,6 +129,32 @@ static int test_spd_loader() {
     return 0;
 }
 
+static int test_scene_io_load_spd_runtime_n() {
+    const char* tmp = "test_spd_runtime_n.spd";
+    {
+        std::ofstream f(tmp);
+        f << "400.0 0.0\n";
+        f << "500.0 1.0\n";
+        f << "600.0 0.5\n";
+        f << "700.0 0.25\n";
+    }
+
+    auto n8 = ure::scene_io::load_spd(tmp, 8);
+    CHECK(n8.size() == 8);
+    CHECK_FLOAT_EQ(n8[0], 0.0f, 1e-6f);
+    CHECK_FLOAT_EQ(n8[7], 0.25f, 1e-6f);
+
+    ure::RenderConfig cfg;
+    cfg.num_wavelengths = 6;
+    auto n6 = ure::scene_io::load_spd(tmp, cfg);
+    CHECK(n6.size() == 6);
+    CHECK_FLOAT_EQ(n6[0], 0.0f, 1e-6f);
+    CHECK_FLOAT_EQ(n6[5], 0.25f, 1e-6f);
+
+    std::remove(tmp);
+    return 0;
+}
+
 static int test_missing_texture() {
     ure::gpu::HostTexture tex;
     bool ok = ure::io::load_image_rgb32f("nonexistent_file_xyz.bmp", tex);
@@ -199,6 +226,7 @@ int main() {
     int failed = 0;
     failed += run("test_load_image_bmp", test_load_image_bmp);
     failed += run("test_spd_loader", test_spd_loader);
+    failed += run("test_scene_io_load_spd_runtime_n", test_scene_io_load_spd_runtime_n);
     failed += run("test_missing_texture", test_missing_texture);
     failed += run("test_empty_spd", test_empty_spd);
     failed += run("test_spd_unsorted", test_spd_unsorted);

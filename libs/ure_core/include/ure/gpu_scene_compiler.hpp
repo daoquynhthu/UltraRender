@@ -3,7 +3,13 @@
 #include "ure/ure_api.hpp"
 #include "ure/gpu_driver.hpp"
 #include "ure/gpu_scene_loader.hpp"
+#include "ure/render_config.hpp"
 #include "ure/scene_ir.hpp"
+
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4324)
+#endif
 
 namespace ure {
 
@@ -11,7 +17,7 @@ struct CompiledGpuScene {
     std::vector<ure::gpu::RenderMesh> meshes;
     std::vector<ure::gpu::GpuInstance> instances;
     std::vector<ure::gpu::GpuSphere> spheres;
-    std::vector<ure::gpu::GpuMaterial> materials;
+    std::vector<ure::gpu::GpuMaterialData> materials;
     std::vector<ure::gpu::HostTexture> textures;
     Camera camera;
     float medium_density = 0.0f;
@@ -27,6 +33,7 @@ class GpuSceneCompiler {
 public:
     static CompiledGpuScene compile_legacy(const Scene& scene);
     static CompiledGpuScene compile(const scene_ir::SceneIR& scene_ir);
+    static CompiledGpuScene compile(const scene_ir::SceneIR& scene_ir, const RenderConfig& config);
 
     // Build a single GpuInstanceTransform from entity pose + mesh AABB.
     // Used for hot-update path via IRenderEngine::update_transforms().
@@ -38,3 +45,7 @@ public:
 };
 
 } // namespace ure
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif

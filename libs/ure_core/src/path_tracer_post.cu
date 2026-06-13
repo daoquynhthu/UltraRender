@@ -7,7 +7,7 @@ using namespace ure::gpu;
 
 namespace ure::gpu {
 
-__global__ void resolve_framebuffer_kernel(
+__global__ __launch_bounds__(256) void resolve_framebuffer_kernel(
     GpuVec3* accum_buffer,
     int* sample_counts,
     GpuVec3* output,
@@ -63,7 +63,7 @@ __device__ GpuVec3 sample_bilinear(const GpuVec3* buffer, int width, int height,
     return top * (1.0f - dy) + bot * dy;
 }
 
-__global__ void fxaa_kernel(
+__global__ __launch_bounds__(256) void fxaa_kernel(
     GpuVec3* output,
     const GpuVec3* input,
     int width,

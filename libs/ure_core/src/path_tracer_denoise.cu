@@ -11,7 +11,7 @@ static __device__ __forceinline__ float luma(GpuVec3 rgb) {
     return rgb.x * 0.299f + rgb.y * 0.587f + rgb.z * 0.114f;
 }
 
-__global__ void suppress_dark_outliers_kernel(
+__global__ __launch_bounds__(256) void suppress_dark_outliers_kernel(
     GpuVec3* output_buffer,
     const GpuVec3* input_buffer,
     const GpuVec3* normal_buffer,
@@ -91,7 +91,7 @@ __global__ void suppress_dark_outliers_kernel(
     }
 }
 
-__global__ void atrous_filter_kernel(
+__global__ __launch_bounds__(256) void atrous_filter_kernel(
     GpuVec3* output_buffer,
     const GpuVec3* input_buffer,
     const GpuVec3* normal_buffer,

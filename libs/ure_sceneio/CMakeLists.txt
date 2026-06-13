@@ -26,7 +26,8 @@ target_include_directories(ure_sceneio PUBLIC
 target_include_directories(ure_sceneio PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party
 )
-target_link_libraries(ure_sceneio PUBLIC ure_types ure_core ure_diag)
+target_link_libraries(ure_sceneio PUBLIC ure_types ure_diag)
+target_link_libraries(ure_sceneio PRIVATE ure_core)
 
 if(MSVC)
     target_compile_options(ure_sceneio PRIVATE

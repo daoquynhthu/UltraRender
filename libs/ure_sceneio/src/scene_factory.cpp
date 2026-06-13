@@ -66,11 +66,11 @@ SceneFactory::SceneData SceneFactory::create_test_scene() {
     auto glass_material = std::make_shared<materials::DielectricBSDF>(glass_eta);
     
     // 金属球：金色近似
-    auto gold_spd = spectral::Spectrum::spd_from_rgb(1.0f, 0.85f, 0.5f);
+    auto gold_spd = spectral::Spectrum::rgb_to_approximate_spd(1.0f, 0.85f, 0.5f);
     auto metal_material = std::make_shared<materials::MicrofacetBSDF>(gold_spd, 0.05f);
     
     // 红色球：鲜艳的红色
-    auto red_spd = spectral::Spectrum::spd_from_rgb(0.9f, 0.1f, 0.1f);
+    auto red_spd = spectral::Spectrum::rgb_to_approximate_spd(0.9f, 0.1f, 0.1f);
     auto red_material = std::make_shared<materials::LambertianBSDF>(red_spd);
 
     // Primitives
@@ -108,7 +108,7 @@ SceneFactory::SceneData SceneFactory::create_quick_test_scene() {
     data.camera = std::make_shared<core::ThinLensCamera>(look_from, look_at, vfov, aspect, 0.0f, 10.0f);
 
     auto accel = std::make_unique<accelerators::BVHAccelerator>();
-    auto red_bsdf = std::make_shared<materials::LambertianBSDF>(spectral::Spectrum::spd_from_rgb(0.8f, 0.05f, 0.05f));
+    auto red_bsdf = std::make_shared<materials::LambertianBSDF>(spectral::Spectrum::rgb_to_approximate_spd(0.8f, 0.05f, 0.05f));
     accel->add_primitive(std::make_shared<Primitive>(
         std::make_shared<Sphere>(core::Point3f(0, 0, 0), 1.0f), red_bsdf));
     accel->build();
@@ -138,7 +138,7 @@ SceneFactory::SceneData SceneFactory::create_obj_scene(const std::string& filena
     auto accel = std::make_unique<accelerators::BVHAccelerator>();
     
     // Default Material (Red Lambertian to distinguish from background)
-    auto default_bsdf = std::make_shared<materials::LambertianBSDF>(spectral::Spectrum::spd_from_rgb(0.8f, 0.1f, 0.1f));
+    auto default_bsdf = std::make_shared<materials::LambertianBSDF>(spectral::Spectrum::rgb_to_approximate_spd(0.8f, 0.1f, 0.1f));
 
     // DEBUG: Print first triangle
     if (mesh->indices.size() >= 3) {

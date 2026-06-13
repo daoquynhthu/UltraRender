@@ -1,6 +1,8 @@
 # UltraRender 现状文档 (STATUS.md)
 
-最后更新: 2026-06-08
+最后更新: 2026-06-13
+
+> 过期说明（2026-06-13）: 本文件描述的是模块化重构前后的早期快照，包含旧 `include/`/`src` 路径和 `render_frame_gpu()` 入口等已删除内容。当前工程状态以 `PLAN.md`、`AGENTS.md` 和 `docs/Phase_E_Spectral_Architecture.md` 为准。不要把本文件作为当前架构事实来源；保留它仅用于历史追溯。Phase E.5 物理审查、Phase S background progressive scheduler、AOV/Python progressive API、C ABI + pyure mutation helpers、SceneDiff material texture/resource full reload、SceneDiff instance/entity/sphere topology full reload、SceneDiff instance transform/material hot-update、MotionVector camera/instance object-motion 进展和当前门禁均已移入当前文档。
 
 本文档记录代码库的实际状态、已知问题和与设计文档的差距。所有信息来自对源码的直接审查。
 

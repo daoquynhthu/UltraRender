@@ -26,12 +26,6 @@ __global__ void test_schlick_kernel(float* out) {
     out[2] = schlick(0.0f, 1.5f);
 }
 
-__global__ void test_power_heuristic_kernel(float* out) {
-    out[0] = power_heuristic(1.0f, 1.0f);
-    out[1] = power_heuristic(1.0f, 0.0f);
-    out[2] = power_heuristic(0.0f, 1.0f);
-}
-
 } // namespace ure::gpu
 
 static int test_ggx_D() {
@@ -79,27 +73,11 @@ static int test_schlick() {
     return 0;
 }
 
-static int test_power_heuristic() {
-    REQUIRE_GPU();
-    float h_out[3] = {};
-    float* d_out = nullptr;
-    CHECK_CUDA(cudaMalloc(&d_out, 3 * sizeof(float)));
-    DeviceMem _d(d_out);
-    ure::gpu::test_power_heuristic_kernel<<<1, 1>>>(d_out);
-    CHECK_CUDA(cudaGetLastError());
-    CHECK_CUDA(cudaMemcpy(h_out, d_out, 3 * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK_FLOAT_EQ(h_out[0], 0.5f, 1e-5f);
-    CHECK_FLOAT_EQ(h_out[1], 1.0f, 1e-5f);
-    CHECK_FLOAT_EQ(h_out[2], 0.0f, 1e-5f);
-    return 0;
-}
-
 int main() {
     printf("[GPU Math Functions Test]\n");
     RUN_TEST(test_ggx_D);
     RUN_TEST(test_smith_G1);
     RUN_TEST(test_schlick);
-    RUN_TEST(test_power_heuristic);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;
 }

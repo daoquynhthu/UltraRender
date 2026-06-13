@@ -4,6 +4,7 @@
 #include "ure/gpu_scene_loader.hpp"
 #include "ure/gpu_structs.hpp"
 #include "ure/instance_transform.hpp"
+#include "ure/render_config.hpp"
 
 // Disable C4819 warning for MSVC (encoding issue)
 #pragma warning(disable: 4819)
@@ -20,22 +21,6 @@ struct RenderMesh {
     // Pre-computed AABB could be added here if we wanted to do it on CPU
 };
 
-// Main Entry Point
-// Legacy One-Shot Render
-void render_frame_gpu(float* output_buffer, int width, int height, int samples_per_pixel,
-                      const std::vector<RenderMesh>& meshes,
-                      const std::vector<GpuInstance>& instances,
-                      const std::vector<GpuSphere>& spheres,
-                      const std::vector<GpuMaterial>& materials,
-                      const float* cam_pos = nullptr,
-                      const float* cam_look = nullptr,
-                      float fov = 45.0f,
-                      float medium_density = 0.0f,
-                      float medium_anisotropy = 0.0f,
-                      GpuSpectrum medium_scattering = GpuSpectrum(0.0f),
-                      GpuSpectrum medium_absorption = GpuSpectrum(0.0f),
-                      float medium_max_distance = 0.0f);
-
 // --- Interactive API ---
 
 struct GpuContext; // Opaque handle to GPU resources
@@ -45,8 +30,9 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<RenderMesh>& meshes,
                               const std::vector<GpuInstance>& instances,
                               const std::vector<GpuSphere>& spheres,
-                              const std::vector<GpuMaterial>& materials,
-                              const std::vector<HostTexture>& textures = {});
+                              const std::vector<GpuMaterialData>& materials,
+                              const std::vector<HostTexture>& textures = {},
+                              const ure::RenderConfig& config = ure::RenderConfig{});
 
 // Cleanup GPU resources
 void free_gpu_renderer(GpuContext* ctx);
@@ -75,10 +61,16 @@ void update_instance_transforms_gpu(GpuContext* ctx,
                                     const GpuInstanceTransform* transforms,
                                     int count);
 
+void update_materials_gpu(GpuContext* ctx,
+                          const GpuMaterialData* materials,
+                          int count,
+                          int first_material_index);
+
 // Copy frame buffer from GPU to Host
 void copy_frame_buffer_gpu(GpuContext* ctx, float* host_buffer);
-
-// Check if GPU is available
-bool check_gpu_availability();
-
+void copy_normal_buffer_gpu(GpuContext* ctx, float* host_buffer);
+void copy_albedo_buffer_gpu(GpuContext* ctx, float* host_buffer);
+void copy_depth_buffer_gpu(GpuContext* ctx, float* host_buffer);
+void copy_uv_buffer_gpu(GpuContext* ctx, float* host_buffer);
+void copy_motion_vector_buffer_gpu(GpuContext* ctx, float* host_buffer);
 } // namespace ure::gpu

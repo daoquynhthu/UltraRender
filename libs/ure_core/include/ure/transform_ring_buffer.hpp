@@ -66,6 +66,7 @@ struct TransformRingBuffer {
     // Acquire on write_index pairs with writer's release fence + store.
 
     const GpuInstanceTransform* begin_read(int& out_count) const {
+        assert(instance_count > 0 && "begin_read before init_from_instances / resize");
         out_count = instance_count;
         int w = write_index.load(std::memory_order_acquire);
         int r = (w + kNumFrames - 1) % kNumFrames;
@@ -90,6 +91,7 @@ struct TransformRingBuffer {
     }
 
     const GpuInstanceTransform* data() const {
+        assert(instance_count > 0 && "data() before init_from_instances / resize");
         int w = write_index.load(std::memory_order_acquire);
         return frames[(w + kNumFrames - 1) % kNumFrames].data();
     }

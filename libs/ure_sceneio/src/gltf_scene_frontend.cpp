@@ -909,6 +909,20 @@ private:
                 ext->spectral_bands = get_int(*spectral, "spectralBands", 0);
                 ext->albedo_spd = get_string(*spectral, "albedoSPD");
                 ext->emission_spd = get_string(*spectral, "emissionSPD");
+                if (!ext->albedo_spd.empty()) {
+                    std::filesystem::path spd_path = ext->albedo_spd;
+                    if (spd_path.is_relative()) {
+                        spd_path = base_dir_ / spd_path;
+                    }
+                    ext->albedo_spd = spd_path.lexically_normal().string();
+                }
+                if (!ext->emission_spd.empty()) {
+                    std::filesystem::path spd_path = ext->emission_spd;
+                    if (spd_path.is_relative()) {
+                        spd_path = base_dir_ / spd_path;
+                    }
+                    ext->emission_spd = spd_path.lexically_normal().string();
+                }
                 node->dispersion = static_cast<float>(get_number(*spectral, "dispersion", node->dispersion));
                 node->spectral_extension = ext;
                 UR_LOG_DEBUG(SceneIO, "Parsed URE_spectral_material for '{}': bands={}, albedoSPD='{}'",

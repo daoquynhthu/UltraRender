@@ -22,9 +22,3 @@ __device__ float schlick(float cosine, float ref_idx) {
     r0 = r0 * r0;
     return r0 + (1.0f - r0) * powf((1.0f - cosine), 5.0f);
 }
-
-__device__ inline float power_heuristic(float f_pdf, float g_pdf) {
-    float f2 = f_pdf * f_pdf;
-    float g2 = g_pdf * g_pdf;
-    return f2 / (f2 + g2 + 1e-10f);
-}

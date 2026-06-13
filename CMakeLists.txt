@@ -18,6 +18,7 @@ if(MSVC)
 endif()
 
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+find_package(CUDAToolkit REQUIRED)
 include(GNUInstallDirs)
 
 add_subdirectory(libs/ure_types)

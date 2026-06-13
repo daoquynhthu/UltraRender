@@ -3,6 +3,11 @@
 #include <cuda_runtime.h>
 #include <cmath>
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4324)
+#endif
+
 namespace ure::gpu {
 
 // Use 16-byte alignment for float3 to match CUDA float4 alignment if needed,
@@ -35,21 +40,21 @@ __host__ __device__ inline float4 operator*(const float4& a, float s) {
 
 struct GpuVec3 {
     float x, y, z;
-    
+
     __host__ __device__ GpuVec3() : x(0), y(0), z(0) {}
     __host__ __device__ GpuVec3(float x, float y, float z) : x(x), y(y), z(z) {}
-    
+
     __host__ __device__ GpuVec3 operator+(const GpuVec3& v) const { return {x + v.x, y + v.y, z + v.z}; }
     __host__ __device__ GpuVec3 operator-(const GpuVec3& v) const { return {x - v.x, y - v.y, z - v.z}; }
     __host__ __device__ GpuVec3 operator*(float s) const { return {x * s, y * s, z * s}; }
     __host__ __device__ GpuVec3 operator*(const GpuVec3& v) const { return {x * v.x, y * v.y, z * v.z}; }
-    
+
     __host__ __device__ float dot(const GpuVec3& v) const { return x * v.x + y * v.y + z * v.z; }
-    
+
     __host__ __device__ GpuVec3 cross(const GpuVec3& v) const {
         return {y * v.z - z * v.y, z * v.x - x * v.z, x * v.y - y * v.x};
     }
-    
+
     __host__ __device__ GpuVec3 normalize() const {
         float len = sqrtf(x * x + y * y + z * z);
         return len > 0 ? *this * (1.0f / len) : *this;
@@ -63,11 +68,11 @@ struct GpuVec3 {
 
 struct GpuMat4 {
     float m[4][4];
-    
+
     __host__ __device__ GpuMat4() {
         for(int i=0; i<4; ++i) for(int j=0; j<4; ++j) m[i][j] = (i==j)?1.0f:0.0f;
     }
-    
+
     __host__ __device__ static GpuMat4 identity() { return GpuMat4(); }
 
     __host__ __device__ GpuVec3 transform_point(const GpuVec3& p) const {
@@ -75,9 +80,9 @@ struct GpuMat4 {
         float y = m[1][0]*p.x + m[1][1]*p.y + m[1][2]*p.z + m[1][3];
         float z = m[2][0]*p.x + m[2][1]*p.y + m[2][2]*p.z + m[2][3];
         float w = m[3][0]*p.x + m[3][1]*p.y + m[3][2]*p.z + m[3][3];
-        if (fabsf(w) > 1e-6f) { 
+        if (fabsf(w) > 1e-6f) {
             float invW = 1.0f / w;
-            x *= invW; y *= invW; z *= invW; 
+            x *= invW; y *= invW; z *= invW;
         }
         return GpuVec3(x, y, z);
     }
@@ -89,7 +94,7 @@ struct GpuMat4 {
         float z = m[2][0]*v.x + m[2][1]*v.y + m[2][2]*v.z;
         return GpuVec3(x, y, z);
     }
-    
+
     // Transform normal using Transpose of this matrix
     // Use this when 'this' is the Inverse Transform Matrix to get World Normal from Object Normal
     __host__ __device__ GpuVec3 transform_normal(const GpuVec3& n) const {
@@ -115,147 +120,86 @@ struct StokesVector {
     __host__ __device__ StokesVector operator+(const StokesVector& other) const {
         return {I + other.I, Q + other.Q, U + other.U, V + other.V};
     }
-    
+
     __host__ __device__ StokesVector operator*(float s) const {
         return {I * s, Q * s, U * s, V * s};
     }
 };
 
-struct MuellerMatrix {
-    // 4x4 Matrix for polarization transformation
-    float m[4][4];
+// Spectral range constants (moved out of GpuSpectrum for Phase E)
+constexpr float kSpectralLambdaMin = 360.0f;
+constexpr float kSpectralLambdaMax = 830.0f;
+constexpr int kMaxSpectralChannels = 32;
 
-    __host__ __device__ MuellerMatrix() {
-        for(int i=0; i<4; ++i)
-            for(int j=0; j<4; ++j)
-                m[i][j] = (i==j) ? 1.0f : 0.0f;
-    }
-
-    __host__ __device__ static MuellerMatrix polarizer(float theta) {
-        // Linear polarizer at angle theta
-        float c = cosf(2*theta);
-        float s = sinf(2*theta);
-        MuellerMatrix mat;
-        mat.m[0][0] = 1; mat.m[0][1] = c; mat.m[0][2] = s; mat.m[0][3] = 0;
-        mat.m[1][0] = c; mat.m[1][1] = c*c; mat.m[1][2] = c*s; mat.m[1][3] = 0;
-        mat.m[2][0] = s; mat.m[2][1] = s*c; mat.m[2][2] = s*s; mat.m[2][3] = 0;
-        mat.m[3][0] = 0; mat.m[3][1] = 0; mat.m[3][2] = 0; mat.m[3][3] = 0;
-        
-        // Multiply by 0.5 transmission for unpolarized light
-        for(int i=0; i<4; ++i)
-            for(int j=0; j<4; ++j)
-                mat.m[i][j] *= 0.5f;
-        return mat;
-    }
-    
-    __host__ __device__ StokesVector apply(const StokesVector& s) const {
-        float res[4] = {0,0,0,0};
-        float in[4] = {s.I, s.Q, s.U, s.V};
-        for(int i=0; i<4; ++i) {
-            for(int j=0; j<4; ++j) {
-                res[i] += m[i][j] * in[j];
-            }
-        }
-        return StokesVector(res[0], res[1], res[2], res[3]);
-    }
-};
-
-// Phase 2: Spectral Parallelization Support
-// Wavelength packet for SIMT execution (Vectorized)
 struct alignas(16) GpuSpectrum {
-    static constexpr int kNumWavelengths = 4;
-    static constexpr float kLambdaMin = 360.0f;
-    static constexpr float kLambdaMax = 830.0f;
-
-    // Vectorized storage using float4 (128-bit alignment)
-    float4 values;
-    float4 wavelengths;
+    float values[kMaxSpectralChannels];
+    float wavelengths[kMaxSpectralChannels];
 
     __host__ __device__ GpuSpectrum() {
-        values = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-        wavelengths = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+            values[c] = 0.0f;
+            wavelengths[c] = 0.0f;
+        }
     }
 
     __host__ __device__ GpuSpectrum(float v) {
-        values = make_float4(v, v, v, v);
-        wavelengths = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+            values[c] = v;
+            wavelengths[c] = 0.0f;
+        }
     }
-    
+
     __host__ __device__ GpuSpectrum(float r, float g, float b) {
-        values = make_float4(r, g, b, (r+g+b)/3.0f);
-        wavelengths = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+        float avg = (r + g + b) / 3.0f;
+        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+            values[c] = avg;
+            wavelengths[c] = 0.0f;
+        }
+        values[0] = r;
+        values[1] = g;
+        values[2] = b;
     }
 
     __host__ __device__ GpuSpectrum operator+(const GpuSpectrum& other) const {
         GpuSpectrum res;
-        res.values = make_float4(values.x + other.values.x, values.y + other.values.y, values.z + other.values.z, values.w + other.values.w);
-        res.wavelengths = wavelengths;
+        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+            res.values[c] = values[c] + other.values[c];
+            res.wavelengths[c] = wavelengths[c];
+        }
         return res;
     }
 
     __host__ __device__ GpuSpectrum operator-(const GpuSpectrum& other) const {
         GpuSpectrum res;
-        res.values = make_float4(values.x - other.values.x, values.y - other.values.y, values.z - other.values.z, values.w - other.values.w);
-        res.wavelengths = wavelengths;
+        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+            res.values[c] = values[c] - other.values[c];
+            res.wavelengths[c] = wavelengths[c];
+        }
         return res;
     }
-    
+
     __host__ __device__ GpuSpectrum operator*(float s) const {
         GpuSpectrum res;
-        res.values = make_float4(values.x * s, values.y * s, values.z * s, values.w * s);
-        res.wavelengths = wavelengths;
+        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+            res.values[c] = values[c] * s;
+            res.wavelengths[c] = wavelengths[c];
+        }
         return res;
     }
-    
+
     __host__ __device__ GpuSpectrum operator*(const GpuSpectrum& other) const {
         GpuSpectrum res;
-        res.values = make_float4(values.x * other.values.x, values.y * other.values.y, values.z * other.values.z, values.w * other.values.w);
-        res.wavelengths = wavelengths;
+        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+            res.values[c] = values[c] * other.values[c];
+            res.wavelengths[c] = wavelengths[c];
+        }
         return res;
     }
 
-    __host__ __device__ static GpuSpectrum from_rgb(const GpuVec3& rgb) {
-        GpuSpectrum s;
-        // Simple mapping for now: R, G, B, Lum
-        s.values.x = rgb.x;
-        s.values.y = rgb.y;
-        s.values.z = rgb.z;
-        s.values.w = (rgb.x + rgb.y + rgb.z) / 3.0f;
-        return s;
-    }
-
-    __host__ __device__ GpuVec3 to_rgb() const {
-        // Simple mapping back
-        return GpuVec3(values.x, values.y, values.z);
-    }
-
-    __host__ __device__ float sample(int i) const {
-        if (i == 0) return values.x;
-        if (i == 1) return values.y;
-        if (i == 2) return values.z;
-        return values.w;
-    }
-
-    __host__ __device__ void set_sample(int i, float v) {
-        if (i == 0) values.x = v;
-        else if (i == 1) values.y = v;
-        else if (i == 2) values.z = v;
-        else values.w = v;
-    }
-
-    __host__ __device__ float wavelength(int i) const {
-        if (i == 0) return wavelengths.x;
-        if (i == 1) return wavelengths.y;
-        if (i == 2) return wavelengths.z;
-        return wavelengths.w;
-    }
-
-    __host__ __device__ void set_wavelength(int i, float v) {
-        if (i == 0) wavelengths.x = v;
-        else if (i == 1) wavelengths.y = v;
-        else if (i == 2) wavelengths.z = v;
-        else wavelengths.w = v;
-    }
+    __host__ __device__ float sample(int i) const { return values[i]; }
+    __host__ __device__ void set_sample(int i, float v) { values[i] = v; }
+    __host__ __device__ float wavelength(int i) const { return wavelengths[i]; }
+    __host__ __device__ void set_wavelength(int i, float v) { wavelengths[i] = v; }
 };
 
 struct GpuRay {
@@ -264,7 +208,7 @@ struct GpuRay {
     float t_min;
     float t_max;
     StokesVector stokes; // Phase 3: Polarization State
-    
+
     __host__ __device__ GpuVec3 at(float t) const {
         return origin + direction * t;
     }
@@ -291,31 +235,35 @@ enum class MaterialType {
 struct GpuTexture {
     int width;
     int height;
+    int channels;
     GpuSpectrum* data; // Unified Memory / Linear
     cudaTextureObject_t texObj; // Texture Object (Hardware Filtering)
 };
 
+// Phase E: Scalar-only material header. Spectral data stored as SoA in GpuScene.
 struct GpuMaterial {
     MaterialType type;
-    GpuSpectrum albedo;
     float roughness;
     float ior;
-    GpuSpectrum metal_eta;
-    GpuSpectrum extinction; // For metals (Conductor)
-    float dispersion; // 0.0 = no dispersion. High values (~0.05) = strong dispersion.
+    float dispersion;
     float thin_film_thickness;
     float thin_film_ior;
-    
-    // Phase 3: Volume / SSS
-    float medium_density;     // 0.0 = Surface only, > 0.0 = Volumetric/SSS
-    float medium_anisotropy;  // g factor for Henyey-Greenstein
-    GpuSpectrum medium_scattering; // Color of the medium (sigma_s)
-    GpuSpectrum medium_absorption; // Absorption of the medium (sigma_a)
-    
-    GpuSpectrum emission;
-    int texture_index = -1; // -1 means no texture
+    float medium_density;
+    float medium_anisotropy;
+    int texture_index = -1;
     int roughness_texture_index = -1;
     int emission_texture_index = -1;
+};
+
+// Host-side companion holding spectral data alongside the GPU header.
+struct GpuMaterialData {
+    GpuMaterial header;
+    GpuSpectrum albedo;
+    GpuSpectrum metal_eta;
+    GpuSpectrum extinction;
+    GpuSpectrum medium_scattering;
+    GpuSpectrum medium_absorption;
+    GpuSpectrum emission;
 };
 
 struct GpuSphere {
@@ -329,11 +277,11 @@ struct GpuBvhNode {
     GpuVec3 min_pt;
     // If primitive_count == 0 (Internal): stores Right Child Index.
     // If primitive_count > 0 (Leaf): stores First Primitive Index.
-    int child_or_primitive_index; 
-    
+    int child_or_primitive_index;
+
     GpuVec3 max_pt;
     // If 0, Internal Node. If > 0, Leaf Node with this many primitives.
-    int primitive_count; 
+    int primitive_count;
 };
 
 struct GpuMesh {
@@ -344,11 +292,11 @@ struct GpuMesh {
     int* indices;
     int triangle_count;
     int material_index; // Default material
-    
+
     // AABB Bounds (Object Space)
     GpuVec3 min_pt;
     GpuVec3 max_pt;
-    
+
     // BVH Data (Object Space)
     GpuBvhNode* bvh_nodes;
     int bvh_node_count;
@@ -358,7 +306,7 @@ struct GpuMesh {
 #include "ure/instance_desc.hpp"
 #include "ure/instance_transform.hpp"
 
-// Legacy (kept for backward compatibility with render_frame_gpu)
+// Legacy packed instance layout retained for compatibility with existing GPU scene upload paths.
 // Layout: GpuInstanceDesc (8B) + GpuInstanceTransform (152B) = 160B total
 // This ordering ensures reinterpret_cast<GpuInstanceDesc*>(ptr) works correctly
 struct GpuInstance {
@@ -373,22 +321,33 @@ struct GpuInstance {
 struct GpuScene {
     GpuSphere* spheres;
     int sphere_count;
-    
+
     GpuMesh* meshes;
     int mesh_count;
-    
-    GpuInstance* instances;          // Legacy (same data as descs + xforms, for render_frame_gpu)
+
+    GpuInstance* instances;          // Legacy packed data, same content as descs + xforms
     GpuInstanceDesc* instance_descs; // Phase P.1: static descriptors
     GpuInstanceTransform* instance_transforms; // Phase P.1: dynamic transforms (updated per frame)
+    GpuInstanceTransform* previous_instance_transforms;
     int instance_count;
-    
+
     GpuMaterial* materials;
     int material_count;
+
+    // Phase E: SoA spectral data (num_spectral_channels × material_count)
+    float* mat_albedo_vals;
+    float* mat_metal_eta_vals;
+    float* mat_extinction_vals;
+    float* mat_medium_scattering_vals;
+    float* mat_medium_absorption_vals;
+    float* mat_emission_vals;
+    int num_spectral_channels;
+
     GpuTexture* textures;
     int texture_count;
     int* light_indices;
     int light_count;
-    
+
     // Global Homogeneous Medium (Volumetric Fog)
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f; // 0.0 = Isotropic
@@ -398,20 +357,34 @@ struct GpuScene {
 };
 
 // Wavefront Path Tracing Structures
+enum SpectralRayMode : int {
+    SpectralRayModePacket = 0,
+    SpectralRayModeLane = 1
+};
+
 struct RayQueue {
     GpuVec3* origins;
     GpuVec3* directions;
-    GpuSpectrum* throughputs;
-    StokesVector* stokes; // Phase 3: Polarization
+    float* throughput_vals;        // SoA: spectral_vals[channel * capacity + idx]
+    float* throughput_wavelengths; // SoA: wavelengths[channel * capacity + idx]
+    int num_spectral_channels;     // Number of spectral channels (runtime, from RenderConfig)
+    float* stokes_i;
+    float* stokes_q;
+    float* stokes_u;
+    float* stokes_v;
     int* medium_indices; // Phase 3: Volume / SSS (Current medium index, -1 = Global)
     unsigned int* seeds; // Lightweight RNG state
     int* pixel_indices;
     int* depths;
     int* flags; // Bitmask for ray state (e.g. 0x1 = Specular Bounce)
     float* last_pdf; // For MIS: PDF of the last sampled direction
-    
+    int* spectral_modes;
+    int* active_channels;
+    float* wavelength_pdfs;
+
     // Using pointer for atomic operations on device
-    int* count; 
+    int* count;
+    int* overflow_count;
     int capacity;
 };
 
@@ -419,9 +392,14 @@ struct ShadowQueue {
     GpuVec3* origins;
     GpuVec3* directions;
     float* max_dist;
-    GpuSpectrum* radiance; // Potential contribution
+    float* radiance_vals;        // SoA: vals[channel * capacity + idx]
+    float* radiance_wavelengths; // SoA: wls[channel * capacity + idx]
+    int num_spectral_channels;
+    int* spectral_modes;
+    int* active_channels;
+    float* wavelength_pdfs;
     int* pixel_indices;
-    
+
     int* count;
     int capacity;
 };
@@ -438,3 +416,7 @@ struct HitQueue {
 };
 
 } // namespace ure::gpu
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif

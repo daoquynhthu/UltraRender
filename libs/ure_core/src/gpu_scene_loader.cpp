@@ -165,17 +165,17 @@ GpuHostScene load_default_scene(bool has_mesh) {
     // ground_mat.texture_index = 0; // Use texture 0
     
     // Simple Gray-White Lambertian (0.8)
-    GpuMaterial ground_mat;
-    ground_mat.type = MaterialType::Lambertian;
-    ground_mat.albedo = GpuSpectrum::from_rgb(GpuVec3(0.8f, 0.8f, 0.8f));
-    ground_mat.roughness = 1.0f;
-    ground_mat.ior = 1.0f;
+    GpuMaterialData ground_mat;
+    ground_mat.header.type = MaterialType::Lambertian;
+    ground_mat.albedo = GpuSpectrum(0.8f, 0.8f, 0.8f);
+    ground_mat.header.roughness = 1.0f;
+    ground_mat.header.ior = 1.0f;
     ground_mat.extinction = GpuSpectrum(0.0f);
-    ground_mat.dispersion = 0.0f;
-    ground_mat.thin_film_thickness = 0.0f;
-    ground_mat.thin_film_ior = 1.0f;
+    ground_mat.header.dispersion = 0.0f;
+    ground_mat.header.thin_film_thickness = 0.0f;
+    ground_mat.header.thin_film_ior = 1.0f;
     ground_mat.emission = GpuSpectrum(0.0f);
-    ground_mat.texture_index = -1;
+    ground_mat.header.texture_index = -1;
     
     scene.materials.push_back(ground_mat);
     

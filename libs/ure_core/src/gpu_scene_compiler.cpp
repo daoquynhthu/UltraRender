@@ -1,9 +1,16 @@
 #include "ure/gpu_scene_compiler.hpp"
 #include "ure/gpu_scene_loader.hpp"
+#include "ure/gpu_spectrum_utils.cuh"
 #include "ure/image_loader.hpp"
+#include "ure/spd_loader.hpp"
+#include "ure/spectral/spectral.hpp"
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <stdexcept>
+#include <vector>
+
+#include <ure/log.hpp>
 
 namespace ure {
 
@@ -13,52 +20,120 @@ ure::gpu::GpuVec3 to_gpu_vec3(const core::Vec3f& v) {
     return ure::gpu::GpuVec3(v.x, v.y, v.z);
 }
 
-ure::gpu::GpuMaterial compile_material_node(scene_ir::MaterialModel model,
-                                            const core::Vec3f& albedo,
-                                            const core::Vec3f& emission,
-                                            float roughness,
-                                            float ior,
-                                            const core::Vec3f& metal_eta,
-                                            float dispersion,
-                                            float thin_film_thickness,
-                                            float thin_film_ior,
-                                            float medium_density,
-                                            float medium_anisotropy,
-                                            const core::Vec3f& medium_scattering,
-                                            const core::Vec3f& medium_absorption,
-                                            const core::Vec3f& extinction,
-                                            int texture_index = -1,
-                                            int roughness_texture_index = -1,
-                                            int emission_texture_index = -1) {
-    ure::gpu::GpuMaterial gpu_mat = {};
-    switch (model) {
-        case scene_ir::MaterialModel::Lambertian: gpu_mat.type = ure::gpu::MaterialType::Lambertian; break;
-        case scene_ir::MaterialModel::Metal: gpu_mat.type = ure::gpu::MaterialType::Metal; break;
-        case scene_ir::MaterialModel::Dielectric: gpu_mat.type = ure::gpu::MaterialType::Dielectric; break;
-        case scene_ir::MaterialModel::Light: gpu_mat.type = ure::gpu::MaterialType::Light; break;
-        default: gpu_mat.type = ure::gpu::MaterialType::Lambertian; break;
+int checked_num_wavelengths(const RenderConfig& config) {
+    if (config.num_wavelengths <= 0 || config.num_wavelengths > ure::gpu::kMaxSpectralChannels) {
+        throw std::runtime_error("RenderConfig::num_wavelengths must be in [1, kMaxSpectralChannels]");
     }
-
-    gpu_mat.albedo = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(albedo));
-    gpu_mat.emission = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(emission));
-    gpu_mat.roughness = roughness;
-    gpu_mat.ior = ior;
-    gpu_mat.metal_eta = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(metal_eta));
-    gpu_mat.dispersion = dispersion;
-    gpu_mat.thin_film_thickness = thin_film_thickness;
-    gpu_mat.thin_film_ior = thin_film_ior;
-    gpu_mat.medium_density = medium_density;
-    gpu_mat.medium_anisotropy = medium_anisotropy;
-    gpu_mat.medium_scattering = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(medium_scattering));
-    gpu_mat.medium_absorption = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(medium_absorption));
-    gpu_mat.extinction = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(extinction));
-    gpu_mat.texture_index = texture_index;
-    gpu_mat.roughness_texture_index = roughness_texture_index;
-    gpu_mat.emission_texture_index = emission_texture_index;
-    return gpu_mat;
+    return config.num_wavelengths;
 }
 
-ure::gpu::GpuMaterial compile_material(const std::shared_ptr<Material>& mat) {
+std::vector<float> spectral_bin_centers(int num_wavelengths) {
+    std::vector<float> wavelengths;
+    wavelengths.reserve(num_wavelengths);
+    float domain = ure::gpu::kSpectralLambdaMax - ure::gpu::kSpectralLambdaMin;
+    float bin_width = domain / static_cast<float>(num_wavelengths);
+    for (int c = 0; c < num_wavelengths; ++c) {
+        wavelengths.push_back(ure::gpu::kSpectralLambdaMin + (static_cast<float>(c) + 0.5f) * bin_width);
+    }
+    return wavelengths;
+}
+
+void assign_spectrum(ure::gpu::GpuSpectrum& target,
+                     const std::vector<float>& values,
+                     const std::vector<float>& wavelengths) {
+    target = ure::gpu::GpuSpectrum();
+    int n = std::min<int>(static_cast<int>(values.size()), ure::gpu::kMaxSpectralChannels);
+    for (int c = 0; c < n; ++c) {
+        target.values[c] = values[c];
+        target.wavelengths[c] = wavelengths[c];
+    }
+}
+
+void assign_rgb_coeff_spectrum(ure::gpu::GpuSpectrum& target,
+                               const core::Vec3f& rgb,
+                               const std::vector<float>& wavelengths) {
+    ure::gpu::GpuVec3 gpu_rgb = to_gpu_vec3(rgb);
+    target = ure::gpu::rgb_coeff_to_spectrum(gpu_rgb, wavelengths.data(), static_cast<int>(wavelengths.size()));
+}
+
+void assign_rgb_emission_spectrum(ure::gpu::GpuSpectrum& target,
+                                  const core::Vec3f& rgb,
+                                  const std::vector<float>& wavelengths) {
+    ure::gpu::GpuVec3 gpu_rgb = to_gpu_vec3(rgb);
+    target = ure::gpu::emission_to_spectrum(gpu_rgb, wavelengths.data(), static_cast<int>(wavelengths.size()));
+}
+
+std::vector<float> load_spd_values(const std::string& path,
+                                   const std::vector<float>& wavelengths,
+                                   const char* role) {
+    ure::spectral::SPDData spd = ure::spectral::load_spd_file(path);
+    if (spd.lambdas.empty()) {
+        throw std::runtime_error(std::string("could not load ") + role + " SPD: " + path);
+    }
+
+    std::vector<ure::spectral::SPD::Sample> samples;
+    samples.reserve(spd.lambdas.size());
+    for (size_t i = 0; i < spd.lambdas.size(); ++i) {
+        samples.push_back({spd.lambdas[i], spd.values[i]});
+    }
+
+    ure::spectral::SPD sampled_spd(samples);
+    std::vector<float> values;
+    values.reserve(wavelengths.size());
+    for (float lambda : wavelengths) {
+        values.push_back(sampled_spd.evaluate(lambda));
+    }
+    return values;
+}
+
+ure::gpu::GpuMaterialData compile_material_node(scene_ir::MaterialModel model,
+                                                const core::Vec3f& albedo,
+                                                const core::Vec3f& emission,
+                                                float roughness,
+                                                float ior,
+                                                const core::Vec3f& metal_eta,
+                                                float dispersion,
+                                                float thin_film_thickness,
+                                                float thin_film_ior,
+                                                float medium_density,
+                                                float medium_anisotropy,
+                                                const core::Vec3f& medium_scattering,
+                                                const core::Vec3f& medium_absorption,
+                                                const core::Vec3f& extinction,
+                                                const std::vector<float>& wavelengths,
+                                                int texture_index = -1,
+                                                int roughness_texture_index = -1,
+                                                int emission_texture_index = -1) {
+    ure::gpu::GpuMaterialData data = {};
+    switch (model) {
+        case scene_ir::MaterialModel::Lambertian: data.header.type = ure::gpu::MaterialType::Lambertian; break;
+        case scene_ir::MaterialModel::Metal: data.header.type = ure::gpu::MaterialType::Metal; break;
+        case scene_ir::MaterialModel::Dielectric: data.header.type = ure::gpu::MaterialType::Dielectric; break;
+        case scene_ir::MaterialModel::Light: data.header.type = ure::gpu::MaterialType::Light; break;
+        default: data.header.type = ure::gpu::MaterialType::Lambertian; break;
+    }
+
+    assign_rgb_coeff_spectrum(data.albedo, albedo, wavelengths);
+    assign_rgb_emission_spectrum(data.emission, emission, wavelengths);
+    data.header.roughness = roughness;
+    data.header.ior = ior;
+    assign_rgb_coeff_spectrum(data.metal_eta, metal_eta, wavelengths);
+    data.header.dispersion = dispersion;
+    data.header.thin_film_thickness = thin_film_thickness;
+    data.header.thin_film_ior = thin_film_ior;
+    data.header.medium_density = medium_density;
+    data.header.medium_anisotropy = medium_anisotropy;
+    assign_rgb_coeff_spectrum(data.medium_scattering, medium_scattering, wavelengths);
+    assign_rgb_coeff_spectrum(data.medium_absorption, medium_absorption, wavelengths);
+    assign_rgb_coeff_spectrum(data.extinction, extinction, wavelengths);
+    data.header.texture_index = texture_index;
+    data.header.roughness_texture_index = roughness_texture_index;
+    data.header.emission_texture_index = emission_texture_index;
+    return data;
+}
+
+ure::gpu::GpuMaterialData compile_material(const std::shared_ptr<Material>& mat, int num_wavelengths) {
+    std::vector<float> wavelengths = spectral_bin_centers(num_wavelengths);
     if (!mat) {
         return compile_material_node(scene_ir::MaterialModel::Lambertian,
                                      {0.8f, 0.8f, 0.8f},
@@ -73,7 +148,8 @@ ure::gpu::GpuMaterial compile_material(const std::shared_ptr<Material>& mat) {
                                      0.0f,
                                      {0.0f, 0.0f, 0.0f},
                                      {0.0f, 0.0f, 0.0f},
-                                     {0.0f, 0.0f, 0.0f});
+                                     {0.0f, 0.0f, 0.0f},
+                                     wavelengths);
     }
 
     scene_ir::MaterialModel model = scene_ir::MaterialModel::Lambertian;
@@ -98,13 +174,43 @@ ure::gpu::GpuMaterial compile_material(const std::shared_ptr<Material>& mat) {
                                  mat->medium_anisotropy,
                                  mat->medium_scattering,
                                  mat->medium_absorption,
-                                 mat->extinction);
+                                 mat->extinction,
+                                 wavelengths);
 }
 
-ure::gpu::GpuMaterial compile_material(const std::shared_ptr<scene_ir::MaterialNode>& mat,
-                                       int texture_index = -1,
-                                       int roughness_texture_index = -1,
-                                       int emission_texture_index = -1) {
+ure::gpu::HostTexture make_host_texture(const Texture& texture) {
+    if (texture.width <= 0 || texture.height <= 0) {
+        throw std::runtime_error("Texture dimensions must be positive");
+    }
+    const size_t pixel_count = static_cast<size_t>(texture.width) * static_cast<size_t>(texture.height);
+    if (texture.data.size() < pixel_count * 3) {
+        throw std::runtime_error("Texture data must contain at least RGB float channels");
+    }
+    ure::gpu::HostTexture host_texture;
+    host_texture.width = texture.width;
+    host_texture.height = texture.height;
+    host_texture.channels = static_cast<int>(texture.data.size() / pixel_count);
+    if (host_texture.channels < 3) {
+        throw std::runtime_error("Texture data must contain RGB float channels");
+    }
+    host_texture.data = texture.data;
+    return host_texture;
+}
+
+ure::gpu::GpuMaterialData compile_material(const std::shared_ptr<Material>& mat,
+                                           int num_wavelengths,
+                                           int texture_index) {
+    ure::gpu::GpuMaterialData data = compile_material(mat, num_wavelengths);
+    data.header.texture_index = texture_index;
+    return data;
+}
+
+ure::gpu::GpuMaterialData compile_material(const std::shared_ptr<scene_ir::MaterialNode>& mat,
+                                           int num_wavelengths,
+                                           int texture_index = -1,
+                                           int roughness_texture_index = -1,
+                                           int emission_texture_index = -1) {
+    std::vector<float> wavelengths = spectral_bin_centers(num_wavelengths);
     if (!mat) {
         return compile_material_node(scene_ir::MaterialModel::Lambertian,
                                      {0.8f, 0.8f, 0.8f},
@@ -120,28 +226,43 @@ ure::gpu::GpuMaterial compile_material(const std::shared_ptr<scene_ir::MaterialN
                                      {0.0f, 0.0f, 0.0f},
                                      {0.0f, 0.0f, 0.0f},
                                      {0.0f, 0.0f, 0.0f},
+                                     wavelengths,
                                      texture_index,
                                      roughness_texture_index,
                                      emission_texture_index);
     }
 
-    return compile_material_node(mat->model,
-                                 mat->base_color,
-                                 mat->emission,
-                                 mat->roughness,
-                                 mat->ior,
-                                 mat->metal_eta,
-                                 mat->dispersion,
-                                 mat->thin_film_thickness,
-                                 mat->thin_film_ior,
-                                 mat->medium_density,
-                                 mat->medium_anisotropy,
-                                 mat->medium_scattering,
-                                 mat->medium_absorption,
-                                 mat->metal_k,
-                                 texture_index,
-                                 roughness_texture_index,
-                                 emission_texture_index);
+    ure::gpu::GpuMaterialData data = compile_material_node(mat->model,
+                                                           mat->base_color,
+                                                           mat->emission,
+                                                           mat->roughness,
+                                                           mat->ior,
+                                                           mat->metal_eta,
+                                                           mat->dispersion,
+                                                           mat->thin_film_thickness,
+                                                           mat->thin_film_ior,
+                                                           mat->medium_density,
+                                                           mat->medium_anisotropy,
+                                                           mat->medium_scattering,
+                                                           mat->medium_absorption,
+                                                           mat->metal_k,
+                                                           wavelengths,
+                                                           texture_index,
+                                                           roughness_texture_index,
+                                                           emission_texture_index);
+    if (mat->spectral_extension) {
+        if (!mat->spectral_extension->albedo_spd.empty()) {
+            assign_spectrum(data.albedo,
+                            load_spd_values(mat->spectral_extension->albedo_spd, wavelengths, "albedo"),
+                            wavelengths);
+        }
+        if (!mat->spectral_extension->emission_spd.empty()) {
+            assign_spectrum(data.emission,
+                            load_spd_values(mat->spectral_extension->emission_spd, wavelengths, "emission"),
+                            wavelengths);
+        }
+    }
+    return data;
 }
 
 } // anonymous namespace (material helpers)
@@ -291,19 +412,34 @@ CompiledGpuScene GpuSceneCompiler::compile_legacy(const Scene& scene) {
     compiled.camera = scene.camera;
     compiled.medium_density = scene.medium_density;
     compiled.medium_anisotropy = scene.medium_anisotropy;
-    compiled.medium_scattering = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(scene.medium_scattering));
-    compiled.medium_absorption = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(scene.medium_absorption));
+    std::vector<float> wavelengths = spectral_bin_centers(RenderConfig{}.num_wavelengths);
+    assign_rgb_coeff_spectrum(compiled.medium_scattering, scene.medium_scattering, wavelengths);
+    assign_rgb_coeff_spectrum(compiled.medium_absorption, scene.medium_absorption, wavelengths);
     compiled.medium_max_distance = scene.medium_max_distance;
     compiled.width = scene.width > 0 ? scene.width : 1920;
     compiled.height = scene.height > 0 ? scene.height : 1080;
 
     int material_offset = gpu::kDefaultMaterialCount;
+    std::map<std::shared_ptr<Texture>, int> texture_map;
+    auto cache_texture = [&](const std::shared_ptr<Texture>& texture) -> int {
+        if (!texture) return -1;
+        auto existing = texture_map.find(texture);
+        if (existing != texture_map.end()) {
+            return existing->second;
+        }
+        compiled.textures.push_back(make_host_texture(*texture));
+        int index = static_cast<int>(compiled.textures.size()) - 1;
+        texture_map[texture] = index;
+        return index;
+    };
+
     std::map<std::shared_ptr<Material>, int> material_map;
     auto cache_material = [&](const std::shared_ptr<Material>& mat) -> int {
         if (!mat) return 0;
         auto it = material_map.find(mat);
         if (it != material_map.end()) return it->second;
-        compiled.materials.push_back(compile_material(mat));
+        int texture_index = cache_texture(mat->albedo_texture);
+        compiled.materials.push_back(compile_material(mat, RenderConfig{}.num_wavelengths, texture_index));
         int material_index = material_offset + static_cast<int>(compiled.materials.size()) - 1;
         material_map[mat] = material_index;
         return material_index;
@@ -360,12 +496,18 @@ CompiledGpuScene GpuSceneCompiler::compile_legacy(const Scene& scene) {
 }
 
 CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir) {
+    return compile(scene_ir, RenderConfig{});
+}
+
+CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir, const RenderConfig& config) {
+    int num_wavelengths = checked_num_wavelengths(config);
+    std::vector<float> wavelengths = spectral_bin_centers(num_wavelengths);
     CompiledGpuScene compiled;
     compiled.camera = scene_ir.camera;
     compiled.medium_density = scene_ir.medium_density;
     compiled.medium_anisotropy = scene_ir.medium_anisotropy;
-    compiled.medium_scattering = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(scene_ir.medium_scattering));
-    compiled.medium_absorption = ure::gpu::GpuSpectrum::from_rgb(to_gpu_vec3(scene_ir.medium_absorption));
+    assign_rgb_coeff_spectrum(compiled.medium_scattering, scene_ir.medium_scattering, wavelengths);
+    assign_rgb_coeff_spectrum(compiled.medium_absorption, scene_ir.medium_absorption, wavelengths);
     compiled.medium_max_distance = scene_ir.medium_max_distance;
     compiled.width = scene_ir.width > 0 ? scene_ir.width : 1920;
     compiled.height = scene_ir.height > 0 ? scene_ir.height : 1080;
@@ -400,7 +542,7 @@ CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir) {
         int texture_index = cache_texture(mat->base_color_texture);
         int roughness_texture_index = cache_texture(mat->roughness_texture);
         int emission_texture_index = cache_texture(mat->emission_texture);
-        compiled.materials.push_back(compile_material(mat, texture_index, roughness_texture_index, emission_texture_index));
+        compiled.materials.push_back(compile_material(mat, num_wavelengths, texture_index, roughness_texture_index, emission_texture_index));
         int material_index = material_offset + static_cast<int>(compiled.materials.size()) - 1;
         material_map[mat] = material_index;
         return material_index;

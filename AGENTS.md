@@ -33,11 +33,12 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | Dx (Diagnostics) | Done | `ure_diag` unified logging, CUDA error abstraction, RAII timer, ~73 站点迁移 |
 | G (glTF) | Done | normalTexture + tangent generation, camera parsing, URE_spectral_material extension, non-glTF fallback; audit fix (5 gaps), comprehensive tests (11 host + 3 GPU) |
 | I (Config) | Done | JSON config, CLI11 subcommands (render/info/list-devices/validate), override chain |
-| A (SoA Queue) | Not started | Dynamic N wavelengths from RenderConfig |
+| A (SoA Queue) | Done | Dynamic N wavelengths from RenderConfig, SoA spectral queues/materials |
+| E (N-Channel Spectral) | Done | Runtime-N spectral pipeline, SPD input, spectral lane split, Mueller/dispersion closure |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
-- Spectral rendering with multi-channel wavelength packets (currently 4, target N >= 32)
+- Spectral rendering with runtime-configured multi-channel wavelength packets (current GPU packet cap 32)
 - Polarization tracking via Stokes vectors and Mueller matrices
 - Wavefront path tracing on CUDA, SIMT-optimized
 - Physical correctness over performance tricks
@@ -172,6 +173,8 @@ cmake --build build_modular --config Release
 & "E:\Render Engine\build_modular\tests\host\Release\test_world.exe"
 & "E:\Render Engine\build_modular\tests\host\Release\test_asset_pipeline.exe"
 & "E:\Render Engine\build_modular\tests\host\Release\test_gltf_frontend.exe"
+& "E:\Render Engine\build_modular\tests\host\Release\test_session.exe"
+$env:PYTHONPATH="E:\Render Engine"; $env:PYURE_NATIVE="E:\Render Engine\build_modular\pyure\Release\pyure_native.dll"; python "E:\Render Engine\tests\host\test_pyure_smoke.py"
 
 # Run GPU tests
 & "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_device.exe"
@@ -181,6 +184,10 @@ cmake --build build_modular --config Release
 & "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_render.exe"
 & "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_instance.exe"
 & "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_tangents.exe"
+& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_denoise.exe"
+& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_polarization.exe"
+& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_volume.exe"
+& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_contract.exe"
 
 # Build+run a single host test (RelWithDebInfo, faster than Debug)
 cmake --build build_modular --config RelWithDebInfo --target test_gltf_frontend
@@ -195,16 +202,23 @@ cmake --build build_modular --config RelWithDebInfo --target gpu_test_tangents
 | Type | Count | Location | Runner |
 |------|-------|----------|--------|
 | Host (World/ECS) | 39 | `tests/host/test_world.cpp` | Direct EXE |
-| Host (Asset Pipeline) | 6 | `tests/host/test_asset_pipeline.cpp` | Direct EXE |
+| Host (Asset Pipeline) | 48 | `tests/host/test_asset_pipeline.cpp` | Direct EXE |
+| Host (glTF Frontend) | 185 | `tests/host/test_gltf_frontend.cpp` | Direct EXE |
+| Host (Session API) | 188 | `tests/host/test_session.cpp` | Direct EXE |
+| Host (Python API smoke) | 1 CTest | `tests/host/test_pyure_smoke.py` | Python/CTest |
 | GPU (Device) | ~30 | `tests/gpu/test_device.cu` | Direct EXE |
-| GPU (Hardware) | ~30 | `tests/gpu/test_hardware.cu` | Direct EXE |
+| GPU (Hardware) | 17 | `tests/gpu/test_hardware.cu` | Direct EXE |
 | GPU (Math) | ~30 | `tests/gpu/test_math_functions.cu` | Direct EXE |
-| GPU (Spectral) | ~30 | `tests/gpu/test_spectral_pipeline.cu` | Direct EXE |
-| GPU (Render) | ~30 | `tests/gpu/test_render_basic.cu` | Direct EXE |
-| GPU (Hot-Update) | ~33 | `tests/gpu/test_instance_hotupdate.cu` | Direct EXE |
-| Host (glTF Frontend) | 55 | `tests/host/test_gltf_frontend.cpp` | Direct EXE |
-| GPU (Tangents) | 21 | `tests/gpu/test_gpu_tangents.cu` | Direct EXE |
-| **Total** | **~340** | | |
+| GPU (Spectral) | 569 | `tests/gpu/test_spectral_pipeline.cu` | Direct EXE |
+| GPU (Spectral SoA) | 633 | `tests/gpu/test_spectral_pipeline_soa.cu` | Direct EXE |
+| GPU (Render) | 315 | `tests/gpu/test_render_basic.cu` | Direct EXE |
+| GPU (Hot-Update) | 68 | `tests/gpu/test_instance_hotupdate.cu` | Direct EXE |
+| GPU (Tangents) | 27 | `tests/gpu/test_gpu_tangents.cu` | Direct EXE |
+| GPU (Denoise) | CTest target | `tests/gpu/test_gpu_denoise.cu` | Direct EXE |
+| GPU (Polarization) | 126 | `tests/gpu/test_gpu_polarization.cu` | Direct EXE |
+| GPU (Volume) | CTest target | `tests/gpu/test_gpu_volume.cu` | Direct EXE |
+| GPU (Distributed Contract) | CTest target | `tests/gpu/test_distributed_contract.cu` | Direct EXE |
+| **CTest total** | **17/17 passing** | `build_modular` | `ctest -C Release` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -306,7 +320,7 @@ PLAN → IMPLEMENT → VERIFY → REVIEW → REPORT → COMMIT
 - ❌ Do NOT skip PLAN.md or AGENTS.md on session resume
 - ❌ Do NOT commit without user approval
 - ❌ Do NOT ignore failing tests
-- ❌ Do NOT change `kNumWavelengths` from 4 (that is Phase E — N-channel spectral upgrade)
+- ✅ **Phase E complete**: keep `kNumWavelengths = 4`, `.values.x/y/z/w`, RGB roundtrip APIs, old thin-film helpers, and dielectric transmission clamps from re-entering the codebase. See `docs/Phase_E_Spectral_Architecture.md` for the final design and remaining post-E technical debt.
 - ❌ Do NOT modify acoustic/physics modules during Phase Dx (diagnostics) — they are out of scope
 - ❌ Do NOT introduce pink checkerboard generation for missing textures (see PLAN.md Phase H.3)
 - ❌ Do NOT add stb_image_write (engine has own tonemapping pipeline, see PLAN.md Phase H.1)

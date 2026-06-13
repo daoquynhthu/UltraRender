@@ -319,7 +319,11 @@ static int cmd_render(const ure::config::CliResult& cli) {
 
     // 3. Initialize Engine
     UR_LOG_INFO(CLI, "Initializing GPU Engine...");
-    auto engine = RenderEngineFactory::create_gpu_renderer();
+    ure::RenderConfig render_config;
+    render_config.num_wavelengths = cfg.spectral.bands;
+    render_config.queue_capacity = cfg.gpu.wavefront_capacity;
+    render_config.max_trace_depth = cfg.renderer.max_depth;
+    auto engine = RenderEngineFactory::create_gpu_renderer(render_config);
 
     if (scene.physics.fluid.enabled && physics_world) {
         auto fluid_system = physics_world->get_fluid_system();

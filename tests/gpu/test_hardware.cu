@@ -1,6 +1,7 @@
 #include "test_framework.cuh"
 #include "ure/gpu_hardware.hpp"
 #include "ure/gpu_auto_config.hpp"
+#include "ure/log.hpp"
 
 static int test_query_hardware() {
     REQUIRE_GPU();
@@ -25,7 +26,6 @@ static int test_auto_configure_low_vram() {
     CHECK(cfg.num_wavelengths == 8);
     CHECK(cfg.queue_capacity > 0);
     CHECK(cfg.wg_size == 8);
-    printf("  low VRAM (4 GB): N=%d, queue=%d\n", cfg.num_wavelengths, cfg.queue_capacity);
     return 0;
 }
 
@@ -40,7 +40,6 @@ static int test_auto_configure_medium_vram() {
     CHECK(cfg.num_wavelengths == 64);
     CHECK(cfg.queue_capacity > 0);
     CHECK(cfg.wg_size == 32);
-    printf("  medium VRAM (8 GB): N=%d, queue=%d\n", cfg.num_wavelengths, cfg.queue_capacity);
     return 0;
 }
 
@@ -55,7 +54,6 @@ static int test_auto_configure_high_vram() {
     CHECK(cfg.num_wavelengths == 128);
     CHECK(cfg.queue_capacity > 0);
     CHECK(cfg.wg_size == 32);
-    printf("  high VRAM (24 GB): N=%d, queue=%d\n", cfg.num_wavelengths, cfg.queue_capacity);
     return 0;
 }
 
@@ -69,7 +67,6 @@ static int test_auto_configure_ultra_vram() {
     auto cfg = ure::auto_configure(hw, 3840, 2160, 512);
     CHECK(cfg.num_wavelengths == 512);
     CHECK(cfg.wg_size == 32);
-    printf("  ultra VRAM (80 GB): N=%d, queue=%d\n", cfg.num_wavelengths, cfg.queue_capacity);
     return 0;
 }
 
@@ -83,6 +80,7 @@ static int test_auto_configure_scene_N_lower_than_hw_max() {
 }
 
 int main() {
+    ure::log::set_min_level(ure::log::Level::Warn);
     printf("[Hardware Config Test]\n");
     RUN_TEST(test_query_hardware);
     RUN_TEST(test_auto_configure_low_vram);
