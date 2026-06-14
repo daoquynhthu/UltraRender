@@ -8,7 +8,7 @@
 namespace ure::config {
 
 struct SpectralConfig {
-    int bands = 64;
+    int bands = 32;
     std::vector<std::string> spd_search_paths = {"./spds/"};
 };
 
@@ -19,7 +19,7 @@ struct RendererConfig {
 };
 
 struct OutputConfig {
-    std::string file = "output.bmp";
+    std::string file;
     std::string tonemap = "aces";
     std::string format = "bmp";
 };

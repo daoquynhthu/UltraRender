@@ -94,26 +94,26 @@ namespace ure::gpu {
 void alloc_ray_queue(RayQueue& q, int capacity, int num_spec_channels) {
     q.capacity = capacity;
     q.num_spectral_channels = num_spec_channels;
-    cudaMalloc(&q.origins, capacity * sizeof(GpuVec3));
-    cudaMalloc(&q.directions, capacity * sizeof(GpuVec3));
-    cudaMalloc(&q.throughput_vals, num_spec_channels * capacity * sizeof(float));
-    cudaMalloc(&q.throughput_wavelengths, num_spec_channels * capacity * sizeof(float));
-    cudaMalloc(&q.stokes_i, num_spec_channels * capacity * sizeof(float));
-    cudaMalloc(&q.stokes_q, num_spec_channels * capacity * sizeof(float));
-    cudaMalloc(&q.stokes_u, num_spec_channels * capacity * sizeof(float));
-    cudaMalloc(&q.stokes_v, num_spec_channels * capacity * sizeof(float));
-    cudaMalloc(&q.medium_indices, capacity * sizeof(int));
-    cudaMalloc(&q.seeds, capacity * sizeof(unsigned int));
-    cudaMalloc(&q.pixel_indices, capacity * sizeof(int));
-    cudaMalloc(&q.depths, capacity * sizeof(int));
-    cudaMalloc(&q.flags, capacity * sizeof(int));
-    cudaMalloc(&q.last_pdf, capacity * sizeof(float));
-    cudaMalloc(&q.spectral_modes, capacity * sizeof(int));
-    cudaMalloc(&q.active_channels, capacity * sizeof(int));
-    cudaMalloc(&q.wavelength_pdfs, capacity * sizeof(float));
-    cudaMalloc(&q.count, sizeof(int));
-    cudaMalloc(&q.overflow_count, sizeof(int));
-    cudaMemset(q.overflow_count, 0, sizeof(int));
+    UR_CUDA_CHECK(cudaMalloc(&q.origins, capacity * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMalloc(&q.directions, capacity * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMalloc(&q.throughput_vals, num_spec_channels * capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.throughput_wavelengths, num_spec_channels * capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.stokes_i, num_spec_channels * capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.stokes_q, num_spec_channels * capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.stokes_u, num_spec_channels * capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.stokes_v, num_spec_channels * capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.medium_indices, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.seeds, capacity * sizeof(unsigned int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.pixel_indices, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.depths, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.flags, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.last_pdf, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.spectral_modes, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.active_channels, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.wavelength_pdfs, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.count, sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.overflow_count, sizeof(int)));
+    UR_CUDA_CHECK(cudaMemset(q.overflow_count, 0, sizeof(int)));
 }
 
 void free_ray_queue(RayQueue& q) {
@@ -139,14 +139,14 @@ void free_ray_queue(RayQueue& q) {
 }
 
 void alloc_hit_queue(HitQueue& q, int capacity) {
-    cudaMalloc(&q.t, capacity * sizeof(float));
-    cudaMalloc(&q.p, capacity * sizeof(GpuVec3));
-    cudaMalloc(&q.n, capacity * sizeof(GpuVec3));
-    cudaMalloc(&q.ng, capacity * sizeof(GpuVec3));
-    cudaMalloc(&q.uv, capacity * sizeof(GpuVec2));
-    cudaMalloc(&q.mat_ids, capacity * sizeof(int));
-    cudaMalloc(&q.hit_types, capacity * sizeof(int));
-    cudaMalloc(&q.hit_indices, capacity * sizeof(int));
+    UR_CUDA_CHECK(cudaMalloc(&q.t, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.p, capacity * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMalloc(&q.n, capacity * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMalloc(&q.ng, capacity * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMalloc(&q.uv, capacity * sizeof(GpuVec2)));
+    UR_CUDA_CHECK(cudaMalloc(&q.mat_ids, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.hit_types, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.hit_indices, capacity * sizeof(int)));
 }
 
 void free_hit_queue(HitQueue& q) {
@@ -163,16 +163,16 @@ void free_hit_queue(HitQueue& q) {
 void alloc_shadow_queue(ShadowQueue& q, int capacity, int num_spec_channels) {
     q.capacity = capacity;
     q.num_spectral_channels = num_spec_channels;
-    cudaMalloc(&q.origins, capacity * sizeof(GpuVec3));
-    cudaMalloc(&q.directions, capacity * sizeof(GpuVec3));
-    cudaMalloc(&q.max_dist, capacity * sizeof(float));
-    cudaMalloc(&q.radiance_vals, num_spec_channels * capacity * sizeof(float));
-    cudaMalloc(&q.radiance_wavelengths, num_spec_channels * capacity * sizeof(float));
-    cudaMalloc(&q.spectral_modes, capacity * sizeof(int));
-    cudaMalloc(&q.active_channels, capacity * sizeof(int));
-    cudaMalloc(&q.wavelength_pdfs, capacity * sizeof(float));
-    cudaMalloc(&q.pixel_indices, capacity * sizeof(int));
-    cudaMalloc(&q.count, sizeof(int));
+    UR_CUDA_CHECK(cudaMalloc(&q.origins, capacity * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMalloc(&q.directions, capacity * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMalloc(&q.max_dist, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.radiance_vals, num_spec_channels * capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.radiance_wavelengths, num_spec_channels * capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.spectral_modes, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.active_channels, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.wavelength_pdfs, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.pixel_indices, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.count, sizeof(int)));
 }
 
 void free_shadow_queue(ShadowQueue& q) {
@@ -296,32 +296,32 @@ GpuContext* init_gpu_renderer(int width, int height,
     UR_LOG_INFO(GPU, "Allocating memory for {}x{} interactive session...", width, height);
 
     size_t framebuffer_size = width * height * sizeof(GpuVec3);
-    cudaMalloc(&ctx->d_output, framebuffer_size);
-    cudaMalloc(&ctx->d_accum_buffer, framebuffer_size);
-    cudaMalloc(&ctx->d_accum_sq_buffer, framebuffer_size);
-    cudaMalloc(&ctx->d_sample_counts, width * height * sizeof(int));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_output, framebuffer_size));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_accum_buffer, framebuffer_size));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_accum_sq_buffer, framebuffer_size));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_sample_counts, width * height * sizeof(int)));
 
-    cudaMemset(ctx->d_accum_buffer, 0, framebuffer_size);
-    cudaMemset(ctx->d_accum_sq_buffer, 0, framebuffer_size);
-    cudaMemset(ctx->d_sample_counts, 0, width * height * sizeof(int));
+    UR_CUDA_CHECK(cudaMemset(ctx->d_accum_buffer, 0, framebuffer_size));
+    UR_CUDA_CHECK(cudaMemset(ctx->d_accum_sq_buffer, 0, framebuffer_size));
+    UR_CUDA_CHECK(cudaMemset(ctx->d_sample_counts, 0, width * height * sizeof(int)));
 
-    cudaMalloc(&ctx->d_normal_buffer, framebuffer_size);
-    cudaMemset(ctx->d_normal_buffer, 0, framebuffer_size);
-    cudaMalloc(&ctx->d_albedo_buffer, framebuffer_size);
-    cudaMemset(ctx->d_albedo_buffer, 0, framebuffer_size);
-    cudaMalloc(&ctx->d_depth_buffer, width * height * sizeof(float));
-    cudaMemset(ctx->d_depth_buffer, 0, width * height * sizeof(float));
-    cudaMalloc(&ctx->d_uv_buffer, width * height * sizeof(GpuVec2));
-    cudaMemset(ctx->d_uv_buffer, 0, width * height * sizeof(GpuVec2));
-    cudaMalloc(&ctx->d_motion_vector_buffer, width * height * sizeof(GpuVec2));
-    cudaMemset(ctx->d_motion_vector_buffer, 0, width * height * sizeof(GpuVec2));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_normal_buffer, framebuffer_size));
+    UR_CUDA_CHECK(cudaMemset(ctx->d_normal_buffer, 0, framebuffer_size));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_albedo_buffer, framebuffer_size));
+    UR_CUDA_CHECK(cudaMemset(ctx->d_albedo_buffer, 0, framebuffer_size));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_depth_buffer, width * height * sizeof(float)));
+    UR_CUDA_CHECK(cudaMemset(ctx->d_depth_buffer, 0, width * height * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_uv_buffer, width * height * sizeof(GpuVec2)));
+    UR_CUDA_CHECK(cudaMemset(ctx->d_uv_buffer, 0, width * height * sizeof(GpuVec2)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_motion_vector_buffer, width * height * sizeof(GpuVec2)));
+    UR_CUDA_CHECK(cudaMemset(ctx->d_motion_vector_buffer, 0, width * height * sizeof(GpuVec2)));
 
     init_debug_log();
 
     int max_rays = config.queue_capacity > 0 ? config.queue_capacity : width * height;
     int num_spec = config.num_wavelengths;
-    if (num_spec <= 0 || num_spec > kMaxSpectralChannels) {
-        throw std::runtime_error("RenderConfig::num_wavelengths must be in [1, kMaxSpectralChannels]");
+    if (num_spec < kMinSpectralChannels || num_spec > kMaxSpectralChannels) {
+        throw std::runtime_error("RenderConfig::num_wavelengths must be in [kMinSpectralChannels, kMaxSpectralChannels]");
     }
     alloc_ray_queue(ctx->queueA, max_rays, num_spec);
     alloc_ray_queue(ctx->queueB, max_rays, num_spec);

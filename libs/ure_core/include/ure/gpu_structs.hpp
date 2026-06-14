@@ -129,6 +129,7 @@ struct StokesVector {
 // Spectral range constants (moved out of GpuSpectrum for Phase E)
 constexpr float kSpectralLambdaMin = 360.0f;
 constexpr float kSpectralLambdaMax = 830.0f;
+constexpr int kMinSpectralChannels = 8;
 constexpr int kMaxSpectralChannels = 32;
 
 struct alignas(16) GpuSpectrum {

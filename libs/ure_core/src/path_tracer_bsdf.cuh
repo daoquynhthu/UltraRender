@@ -2,6 +2,7 @@
 
 #include "path_tracer_decl.cuh"
 #include "path_tracer_polarization.cuh"
+#include "path_tracer_boundary.cuh"
 
 #include "ure/gpu_material_helpers.cuh"
 
@@ -23,14 +24,27 @@ __device__ float pdf_bsdf(const GpuMaterial& mat, const GpuVec3& n, const GpuVec
         float NdotH = N.dot(H);
         if (NdotH <= 0.0f) return 0.0f;
 
-        float D = ggx_D(NdotH, mat.roughness);
-
-        float rough = fmaxf(0.001f, mat.roughness);
-        float k = (rough + 1.0f);
-        k = (k * k) * 0.125f;
-        float G1_V = smith_G1(NdotV, k);
+        float alpha = ggx_alpha_from_roughness(mat.roughness);
+        float D = ggx_D(NdotH, alpha);
+        float G1_V = smith_G1_ggx(NdotV, alpha);
 
         return (G1_V * D) / (4.0f * NdotV);
+    } else if (is_rough_dielectric_bsdf(mat)) {
+        if (n.dot(wo) * n.dot(wi) > 0.0f) {
+            RoughDielectricLobe l = eval_rough_dielectric_reflection_lobe(mat, n, wo, wi);
+            if (!l.valid) return 0.0f;
+            DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
+                550.0f, mat.thin_film_thickness, l.eta_i, mat.thin_film_ior, l.eta_t, l.VdotM);
+            float F = surface.tir ? 1.0f : eval_unpolarized_reflection_probability(surface);
+            return rough_dielectric_reflection_pdf(l, F);
+        }
+
+        RoughDielectricLobe l = eval_rough_dielectric_transmission_lobe(mat, n, wo, wi);
+        if (!l.valid) return 0.0f;
+        DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
+            550.0f, mat.thin_film_thickness, l.eta_i, mat.thin_film_ior, l.eta_t, l.VdotM);
+        float F = surface.tir ? 1.0f : eval_unpolarized_reflection_probability(surface);
+        return rough_dielectric_transmission_pdf(l, F);
     } else if (mat.type == MaterialType::Dielectric) {
         return 0.0f;
     }
@@ -70,12 +84,9 @@ __device__ GpuSpectrum eval_bsdf(
         float NdotH = N.dot(H);
         float VdotH = V.dot(H);
 
-        float D = ggx_D(NdotH, mat.roughness);
-
-        float rough = fmaxf(0.001f, mat.roughness);
-        float k_val = (rough + 1.0f);
-        k_val = (k_val * k_val) * 0.125f;
-        float G = smith_G(NdotV, NdotL, k_val);
+        float alpha = ggx_alpha_from_roughness(mat.roughness);
+        float D = ggx_D(NdotH, alpha);
+        float G = smith_G_ggx(NdotV, NdotL, alpha);
 
         GpuSpectrum fresnel_spec;
         for (int c = 0; c < num_spec; ++c) {
@@ -102,6 +113,48 @@ __device__ GpuSpectrum eval_bsdf(
         }
 
         return fresnel_spec * (D * G / (4.0f * NdotV * NdotL));
+    } else if (is_rough_dielectric_bsdf(mat)) {
+        bool reflection = n.dot(wo) * n.dot(wi) > 0.0f;
+        RoughDielectricLobe l = reflection
+            ? eval_rough_dielectric_reflection_lobe(mat, n, wo, wi)
+            : eval_rough_dielectric_transmission_lobe(mat, n, wo, wi);
+        if (!l.valid) return GpuSpectrum(0.0f);
+
+        GpuSpectrum fresnel_spec;
+        for (int c = 0; c < num_spec; ++c) {
+            fresnel_spec.wavelengths[c] = wavelengths[c];
+            RoughDielectricLobe channel_lobe = reflection
+                ? eval_rough_dielectric_reflection_lobe(mat, n, wo, wi, wavelengths[c])
+                : eval_rough_dielectric_transmission_lobe(mat, n, wo, wi, wavelengths[c]);
+            if (!channel_lobe.valid) {
+                fresnel_spec.values[c] = 0.0f;
+                continue;
+            }
+
+            float denominator = reflection
+                ? 4.0f * channel_lobe.NdotV * fabsf(channel_lobe.NdotL)
+                : channel_lobe.NdotV * fabsf(channel_lobe.NdotL) *
+                    fmaxf(1e-12f,
+                          (channel_lobe.eta_i * channel_lobe.VdotM + channel_lobe.eta_t * channel_lobe.LdotM) *
+                          (channel_lobe.eta_i * channel_lobe.VdotM + channel_lobe.eta_t * channel_lobe.LdotM));
+            float transmission_jacobian_scale = reflection
+                ? 1.0f
+                : channel_lobe.eta_t * channel_lobe.eta_t * fabsf(channel_lobe.VdotM * channel_lobe.LdotM);
+            float scale = channel_lobe.D * channel_lobe.G * transmission_jacobian_scale /
+                fmaxf(1e-12f, denominator);
+            DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
+                wavelengths[c],
+                mat.thin_film_thickness,
+                channel_lobe.eta_i,
+                mat.thin_film_ior,
+                channel_lobe.eta_t,
+                channel_lobe.VdotM);
+            float F = surface.tir ? 1.0f : eval_unpolarized_reflection_probability(surface);
+            float boundary_weight = reflection ? F : (1.0f - F) *
+                select_boundary_transport_scale(surface.radiance_scale, surface.importance_scale, BoundaryTransportMode::Radiance);
+            fresnel_spec.values[c] = boundary_weight * scale;
+        }
+        return fresnel_spec;
     } else if (mat.type == MaterialType::Dielectric) {
         return GpuSpectrum(0.0f);
     }

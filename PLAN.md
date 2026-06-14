@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-13 (Phase B/C/S status consolidation and Phase C contract hardening)
+最后更新: 2026-06-13 (Phase M started: material graph IR and restricted compiler boundary)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -23,7 +23,7 @@
 新 Phase D:     分布式集成                                          已完成
 新 Phase E:     N 通道光谱升级                                      已完成
 远期 Phase S:   Session API + 脚本化                                已完成
-远期 Phase M:   材质系统                                             未开始
+远期 Phase M:   材质系统                                             进行中
 ```
 
 ---
@@ -1393,6 +1393,8 @@ void merge_partial_framebuffer(DistributedFrameBuffer& accum, const DistributedF
 - Phase E.3 显式光谱纹理当前通过 `GpuTexture::data` 手写双线性采样实现，而不是 layered texture object；这是正确性优先的 N-channel carrier，后续可作为性能优化替换为分层 CUDA texture。
 - Phase E.4 发现并修复配置链断点：`RenderEngineFactory::create_gpu_renderer()` 过去无法接收 `RenderConfig`，CLI `cfg.spectral.bands` 不会进入 renderer。已新增 config 重载并在 CLI 中传递 `spectral.bands` / queue capacity / max depth。后续配置审计应继续检查 `scene_ir.width/height` 与 CLI override 的合流点。
 - Phase E.5 并行审查确认的数学债已在 C1-C6 和后续 blocker pass 内收束：packet 色散不再由 hero wavelength 单独决定整包方向，dispersive/thin-film dielectric 首段会 deterministic split；旧 dielectric transmission clamp 已删除，radiance transport 方向锁定为 `(eta_i / eta_t)^2`，importance 为其逆，air→glass 衰减、glass→air 放大，slab 往返相消；Stokes convention 固定为 `Q = I_s - I_p`；conductor/thin-film reflection 与 thin-film transmission Mueller 已从 boundary complex amplitude 派生，packet metal/dielectric 输出 Stokes 已按 channel 写回且 packet sampling 输入使用 channel-average Stokes；lane contribution 和 ShadowQueue direct lighting 已使用 explicit wavelength PDF estimator。specular manifold NEE、rough dielectric microfacet BTDF、RGB/photometry fallback 精度和 volume spectral proposal 方差仍是明确后续边界，不再作为 E.5 完成阻塞。
+- 2026-06-13 物理第一性审查重新打开 4 个 correctness blocker 与 2 个完整性边界：lane-mode dielectric 后续界面不能回落到 packet hero-channel；dielectric interface 不能被 baseColor/albedo 染色；rough metal 的 VNDF sampling/eval/pdf 必须同分布；sphere-light MIS reverse PDF 必须匹配实际 solid-angle sampling；rough dielectric 仍需 microfacet BSDF/BTDF；specular dielectric direct lighting 仍需 specular manifold / refractive shadow path。本批已修复 4 个 correctness blocker：lane active-channel、dielectric tint 语义、sphere-light MIS PDF、rough metal `alpha = roughness^2` + exact Smith GGX 一致性，并新增 targeted GPU regressions。rough dielectric path continuation 已从 normal jitter 替换为 GGX visible microfacet reflection/transmission；reflection/transmission lobe 已进入 `eval_bsdf()` / `pdf_bsdf()` / direct-light MIS，scatter 也返回非 delta PDF；rough thin-film/dispersive dielectric 已从 smooth specular lane split 中移出，进入同一 microfacet BSDF 路径，per-channel lobe 会按 wavelength 重新计算 dispersive IOR、thin-film boundary 和 transmission Jacobian；shade direct-light gate 已允许 rough dielectric BTDF 半球并按出射侧偏移 shadow origin；transmission continuation 已用 `eval_bsdf * abs(cos) / pdf_bsdf` 等式锁定同分布。完整 furnace/reference scenes 与 specular manifold 仍是下一批大范围物理设计入口。新增真实 CLI 视觉 smoke：`scenes/physics_optics_visual.scene` + `scripts/render_physics_optics_visual.ps1`，已暴露并修复 CLI 默认 spectral bands 超过 GPU cap 的错误；该 smoke 只覆盖可渲染性和初步观感，不替代物理 reference tests。
+- 2026-06-13 用户级可靠性收敛：Release 默认配置已实跑通过；runtime spectral channel contract 显式收紧为 `[8, 32]`，核心默认 N=8，CLI 默认 N=32，4 通道会在 CLI/compiler/GPU init 层拒绝；CLI 输出新增 Radiance HDR (`--format hdr` / `.hdr`)；SceneFrontend 只分派 `.gltf/.glb/.scene`，未知扩展不再 fallback 到 legacy parser，direct GltfSceneFrontend 也拒绝非 glTF 输入。
 - Host interactive API 的自定义 `spheres/materials` 当前仍与默认材质表合并，外部传入 sphere 的 `material_index` 指向合并后索引而非传入 materials 的局部索引。新测试按当前语义覆盖 long-wavelength light-list；后续 API 清理应显式定义并测试 material index offset 规则。
 - Phase E.5.1 已将 `RayQueue` 从 scalar `StokesVector*` 迁移到 channel-major `stokes_i/q/u/v` SoA，并新增 `spectral_modes` / `active_channels` / `wavelength_pdfs`。packet scatter 的输入 Stokes 现在使用 channel-average，输出通过 `store_packet_scattered_stokes()` 按通道写回 metal/dielectric boundary Mueller；真正的 dispersive lane child ray 生成在 E.5.3。
 - Phase E.5.2 已新增 `path_tracer_boundary.cuh`，集中 dielectric/conductor/thin-film boundary 计算；`DielectricSurfaceBoundary` 统一裸 dielectric 与 dielectric thin-film 的复振幅、power R/T、eta Jacobian 和 radiance/importance transport scale，`scatter()`、spectral lane split 和 transparent shadow visibility 均消费同一 surface result。旧 `conductor_fresnel_reflectance()`、`get_dielectric_thin_film_reflectance()` 和 `get_thin_film_interference()` 已删除；`apply_mueller_reflection_conductor()` 和 dielectric thin-film reflection 现在直接从 boundary 复振幅派生 Mueller 项；metal thin-film scatter 现走 `eval_thin_film_conductor_boundary()`，albedo-F0 模式临时映射为等效 real eta，后续需以明确材质语义替代。
@@ -1619,8 +1621,8 @@ struct MaterialGraph {
 
 | Step | 内容 | 前置依赖 |
 |------|------|---------|
-| M.1 | 设计节点图 IR（不依赖 OSL，自定义格式） | Phase G (glTF 材质) |
-| M.2 | GPU 编译：节点图 → GpuMaterial + 内核参数 | Phase E (SoA 光谱) |
+| M.1 | 设计节点图 IR（不依赖 OSL，自定义格式） | ✅ `scene_ir::MaterialGraph` / `MaterialGraphNode` / `MaterialGraphInput` 已进入公共 SceneIR；首批节点覆盖 ConstantColor/ConstantFloat/BSDF/OutputSurface，Texture/Add/Mix 等复杂节点保留为显式 unsupported |
+| M.2 | GPU 编译：节点图 → GpuMaterial + 内核参数 | 进行中：`GpuSceneCompiler` 已支持受限图编译到现有 `GpuMaterialData` + spectral SoA；当前只接受单 OutputSurface → 单 BSDF → 常量输入，unsupported graph fail-loud，后续再扩展 texture/procedural/mix |
 | M.3 | MaterialX 导入（`mtlx` → 节点图 IR） | M.1 |
 | M.4 | MaterialX 导出（节点图 IR → `mtlx`） | M.1 |
 | M.5 | 材质预设库（金属/玻璃/皮肤/织物/汽车漆） | M.2 |

@@ -5,6 +5,8 @@
 #include <chrono>
 #include <iomanip>
 #include <sstream>
+#include <algorithm>
+#include <cctype>
 
 #include <ure/log.hpp>
 
@@ -16,6 +18,7 @@
 #include "ure/core/quaternion.hpp"
 #include "ure/ure_api.hpp"
 #include "ure/render.hpp"
+#include "ure/gpu_structs.hpp"
 #include "ure/physics.hpp"
 #include "ure/scene_io.hpp"
 #include "ure/config.hpp"
@@ -34,18 +37,53 @@
 
 using namespace ure;
 
+static std::string lowercase(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return value;
+}
+
+static std::string output_format_from_path_or_config(const std::string& path, const std::string& configured_format) {
+    std::string extension = lowercase(std::filesystem::path(path).extension().string());
+    if (extension == ".hdr" || extension == ".rgbe") return "hdr";
+    if (extension == ".ppm") return "ppm";
+    if (extension == ".bmp") return "bmp";
+    return lowercase(configured_format.empty() ? "bmp" : configured_format);
+}
+
+static std::string output_extension_for_format(const std::string& format) {
+    std::string normalized = lowercase(format);
+    if (normalized == "hdr" || normalized == "rgbe") return ".hdr";
+    if (normalized == "ppm") return ".ppm";
+    return ".bmp";
+}
+
 // ── helper: flush engine framebuffer to disk via public API ──
-static void save_frame(IRenderEngine* engine, int width, int height, const std::string& path) {
+static bool save_frame(IRenderEngine* engine, int width, int height, const std::string& path, const std::string& configured_format) {
     const auto& buffer = engine->get_framebuffer();
-    if (buffer.empty()) return;
+    if (buffer.empty()) return false;
     std::vector<core::Vec3f> pixels(width * height);
     for (size_t i = 0; i < pixels.size(); ++i)
         pixels[i] = {buffer[i*3], buffer[i*3+1], buffer[i*3+2]};
 
     std::string tmp = path + ".tmp";
-    ure::io::ImageSaver::save_bmp(tmp, width, height, pixels, ure::io::ToneMapType::ACES, 1.0f);
+    std::string format = output_format_from_path_or_config(path, configured_format);
+    bool saved = false;
+    if (format == "hdr" || format == "rgbe") {
+        saved = ure::io::ImageSaver::save_hdr(tmp, width, height, pixels, 1.0f);
+    } else if (format == "ppm") {
+        saved = ure::io::ImageSaver::save_ppm(tmp, width, height, pixels, ure::io::ToneMapType::ACES, 1.0f);
+    } else if (format == "bmp") {
+        saved = ure::io::ImageSaver::save_bmp(tmp, width, height, pixels, ure::io::ToneMapType::ACES, 1.0f);
+    } else {
+        std::cerr << "Error: unsupported output format '" << format << "'\n";
+        return false;
+    }
+    if (!saved) return false;
     if (std::filesystem::exists(path)) std::filesystem::remove(path);
     try { std::filesystem::rename(tmp, path); } catch (...) {}
+    return std::filesystem::exists(path);
 }
 
 // ── helper: dynamic body list ──
@@ -83,7 +121,12 @@ static int cmd_render(const ure::config::CliResult& cli) {
 
     if (std::filesystem::exists(scene_path)) {
         UR_LOG_INFO(CLI, "Parsing scene file: {}", scene_path);
-        scene_ir = SceneParser::parse_file_to_ir(scene_path);
+        try {
+            scene_ir = SceneParser::parse_file_to_ir(scene_path);
+        } catch (const std::exception& e) {
+            std::cerr << "Error parsing scene: " << e.what() << "\n";
+            return 1;
+        }
         has_scene_ir = true;
         scene = ure::scene_ir::to_legacy_scene(scene_ir);
 
@@ -323,6 +366,14 @@ static int cmd_render(const ure::config::CliResult& cli) {
     render_config.num_wavelengths = cfg.spectral.bands;
     render_config.queue_capacity = cfg.gpu.wavefront_capacity;
     render_config.max_trace_depth = cfg.renderer.max_depth;
+    if (render_config.num_wavelengths < ure::gpu::kMinSpectralChannels ||
+        render_config.num_wavelengths > ure::gpu::kMaxSpectralChannels) {
+        std::cerr << "Error: spectral bands must be in ["
+                  << ure::gpu::kMinSpectralChannels << ", "
+                  << ure::gpu::kMaxSpectralChannels << "], got "
+                  << render_config.num_wavelengths << "\n";
+        return 1;
+    }
     auto engine = RenderEngineFactory::create_gpu_renderer(render_config);
 
     if (scene.physics.fluid.enabled && physics_world) {
@@ -376,7 +427,7 @@ static int cmd_render(const ure::config::CliResult& cli) {
     std::string output_filename = output_filename_override;
     if (output_filename.empty()) {
         std::string base = std::filesystem::exists(scene_path) ? std::filesystem::path(scene_path).stem().string() : "output_procedural";
-        output_filename = base + ".bmp";
+        output_filename = base + output_extension_for_format(cfg.output.format);
     }
     std::string output_path = (output_dir / output_filename).string();
 
@@ -478,8 +529,12 @@ static int cmd_render(const ure::config::CliResult& cli) {
 
             // 7. Save Frame
             std::stringstream ss;
-            ss << "frame_" << std::setw(3) << std::setfill('0') << frame << ".bmp";
-            save_frame(engine.get(), scene.width, scene.height, (output_dir / ss.str()).string());
+            ss << "frame_" << std::setw(3) << std::setfill('0') << frame
+               << output_extension_for_format(cfg.output.format);
+            if (!save_frame(engine.get(), scene.width, scene.height, (output_dir / ss.str()).string(), cfg.output.format)) {
+                std::cerr << "Error: failed to save frame\n";
+                return 1;
+            }
             UR_LOG_INFO(CLI, "Frame {} saved.", frame+1);
         }
 
@@ -505,7 +560,10 @@ static int cmd_render(const ure::config::CliResult& cli) {
         auto now = std::chrono::steady_clock::now();
         if (std::chrono::duration_cast<std::chrono::seconds>(now - last_save_time).count() >= 1
             || current_spp == 1 || current_spp == 10 || current_spp == spp) {
-            save_frame(engine.get(), scene.width, scene.height, output_path);
+            if (!save_frame(engine.get(), scene.width, scene.height, output_path, cfg.output.format)) {
+                std::cerr << "Error: failed to save output: " << output_path << "\n";
+                return 1;
+            }
             last_save_time = now;
         }
     }

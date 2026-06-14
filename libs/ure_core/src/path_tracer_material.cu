@@ -161,11 +161,8 @@ __device__ inline bool scatter(
         NdotH = fmaxf(1e-6f, NdotH);
         VdotH = fmaxf(1e-6f, VdotH);
         
-        float rough = fmaxf(0.001f, mat.roughness);
-        float k = (rough + 1.0f);
-        k = (k * k) * 0.125f;
-        
-        float G1_L = smith_G1(NdotL, k);
+        float alpha = ggx_alpha_from_roughness(mat.roughness);
+        float G1_L = smith_G1_ggx(NdotL, alpha);
         float microfacet_weight = G1_L;
         
         if (effective_thickness > 0.0f) {
@@ -205,30 +202,21 @@ __device__ inline bool scatter(
         scattered.t_max = FLT_MAX;
 
         {
-            float pdf_rough = fmaxf(0.001f, mat.roughness);
-            float pdf_a2 = pdf_rough * pdf_rough;
+            float pdf_alpha = ggx_alpha_from_roughness(mat.roughness);
+            float pdf_a2 = pdf_alpha * pdf_alpha;
             float pdf_D_denom = NdotH * NdotH * (pdf_a2 - 1.0f) + 1.0f;
             float pdf_D = pdf_a2 / (3.14159265f * pdf_D_denom * pdf_D_denom);
-            float pdf_k = (pdf_rough + 1.0f);
-            pdf_k = (pdf_k * pdf_k) * 0.125f;
-            float pdf_G1_V = smith_G1(fmaxf(1e-6f, NdotV), pdf_k);
+            float pdf_G1_V = smith_G1_ggx(fmaxf(1e-6f, NdotV), pdf_alpha);
             out_pdf = (pdf_G1_V * pdf_D) / (4.0f * fmaxf(1e-6f, NdotV));
         }
         return (scattered.direction.dot(N) > 0);
     } else if (mat.type == MaterialType::Dielectric) {
-        attenuation = albedo; // Use material albedo for tint
+        attenuation = GpuSpectrum(1.0f);
 
         bool front_face = r_in.direction.dot(n) < 0;
         GpuVec3 normal = front_face ? n : -n;
 
-        if (mat.type == MaterialType::Dielectric) {
-            float jitter_scale = mat.roughness * 0.002f;
-            if (jitter_scale > 0.0f) {
-                GpuVec3 jitter = sample_unit_vector_lds(r_bsdf_1, r_bsdf_2) * jitter_scale; 
-                normal = (normal + jitter).normalize();
-            }
-        }
-        
+        StokesVector incident_stokes = stokes;
         GpuVec3 ref_in = get_reference_frame(r_in.direction);
         
         GpuVec3 raw_s = r_in.direction.cross(normal);
@@ -249,6 +237,148 @@ __device__ inline bool scatter(
 
         GpuVec3 unit_direction = r_in.direction.normalize();
         float cos_theta_i = fminf((-unit_direction).dot(normal), 1.0f);
+        int lane_channel = spectral_mode == SpectralRayModeLane
+            ? min(max(active_channel, 0), num_spec - 1)
+            : -1;
+        bool use_rough_microfacet = is_rough_dielectric_bsdf(mat);
+
+        if (use_rough_microfacet) {
+            GpuVec3 V = (-unit_direction).normalize();
+            GpuVec3 H = ImportanceSampleGGXVisible(r_bsdf_1, r_bsdf_2, V, normal, mat.roughness);
+            if (V.dot(H) < 0.0f) H = -H;
+            float cos_theta_h = fmaxf(0.0f, V.dot(H));
+            int boundary_channel = lane_channel >= 0 ? lane_channel : 0;
+            float boundary_material_ior = dispersed_dielectric_ior(
+                mat.ior,
+                mat.dispersion,
+                current_throughput.wavelengths[boundary_channel],
+                dispersion_clamp);
+            float boundary_eta_i = front_face ? ior_outside : boundary_material_ior;
+            float boundary_eta_t = front_face ? boundary_material_ior : ior_outside;
+            stokes = incident_stokes;
+            GpuVec3 micro_ref_in = get_reference_frame(r_in.direction);
+            GpuVec3 micro_raw_s = r_in.direction.cross(H);
+            float micro_raw_len_sq = micro_raw_s.length_sq();
+            GpuVec3 micro_s_axis = micro_raw_len_sq < 1e-12f
+                ? get_reference_frame(H)
+                : micro_raw_s * (1.0f / sqrtf(micro_raw_len_sq));
+            float micro_cos_phi_in = micro_ref_in.dot(micro_s_axis);
+            float micro_sin_phi_in = micro_ref_in.cross(micro_s_axis).dot(r_in.direction);
+            rotate_stokes(stokes, 2.0f * atan2f(micro_sin_phi_in, micro_cos_phi_in));
+            DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
+                current_throughput.wavelengths[boundary_channel],
+                effective_thickness,
+                boundary_eta_i,
+                mat.thin_film_ior,
+                boundary_eta_t,
+                cos_theta_h);
+            float stokes_i_in = stokes.I;
+            float Is = stokes_s_intensity(stokes);
+            float Ip = stokes_p_intensity(stokes);
+            float reflect_prob = surface.tir ? 1.0f :
+                fminf(1.0f, fmaxf(0.0f, (surface.Rs * Is + surface.Rp * Ip) / (stokes_i_in + 1e-6f)));
+            bool reflect_event = r_bsdf_3 < reflect_prob;
+
+            if (reflect_event) {
+                GpuVec3 out_direction = reflect(unit_direction, H).normalize();
+                float NdotL = normal.dot(out_direction);
+                if (NdotL <= 1e-6f) {
+                    out_pdf = 0.0f;
+                    return false;
+                }
+
+                apply_mueller_reflection_boundary(stokes, surface.rs, surface.rp, surface.Rs, surface.Rp);
+                float alpha = ggx_alpha_from_roughness(mat.roughness);
+                float G1_L = smith_G1_ggx(NdotL, alpha);
+                float pdf = fmaxf(1e-6f, reflect_prob);
+                for (int c = 0; c < num_spec; ++c) {
+                    float material_ior = dispersed_dielectric_ior(mat.ior, mat.dispersion, current_throughput.wavelengths[c], dispersion_clamp);
+                    float eta_i_c = front_face ? ior_outside : material_ior;
+                    float eta_t_c = front_face ? material_ior : ior_outside;
+                    DielectricSurfaceBoundary surface_c = eval_dielectric_surface_boundary(
+                        current_throughput.wavelengths[c], effective_thickness, eta_i_c, mat.thin_film_ior, eta_t_c, cos_theta_h);
+                    float R_c = surface_c.tir ? 1.0f : (surface_c.Rs * Is + surface_c.Rp * Ip) / (stokes_i_in + 1e-6f);
+                    attenuation.values[c] = fminf(1.0f, fmaxf(0.0f, R_c)) * G1_L * (1.0f / pdf);
+                }
+
+                scattered.direction = out_direction;
+                GpuVec3 micro_ref_out = get_reference_frame(scattered.direction);
+                GpuVec3 micro_raw_s_out = scattered.direction.cross(H);
+                float micro_raw_len_sq_out = micro_raw_s_out.length_sq();
+                GpuVec3 micro_s_axis_out = micro_raw_len_sq_out < 1e-12f
+                    ? get_reference_frame(H)
+                    : micro_raw_s_out * (1.0f / sqrtf(micro_raw_len_sq_out));
+                float micro_cos_phi_out = micro_s_axis_out.dot(micro_ref_out);
+                float micro_sin_phi_out = micro_s_axis_out.cross(micro_ref_out).dot(scattered.direction);
+                rotate_stokes(stokes, 2.0f * atan2f(micro_sin_phi_out, micro_cos_phi_out));
+                GpuVec3 offset = (scattered.direction.dot(n) > 0.0f) ? n : -n;
+                scattered.origin = p + offset * 1e-4f;
+                scattered.t_min = 1e-4f;
+                scattered.t_max = FLT_MAX;
+                RoughDielectricLobe pdf_lobe = eval_rough_dielectric_reflection_lobe(
+                    mat, normal, V, scattered.direction);
+                out_pdf = reflect_prob * rough_dielectric_visible_microfacet_pdf(pdf_lobe) *
+                    (pdf_lobe.valid ? pdf_lobe.jacobian : 0.0f);
+                return true;
+            }
+
+            float eta = surface.tir ? 1.0f : (boundary_eta_i / boundary_eta_t);
+            GpuVec3 perp = eta * (unit_direction + cos_theta_h * H);
+            float sin_t2 = perp.length_sq();
+            if (sin_t2 >= 1.0f) {
+                out_pdf = 0.0f;
+                return false;
+            }
+            GpuVec3 para = -sqrtf(fmaxf(0.0f, 1.0f - sin_t2)) * H;
+            GpuVec3 out_direction = (perp + para).normalize();
+            if (normal.dot(out_direction) >= -1e-6f) {
+                out_pdf = 0.0f;
+                return false;
+            }
+
+            float alpha = ggx_alpha_from_roughness(mat.roughness);
+            float G1_L = smith_G1_ggx(fabsf(normal.dot(out_direction)), alpha);
+            float transmit_prob = fmaxf(1e-6f, 1.0f - reflect_prob);
+            apply_mueller_transmission_boundary(stokes, surface.ts, surface.tp, surface.Ts, surface.Tp, surface.eta_jacobian);
+            float radiance_scale = select_boundary_transport_scale(
+                surface.radiance_scale,
+                surface.importance_scale,
+                BoundaryTransportMode::Radiance);
+            stokes = stokes * radiance_scale * (1.0f / transmit_prob);
+            for (int c = 0; c < num_spec; ++c) {
+                float material_ior = dispersed_dielectric_ior(mat.ior, mat.dispersion, current_throughput.wavelengths[c], dispersion_clamp);
+                float eta_i_c = front_face ? ior_outside : material_ior;
+                float eta_t_c = front_face ? material_ior : ior_outside;
+                DielectricSurfaceBoundary surface_c = eval_dielectric_surface_boundary(
+                    current_throughput.wavelengths[c], effective_thickness, eta_i_c, mat.thin_film_ior, eta_t_c, cos_theta_h);
+                float T_c = surface_c.tir ? 0.0f : (surface_c.Ts * Is + surface_c.Tp * Ip) / (stokes_i_in + 1e-6f);
+                float scale_c = select_boundary_transport_scale(
+                    surface_c.radiance_scale,
+                    surface_c.importance_scale,
+                    BoundaryTransportMode::Radiance);
+                attenuation.values[c] = fminf(1.0f, fmaxf(0.0f, T_c)) * scale_c * G1_L * (1.0f / transmit_prob);
+            }
+
+            scattered.direction = out_direction;
+            GpuVec3 micro_ref_out = get_reference_frame(scattered.direction);
+            GpuVec3 micro_raw_s_out = scattered.direction.cross(H);
+            float micro_raw_len_sq_out = micro_raw_s_out.length_sq();
+            GpuVec3 micro_s_axis_out = micro_raw_len_sq_out < 1e-12f
+                ? get_reference_frame(H)
+                : micro_raw_s_out * (1.0f / sqrtf(micro_raw_len_sq_out));
+            float micro_cos_phi_out = micro_s_axis_out.dot(micro_ref_out);
+            float micro_sin_phi_out = micro_s_axis_out.cross(micro_ref_out).dot(scattered.direction);
+            rotate_stokes(stokes, 2.0f * atan2f(micro_sin_phi_out, micro_cos_phi_out));
+            GpuVec3 offset = (scattered.direction.dot(n) > 0.0f) ? n : -n;
+            scattered.origin = p + offset * 1e-4f;
+            scattered.t_min = 1e-4f;
+            scattered.t_max = FLT_MAX;
+            RoughDielectricLobe pdf_lobe = eval_rough_dielectric_transmission_lobe(
+                mat, normal, V, scattered.direction);
+            out_pdf = transmit_prob * rough_dielectric_visible_microfacet_pdf(pdf_lobe) *
+                (pdf_lobe.valid ? pdf_lobe.jacobian : 0.0f);
+            return true;
+        }
 
         float Is = stokes_s_intensity(stokes);
         float Ip = stokes_p_intensity(stokes);
@@ -280,9 +410,11 @@ __device__ inline bool scatter(
             T_vals[c] = fminf(1.0f, fmaxf(0.0f, T_c));
             reflect_prob += R_vals[c];
         }
-        reflect_prob = fminf(1.0f, fmaxf(0.0f, reflect_prob / float(num_spec)));
+        reflect_prob = lane_channel >= 0
+            ? R_vals[lane_channel]
+            : fminf(1.0f, fmaxf(0.0f, reflect_prob / float(num_spec)));
 
-        int hero_channel = (int)floorf(r_bsdf_4 * float(num_spec));
+        int hero_channel = lane_channel >= 0 ? lane_channel : (int)floorf(r_bsdf_4 * float(num_spec));
         if (hero_channel < 0) hero_channel = 0;
         if (hero_channel >= num_spec) hero_channel = num_spec - 1;
         float eta_i = eta_i_vals[hero_channel];
@@ -308,7 +440,7 @@ __device__ inline bool scatter(
             stokes = stokes * (1.0f / pdf);
             attenuation = attenuation * (1.0f / pdf);
         } else {
-            GpuSpectrum transmission_color = albedo;
+            GpuSpectrum transmission_color(1.0f);
             for (int c = 0; c < num_spec; ++c) transmission_color.values[c] *= T_vals[c];
             attenuation = transmission_color;
 

@@ -265,6 +265,125 @@ __device__ inline float eval_unpolarized_transmission_transport_weight(
         select_boundary_transport_scale(surface.radiance_scale, surface.importance_scale, mode);
 }
 
+__device__ inline bool is_rough_dielectric_bsdf(const GpuMaterial& mat) {
+    return mat.type == MaterialType::Dielectric &&
+           mat.roughness > 1e-4f;
+}
+
+__device__ inline float dispersed_dielectric_ior(float base_ior, float dispersion, float wavelength, float clamp) {
+    if (dispersion <= 0.0f) return base_ior;
+    float inv_lambda2 = 1.0f / (wavelength * wavelength);
+    float inv_ref2 = 1.0f / (550.0f * 550.0f);
+    float offset = (inv_lambda2 - inv_ref2) * 4e5f;
+    offset = fminf(clamp, fmaxf(-clamp, offset));
+    return fmaxf(1.01f, base_ior + dispersion * offset);
+}
+
+struct RoughDielectricLobe {
+    GpuVec3 m;
+    float eta_i;
+    float eta_t;
+    float NdotV;
+    float NdotL;
+    float VdotM;
+    float LdotM;
+    float NdotM;
+    float D;
+    float G;
+    float G1_V;
+    float jacobian;
+    bool valid;
+};
+
+__device__ inline RoughDielectricLobe eval_rough_dielectric_reflection_lobe(
+    const GpuMaterial& mat,
+    const GpuVec3& n,
+    const GpuVec3& wo,
+    const GpuVec3& wi,
+    float wavelength = 550.0f,
+    float dispersion_clamp = 20.0f
+) {
+    RoughDielectricLobe l = {};
+    GpuVec3 N = n;
+    GpuVec3 V = wo.normalize();
+    GpuVec3 L = wi.normalize();
+    if (V.dot(N) < 0.0f) N = -N;
+    l.NdotV = N.dot(V);
+    l.NdotL = N.dot(L);
+    if (l.NdotV <= 1e-6f || l.NdotL <= 1e-6f) return l;
+
+    l.m = (V + L).normalize();
+    l.NdotM = N.dot(l.m);
+    l.VdotM = V.dot(l.m);
+    l.LdotM = L.dot(l.m);
+    if (l.NdotM <= 1e-6f || l.VdotM <= 1e-6f || l.LdotM <= 1e-6f) return l;
+
+    float alpha = ggx_alpha_from_roughness(mat.roughness);
+    l.D = ggx_D(l.NdotM, alpha);
+    l.G1_V = smith_G1_ggx(l.NdotV, alpha);
+    l.G = smith_G_ggx(l.NdotV, l.NdotL, alpha);
+    float material_ior = dispersed_dielectric_ior(mat.ior, mat.dispersion, wavelength, dispersion_clamp);
+    l.eta_i = V.dot(n) >= 0.0f ? 1.0f : material_ior;
+    l.eta_t = V.dot(n) >= 0.0f ? material_ior : 1.0f;
+    l.jacobian = 1.0f / (4.0f * l.VdotM);
+    l.valid = true;
+    return l;
+}
+
+__device__ inline RoughDielectricLobe eval_rough_dielectric_transmission_lobe(
+    const GpuMaterial& mat,
+    const GpuVec3& n,
+    const GpuVec3& wo,
+    const GpuVec3& wi,
+    float wavelength = 550.0f,
+    float dispersion_clamp = 20.0f
+) {
+    RoughDielectricLobe l = {};
+    GpuVec3 N = n;
+    GpuVec3 V = wo.normalize();
+    GpuVec3 L = wi.normalize();
+    bool outside_to_inside = V.dot(N) > 0.0f;
+    if (!outside_to_inside) N = -N;
+    l.NdotV = N.dot(V);
+    l.NdotL = N.dot(L);
+    if (l.NdotV <= 1e-6f || l.NdotL >= -1e-6f) return l;
+
+    float material_ior = dispersed_dielectric_ior(mat.ior, mat.dispersion, wavelength, dispersion_clamp);
+    l.eta_i = outside_to_inside ? 1.0f : material_ior;
+    l.eta_t = outside_to_inside ? material_ior : 1.0f;
+    l.m = (l.eta_i * V + l.eta_t * L).normalize();
+    if (l.m.dot(N) < 0.0f) l.m = -l.m;
+
+    l.NdotM = N.dot(l.m);
+    l.VdotM = V.dot(l.m);
+    l.LdotM = L.dot(l.m);
+    if (l.NdotM <= 1e-6f || l.VdotM <= 1e-6f || l.LdotM >= -1e-6f) return l;
+
+    float denom = l.eta_i * l.VdotM + l.eta_t * l.LdotM;
+    if (fabsf(denom) <= 1e-6f) return l;
+
+    float alpha = ggx_alpha_from_roughness(mat.roughness);
+    l.D = ggx_D(l.NdotM, alpha);
+    l.G1_V = smith_G1_ggx(l.NdotV, alpha);
+    l.G = smith_G_ggx(l.NdotV, fabsf(l.NdotL), alpha);
+    l.jacobian = (l.eta_t * l.eta_t * fabsf(l.LdotM)) / fmaxf(1e-12f, denom * denom);
+    l.valid = true;
+    return l;
+}
+
+__device__ inline float rough_dielectric_visible_microfacet_pdf(const RoughDielectricLobe& l) {
+    if (!l.valid) return 0.0f;
+    return l.D * l.G1_V * fabsf(l.VdotM) / fmaxf(1e-6f, l.NdotV);
+}
+
+__device__ inline float rough_dielectric_reflection_pdf(const RoughDielectricLobe& l, float fresnel) {
+    return fresnel * rough_dielectric_visible_microfacet_pdf(l) * l.jacobian;
+}
+
+__device__ inline float rough_dielectric_transmission_pdf(const RoughDielectricLobe& l, float fresnel) {
+    return (1.0f - fresnel) * rough_dielectric_visible_microfacet_pdf(l) * l.jacobian;
+}
+
 __device__ inline ThinFilmBoundary eval_thin_film_boundary(
     float wavelength,
     float thickness,
@@ -370,6 +489,22 @@ __device__ inline DielectricSurfaceBoundary eval_dielectric_surface_boundary(
     out.Tp = bare.Tp;
     out.eta_jacobian = bare.eta_jacobian;
     return out;
+}
+
+__device__ inline float eval_dielectric_surface_unpolarized_reflectance(
+    float wavelength,
+    float eta_i,
+    float eta_t,
+    float cos_i
+) {
+    DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
+        wavelength,
+        0.0f,
+        eta_i,
+        1.0f,
+        eta_t,
+        cos_i);
+    return surface.tir ? 1.0f : eval_unpolarized_reflection_probability(surface);
 }
 
 __device__ inline ThinFilmBoundary eval_thin_film_conductor_boundary(

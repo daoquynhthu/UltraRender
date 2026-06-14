@@ -4,8 +4,13 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <filesystem>
+#include <stdexcept>
+#include <iterator>
 
 #include <ure/image_loader.hpp>
+#include <ure/image_saver.hpp>
+#include <ure/scene_parser.hpp>
 #include <ure/scene_io.hpp>
 #include <ure/spd_loader.hpp>
 
@@ -87,6 +92,48 @@ static int test_load_image_bmp() {
     CHECK_FLOAT_EQ(tex.data[9], 1.0f, 1e-6f);
     CHECK_FLOAT_EQ(tex.data[10], 1.0f, 1e-6f);
     CHECK_FLOAT_EQ(tex.data[11], 1.0f, 1e-6f);
+
+    std::remove(tmp);
+    return 0;
+}
+
+static int test_save_hdr() {
+    const char* tmp = "test_asset_temp.hdr";
+    std::vector<ure::core::Vec3f> pixels = {
+        {4.0f, 2.0f, 1.0f},
+        {0.5f, 0.25f, 0.125f}
+    };
+    bool ok = ure::io::ImageSaver::save_hdr(tmp, 2, 1, pixels);
+    CHECK(ok);
+
+    std::ifstream f(tmp, std::ios::binary);
+    CHECK(f.good());
+    std::string header;
+    std::getline(f, header);
+    CHECK(header == "#?RADIANCE");
+    std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    CHECK(content.find("FORMAT=32-bit_rle_rgbe") != std::string::npos);
+    CHECK(content.find("-Y 1 +X 2") != std::string::npos);
+    CHECK(std::filesystem::file_size(tmp) > 32);
+
+    std::remove(tmp);
+    return 0;
+}
+
+static int test_unknown_scene_extension_rejected() {
+    const char* tmp = "test_unknown_scene.obj";
+    {
+        std::ofstream f(tmp);
+        f << "not a supported scene frontend\n";
+    }
+
+    bool rejected = false;
+    try {
+        (void)ure::SceneParser::parse_file_to_ir(tmp);
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    CHECK(rejected);
 
     std::remove(tmp);
     return 0;
@@ -225,6 +272,8 @@ int main() {
 
     int failed = 0;
     failed += run("test_load_image_bmp", test_load_image_bmp);
+    failed += run("test_save_hdr", test_save_hdr);
+    failed += run("test_unknown_scene_extension_rejected", test_unknown_scene_extension_rejected);
     failed += run("test_spd_loader", test_spd_loader);
     failed += run("test_scene_io_load_spd_runtime_n", test_scene_io_load_spd_runtime_n);
     failed += run("test_missing_texture", test_missing_texture);

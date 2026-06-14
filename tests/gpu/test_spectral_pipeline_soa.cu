@@ -1150,10 +1150,8 @@ __global__ void t11_kernel(float* out_attenuation, float* out_expected, int num_
     GpuVec3 H = (V + scattered.direction.normalize()).normalize();
     float cos_theta_h = fmaxf(0.0f, V.dot(H));
     float NdotL = fmaxf(1e-6f, GpuVec3(0.0f, 0.0f, 1.0f).dot(scattered.direction));
-    float rough = fmaxf(0.001f, mat.roughness);
-    float k = (rough + 1.0f);
-    k = (k * k) * 0.125f;
-    float expected_weight = smith_G1(NdotL, k);
+    float alpha = ggx_alpha_from_roughness(mat.roughness);
+    float expected_weight = smith_G1_ggx(NdotL, alpha);
     for (int c = 0; c < num_spec; ++c) {
         out_attenuation[c] = attenuation.values[c];
         float fresnel = eval_conductor_unpolarized_reflectance(metal_eta.values[c], extinction.values[c], cos_theta_h);
@@ -1522,6 +1520,532 @@ static int test_lane_split_medium_transition() {
     return 0;
 }
 
+__global__ void c7_lane_dielectric_active_channel_kernel(float* out_dir_z, int* out_sample)
+{
+    constexpr int num_spec = 4;
+    GpuMaterial mat = {};
+    mat.type = MaterialType::Dielectric;
+    mat.ior = 1.1f;
+    mat.dispersion = 0.5f;
+    mat.roughness = 0.0f;
+    mat.thin_film_thickness = 0.0f;
+    mat.thin_film_ior = 1.4f;
+
+    GpuSpectrum albedo(1.0f);
+    GpuSpectrum extinction(0.0f);
+    GpuSpectrum metal_eta(0.0f);
+    GpuSpectrum throughput(1.0f);
+    throughput.wavelengths[0] = 400.0f;
+    throughput.wavelengths[1] = 500.0f;
+    throughput.wavelengths[2] = 600.0f;
+    throughput.wavelengths[3] = 700.0f;
+
+    float sin_theta = 0.7f;
+    float cos_theta = sqrtf(1.0f - sin_theta * sin_theta);
+    GpuRay in;
+    in.origin = GpuVec3(0.0f, 0.0f, -1.0f);
+    in.direction = GpuVec3(sin_theta, 0.0f, cos_theta).normalize();
+    in.t_min = 0.0f;
+    in.t_max = 1000.0f;
+    in.stokes = StokesVector(1.0f, 0.0f, 0.0f, 0.0f);
+
+    for (int sample = 0; sample < 512; ++sample) {
+        float r_branch = sample_dimension(sample, 0, 6);
+        int hero = int(floorf(sample_dimension(sample, 0, 7) * float(num_spec)));
+        if (hero == 0 || r_branch < 0.75f) {
+            continue;
+        }
+
+        GpuSpectrum attenuation;
+        GpuRay scattered;
+        StokesVector stokes(1.0f, 0.0f, 0.0f, 0.0f);
+        unsigned int seed = 1u;
+        float pdf = 0.0f;
+        bool ok = scatter(
+            in,
+            mat,
+            albedo,
+            extinction,
+            metal_eta,
+            GpuVec3(0.0f, 0.0f, 0.0f),
+            GpuVec3(0.0f, 0.0f, 1.0f),
+            GpuVec2(0.0f, 0.0f),
+            throughput,
+            attenuation,
+            scattered,
+            stokes,
+            seed,
+            pdf,
+            20.0f,
+            sample,
+            0,
+            0,
+            num_spec,
+            1.0f,
+            1.1f,
+            SpectralRayModeLane,
+            0);
+        if (ok) {
+            out_dir_z[0] = scattered.direction.z;
+            out_sample[0] = sample;
+            return;
+        }
+    }
+
+    out_dir_z[0] = 1.0f;
+    out_sample[0] = -1;
+}
+
+static int test_lane_dielectric_uses_active_channel() {
+    REQUIRE_GPU();
+    float* d_dir_z = nullptr;
+    int* d_sample = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_dir_z, sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_sample, sizeof(int)));
+    DeviceMem _dz(d_dir_z), _ds(d_sample);
+
+    c7_lane_dielectric_active_channel_kernel<<<1, 1>>>(d_dir_z, d_sample);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float h_dir_z = 0.0f;
+    int h_sample = -1;
+    CHECK_CUDA(cudaMemcpy(&h_dir_z, d_dir_z, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&h_sample, d_sample, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK(h_sample >= 0);
+    CHECK(h_dir_z < 0.0f);
+    return 0;
+}
+
+__global__ void c8_dielectric_lane_split_no_albedo_tint_kernel(RayQueue current, RayQueue next, float* out_observed, float* out_expected)
+{
+    constexpr int num_spec = 4;
+    *current.count = 1;
+    *next.count = 0;
+
+    current.origins[0] = GpuVec3(0.0f, 0.0f, 1.0f);
+    current.directions[0] = GpuVec3(0.0f, 0.0f, -1.0f);
+    current.medium_indices[0] = -1;
+    current.seeds[0] = 29u;
+    current.pixel_indices[0] = 0;
+    current.depths[0] = 0;
+    current.flags[0] = 1;
+    current.last_pdf[0] = 1.0f;
+    current.spectral_modes[0] = SpectralRayModePacket;
+    current.active_channels[0] = -1;
+    current.wavelength_pdfs[0] = 1.0f / float(num_spec);
+
+    GpuSpectrum throughput(1.0f);
+    for (int c = 0; c < num_spec; ++c) {
+        throughput.wavelengths[c] = 440.0f + 40.0f * float(c);
+        store_stokes(current, 0, c, StokesVector(1.0f, 0.0f, 0.0f, 0.0f));
+        out_observed[c] = -1.0f;
+        out_expected[c] = -1.0f;
+    }
+    store_throughput(current, 0, throughput);
+
+    GpuMaterial mat = {};
+    mat.type = MaterialType::Dielectric;
+    mat.ior = 1.5f;
+    mat.dispersion = 0.08f;
+    mat.roughness = 0.0f;
+    mat.thin_film_thickness = 0.0f;
+    mat.thin_film_ior = 1.4f;
+
+    GpuMaterialSoA mat_soa = {};
+    mat_soa.albedo = GpuSpectrum(0.25f);
+
+    split_dispersive_dielectric_lanes(
+        current,
+        next,
+        0,
+        mat,
+        mat_soa,
+        GpuVec3(0.0f, 0.0f, 0.0f),
+        GpuVec3(0.0f, 0.0f, 1.0f),
+        GpuVec3(0.0f, 0.0f, 1.0f),
+        GpuVec2(0.0f, 0.0f),
+        throughput,
+        -1,
+        5,
+        0,
+        0,
+        123u,
+        20.0f,
+        1.0f);
+
+    int count = *next.count;
+    int cap = next.capacity;
+    for (int i = 0; i < count; ++i) {
+        int c = next.active_channels[i];
+        if (c >= 0 && c < num_spec && next.directions[i].z > 0.0f) {
+            float lambda = throughput.wavelengths[c];
+            float material_ior = dispersed_dielectric_ior(mat.ior, mat.dispersion, lambda, 20.0f);
+            DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
+                lambda, 0.0f, 1.0f, mat.thin_film_ior, material_ior, 1.0f);
+            float expected = 0.5f * (surface.Rs + surface.Rp) * (1.0f / float(num_spec));
+            out_observed[c] = next.throughput_vals[c * cap + i];
+            out_expected[c] = expected;
+        }
+    }
+}
+
+static int test_dielectric_lane_split_does_not_tint_interface() {
+    REQUIRE_GPU();
+    constexpr int num_spec = 4;
+    RayQueue current = {};
+    RayQueue next = {};
+    if (alloc_test_ray_queue(current, 1, num_spec)) return 1;
+    if (alloc_test_ray_queue(next, 2 * num_spec, num_spec)) return 1;
+
+    float* d_observed = nullptr;
+    float* d_expected = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_observed, num_spec * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_expected, num_spec * sizeof(float)));
+    DeviceMem _do(d_observed), _de(d_expected);
+
+    c8_dielectric_lane_split_no_albedo_tint_kernel<<<1, 1>>>(current, next, d_observed, d_expected);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float h_observed[num_spec];
+    float h_expected[num_spec];
+    CHECK_CUDA(cudaMemcpy(h_observed, d_observed, num_spec * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(h_expected, d_expected, num_spec * sizeof(float), cudaMemcpyDeviceToHost));
+
+    for (int c = 0; c < num_spec; ++c) {
+        CHECK(h_observed[c] > 0.0f);
+        CHECK_FLOAT_EQ(h_observed[c], h_expected[c], 1e-5f);
+    }
+
+    free_test_ray_queue(current);
+    free_test_ray_queue(next);
+    return 0;
+}
+
+__global__ void c9_sphere_light_pdf_kernel(float* out)
+{
+    GpuSphere light = {};
+    light.center = GpuVec3(0.0f, 0.0f, 10.0f);
+    light.radius = 1.0f;
+    out[0] = sphere_light_solid_angle_pdf(light, GpuVec3(0.0f, 0.0f, 0.0f), 2);
+    float cos_theta_max = sqrtf(1.0f - 1.0f / 100.0f);
+    float solid_angle = 6.2831853f * (1.0f - cos_theta_max);
+    out[1] = 1.0f / (solid_angle * 2.0f);
+}
+
+static int test_sphere_light_pdf_matches_solid_angle_sampling() {
+    REQUIRE_GPU();
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_out, 2 * sizeof(float)));
+    DeviceMem _do(d_out);
+
+    c9_sphere_light_pdf_kernel<<<1, 1>>>(d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float h_out[2];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 2 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(h_out[0], h_out[1], 1e-5f);
+    return 0;
+}
+
+__global__ void c10_rough_dielectric_microfacet_kernel(float* out, int* out_sample)
+{
+    constexpr int num_spec = 4;
+    GpuMaterial mat = {};
+    mat.type = MaterialType::Dielectric;
+    mat.ior = 1.5f;
+    mat.dispersion = 0.0f;
+    mat.roughness = 0.5f;
+    mat.thin_film_thickness = 0.0f;
+    mat.thin_film_ior = 1.4f;
+
+    GpuSpectrum albedo(0.2f);
+    GpuSpectrum extinction(0.0f);
+    GpuSpectrum metal_eta(0.0f);
+    GpuSpectrum throughput(1.0f);
+    for (int c = 0; c < num_spec; ++c) {
+        throughput.wavelengths[c] = 500.0f + 10.0f * float(c);
+    }
+
+    GpuRay in;
+    in.origin = GpuVec3(0.0f, 0.0f, 1.0f);
+    in.direction = GpuVec3(0.0f, 0.0f, -1.0f);
+    in.t_min = 0.0f;
+    in.t_max = 1000.0f;
+    in.stokes = StokesVector(1.0f, 0.0f, 0.0f, 0.0f);
+
+    for (int sample = 0; sample < 128; ++sample) {
+        float r3 = sample_dimension(sample, 0, 6);
+        if (r3 < 0.2f) {
+            continue;
+        }
+
+        GpuSpectrum attenuation;
+        GpuRay scattered;
+        StokesVector stokes(1.0f, 0.0f, 0.0f, 0.0f);
+        unsigned int seed = 1u;
+        float pdf = 0.0f;
+        bool ok = scatter(
+            in,
+            mat,
+            albedo,
+            extinction,
+            metal_eta,
+            GpuVec3(0.0f, 0.0f, 0.0f),
+            GpuVec3(0.0f, 0.0f, 1.0f),
+            GpuVec2(0.0f, 0.0f),
+            throughput,
+            attenuation,
+            scattered,
+            stokes,
+            seed,
+            pdf,
+            20.0f,
+            sample,
+            0,
+            0,
+            num_spec,
+            1.0f,
+            1.5f,
+            SpectralRayModePacket,
+            -1);
+        if (!ok || scattered.direction.z >= -1e-6f) {
+            continue;
+        }
+
+        GpuVec3 V = GpuVec3(0.0f, 0.0f, 1.0f);
+        GpuVec3 H = ImportanceSampleGGXVisible(
+            sample_dimension(sample, 0, 4),
+            sample_dimension(sample, 0, 5),
+            V,
+            GpuVec3(0.0f, 0.0f, 1.0f),
+            mat.roughness);
+        float cos_theta_h = fmaxf(0.0f, V.dot(H));
+        DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
+            throughput.wavelengths[0], 0.0f, 1.0f, mat.thin_film_ior, mat.ior, cos_theta_h);
+        float reflect_prob = 0.5f * (surface.Rs + surface.Rp);
+        float eta = 1.0f / mat.ior;
+        GpuVec3 perp = eta * (in.direction + cos_theta_h * H);
+        GpuVec3 expected_dir = (perp - sqrtf(fmaxf(0.0f, 1.0f - perp.length_sq())) * H).normalize();
+        float alpha = ggx_alpha_from_roughness(mat.roughness);
+        float expected_weight = (0.5f * (surface.Ts + surface.Tp)) *
+            surface.radiance_scale *
+            smith_G1_ggx(fabsf(scattered.direction.z), alpha) *
+            (1.0f / fmaxf(1e-6f, 1.0f - reflect_prob));
+
+        out[0] = scattered.direction.x;
+        out[1] = expected_dir.x;
+        out[2] = scattered.direction.z;
+        out[3] = expected_dir.z;
+        out[4] = attenuation.values[0];
+        out[5] = expected_weight;
+        out[6] = albedo.values[0];
+        out[7] = pdf;
+        float wavelengths[num_spec] = {throughput.wavelengths[0], throughput.wavelengths[1], throughput.wavelengths[2], throughput.wavelengths[3]};
+        GpuSpectrum bsdf = eval_bsdf(
+            mat,
+            albedo,
+            extinction,
+            metal_eta,
+            GpuVec3(0.0f, 0.0f, 0.0f),
+            GpuVec3(0.0f, 0.0f, 1.0f),
+            GpuVec2(0.0f, 0.0f),
+            V,
+            scattered.direction,
+            wavelengths,
+            num_spec);
+        float bsdf_pdf = pdf_bsdf(mat, GpuVec3(0.0f, 0.0f, 1.0f), V, scattered.direction);
+        out[8] = bsdf.values[0] * fabsf(scattered.direction.z) / fmaxf(1e-6f, bsdf_pdf);
+        out_sample[0] = sample;
+        return;
+    }
+
+    out_sample[0] = -1;
+}
+
+static int test_rough_dielectric_uses_microfacet_btdf() {
+    REQUIRE_GPU();
+    float* d_out = nullptr;
+    int* d_sample = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_out, 9 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_sample, sizeof(int)));
+    DeviceMem _do(d_out), _ds(d_sample);
+
+    c10_rough_dielectric_microfacet_kernel<<<1, 1>>>(d_out, d_sample);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float h_out[9];
+    int h_sample = -1;
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 9 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&h_sample, d_sample, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK(h_sample >= 0);
+    CHECK_FLOAT_EQ(h_out[0], h_out[1], 1e-5f);
+    CHECK_FLOAT_EQ(h_out[2], h_out[3], 1e-5f);
+    CHECK_FLOAT_EQ(h_out[4], h_out[5], 1e-4f);
+    CHECK(fabsf(h_out[4] - h_out[6]) > 1e-3f);
+    CHECK(h_out[7] > 0.0f);
+    CHECK_FLOAT_EQ(h_out[4], h_out[8], 1e-3f);
+    return 0;
+}
+
+__global__ void c11_rough_dielectric_eval_pdf_kernel(float* out)
+{
+    constexpr int num_spec = 4;
+    GpuMaterial rough = {};
+    rough.type = MaterialType::Dielectric;
+    rough.ior = 1.5f;
+    rough.roughness = 0.45f;
+    rough.thin_film_thickness = 0.0f;
+    rough.dispersion = 0.0f;
+
+    float wavelengths[num_spec] = {450.0f, 520.0f, 610.0f, 700.0f};
+    GpuSpectrum albedo(1.0f);
+    GpuSpectrum extinction(0.0f);
+    GpuSpectrum metal_eta(0.0f);
+    GpuVec3 n(0.0f, 0.0f, 1.0f);
+    GpuVec3 wo = GpuVec3(0.25f, 0.0f, 0.9682458f).normalize();
+    GpuVec3 wi = GpuVec3(-0.20f, 0.15f, 0.9682458f).normalize();
+    GpuVec3 wt = GpuVec3(-0.10f, 0.05f, -0.9937303f).normalize();
+
+    GpuSpectrum bsdf = eval_bsdf(
+        rough,
+        albedo,
+        extinction,
+        metal_eta,
+        GpuVec3(0.0f, 0.0f, 0.0f),
+        n,
+        GpuVec2(0.0f, 0.0f),
+        wo,
+        wi,
+        wavelengths,
+        num_spec);
+    out[0] = bsdf.values[0];
+    out[1] = bsdf.values[3];
+    out[2] = pdf_bsdf(rough, n, wo, wi);
+    GpuSpectrum btdf = eval_bsdf(
+        rough,
+        albedo,
+        extinction,
+        metal_eta,
+        GpuVec3(0.0f, 0.0f, 0.0f),
+        n,
+        GpuVec2(0.0f, 0.0f),
+        wo,
+        wt,
+        wavelengths,
+        num_spec);
+    out[3] = btdf.values[0];
+    out[4] = pdf_bsdf(rough, n, wo, wt);
+
+    GpuMaterial smooth = rough;
+    smooth.roughness = 0.0f;
+    out[5] = pdf_bsdf(smooth, n, wo, wi);
+
+    GpuMaterial thin_film = rough;
+    thin_film.thin_film_thickness = 500.0f;
+    out[6] = pdf_bsdf(thin_film, n, wo, wi);
+    GpuSpectrum thin_film_bsdf = eval_bsdf(
+        thin_film,
+        albedo,
+        extinction,
+        metal_eta,
+        GpuVec3(0.0f, 0.0f, 0.0f),
+        n,
+        GpuVec2(0.0f, 0.0f),
+        wo,
+        wi,
+        wavelengths,
+        num_spec);
+    out[7] = thin_film_bsdf.values[0];
+
+    GpuMaterial dispersive = rough;
+    dispersive.dispersion = 0.25f;
+    GpuSpectrum dispersive_btdf = eval_bsdf(
+        dispersive,
+        albedo,
+        extinction,
+        metal_eta,
+        GpuVec3(0.0f, 0.0f, 0.0f),
+        n,
+        GpuVec2(0.0f, 0.0f),
+        wo,
+        wt,
+        wavelengths,
+        num_spec);
+    out[8] = dispersive_btdf.values[0];
+    out[9] = dispersive_btdf.values[3];
+}
+
+static int test_rough_dielectric_eval_pdf_visible_to_direct_light() {
+    REQUIRE_GPU();
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_out, 10 * sizeof(float)));
+    DeviceMem _do(d_out);
+
+    c11_rough_dielectric_eval_pdf_kernel<<<1, 1>>>(d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float h_out[10];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 10 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(h_out[0] > 0.0f);
+    CHECK(h_out[1] > 0.0f);
+    CHECK(h_out[2] > 0.0f);
+    CHECK(h_out[3] > 0.0f);
+    CHECK(h_out[4] > 0.0f);
+    CHECK_FLOAT_EQ(h_out[5], 0.0f, 1e-7f);
+    CHECK(h_out[6] > 0.0f);
+    CHECK(h_out[7] > 0.0f);
+    CHECK(h_out[8] > 0.0f);
+    CHECK(h_out[9] > 0.0f);
+    CHECK(fabsf(h_out[8] - h_out[9]) > 1e-6f);
+    return 0;
+}
+
+__global__ void c12_rough_dielectric_direct_light_gate_kernel(float* out)
+{
+    GpuMaterial lambert = {};
+    lambert.type = MaterialType::Lambertian;
+
+    GpuMaterial rough = {};
+    rough.type = MaterialType::Dielectric;
+    rough.ior = 1.5f;
+    rough.roughness = 0.35f;
+
+    GpuVec3 n(0.0f, 0.0f, 1.0f);
+    GpuVec3 ng(0.0f, 0.0f, 1.0f);
+    GpuVec3 back_light = GpuVec3(0.2f, 0.0f, -0.9797959f).normalize();
+
+    out[0] = direct_light_direction_allowed(lambert, n, ng, back_light) ? 1.0f : 0.0f;
+    out[1] = direct_light_cosine_factor(lambert, n, back_light);
+    out[2] = direct_light_direction_allowed(rough, n, ng, back_light) ? 1.0f : 0.0f;
+    out[3] = direct_light_cosine_factor(rough, n, back_light);
+    out[4] = direct_light_offset_normal(ng, back_light).z;
+}
+
+static int test_rough_dielectric_direct_light_gate_allows_btdf_side() {
+    REQUIRE_GPU();
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_out, 5 * sizeof(float)));
+    DeviceMem _do(d_out);
+
+    c12_rough_dielectric_direct_light_gate_kernel<<<1, 1>>>(d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float h_out[5];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 5 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(h_out[0], 0.0f, 1e-7f);
+    CHECK_FLOAT_EQ(h_out[1], 0.0f, 1e-7f);
+    CHECK_FLOAT_EQ(h_out[2], 1.0f, 1e-7f);
+    CHECK(h_out[3] > 0.9f);
+    CHECK_FLOAT_EQ(h_out[4], -1.0f, 1e-7f);
+    return 0;
+}
+
 // ===========================================================================
 
 int main() {
@@ -1544,6 +2068,12 @@ int main() {
     RUN_TEST(test_dielectric_slab_scatter_transport_reciprocity);
     RUN_TEST(test_dielectric_medium_transition_helper);
     RUN_TEST(test_lane_split_medium_transition);
+    RUN_TEST(test_lane_dielectric_uses_active_channel);
+    RUN_TEST(test_dielectric_lane_split_does_not_tint_interface);
+    RUN_TEST(test_sphere_light_pdf_matches_solid_angle_sampling);
+    RUN_TEST(test_rough_dielectric_uses_microfacet_btdf);
+    RUN_TEST(test_rough_dielectric_eval_pdf_visible_to_direct_light);
+    RUN_TEST(test_rough_dielectric_direct_light_gate_allows_btdf_side);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;
 }

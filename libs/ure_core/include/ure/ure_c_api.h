@@ -87,8 +87,9 @@ const float* ure_engine_get_framebuffer(const ure_engine_t* engine);
 const float* ure_engine_get_aov(const ure_engine_t* engine, ure_aov_type_t type);
 int ure_aov_channel_count(ure_aov_type_t type);
 
-/* Save current framebuffer to BMP file. Returns 0 on success. */
+/* Save current framebuffer to BMP/HDR file. Returns 0 on success. */
 int ure_engine_save_bmp(const ure_engine_t* engine, const char* path);
+int ure_engine_save_hdr(const ure_engine_t* engine, const char* path);
 
 /* ── Session API ───────────────────────────────────────────────── */
 
@@ -131,6 +132,8 @@ void ure_session_get_framebuffer_size(const ure_session_t* session,
                                       int* out_height);
 const float* ure_session_get_framebuffer(const ure_session_t* session);
 const float* ure_session_get_aov(const ure_session_t* session, ure_aov_type_t type);
+int ure_session_save_bmp(const ure_session_t* session, const char* path);
+int ure_session_save_hdr(const ure_session_t* session, const char* path);
 
 #ifdef __cplusplus
 }

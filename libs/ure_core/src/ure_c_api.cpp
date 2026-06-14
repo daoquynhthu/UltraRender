@@ -7,6 +7,7 @@
 #include <ure/log.hpp>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 
 using namespace ure;
 
@@ -73,6 +74,44 @@ core::Vec3f vec3_from_ptr(const float* values, core::Vec3f fallback) {
         return fallback;
     }
     return {values[0], values[1], values[2]};
+}
+
+bool framebuffer_to_pixels(const std::vector<float>& framebuffer,
+                           std::vector<core::Vec3f>& pixels) {
+    if (framebuffer.empty() || framebuffer.size() % 3 != 0) {
+        return false;
+    }
+    pixels.clear();
+    pixels.reserve(framebuffer.size() / 3);
+    for (size_t i = 0; i < framebuffer.size(); i += 3) {
+        pixels.push_back({framebuffer[i], framebuffer[i + 1], framebuffer[i + 2]});
+    }
+    return true;
+}
+
+template <typename FrameProvider>
+int save_framebuffer(FrameProvider&& provider, const char* path, bool hdr) {
+    if (!path) {
+        return -1;
+    }
+    try {
+        int width = 0;
+        int height = 0;
+        const auto& framebuffer = provider(width, height);
+        if (width <= 0 || height <= 0) {
+            return -1;
+        }
+        std::vector<core::Vec3f> pixels;
+        if (!framebuffer_to_pixels(framebuffer, pixels)) {
+            return -1;
+        }
+        const bool ok = hdr
+            ? ure::io::ImageSaver::save_hdr(path, width, height, pixels, 1.0f)
+            : ure::io::ImageSaver::save_bmp(path, width, height, pixels, ure::io::ToneMapType::ACES, 1.0f);
+        return ok ? 0 : -1;
+    } catch (...) {
+        return -1;
+    }
 }
 
 }
@@ -189,13 +228,20 @@ int ure_aov_channel_count(ure_aov_type_t type) {
 
 int ure_engine_save_bmp(const ure_engine_t* engine, const char* path) {
     if (!engine || !path) return -1;
-    try {
-        const auto& buf = reinterpret_cast<const IRenderEngine*>(engine)->get_framebuffer();
-        if (buf.empty()) return -1;
-        return 0;
-    } catch (...) {
-        return -1;
-    }
+    const auto* renderer = reinterpret_cast<const IRenderEngine*>(engine);
+    return save_framebuffer([renderer](int& width, int& height) -> const std::vector<float>& {
+        renderer->get_framebuffer_size(width, height);
+        return renderer->get_framebuffer();
+    }, path, false);
+}
+
+int ure_engine_save_hdr(const ure_engine_t* engine, const char* path) {
+    if (!engine || !path) return -1;
+    const auto* renderer = reinterpret_cast<const IRenderEngine*>(engine);
+    return save_framebuffer([renderer](int& width, int& height) -> const std::vector<float>& {
+        renderer->get_framebuffer_size(width, height);
+        return renderer->get_framebuffer();
+    }, path, true);
 }
 
 ure_session_t* ure_session_create(void) {
@@ -423,6 +469,24 @@ const float* ure_session_get_aov(const ure_session_t* session, ure_aov_type_t ty
     } catch (...) {
         return nullptr;
     }
+}
+
+int ure_session_save_bmp(const ure_session_t* session, const char* path) {
+    if (!session || !path) return -1;
+    const auto* render_session = reinterpret_cast<const RenderSession*>(session);
+    return save_framebuffer([render_session](int& width, int& height) -> const std::vector<float>& {
+        render_session->get_framebuffer_size(width, height);
+        return render_session->get_framebuffer();
+    }, path, false);
+}
+
+int ure_session_save_hdr(const ure_session_t* session, const char* path) {
+    if (!session || !path) return -1;
+    const auto* render_session = reinterpret_cast<const RenderSession*>(session);
+    return save_framebuffer([render_session](int& width, int& height) -> const std::vector<float>& {
+        render_session->get_framebuffer_size(width, height);
+        return render_session->get_framebuffer();
+    }, path, true);
 }
 
 } // extern "C"

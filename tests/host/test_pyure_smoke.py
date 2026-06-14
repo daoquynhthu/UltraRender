@@ -57,6 +57,9 @@ add_entity sphere light 0 4 2 1 1 1
             assert wait_until(lambda: session.progress().spp >= 1)
             framebuffer = session.framebuffer()
             assert len(framebuffer) == 8 * 8 * 3
+            hdr_path = Path(tmp) / "pyure_smoke.hdr"
+            session.save_hdr(hdr_path)
+            assert hdr_path.read_bytes().startswith(b"#?RADIANCE\n")
             depth = session.aov(pyure.AovType.DEPTH)
             assert len(depth) == 8 * 8
             motion = session.aov(pyure.AovType.MOTION_VECTOR)

@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <stdexcept>
 
 #include <ure/log.hpp>
 #include <optional>
@@ -954,9 +955,7 @@ scene_ir::SceneIR GltfSceneFrontend::parse_file_to_ir(const std::string& filepat
                    [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
 
     if (ext != ".gltf" && ext != ".glb") {
-        UR_LOG_WARN(SceneIO, "Non-glTF file '{}' (extension {}); falling back to legacy scene parser.", filepath, ext);
-        auto legacy_ir = SceneParser::parse_file_to_ir(filepath);
-        return legacy_ir;
+        throw std::runtime_error("GltfSceneFrontend only accepts .gltf or .glb files");
     }
 
     if (ext == ".glb") {

@@ -704,7 +704,7 @@ static int test_scene_diff_topology_real_gpu_reload_smoke() {
         }
     } log_guard(ure::log::Level::Warn);
     ure::RenderConfig config;
-    config.num_wavelengths = 4;
+    config.num_wavelengths = 8;
     config.max_trace_depth = 2;
     ure::RenderSession session = ure::RenderSession::create(config);
     ure::scene_ir::SceneIR scene_ir = make_scene_ir_with_instance();
@@ -746,7 +746,7 @@ static int test_scene_diff_texture_material_real_gpu_reload_smoke() {
     } log_guard(ure::log::Level::Warn);
 
     ure::RenderConfig config;
-    config.num_wavelengths = 4;
+    config.num_wavelengths = 8;
     config.max_trace_depth = 2;
     ure::RenderSession session = ure::RenderSession::create(config);
     ure::Scene scene = make_legacy_scene_with_instance();
@@ -777,6 +777,8 @@ static int test_c_session_lifecycle() {
     CHECK(ure_session_render_pass(nullptr) == -1);
     CHECK(ure_session_get_framebuffer(nullptr) == nullptr);
     CHECK(ure_session_get_aov(nullptr, URE_AOV_NORMAL) == nullptr);
+    CHECK(ure_session_save_bmp(nullptr, "null.bmp") == -1);
+    CHECK(ure_session_save_hdr(nullptr, "null.hdr") == -1);
     CHECK(ure_session_update_camera(nullptr, nullptr, nullptr, 45.0f) == -1);
     float vec[3] = {0.0f, 0.0f, 0.0f};
     CHECK(ure_session_update_instance_transform(nullptr, 0, vec, vec) == -1);
@@ -813,6 +815,8 @@ static int test_c_session_lifecycle() {
     CHECK(ure_session_start(session, 1) == -1);
     CHECK(ure_session_get_framebuffer(session) == nullptr);
     CHECK(ure_session_get_aov(session, URE_AOV_DEPTH) == nullptr);
+    CHECK(ure_session_save_bmp(session, "empty.bmp") == -1);
+    CHECK(ure_session_save_hdr(session, "empty.hdr") == -1);
     CHECK(ure_session_update_camera(session, vec, vec, 45.0f) == -1);
     CHECK(ure_session_update_instance_transform(session, 0, vec, vec) == -1);
     CHECK(ure_session_update_instance_transform(session, 0, nullptr, vec) == -1);

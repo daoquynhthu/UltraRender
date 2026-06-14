@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <algorithm>
+#include <array>
 
 namespace ure::io {
 
@@ -118,6 +119,37 @@ bool ImageSaver::save_bmp(const std::string& filename, int width, int height, co
     }
 
     ofs.close();
+    return true;
+}
+
+bool ImageSaver::save_hdr(const std::string& filename, int width, int height, const std::vector<core::Vec3f>& pixels, float exposure) {
+    std::ofstream ofs(filename, std::ios::out | std::ios::binary);
+    if (!ofs.is_open()) return false;
+
+    ofs << "#?RADIANCE\n";
+    ofs << "FORMAT=32-bit_rle_rgbe\n\n";
+    ofs << "-Y " << height << " +X " << width << "\n";
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const auto& p = pixels[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)];
+            float r = std::max(0.0f, p.x * exposure);
+            float g = std::max(0.0f, p.y * exposure);
+            float b = std::max(0.0f, p.z * exposure);
+            float max_channel = std::max({r, g, b});
+            std::array<unsigned char, 4> rgbe = {0, 0, 0, 0};
+            if (max_channel > 1e-32f && std::isfinite(max_channel)) {
+                int exponent = 0;
+                float mantissa = std::frexp(max_channel, &exponent) * 256.0f / max_channel;
+                rgbe[0] = static_cast<unsigned char>(std::clamp(r * mantissa, 0.0f, 255.0f));
+                rgbe[1] = static_cast<unsigned char>(std::clamp(g * mantissa, 0.0f, 255.0f));
+                rgbe[2] = static_cast<unsigned char>(std::clamp(b * mantissa, 0.0f, 255.0f));
+                rgbe[3] = static_cast<unsigned char>(exponent + 128);
+            }
+            ofs.write(reinterpret_cast<const char*>(rgbe.data()), static_cast<std::streamsize>(rgbe.size()));
+        }
+    }
+
     return true;
 }
 

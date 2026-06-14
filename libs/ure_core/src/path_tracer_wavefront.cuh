@@ -262,6 +262,46 @@ __device__ inline int next_dielectric_medium_index(
     return material_idx;
 }
 
+__device__ inline float sphere_light_solid_angle_pdf(
+    const GpuSphere& light_sphere,
+    const GpuVec3& reference_point,
+    int light_count
+) {
+    if (light_count <= 0) return 0.0f;
+    GpuVec3 wc = light_sphere.center - reference_point;
+    float dist_sq = wc.length_sq();
+    float radius_sq = light_sphere.radius * light_sphere.radius;
+    if (dist_sq <= radius_sq) return 0.0f;
+    float cos_theta_max = sqrtf(fmaxf(0.0f, 1.0f - radius_sq / dist_sq));
+    float solid_angle = 6.2831853f * (1.0f - cos_theta_max);
+    if (solid_angle <= 1e-8f) return 0.0f;
+    return 1.0f / (solid_angle * float(light_count));
+}
+
+__device__ inline bool direct_light_direction_allowed(
+    const GpuMaterial& mat,
+    const GpuVec3& n,
+    const GpuVec3& ng,
+    const GpuVec3& wi
+) {
+    if (is_rough_dielectric_bsdf(mat)) {
+        return fabsf(n.dot(wi)) > 1e-6f && fabsf(ng.dot(wi)) > 1e-6f;
+    }
+    return n.dot(wi) > 0.0f && ng.dot(wi) > 0.0f;
+}
+
+__device__ inline float direct_light_cosine_factor(
+    const GpuMaterial& mat,
+    const GpuVec3& n,
+    const GpuVec3& wi
+) {
+    return is_rough_dielectric_bsdf(mat) ? fabsf(n.dot(wi)) : fmaxf(0.0f, n.dot(wi));
+}
+
+__device__ inline GpuVec3 direct_light_offset_normal(const GpuVec3& ng, const GpuVec3& wi) {
+    return ng.dot(wi) >= 0.0f ? ng : -ng;
+}
+
 __device__ inline StokesVector load_packet_average_stokes(const RayQueue& q, int idx) {
     StokesVector s(0.0f, 0.0f, 0.0f, 0.0f);
     for (int c = 0; c < q.num_spectral_channels; ++c) {
@@ -443,6 +483,7 @@ __device__ inline bool split_dispersive_dielectric_lanes(
     float ior_outside
 ) {
     if (mat.type != MaterialType::Dielectric) return false;
+    if (is_rough_dielectric_bsdf(mat)) return false;
     if (current_queue.spectral_modes[idx] == SpectralRayModeLane) return false;
 
     float effective_thickness = mat.thin_film_thickness;
@@ -485,7 +526,7 @@ __device__ inline bool split_dispersive_dielectric_lanes(
                 next_queue.origins[out_idx] = p + offset * 1e-4f;
                 next_queue.directions[out_idx] = out_direction;
                 float wavelength_pdf = current_queue.wavelength_pdfs[idx];
-                store_lane_throughput(next_queue, out_idx, throughput, c, throughput.values[c] * mat_soa.albedo.values[c] * R * wavelength_pdf);
+                store_lane_throughput(next_queue, out_idx, throughput, c, throughput.values[c] * R * wavelength_pdf);
                 for (int s = 0; s < current_queue.num_spectral_channels; ++s) {
                     store_stokes(next_queue, out_idx, s, StokesVector(0.0f, 0.0f, 0.0f, 0.0f));
                 }
@@ -518,7 +559,7 @@ __device__ inline bool split_dispersive_dielectric_lanes(
                 float wavelength_pdf = current_queue.wavelength_pdfs[idx];
                 next_queue.origins[out_idx] = p + offset * 1e-4f;
                 next_queue.directions[out_idx] = out_direction;
-                store_lane_throughput(next_queue, out_idx, throughput, c, throughput.values[c] * mat_soa.albedo.values[c] * transport_weight * wavelength_pdf);
+                store_lane_throughput(next_queue, out_idx, throughput, c, throughput.values[c] * transport_weight * wavelength_pdf);
                 for (int s = 0; s < current_queue.num_spectral_channels; ++s) {
                     store_stokes(next_queue, out_idx, s, StokesVector(0.0f, 0.0f, 0.0f, 0.0f));
                 }
@@ -905,28 +946,22 @@ __global__ __launch_bounds__(256) void shade_kernel(
         float mis_weight = 1.0f;
 
         if (depth > 0 && !(flag & 1) && scene.light_count > 0) {
-             float light_area = 0.0f;
+             float pdf_nee = 0.0f;
 
              for(int k=0; k<scene.light_count; ++k) {
                  int l_idx = scene.light_indices[k];
                  GpuSphere sph = scene.spheres[l_idx];
                  if (sph.material_index == mat_idx) {
-                      light_area = 4.0f * 3.14159f * sph.radius * sph.radius;
+                      pdf_nee = sphere_light_solid_angle_pdf(sph, current_queue.origins[idx], scene.light_count);
                       break;
                  }
              }
 
-             if (light_area > 0.0f) {
-                 float dist_sq = (p - current_queue.origins[idx]).length_sq();
-                 float cos_theta = fmaxf(0.0f, (-current_queue.directions[idx]).dot(n));
-
-                 if (cos_theta > 1e-6f) {
-                     float pdf_nee = (1.0f / scene.light_count) * (1.0f / light_area) * (dist_sq / cos_theta);
-                     float last_pdf = current_queue.last_pdf[idx];
-                     mis_weight = (last_pdf * last_pdf) / (last_pdf * last_pdf + pdf_nee * pdf_nee);
-                 } else {
-                     mis_weight = 0.0f;
-                 }
+             if (pdf_nee > 0.0f) {
+                 float last_pdf = current_queue.last_pdf[idx];
+                 mis_weight = (last_pdf * last_pdf) / (last_pdf * last_pdf + pdf_nee * pdf_nee);
+             } else {
+                 mis_weight = 0.0f;
              }
         }
 
@@ -961,7 +996,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
     if (depth >= 50) return;
 
-    if (scene.light_count > 0 && (mat.type == MaterialType::Lambertian || mat.type == MaterialType::Cloth || (mat.type == MaterialType::Metal && mat.roughness > 0.02f))) {
+    if (scene.light_count > 0 && (mat.type == MaterialType::Lambertian ||
+                                  mat.type == MaterialType::Cloth ||
+                                  (mat.type == MaterialType::Metal && mat.roughness > 0.02f) ||
+                                  is_rough_dielectric_bsdf(mat))) {
         int dim_offset = 4 + depth * 6;
 
         float r_light_pick = sample_dimension(sample_index, pixel_index, dim_offset + 3);
@@ -995,12 +1033,11 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
             GpuVec3 l_dir = (u * cosf(phi) * sin_theta + v * sinf(phi) * sin_theta + w * cos_theta).normalize();
 
-            float cos_surf = fmaxf(0.0f, n.dot(l_dir));
+            float cos_surf = direct_light_cosine_factor(mat, n, l_dir);
 
-            if (cos_surf > 0.0f && ng.dot(l_dir) > 0.0f) {
-                 float solid_angle = 6.2831853f * (1.0f - cos_theta_max);
-                 float pdf = 1.0f / solid_angle;
-                 pdf *= (1.0f / scene.light_count);
+            if (direct_light_direction_allowed(mat, n, ng, l_dir)) {
+                 float pdf = sphere_light_solid_angle_pdf(light_sphere, p, scene.light_count);
+                 pdf = fmaxf(pdf, 1e-12f);
 
                  int light_mat_idx = light_sphere.material_index;
                  GpuSpectrum L_e = load_mat_spectrum(scene.mat_emission_vals, light_mat_idx, scene.num_spectral_channels);
@@ -1037,8 +1074,9 @@ __global__ __launch_bounds__(256) void shade_kernel(
                          int s_idx = atomicAdd(shadow_queue.count, 1);
                          if (s_idx < shadow_queue.capacity) {
                              const int cap = shadow_queue.capacity;
-                             float adaptive_eps = 1e-4f / fmaxf(0.01f, ng.dot(l_dir));
-                             shadow_queue.origins[s_idx] = p + ng * adaptive_eps;
+                             GpuVec3 offset_normal = direct_light_offset_normal(ng, l_dir);
+                             float adaptive_eps = 1e-4f / fmaxf(0.01f, fabsf(ng.dot(l_dir)));
+                             shadow_queue.origins[s_idx] = p + offset_normal * adaptive_eps;
                              shadow_queue.directions[s_idx] = l_dir;
                              shadow_queue.max_dist[s_idx] = t_hit_shadow - adaptive_eps;
                              for (int c = 0; c < scene.num_spectral_channels; ++c) {
@@ -1114,8 +1152,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 }
 
                 int next_flag = 0;
-                bool is_specular = (mat.type == MaterialType::Metal || mat.type == MaterialType::Dielectric);
-                if (is_specular || scene.light_count == 0) {
+                bool is_delta = scene.light_count == 0 ||
+                    (mat.type == MaterialType::Metal && mat.roughness <= 0.02f) ||
+                    (mat.type == MaterialType::Dielectric && pdf_val <= 0.0f);
+                if (is_delta) {
                     next_flag = 1;
                 }
 

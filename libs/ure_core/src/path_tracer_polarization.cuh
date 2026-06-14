@@ -93,15 +93,6 @@ __device__ inline void apply_mueller_reflection_conductor(StokesVector& s, float
     apply_mueller_reflection_boundary(s, b.rs, b.rp, b.Rs, b.Rp);
 }
 
-__device__ inline float dispersed_dielectric_ior(float base_ior, float dispersion, float wavelength, float clamp) {
-    if (dispersion <= 0.0f) return base_ior;
-    float inv_lambda2 = 1.0f / (wavelength * wavelength);
-    float inv_ref2 = 1.0f / (550.0f * 550.0f);
-    float offset = (inv_lambda2 - inv_ref2) * 4e5f;
-    offset = fminf(clamp, fmaxf(-clamp, offset));
-    return fmaxf(1.01f, base_ior + dispersion * offset);
-}
-
 __device__ inline void apply_mueller_transmission_dielectric(StokesVector& s, float ts, float tp, float eta_rel) {
     float Ts = ts * ts * eta_rel;
     float Tp = tp * tp * eta_rel;

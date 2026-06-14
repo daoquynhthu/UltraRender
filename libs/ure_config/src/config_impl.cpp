@@ -59,7 +59,7 @@ CliResult parse_cli(int argc, char** argv) {
     app.add_flag("-q,--quiet", quiet, "Quiet output (Error+ only)");
 
     auto* render_cmd = app.add_subcommand("render", "Render a scene file");
-    std::string scene_render, config_render, output_render;
+    std::string scene_render, config_render, output_render, format_render;
     int spp_render = 0, width_render = 0, height_render = 0;
     bool physics = false, audio = false;
     render_cmd->add_option("scene", scene_render, "Path to scene file (glTF)")->required();
@@ -68,6 +68,7 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_option("--width", width_render, "Render width");
     render_cmd->add_option("--height", height_render, "Render height");
     render_cmd->add_option("-o,--output", output_render, "Output image path");
+    render_cmd->add_option("--format", format_render, "Output format: bmp, ppm, hdr");
     render_cmd->add_flag("--physics", physics, "Enable physics simulation");
     render_cmd->add_flag("--audio", audio, "Enable audio rendering");
 
@@ -101,6 +102,7 @@ CliResult parse_cli(int argc, char** argv) {
         if (width_render > 0) cfg.width = width_render;
         if (height_render > 0) cfg.height = height_render;
         if (!output_render.empty()) cfg.output.file = output_render;
+        if (!format_render.empty()) cfg.output.format = format_render;
         cfg.physics_enabled = physics;
         cfg.enable_audio = audio;
         cfg.scene_path = scene_render;

@@ -21,8 +21,9 @@ ure::gpu::GpuVec3 to_gpu_vec3(const core::Vec3f& v) {
 }
 
 int checked_num_wavelengths(const RenderConfig& config) {
-    if (config.num_wavelengths <= 0 || config.num_wavelengths > ure::gpu::kMaxSpectralChannels) {
-        throw std::runtime_error("RenderConfig::num_wavelengths must be in [1, kMaxSpectralChannels]");
+    if (config.num_wavelengths < ure::gpu::kMinSpectralChannels ||
+        config.num_wavelengths > ure::gpu::kMaxSpectralChannels) {
+        throw std::runtime_error("RenderConfig::num_wavelengths must be in [kMinSpectralChannels, kMaxSpectralChannels]");
     }
     return config.num_wavelengths;
 }
@@ -84,6 +85,152 @@ std::vector<float> load_spd_values(const std::string& path,
         values.push_back(sampled_spd.evaluate(lambda));
     }
     return values;
+}
+
+struct FlatMaterial {
+    scene_ir::MaterialModel model = scene_ir::MaterialModel::Lambertian;
+    core::Vec3f base_color = {0.8f, 0.8f, 0.8f};
+    core::Vec3f emission = {0.0f, 0.0f, 0.0f};
+    float roughness = 0.5f;
+    float ior = 1.45f;
+    core::Vec3f metal_eta = {0.0f, 0.0f, 0.0f};
+    core::Vec3f metal_k = {0.0f, 0.0f, 0.0f};
+    float dispersion = 0.0f;
+    float thin_film_thickness = 0.0f;
+    float thin_film_ior = 1.0f;
+    float medium_density = 0.0f;
+    float medium_anisotropy = 0.0f;
+    core::Vec3f medium_scattering = {0.0f, 0.0f, 0.0f};
+    core::Vec3f medium_absorption = {0.0f, 0.0f, 0.0f};
+};
+
+const scene_ir::MaterialGraphInput* find_input(const scene_ir::MaterialGraphNode& node, const char* name) {
+    for (const auto& input : node.inputs) {
+        if (input.name == name) {
+            return &input;
+        }
+    }
+    return nullptr;
+}
+
+const scene_ir::MaterialGraphNode& require_graph_node(const scene_ir::MaterialGraph& graph,
+                                                      scene_ir::MaterialGraphNodeId id,
+                                                      const char* context) {
+    const scene_ir::MaterialGraphNode* node = graph.find_node(id);
+    if (!node) {
+        throw std::runtime_error(std::string("MaterialGraph missing node for ") + context);
+    }
+    return *node;
+}
+
+core::Vec3f read_graph_color(const scene_ir::MaterialGraph& graph,
+                             const scene_ir::MaterialGraphNode& node,
+                             const char* input_name,
+                             const core::Vec3f& fallback) {
+    const scene_ir::MaterialGraphInput* input = find_input(node, input_name);
+    if (!input || input->node_id == scene_ir::kInvalidMaterialGraphNode) {
+        return fallback;
+    }
+    const auto& value_node = require_graph_node(graph, input->node_id, input_name);
+    if (value_node.kind != scene_ir::MaterialGraphNodeKind::ConstantColor) {
+        throw std::runtime_error("MaterialGraph color input requires ConstantColor");
+    }
+    return value_node.color;
+}
+
+float read_graph_float(const scene_ir::MaterialGraph& graph,
+                       const scene_ir::MaterialGraphNode& node,
+                       const char* input_name,
+                       float fallback) {
+    const scene_ir::MaterialGraphInput* input = find_input(node, input_name);
+    if (!input || input->node_id == scene_ir::kInvalidMaterialGraphNode) {
+        return fallback;
+    }
+    const auto& value_node = require_graph_node(graph, input->node_id, input_name);
+    if (value_node.kind != scene_ir::MaterialGraphNodeKind::ConstantFloat) {
+        throw std::runtime_error("MaterialGraph float input requires ConstantFloat");
+    }
+    return value_node.value;
+}
+
+void validate_phase_m1_graph_node(const scene_ir::MaterialGraphNode& node) {
+    switch (node.kind) {
+        case scene_ir::MaterialGraphNodeKind::ConstantColor:
+        case scene_ir::MaterialGraphNodeKind::ConstantFloat:
+        case scene_ir::MaterialGraphNodeKind::BsdfLambert:
+        case scene_ir::MaterialGraphNodeKind::BsdfMetal:
+        case scene_ir::MaterialGraphNodeKind::BsdfDielectric:
+        case scene_ir::MaterialGraphNodeKind::BsdfLight:
+        case scene_ir::MaterialGraphNodeKind::OutputSurface:
+            return;
+        default:
+            throw std::runtime_error("MaterialGraph contains a node kind not supported by the Phase M.1 compiler");
+    }
+}
+
+FlatMaterial flatten_material_graph(const scene_ir::MaterialNode& material) {
+    FlatMaterial flat;
+    flat.medium_density = material.medium_density;
+    flat.medium_anisotropy = material.medium_anisotropy;
+    flat.medium_scattering = material.medium_scattering;
+    flat.medium_absorption = material.medium_absorption;
+    flat.dispersion = material.dispersion;
+    flat.thin_film_thickness = material.thin_film_thickness;
+    flat.thin_film_ior = material.thin_film_ior;
+
+    if (!material.graph || material.graph->empty()) {
+        flat.model = material.model;
+        flat.base_color = material.base_color;
+        flat.emission = material.emission;
+        flat.roughness = material.roughness;
+        flat.ior = material.ior;
+        flat.metal_eta = material.metal_eta;
+        flat.metal_k = material.metal_k;
+        return flat;
+    }
+
+    for (const auto& node : material.graph->nodes) {
+        validate_phase_m1_graph_node(node);
+    }
+
+    const auto& output = require_graph_node(*material.graph, material.graph->output_node_id, "surface output");
+    if (output.kind != scene_ir::MaterialGraphNodeKind::OutputSurface) {
+        throw std::runtime_error("MaterialGraph output node must be OutputSurface");
+    }
+    const scene_ir::MaterialGraphInput* surface = find_input(output, "surface");
+    if (!surface || surface->node_id == scene_ir::kInvalidMaterialGraphNode) {
+        throw std::runtime_error("MaterialGraph OutputSurface requires a surface input");
+    }
+
+    const auto& bsdf = require_graph_node(*material.graph, surface->node_id, "surface input");
+    switch (bsdf.kind) {
+        case scene_ir::MaterialGraphNodeKind::BsdfLambert:
+            flat.model = scene_ir::MaterialModel::Lambertian;
+            flat.base_color = read_graph_color(*material.graph, bsdf, "base_color", bsdf.color);
+            flat.roughness = read_graph_float(*material.graph, bsdf, "roughness", material.roughness);
+            break;
+        case scene_ir::MaterialGraphNodeKind::BsdfMetal:
+            flat.model = scene_ir::MaterialModel::Metal;
+            flat.base_color = read_graph_color(*material.graph, bsdf, "base_color", bsdf.color);
+            flat.roughness = read_graph_float(*material.graph, bsdf, "roughness", material.roughness);
+            flat.metal_eta = read_graph_color(*material.graph, bsdf, "eta", material.metal_eta);
+            flat.metal_k = read_graph_color(*material.graph, bsdf, "k", material.metal_k);
+            break;
+        case scene_ir::MaterialGraphNodeKind::BsdfDielectric:
+            flat.model = scene_ir::MaterialModel::Dielectric;
+            flat.base_color = read_graph_color(*material.graph, bsdf, "base_color", material.base_color);
+            flat.roughness = read_graph_float(*material.graph, bsdf, "roughness", material.roughness);
+            flat.ior = read_graph_float(*material.graph, bsdf, "ior", material.ior);
+            break;
+        case scene_ir::MaterialGraphNodeKind::BsdfLight:
+            flat.model = scene_ir::MaterialModel::Light;
+            flat.emission = read_graph_color(*material.graph, bsdf, "emission", bsdf.color);
+            break;
+        default:
+            throw std::runtime_error("MaterialGraph surface input must be a supported BSDF node");
+    }
+
+    return flat;
 }
 
 ure::gpu::GpuMaterialData compile_material_node(scene_ir::MaterialModel model,
@@ -232,20 +379,21 @@ ure::gpu::GpuMaterialData compile_material(const std::shared_ptr<scene_ir::Mater
                                      emission_texture_index);
     }
 
-    ure::gpu::GpuMaterialData data = compile_material_node(mat->model,
-                                                           mat->base_color,
-                                                           mat->emission,
-                                                           mat->roughness,
-                                                           mat->ior,
-                                                           mat->metal_eta,
-                                                           mat->dispersion,
-                                                           mat->thin_film_thickness,
-                                                           mat->thin_film_ior,
-                                                           mat->medium_density,
-                                                           mat->medium_anisotropy,
-                                                           mat->medium_scattering,
-                                                           mat->medium_absorption,
-                                                           mat->metal_k,
+    FlatMaterial flat = flatten_material_graph(*mat);
+    ure::gpu::GpuMaterialData data = compile_material_node(flat.model,
+                                                           flat.base_color,
+                                                           flat.emission,
+                                                           flat.roughness,
+                                                           flat.ior,
+                                                           flat.metal_eta,
+                                                           flat.dispersion,
+                                                           flat.thin_film_thickness,
+                                                           flat.thin_film_ior,
+                                                           flat.medium_density,
+                                                           flat.medium_anisotropy,
+                                                           flat.medium_scattering,
+                                                           flat.medium_absorption,
+                                                           flat.metal_k,
                                                            wavelengths,
                                                            texture_index,
                                                            roughness_texture_index,
@@ -539,6 +687,10 @@ CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir, co
         if (!mat) return 0;
         auto it = material_map.find(mat);
         if (it != material_map.end()) return it->second;
+        if (mat->graph && !mat->graph->empty() &&
+            (mat->base_color_texture || mat->roughness_texture || mat->emission_texture || mat->normal_texture)) {
+            throw std::runtime_error("MaterialGraph materials cannot use legacy texture slots in the Phase M.1 compiler");
+        }
         int texture_index = cache_texture(mat->base_color_texture);
         int roughness_texture_index = cache_texture(mat->roughness_texture);
         int emission_texture_index = cache_texture(mat->emission_texture);

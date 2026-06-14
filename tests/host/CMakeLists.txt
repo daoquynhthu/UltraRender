@@ -16,6 +16,10 @@ add_executable(test_gltf_frontend test_gltf_frontend.cpp)
 target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)
 
+add_executable(test_material_graph test_material_graph.cpp)
+target_link_libraries(test_material_graph PRIVATE ure_core ure_diag)
+add_test(NAME test_material_graph COMMAND test_material_graph)
+
 add_executable(test_session test_session.cpp)
 target_link_libraries(test_session PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_session COMMAND test_session)

@@ -321,6 +321,16 @@ static int test_spectral_spd_compiles_runtime_n() {
     }
     CHECK(rejected);
 
+    rejected = false;
+    try {
+        ure::RenderConfig invalid = config;
+        invalid.num_wavelengths = 4;
+        (void)ure::GpuSceneCompiler::compile(scene, invalid);
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+
     std::filesystem::remove(path);
     std::filesystem::remove("textures/gold.spd");
     std::filesystem::remove("lights/d65.spd");
@@ -513,12 +523,18 @@ static int test_normal_texture() {
     return 0;
 }
 
-// ============ Test: non-glTF fallback ============
-static int test_non_gltf_fallback() {
+// ============ Test: non-glTF rejected ============
+static int test_non_gltf_rejected() {
     std::string obj = "v 0 0 0\nv 1 0 0\nv 0 1 0\n";
     std::string path = write_temp(obj, ".obj");
-    auto scene = ure::GltfSceneFrontend::parse_file_to_ir(path);
+    bool rejected = false;
+    try {
+        (void)ure::GltfSceneFrontend::parse_file_to_ir(path);
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
     std::filesystem::remove(path);
+    CHECK(rejected);
     return 0;
 }
 
@@ -601,7 +617,7 @@ int main() {
     failed += run("test_extensions_used_spectral",         test_extensions_used_spectral);
     failed += run("test_camera_parsing",                  test_camera_parsing);
     failed += run("test_normal_texture",                  test_normal_texture);
-    failed += run("test_non_gltf_fallback",               test_non_gltf_fallback);
+    failed += run("test_non_gltf_rejected",               test_non_gltf_rejected);
     failed += run("test_file_not_found",                  test_file_not_found);
     failed += run("test_metallic_roughness_texture_linear", test_metallic_roughness_texture_linear);
 

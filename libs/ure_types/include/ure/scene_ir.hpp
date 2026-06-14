@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ure/ure_api.hpp"
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -37,6 +38,55 @@ struct TextureResource {
     int uv_set = 0;
 };
 
+using MaterialGraphNodeId = uint32_t;
+constexpr MaterialGraphNodeId kInvalidMaterialGraphNode = 0xffffffffu;
+
+enum class MaterialGraphNodeKind {
+    ConstantColor,
+    ConstantFloat,
+    Texture2D,
+    Add,
+    Multiply,
+    Mix,
+    BsdfLambert,
+    BsdfMetal,
+    BsdfDielectric,
+    BsdfLight,
+    OutputSurface
+};
+
+struct MaterialGraphInput {
+    std::string name;
+    MaterialGraphNodeId node_id = kInvalidMaterialGraphNode;
+    std::string output = "out";
+};
+
+struct MaterialGraphNode {
+    MaterialGraphNodeId id = kInvalidMaterialGraphNode;
+    MaterialGraphNodeKind kind = MaterialGraphNodeKind::ConstantColor;
+    std::string name;
+    core::Vec3f color = {0.0f, 0.0f, 0.0f};
+    float value = 0.0f;
+    std::shared_ptr<TextureResource> texture;
+    std::vector<MaterialGraphInput> inputs;
+};
+
+struct MaterialGraph {
+    std::vector<MaterialGraphNode> nodes;
+    MaterialGraphNodeId output_node_id = kInvalidMaterialGraphNode;
+
+    bool empty() const { return nodes.empty() || output_node_id == kInvalidMaterialGraphNode; }
+
+    const MaterialGraphNode* find_node(MaterialGraphNodeId id) const {
+        for (const auto& node : nodes) {
+            if (node.id == id) {
+                return &node;
+            }
+        }
+        return nullptr;
+    }
+};
+
 struct SpectralMaterialExtension {
     int spectral_bands = 0;
     std::string albedo_spd;
@@ -65,6 +115,7 @@ struct MaterialNode {
     std::shared_ptr<TextureResource> normal_texture;
     float normal_scale = 1.0f;
     std::shared_ptr<SpectralMaterialExtension> spectral_extension;
+    std::shared_ptr<MaterialGraph> graph;
 };
 
 struct MeshResource {

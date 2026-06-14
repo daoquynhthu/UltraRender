@@ -140,6 +140,10 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
     lib.ure_session_get_framebuffer.restype = ctypes.POINTER(ctypes.c_float)
     lib.ure_session_get_aov.argtypes = [ctypes.c_void_p, ctypes.c_int]
     lib.ure_session_get_aov.restype = ctypes.POINTER(ctypes.c_float)
+    lib.ure_session_save_bmp.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+    lib.ure_session_save_bmp.restype = ctypes.c_int
+    lib.ure_session_save_hdr.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+    lib.ure_session_save_hdr.restype = ctypes.c_int
     lib.ure_aov_channel_count.argtypes = [ctypes.c_int]
     lib.ure_aov_channel_count.restype = ctypes.c_int
 
@@ -326,6 +330,14 @@ class RenderSession:
         ptr = self.aov_ptr(aov)
         length = width * height * channels
         return list(ctypes.cast(ptr, ctypes.POINTER(ctypes.c_float * length)).contents)
+
+    def save_bmp(self, path: str | os.PathLike[str]) -> None:
+        if native().ure_session_save_bmp(self.handle, os.fsencode(path)) != 0:
+            raise RuntimeError(f"failed to save BMP: {path}")
+
+    def save_hdr(self, path: str | os.PathLike[str]) -> None:
+        if native().ure_session_save_hdr(self.handle, os.fsencode(path)) != 0:
+            raise RuntimeError(f"failed to save HDR: {path}")
 
 
 def create_session(num_wavelengths: int = 0, queue_capacity: int = 0, max_trace_depth: int = 0) -> RenderSession:
