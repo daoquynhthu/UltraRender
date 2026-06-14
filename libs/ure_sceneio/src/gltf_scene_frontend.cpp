@@ -1,5 +1,4 @@
 #include "ure/gltf_scene_frontend.hpp"
-#include "ure/scene_parser.hpp"
 
 #include <algorithm>
 #include <array>
@@ -15,6 +14,7 @@
 #include <optional>
 #include <sstream>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace ure {
@@ -932,11 +932,8 @@ private:
         }
 
         auto graph = std::make_shared<scene_ir::MaterialGraph>();
-        scene_ir::MaterialGraphNodeId next_id = 1;
         auto add_node = [&](scene_ir::MaterialGraphNode graph_node) {
-            graph_node.id = next_id++;
-            graph->nodes.push_back(graph_node);
-            return graph_node.id;
+            return graph->add_node(std::move(graph_node));
         };
         auto add_color = [&](const core::Vec3f& color) {
             scene_ir::MaterialGraphNode graph_node;
@@ -959,14 +956,14 @@ private:
         auto add_multiply = [&](scene_ir::MaterialGraphNodeId a, scene_ir::MaterialGraphNodeId b) {
             scene_ir::MaterialGraphNode graph_node;
             graph_node.kind = scene_ir::MaterialGraphNodeKind::Multiply;
-            graph_node.inputs.push_back({"a", a, "out"});
-            graph_node.inputs.push_back({"b", b, "out"});
+            graph_node.inputs.push_back(scene_ir::material_graph_input("a", a));
+            graph_node.inputs.push_back(scene_ir::material_graph_input("b", b));
             return add_node(graph_node);
         };
         auto add_surface_input = [&](const char* name,
                                      scene_ir::MaterialGraphNode& graph_node,
                                      scene_ir::MaterialGraphNodeId input_id) {
-            graph_node.inputs.push_back({name, input_id, "out"});
+            graph_node.inputs.push_back(scene_ir::material_graph_input(name, input_id));
         };
 
         scene_ir::MaterialGraphNode bsdf;
@@ -996,7 +993,7 @@ private:
 
         scene_ir::MaterialGraphNode output;
         output.kind = scene_ir::MaterialGraphNodeKind::OutputSurface;
-        output.inputs.push_back({"surface", bsdf_id, "out"});
+        output.inputs.push_back(scene_ir::material_graph_input("surface", bsdf_id));
         graph->output_node_id = add_node(output);
         node->graph = graph;
 

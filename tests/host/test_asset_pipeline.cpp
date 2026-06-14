@@ -10,7 +10,7 @@
 
 #include <ure/image_loader.hpp>
 #include <ure/image_saver.hpp>
-#include <ure/scene_parser.hpp>
+#include <ure/scene_frontend.hpp>
 #include <ure/scene_io.hpp>
 #include <ure/spd_loader.hpp>
 
@@ -129,7 +129,7 @@ static int test_unknown_scene_extension_rejected() {
 
     bool rejected = false;
     try {
-        (void)ure::SceneParser::parse_file_to_ir(tmp);
+        (void)ure::SceneFrontend::parse_file_to_ir(tmp);
     } catch (const std::runtime_error&) {
         rejected = true;
     }

@@ -2,8 +2,13 @@
 
 #include "ure/ure_api.hpp"
 #include <cstdint>
+#include <functional>
+#include <map>
 #include <memory>
+#include <set>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ure::scene_ir {
@@ -77,6 +82,25 @@ struct MaterialGraph {
 
     bool empty() const { return nodes.empty() || output_node_id == kInvalidMaterialGraphNode; }
 
+    MaterialGraphNodeId next_node_id() const {
+        MaterialGraphNodeId next = 1;
+        for (const auto& node : nodes) {
+            if (node.id != kInvalidMaterialGraphNode && node.id >= next) {
+                next = node.id + 1;
+            }
+        }
+        return next;
+    }
+
+    MaterialGraphNodeId add_node(MaterialGraphNode node) {
+        if (node.id == kInvalidMaterialGraphNode) {
+            node.id = next_node_id();
+        }
+        MaterialGraphNodeId id = node.id;
+        nodes.push_back(std::move(node));
+        return id;
+    }
+
     const MaterialGraphNode* find_node(MaterialGraphNodeId id) const {
         for (const auto& node : nodes) {
             if (node.id == id) {
@@ -85,7 +109,66 @@ struct MaterialGraph {
         }
         return nullptr;
     }
+
+    const MaterialGraphNode& require_node(MaterialGraphNodeId id, const std::string& context) const {
+        const MaterialGraphNode* node = find_node(id);
+        if (!node) {
+            throw std::runtime_error("MaterialGraph missing node for " + context);
+        }
+        return *node;
+    }
+
+    void validate() const {
+        std::set<MaterialGraphNodeId> ids;
+        for (const auto& node : nodes) {
+            if (node.id == kInvalidMaterialGraphNode) {
+                throw std::runtime_error("MaterialGraph contains an invalid node id");
+            }
+            if (!ids.insert(node.id).second) {
+                throw std::runtime_error("MaterialGraph contains duplicate node ids");
+            }
+        }
+        (void)require_node(output_node_id, "graph output");
+
+        std::map<MaterialGraphNodeId, int> state;
+        std::function<void(MaterialGraphNodeId)> visit = [&](MaterialGraphNodeId id) {
+            auto it = state.find(id);
+            if (it != state.end()) {
+                if (it->second == 1) {
+                    throw std::runtime_error("MaterialGraph contains a cycle");
+                }
+                if (it->second == 2) {
+                    return;
+                }
+            }
+
+            state[id] = 1;
+            const MaterialGraphNode& node = require_node(id, "graph input");
+            for (const auto& input : node.inputs) {
+                if (input.node_id == kInvalidMaterialGraphNode) {
+                    continue;
+                }
+                (void)require_node(input.node_id, input.name);
+                visit(input.node_id);
+            }
+            state[id] = 2;
+        };
+
+        for (const auto& node : nodes) {
+            visit(node.id);
+        }
+    }
 };
+
+inline MaterialGraphInput material_graph_input(const std::string& name,
+                                               MaterialGraphNodeId node_id,
+                                               const std::string& output = "out") {
+    MaterialGraphInput input;
+    input.name = name;
+    input.node_id = node_id;
+    input.output = output;
+    return input;
+}
 
 struct SpectralMaterialExtension {
     int spectral_bands = 0;

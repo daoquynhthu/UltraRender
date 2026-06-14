@@ -2,7 +2,6 @@ add_library(ure_sceneio STATIC
     src/scene_io_api.cpp
     src/gltf_scene_frontend.cpp
     src/scene_frontend.cpp
-    src/scene_parser.cpp
     src/image_loader.cpp
     src/image_saver.cpp
     src/spd_loader.cpp

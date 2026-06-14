@@ -1,7 +1,7 @@
 #include "ure/ure_c_api.h"
 #include "ure/render.hpp"
 #include "ure/session.hpp"
-#include "ure/scene_parser.hpp"
+#include "ure/scene_frontend.hpp"
 #include "ure/image_saver.hpp"
 #include <ure/log.hpp>
 #include <cstdlib>
@@ -84,52 +84,46 @@ scene_ir::MaterialNode make_scene_ir_material(ure_material_type_t type,
 
     auto graph = std::make_shared<scene_ir::MaterialGraph>();
     scene_ir::MaterialGraphNode color;
-    color.id = 1;
     color.kind = scene_ir::MaterialGraphNodeKind::ConstantColor;
     color.color = material.model == scene_ir::MaterialModel::Light ? material.emission : material.base_color;
-    scene_ir::MaterialGraphNode rough;
-    rough.id = 2;
-    rough.kind = scene_ir::MaterialGraphNodeKind::ConstantFloat;
-    rough.value = material.roughness;
-    scene_ir::MaterialGraphNode ior_node;
-    ior_node.id = 3;
-    ior_node.kind = scene_ir::MaterialGraphNodeKind::ConstantFloat;
-    ior_node.value = material.ior;
+    scene_ir::MaterialGraphNodeId color_id = graph->add_node(color);
+
+    auto add_float = [&](float value) {
+        scene_ir::MaterialGraphNode node;
+        node.kind = scene_ir::MaterialGraphNodeKind::ConstantFloat;
+        node.value = value;
+        return graph->add_node(node);
+    };
+
     scene_ir::MaterialGraphNode bsdf;
-    bsdf.id = 4;
     switch (material.model) {
     case scene_ir::MaterialModel::Metal:
         bsdf.kind = scene_ir::MaterialGraphNodeKind::BsdfMetal;
-        bsdf.inputs.push_back({"base_color", color.id, "out"});
-        bsdf.inputs.push_back({"roughness", rough.id, "out"});
-        graph->nodes = {color, rough, bsdf};
+        bsdf.inputs.push_back(scene_ir::material_graph_input("base_color", color_id));
+        bsdf.inputs.push_back(scene_ir::material_graph_input("roughness", add_float(material.roughness)));
         break;
     case scene_ir::MaterialModel::Dielectric:
         bsdf.kind = scene_ir::MaterialGraphNodeKind::BsdfDielectric;
-        bsdf.inputs.push_back({"base_color", color.id, "out"});
-        bsdf.inputs.push_back({"roughness", rough.id, "out"});
-        bsdf.inputs.push_back({"ior", ior_node.id, "out"});
-        graph->nodes = {color, rough, ior_node, bsdf};
+        bsdf.inputs.push_back(scene_ir::material_graph_input("base_color", color_id));
+        bsdf.inputs.push_back(scene_ir::material_graph_input("roughness", add_float(material.roughness)));
+        bsdf.inputs.push_back(scene_ir::material_graph_input("ior", add_float(material.ior)));
         break;
     case scene_ir::MaterialModel::Light:
         bsdf.kind = scene_ir::MaterialGraphNodeKind::BsdfLight;
-        bsdf.inputs.push_back({"emission", color.id, "out"});
-        graph->nodes = {color, bsdf};
+        bsdf.inputs.push_back(scene_ir::material_graph_input("emission", color_id));
         break;
     default:
         bsdf.kind = scene_ir::MaterialGraphNodeKind::BsdfLambert;
-        bsdf.inputs.push_back({"base_color", color.id, "out"});
-        bsdf.inputs.push_back({"roughness", rough.id, "out"});
-        graph->nodes = {color, rough, bsdf};
+        bsdf.inputs.push_back(scene_ir::material_graph_input("base_color", color_id));
+        bsdf.inputs.push_back(scene_ir::material_graph_input("roughness", add_float(material.roughness)));
         break;
     }
+    scene_ir::MaterialGraphNodeId bsdf_id = graph->add_node(bsdf);
 
     scene_ir::MaterialGraphNode output;
-    output.id = 5;
     output.kind = scene_ir::MaterialGraphNodeKind::OutputSurface;
-    output.inputs.push_back({"surface", bsdf.id, "out"});
-    graph->nodes.push_back(output);
-    graph->output_node_id = output.id;
+    output.inputs.push_back(scene_ir::material_graph_input("surface", bsdf_id));
+    graph->output_node_id = graph->add_node(output);
     material.graph = graph;
     return material;
 }
@@ -199,7 +193,7 @@ void ure_engine_destroy(ure_engine_t* engine) {
 int ure_engine_load_scene_file(ure_engine_t* engine, const char* path) {
     if (!engine || !path) return -1;
     try {
-        scene_ir::SceneIR scene = SceneParser::parse_file_to_ir(path);
+        scene_ir::SceneIR scene = SceneFrontend::parse_file_to_ir(path);
         reinterpret_cast<IRenderEngine*>(engine)->load_scene_ir(scene);
         return 0;
     } catch (...) {
@@ -311,7 +305,7 @@ void ure_session_destroy(ure_session_t* session) {
 int ure_session_load_scene_file(ure_session_t* session, const char* path) {
     if (!session || !path) return -1;
     try {
-        scene_ir::SceneIR scene = SceneParser::parse_file_to_ir(path);
+        scene_ir::SceneIR scene = SceneFrontend::parse_file_to_ir(path);
         if (scene.width <= 0) scene.width = 8;
         if (scene.height <= 0) scene.height = 8;
         reinterpret_cast<RenderSession*>(session)->load_scene(scene);

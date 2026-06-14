@@ -117,6 +117,9 @@ struct GraphFloatValue {
     std::shared_ptr<scene_ir::TextureResource> texture;
 };
 
+GraphFloatValue evaluate_graph_float(const scene_ir::MaterialGraph& graph,
+                                     const scene_ir::MaterialGraphNode& value_node);
+
 const scene_ir::MaterialGraphInput* find_input(const scene_ir::MaterialGraphNode& node, const char* name) {
     for (const auto& input : node.inputs) {
         if (input.name == name) {
@@ -129,11 +132,7 @@ const scene_ir::MaterialGraphInput* find_input(const scene_ir::MaterialGraphNode
 const scene_ir::MaterialGraphNode& require_graph_node(const scene_ir::MaterialGraph& graph,
                                                       scene_ir::MaterialGraphNodeId id,
                                                       const char* context) {
-    const scene_ir::MaterialGraphNode* node = graph.find_node(id);
-    if (!node) {
-        throw std::runtime_error(std::string("MaterialGraph missing node for ") + context);
-    }
-    return *node;
+    return graph.require_node(id, context);
 }
 
 GraphColorValue evaluate_graph_color(const scene_ir::MaterialGraph& graph,
@@ -159,8 +158,44 @@ GraphColorValue evaluate_graph_color(const scene_ir::MaterialGraph& graph,
             return {{av.color.x * bv.color.x, av.color.y * bv.color.y, av.color.z * bv.color.z},
                     av.texture ? av.texture : bv.texture};
         }
+        case scene_ir::MaterialGraphNodeKind::Add: {
+            const scene_ir::MaterialGraphInput* a = find_input(value_node, "a");
+            const scene_ir::MaterialGraphInput* b = find_input(value_node, "b");
+            if (!a || !b ||
+                a->node_id == scene_ir::kInvalidMaterialGraphNode ||
+                b->node_id == scene_ir::kInvalidMaterialGraphNode) {
+                throw std::runtime_error("MaterialGraph Add requires a and b inputs");
+            }
+            GraphColorValue av = evaluate_graph_color(graph, require_graph_node(graph, a->node_id, "add input a"));
+            GraphColorValue bv = evaluate_graph_color(graph, require_graph_node(graph, b->node_id, "add input b"));
+            if (av.texture || bv.texture) {
+                throw std::runtime_error("MaterialGraph Add with texture inputs is not supported by the Phase M.2 compiler");
+            }
+            return {{av.color.x + bv.color.x, av.color.y + bv.color.y, av.color.z + bv.color.z}, nullptr};
+        }
+        case scene_ir::MaterialGraphNodeKind::Mix: {
+            const scene_ir::MaterialGraphInput* a = find_input(value_node, "a");
+            const scene_ir::MaterialGraphInput* b = find_input(value_node, "b");
+            const scene_ir::MaterialGraphInput* factor = find_input(value_node, "factor");
+            if (!a || !b || !factor ||
+                a->node_id == scene_ir::kInvalidMaterialGraphNode ||
+                b->node_id == scene_ir::kInvalidMaterialGraphNode ||
+                factor->node_id == scene_ir::kInvalidMaterialGraphNode) {
+                throw std::runtime_error("MaterialGraph Mix requires a, b, and factor inputs");
+            }
+            GraphColorValue av = evaluate_graph_color(graph, require_graph_node(graph, a->node_id, "mix input a"));
+            GraphColorValue bv = evaluate_graph_color(graph, require_graph_node(graph, b->node_id, "mix input b"));
+            GraphFloatValue fv = evaluate_graph_float(graph, require_graph_node(graph, factor->node_id, "mix factor"));
+            if (av.texture || bv.texture || fv.texture) {
+                throw std::runtime_error("MaterialGraph Mix with texture inputs is not supported by the Phase M.2 compiler");
+            }
+            float t = (std::clamp)(fv.value, 0.0f, 1.0f);
+            return {{av.color.x * (1.0f - t) + bv.color.x * t,
+                     av.color.y * (1.0f - t) + bv.color.y * t,
+                     av.color.z * (1.0f - t) + bv.color.z * t}, nullptr};
+        }
         default:
-            throw std::runtime_error("MaterialGraph color input requires ConstantColor, Texture2D, or Multiply");
+            throw std::runtime_error("MaterialGraph color input requires ConstantColor, Texture2D, Add, Multiply, or Mix");
     }
 }
 
@@ -198,8 +233,42 @@ GraphFloatValue evaluate_graph_float(const scene_ir::MaterialGraph& graph,
             }
             return {av.value * bv.value, av.texture ? av.texture : bv.texture};
         }
+        case scene_ir::MaterialGraphNodeKind::Add: {
+            const scene_ir::MaterialGraphInput* a = find_input(value_node, "a");
+            const scene_ir::MaterialGraphInput* b = find_input(value_node, "b");
+            if (!a || !b ||
+                a->node_id == scene_ir::kInvalidMaterialGraphNode ||
+                b->node_id == scene_ir::kInvalidMaterialGraphNode) {
+                throw std::runtime_error("MaterialGraph Add requires a and b inputs");
+            }
+            GraphFloatValue av = evaluate_graph_float(graph, require_graph_node(graph, a->node_id, "add input a"));
+            GraphFloatValue bv = evaluate_graph_float(graph, require_graph_node(graph, b->node_id, "add input b"));
+            if (av.texture || bv.texture) {
+                throw std::runtime_error("MaterialGraph Add with texture inputs is not supported by the Phase M.2 compiler");
+            }
+            return {av.value + bv.value, nullptr};
+        }
+        case scene_ir::MaterialGraphNodeKind::Mix: {
+            const scene_ir::MaterialGraphInput* a = find_input(value_node, "a");
+            const scene_ir::MaterialGraphInput* b = find_input(value_node, "b");
+            const scene_ir::MaterialGraphInput* factor = find_input(value_node, "factor");
+            if (!a || !b || !factor ||
+                a->node_id == scene_ir::kInvalidMaterialGraphNode ||
+                b->node_id == scene_ir::kInvalidMaterialGraphNode ||
+                factor->node_id == scene_ir::kInvalidMaterialGraphNode) {
+                throw std::runtime_error("MaterialGraph Mix requires a, b, and factor inputs");
+            }
+            GraphFloatValue av = evaluate_graph_float(graph, require_graph_node(graph, a->node_id, "mix input a"));
+            GraphFloatValue bv = evaluate_graph_float(graph, require_graph_node(graph, b->node_id, "mix input b"));
+            GraphFloatValue fv = evaluate_graph_float(graph, require_graph_node(graph, factor->node_id, "mix factor"));
+            if (av.texture || bv.texture || fv.texture) {
+                throw std::runtime_error("MaterialGraph Mix with texture inputs is not supported by the Phase M.2 compiler");
+            }
+            float t = (std::clamp)(fv.value, 0.0f, 1.0f);
+            return {av.value * (1.0f - t) + bv.value * t, nullptr};
+        }
         default:
-            throw std::runtime_error("MaterialGraph float input requires ConstantFloat, Texture2D, or Multiply");
+            throw std::runtime_error("MaterialGraph float input requires ConstantFloat, Texture2D, Add, Multiply, or Mix");
     }
 }
 
@@ -220,7 +289,9 @@ void validate_phase_m1_graph_node(const scene_ir::MaterialGraphNode& node) {
         case scene_ir::MaterialGraphNodeKind::ConstantColor:
         case scene_ir::MaterialGraphNodeKind::ConstantFloat:
         case scene_ir::MaterialGraphNodeKind::Texture2D:
+        case scene_ir::MaterialGraphNodeKind::Add:
         case scene_ir::MaterialGraphNodeKind::Multiply:
+        case scene_ir::MaterialGraphNodeKind::Mix:
         case scene_ir::MaterialGraphNodeKind::BsdfLambert:
         case scene_ir::MaterialGraphNodeKind::BsdfMetal:
         case scene_ir::MaterialGraphNodeKind::BsdfDielectric:
@@ -256,6 +327,7 @@ FlatMaterial flatten_material_graph(const scene_ir::MaterialNode& material) {
         return flat;
     }
 
+    material.graph->validate();
     for (const auto& node : material.graph->nodes) {
         validate_phase_m1_graph_node(node);
     }

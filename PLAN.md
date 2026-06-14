@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-14 (Phase M SceneIR-only cleanup and glTF visual gate)
+最后更新: 2026-06-14 (Phase L million-channel spectral-domain plan)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -24,6 +24,7 @@
 新 Phase E:     N 通道光谱升级                                      已完成
 远期 Phase S:   Session API + 脚本化                                已完成
 远期 Phase M:   材质系统                                             进行中
+远期 Phase L:   百万级光谱域 / packet-resolution 解耦                规划完成，待实施
 ```
 
 ---
@@ -452,16 +453,15 @@ set_target_properties(ure_core PROPERTIES CUDA_ARCHITECTURES "all-major")
 add_library(ure_sceneio STATIC
     src/gltf_scene_frontend.cpp
     src/scene_frontend.cpp
-    src/scene_parser.cpp
     src/image_loader.cpp
     src/image_saver.cpp
-    src/scene/scene_ir.cpp
-    src/scene/scene.cpp
-    src/scene/camera.cpp
-    src/scene/mesh.cpp
-    src/scene/sphere.cpp
-    src/scene/triangle.cpp
-    src/scene/obj_loader.cpp
+    src/spd_loader.cpp
+    src/scene_ir.cpp
+    src/camera.cpp
+    src/mesh.cpp
+    src/sphere.cpp
+    src/triangle.cpp
+    src/obj_loader.cpp
 )
 target_include_directories(ure_sceneio PUBLIC include)
 target_link_libraries(ure_sceneio PUBLIC ure_types)
@@ -1511,14 +1511,14 @@ UltraRender = 光谱渲染器 + 物理模拟 + 声学合成
 ### 新增远期 Phase
 
 ```
-Phase E ──→ Phase S ──→ Phase M ──→ Phase U ──→ Phase K (持续)
+Phase E ──→ Phase S ──→ Phase M ──→ Phase L ──→ Phase U ──→ Phase K (持续)
                │
                ├──→ Phase X (可并行)
                │
                └──→ Phase C/D (分布式, 可并行)
 ```
 
-与中短期的关系：Phase S 和 Phase X 的部分工作可在 Phase E 完成后立即开始；Phase M 依赖 Phase G 的材质扩展 + Phase E 的光谱引擎；Phase U 依赖 Phase S 的稳定 API。
+与中短期的关系：Phase S 和 Phase X 的部分工作可在 Phase E 完成后立即开始；Phase M 依赖 Phase G 的材质扩展 + Phase E 的光谱引擎；Phase L 是 README “百万级波长通道”承诺的真正架构阶段，必须在 MaterialX/USD/插件把材质语义固化到 `GpuMaterialData + GpuSpectrum[32]` 之前完成；Phase U 依赖 Phase S 的稳定 API，并应消费 Phase L 的 spectral resource contract。
 
 ---
 
@@ -1587,6 +1587,123 @@ session.get_framebuffer().save("final.exr")
 
 ---
 
+### Phase L — 百万级光谱域 / Large Spectral Domain
+
+**目标**: 兑现 README 中“支持百万级波长通道的并行计算”的长期承诺，同时保持低端硬件可运行、高端单机/多卡/农场可扩展。Phase L 不表示一条 ray 携带 1,000,000 个 lane；它表示 renderer 的**光谱资源域**可达到百万级离散采样，而 GPU path state 通过小 packet / sampled wavelength / MIS 在该高维域上积分。
+
+**核心结论**: 当前 Phase E 的 `[8, 32]` 是 runtime packet renderer，不是百万级光谱域。`RenderConfig::num_wavelengths` 同时承担了“全局光谱分辨率”和“ray packet lane 数”两个语义，这是最大架构债。Phase L 必须把两者拆开：
+
+```cpp
+struct SpectralConfig {
+    uint64_t domain_bins;      // target spectral-domain resolution, can be 1,000,000+
+    int packet_lanes;          // lanes carried by one GPU ray, typically 1/4/8/16/32
+    int max_resident_bins;     // bins allowed resident/cacheable on this device
+    SpectralSamplingMode mode; // Uniform, Stratified, Importance, Hero, FarmShard
+};
+```
+
+#### 当前硬阻塞与不兼容点
+
+| 类别 | 当前状态 | 为什么阻塞百万级 |
+|------|----------|------------------|
+| `GpuSpectrum` | `values[kMaxSpectralChannels]` + `wavelengths[kMaxSpectralChannels]`，当前上限 32 | 每个 device 局部对象随 N 线性膨胀；百万级不可能放进寄存器/局部内存 |
+| 临时数组 | `path_tracer_material.cu` / `path_tracer_wavefront.cuh` 中 `float tmp[kMaxSpectralChannels]` | 依赖固定 packet cap，不能表达动态百万域 |
+| `RenderConfig::num_wavelengths` | 同时被 CLI、compiler、GPU init 当作 material SoA 宽度和 ray packet 宽度 | 低端硬件上限与目标光谱分辨率混淆；超过 32 直接拒绝 |
+| material SoA | `num_spectral_channels × material_count` 全量驻留 | 对 1M bins × 6 spectra × material_count 显存不可控 |
+| `GpuMaterialData` | 每个材质含 6 个 `GpuSpectrum` | C ABI、Session mutation、material graph compiler 都会把材质固化到 32-lane carrier |
+| spectral texture | `GpuTexture::data` 是每 texel 一个 `GpuSpectrum` | 1M bins × texels 会直接爆显存；必须改 tiled/basis/sparse resource |
+| SPD pipeline | SPD 在 compile 阶段 eager resample 到 `num_wavelengths` | 高分辨率资源无法按 ray wavelength 动态采样，也无法跨 GPU/farm 分片 |
+| CIE / photometry | GPU table 是固定可见域积分 helper，现有测试只覆盖 N=32 | 百万域下需要 domain-aware integration / sampled estimator / reference oracle |
+| Session / Python / C ABI | `num_wavelengths` 单参数 | 外部 API 无法表达 domain resolution、packet lanes、硬件预算和采样策略 |
+| Multi-GPU / Distributed | 当前按 sample range 分割，未定义 spectral-domain shard | 农场顶级性能需要 sample shard + wavelength shard + frame shard 三种分解 |
+| Phase M | MaterialGraph 目前编译到 `GpuMaterialData` | 若继续扩展 MaterialX，会把节点图锁死到 32-lane GPU carrier |
+| Phase U / X | USD/Hydra/插件计划使用现有 material/session 边界 | 若先实现，会把 `bands=64` 之类弱语义扩散到外部生态，后续破坏性更大 |
+
+#### 最终架构
+
+```
+SceneIR / MaterialGraph / MaterialX
+        │
+        ▼
+SpectralResourceGraph
+        ├── analytic node: eval(lambda)
+        ├── dense table: N bins, CPU/GPU sampled
+        ├── compressed basis: coeffs × basis(lambda)
+        ├── tiled spectral texture: texel tile × spectral tile
+        └── fluorescence matrix: excitation lambda → emission distribution
+        │
+        ▼
+SpectralDomain + SpectralSampler
+        ├── low-end: sampled/hero wavelength, small resident cache
+        ├── desktop: packet lanes 8-32, dense/basis hybrid
+        ├── high-end: larger cache, multi-stream spectral tiles
+        └── farm: sample shard × wavelength shard × frame shard
+        │
+        ▼
+GPU Path State
+        ├── SpectralPacket(packet_lanes)
+        ├── active lambda/bin/pdf
+        ├── Stokes per packet lane or sampled lane
+        └── no full-domain array in a ray
+```
+
+#### 硬件适配与拒绝策略
+
+Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并在低端硬件上 fail-loud：
+
+| 设备/模式 | 允许策略 | 拒绝条件 |
+|-----------|----------|----------|
+| 低端 GPU / 小 VRAM | `domain_bins` 可大，但 `packet_lanes` 小；spectral resources 必须走 analytic/basis/tiled streaming；resident cache 按 VRAM 预算限制 | 用户要求 dense resident 1M bins 且预算超过 VRAM；packet lanes 超过寄存器/occupancy 预算 |
+| 当前 RTX 5060 级别 | packet lanes 8-32；1M domain 通过 sampled wavelength + resource cache；不承诺每 pass 全域遍历 | 用户把 `packet_lanes` 当成 1M；texture/material 要求全量展开到 `GpuSpectrum[]` |
+| 高端单机 | 更大 resource cache、多 CUDA stream、多 GPU spectral tiles；仍保持 ray packet 小宽度 | scene 的 spectral working set 超过设备+spill 策略能力 |
+| 多卡/农场 | sample-range partition + spectral-domain partition；每 worker 只持有 domain shard/resource shard；merge 时按 wavelength PDF/XYZ estimator 合并 | 分布式 contract 缺失 spectral shard metadata；不同 worker 使用不一致 sampler seed/domain mapping |
+
+硬上限计算必须基于：
+- VRAM: framebuffer + AOV + queues + BVH + material/resource cache + staging buffer
+- SM/register pressure: `packet_lanes` 与 kernel occupancy 的函数，不由 VRAM 单独决定
+- scene resource working set: material count、texture texel count、spectral tiles、fluorescence matrix density
+- requested quality: spp、domain_bins、sampler mode、farm shard count
+
+#### 子步骤
+
+| Step | 内容 | 文件/模块 | 完成判据 |
+|------|------|-----------|----------|
+| L.0 | README/PLAN 口径闭合：明确“百万级通道”= spectral domain/resource resolution，不是单 ray million lanes | `README.md`, `PLAN.md`, `docs/Phase_E_Spectral_Architecture.md` | 文档不再暗示 `GpuSpectrum` 可承载百万 lane；当前 `[8,32]` 被标为 Phase E packet cap |
+| L.1 | 配置拆分：`num_wavelengths` 退役为 legacy alias；新增 `spectral.domain_bins`, `spectral.packet_lanes`, `spectral.max_resident_mb`, `spectral.sampling_mode` | `render_config.hpp`, `ure_config`, CLI, C ABI, pyure | 低端硬件超预算会明确错误；旧配置迁移有 warning 或兼容 alias |
+| L.2 | 硬件预算器：`SpectralRuntimePlan` 根据 GPU/VRAM/SM/queue/scene resource 计算 packet lanes、cache budget、domain shard | `gpu_auto_config.hpp`, `gpu_hardware`, `ure_config` | 覆盖 4GB/8GB/24GB/80GB/farm profiles；超过上限 fail-loud |
+| L.3 | 类型拆分：`GpuSpectrum` 拆成 `SpectralPacket` 与 `SpectralSample`; 禁止 scene/resource API 暴露 fixed 32 array | `gpu_structs.hpp`, `gpu_spectrum_utils.cuh`, tests | code search 对 resource path 中 `GpuSpectrum` 清零；packet cap 改名为 `kMaxPacketLanes` |
+| L.4 | Ray/Shadow queue 语义迁移：队列只保存 packet lanes、lambda/bin/pdf；支持 sampled/hero/lane/packet 模式统一 | `RayQueue`, `ShadowQueue`, raygen, wavefront | N=1 sampled、N=8 packet、dispersive lane split 都走同一 estimator |
+| L.5 | SpectralResource 抽象：material/medium/light/texture 不再 eager 展开到 material SoA；改为 `eval(lambda)` / sampled table / basis / tiled resource | `SceneIR`, `GpuSceneCompiler`, `path_tracer_*` | SPD、n/k、medium sigma、emission 均可按任意 lambda 查询 |
+| L.6 | Million-bin host oracle：实现 CPU 端 reference integration，可生成 1M-bin domain 的 D65/equal-energy/narrowband/metamer fixtures | `tests/host`, `docs` | 不依赖 GPU 即可验证 high-res spectral resource 与 sampled estimator 偏差 |
+| L.7 | GPU sampled estimator：以 sampled wavelength / packet subset 在 1M domain 上积分，XYZ 和 RR 全部显式使用 pdf | `gpu_spectrum_utils.cuh`, wavefront, render tests | 1M domain smoke 不展开 1M lane；D65/equal-energy 与 oracle 误差在阈值内 |
+| L.8 | Spectral texture 重构：显式光谱纹理由 `GpuSpectrum per texel` 改为 tiled/basis/sparse resource；RGB texture 仍可走硬件 filtering + reconstruction | `HostTexture`, `GpuTexture`, image/asset pipeline | 大纹理不会按 texel×1M 全量驻留；cache miss/fallback 有诊断 |
+| L.9 | MaterialGraph 对接：节点输出从 `GpuMaterialData` 改为 spectral expression/resource graph；Phase M 的 Add/Mix/Texture/MaterialX 不再被 32-lane carrier 限制 | `scene_ir.hpp`, `gpu_scene_compiler.cpp`, material graph tests | MaterialX 导入前完成；texture Add/Mix 可表达为 resource graph，而不是 fail-loud |
+| L.10 | Multi-GPU / farm 分片：新增 spectral-domain shard metadata，支持 sample shard、wavelength shard、frame shard 组合 merge | distributed contract, file backend, multi GPU driver | 不同 worker 的 wavelength PDF/domain shard 可复现合并；错误 shard metadata 会拒绝 |
+| L.11 | 性能路径：针对低端/高端分别提供 sampler preset、cache preset、CUDA stream preset；建立 benchmark scenes | `tools/`, `tests/perf`, docs | 低端能跑且拒绝超预算；高端/农场能随 shard 数扩展 |
+| L.12 | 静态审计门禁：禁止新增 `kMaxSpectralChannels`、`GpuSpectrum[]` resource、`num_wavelengths` 作为 domain resolution、eager million-bin SoA | scripts/check_* | CI/本地脚本可阻断架构回退 |
+
+#### 与未完成 Phase 的技术债约束
+
+| Phase | 风险 | Phase L 前的约束 |
+|-------|------|------------------|
+| Phase M | MaterialGraph 继续编译到 `GpuMaterialData` 会固化 32-lane carrier | M.2 只能作为过渡 flatten；M.3 MaterialX 导入前必须接入 `SpectralResourceGraph` |
+| Phase U | USD `ure:spectral:bands = 64` 语义太弱 | U.1 schema 必须使用 `domainBins`、`packetLanes`、resource URI/basis/tile metadata，而不是单一 bands |
+| Phase X | Shader 插件若直接返回 `GpuSpectrum` 会锁死 ABI | 插件 shader API 必须返回 spectral expression / sampled eval callback |
+| Phase K | Spectral MIS 若只优化 N<=32 packet，会和 Phase L 采样器重复 | K.6 并入或依赖 L.7，不再单独设计一套 sampled wavelength estimator |
+| Phase C/D | 当前 distributed contract 只按 sample range | D 后续必须增加 spectral shard contract，否则农场无法服务百万域 |
+| Session API | `create_session(num_wavelengths)` 已公开 | C/Python API 需新增 config object；旧参数作为 packet/domain alias 时必须给 warning |
+
+#### 完成标准
+
+- `README.md` 的百万级承诺有工程定义：1M+ spectral domain/resource bins，small packet path integration。
+- 当前 32-lane packet cap 不再阻塞高分辨率 spectral resources。
+- 低端硬件通过 budgeter 自动降级 sampler/cache/packet lanes，无法满足时在 scene load 前拒绝。
+- 高端单机和农场支持 spectral-domain shard，merge 由 explicit wavelength PDF / domain metadata 保证无偏。
+- `MaterialGraph`、MaterialX、USD、plugin API 不再暴露或依赖 `GpuMaterialData + GpuSpectrum[32]` 作为最终材质表达。
+- 1M-domain host oracle + GPU sampled smoke + distributed shard merge test 全部通过。
+
+---
+
 ### Phase M — 材质系统
 
 **目标**: 从硬编码 BSDF 升级为基于节点图的材质系统，兼容行业标准。
@@ -1619,9 +1736,9 @@ struct MaterialGraph {
 | Step | 内容 | 前置依赖 |
 |------|------|---------|
 | M.1 | 设计节点图 IR（不依赖 OSL，自定义格式） | ✅ `scene_ir::MaterialGraph` / `MaterialGraphNode` / `MaterialGraphInput` 已进入公共 SceneIR；首批节点覆盖 ConstantColor/ConstantFloat/BSDF/OutputSurface，Texture/Add/Mix 等复杂节点保留为显式 unsupported |
-| M.2 | GPU 编译：节点图 → GpuMaterial + 内核参数 | 进行中：`GpuSceneCompiler` 已支持单 OutputSurface → 单 BSDF 编译到现有 `GpuMaterialData` + spectral SoA，并支持 ConstantColor/ConstantFloat、Texture2D、单纹理 Multiply；graph 存在时 graph 输出为 authoritative，scalar material texture fields 不参与 GPU 编译；glTF PBR baseColor/roughness/emissive 已自动生成等价 MaterialGraph；旧文本场景、`scene_io::load_scene()`、`SceneParser::parse_file()`、`SceneIR -> Scene` compiler、procedural CLI fallback、`IRenderEngine` Scene overload 与旧视觉 smoke 资产均已移除，C/Python file loading 进入 SceneIR；raw in-memory texture mutation 直接失败，后续资源变更必须走 graph/resource 节点；Mix/BSDF layering/procedural material nodes 仍为 fail-loud |
-| M.3 | MaterialX 导入（`mtlx` → 节点图 IR） | M.1 |
-| M.4 | MaterialX 导出（节点图 IR → `mtlx`） | M.1 |
+| M.2 | GPU 编译：节点图 → GpuMaterial + 内核参数 | 进行中：`GpuSceneCompiler` 已支持单 OutputSurface → 单 BSDF 编译到现有 `GpuMaterialData` + spectral SoA，并支持 ConstantColor/ConstantFloat、Texture2D、单纹理 Multiply、常量 Add/Mix；MaterialGraph 现有重复 id、坏引用、环检测，坏图 fail-loud；graph 存在时 graph 输出为 authoritative，scalar material texture fields 不参与 GPU 编译；glTF PBR baseColor/roughness/emissive 已自动生成等价 MaterialGraph，并改用 `MaterialGraph::add_node()` builder 自动分配 id；旧文本场景、`scene_io::load_scene()`、`SceneParser` 兼容 shim、`SceneIR -> Scene` compiler、procedural CLI fallback、`IRenderEngine` Scene overload 与旧视觉 smoke 资产均已移除，C/Python file loading 进入 SceneIR；raw in-memory texture mutation 直接失败，后续资源变更必须走 graph/resource 节点；texture Add/Mix、BSDF layering、procedural material nodes 在 Phase L 前仍为 fail-loud，避免把无法表达的图静默压扁到 32-lane carrier |
+| M.3 | MaterialX 导入（`mtlx` → 节点图 IR） | M.1 + Phase L.5/L.9 |
+| M.4 | MaterialX 导出（节点图 IR → `mtlx`） | M.1 + Phase L.9 |
 | M.5 | 材质预设库（金属/玻璃/皮肤/织物/汽车漆） | M.2 |
 
 **前置条件**: Batch 4 BSDF 测试 (OT2, OT3) 必须在此步骤前通过，确保现有 BSDF 行为基线锁定。
@@ -1738,7 +1855,8 @@ Phase 0 ─→ Phase F ─┬──→ Phase P ─┬──→ Phase A ─┬─
                                                   ▼              ▼
                                              Phase M         Phase X
                                                   │              │
-                                                  └──────┬───────┘
+                                                  ▼              │
+                                             Phase L ─────┬──────┘
                                                          ▼
                                                     Phase U
                                                          │

@@ -10,7 +10,6 @@
 
 #include <ure/gltf_scene_frontend.hpp>
 #include <ure/scene_ir.hpp>
-#include <ure/scene_parser.hpp>
 #include <ure/log.hpp>
 
 static int g_passed = 0, g_failed = 0;

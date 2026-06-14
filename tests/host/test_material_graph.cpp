@@ -45,10 +45,14 @@ static const unsigned char kTestBmp[] = {
 } while(0)
 
 static ure::scene_ir::MaterialGraphInput input(const char* name, ure::scene_ir::MaterialGraphNodeId node_id) {
-    ure::scene_ir::MaterialGraphInput in;
-    in.name = name;
-    in.node_id = node_id;
-    return in;
+    return ure::scene_ir::material_graph_input(name, node_id);
+}
+
+static ure::scene_ir::MaterialGraphNodeId add_constant_float(ure::scene_ir::MaterialGraph& graph, float value) {
+    ure::scene_ir::MaterialGraphNode node;
+    node.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    node.value = value;
+    return graph.add_node(node);
 }
 
 static ure::scene_ir::SceneIR scene_with_material(const std::shared_ptr<ure::scene_ir::MaterialNode>& material) {
@@ -310,6 +314,234 @@ static int test_graph_roughness_texture_compiles_to_texture_slot() {
     return 0;
 }
 
+static int test_graph_add_and_mix_constants_compile() {
+    auto material = std::make_shared<ure::scene_ir::MaterialNode>();
+    material->graph = std::make_shared<ure::scene_ir::MaterialGraph>();
+
+    ure::scene_ir::MaterialGraphNode low;
+    low.id = 1;
+    low.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    low.value = 0.2f;
+
+    ure::scene_ir::MaterialGraphNode high;
+    high.id = 2;
+    high.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    high.value = 0.8f;
+
+    ure::scene_ir::MaterialGraphNode factor;
+    factor.id = 3;
+    factor.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    factor.value = 0.25f;
+
+    ure::scene_ir::MaterialGraphNode mixed;
+    mixed.id = 4;
+    mixed.kind = ure::scene_ir::MaterialGraphNodeKind::Mix;
+    mixed.inputs.push_back(input("a", low.id));
+    mixed.inputs.push_back(input("b", high.id));
+    mixed.inputs.push_back(input("factor", factor.id));
+
+    ure::scene_ir::MaterialGraphNode offset;
+    offset.id = 5;
+    offset.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    offset.value = 0.1f;
+
+    ure::scene_ir::MaterialGraphNode added;
+    added.id = 6;
+    added.kind = ure::scene_ir::MaterialGraphNodeKind::Add;
+    added.inputs.push_back(input("a", mixed.id));
+    added.inputs.push_back(input("b", offset.id));
+
+    ure::scene_ir::MaterialGraphNode bsdf;
+    bsdf.id = 7;
+    bsdf.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLambert;
+    bsdf.inputs.push_back(input("roughness", added.id));
+
+    ure::scene_ir::MaterialGraphNode output;
+    output.id = 8;
+    output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    output.inputs.push_back(input("surface", bsdf.id));
+
+    material->graph->nodes = {low, high, factor, mixed, offset, added, bsdf, output};
+    material->graph->output_node_id = output.id;
+
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    auto compiled = ure::GpuSceneCompiler::compile(scene_with_material(material), config);
+
+    CHECK(compiled.materials.size() == 1);
+    CHECK_FLOAT_EQ(compiled.materials[0].header.roughness, 0.45f, 1e-6f);
+    return 0;
+}
+
+static int test_graph_builder_assigns_node_ids() {
+    ure::scene_ir::MaterialGraph graph;
+    ure::scene_ir::MaterialGraphNodeId a = add_constant_float(graph, 0.25f);
+    ure::scene_ir::MaterialGraphNodeId b = add_constant_float(graph, 0.75f);
+
+    ure::scene_ir::MaterialGraphNode add;
+    add.kind = ure::scene_ir::MaterialGraphNodeKind::Add;
+    add.inputs.push_back(ure::scene_ir::material_graph_input("a", a));
+    add.inputs.push_back(ure::scene_ir::material_graph_input("b", b));
+    ure::scene_ir::MaterialGraphNodeId c = graph.add_node(add);
+
+    CHECK(a == 1);
+    CHECK(b == 2);
+    CHECK(c == 3);
+    CHECK(graph.nodes.size() == 3);
+    CHECK(graph.nodes[2].inputs[0].output == "out");
+    bool rejected = false;
+    try {
+        graph.validate();
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
+static int test_graph_duplicate_node_ids_rejected() {
+    auto material = std::make_shared<ure::scene_ir::MaterialNode>();
+    material->graph = std::make_shared<ure::scene_ir::MaterialGraph>();
+
+    ure::scene_ir::MaterialGraphNode a;
+    a.id = 1;
+    a.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLambert;
+
+    ure::scene_ir::MaterialGraphNode b;
+    b.id = 1;
+    b.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    b.value = 0.5f;
+
+    ure::scene_ir::MaterialGraphNode output;
+    output.id = 2;
+    output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    output.inputs.push_back(input("surface", a.id));
+
+    material->graph->nodes = {a, b, output};
+    material->graph->output_node_id = output.id;
+
+    bool rejected = false;
+    try {
+        ure::RenderConfig config;
+        config.num_wavelengths = 8;
+        (void)ure::GpuSceneCompiler::compile(scene_with_material(material), config);
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
+static int test_graph_cycles_rejected() {
+    auto material = std::make_shared<ure::scene_ir::MaterialNode>();
+    material->graph = std::make_shared<ure::scene_ir::MaterialGraph>();
+
+    ure::scene_ir::MaterialGraphNode a;
+    a.id = 1;
+    a.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    a.value = 0.5f;
+    a.inputs.push_back(input("cycle", 2));
+
+    ure::scene_ir::MaterialGraphNode b;
+    b.id = 2;
+    b.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    b.value = 0.5f;
+    b.inputs.push_back(input("cycle", 1));
+
+    ure::scene_ir::MaterialGraphNode bsdf;
+    bsdf.id = 3;
+    bsdf.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLambert;
+    bsdf.inputs.push_back(input("roughness", a.id));
+
+    ure::scene_ir::MaterialGraphNode output;
+    output.id = 4;
+    output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    output.inputs.push_back(input("surface", bsdf.id));
+
+    material->graph->nodes = {a, b, bsdf, output};
+    material->graph->output_node_id = output.id;
+
+    bool rejected = false;
+    try {
+        ure::RenderConfig config;
+        config.num_wavelengths = 8;
+        (void)ure::GpuSceneCompiler::compile(scene_with_material(material), config);
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
+static int test_texture_add_and_mix_fail_loud() {
+    const std::string texture_path = "test_material_graph_texture_expr.bmp";
+    auto texture = write_texture_resource(texture_path);
+
+    auto make_material = [&](ure::scene_ir::MaterialGraphNodeKind op) {
+        auto material = std::make_shared<ure::scene_ir::MaterialNode>();
+        material->graph = std::make_shared<ure::scene_ir::MaterialGraph>();
+
+        ure::scene_ir::MaterialGraphNode tint;
+        tint.id = 1;
+        tint.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantColor;
+        tint.color = {0.1f, 0.2f, 0.3f};
+
+        ure::scene_ir::MaterialGraphNode tex;
+        tex.id = 2;
+        tex.kind = ure::scene_ir::MaterialGraphNodeKind::Texture2D;
+        tex.texture = texture;
+
+        ure::scene_ir::MaterialGraphNode factor;
+        factor.id = 3;
+        factor.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+        factor.value = 0.5f;
+
+        ure::scene_ir::MaterialGraphNode expr;
+        expr.id = 4;
+        expr.kind = op;
+        expr.inputs.push_back(input("a", tint.id));
+        expr.inputs.push_back(input("b", tex.id));
+        if (op == ure::scene_ir::MaterialGraphNodeKind::Mix) {
+            expr.inputs.push_back(input("factor", factor.id));
+        }
+
+        ure::scene_ir::MaterialGraphNode bsdf;
+        bsdf.id = 5;
+        bsdf.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLambert;
+        bsdf.inputs.push_back(input("base_color", expr.id));
+
+        ure::scene_ir::MaterialGraphNode output;
+        output.id = 6;
+        output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+        output.inputs.push_back(input("surface", bsdf.id));
+
+        material->graph->nodes = {tint, tex, factor, expr, bsdf, output};
+        material->graph->output_node_id = output.id;
+        return material;
+    };
+
+    bool add_rejected = false;
+    bool mix_rejected = false;
+    try {
+        ure::RenderConfig config;
+        config.num_wavelengths = 8;
+        (void)ure::GpuSceneCompiler::compile(scene_with_material(make_material(ure::scene_ir::MaterialGraphNodeKind::Add)), config);
+    } catch (const std::runtime_error&) {
+        add_rejected = true;
+    }
+    try {
+        ure::RenderConfig config;
+        config.num_wavelengths = 8;
+        (void)ure::GpuSceneCompiler::compile(scene_with_material(make_material(ure::scene_ir::MaterialGraphNodeKind::Mix)), config);
+    } catch (const std::runtime_error&) {
+        mix_rejected = true;
+    }
+    std::remove(texture_path.c_str());
+    CHECK(add_rejected);
+    CHECK(mix_rejected);
+    return 0;
+}
+
 int main() {
     fprintf(stderr, "[Material Graph Test]\n");
 
@@ -327,6 +559,11 @@ int main() {
     failed += run("test_graph_overrides_scene_ir_texture_fields", test_graph_overrides_scene_ir_texture_fields);
     failed += run("test_graph_texture2d_compiles_to_texture_slot", test_graph_texture2d_compiles_to_texture_slot);
     failed += run("test_graph_roughness_texture_compiles_to_texture_slot", test_graph_roughness_texture_compiles_to_texture_slot);
+    failed += run("test_graph_add_and_mix_constants_compile", test_graph_add_and_mix_constants_compile);
+    failed += run("test_graph_builder_assigns_node_ids", test_graph_builder_assigns_node_ids);
+    failed += run("test_graph_duplicate_node_ids_rejected", test_graph_duplicate_node_ids_rejected);
+    failed += run("test_graph_cycles_rejected", test_graph_cycles_rejected);
+    failed += run("test_texture_add_and_mix_fail_loud", test_texture_add_and_mix_fail_loud);
 
     fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

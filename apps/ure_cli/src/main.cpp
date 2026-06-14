@@ -11,7 +11,7 @@
 #include <ure/image_saver.hpp>
 #include <ure/log.hpp>
 #include <ure/render.hpp>
-#include <ure/scene_parser.hpp>
+#include <ure/scene_frontend.hpp>
 
 #ifdef USE_CUDA
 #include <cuda_runtime.h>
@@ -110,7 +110,7 @@ int cmd_render(const ure::config::CliResult& cli) {
 
     ure::scene_ir::SceneIR scene_ir;
     try {
-        scene_ir = ure::SceneParser::parse_file_to_ir(app_config.scene_path);
+        scene_ir = ure::SceneFrontend::parse_file_to_ir(app_config.scene_path);
     } catch (const std::exception& e) {
         std::cerr << "Error parsing scene: " << e.what() << "\n";
         return 1;
@@ -165,7 +165,7 @@ int cmd_info(const std::string& scene_path) {
         return 1;
     }
     try {
-        const auto ir = ure::SceneParser::parse_file_to_ir(scene_path);
+        const auto ir = ure::SceneFrontend::parse_file_to_ir(scene_path);
         std::cout << "Scene: " << scene_path << "\n";
         std::cout << "  Meshes:     " << ir.meshes.size() << "\n";
         std::cout << "  Materials:  " << ir.materials.size() << "\n";
@@ -213,7 +213,7 @@ int cmd_validate(const std::string& scene_path) {
         return 1;
     }
     try {
-        const auto ir = ure::SceneParser::parse_file_to_ir(scene_path);
+        const auto ir = ure::SceneFrontend::parse_file_to_ir(scene_path);
         std::cout << "Valid: " << scene_path << "\n";
         std::cout << "  " << ir.meshes.size() << " meshes, "
                   << ir.materials.size() << " materials, "
