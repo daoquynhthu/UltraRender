@@ -37,7 +37,6 @@ public:
     RenderSession(const RenderSession&) = delete;
     RenderSession& operator=(const RenderSession&) = delete;
 
-    void load_scene(const Scene& scene);
     void load_scene(const scene_ir::SceneIR& scene_ir);
     void mutate_scene(const SceneDiff& diff);
     void start_render(bool progressive = true);
@@ -65,9 +64,7 @@ private:
     bool apply_topology_mutations(const SceneDiff& diff);
     void reload_current_scene();
     void apply_instance_transform_mutations(const std::vector<InstanceTransformMutation>& mutations, bool upload);
-    bool apply_material_mutations(const std::vector<SceneIrMaterialMutation>& scene_ir_mutations,
-                                  const std::vector<LegacyMaterialMutation>& legacy_mutations,
-                                  bool upload);
+    bool apply_material_mutations(const std::vector<SceneIrMaterialMutation>& scene_ir_mutations, bool upload);
 
     std::unique_ptr<IRenderEngine> engine_;
     RenderConfig config_;
@@ -76,7 +73,6 @@ private:
     bool progressive_ = true;
     bool worker_stop_requested_ = false;
     std::exception_ptr worker_exception_;
-    std::optional<Scene> current_scene_;
     std::optional<scene_ir::SceneIR> current_scene_ir_;
     mutable std::mutex mutex_;
     std::thread worker_;

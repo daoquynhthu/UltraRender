@@ -211,46 +211,16 @@ static void compute_aabb(const std::vector<float>& vertices, GpuVec3& min_pt, Gp
     max_pt = max_pt + GpuVec3(padding, padding, padding);
 }
 
-static bool is_legacy_rgb_slot_spectrum(const GpuSpectrum& spectrum, int num_channels) {
-    for (int c = 0; c < num_channels; ++c) {
-        if (spectrum.wavelengths[c] > 0.0f) {
-            return false;
-        }
-    }
-    if (num_channels <= 3) {
-        return false;
-    }
-    float avg = (spectrum.values[0] + spectrum.values[1] + spectrum.values[2]) / 3.0f;
-    for (int c = 3; c < num_channels; ++c) {
-        if (fabsf(spectrum.values[c] - avg) > 1e-6f) {
-            return false;
-        }
-    }
-    return true;
-}
-
 static void build_material_soa(std::vector<float>& host_soa,
                                const GpuMaterialData* data,
                                int count,
                                int num_channels,
-                               GpuSpectrum GpuMaterialData::* field,
-                               bool emission_field) {
+                               GpuSpectrum GpuMaterialData::* field) {
     host_soa.assign(static_cast<size_t>(count) * static_cast<size_t>(num_channels), 0.0f);
     for (int i = 0; i < count; ++i) {
         const GpuSpectrum& spectrum = data[i].*field;
-        if (is_legacy_rgb_slot_spectrum(spectrum, num_channels)) {
-            GpuVec3 rgb(spectrum.values[0], spectrum.values[1], spectrum.values[2]);
-            for (int c = 0; c < num_channels; ++c) {
-                float lambda = kSpectralLambdaMin + (float(c) + 0.5f) *
-                    ((kSpectralLambdaMax - kSpectralLambdaMin) / float(num_channels));
-                host_soa[static_cast<size_t>(i) * num_channels + c] = emission_field
-                    ? rgb_to_spectrum_value(rgb, lambda)
-                    : rgb_coeff_to_spectrum_value(rgb, lambda);
-            }
-        } else {
-            for (int c = 0; c < num_channels; ++c) {
-                host_soa[static_cast<size_t>(i) * num_channels + c] = spectrum.values[c];
-            }
+        for (int c = 0; c < num_channels; ++c) {
+            host_soa[static_cast<size_t>(i) * num_channels + c] = spectrum.values[c];
         }
     }
 }
@@ -258,12 +228,11 @@ static void build_material_soa(std::vector<float>& host_soa,
 static void upload_material_soa(float* d_ptr,
                                 const GpuMaterialData* data,
                                 int count,
-                                int num_channels,
-                                int first_material_index,
-                                GpuSpectrum GpuMaterialData::* field,
-                                bool emission_field) {
+                               int num_channels,
+                               int first_material_index,
+                               GpuSpectrum GpuMaterialData::* field) {
     std::vector<float> host_soa;
-    build_material_soa(host_soa, data, count, num_channels, field, emission_field);
+    build_material_soa(host_soa, data, count, num_channels, field);
     for (int i = 0; i < count; ++i) {
         float* dst = d_ptr + static_cast<size_t>(first_material_index + i) * static_cast<size_t>(num_channels);
         const float* src = host_soa.data() + static_cast<size_t>(i) * static_cast<size_t>(num_channels);
@@ -368,19 +337,19 @@ GpuContext* init_gpu_renderer(int width, int height,
     alloc_soa(ctx->d_mat_emission, ctx->pointers_to_free);
     ctx->num_spectral_channels = num_channels;
 
-    auto upload_soa = [&](float* d_ptr, const GpuMaterialData* data, GpuSpectrum GpuMaterialData::* field, bool emission_field) {
+    auto upload_soa = [&](float* d_ptr, const GpuMaterialData* data, GpuSpectrum GpuMaterialData::* field) {
         std::vector<float> host_soa;
-        build_material_soa(host_soa, data, mat_count, num_channels, field, emission_field);
+        build_material_soa(host_soa, data, mat_count, num_channels, field);
         cudaMemcpy(d_ptr, host_soa.data(), mat_count * num_channels * sizeof(float), cudaMemcpyHostToDevice);
     };
     if (mat_count > 0 && num_channels > 0) {
         auto data = host_materials.data();
-        upload_soa(ctx->d_mat_albedo, data, &GpuMaterialData::albedo, false);
-        upload_soa(ctx->d_mat_metal_eta, data, &GpuMaterialData::metal_eta, false);
-        upload_soa(ctx->d_mat_extinction, data, &GpuMaterialData::extinction, false);
-        upload_soa(ctx->d_mat_medium_scattering, data, &GpuMaterialData::medium_scattering, false);
-        upload_soa(ctx->d_mat_medium_absorption, data, &GpuMaterialData::medium_absorption, false);
-        upload_soa(ctx->d_mat_emission, data, &GpuMaterialData::emission, true);
+        upload_soa(ctx->d_mat_albedo, data, &GpuMaterialData::albedo);
+        upload_soa(ctx->d_mat_metal_eta, data, &GpuMaterialData::metal_eta);
+        upload_soa(ctx->d_mat_extinction, data, &GpuMaterialData::extinction);
+        upload_soa(ctx->d_mat_medium_scattering, data, &GpuMaterialData::medium_scattering);
+        upload_soa(ctx->d_mat_medium_absorption, data, &GpuMaterialData::medium_absorption);
+        upload_soa(ctx->d_mat_emission, data, &GpuMaterialData::emission);
     }
 
     std::vector<GpuSphere> host_spheres = spheres;
@@ -913,12 +882,12 @@ void update_materials_gpu(GpuContext* ctx,
                              cudaMemcpyHostToDevice));
 
     int num_channels = ctx->num_spectral_channels;
-    upload_material_soa(ctx->d_mat_albedo, materials, count, num_channels, first_material_index, &GpuMaterialData::albedo, false);
-    upload_material_soa(ctx->d_mat_metal_eta, materials, count, num_channels, first_material_index, &GpuMaterialData::metal_eta, false);
-    upload_material_soa(ctx->d_mat_extinction, materials, count, num_channels, first_material_index, &GpuMaterialData::extinction, false);
-    upload_material_soa(ctx->d_mat_medium_scattering, materials, count, num_channels, first_material_index, &GpuMaterialData::medium_scattering, false);
-    upload_material_soa(ctx->d_mat_medium_absorption, materials, count, num_channels, first_material_index, &GpuMaterialData::medium_absorption, false);
-    upload_material_soa(ctx->d_mat_emission, materials, count, num_channels, first_material_index, &GpuMaterialData::emission, true);
+    upload_material_soa(ctx->d_mat_albedo, materials, count, num_channels, first_material_index, &GpuMaterialData::albedo);
+    upload_material_soa(ctx->d_mat_metal_eta, materials, count, num_channels, first_material_index, &GpuMaterialData::metal_eta);
+    upload_material_soa(ctx->d_mat_extinction, materials, count, num_channels, first_material_index, &GpuMaterialData::extinction);
+    upload_material_soa(ctx->d_mat_medium_scattering, materials, count, num_channels, first_material_index, &GpuMaterialData::medium_scattering);
+    upload_material_soa(ctx->d_mat_medium_absorption, materials, count, num_channels, first_material_index, &GpuMaterialData::medium_absorption);
+    upload_material_soa(ctx->d_mat_emission, materials, count, num_channels, first_material_index, &GpuMaterialData::emission);
 }
 
 

@@ -113,6 +113,4 @@ struct SceneIR {
     std::shared_ptr<TextureResource> register_texture(const std::string& name, const std::shared_ptr<ImageResource>& image, int uv_set = 0);
 };
 
-Scene to_legacy_scene(const SceneIR& scene_ir);
-
 } // namespace ure::scene_ir

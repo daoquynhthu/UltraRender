@@ -1,7 +1,7 @@
 #pragma once
 
+#include "ure/render_config.hpp"
 #include "ure/ure_api.hpp"
-#include "ure/world_scene_builder.hpp"
 #include <memory>
 #include <vector>
 
@@ -31,28 +31,23 @@ class IRenderEngine {
 public:
     virtual ~IRenderEngine() = default;
 
-    // First-time scene load: uploads all static GPU data (meshes, materials, BVH, descs).
-    // Subsequent calls on the same engine act as a transform update only.
-    virtual void load_scene(const Scene& scene) = 0;
+    // First-time SceneIR load uploads all static GPU data. Subsequent calls on
+    // the same engine act as a transform update only.
     virtual void load_scene_ir(const scene_ir::SceneIR& scene_ir) = 0;
 
-    // Explicit first-time scene load (always does a full upload, never just transform update).
-    virtual void load_scene_once(const Scene& scene) = 0;
-
-    // Explicit full scene replacement. Use this for topology/resource changes;
-    // load_scene/load_scene_ir remain the transform-hot-update compatible entry points.
-    virtual void reload_scene(const Scene& scene) = 0;
+    // Explicit full SceneIR replacement. Use this for topology/resource changes;
+    // load_scene_ir remains the transform-hot-update compatible entry point.
     virtual void reload_scene_ir(const scene_ir::SceneIR& scene_ir) = 0;
 
     // Hot-update instance transforms without reloading the entire scene.
-    // Must be called after load_scene_once() or load_scene().
+    // Must be called after load_scene_ir().
     virtual void update_transforms(const gpu::GpuInstanceTransform* transforms, int count) = 0;
 
     // Hot-update the scene-owned material segment without reallocating geometry.
     // The engine owns default/internal material offsets; callers pass only scene materials.
     virtual void update_materials(const gpu::GpuMaterialData* materials, int count) = 0;
 
-    // Legacy blocking render, implemented using render_pass loop
+    // Blocking render, implemented using render_pass loop.
     virtual void render(const RenderSettings& settings) = 0;
 
     // Render one pass (or a batch of samples) and accumulate to the frame buffer.
@@ -83,14 +78,6 @@ public:
     // Backward compatibility alias
     const std::vector<float>& get_frame_buffer() const { return get_framebuffer(); }
 
-    // ── World-based convenience wrappers ────────────────────────────
-
-    // Load a World as the runtime data bus (converts to Scene internally).
-    // Call once at startup, then use update_world_transforms() each frame.
-    void load_world(const World& world);
-
-    // Hot-update transforms from World component pools.
-    void update_world_transforms(const World& world);
 };
 
 // Factory

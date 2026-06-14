@@ -1,11 +1,6 @@
 #include "ure/scene_ir.hpp"
-#include "ure/scene_ir_compiler.hpp"
 
 namespace ure::scene_ir {
-
-Scene to_legacy_scene(const SceneIR& scene_ir) {
-    return SceneIrCompiler::compile_legacy(scene_ir);
-}
 
 std::shared_ptr<MaterialNode> SceneIR::find_material(const std::string& name) const {
     for (const auto& material : materials) {

@@ -11,13 +11,11 @@ add_library(ure_core STATIC
     src/gpu_scene_loader.cpp
     src/gpu_engine_impl.cpp
     src/gpu_scene_compiler.cpp
-    src/scene_ir_compiler.cpp
     src/distributed_contract.cpp
     src/distributed_file_io.cpp
     src/session.cpp
     src/bvh_builder.cpp
     src/bvh_accelerator.cpp
-    src/world_scene_builder.cpp
     src/render_api.cpp
 )
 

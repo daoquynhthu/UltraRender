@@ -1,15 +1,10 @@
 #include "ure/scene_io.hpp"
-#include "ure/scene_parser.hpp"
 #include "ure/gltf_scene_frontend.hpp"
 #include "ure/image_loader.hpp"
 #include "ure/image_saver.hpp"
 #include "ure/spd_loader.hpp"
 
 namespace ure::scene_io {
-
-Scene load_scene(const std::string& path) {
-    return SceneParser::parse_file(path);
-}
 
 scene_ir::SceneIR load_gltf(const std::string& path) {
     return GltfSceneFrontend::parse_file_to_ir(path);
@@ -23,10 +18,6 @@ bool save_bmp(const std::string& path,
               const std::vector<core::Vec3f>& pixels,
               int width, int height) {
     return io::ImageSaver::save_bmp(path, width, height, pixels);
-}
-
-std::vector<float> load_spd(const std::string& path) {
-    return load_spd(path, RenderConfig{}.num_wavelengths);
 }
 
 std::vector<float> load_spd(const std::string& path, int num_wavelengths) {

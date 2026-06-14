@@ -31,7 +31,6 @@ struct CompiledGpuScene {
 
 class GpuSceneCompiler {
 public:
-    static CompiledGpuScene compile_legacy(const Scene& scene);
     static CompiledGpuScene compile(const scene_ir::SceneIR& scene_ir);
     static CompiledGpuScene compile(const scene_ir::SceneIR& scene_ir, const RenderConfig& config);
 

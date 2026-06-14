@@ -57,13 +57,6 @@ void ure_engine_destroy(ure_engine_t* engine);
 /* Load scene from file (auto-detect format). Returns 0 on success. */
 int ure_engine_load_scene_file(ure_engine_t* engine, const char* path);
 
-/* Load scene with explicit resolution. Returns 0 on success. */
-int ure_engine_load_scene(ure_engine_t* engine,
-                          int width, int height,
-                          const float* camera_pos,    /* [3] */
-                          const float* camera_look,   /* [3] */
-                          float fov);
-
 /* ── Rendering ─────────────────────────────────────────────────── */
 
 /* Run one render pass (one sample per pixel). Returns current SPP. */

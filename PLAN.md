@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-13 (Phase M started: material graph IR and restricted compiler boundary)
+最后更新: 2026-06-14 (Phase M SceneIR-only cleanup and glTF visual gate)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -44,7 +44,7 @@ GPU (tracing / shading):
     begin_read (acquire) → upload transforms → render_pass → resolve
 ```
 
-这是**窄 XPU** — 只有 instance transform 走动态管线。其他场景数据（mesh、material、sphere、light_index、texture、BVH）在 `load_scene_once()` 时一次性上传，此后只读。
+这是**窄 XPU** — 只有 instance transform 走动态管线。其他场景数据（mesh、material、sphere、light_index、texture、BVH）在 `load_scene_ir()` 首次加载时一次性上传，此后只读。
 
 ### 核心模式：SPSC RingBuffer
 
@@ -451,15 +451,12 @@ set_target_properties(ure_core PROPERTIES CUDA_ARCHITECTURES "all-major")
 ```cmake
 add_library(ure_sceneio STATIC
     src/gltf_scene_frontend.cpp
-    src/scene_ir_frontend.cpp
     src/scene_frontend.cpp
     src/scene_parser.cpp
-    src/procedural.cpp
     src/image_loader.cpp
     src/image_saver.cpp
     src/scene/scene_ir.cpp
     src/scene/scene.cpp
-    src/scene/scene_factory.cpp
     src/scene/camera.cpp
     src/scene/mesh.cpp
     src/scene/sphere.cpp
@@ -483,7 +480,7 @@ target_link_libraries(ure_cli PRIVATE ure_core ure_sceneio ure_config)
 
 ### Step F.4 — 旧 CMakeLists.txt 退役
 
-在顶层新增 `option(UR_USE_OLD_BUILD "Use legacy build" OFF)`，旧 CMakeLists.txt 内容只在 `UR_USE_OLD_BUILD=ON` 时编译。最终删除。
+旧 CMake 构建块已删除；当前仅保留模块化 CMake。
 
 ### Step F.5 — 验证
 
@@ -523,7 +520,7 @@ struct GpuInstanceTransform { GpuMat4 transform, inverse_transform; GpuVec3 min_
 void update_instance_transforms(GpuContext* ctx, const GpuInstanceTransform* transforms, int count); // 单次 cudaMemcpyAsync
 ```
 
-`IRenderEngine::load_scene()` 首帧全量初始化，后续每帧仅调用 `update_instance_transforms()` + `reset_accumulation()`。
+`IRenderEngine::load_scene_ir()` 首帧全量初始化，后续每帧仅调用 `update_instance_transforms()` + `reset_accumulation()`。
 
 ### P.3 — Transform Ring Buffer（双/三缓冲，3 帧滞后）
 
@@ -545,9 +542,9 @@ void update_instance_transforms(GpuContext* ctx, const GpuInstanceTransform* tra
 
 为每个库提供稳定公共头文件（向后兼容）：
 
-- `ure_core/include/ure/render.hpp`: `create_gpu_renderer()`, `load_scene_once()`, `update_transforms()`, `render_pass()`, `get_framebuffer()`
+- `ure_core/include/ure/render.hpp`: `create_gpu_renderer()`, `load_scene_ir()`, `update_transforms()`, `render_pass()`, `get_framebuffer()`
 - `ure_physics/include/ure/physics.hpp`: `create_world()`, `step(dt)`, `get_transform_snapshot()`, `ray_cast()`
-- `ure_sceneio/include/ure/scene_io.hpp`: `load_scene()`, `load_image()`, `load_spd()`
+- `ure_sceneio/include/ure/scene_io.hpp`: `load_image()`, `load_spd(path, N)`, `load_spd(path, RenderConfig)`
 - `ure_config/include/ure/config.hpp`: `load_config()`, `parse_cli()`, `make_render_config()`
 
 可选：提供 `ure_c_api.h` 的 C 接口以支持 Python/C#/Unity 绑定。
@@ -661,9 +658,9 @@ struct TransformRingBuffer {
 
 ### Step J.5 — Transform 管线集成
 
-- `engine->load_scene()` 首次调用：上传所有静态 GPU 数据（meshes, materials, descs, BVH）
+- `engine->load_scene_ir()` 首次调用：上传所有静态 GPU 数据（meshes, materials, descs, BVH）
 - 每帧物理循环: `update_instance_transforms(ctx, ring_buffer.cpu_transforms[ring_buffer.read_frame], count)`
-- 消除 `load_scene()` 全量重建
+- 消除 SceneIR transform-only 更新中的全量重建
 
 ### Step J.6 — 验证
 
@@ -720,7 +717,7 @@ struct TransformRingBuffer {
 
 ### Step G.5 — Fallback
 
-非 glTF 文件 → legacy 解析器 + deprecation warning。
+非 glTF/GLB 文件 → fail-loud。旧文本场景格式已在 Phase M cutoff 中删除，不再作为 fallback 或兼容路径维护。
 
 ---
 
@@ -781,7 +778,7 @@ std::vector<float> resample_uniform(const SPDData& spd, int n,
 }
 ```
 
-`scene_io.hpp` 提供 `load_spd(path, int num_wavelengths)` 和 `load_spd(path, RenderConfig)`，调用内部 `load_spd_file` + `resample_uniform(raw, num_wavelengths)`。无参 `load_spd(path)` 仅保留为默认 `RenderConfig{}` 的 legacy convenience，不作为 Phase E 主路径。
+`scene_io.hpp` 提供 `load_spd(path, int num_wavelengths)` 和 `load_spd(path, RenderConfig)`，调用内部 `load_spd_file` + `resample_uniform(raw, num_wavelengths)`。无参 `load_spd(path)` 已删除，调用方必须显式给出 runtime-N。
 
 格式：每行 `波长 值`（空格/Tab分隔，`#` 开头注释行跳过，空行跳过）。
 
@@ -975,7 +972,7 @@ void upload_scene() {
 | 批次 | 文件 | 旧模式 | 新模式 | 约改数 |
 |------|------|--------|--------|:------:|
 | a | `spd_loader.cpp`, `image_loader.cpp` | `std::cerr << "[H] WARNING:"` | `UR_LOG_WARN(SceneIO, ...)` | 3 |
-| b | `scene_ir_frontend.cpp`, `gltf_scene_frontend.cpp` | `std::cerr << "[SceneParser] Error/Warning"` | `UR_LOG_ERROR/WARN(SceneIO, ...)` | 9 |
+| b | `gltf_scene_frontend.cpp` | `std::cerr << "[SceneParser] Error/Warning"` | `UR_LOG_ERROR/WARN(SceneIO, ...)` | 9 |
 | c | `gpu_engine_impl.cpp` | `std::cerr/cout` | `UR_LOG_ERROR/INFO(Core, ...)` | 4 |
 | d | `path_tracer_kernel.cu`（主机端 25 处） | `std::cout/cerr` + 手动 chrono | `UR_LOG_*(GPU, ...)` + `UR_SCOPE_TIMER` | 25 |
 | e | `gpu_driver.cu`, `gpu_hardware.cu` | `printf/cout` | `UR_LOG_*(GPU, ...)` | 10 |
@@ -1313,7 +1310,7 @@ void merge_partial_framebuffer(DistributedFrameBuffer& accum, const DistributedF
 
 **目标**: 物理精确的色散和偏振光谱化。
 
-2026-06-11 并行物理审查结论：当前代码中存在系统性光学估计器风险，E.5 不允许以 packet 内平均/hero-channel 近似作为最终完成标准。已经修复可局部证明的偏置项：SceneIR RGB fallback 和 legacy `GpuMaterialData` upload 不再把 RGB triple 当作 spectral slots；metal scatter attenuation 使用 per-channel conductor Fresnel；light-list 遍历全部 runtime-N emission 通道；volume no-scatter 权重使用 proposal `exp(-sigma_t_avg * t_hit)`。E.5 架构已明确采用 **hybrid packet + spectral lane split**：非方向相关事件保持 packet；色散 dielectric/临界角/TIR 等波长决定方向的 delta 事件拆成 per-channel lanes，并可确定性 split reflection/transmission；Stokes 改为 channel-major SoA。
+2026-06-11 并行物理审查结论：当前代码中存在系统性光学估计器风险，E.5 不允许以 packet 内平均/hero-channel 近似作为最终完成标准。已经修复可局部证明的偏置项：SceneIR RGB fallback 和旧 `GpuMaterialData` RGB upload 均不再把 RGB triple 当作 spectral slots；metal scatter attenuation 使用 per-channel conductor Fresnel；light-list 遍历全部 runtime-N emission 通道；volume no-scatter 权重使用 proposal `exp(-sigma_t_avg * t_hit)`。E.5 架构已明确采用 **hybrid packet + spectral lane split**：非方向相关事件保持 packet；色散 dielectric/临界角/TIR 等波长决定方向的 delta 事件拆成 per-channel lanes，并可确定性 split reflection/transmission；Stokes 改为 channel-major SoA。
 
 2026-06-12 物理公式并行审查补充：确认 3 个 P0、6 个 P1/P2 风险。已立即处理 P0-1/P0-2/P0-3、P1 film-substrate TIR phase、transparent shadow 出射 TIR、VNDF metal continuation weight、lane-mode volume proposal 与 P2-RR：raygen wavelength 从 bin 内 jitter 改为 bin center，和 host 侧 material/medium/texture SoA 的采样语义一致；n/k metal scatter 不再把 baseColor 乘入 Fresnel continuation，和 `eval_bsdf()` 的 conductor 语义对齐；thin-film dielectric boundary evaluator 返回 complex `r_s/r_p/t_s/t_p`、power `R/T` 和 transmission phase，scatter/lane split/shadow 全部消费同一 result；film-substrate TIR 使用 complex Fresnel amplitude 保留相位；transparent shadow 在直线近似下维护同一 dielectric 的 enter/exit 状态，出射临界角会 TIR 阻断；metal VNDF continuation 改为 `F * G1(L)`，即 `eval_bsdf * cos / pdf` 的闭式结果；lane-mode volume free-flight/no-scatter proposal 使用 active channel `sigma_t`，packet mode 继续使用平均 proposal；Russian roulette survival 改为非负 spectral max proxy，不再使用 `spectrum_to_xyz -> xyz_to_rgb -> max RGB`。后续追加审查又发现 5 个 blocker，并已收束：dielectric radiance transport scale 改为 `(eta_i / eta_t)^2`、Stokes convention 固定为 `Q = I_s - I_p`、ShadowQueue direct-light lane estimator 携带 wavelength pdf、thin-film metal scatter/eval_bsdf 共用 reflectance helper、lane-mode metal polarization 使用 active channel eta/k。仍保留为明确后续边界的是：transparent shadow 嵌套 medium stack/折射方向、specular manifold/refractive shadow path、更完整 white-furnace/MIS 场景验证、rough dielectric microfacet BTDF 替代当前 normal jitter 近似。
 
@@ -1344,7 +1341,7 @@ void merge_partial_framebuffer(DistributedFrameBuffer& accum, const DistributedF
 | C2 Optical material semantics closure | material 的 measured n/k、dielectric eta、thin-film、baseColor/F0 fallback 语义收敛为单一规则；有 n/k 时 albedo 不再二次染色，无 n/k 时 fallback 明确 | ✅ `ConductorMaterialSemantics` 统一 BSDF/scatter/Stokes 判定；measured conductor 由 nonzero k 启用，eta 可来自 spectral eta 或 material fallback，k=0 时使用 albedo/F0 fallback；GPU + compiler tests 覆盖 |
 | C3 Transport / reciprocity / white furnace closure | dielectric/conductor/thin-film 的 power、radiance transport、importance transport 不再混用；surface/slab 的 reciprocity 和 furnace 行为有测试证据 | ✅ boundary furnace `R+T=1` 覆盖 bare dielectric、dielectric thin-film、TIR 与 reverse interface；slab reciprocity 覆盖两次真实 `scatter()` 后 eta scale 相消；无 dielectric transmission clamp；radiance scale 方向锁定为 air→glass attenuation、glass→air inverse；`gpu_test_polarization` 126/0，构建日志 warning/error scan 为空 |
 | C4 Spectral sampling / MIS / photometry closure | `wavelength_pdf` 成为 resolve/RR/MIS 的显式输入；D65 SPD、equal-energy E、narrowband RR 都有门禁；packet/lane contribution 的 PDF 语义闭合 | ✅ `sampled_spectrum_to_xyz()` 明确 lane estimator 为 `value * bin_width / wavelength_pdf`；ShadowQueue carries spectral mode / active channel / wavelength pdf；deterministic split lane 预乘 pdf，与 packet quadrature 等价；GPU tests 覆盖 D65 SPD -> sRGB white、equal-energy E、narrowband RR、sampled/packet PDF 等价和 lane pdf carrier；`gpu_test_spectral` 569/0、`gpu_test_spectral_soa` 633/0、`gpu_test_render` 281/0 |
-| C5 Transitional API removal / static audit closure | Phase E 过渡桥接不再遮蔽架构目标：固定 4 通道路径、`.values.x/y/z/w`、scalar Stokes device 依赖、过时 helper/API 全部审计 | ✅ code search 对 `kNumWavelengths`、`.values.x/y/z/w`、`.wavelengths.x/y/z/w`、`.to_rgb()`、`from_rgb(`、`spd_from_rgb(`、旧 thin-film helper 和 dielectric clamp 全部清零；CPU `SampledSpectrum::from_rgb/to_rgb` 已删除，legacy scene factory 改用显式 `rgb_to_approximate_spd()`；`test_asset_pipeline` 48/0、`test_gltf_frontend` 185/0、`gpu_test_spectral` 569/0 |
+| C5 Transitional API removal / static audit closure | Phase E 过渡桥接不再遮蔽架构目标：固定 4 通道路径、`.values.x/y/z/w`、scalar Stokes device 依赖、过时 helper/API 全部审计 | ✅ code search 对 `kNumWavelengths`、`.values.x/y/z/w`、`.wavelengths.x/y/z/w`、`.to_rgb()`、`from_rgb(`、`spd_from_rgb(`、旧 thin-film helper 和 dielectric clamp 全部清零；CPU `SampledSpectrum::from_rgb/to_rgb` 已删除；旧 scene factory 已在 Phase M 删除；`test_asset_pipeline` 48/0、`test_gltf_frontend` 185/0、`gpu_test_spectral` 569/0 |
 | C6 Final E.5 audit and documentation closure | E.5 状态从“进行中”改为“完成”；所有新增风险、技术债、后续 Phase 边界写入 PLAN 和 Phase E 文档 | ✅ Release build、17/17 CTest、warning/error scan、`git diff --check`、E.5 搜索门禁全绿；已进入提交边界 |
 
 测试节奏：每个 closure step 内只跑针对性 build/test 和必要的 warning filter；每个 closure step 结束必须跑该 step 的 targeted GPU/host tests。只有 C6 才跑完整 Release + CTest + 全量搜索门禁。
@@ -1393,8 +1390,8 @@ void merge_partial_framebuffer(DistributedFrameBuffer& accum, const DistributedF
 - Phase E.3 显式光谱纹理当前通过 `GpuTexture::data` 手写双线性采样实现，而不是 layered texture object；这是正确性优先的 N-channel carrier，后续可作为性能优化替换为分层 CUDA texture。
 - Phase E.4 发现并修复配置链断点：`RenderEngineFactory::create_gpu_renderer()` 过去无法接收 `RenderConfig`，CLI `cfg.spectral.bands` 不会进入 renderer。已新增 config 重载并在 CLI 中传递 `spectral.bands` / queue capacity / max depth。后续配置审计应继续检查 `scene_ir.width/height` 与 CLI override 的合流点。
 - Phase E.5 并行审查确认的数学债已在 C1-C6 和后续 blocker pass 内收束：packet 色散不再由 hero wavelength 单独决定整包方向，dispersive/thin-film dielectric 首段会 deterministic split；旧 dielectric transmission clamp 已删除，radiance transport 方向锁定为 `(eta_i / eta_t)^2`，importance 为其逆，air→glass 衰减、glass→air 放大，slab 往返相消；Stokes convention 固定为 `Q = I_s - I_p`；conductor/thin-film reflection 与 thin-film transmission Mueller 已从 boundary complex amplitude 派生，packet metal/dielectric 输出 Stokes 已按 channel 写回且 packet sampling 输入使用 channel-average Stokes；lane contribution 和 ShadowQueue direct lighting 已使用 explicit wavelength PDF estimator。specular manifold NEE、rough dielectric microfacet BTDF、RGB/photometry fallback 精度和 volume spectral proposal 方差仍是明确后续边界，不再作为 E.5 完成阻塞。
-- 2026-06-13 物理第一性审查重新打开 4 个 correctness blocker 与 2 个完整性边界：lane-mode dielectric 后续界面不能回落到 packet hero-channel；dielectric interface 不能被 baseColor/albedo 染色；rough metal 的 VNDF sampling/eval/pdf 必须同分布；sphere-light MIS reverse PDF 必须匹配实际 solid-angle sampling；rough dielectric 仍需 microfacet BSDF/BTDF；specular dielectric direct lighting 仍需 specular manifold / refractive shadow path。本批已修复 4 个 correctness blocker：lane active-channel、dielectric tint 语义、sphere-light MIS PDF、rough metal `alpha = roughness^2` + exact Smith GGX 一致性，并新增 targeted GPU regressions。rough dielectric path continuation 已从 normal jitter 替换为 GGX visible microfacet reflection/transmission；reflection/transmission lobe 已进入 `eval_bsdf()` / `pdf_bsdf()` / direct-light MIS，scatter 也返回非 delta PDF；rough thin-film/dispersive dielectric 已从 smooth specular lane split 中移出，进入同一 microfacet BSDF 路径，per-channel lobe 会按 wavelength 重新计算 dispersive IOR、thin-film boundary 和 transmission Jacobian；shade direct-light gate 已允许 rough dielectric BTDF 半球并按出射侧偏移 shadow origin；transmission continuation 已用 `eval_bsdf * abs(cos) / pdf_bsdf` 等式锁定同分布。完整 furnace/reference scenes 与 specular manifold 仍是下一批大范围物理设计入口。新增真实 CLI 视觉 smoke：`scenes/physics_optics_visual.scene` + `scripts/render_physics_optics_visual.ps1`，已暴露并修复 CLI 默认 spectral bands 超过 GPU cap 的错误；该 smoke 只覆盖可渲染性和初步观感，不替代物理 reference tests。
-- 2026-06-13 用户级可靠性收敛：Release 默认配置已实跑通过；runtime spectral channel contract 显式收紧为 `[8, 32]`，核心默认 N=8，CLI 默认 N=32，4 通道会在 CLI/compiler/GPU init 层拒绝；CLI 输出新增 Radiance HDR (`--format hdr` / `.hdr`)；SceneFrontend 只分派 `.gltf/.glb/.scene`，未知扩展不再 fallback 到 legacy parser，direct GltfSceneFrontend 也拒绝非 glTF 输入。
+- 2026-06-13 物理第一性审查重新打开 4 个 correctness blocker 与 2 个完整性边界：lane-mode dielectric 后续界面不能回落到 packet hero-channel；dielectric interface 不能被 baseColor/albedo 染色；rough metal 的 VNDF sampling/eval/pdf 必须同分布；sphere-light MIS reverse PDF 必须匹配实际 solid-angle sampling；rough dielectric 仍需 microfacet BSDF/BTDF；specular dielectric direct lighting 仍需 specular manifold / refractive shadow path。本批已修复 4 个 correctness blocker：lane active-channel、dielectric tint 语义、sphere-light MIS PDF、rough metal `alpha = roughness^2` + exact Smith GGX 一致性，并新增 targeted GPU regressions。rough dielectric path continuation 已从 normal jitter 替换为 GGX visible microfacet reflection/transmission；reflection/transmission lobe 已进入 `eval_bsdf()` / `pdf_bsdf()` / direct-light MIS，scatter 也返回非 delta PDF；rough thin-film/dispersive dielectric 已从 smooth specular lane split 中移出，进入同一 microfacet BSDF 路径，per-channel lobe 会按 wavelength 重新计算 dispersive IOR、thin-film boundary 和 transmission Jacobian；shade direct-light gate 已允许 rough dielectric BTDF 半球并按出射侧偏移 shadow origin；transmission continuation 已用 `eval_bsdf * abs(cos) / pdf_bsdf` 等式锁定同分布。完整 furnace/reference scenes 与 specular manifold 仍是下一批大范围物理设计入口。历史真实 CLI 视觉 smoke 已随旧文本场景 cutoff 删除；后续视觉 smoke 必须迁移到 glTF/GLB。
+- 2026-06-13 用户级可靠性收敛：Release 默认配置已实跑通过；runtime spectral channel contract 显式收紧为 `[8, 32]`，核心默认 N=8，CLI 默认 N=32，4 通道会在 CLI/compiler/GPU init 层拒绝；CLI 输出新增 Radiance HDR (`--format hdr` / `.hdr`)；SceneFrontend 只分派 `.gltf/.glb`，未知扩展均 fail-loud，direct GltfSceneFrontend 也拒绝非 glTF 输入。
 - Host interactive API 的自定义 `spheres/materials` 当前仍与默认材质表合并，外部传入 sphere 的 `material_index` 指向合并后索引而非传入 materials 的局部索引。新测试按当前语义覆盖 long-wavelength light-list；后续 API 清理应显式定义并测试 material index offset 规则。
 - Phase E.5.1 已将 `RayQueue` 从 scalar `StokesVector*` 迁移到 channel-major `stokes_i/q/u/v` SoA，并新增 `spectral_modes` / `active_channels` / `wavelength_pdfs`。packet scatter 的输入 Stokes 现在使用 channel-average，输出通过 `store_packet_scattered_stokes()` 按通道写回 metal/dielectric boundary Mueller；真正的 dispersive lane child ray 生成在 E.5.3。
 - Phase E.5.2 已新增 `path_tracer_boundary.cuh`，集中 dielectric/conductor/thin-film boundary 计算；`DielectricSurfaceBoundary` 统一裸 dielectric 与 dielectric thin-film 的复振幅、power R/T、eta Jacobian 和 radiance/importance transport scale，`scatter()`、spectral lane split 和 transparent shadow visibility 均消费同一 surface result。旧 `conductor_fresnel_reflectance()`、`get_dielectric_thin_film_reflectance()` 和 `get_thin_film_interference()` 已删除；`apply_mueller_reflection_conductor()` 和 dielectric thin-film reflection 现在直接从 boundary 复振幅派生 Mueller 项；metal thin-film scatter 现走 `eval_thin_film_conductor_boundary()`，albedo-F0 模式临时映射为等效 real eta，后续需以明确材质语义替代。
@@ -1408,7 +1405,7 @@ void merge_partial_framebuffer(DistributedFrameBuffer& accum, const DistributedF
 - Phase E.5 C2 已收束：conductor 材质语义由 `ConductorMaterialSemantics` 集中判定，`eval_bsdf()`、`scatter()` 和 packet Stokes 写回不再各自检查 `metal_eta/extinction`。规则固定为：`extinction/k` 非零表示 measured conductor；若 measured conductor 且 `metal_eta` 非零则使用 spectral eta，否则使用 material scalar `ior`；若 `k=0` 则使用 albedo/F0 fallback，`metal_eta` 不会意外启用 measured conductor。`test_conductor_material_semantics` 覆盖三种 device 判定，`test_metal_coefficients_compile_as_physical_carriers` 覆盖 compiler 物理系数 carrier 和 fallback metal 的 zero-k 语义。针对性门禁：`gpu_test_spectral_soa` 534/0，`test_gltf_frontend` 185/0，构建日志 warning/error scan 为空。
 - Phase E.5 C3 已收束：dielectric transport 现在以 boundary result 为唯一事实来源，power probability、radiance eta scale、importance eta scale 分离且互逆；surface furnace 测试要求 bare dielectric、oblique reverse interface、dielectric thin-film 和 TIR 的 unpolarized `R+T=1`，slab reciprocity 测试要求两次真实 `scatter()` 后 air→glass→air 的 eta scale 在 path weight 上相消。针对性门禁：`gpu_test_polarization` 126/0，构建日志 warning/error scan 为空。
 - Phase E.5 C4 已收束：wavelength PDF 不再只是队列字段；`sampled_spectrum_to_xyz()` 是 lane contribution 的唯一 sampled XYZ estimator，普通 packet 继续走 quadrature fallback；ShadowQueue direct light 也携带 spectral mode、active channel 和 wavelength pdf。packet→lane deterministic split 写出 `pdf=1/N` 并将 active lane throughput 预乘 pdf，sampled estimator 除以 pdf 后恢复每个 bin 的 quadrature contribution。针对性门禁：`gpu_test_spectral` 569/0、`gpu_test_spectral_soa` 633/0、`gpu_test_render` 281/0，全部构建日志 warning/error scan 为空。
-- Phase E.5 C5 已收束：代码级静态审计对 `kNumWavelengths`、`.values.x/y/z/w`、`.wavelengths.x/y/z/w`、`.to_rgb()`、`from_rgb(`、`spd_from_rgb(`、旧 thin-film helper 和 dielectric transmission clamp 均无命中。CPU `SampledSpectrum::from_rgb()` / `to_rgb()` 已删除；legacy scene factory 的 RGB 示例材质改名为显式 `rgb_to_approximate_spd()`，不再伪装为核心 roundtrip API。针对性门禁：`test_asset_pipeline` 48/0、`test_gltf_frontend` 185/0、`gpu_test_spectral` 569/0，构建日志 warning/error scan 为空。
+- Phase E.5 C5 已收束：代码级静态审计对 `kNumWavelengths`、`.values.x/y/z/w`、`.wavelengths.x/y/z/w`、`.to_rgb()`、`from_rgb(`、`spd_from_rgb(`、旧 thin-film helper 和 dielectric transmission clamp 均无命中。CPU `SampledSpectrum::from_rgb()` / `to_rgb()` 已删除；旧 scene factory 已在 Phase M 删除。针对性门禁：`test_asset_pipeline` 48/0、`test_gltf_frontend` 185/0、`gpu_test_spectral` 569/0，构建日志 warning/error scan 为空。
 
 ## 预估总工期
 
@@ -1433,7 +1430,7 @@ void merge_partial_framebuffer(DistributedFrameBuffer& accum, const DistributedF
 
 | 特性 | 设计中位置 | 冲突风险 |
 |------|-----------|---------|
-| N 通道光谱 (运行时指定) | RenderConfig.num_wavelengths → Phase E | ✅ SceneIR material RGB fallback 已在 compiler 按 runtime-N bin 重建；legacy `GpuMaterialData` RGB slot upload 会在 host 层重建；RGB/N-channel texture carrier 已接入，advanced texture semantics 属 post-E 资产/性能扩展 |
+| N 通道光谱 (运行时指定) | RenderConfig.num_wavelengths → Phase E | ✅ SceneIR material RGB fallback 已在 compiler 按 runtime-N bin 重建；`GpuMaterialData` upload 不再运行时重解释旧 RGB slots；RGB/N-channel texture carrier 已接入，advanced texture semantics 属 post-E 资产/性能扩展 |
 | CIE 解析函数 | CPU/GPU 均使用 CIE 1931 2-degree table 插值，GPU 端以 device constexpr table 避免 `std::array` 进入 device code | ✅ Phase E 已统一为官方表插值；equal-energy E 与 D65 SPD whitepoint gates 已通过 |
 | SoA 队列 | Phase A, ure_core 内部 | ✅ 已兼容 N 通道 |
 | Wavefront 渲染 | ure_core 核心算法 | 需批量修改 `.values.x/y/z/w` 为循环访问 |
@@ -1505,7 +1502,7 @@ UltraRender = 光谱渲染器 + 物理模拟 + 声学合成
 
 | 维度 | 当前 (Phase 0/F) | Phase E 完成后 | 远期目标 |
 |------|------------------|---------------|---------|
-| 场景描述 | legacy .scene | glTF 2.0 + URE 扩展 | USD + Hydra 委托 |
+| 场景描述 | glTF/GLB only | glTF 2.0 + URE 扩展 | USD + Hydra 委托 |
 | API 可集成性 | CLI only | C++ 公共 API | Python API + 脚本 |
 | 材质系统 | 硬编码 BSDF | glTF PBR + URE 光谱 | 节点图 (MaterialX/OSL) |
 | 交互性 | 离线帧 → BMP | 渐进式渲染 | 视口交互 + 热重载 |
@@ -1555,7 +1552,7 @@ public:
 | Step | 内容 | 文件 |
 |------|------|------|
 | S.1 | 定义 `RenderSession` 接口 + 实现 | ✅ `session.hpp`, `session.cpp`; 支持 create/load_scene/render_pass/start/pause/resume/cancel/reset/update_camera/progress/framebuffer；`test_session` 覆盖状态机 |
-| S.2 | 定义 `SceneDiff` 增量变更描述（增/删/改 entity，改 transform，改材质） | ✅ 当前 Session 边界已完成：`scene_diff.hpp` 建立高层 diff contract，支持 full SceneIR replacement、camera mutation、reset accumulation、instance transform mutation、SceneIR material-table mutation、legacy material-slot mutation、SceneIR instance add/remove、legacy entity add/remove、SceneIR sphere add/remove、legacy sphere add/remove；transform/material 参数 mutation 继续走 `IRenderEngine::update_transforms()` / `update_materials()` 热更新；拓扑 mutation 与 texture/resource material mutation 先更新 retained CPU Scene/SceneIR，再通过 `IRenderEngine::reload_scene()` / `reload_scene_ir()` 显式 full GPU reload，避免误用 transform-only path；legacy `Material::albedo_texture` 现在会编译为 `HostTexture` + material texture slot |
+| S.2 | 定义 `SceneDiff` 增量变更描述（增/删/改 entity，改 transform，改材质） | ✅ 当前 Session 边界已完成：`scene_diff.hpp` 建立高层 diff contract，支持 full SceneIR replacement、camera mutation、reset accumulation、instance transform mutation、SceneIR material-table mutation、SceneIR instance add/remove、SceneIR sphere add/remove；transform/material 参数 mutation 继续走 `IRenderEngine::update_transforms()` / `update_materials()` 热更新；拓扑 mutation 与 texture/resource material mutation 先更新 retained SceneIR，再通过 `IRenderEngine::reload_scene_ir()` 显式 full GPU reload，避免误用 transform-only path；Phase M 起旧 Scene mutation API 与底层 Scene bridge 已移除 |
 | S.3 | C API：`ure_session_create()`, `ure_session_render()`, `ure_session_get_frame()` 等 | ✅ `ure_session_t` handle、create/config/destroy、load_scene_file、start/render_pass/pause/resume/cancel/reset/progress/framebuffer 已接入 C ABI；`ure_set_min_log_level()` 暴露 runtime log gate；新增高层 mutation helper：camera、instance transform、material 参数、material texture；空指针/未加载场景/非法 texture 参数错误码路径由 `test_session` 覆盖 |
 | S.4 | Python binding：发布 `pyure` 包 | ✅ `pyure/` 通过 ctypes 直接绑定 C ABI 和 `pyure_native.dll`，不包装 CLI；提供 Session lifecycle、load_scene_file、start/render_pass/pause/resume/cancel/reset、progress、framebuffer_size、framebuffer/AOV copy、runtime log level，以及 `update_camera()` / `update_instance_transform()` / `update_material()` / `update_material_texture()` 高层 mutation helper；该路线保留稳定 ABI 边界，比 pybind11 直接暴露 C++ 对象更适合当前 Session API；`test_pyure_smoke` 覆盖 channel count、no-scene error、真实 8x8 scene background progressive render、pause/resume/cancel、framebuffer/AOV copy、camera/material/texture mutation 后 reset+继续渲染 |
 | S.5 | 渐进式渲染：`render_pass()` 循环 + 交互相机回调 | ✅ `RenderSession` 已支持后台 progressive worker：`start_render(true)` 启动 worker 连续 render_pass，pause/resume/cancel 控制状态并停止/恢复 SPP 增长；所有 engine 访问由 Session mutex 串行化，scene mutation/camera/framebuffer/AOV copy 会先停 worker 或在锁下执行；`start_render(false)` 保留同步单 pass 行为 |
@@ -1586,7 +1583,7 @@ session.get_framebuffer().save("final.exr")
 
 **核心原则**: Python API 不包装 CLI，而是直接链接 `ure_core`/`ure_sceneio` 的 C API。
 
-2026-06-13 S batch 进展：新增 `RenderSession` 作为 Phase S 的会话边界，生产路径通过 `RenderEngineFactory::create_gpu_renderer(config)` 创建，测试路径允许注入 `IRenderEngine`，因此 Session 状态机可在 host test 中验证而不启动 CUDA。新增 `SceneDiff` 高层 contract，当前支持 full SceneIR replacement、camera mutation、reset-only mutation、instance transform mutation、SceneIR material-table mutation、legacy material-slot mutation、SceneIR instance add/remove、legacy entity add/remove、SceneIR sphere add/remove 和 legacy sphere add/remove；Session 保留 CPU-side Scene/SceneIR state。Transform diff 使用源场景索引，验证目标必须是可渲染 mesh instance，然后调用 `GpuSceneCompiler::build_instance_transform()` 编译完整 transform/AABB buffer 并走 `IRenderEngine::update_transforms()`，没有把 `GpuInstanceTransform` 暴露到 public Session API。非 texture material diff 修改 CPU-side material state 后重新编译 scene-owned material append table，并通过 `IRenderEngine::update_materials()` / `update_materials_gpu()` 更新 GPU material header 与 6 组 SoA 光谱数组。Topology diff 和 texture/resource material diff 不伪装成 hot-update：新增 `IRenderEngine::reload_scene()` / `reload_scene_ir()`，变更先更新 retained CPU scene，再显式 full GPU reload；`replace_scene()` 也强制 full reload，避免旧 `load_scene_ir()` initialized 分支只更新 transform 的错误语义。Legacy `Material::albedo_texture` 已补齐编译器路径，会生成 `HostTexture` 并写入 material texture slot；SceneIR texture rebinding 复用已有 image/texture resource cache。Session progressive scheduler 已接入后台 worker：`start_render(true)` 连续 render pass，pause 停止 SPP 增长，resume 继续，cancel/destructor/mutation 会停止 worker；所有 engine 调用通过 Session mutex 串行化，避免 Python 主线程和 worker 并发访问同一 GPU context。`ure_session_t` C ABI 覆盖 create/config/destroy、load_scene_file、start/render_pass、pause/resume/cancel/reset、progress、framebuffer_size、framebuffer pointer、typed AOV pointer、runtime log level，以及 camera/instance/material/texture mutation helper；Python `pyure` 通过 ctypes 直接调用 `pyure_native.dll`，提供 background progressive workflow、framebuffer/AOV copy、runtime log level 和高层 mutation API，不包装 CLI。AOV 已通过 GPU kernel 写出 first-hit normal/albedo/depth/uv/motion-vector，Beauty 走 framebuffer。MotionVector 使用 first-hit world position 输出 current-minus-previous screen-space delta；静态物体由 current/previous `GpuCamera` 投影得到 camera motion，instance object motion 由 `GpuContext` 保存 previous/current instance transform，kernel 将当前 hit point经 current inverse transform 回到 local，再经 previous transform 重建 previous world point 后投影。针对性门禁：`test_session` 188/0（含后台 scheduler、legacy texture compiler、texture material full reload、真实 4x4 GPU texture/topology reload smoke、C ABI mutation failure gates）、`gpu_test_render` 315/0、`gpu_test_instance` 68/0、`test_pyure_smoke` 真实 8x8 background progressive workflow + camera/material/texture mutation 通过；完整 Release build + `ctest -C Release` 17/17 通过，warning/error scan 为空。Phase S 当前边界已完成；非 instance 的拓扑变形仍需专用 geometry/update queue，不能用当前 world hit point 或零值假装完成。
+2026-06-13 S batch 进展：新增 `RenderSession` 作为 Phase S 的会话边界，生产路径通过 `RenderEngineFactory::create_gpu_renderer(config)` 创建，测试路径允许注入 `IRenderEngine`，因此 Session 状态机可在 host test 中验证而不启动 CUDA。新增 `SceneDiff` 高层 contract，支持 full SceneIR replacement、camera mutation、reset-only mutation、instance transform mutation、SceneIR material-table mutation、SceneIR instance add/remove 和 SceneIR sphere add/remove；Phase M 起旧 Scene mutation API、retained `Scene` state、`RenderSession::load_scene(Scene)`、`IRenderEngine` Scene overload、`SceneIR -> Scene` compiler、procedural SceneBuilder CLI fallback 与旧文本场景 parser 均已移除。Transform diff 使用源场景索引，验证目标必须是可渲染 mesh instance，然后调用 `GpuSceneCompiler::build_instance_transform()` 编译完整 transform/AABB buffer 并走 `IRenderEngine::update_transforms()`，没有把 `GpuInstanceTransform` 暴露到 public Session API。非 texture material diff 修改 retained SceneIR material table 后重新编译 scene-owned material append table，并通过 `IRenderEngine::update_materials()` / `update_materials_gpu()` 更新 GPU material header 与 6 组 SoA 光谱数组。Topology diff 和 texture/resource material diff 不伪装成 hot-update：变更先更新 retained SceneIR，再显式 `reload_scene_ir()` full GPU reload；`replace_scene()` 也强制 full reload，避免旧 `load_scene_ir()` initialized 分支只更新 transform 的错误语义。SceneIR texture rebinding 复用已有 image/texture resource cache。Session progressive scheduler 已接入后台 worker：`start_render(true)` 连续 render pass，pause 停止 SPP 增长，resume 继续，cancel/destructor/mutation 会停止 worker；所有 engine 调用通过 Session mutex 串行化，避免 Python 主线程和 worker 并发访问同一 GPU context。`ure_session_t` C ABI 覆盖 create/config/destroy、load_scene_file、start/render_pass、pause/resume/cancel/reset、progress、framebuffer_size、framebuffer pointer、typed AOV pointer、runtime log level，以及 camera/instance/material/texture mutation helper；Python `pyure` 通过 ctypes 直接调用 `pyure_native.dll`，提供 background progressive workflow、framebuffer/AOV copy、runtime log level 和高层 mutation API，不包装 CLI。AOV 已通过 GPU kernel 写出 first-hit normal/albedo/depth/uv/motion-vector，Beauty 走 framebuffer。MotionVector 使用 first-hit world position 输出 current-minus-previous screen-space delta；静态物体由 current/previous `GpuCamera` 投影得到 camera motion，instance object motion 由 `GpuContext` 保存 previous/current instance transform，kernel 将当前 hit point经 current inverse transform 回到 local，再经 previous transform 重建 previous world point 后投影。针对性门禁：`test_session`、`gpu_test_render`、`gpu_test_instance`、`test_pyure_smoke` 已覆盖后台 scheduler、texture/resource full reload、真实 GPU reload smoke、C ABI mutation failure gates 与 Python workflow；完整 Release build + `ctest -C Release` 17/17 通过，warning/error scan 为空。Phase S 当前边界已完成；非 instance 的拓扑变形仍需专用 geometry/update queue，不能用当前 world hit point 或零值假装完成。
 
 ---
 
@@ -1622,7 +1619,7 @@ struct MaterialGraph {
 | Step | 内容 | 前置依赖 |
 |------|------|---------|
 | M.1 | 设计节点图 IR（不依赖 OSL，自定义格式） | ✅ `scene_ir::MaterialGraph` / `MaterialGraphNode` / `MaterialGraphInput` 已进入公共 SceneIR；首批节点覆盖 ConstantColor/ConstantFloat/BSDF/OutputSurface，Texture/Add/Mix 等复杂节点保留为显式 unsupported |
-| M.2 | GPU 编译：节点图 → GpuMaterial + 内核参数 | 进行中：`GpuSceneCompiler` 已支持受限图编译到现有 `GpuMaterialData` + spectral SoA；当前只接受单 OutputSurface → 单 BSDF → 常量输入，unsupported graph fail-loud，后续再扩展 texture/procedural/mix |
+| M.2 | GPU 编译：节点图 → GpuMaterial + 内核参数 | 进行中：`GpuSceneCompiler` 已支持单 OutputSurface → 单 BSDF 编译到现有 `GpuMaterialData` + spectral SoA，并支持 ConstantColor/ConstantFloat、Texture2D、单纹理 Multiply；graph 存在时 graph 输出为 authoritative，scalar material texture fields 不参与 GPU 编译；glTF PBR baseColor/roughness/emissive 已自动生成等价 MaterialGraph；旧文本场景、`scene_io::load_scene()`、`SceneParser::parse_file()`、`SceneIR -> Scene` compiler、procedural CLI fallback、`IRenderEngine` Scene overload 与旧视觉 smoke 资产均已移除，C/Python file loading 进入 SceneIR；raw in-memory texture mutation 直接失败，后续资源变更必须走 graph/resource 节点；Mix/BSDF layering/procedural material nodes 仍为 fail-loud |
 | M.3 | MaterialX 导入（`mtlx` → 节点图 IR） | M.1 |
 | M.4 | MaterialX 导出（节点图 IR → `mtlx`） | M.1 |
 | M.5 | 材质预设库（金属/玻璃/皮肤/织物/汽车漆） | M.2 |

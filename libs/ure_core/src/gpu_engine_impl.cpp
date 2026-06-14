@@ -30,16 +30,6 @@ public:
         }
     }
 
-    void load_scene(const Scene& scene) override {
-        CompiledGpuScene compiled = GpuSceneCompiler::compile_legacy(scene);
-        if (!initialized_) {
-            load_compiled_scene(compiled);
-            initialized_ = true;
-        } else {
-            update_transforms_internal(compiled);
-        }
-    }
-
     void load_scene_ir(const scene_ir::SceneIR& scene_ir) override {
         CompiledGpuScene compiled = GpuSceneCompiler::compile(scene_ir, config_);
         if (!initialized_) {
@@ -48,18 +38,6 @@ public:
         } else {
             update_transforms_internal(compiled);
         }
-    }
-
-    void load_scene_once(const Scene& scene) override {
-        CompiledGpuScene compiled = GpuSceneCompiler::compile_legacy(scene);
-        load_compiled_scene(compiled);
-        initialized_ = true;
-    }
-
-    void reload_scene(const Scene& scene) override {
-        CompiledGpuScene compiled = GpuSceneCompiler::compile_legacy(scene);
-        load_compiled_scene(compiled);
-        initialized_ = true;
     }
 
     void reload_scene_ir(const scene_ir::SceneIR& scene_ir) override {

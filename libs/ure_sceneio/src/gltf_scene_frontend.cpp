@@ -931,6 +931,75 @@ private:
             }
         }
 
+        auto graph = std::make_shared<scene_ir::MaterialGraph>();
+        scene_ir::MaterialGraphNodeId next_id = 1;
+        auto add_node = [&](scene_ir::MaterialGraphNode graph_node) {
+            graph_node.id = next_id++;
+            graph->nodes.push_back(graph_node);
+            return graph_node.id;
+        };
+        auto add_color = [&](const core::Vec3f& color) {
+            scene_ir::MaterialGraphNode graph_node;
+            graph_node.kind = scene_ir::MaterialGraphNodeKind::ConstantColor;
+            graph_node.color = color;
+            return add_node(graph_node);
+        };
+        auto add_float = [&](float value) {
+            scene_ir::MaterialGraphNode graph_node;
+            graph_node.kind = scene_ir::MaterialGraphNodeKind::ConstantFloat;
+            graph_node.value = value;
+            return add_node(graph_node);
+        };
+        auto add_texture = [&](const std::shared_ptr<scene_ir::TextureResource>& texture) {
+            scene_ir::MaterialGraphNode graph_node;
+            graph_node.kind = scene_ir::MaterialGraphNodeKind::Texture2D;
+            graph_node.texture = texture;
+            return add_node(graph_node);
+        };
+        auto add_multiply = [&](scene_ir::MaterialGraphNodeId a, scene_ir::MaterialGraphNodeId b) {
+            scene_ir::MaterialGraphNode graph_node;
+            graph_node.kind = scene_ir::MaterialGraphNodeKind::Multiply;
+            graph_node.inputs.push_back({"a", a, "out"});
+            graph_node.inputs.push_back({"b", b, "out"});
+            return add_node(graph_node);
+        };
+        auto add_surface_input = [&](const char* name,
+                                     scene_ir::MaterialGraphNode& graph_node,
+                                     scene_ir::MaterialGraphNodeId input_id) {
+            graph_node.inputs.push_back({name, input_id, "out"});
+        };
+
+        scene_ir::MaterialGraphNode bsdf;
+        if (node->model == scene_ir::MaterialModel::Light) {
+            bsdf.kind = scene_ir::MaterialGraphNodeKind::BsdfLight;
+            scene_ir::MaterialGraphNodeId emission = add_color(node->emission);
+            if (node->emission_texture) {
+                emission = add_multiply(emission, add_texture(node->emission_texture));
+            }
+            add_surface_input("emission", bsdf, emission);
+        } else {
+            bsdf.kind = node->model == scene_ir::MaterialModel::Metal
+                            ? scene_ir::MaterialGraphNodeKind::BsdfMetal
+                            : scene_ir::MaterialGraphNodeKind::BsdfLambert;
+            scene_ir::MaterialGraphNodeId base_color = add_color(node->base_color);
+            if (node->base_color_texture) {
+                base_color = add_multiply(base_color, add_texture(node->base_color_texture));
+            }
+            scene_ir::MaterialGraphNodeId roughness = add_float(node->roughness);
+            if (node->roughness_texture) {
+                roughness = add_multiply(roughness, add_texture(node->roughness_texture));
+            }
+            add_surface_input("base_color", bsdf, base_color);
+            add_surface_input("roughness", bsdf, roughness);
+        }
+        scene_ir::MaterialGraphNodeId bsdf_id = add_node(bsdf);
+
+        scene_ir::MaterialGraphNode output;
+        output.kind = scene_ir::MaterialGraphNodeKind::OutputSurface;
+        output.inputs.push_back({"surface", bsdf_id, "out"});
+        graph->output_node_id = add_node(output);
+        node->graph = graph;
+
         scene_.add_material(node);
         material_cache_[material_index] = node;
         return node;

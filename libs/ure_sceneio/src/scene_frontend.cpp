@@ -1,7 +1,6 @@
 #include "ure/scene_frontend.hpp"
 
 #include "ure/gltf_scene_frontend.hpp"
-#include "ure/scene_ir_frontend.hpp"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -20,11 +19,7 @@ scene_ir::SceneIR SceneFrontend::parse_file_to_ir(const std::string& filepath) {
         return GltfSceneFrontend::parse_file_to_ir(filepath);
     }
 
-    if (extension == ".scene") {
-        return LegacySceneFrontend::parse_file_to_ir(filepath);
-    }
-
-    throw std::runtime_error("Unsupported scene format: " + extension + " (expected .gltf, .glb, or .scene)");
+    throw std::runtime_error("Unsupported scene format: " + extension + " (expected .gltf or .glb)");
 }
 
 } // namespace ure

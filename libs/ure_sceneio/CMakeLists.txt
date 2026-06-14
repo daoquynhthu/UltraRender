@@ -1,17 +1,13 @@
 add_library(ure_sceneio STATIC
     src/scene_io_api.cpp
     src/gltf_scene_frontend.cpp
-    src/scene_ir_frontend.cpp
     src/scene_frontend.cpp
     src/scene_parser.cpp
-    src/procedural.cpp
     src/image_loader.cpp
     src/image_saver.cpp
     src/spd_loader.cpp
     src/wav_saver.cpp
     src/scene_ir.cpp
-    src/scene.cpp
-    src/scene_factory.cpp
     src/camera.cpp
     src/mesh.cpp
     src/sphere.cpp
@@ -27,7 +23,6 @@ target_include_directories(ure_sceneio PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party
 )
 target_link_libraries(ure_sceneio PUBLIC ure_types ure_diag)
-target_link_libraries(ure_sceneio PRIVATE ure_core)
 
 if(MSVC)
     target_compile_options(ure_sceneio PRIVATE

@@ -10,9 +10,6 @@ namespace ure::gpu { struct HostTexture; }
 
 namespace ure::scene_io {
 
-// Load a scene from a file path (auto-detect format via extension)
-Scene load_scene(const std::string& path);
-
 // Load glTF scene directly into SceneIR
 scene_ir::SceneIR load_gltf(const std::string& path);
 
@@ -25,7 +22,6 @@ bool save_bmp(const std::string& path,
               int width, int height);
 
 // SPD file loading
-std::vector<float> load_spd(const std::string& path);
 std::vector<float> load_spd(const std::string& path, int num_wavelengths);
 std::vector<float> load_spd(const std::string& path, const RenderConfig& config);
 

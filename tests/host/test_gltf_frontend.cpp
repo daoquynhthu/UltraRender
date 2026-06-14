@@ -171,6 +171,9 @@ static int test_pbr_material() {
     CHECK_FLOAT_EQ(mat->base_color.z, 0.6f, 1e-6f);
     CHECK_FLOAT_EQ(mat->roughness, 0.3f, 1e-6f);
     CHECK(mat->model == ure::scene_ir::MaterialModel::Metal);
+    CHECK(mat->graph != nullptr);
+    CHECK(!mat->graph->empty());
+    CHECK(mat->graph->nodes.size() >= 4);
     return 0;
 }
 
@@ -593,6 +596,15 @@ static int test_metallic_roughness_texture_linear() {
     CHECK(mat->roughness_texture->image != nullptr);
     CHECK(mat->roughness_texture->image->uri.find("nonexistent_mr.png") != std::string::npos);
     CHECK(mat->roughness_texture->image->color_space == ure::scene_ir::ImageColorSpace::Linear);
+    CHECK(mat->graph != nullptr);
+    bool found_texture_node = false;
+    for (const auto& node : mat->graph->nodes) {
+        if (node.kind == ure::scene_ir::MaterialGraphNodeKind::Texture2D &&
+            node.texture == mat->roughness_texture) {
+            found_texture_node = true;
+        }
+    }
+    CHECK(found_texture_node);
     return 0;
 }
 int main() {

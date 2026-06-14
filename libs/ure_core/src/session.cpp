@@ -14,34 +14,6 @@ void apply_transform(scene_ir::InstanceNode& instance, const InstanceTransformMu
     instance.rotation = mutation.rotation;
 }
 
-void apply_transform(RenderEntity& entity, const InstanceTransformMutation& mutation) {
-    entity.position = mutation.position;
-    entity.scale = mutation.scale;
-    entity.rotation = mutation.rotation;
-}
-
-std::vector<std::shared_ptr<Material>> collect_legacy_material_slots(Scene& scene) {
-    std::vector<std::shared_ptr<Material>> slots;
-    auto add_slot = [&slots](const std::shared_ptr<Material>& material) {
-        if (!material) {
-            return;
-        }
-        for (const auto& existing : slots) {
-            if (existing == material) {
-                return;
-            }
-        }
-        slots.push_back(material);
-    };
-    for (auto& entity : scene.entities) {
-        add_slot(entity.material);
-    }
-    for (auto& sphere : scene.spheres) {
-        add_slot(sphere.material);
-    }
-    return slots;
-}
-
 bool has_texture_resource(const scene_ir::MaterialNode& material) {
     return material.base_color_texture ||
            material.roughness_texture ||
@@ -49,19 +21,9 @@ bool has_texture_resource(const scene_ir::MaterialNode& material) {
            material.normal_texture;
 }
 
-bool has_texture_resource(const Material& material) {
-    return static_cast<bool>(material.albedo_texture);
-}
-
 void validate_renderable_instance(const scene_ir::InstanceNode& instance) {
     if (!instance.mesh || !instance.mesh->mesh) {
         throw std::runtime_error("SceneDiff instance topology mutation requires a renderable mesh");
-    }
-}
-
-void validate_renderable_entity(const RenderEntity& entity) {
-    if (!entity.mesh) {
-        throw std::runtime_error("SceneDiff legacy entity topology mutation requires a renderable mesh");
     }
 }
 
@@ -71,15 +33,6 @@ void validate_scene_ir_sphere(const scene_ir::SphereNode& sphere) {
     }
     if (!sphere.material) {
         throw std::runtime_error("SceneDiff sphere topology mutation requires a material");
-    }
-}
-
-void validate_legacy_sphere(const SphereEntity& sphere) {
-    if (sphere.radius <= 0.0f) {
-        throw std::runtime_error("SceneDiff legacy sphere topology mutation requires a positive radius");
-    }
-    if (!sphere.material) {
-        throw std::runtime_error("SceneDiff legacy sphere topology mutation requires a material");
     }
 }
 
@@ -117,31 +70,9 @@ void compile_scene_ir_transforms(const scene_ir::SceneIR& scene_ir,
     }
 }
 
-void compile_legacy_transforms(const Scene& scene,
-                               std::vector<gpu::GpuInstanceTransform>& out) {
-    out.clear();
-    out.reserve(scene.entities.size());
-    for (const auto& entity : scene.entities) {
-        if (!entity.mesh) {
-            continue;
-        }
-        gpu::GpuInstanceTransform transform = {};
-        GpuSceneCompiler::build_instance_transform(entity.position,
-                                                   entity.scale,
-                                                   entity.rotation,
-                                                   entity.mesh,
-                                                   transform);
-        out.push_back(transform);
-    }
-}
-
 std::vector<gpu::GpuMaterialData> compile_scene_ir_materials(const scene_ir::SceneIR& scene_ir,
                                                              const RenderConfig& config) {
     return GpuSceneCompiler::compile(scene_ir, config).materials;
-}
-
-std::vector<gpu::GpuMaterialData> compile_legacy_materials(const Scene& scene) {
-    return GpuSceneCompiler::compile_legacy(scene).materials;
 }
 
 } // namespace
@@ -168,7 +99,6 @@ RenderSession::RenderSession(RenderSession&& other) noexcept {
     has_scene_ = other.has_scene_;
     progressive_ = other.progressive_;
     worker_exception_ = other.worker_exception_;
-    current_scene_ = std::move(other.current_scene_);
     current_scene_ir_ = std::move(other.current_scene_ir_);
     other.state_ = RenderSessionState::Empty;
     other.has_scene_ = false;
@@ -188,23 +118,11 @@ RenderSession& RenderSession::operator=(RenderSession&& other) noexcept {
     has_scene_ = other.has_scene_;
     progressive_ = other.progressive_;
     worker_exception_ = other.worker_exception_;
-    current_scene_ = std::move(other.current_scene_);
     current_scene_ir_ = std::move(other.current_scene_ir_);
     other.state_ = RenderSessionState::Empty;
     other.has_scene_ = false;
     other.worker_exception_ = nullptr;
     return *this;
-}
-
-void RenderSession::load_scene(const Scene& scene) {
-    stop_worker();
-    std::scoped_lock lock(mutex_);
-    require_engine();
-    engine_->load_scene(scene);
-    current_scene_ = scene;
-    current_scene_ir_.reset();
-    has_scene_ = true;
-    state_ = RenderSessionState::Ready;
 }
 
 void RenderSession::load_scene(const scene_ir::SceneIR& scene_ir) {
@@ -213,7 +131,6 @@ void RenderSession::load_scene(const scene_ir::SceneIR& scene_ir) {
     require_engine();
     engine_->load_scene_ir(scene_ir);
     current_scene_ir_ = scene_ir;
-    current_scene_.reset();
     has_scene_ = true;
     state_ = RenderSessionState::Ready;
 }
@@ -228,7 +145,6 @@ void RenderSession::mutate_scene(const SceneDiff& diff) {
     if (diff.replacement_scene) {
         engine_->reload_scene_ir(*diff.replacement_scene);
         current_scene_ir_ = *diff.replacement_scene;
-        current_scene_.reset();
         has_scene_ = true;
         state_ = RenderSessionState::Ready;
     } else {
@@ -239,8 +155,8 @@ void RenderSession::mutate_scene(const SceneDiff& diff) {
         apply_instance_transform_mutations(diff.instance_transforms, !topology_changed);
     }
     bool resource_changed = false;
-    if (!diff.scene_ir_materials.empty() || !diff.legacy_materials.empty()) {
-        resource_changed = apply_material_mutations(diff.scene_ir_materials, diff.legacy_materials, !topology_changed);
+    if (!diff.scene_ir_materials.empty()) {
+        resource_changed = apply_material_mutations(diff.scene_ir_materials, !topology_changed);
     }
     if (topology_changed || resource_changed) {
         reload_current_scene();
@@ -252,8 +168,7 @@ void RenderSession::mutate_scene(const SceneDiff& diff) {
                !diff.replacement_scene &&
                !topology_changed &&
                diff.instance_transforms.empty() &&
-               diff.scene_ir_materials.empty() &&
-               diff.legacy_materials.empty()) {
+               diff.scene_ir_materials.empty()) {
         engine_->reset_accumulation();
         state_ = RenderSessionState::Ready;
     }
@@ -432,12 +347,6 @@ bool RenderSession::apply_topology_mutations(const SceneDiff& diff) {
     }
 
     if (current_scene_ir_) {
-        if (!diff.legacy_entities_to_add.empty() ||
-            !diff.legacy_entities_to_remove.empty() ||
-            !diff.legacy_spheres_to_add.empty() ||
-            !diff.legacy_spheres_to_remove.empty()) {
-            throw std::runtime_error("legacy topology mutations cannot be applied to a SceneIR session");
-        }
         erase_indices_descending(current_scene_ir_->instances,
                                  diff.scene_ir_instances_to_remove,
                                  "SceneDiff SceneIR instance remove index is out of range");
@@ -455,31 +364,7 @@ bool RenderSession::apply_topology_mutations(const SceneDiff& diff) {
         return true;
     }
 
-    if (current_scene_) {
-        if (!diff.scene_ir_instances_to_add.empty() ||
-            !diff.scene_ir_instances_to_remove.empty() ||
-            !diff.scene_ir_spheres_to_add.empty() ||
-            !diff.scene_ir_spheres_to_remove.empty()) {
-            throw std::runtime_error("SceneIR topology mutations cannot be applied to a legacy Scene session");
-        }
-        erase_indices_descending(current_scene_->entities,
-                                 diff.legacy_entities_to_remove,
-                                 "SceneDiff legacy entity remove index is out of range");
-        for (const LegacyEntityInsertion& insertion : diff.legacy_entities_to_add) {
-            validate_renderable_entity(insertion.entity);
-            current_scene_->entities.push_back(insertion.entity);
-        }
-        erase_indices_descending(current_scene_->spheres,
-                                 diff.legacy_spheres_to_remove,
-                                 "SceneDiff legacy sphere remove index is out of range");
-        for (const LegacySphereInsertion& insertion : diff.legacy_spheres_to_add) {
-            validate_legacy_sphere(insertion.sphere);
-            current_scene_->spheres.push_back(insertion.sphere);
-        }
-        return true;
-    }
-
-    throw std::runtime_error("SceneDiff topology mutation requires a retained CPU scene");
+    throw std::runtime_error("SceneDiff topology mutation requires a retained SceneIR scene");
 }
 
 void RenderSession::reload_current_scene() {
@@ -488,12 +373,7 @@ void RenderSession::reload_current_scene() {
         state_ = RenderSessionState::Ready;
         return;
     }
-    if (current_scene_) {
-        engine_->reload_scene(*current_scene_);
-        state_ = RenderSessionState::Ready;
-        return;
-    }
-    throw std::runtime_error("SceneDiff full reload requires a retained CPU scene");
+    throw std::runtime_error("SceneDiff full reload requires a retained SceneIR scene");
 }
 
 void RenderSession::apply_instance_transform_mutations(const std::vector<InstanceTransformMutation>& mutations, bool upload) {
@@ -518,37 +398,12 @@ void RenderSession::apply_instance_transform_mutations(const std::vector<Instanc
         return;
     }
 
-    if (current_scene_) {
-        for (const InstanceTransformMutation& mutation : mutations) {
-            if (mutation.instance_index >= current_scene_->entities.size()) {
-                throw std::out_of_range("SceneDiff instance transform index is out of range");
-            }
-            RenderEntity& entity = current_scene_->entities[mutation.instance_index];
-            if (!entity.mesh) {
-                throw std::runtime_error("SceneDiff instance transform targets a non-renderable legacy Scene entity");
-            }
-            apply_transform(entity, mutation);
-        }
-        if (!upload) {
-            return;
-        }
-        std::vector<gpu::GpuInstanceTransform> transforms;
-        compile_legacy_transforms(*current_scene_, transforms);
-        engine_->update_transforms(transforms.data(), static_cast<int>(transforms.size()));
-        state_ = RenderSessionState::Ready;
-        return;
-    }
-
-    throw std::runtime_error("SceneDiff instance transform requires a retained CPU scene");
+    throw std::runtime_error("SceneDiff instance transform requires a retained SceneIR scene");
 }
 
 bool RenderSession::apply_material_mutations(const std::vector<SceneIrMaterialMutation>& scene_ir_mutations,
-                                             const std::vector<LegacyMaterialMutation>& legacy_mutations,
                                              bool upload) {
     if (current_scene_ir_) {
-        if (!legacy_mutations.empty()) {
-            throw std::runtime_error("legacy material mutations cannot be applied to a SceneIR session");
-        }
         bool requires_reload = false;
         for (const SceneIrMaterialMutation& mutation : scene_ir_mutations) {
             if (mutation.material_index >= current_scene_ir_->materials.size()) {
@@ -571,34 +426,7 @@ bool RenderSession::apply_material_mutations(const std::vector<SceneIrMaterialMu
         return false;
     }
 
-    if (current_scene_) {
-        if (!scene_ir_mutations.empty()) {
-            throw std::runtime_error("SceneIR material mutations cannot be applied to a legacy Scene session");
-        }
-        std::vector<std::shared_ptr<Material>> slots = collect_legacy_material_slots(*current_scene_);
-        bool requires_reload = false;
-        for (const LegacyMaterialMutation& mutation : legacy_mutations) {
-            if (mutation.material_index >= slots.size()) {
-                throw std::out_of_range("SceneDiff material index is out of range");
-            }
-            if (has_texture_resource(mutation.material)) {
-                requires_reload = true;
-            }
-            if (!slots[mutation.material_index]) {
-                throw std::runtime_error("SceneDiff legacy material target is null");
-            }
-            *slots[mutation.material_index] = mutation.material;
-        }
-        if (!upload || requires_reload) {
-            return requires_reload;
-        }
-        std::vector<gpu::GpuMaterialData> materials = compile_legacy_materials(*current_scene_);
-        engine_->update_materials(materials.data(), static_cast<int>(materials.size()));
-        state_ = RenderSessionState::Ready;
-        return false;
-    }
-
-    throw std::runtime_error("SceneDiff material mutation requires a retained CPU scene");
+    throw std::runtime_error("SceneDiff material mutation requires a retained SceneIR scene");
 }
 
 } // namespace ure

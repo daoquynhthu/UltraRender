@@ -307,7 +307,7 @@ struct GpuMesh {
 #include "ure/instance_desc.hpp"
 #include "ure/instance_transform.hpp"
 
-// Legacy packed instance layout retained for compatibility with existing GPU scene upload paths.
+// Packed instance layout retained for existing GPU kernels.
 // Layout: GpuInstanceDesc (8B) + GpuInstanceTransform (152B) = 160B total
 // This ordering ensures reinterpret_cast<GpuInstanceDesc*>(ptr) works correctly
 struct GpuInstance {
@@ -326,7 +326,7 @@ struct GpuScene {
     GpuMesh* meshes;
     int mesh_count;
 
-    GpuInstance* instances;          // Legacy packed data, same content as descs + xforms
+    GpuInstance* instances;          // Packed data, same content as descs + xforms
     GpuInstanceDesc* instance_descs; // Phase P.1: static descriptors
     GpuInstanceTransform* instance_transforms; // Phase P.1: dynamic transforms (updated per frame)
     GpuInstanceTransform* previous_instance_transforms;

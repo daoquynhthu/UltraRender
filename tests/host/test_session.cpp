@@ -7,13 +7,27 @@
 
 #include <cstdio>
 #include <chrono>
+#include <fstream>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
 static int g_passed = 0;
 static int g_failed = 0;
+
+static const unsigned char kTestBmp[] = {
+    0x42, 0x4D, 0x4A, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x36, 0x00, 0x00, 0x00, 0x28, 0x00,
+    0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0xFE, 0xFF,
+    0xFF, 0xFF, 0x01, 0x00, 0x18, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x13, 0x0B,
+    0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x00,
+    0x00, 0xFF, 0xFF, 0xFF, 0x00, 0x00,
+};
 
 #define CHECK(cond) do { \
     if (!(cond)) { \
@@ -26,25 +40,9 @@ static int g_failed = 0;
 
 class FakeRenderEngine final : public ure::IRenderEngine {
 public:
-    void load_scene(const ure::Scene&) override {
-        ++scene_loads;
-        loaded = true;
-    }
-
     void load_scene_ir(const ure::scene_ir::SceneIR&) override {
         ++scene_ir_loads;
         loaded = true;
-    }
-
-    void load_scene_once(const ure::Scene&) override {
-        ++scene_once_loads;
-        loaded = true;
-    }
-
-    void reload_scene(const ure::Scene&) override {
-        ++scene_reloads;
-        loaded = true;
-        spp = 0;
     }
 
     void reload_scene_ir(const ure::scene_ir::SceneIR&) override {
@@ -123,10 +121,7 @@ public:
 
     bool loaded = false;
     int spp = 0;
-    int scene_loads = 0;
     int scene_ir_loads = 0;
-    int scene_once_loads = 0;
-    int scene_reloads = 0;
     int scene_ir_reloads = 0;
     int transform_updates = 0;
     int last_transform_count = 0;
@@ -222,30 +217,18 @@ static ure::scene_ir::InstanceNode make_scene_ir_instance(const std::shared_ptr<
     return instance;
 }
 
-static ure::Scene make_legacy_scene_with_instance() {
-    ure::Scene scene;
-    auto material = std::make_shared<ure::Material>();
-    ure::RenderEntity entity;
-    entity.mesh = make_triangle_mesh();
-    entity.material = material;
-    entity.position = {0.0f, 0.0f, 0.0f};
-    scene.entities.push_back(entity);
-    return scene;
-}
-
-static ure::RenderEntity make_legacy_entity(const std::shared_ptr<ure::Material>& material, float x) {
-    ure::RenderEntity entity;
-    entity.mesh = make_triangle_mesh();
-    entity.material = material;
-    entity.position = {x, 0.0f, 0.0f};
-    return entity;
-}
-
-static std::shared_ptr<ure::Texture> make_test_texture(float red, float green, float blue) {
-    auto texture = std::make_shared<ure::Texture>();
-    texture->width = 1;
-    texture->height = 1;
-    texture->data = {red, green, blue};
+static std::shared_ptr<ure::scene_ir::TextureResource> write_scene_ir_texture(const std::string& path) {
+    {
+        std::ofstream f(path, std::ios::binary);
+        f.write(reinterpret_cast<const char*>(kTestBmp), sizeof(kTestBmp));
+    }
+    auto image = std::make_shared<ure::scene_ir::ImageResource>();
+    image->name = path;
+    image->uri = path;
+    image->color_space = ure::scene_ir::ImageColorSpace::Linear;
+    auto texture = std::make_shared<ure::scene_ir::TextureResource>();
+    texture->name = path;
+    texture->image = image;
     return texture;
 }
 
@@ -272,11 +255,11 @@ static int test_scene_lifecycle() {
     auto* raw_engine = new FakeRenderEngine();
     ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
 
-    ure::Scene scene;
-    session.load_scene(scene);
+    ure::scene_ir::SceneIR scene_ir;
+    session.load_scene(scene_ir);
     CHECK(session.has_scene());
     CHECK(session.state() == ure::RenderSessionState::Ready);
-    CHECK(raw_engine->scene_loads == 1);
+    CHECK(raw_engine->scene_ir_loads == 1);
 
     session.start_render(false);
     CHECK(session.state() == ure::RenderSessionState::Running);
@@ -307,8 +290,8 @@ static int test_progressive_background_scheduler() {
     auto* raw_engine = new FakeRenderEngine();
     ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
 
-    ure::Scene scene;
-    session.load_scene(scene);
+    ure::scene_ir::SceneIR scene_ir;
+    session.load_scene(scene_ir);
     session.start_render(true);
     CHECK(session.state() == ure::RenderSessionState::Running);
     CHECK(wait_until([&session] {
@@ -444,23 +427,6 @@ static int test_scene_diff_instance_transform_ir() {
     return 0;
 }
 
-static int test_scene_diff_instance_transform_legacy() {
-    auto* raw_engine = new FakeRenderEngine();
-    ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
-
-    session.load_scene(make_legacy_scene_with_instance());
-    CHECK(raw_engine->scene_loads == 1);
-    session.mutate_scene(ure::SceneDiff::update_instance_transform(0, {0.0f, 4.0f, 0.0f}, {1.0f, 2.0f, 1.0f}));
-    CHECK(raw_engine->scene_loads == 1);
-    CHECK(raw_engine->transform_updates == 1);
-    CHECK(raw_engine->last_transform_count == 1);
-    CHECK(raw_engine->last_transforms[0].transform.m[1][3] == 4.0f);
-    CHECK(raw_engine->last_transforms[0].transform.m[1][1] == 2.0f);
-    CHECK(raw_engine->last_transforms[0].min_pt.y == 4.0f);
-    CHECK(raw_engine->last_transforms[0].max_pt.y == 6.0f);
-    return 0;
-}
-
 static int test_scene_diff_instance_transform_errors() {
     auto* raw_engine = new FakeRenderEngine();
     ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
@@ -507,27 +473,6 @@ static int test_scene_diff_material_update_ir() {
     return 0;
 }
 
-static int test_scene_diff_material_update_legacy() {
-    auto* raw_engine = new FakeRenderEngine();
-    ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
-
-    session.load_scene(make_legacy_scene_with_instance());
-
-    ure::Material material;
-    material.type = ure::MaterialType::Dielectric;
-    material.ior = 1.75f;
-    material.dispersion = 0.04f;
-    session.mutate_scene(ure::SceneDiff::update_material(0, material));
-
-    CHECK(raw_engine->scene_loads == 1);
-    CHECK(raw_engine->material_updates == 1);
-    CHECK(raw_engine->last_material_count == 1);
-    CHECK(raw_engine->last_materials[0].header.type == ure::gpu::MaterialType::Dielectric);
-    CHECK(raw_engine->last_materials[0].header.ior == 1.75f);
-    CHECK(raw_engine->last_materials[0].header.dispersion == 0.04f);
-    return 0;
-}
-
 static int test_scene_diff_material_texture_update_ir_full_reload() {
     auto* raw_engine = new FakeRenderEngine();
     ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
@@ -547,37 +492,6 @@ static int test_scene_diff_material_texture_update_ir_full_reload() {
     return 0;
 }
 
-static int test_scene_diff_material_texture_update_legacy_full_reload() {
-    auto* raw_engine = new FakeRenderEngine();
-    ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
-
-    session.load_scene(make_legacy_scene_with_instance());
-    ure::Material material;
-    material.albedo_texture = make_test_texture(0.2f, 0.4f, 0.6f);
-    session.mutate_scene(ure::SceneDiff::update_material(0, material));
-
-    CHECK(raw_engine->scene_reloads == 1);
-    CHECK(raw_engine->material_updates == 0);
-    CHECK(raw_engine->spp == 0);
-    CHECK(session.state() == ure::RenderSessionState::Ready);
-    return 0;
-}
-
-static int test_legacy_texture_compiles_to_gpu_texture_slot() {
-    ure::Scene scene = make_legacy_scene_with_instance();
-    scene.entities[0].material->albedo_texture = make_test_texture(0.25f, 0.5f, 0.75f);
-
-    ure::CompiledGpuScene compiled = ure::GpuSceneCompiler::compile_legacy(scene);
-    CHECK(compiled.textures.size() == 1);
-    CHECK(compiled.textures[0].width == 1);
-    CHECK(compiled.textures[0].height == 1);
-    CHECK(compiled.textures[0].channels == 3);
-    CHECK(compiled.textures[0].data[0] == 0.25f);
-    CHECK(compiled.materials.size() == 1);
-    CHECK(compiled.materials[0].header.texture_index == 0);
-    return 0;
-}
-
 static int test_scene_diff_material_update_errors() {
     auto* raw_engine = new FakeRenderEngine();
     ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
@@ -585,17 +499,6 @@ static int test_scene_diff_material_update_errors() {
     session.load_scene(make_scene_ir_with_instance());
     CHECK(throws_exception([&session] {
         session.mutate_scene(ure::SceneDiff::update_material(1, ure::scene_ir::MaterialNode{}));
-    }));
-    CHECK(throws_exception([&session] {
-        session.mutate_scene(ure::SceneDiff::update_material(0, ure::Material{}));
-    }));
-
-    session.load_scene(make_legacy_scene_with_instance());
-    CHECK(throws_exception([&session] {
-        session.mutate_scene(ure::SceneDiff::update_material(1, ure::Material{}));
-    }));
-    CHECK(throws_exception([&session] {
-        session.mutate_scene(ure::SceneDiff::update_material(0, ure::scene_ir::MaterialNode{}));
     }));
     return 0;
 }
@@ -626,35 +529,6 @@ static int test_scene_diff_topology_update_ir_full_reload() {
     return 0;
 }
 
-static int test_scene_diff_topology_update_legacy_full_reload() {
-    auto* raw_engine = new FakeRenderEngine();
-    ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
-    ure::Scene scene = make_legacy_scene_with_instance();
-    auto material = scene.entities[0].material;
-
-    session.load_scene(scene);
-    CHECK(raw_engine->scene_loads == 1);
-
-    ure::SphereEntity sphere;
-    sphere.center = {0.0f, 1.0f, 0.0f};
-    sphere.radius = 0.5f;
-    sphere.material = material;
-    session.mutate_scene(ure::SceneDiff::add_legacy_sphere(sphere));
-
-    CHECK(raw_engine->scene_reloads == 1);
-    CHECK(raw_engine->transform_updates == 0);
-    CHECK(session.state() == ure::RenderSessionState::Ready);
-
-    session.mutate_scene(ure::SceneDiff::remove_legacy_sphere(0));
-    CHECK(raw_engine->scene_reloads == 2);
-
-    session.mutate_scene(ure::SceneDiff::add_legacy_entity(make_legacy_entity(material, 2.0f)));
-    CHECK(raw_engine->scene_reloads == 3);
-    session.mutate_scene(ure::SceneDiff::remove_legacy_entity(1));
-    CHECK(raw_engine->scene_reloads == 4);
-    return 0;
-}
-
 static int test_scene_diff_topology_errors() {
     auto* raw_engine = new FakeRenderEngine();
     ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
@@ -668,27 +542,16 @@ static int test_scene_diff_topology_errors() {
         session.mutate_scene(ure::SceneDiff::add_scene_ir_instance(invalid));
     }));
     CHECK(throws_exception([&session] {
-        ure::SphereEntity sphere;
-        sphere.radius = 1.0f;
-        sphere.material = std::make_shared<ure::Material>();
-        session.mutate_scene(ure::SceneDiff::add_legacy_sphere(sphere));
-    }));
-
-    session.load_scene(make_legacy_scene_with_instance());
-    CHECK(throws_exception([&session] {
-        session.mutate_scene(ure::SceneDiff::remove_legacy_entity(3));
-    }));
-    CHECK(throws_exception([&session] {
         ure::scene_ir::SphereNode sphere;
         sphere.radius = 1.0f;
-        sphere.material = std::make_shared<ure::scene_ir::MaterialNode>();
         session.mutate_scene(ure::SceneDiff::add_scene_ir_sphere(sphere));
     }));
+
     CHECK(throws_exception([&session] {
-        ure::SphereEntity sphere;
+        ure::scene_ir::SphereNode sphere;
         sphere.radius = 0.0f;
-        sphere.material = std::make_shared<ure::Material>();
-        session.mutate_scene(ure::SceneDiff::add_legacy_sphere(sphere));
+        sphere.material = std::make_shared<ure::scene_ir::MaterialNode>();
+        session.mutate_scene(ure::SceneDiff::add_scene_ir_sphere(sphere));
     }));
     return 0;
 }
@@ -749,19 +612,21 @@ static int test_scene_diff_texture_material_real_gpu_reload_smoke() {
     config.num_wavelengths = 8;
     config.max_trace_depth = 2;
     ure::RenderSession session = ure::RenderSession::create(config);
-    ure::Scene scene = make_legacy_scene_with_instance();
-    scene.width = 4;
-    scene.height = 4;
-    scene.camera.position = {0.0f, 0.0f, 4.0f};
-    scene.camera.look_at = {0.0f, 0.0f, 0.0f};
-    scene.camera.fov = 45.0f;
+    ure::scene_ir::SceneIR scene_ir = make_scene_ir_with_instance();
+    scene_ir.width = 4;
+    scene_ir.height = 4;
+    scene_ir.camera.position = {0.0f, 0.0f, 4.0f};
+    scene_ir.camera.look_at = {0.0f, 0.0f, 0.0f};
+    scene_ir.camera.fov = 45.0f;
 
-    session.load_scene(scene);
+    session.load_scene(scene_ir);
     CHECK(session.render_pass() >= 1);
 
-    ure::Material textured;
-    textured.albedo_texture = make_test_texture(0.1f, 0.7f, 0.2f);
+    const std::string texture_path = "test_session_texture_reload.bmp";
+    ure::scene_ir::MaterialNode textured;
+    textured.base_color_texture = write_scene_ir_texture(texture_path);
     session.mutate_scene(ure::SceneDiff::update_material(0, textured));
+    std::remove(texture_path.c_str());
     CHECK(session.state() == ure::RenderSessionState::Ready);
     CHECK(session.get_progress().spp == 0);
     CHECK(session.render_pass() >= 1);
@@ -857,16 +722,11 @@ int main() {
     failed += run("test_scene_diff_mutation", test_scene_diff_mutation);
     failed += run("test_scene_diff_replace_scene_forces_full_reload", test_scene_diff_replace_scene_forces_full_reload);
     failed += run("test_scene_diff_instance_transform_ir", test_scene_diff_instance_transform_ir);
-    failed += run("test_scene_diff_instance_transform_legacy", test_scene_diff_instance_transform_legacy);
     failed += run("test_scene_diff_instance_transform_errors", test_scene_diff_instance_transform_errors);
     failed += run("test_scene_diff_material_update_ir", test_scene_diff_material_update_ir);
-    failed += run("test_scene_diff_material_update_legacy", test_scene_diff_material_update_legacy);
     failed += run("test_scene_diff_material_texture_update_ir_full_reload", test_scene_diff_material_texture_update_ir_full_reload);
-    failed += run("test_scene_diff_material_texture_update_legacy_full_reload", test_scene_diff_material_texture_update_legacy_full_reload);
-    failed += run("test_legacy_texture_compiles_to_gpu_texture_slot", test_legacy_texture_compiles_to_gpu_texture_slot);
     failed += run("test_scene_diff_material_update_errors", test_scene_diff_material_update_errors);
     failed += run("test_scene_diff_topology_update_ir_full_reload", test_scene_diff_topology_update_ir_full_reload);
-    failed += run("test_scene_diff_topology_update_legacy_full_reload", test_scene_diff_topology_update_legacy_full_reload);
     failed += run("test_scene_diff_topology_errors", test_scene_diff_topology_errors);
     failed += run("test_scene_diff_topology_real_gpu_reload_smoke", test_scene_diff_topology_real_gpu_reload_smoke);
     failed += run("test_scene_diff_texture_material_real_gpu_reload_smoke", test_scene_diff_texture_material_real_gpu_reload_smoke);

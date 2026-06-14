@@ -1,9 +1,8 @@
 #include "ure/ure_c_api.h"
 #include "ure/render.hpp"
 #include "ure/session.hpp"
-#include "ure/scene_io.hpp"
+#include "ure/scene_parser.hpp"
 #include "ure/image_saver.hpp"
-#include "ure/procedural.hpp"
 #include <ure/log.hpp>
 #include <cstdlib>
 #include <cstring>
@@ -12,6 +11,8 @@
 using namespace ure;
 
 namespace {
+
+core::Vec3f vec3_from_ptr(const float* values, core::Vec3f fallback);
 
 bool map_aov_type(ure_aov_type_t type, AovType& out) {
     switch (type) {
@@ -55,18 +56,82 @@ ure::log::Level map_log_level(ure_log_level_t level) {
     return ure::log::Level::Info;
 }
 
-MaterialType map_material_type(ure_material_type_t type) {
+scene_ir::MaterialModel map_scene_ir_material_type(ure_material_type_t type) {
     switch (type) {
     case URE_MATERIAL_LAMBERTIAN:
-        return MaterialType::Lambertian;
+        return scene_ir::MaterialModel::Lambertian;
     case URE_MATERIAL_METAL:
-        return MaterialType::Metal;
+        return scene_ir::MaterialModel::Metal;
     case URE_MATERIAL_DIELECTRIC:
-        return MaterialType::Dielectric;
+        return scene_ir::MaterialModel::Dielectric;
     case URE_MATERIAL_LIGHT:
-        return MaterialType::Light;
+        return scene_ir::MaterialModel::Light;
     }
-    return MaterialType::Lambertian;
+    return scene_ir::MaterialModel::Lambertian;
+}
+
+scene_ir::MaterialNode make_scene_ir_material(ure_material_type_t type,
+                                              const float* albedo,
+                                              float roughness,
+                                              float ior,
+                                              const float* emission) {
+    scene_ir::MaterialNode material;
+    material.model = map_scene_ir_material_type(type);
+    material.base_color = vec3_from_ptr(albedo, material.base_color);
+    material.roughness = roughness >= 0.0f ? roughness : material.roughness;
+    material.ior = ior > 0.0f ? ior : material.ior;
+    material.emission = vec3_from_ptr(emission, material.emission);
+
+    auto graph = std::make_shared<scene_ir::MaterialGraph>();
+    scene_ir::MaterialGraphNode color;
+    color.id = 1;
+    color.kind = scene_ir::MaterialGraphNodeKind::ConstantColor;
+    color.color = material.model == scene_ir::MaterialModel::Light ? material.emission : material.base_color;
+    scene_ir::MaterialGraphNode rough;
+    rough.id = 2;
+    rough.kind = scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    rough.value = material.roughness;
+    scene_ir::MaterialGraphNode ior_node;
+    ior_node.id = 3;
+    ior_node.kind = scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    ior_node.value = material.ior;
+    scene_ir::MaterialGraphNode bsdf;
+    bsdf.id = 4;
+    switch (material.model) {
+    case scene_ir::MaterialModel::Metal:
+        bsdf.kind = scene_ir::MaterialGraphNodeKind::BsdfMetal;
+        bsdf.inputs.push_back({"base_color", color.id, "out"});
+        bsdf.inputs.push_back({"roughness", rough.id, "out"});
+        graph->nodes = {color, rough, bsdf};
+        break;
+    case scene_ir::MaterialModel::Dielectric:
+        bsdf.kind = scene_ir::MaterialGraphNodeKind::BsdfDielectric;
+        bsdf.inputs.push_back({"base_color", color.id, "out"});
+        bsdf.inputs.push_back({"roughness", rough.id, "out"});
+        bsdf.inputs.push_back({"ior", ior_node.id, "out"});
+        graph->nodes = {color, rough, ior_node, bsdf};
+        break;
+    case scene_ir::MaterialModel::Light:
+        bsdf.kind = scene_ir::MaterialGraphNodeKind::BsdfLight;
+        bsdf.inputs.push_back({"emission", color.id, "out"});
+        graph->nodes = {color, bsdf};
+        break;
+    default:
+        bsdf.kind = scene_ir::MaterialGraphNodeKind::BsdfLambert;
+        bsdf.inputs.push_back({"base_color", color.id, "out"});
+        bsdf.inputs.push_back({"roughness", rough.id, "out"});
+        graph->nodes = {color, rough, bsdf};
+        break;
+    }
+
+    scene_ir::MaterialGraphNode output;
+    output.id = 5;
+    output.kind = scene_ir::MaterialGraphNodeKind::OutputSurface;
+    output.inputs.push_back({"surface", bsdf.id, "out"});
+    graph->nodes.push_back(output);
+    graph->output_node_id = output.id;
+    material.graph = graph;
+    return material;
 }
 
 core::Vec3f vec3_from_ptr(const float* values, core::Vec3f fallback) {
@@ -134,37 +199,8 @@ void ure_engine_destroy(ure_engine_t* engine) {
 int ure_engine_load_scene_file(ure_engine_t* engine, const char* path) {
     if (!engine || !path) return -1;
     try {
-        Scene scene = scene_io::load_scene(path);
-        reinterpret_cast<IRenderEngine*>(engine)->load_scene(scene);
-        return 0;
-    } catch (...) {
-        return -1;
-    }
-}
-
-int ure_engine_load_scene(ure_engine_t* engine,
-                          int width, int height,
-                          const float* camera_pos,
-                          const float* camera_look,
-                          float fov) {
-    if (!engine) return -1;
-    try {
-        SceneBuilder builder;
-        auto mat_light = std::make_shared<Material>();
-        mat_light->type = MaterialType::Light;
-        mat_light->emission = {10, 10, 10};
-        auto mat_floor = std::make_shared<Material>();
-        mat_floor->albedo = {0.8f, 0.8f, 0.8f};
-        mat_floor->roughness = 0.5f;
-        auto mesh_quad = SceneBuilder::create_quad();
-        builder.add_entity(mesh_quad, mat_floor, {0, -1, 0}, {20, 20, 1}, {});
-        builder.add_sphere({0, 8, 0}, 1.0f, mat_light);
-        core::Vec3f pos = camera_pos ? core::Vec3f(camera_pos[0], camera_pos[1], camera_pos[2]) : core::Vec3f(0, 5, 15);
-        core::Vec3f look = camera_look ? core::Vec3f(camera_look[0], camera_look[1], camera_look[2]) : core::Vec3f(0, 0, 0);
-        builder.set_camera(pos, look, fov > 0 ? fov : 45.0f);
-        builder.set_resolution(width > 0 ? width : 1280, height > 0 ? height : 720);
-        Scene scene = builder.build();
-        reinterpret_cast<IRenderEngine*>(engine)->load_scene(scene);
+        scene_ir::SceneIR scene = SceneParser::parse_file_to_ir(path);
+        reinterpret_cast<IRenderEngine*>(engine)->load_scene_ir(scene);
         return 0;
     } catch (...) {
         return -1;
@@ -275,7 +311,9 @@ void ure_session_destroy(ure_session_t* session) {
 int ure_session_load_scene_file(ure_session_t* session, const char* path) {
     if (!session || !path) return -1;
     try {
-        Scene scene = scene_io::load_scene(path);
+        scene_ir::SceneIR scene = SceneParser::parse_file_to_ir(path);
+        if (scene.width <= 0) scene.width = 8;
+        if (scene.height <= 0) scene.height = 8;
         reinterpret_cast<RenderSession*>(session)->load_scene(scene);
         return 0;
     } catch (...) {
@@ -378,12 +416,7 @@ int ure_session_update_material(ure_session_t* session,
                                 const float* emission) {
     if (!session) return -1;
     try {
-        Material material;
-        material.type = map_material_type(type);
-        material.albedo = vec3_from_ptr(albedo, material.albedo);
-        material.roughness = roughness >= 0.0f ? roughness : material.roughness;
-        material.ior = ior > 0.0f ? ior : material.ior;
-        material.emission = vec3_from_ptr(emission, material.emission);
+        scene_ir::MaterialNode material = make_scene_ir_material(type, albedo, roughness, ior, emission);
         reinterpret_cast<RenderSession*>(session)->mutate_scene(
             SceneDiff::update_material(material_index, material));
         return 0;
@@ -398,24 +431,13 @@ int ure_session_update_material_texture(ure_session_t* session,
                                         int height,
                                         int channels,
                                         const float* data) {
-    if (!session || width <= 0 || height <= 0 || channels < 3 || !data) return -1;
-    try {
-        const size_t value_count = static_cast<size_t>(width) *
-                                   static_cast<size_t>(height) *
-                                   static_cast<size_t>(channels);
-        auto texture = std::make_shared<Texture>();
-        texture->width = width;
-        texture->height = height;
-        texture->data.assign(data, data + value_count);
-
-        Material material;
-        material.albedo_texture = texture;
-        reinterpret_cast<RenderSession*>(session)->mutate_scene(
-            SceneDiff::update_material(material_index, material));
-        return 0;
-    } catch (...) {
-        return -1;
-    }
+    (void)session;
+    (void)material_index;
+    (void)width;
+    (void)height;
+    (void)channels;
+    (void)data;
+    return -1;
 }
 
 ure_session_progress_t ure_session_get_progress(const ure_session_t* session) {

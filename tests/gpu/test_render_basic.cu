@@ -846,7 +846,7 @@ static int test_runtime_n_long_wavelength_light_list() {
     return 0;
 }
 
-static int test_runtime_n_upload_remaps_legacy_rgb_material() {
+static int test_runtime_n_upload_uses_explicit_material_soa() {
     REQUIRE_GPU();
     ure::RenderConfig config;
     config.num_wavelengths = 8;
@@ -859,7 +859,10 @@ static int test_runtime_n_upload_remaps_legacy_rgb_material() {
 
     GpuMaterialData material = {};
     material.header.type = MaterialType::Lambertian;
-    material.albedo = GpuSpectrum(1.0f, 0.0f, 0.0f);
+    for (int c = 0; c < 8; ++c) {
+        material.albedo.values[c] = 0.1f * static_cast<float>(c + 1);
+        material.albedo.wavelengths[c] = 430.0f + 50.0f * static_cast<float>(c);
+    }
 
     std::vector<RenderMesh> meshes;
     std::vector<GpuInstance> instances;
@@ -871,10 +874,9 @@ static int test_runtime_n_upload_remaps_legacy_rgb_material() {
     CHECK(ctx != nullptr);
     float values[8];
     CHECK_CUDA(cudaMemcpy(values, ctx->d_mat_albedo + 7 * 8, 8 * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK(values[0] < 1e-5f);
-    CHECK(values[1] < 1e-5f);
-    CHECK(values[4] > 0.9f);
-    CHECK(values[7] > 0.9f);
+    for (int c = 0; c < 8; ++c) {
+        CHECK_FLOAT_EQ(values[c], 0.1f * static_cast<float>(c + 1), 1e-6f);
+    }
     free_gpu_renderer(ctx);
     return 0;
 }
@@ -943,7 +945,7 @@ int main() {
     RUN_TEST(test_packet_metal_stokes_are_channel_major);
     RUN_TEST(test_packet_average_stokes_for_packet_sampling);
     RUN_TEST(test_runtime_n_long_wavelength_light_list);
-    RUN_TEST(test_runtime_n_upload_remaps_legacy_rgb_material);
+    RUN_TEST(test_runtime_n_upload_uses_explicit_material_soa);
     RUN_TEST(test_update_materials_gpu_rewrites_header_and_soa);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;

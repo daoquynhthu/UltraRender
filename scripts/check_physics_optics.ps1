@@ -27,6 +27,10 @@ $targets = @(
     "gpu_test_render"
 )
 
+if ($RenderVisual) {
+    $targets += "ure_cli"
+}
+
 foreach ($target in $targets) {
     Run-Step "Build $target" {
         cmake --build $buildPath --config $Config --target $target -- /m:1
@@ -47,8 +51,14 @@ foreach ($exe in $executables) {
 }
 
 if ($RenderVisual) {
-    Run-Step "Render physics optics visual scene" {
-        & (Join-Path $PSScriptRoot "render_physics_optics_visual.ps1") -BuildDir $BuildDir -Config $Config
+    $scenePath = Join-Path $repo "scenes\textured_quad_validation.gltf"
+    $outputPath = Join-Path $repo "output\physics_optics_visual_gltf.hdr"
+    New-Item -ItemType Directory -Force -Path (Split-Path $outputPath) | Out-Null
+    Run-Step "Render glTF optics visual smoke" {
+        & (Join-Path $buildPath "apps\ure_cli\$Config\ure_cli.exe") render $scenePath --spp 1 --width 8 --height 8 --format hdr --output (Split-Path $outputPath -Leaf)
+    }
+    if (-not (Test-Path $outputPath)) {
+        throw "glTF visual smoke did not produce $outputPath"
     }
 }
 

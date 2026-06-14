@@ -35,16 +35,45 @@ def main() -> int:
         else:
             raise AssertionError("render_pass without a scene must fail")
 
-    scene_text = """\
-resolution 8 8
-camera pos 0 0 5 lookat 0 0 0 fov 45
-define_material red lambertian 1.0 0.1 0.1
-add_entity sphere red 0 0 0 1 1 1
-define_material light light 5 5 5
-add_entity sphere light 0 4 2 1 1 1
+    scene_text = """{
+  "asset": {"version": "2.0"},
+  "scene": 0,
+  "scenes": [{"nodes": [0]}],
+  "nodes": [{"mesh": 0}],
+  "meshes": [{
+    "primitives": [{
+      "attributes": {"POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2},
+      "indices": 3,
+      "material": 0
+    }]
+  }],
+  "materials": [{
+    "name": "graph_mat",
+    "pbrMetallicRoughness": {
+      "baseColorFactor": [1.0, 0.1, 0.1, 1.0],
+      "roughnessFactor": 0.4
+    }
+  }],
+  "buffers": [{
+    "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAABAAIA",
+    "byteLength": 102
+  }],
+  "bufferViews": [
+    {"buffer": 0, "byteOffset": 0, "byteLength": 36},
+    {"buffer": 0, "byteOffset": 36, "byteLength": 36},
+    {"buffer": 0, "byteOffset": 72, "byteLength": 24},
+    {"buffer": 0, "byteOffset": 96, "byteLength": 6}
+  ],
+  "accessors": [
+    {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"},
+    {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3"},
+    {"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC2"},
+    {"bufferView": 3, "componentType": 5123, "count": 3, "type": "SCALAR"}
+  ]
+}
 """
     with tempfile.TemporaryDirectory() as tmp:
-        scene_path = Path(tmp) / "pyure_smoke.scene"
+        scene_path = Path(tmp) / "pyure_smoke.gltf"
         scene_path.write_text(scene_text, encoding="utf-8")
         with pyure.create_session(num_wavelengths=8, queue_capacity=256, max_trace_depth=8) as session:
             session.load_scene_file(scene_path)
@@ -91,11 +120,12 @@ add_entity sphere light 0 4 2 1 1 1
             assert progress.spp == 0
             assert session.render_pass() >= 1
 
-            session.update_material_texture(0, 1, 1, [0.1, 0.6, 0.9])
-            progress = session.progress()
-            assert progress.state == pyure.SessionState.READY
-            assert progress.spp == 0
-            assert session.render_pass() >= 1
+            try:
+                session.update_material_texture(0, 1, 1, [0.1, 0.6, 0.9])
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("raw texture mutation must fail")
 
             try:
                 session.update_instance_transform(999, (0.0, 0.0, 0.0))
