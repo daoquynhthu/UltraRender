@@ -442,6 +442,7 @@ struct GpuScene {
     GpuTexture* textures;
     int texture_count;
     int* light_indices;
+    float* light_selection_cdf;
     int light_count;
 
     // Global Homogeneous Medium (Volumetric Fog)

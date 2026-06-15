@@ -848,6 +848,43 @@ static int test_runtime_n_long_wavelength_light_list() {
     return 0;
 }
 
+static int test_light_selection_cdf_uses_area_and_spectral_power() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+
+    GpuSphere small_light;
+    small_light.center = GpuVec3(-2.0f, 2.0f, 0.0f);
+    small_light.radius = 1.0f;
+    small_light.material_index = 7;
+
+    GpuSphere large_light;
+    large_light.center = GpuVec3(2.0f, 2.0f, 0.0f);
+    large_light.radius = 2.0f;
+    large_light.material_index = 8;
+
+    GpuMaterialData dim = {};
+    dim.header.type = MaterialType::Light;
+    dim.emission = SpectralPacket(1.0f);
+
+    GpuMaterialData bright = {};
+    bright.header.type = MaterialType::Light;
+    bright.emission = SpectralPacket(4.0f);
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {small_light, large_light}, {dim, bright}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->light_count == 2);
+    CHECK(ctx->d_light_selection_cdf != nullptr);
+
+    float cdf[2] = {};
+    CHECK_CUDA(cudaMemcpy(cdf, ctx->d_light_selection_cdf, 2 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(cdf[0], 1.0f / 17.0f, 1e-5f);
+    CHECK_FLOAT_EQ(cdf[1], 1.0f, 1e-6f);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
 static int test_runtime_n_upload_uses_explicit_material_soa() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -1116,6 +1153,7 @@ int main() {
     RUN_TEST(test_packet_metal_stokes_are_channel_major);
     RUN_TEST(test_packet_average_stokes_for_packet_sampling);
     RUN_TEST(test_runtime_n_long_wavelength_light_list);
+    RUN_TEST(test_light_selection_cdf_uses_area_and_spectral_power);
     RUN_TEST(test_runtime_n_upload_uses_explicit_material_soa);
     RUN_TEST(test_l8_spectral_texture_upload_keeps_source_sample_count);
     RUN_TEST(test_l8_rgb_texture_upload_keeps_hardware_filtering);

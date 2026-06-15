@@ -481,6 +481,25 @@ static int launch_blocks_for_active_count(int active_count, int threads_per_bloc
     return active_count > 0 ? (active_count + threads_per_block - 1) / threads_per_block : 0;
 }
 
+static float average_material_emission_power(const GpuMaterialData& material, int num_channels) {
+    float power = 0.0f;
+    for (int c = 0; c < num_channels; ++c) {
+        float lambda = kSpectralLambdaMin + (float(c) + 0.5f) *
+            ((kSpectralLambdaMax - kSpectralLambdaMin) / float(num_channels));
+        SpectralResource view = {};
+        view.kind = material.emission_resource.kind;
+        view.constant = material.emission_resource.constant;
+        view.rgb = material.emission_resource.rgb;
+        view.wavelengths = material.emission_resource.wavelengths.data();
+        view.values = material.emission_resource.values.data();
+        view.sample_count = static_cast<int>(std::min(material.emission_resource.wavelengths.size(), material.emission_resource.values.size()));
+        power += material.emission_resource.kind == SpectralResourceKind::None
+            ? material.emission.values[c]
+            : eval_spectral_resource(view, lambda);
+    }
+    return power / float(std::max(num_channels, 1));
+}
+
 // ===== Interactive API Implementation =====
 
 GpuContext* init_gpu_renderer(int width, int height,
@@ -885,35 +904,39 @@ GpuContext* init_gpu_renderer(int width, int height,
     ctx->texture_count = (int)host_gpu_textures.size();
 
     std::vector<int> host_light_indices;
+    std::vector<float> host_light_weights;
     for (int i = 0; i < host_spheres.size(); ++i) {
         int mat_idx = host_spheres[i].material_index;
         if (mat_idx >= 0 && mat_idx < host_materials.size()) {
             const auto& mat = host_materials[mat_idx];
-            bool has_emission = false;
-            for (int c = 0; c < ctx->num_spectral_channels; ++c) {
-                float lambda = kSpectralLambdaMin + (float(c) + 0.5f) *
-                    ((kSpectralLambdaMax - kSpectralLambdaMin) / float(ctx->num_spectral_channels));
-                SpectralResource view = {};
-                view.kind = mat.emission_resource.kind;
-                view.constant = mat.emission_resource.constant;
-                view.rgb = mat.emission_resource.rgb;
-                view.wavelengths = mat.emission_resource.wavelengths.data();
-                view.values = mat.emission_resource.values.data();
-                view.sample_count = static_cast<int>(std::min(mat.emission_resource.wavelengths.size(), mat.emission_resource.values.size()));
-                float emission = mat.emission_resource.kind == SpectralResourceKind::None
-                    ? mat.emission.values[c]
-                    : eval_spectral_resource(view, lambda);
-                has_emission = has_emission || emission > 1e-4f;
-            }
-            if (has_emission) {
+            const float emission_power = average_material_emission_power(mat, ctx->num_spectral_channels);
+            if (emission_power > 1e-4f) {
                 host_light_indices.push_back(i);
+                const float area = 4.0f * 3.14159265358979323846f * host_spheres[i].radius * host_spheres[i].radius;
+                host_light_weights.push_back(std::max(area * emission_power, 1e-8f));
             }
         }
     }
     if (!host_light_indices.empty()) {
         cudaMalloc(&ctx->d_light_indices, host_light_indices.size() * sizeof(int));
         cudaMemcpy(ctx->d_light_indices, host_light_indices.data(), host_light_indices.size() * sizeof(int), cudaMemcpyHostToDevice);
-    } else { ctx->d_light_indices = nullptr; }
+        float total_light_weight = 0.0f;
+        for (float weight : host_light_weights) {
+            total_light_weight += weight;
+        }
+        std::vector<float> host_light_cdf(host_light_weights.size(), 0.0f);
+        float running = 0.0f;
+        const float inv_total = total_light_weight > 0.0f ? 1.0f / total_light_weight : 1.0f / float(host_light_weights.size());
+        for (size_t i = 0; i < host_light_weights.size(); ++i) {
+            running += total_light_weight > 0.0f ? host_light_weights[i] * inv_total : inv_total;
+            host_light_cdf[i] = i + 1 == host_light_weights.size() ? 1.0f : running;
+        }
+        cudaMalloc(&ctx->d_light_selection_cdf, host_light_cdf.size() * sizeof(float));
+        cudaMemcpy(ctx->d_light_selection_cdf, host_light_cdf.data(), host_light_cdf.size() * sizeof(float), cudaMemcpyHostToDevice);
+    } else {
+        ctx->d_light_indices = nullptr;
+        ctx->d_light_selection_cdf = nullptr;
+    }
     ctx->light_count = (int)host_light_indices.size();
 
     return ctx;
@@ -993,6 +1016,7 @@ void free_gpu_renderer(GpuContext* ctx) {
     cudaFree(ctx->d_meshes);
     cudaFree(ctx->d_instances);
     cudaFree(ctx->d_light_indices);
+    cudaFree(ctx->d_light_selection_cdf);
 
     free_ray_queue(ctx->queueA);
     free_ray_queue(ctx->queueB);
@@ -1039,6 +1063,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.textures = ctx->d_textures;
     scene.texture_count = ctx->texture_count;
     scene.light_indices = ctx->d_light_indices;
+    scene.light_selection_cdf = ctx->d_light_selection_cdf;
     scene.light_count = ctx->light_count;
 
     scene.medium_density = ctx->medium_density;

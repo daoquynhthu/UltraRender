@@ -1827,6 +1827,27 @@ __global__ void c9_sphere_light_pdf_kernel(float* out)
     out[1] = 1.0f / (solid_angle * 2.0f);
 }
 
+__global__ void c9_weighted_sphere_light_pdf_kernel(float* d_cdf, float* out)
+{
+    int light_indices[2] = {0, 1};
+    GpuScene scene = {};
+    scene.light_indices = light_indices;
+    scene.light_selection_cdf = d_cdf;
+    scene.light_count = 2;
+
+    GpuSphere light = {};
+    light.center = GpuVec3(0.0f, 0.0f, 10.0f);
+    light.radius = 1.0f;
+    GpuVec3 ref(0.0f, 0.0f, 0.0f);
+
+    out[0] = float(sample_light_list_index(scene, 0.05f));
+    out[1] = float(sample_light_list_index(scene, 0.50f));
+    out[2] = light_selection_pdf(scene, 0);
+    out[3] = light_selection_pdf(scene, 1);
+    out[4] = selected_sphere_light_pdf(scene, 1, light, ref);
+    out[5] = sphere_light_solid_angle_pdf_only(light, ref) * 0.75f;
+}
+
 static int test_sphere_light_pdf_matches_solid_angle_sampling() {
     REQUIRE_GPU();
     float* d_out = nullptr;
@@ -1840,6 +1861,30 @@ static int test_sphere_light_pdf_matches_solid_angle_sampling() {
     float h_out[2];
     CHECK_CUDA(cudaMemcpy(h_out, d_out, 2 * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(h_out[0], h_out[1], 1e-5f);
+    return 0;
+}
+
+static int test_weighted_sphere_light_pdf_uses_selection_cdf() {
+    REQUIRE_GPU();
+    float h_cdf[2] = {0.25f, 1.0f};
+    float* d_cdf = nullptr;
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_cdf, 2 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_out, 6 * sizeof(float)));
+    DeviceMem _dc(d_cdf), _do(d_out);
+    CHECK_CUDA(cudaMemcpy(d_cdf, h_cdf, 2 * sizeof(float), cudaMemcpyHostToDevice));
+
+    c9_weighted_sphere_light_pdf_kernel<<<1, 1>>>(d_cdf, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float h_out[6];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 6 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(h_out[0], 0.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[1], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[2], 0.25f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[3], 0.75f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[4], h_out[5], 1e-5f);
     return 0;
 }
 
@@ -2280,6 +2325,7 @@ int main() {
     RUN_TEST(test_lane_dielectric_uses_active_channel);
     RUN_TEST(test_dielectric_lane_split_does_not_tint_interface);
     RUN_TEST(test_sphere_light_pdf_matches_solid_angle_sampling);
+    RUN_TEST(test_weighted_sphere_light_pdf_uses_selection_cdf);
     RUN_TEST(test_rough_dielectric_uses_microfacet_btdf);
     RUN_TEST(test_rough_dielectric_eval_pdf_visible_to_direct_light);
     RUN_TEST(test_rough_dielectric_direct_light_gate_allows_btdf_side);
