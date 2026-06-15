@@ -52,9 +52,9 @@ __device__ float pdf_bsdf(const GpuMaterial& mat, const GpuVec3& n, const GpuVec
 }
 
 // Phase E: eval_bsdf receives pre-loaded SoA spectra (albedo may be texture-modulated)
-__device__ GpuSpectrum eval_bsdf(
+__device__ SpectralPacket eval_bsdf(
     const GpuMaterial& mat,
-    const GpuSpectrum& albedo, const GpuSpectrum& extinction, const GpuSpectrum& metal_eta,
+    const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta,
     const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv, const GpuVec3& wo, const GpuVec3& wi,
     const float* wavelengths,
     int num_spec)
@@ -78,7 +78,7 @@ __device__ GpuSpectrum eval_bsdf(
 
         float NdotV = N.dot(V);
         float NdotL = N.dot(L);
-        if (NdotV <= 1e-6f || NdotL <= 1e-6f) return GpuSpectrum(0.0f);
+        if (NdotV <= 1e-6f || NdotL <= 1e-6f) return SpectralPacket(0.0f);
 
         GpuVec3 H = (V + L).normalize();
         float NdotH = N.dot(H);
@@ -88,7 +88,7 @@ __device__ GpuSpectrum eval_bsdf(
         float D = ggx_D(NdotH, alpha);
         float G = smith_G_ggx(NdotV, NdotL, alpha);
 
-        GpuSpectrum fresnel_spec;
+        SpectralPacket fresnel_spec;
         for (int c = 0; c < num_spec; ++c) {
             fresnel_spec.wavelengths[c] = wavelengths[c];
         }
@@ -118,9 +118,9 @@ __device__ GpuSpectrum eval_bsdf(
         RoughDielectricLobe l = reflection
             ? eval_rough_dielectric_reflection_lobe(mat, n, wo, wi)
             : eval_rough_dielectric_transmission_lobe(mat, n, wo, wi);
-        if (!l.valid) return GpuSpectrum(0.0f);
+        if (!l.valid) return SpectralPacket(0.0f);
 
-        GpuSpectrum fresnel_spec;
+        SpectralPacket fresnel_spec;
         for (int c = 0; c < num_spec; ++c) {
             fresnel_spec.wavelengths[c] = wavelengths[c];
             RoughDielectricLobe channel_lobe = reflection
@@ -156,7 +156,7 @@ __device__ GpuSpectrum eval_bsdf(
         }
         return fresnel_spec;
     } else if (mat.type == MaterialType::Dielectric) {
-        return GpuSpectrum(0.0f);
+        return SpectralPacket(0.0f);
     }
-    return GpuSpectrum(0.0f);
+    return SpectralPacket(0.0f);
 }

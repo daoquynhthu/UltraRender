@@ -60,6 +60,19 @@ static ure::gpu::DistributedFrameBuffer make_view(int width,
     return {width, height, samples, data.data()};
 }
 
+static ure::gpu::DistributedFrameBuffer make_sharded_view(
+    int width,
+    int height,
+    int samples,
+    std::vector<float>& data,
+    const ure::gpu::DistributedSpectralDomainShard& spectral,
+    const ure::gpu::DistributedFrameShard& frame = {}) {
+    ure::gpu::DistributedFrameBuffer fb = make_view(width, height, samples, data);
+    fb.shard.spectral = spectral;
+    fb.shard.frame = frame;
+    return fb;
+}
+
 static int test_sample_range_file_roundtrip() {
     const auto path = temp_path("ure_range_roundtrip.urd");
     remove_if_exists(path);
@@ -74,6 +87,9 @@ static int test_sample_range_file_roundtrip() {
     CHECK(loaded.total_samples == 17);
     CHECK(loaded.width == 8);
     CHECK(loaded.height == 4);
+    CHECK(loaded.shard.spectral.shard_id == ure::gpu::kDistributedAggregateShardId);
+    CHECK(loaded.shard.spectral.domain_bins == 1);
+    CHECK(loaded.shard.frame.frame_index == 0);
     CHECK(ure::gpu::validate_sample_range(loaded));
 
     remove_if_exists(path);
@@ -94,12 +110,64 @@ static int test_framebuffer_file_roundtrip() {
     CHECK(loaded.width == 2);
     CHECK(loaded.height == 2);
     CHECK(loaded.total_samples == 7);
+    CHECK(loaded.shard.spectral.shard_id == ure::gpu::kDistributedAggregateShardId);
+    CHECK(loaded.shard.spectral.domain_bins == 1);
+    CHECK(loaded.shard.frame.frame_count == 1);
     CHECK(loaded.data.size() == data.size());
     for (size_t i = 0; i < data.size(); ++i) {
         CHECK_FLOAT_EQ(loaded.data[i], data[i], 1e-6f);
     }
 
     remove_if_exists(path);
+    return 0;
+}
+
+static int test_shard_metadata_file_roundtrip() {
+    const auto range_path = temp_path("ure_range_shard_roundtrip.urd");
+    const auto frame_path = temp_path("ure_frame_shard_roundtrip.urf");
+    remove_if_exists(range_path);
+    remove_if_exists(frame_path);
+
+    ure::gpu::DistributedSampleRange range = ure::gpu::make_sample_range(1, 4, 33, 4, 4);
+    range.shard.spectral = ure::gpu::make_spectral_domain_shard(2, 5, 1'000'000, 360.0f, 830.0f);
+    range.shard.frame = ure::gpu::make_frame_shard(7, 16);
+    ure::gpu::write_sample_range_file(range_path, range);
+    ure::gpu::DistributedSampleRange loaded_range = ure::gpu::read_sample_range_file(range_path);
+    CHECK(loaded_range.shard.spectral.shard_id == 2);
+    CHECK(loaded_range.shard.spectral.shard_count == 5);
+    CHECK(loaded_range.shard.spectral.domain_bins == 1'000'000);
+    CHECK(loaded_range.shard.spectral.domain_start == range.shard.spectral.domain_start);
+    CHECK(loaded_range.shard.spectral.domain_count == range.shard.spectral.domain_count);
+    CHECK_FLOAT_EQ(loaded_range.shard.spectral.wavelength_pdf_integral,
+                   range.shard.spectral.wavelength_pdf_integral,
+                   1e-8f);
+    CHECK(loaded_range.shard.frame.frame_index == 7);
+    CHECK(loaded_range.shard.frame.frame_count == 16);
+
+    std::vector<float> data;
+    ure::gpu::DistributedFrameBuffer fb = make_sharded_view(
+        2,
+        2,
+        11,
+        data,
+        range.shard.spectral,
+        range.shard.frame);
+    for (size_t i = 0; i < data.size(); ++i) {
+        data[i] = static_cast<float>(i + 1);
+    }
+    ure::gpu::write_framebuffer_file(frame_path, fb);
+    ure::gpu::DistributedFrameBufferStorage loaded_frame = ure::gpu::read_framebuffer_file(frame_path);
+    CHECK(loaded_frame.shard.spectral.shard_id == 2);
+    CHECK(loaded_frame.shard.spectral.domain_bins == 1'000'000);
+    CHECK(loaded_frame.shard.frame.frame_index == 7);
+    CHECK(loaded_frame.shard.frame.frame_count == 16);
+    CHECK(loaded_frame.data.size() == data.size());
+    for (size_t i = 0; i < data.size(); ++i) {
+        CHECK_FLOAT_EQ(loaded_frame.data[i], data[i], 1e-6f);
+    }
+
+    remove_if_exists(range_path);
+    remove_if_exists(frame_path);
     return 0;
 }
 
@@ -116,9 +184,28 @@ static int test_framebuffer_file_merge() {
     std::vector<float> accum_data;
     std::vector<float> incoming_a_data;
     std::vector<float> incoming_b_data;
-    auto accum = make_view(2, 1, 1, accum_data);
-    auto incoming_a = make_view(2, 1, 2, incoming_a_data);
-    auto incoming_b = make_view(2, 1, 3, incoming_b_data);
+    auto frame = ure::gpu::make_frame_shard(0, 4);
+    auto accum = make_sharded_view(
+        2,
+        1,
+        1,
+        accum_data,
+        ure::gpu::make_aggregate_spectral_domain(1'000'000, 360.0f, 830.0f),
+        frame);
+    auto incoming_a = make_sharded_view(
+        2,
+        1,
+        2,
+        incoming_a_data,
+        ure::gpu::make_spectral_domain_shard(0, 2, 1'000'000, 360.0f, 830.0f),
+        frame);
+    auto incoming_b = make_sharded_view(
+        2,
+        1,
+        3,
+        incoming_b_data,
+        ure::gpu::make_spectral_domain_shard(1, 2, 1'000'000, 360.0f, 830.0f),
+        frame);
     for (int i = 0; i < 6; ++i) {
         accum_data[static_cast<size_t>(i)] = 1.0f;
         incoming_a_data[static_cast<size_t>(i)] = 2.0f;
@@ -132,6 +219,10 @@ static int test_framebuffer_file_merge() {
 
     ure::gpu::DistributedFrameBufferStorage output = ure::gpu::read_framebuffer_file(output_path);
     CHECK(output.total_samples == 6);
+    CHECK(output.shard.spectral.shard_id == ure::gpu::kDistributedAggregateShardId);
+    CHECK(output.shard.spectral.domain_bins == 1'000'000);
+    CHECK(output.shard.frame.frame_index == 0);
+    CHECK(output.shard.frame.frame_count == 4);
     for (float value : output.data) {
         CHECK_FLOAT_EQ(value, 6.0f, 1e-6f);
     }
@@ -139,6 +230,46 @@ static int test_framebuffer_file_merge() {
     remove_if_exists(accum_path);
     remove_if_exists(incoming_a_path);
     remove_if_exists(incoming_b_path);
+    remove_if_exists(output_path);
+    return 0;
+}
+
+static int test_framebuffer_file_merge_rejects_bad_shard_metadata() {
+    const auto accum_path = temp_path("ure_bad_shard_accum.urf");
+    const auto incoming_path = temp_path("ure_bad_shard_incoming.urf");
+    const auto output_path = temp_path("ure_bad_shard_output.urf");
+    remove_if_exists(accum_path);
+    remove_if_exists(incoming_path);
+    remove_if_exists(output_path);
+
+    std::vector<float> accum_data;
+    std::vector<float> incoming_data;
+    auto accum = make_sharded_view(
+        2,
+        1,
+        1,
+        accum_data,
+        ure::gpu::make_aggregate_spectral_domain(1'000'000, 360.0f, 830.0f),
+        ure::gpu::make_frame_shard(0, 1));
+    auto incoming = make_sharded_view(
+        2,
+        1,
+        1,
+        incoming_data,
+        ure::gpu::make_spectral_domain_shard(0, 2, 500'000, 360.0f, 830.0f),
+        ure::gpu::make_frame_shard(0, 1));
+    for (int i = 0; i < 6; ++i) {
+        accum_data[static_cast<size_t>(i)] = 1.0f;
+        incoming_data[static_cast<size_t>(i)] = 2.0f;
+    }
+    ure::gpu::write_framebuffer_file(accum_path, accum);
+    ure::gpu::write_framebuffer_file(incoming_path, incoming);
+    CHECK(throws_exception([&] {
+        ure::gpu::merge_framebuffer_files(accum_path, {incoming_path}, output_path);
+    }));
+
+    remove_if_exists(accum_path);
+    remove_if_exists(incoming_path);
     remove_if_exists(output_path);
     return 0;
 }
@@ -197,7 +328,9 @@ int main() {
     int failed = 0;
     failed += run("test_sample_range_file_roundtrip", test_sample_range_file_roundtrip);
     failed += run("test_framebuffer_file_roundtrip", test_framebuffer_file_roundtrip);
+    failed += run("test_shard_metadata_file_roundtrip", test_shard_metadata_file_roundtrip);
     failed += run("test_framebuffer_file_merge", test_framebuffer_file_merge);
+    failed += run("test_framebuffer_file_merge_rejects_bad_shard_metadata", test_framebuffer_file_merge_rejects_bad_shard_metadata);
     failed += run("test_invalid_range_file_inputs", test_invalid_range_file_inputs);
     failed += run("test_invalid_framebuffer_file_inputs", test_invalid_framebuffer_file_inputs);
 

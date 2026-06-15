@@ -291,6 +291,18 @@ static int test_spectral_spd_compiles_runtime_n() {
 
     CHECK(compiled.materials.size() == 1);
     const auto& mat = compiled.materials[0];
+    CHECK(mat.albedo_resource.kind == ure::gpu::SpectralResourceKind::SampledTable);
+    CHECK(mat.emission_resource.kind == ure::gpu::SpectralResourceKind::SampledTable);
+    CHECK(mat.albedo_resource.wavelengths.size() == 2);
+    CHECK(mat.albedo_resource.values.size() == 2);
+    CHECK_FLOAT_EQ(mat.albedo_resource.wavelengths[0], 360.0f, 1e-6f);
+    CHECK_FLOAT_EQ(mat.albedo_resource.values[0], 0.36f, 1e-6f);
+    CHECK_FLOAT_EQ(mat.albedo_resource.wavelengths[1], 830.0f, 1e-6f);
+    CHECK_FLOAT_EQ(mat.albedo_resource.values[1], 0.83f, 1e-6f);
+    CHECK_FLOAT_EQ(mat.emission_resource.wavelengths[0], 360.0f, 1e-6f);
+    CHECK_FLOAT_EQ(mat.emission_resource.values[0], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(mat.emission_resource.wavelengths[1], 830.0f, 1e-6f);
+    CHECK_FLOAT_EQ(mat.emission_resource.values[1], 2.0f, 1e-6f);
     for (int c = 0; c < config.num_wavelengths; ++c) {
         float lambda = ure::gpu::kSpectralLambdaMin +
                        (static_cast<float>(c) + 0.5f) *
@@ -317,7 +329,7 @@ static int test_spectral_spd_compiles_runtime_n() {
     bool rejected = false;
     try {
         ure::RenderConfig invalid = config;
-        invalid.num_wavelengths = ure::gpu::kMaxSpectralChannels + 1;
+        invalid.num_wavelengths = ure::gpu::kMaxPacketLanes + 1;
         (void)ure::GpuSceneCompiler::compile(scene, invalid);
     } catch (const std::runtime_error&) {
         rejected = true;

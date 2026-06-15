@@ -1,8 +1,10 @@
 #include "ure/ure_c_api.h"
+#include "ure/gpu_structs.hpp"
 #include "ure/render.hpp"
 #include "ure/session.hpp"
 #include "ure/scene_frontend.hpp"
 #include "ure/image_saver.hpp"
+#include <cstdint>
 #include <ure/log.hpp>
 #include <cstdlib>
 #include <cstring>
@@ -36,6 +38,13 @@ bool map_aov_type(ure_aov_type_t type, AovType& out) {
         return true;
     }
     return false;
+}
+
+bool valid_spectral_runtime_config(std::uint64_t domain_bins, int packet_lanes) {
+    if (!ure::gpu::valid_packet_lane_count(packet_lanes)) {
+        return false;
+    }
+    return domain_bins >= static_cast<std::uint64_t>(packet_lanes);
 }
 
 ure::log::Level map_log_level(ure_log_level_t level) {
@@ -288,9 +297,42 @@ ure_session_t* ure_session_create_config(int num_wavelengths,
                                          int max_trace_depth) {
     try {
         RenderConfig config;
-        if (num_wavelengths > 0) config.num_wavelengths = num_wavelengths;
+        if (num_wavelengths > 0) {
+            if (!valid_spectral_runtime_config(static_cast<std::uint64_t>(num_wavelengths), num_wavelengths)) {
+                return nullptr;
+            }
+            config.num_wavelengths = num_wavelengths;
+            config.spectral_packet_lanes = num_wavelengths;
+            config.spectral_domain_bins = static_cast<std::uint64_t>(num_wavelengths);
+        }
         if (queue_capacity > 0) config.queue_capacity = queue_capacity;
         if (max_trace_depth > 0) config.max_trace_depth = max_trace_depth;
+        auto session = std::make_unique<RenderSession>(RenderSession::create(config));
+        return reinterpret_cast<ure_session_t*>(session.release());
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+ure_session_t* ure_session_create_spectral_config(const ure_spectral_config_t* spectral_config) {
+    if (!spectral_config) return nullptr;
+    try {
+        RenderConfig config;
+        if (spectral_config->packet_lanes > 0) {
+            config.spectral_packet_lanes = spectral_config->packet_lanes;
+            config.num_wavelengths = spectral_config->packet_lanes;
+        }
+        if (spectral_config->domain_bins > 0) {
+            config.spectral_domain_bins = spectral_config->domain_bins;
+        } else if (config.spectral_packet_lanes > 0) {
+            config.spectral_domain_bins = static_cast<std::uint64_t>(config.spectral_packet_lanes);
+        }
+        if (!valid_spectral_runtime_config(spectral_domain_bins(config), spectral_packet_lanes(config))) {
+            return nullptr;
+        }
+        if (spectral_config->max_resident_mb > 0) config.spectral_max_resident_mb = spectral_config->max_resident_mb;
+        if (spectral_config->queue_capacity > 0) config.queue_capacity = spectral_config->queue_capacity;
+        if (spectral_config->max_trace_depth > 0) config.max_trace_depth = spectral_config->max_trace_depth;
         auto session = std::make_unique<RenderSession>(RenderSession::create(config));
         return reinterpret_cast<ure_session_t*>(session.release());
     } catch (...) {

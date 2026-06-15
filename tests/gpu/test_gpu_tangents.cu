@@ -25,7 +25,7 @@ static int test_tangent_upload_readback() {
     std::vector<RenderMesh> meshes = {mesh};
     std::vector<GpuMaterialData> materials(1);
     materials[0].header.type = MaterialType::Lambertian;
-    materials[0].albedo = GpuSpectrum(0.8f, 0.8f, 0.8f);
+    materials[0].albedo = SpectralPacket(0.8f, 0.8f, 0.8f);
 
     std::vector<GpuInstance> instances(1);
     instances[0].mesh_index = 0;
@@ -83,7 +83,7 @@ static int test_no_tangents_fallback() {
     std::vector<RenderMesh> meshes = {mesh};
     std::vector<GpuMaterialData> materials(1);
     materials[0].header.type = MaterialType::Lambertian;
-    materials[0].albedo = GpuSpectrum(0.8f, 0.8f, 0.8f);
+    materials[0].albedo = SpectralPacket(0.8f, 0.8f, 0.8f);
 
     std::vector<GpuInstance> instances(1);
     instances[0].mesh_index = 0;
@@ -130,7 +130,7 @@ static int test_no_tangents_pointer_null() {
     std::vector<RenderMesh> meshes = {mesh};
     std::vector<GpuMaterialData> materials(1);
     materials[0].header.type = MaterialType::Lambertian;
-    materials[0].albedo = GpuSpectrum(0.8f, 0.8f, 0.8f);
+    materials[0].albedo = SpectralPacket(0.8f, 0.8f, 0.8f);
 
     std::vector<GpuInstance> instances(1);
     instances[0].mesh_index = 0;
@@ -168,7 +168,7 @@ static int test_update_camera_gpu() {
 
     std::vector<ure::gpu::GpuMaterialData> materials(1);
     materials[0].header.type = ure::gpu::MaterialType::Light;
-    materials[0].emission = ure::gpu::GpuSpectrum(5.0f);
+    materials[0].emission = ure::gpu::SpectralPacket(5.0f);
 
     std::vector<ure::gpu::GpuInstance> instances(1);
     instances[0].mesh_index = 0;
@@ -219,7 +219,7 @@ static int test_update_medium_gpu() {
 
     std::vector<ure::gpu::GpuMaterialData> materials(1);
     materials[0].header.type = ure::gpu::MaterialType::Light;
-    materials[0].emission = ure::gpu::GpuSpectrum(5.0f);
+    materials[0].emission = ure::gpu::SpectralPacket(5.0f);
 
     std::vector<ure::gpu::GpuInstance> instances(1);
     instances[0].mesh_index = 0;
@@ -239,7 +239,7 @@ static int test_update_medium_gpu() {
 
     // Set medium parameters (very thin medium)
     update_medium_gpu(ctx, 0.001f, 0.0f,
-                       GpuSpectrum(0.1f), GpuSpectrum(0.01f), 10.0f);
+                       SpectralPacket(0.1f), SpectralPacket(0.01f), 10.0f);
 
     int spp = render_pass_gpu(ctx, 1);
     CHECK(spp == 1);

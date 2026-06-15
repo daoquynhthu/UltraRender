@@ -2,6 +2,7 @@
 
 #include <cuda_runtime.h>
 #include <cmath>
+#include <vector>
 
 #if defined(_MSC_VER)
 #pragma warning(push)
@@ -126,33 +127,103 @@ struct StokesVector {
     }
 };
 
-// Spectral range constants (moved out of GpuSpectrum for Phase E)
+// Spectral range constants.
 constexpr float kSpectralLambdaMin = 360.0f;
 constexpr float kSpectralLambdaMax = 830.0f;
-constexpr int kMinSpectralChannels = 8;
-constexpr int kMaxSpectralChannels = 32;
+constexpr int kMinPacketLanes = 1;
+constexpr int kMaxPacketLanes = 32;
 
-struct alignas(16) GpuSpectrum {
-    float values[kMaxSpectralChannels];
-    float wavelengths[kMaxSpectralChannels];
+__host__ __device__ inline bool valid_packet_lane_count(int lanes) {
+    return lanes == 1 || (lanes >= 8 && lanes <= kMaxPacketLanes);
+}
 
-    __host__ __device__ GpuSpectrum() {
-        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+struct SpectralSample {
+    float value = 0.0f;
+    float wavelength = 0.0f;
+    float pdf = 1.0f;
+    int domain_bin = -1;
+};
+
+enum class SpectralResourceKind : int {
+    None = 0,
+    Constant = 1,
+    RgbReflectance = 2,
+    RgbEmission = 3,
+    SampledTable = 4
+};
+
+enum class SpectralTextureResourceKind : int {
+    None = 0,
+    SourceSampleGrid = 1
+};
+
+enum class SpectralExpressionNodeKind : int {
+    None = 0,
+    Resource = 1,
+    Texture = 2,
+    Add = 3,
+    Multiply = 4,
+    Mix = 5
+};
+
+constexpr int kMaxMaterialExpressionNodes = 32;
+
+struct SpectralResource {
+    SpectralResourceKind kind = SpectralResourceKind::None;
+    float constant = 0.0f;
+    GpuVec3 rgb = GpuVec3(0.0f, 0.0f, 0.0f);
+    const float* wavelengths = nullptr;
+    const float* values = nullptr;
+    int sample_count = 0;
+};
+
+struct HostSpectralResource {
+    SpectralResourceKind kind = SpectralResourceKind::None;
+    float constant = 0.0f;
+    GpuVec3 rgb = GpuVec3(0.0f, 0.0f, 0.0f);
+    std::vector<float> wavelengths;
+    std::vector<float> values;
+};
+
+struct SpectralExpressionNode {
+    SpectralExpressionNodeKind kind = SpectralExpressionNodeKind::None;
+    SpectralResource resource;
+    int texture_index = -1;
+    int input_a = -1;
+    int input_b = -1;
+    int input_factor = -1;
+};
+
+struct HostSpectralExpressionNode {
+    SpectralExpressionNodeKind kind = SpectralExpressionNodeKind::None;
+    HostSpectralResource resource;
+    int texture_index = -1;
+    int input_a = -1;
+    int input_b = -1;
+    int input_factor = -1;
+};
+
+struct alignas(16) SpectralPacket {
+    float values[kMaxPacketLanes];
+    float wavelengths[kMaxPacketLanes];
+
+    __host__ __device__ SpectralPacket() {
+        for (int c = 0; c < kMaxPacketLanes; ++c) {
             values[c] = 0.0f;
             wavelengths[c] = 0.0f;
         }
     }
 
-    __host__ __device__ GpuSpectrum(float v) {
-        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+    __host__ __device__ SpectralPacket(float v) {
+        for (int c = 0; c < kMaxPacketLanes; ++c) {
             values[c] = v;
             wavelengths[c] = 0.0f;
         }
     }
 
-    __host__ __device__ GpuSpectrum(float r, float g, float b) {
+    __host__ __device__ SpectralPacket(float r, float g, float b) {
         float avg = (r + g + b) / 3.0f;
-        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+        for (int c = 0; c < kMaxPacketLanes; ++c) {
             values[c] = avg;
             wavelengths[c] = 0.0f;
         }
@@ -161,36 +232,36 @@ struct alignas(16) GpuSpectrum {
         values[2] = b;
     }
 
-    __host__ __device__ GpuSpectrum operator+(const GpuSpectrum& other) const {
-        GpuSpectrum res;
-        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+    __host__ __device__ SpectralPacket operator+(const SpectralPacket& other) const {
+        SpectralPacket res;
+        for (int c = 0; c < kMaxPacketLanes; ++c) {
             res.values[c] = values[c] + other.values[c];
             res.wavelengths[c] = wavelengths[c];
         }
         return res;
     }
 
-    __host__ __device__ GpuSpectrum operator-(const GpuSpectrum& other) const {
-        GpuSpectrum res;
-        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+    __host__ __device__ SpectralPacket operator-(const SpectralPacket& other) const {
+        SpectralPacket res;
+        for (int c = 0; c < kMaxPacketLanes; ++c) {
             res.values[c] = values[c] - other.values[c];
             res.wavelengths[c] = wavelengths[c];
         }
         return res;
     }
 
-    __host__ __device__ GpuSpectrum operator*(float s) const {
-        GpuSpectrum res;
-        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+    __host__ __device__ SpectralPacket operator*(float s) const {
+        SpectralPacket res;
+        for (int c = 0; c < kMaxPacketLanes; ++c) {
             res.values[c] = values[c] * s;
             res.wavelengths[c] = wavelengths[c];
         }
         return res;
     }
 
-    __host__ __device__ GpuSpectrum operator*(const GpuSpectrum& other) const {
-        GpuSpectrum res;
-        for (int c = 0; c < kMaxSpectralChannels; ++c) {
+    __host__ __device__ SpectralPacket operator*(const SpectralPacket& other) const {
+        SpectralPacket res;
+        for (int c = 0; c < kMaxPacketLanes; ++c) {
             res.values[c] = values[c] * other.values[c];
             res.wavelengths[c] = wavelengths[c];
         }
@@ -237,8 +308,12 @@ struct GpuTexture {
     int width;
     int height;
     int channels;
-    GpuSpectrum* data; // Unified Memory / Linear
     cudaTextureObject_t texObj; // Texture Object (Hardware Filtering)
+    SpectralTextureResourceKind spectral_kind = SpectralTextureResourceKind::None;
+    const float* spectral_source_values = nullptr;
+    int spectral_sample_count = 0;
+    float spectral_lambda_min = kSpectralLambdaMin;
+    float spectral_lambda_max = kSpectralLambdaMax;
 };
 
 // Phase E: Scalar-only material header. Spectral data stored as SoA in GpuScene.
@@ -254,17 +329,29 @@ struct GpuMaterial {
     int texture_index = -1;
     int roughness_texture_index = -1;
     int emission_texture_index = -1;
+    int expression_node_start = -1;
+    int expression_node_count = 0;
+    int albedo_expression_root = -1;
+    int roughness_expression_root = -1;
+    int emission_expression_root = -1;
 };
 
 // Host-side companion holding spectral data alongside the GPU header.
 struct GpuMaterialData {
     GpuMaterial header;
-    GpuSpectrum albedo;
-    GpuSpectrum metal_eta;
-    GpuSpectrum extinction;
-    GpuSpectrum medium_scattering;
-    GpuSpectrum medium_absorption;
-    GpuSpectrum emission;
+    SpectralPacket albedo;
+    SpectralPacket metal_eta;
+    SpectralPacket extinction;
+    SpectralPacket medium_scattering;
+    SpectralPacket medium_absorption;
+    SpectralPacket emission;
+    HostSpectralResource albedo_resource;
+    HostSpectralResource metal_eta_resource;
+    HostSpectralResource extinction_resource;
+    HostSpectralResource medium_scattering_resource;
+    HostSpectralResource medium_absorption_resource;
+    HostSpectralResource emission_resource;
+    std::vector<HostSpectralExpressionNode> expression_nodes;
 };
 
 struct GpuSphere {
@@ -342,6 +429,14 @@ struct GpuScene {
     float* mat_medium_scattering_vals;
     float* mat_medium_absorption_vals;
     float* mat_emission_vals;
+    SpectralResource* mat_albedo_resources;
+    SpectralResource* mat_metal_eta_resources;
+    SpectralResource* mat_extinction_resources;
+    SpectralResource* mat_medium_scattering_resources;
+    SpectralResource* mat_medium_absorption_resources;
+    SpectralResource* mat_emission_resources;
+    SpectralExpressionNode* material_expression_nodes;
+    int material_expression_node_count;
     int num_spectral_channels;
 
     GpuTexture* textures;
@@ -352,68 +447,73 @@ struct GpuScene {
     // Global Homogeneous Medium (Volumetric Fog)
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f; // 0.0 = Isotropic
-    GpuSpectrum medium_scattering;
-    GpuSpectrum medium_absorption;
+    SpectralPacket medium_scattering;
+    SpectralPacket medium_absorption;
     float medium_max_distance = 0.0f;
 };
 
 // Wavefront Path Tracing Structures
 enum SpectralRayMode : int {
     SpectralRayModePacket = 0,
-    SpectralRayModeLane = 1
+    SpectralRayModeLane = 1,
+    SpectralRayModeSampled = 2
 };
 
-struct RayQueue {
-    GpuVec3* origins;
-    GpuVec3* directions;
-    float* throughput_vals;        // SoA: spectral_vals[channel * capacity + idx]
-    float* throughput_wavelengths; // SoA: wavelengths[channel * capacity + idx]
-    int num_spectral_channels;     // Number of spectral channels (runtime, from RenderConfig)
-    float* stokes_i;
-    float* stokes_q;
-    float* stokes_u;
-    float* stokes_v;
-    int* medium_indices; // Phase 3: Volume / SSS (Current medium index, -1 = Global)
-    unsigned int* seeds; // Lightweight RNG state
-    int* pixel_indices;
-    int* depths;
-    int* flags; // Bitmask for ray state (e.g. 0x1 = Specular Bounce)
-    float* last_pdf; // For MIS: PDF of the last sampled direction
-    int* spectral_modes;
-    int* active_channels;
-    float* wavelength_pdfs;
+__host__ __device__ inline bool spectral_mode_is_sampled(int mode) {
+    return mode == SpectralRayModeLane || mode == SpectralRayModeSampled;
+}
 
-    // Using pointer for atomic operations on device
-    int* count;
-    int* overflow_count;
-    int capacity;
+struct RayQueue {
+    GpuVec3* origins = nullptr;
+    GpuVec3* directions = nullptr;
+    float* throughput_vals = nullptr;
+    float* throughput_wavelengths = nullptr;
+    int num_spectral_channels = 0;
+    float* stokes_i = nullptr;
+    float* stokes_q = nullptr;
+    float* stokes_u = nullptr;
+    float* stokes_v = nullptr;
+    int* medium_indices = nullptr;
+    unsigned int* seeds = nullptr;
+    int* pixel_indices = nullptr;
+    int* depths = nullptr;
+    int* flags = nullptr;
+    float* last_pdf = nullptr;
+    int* spectral_modes = nullptr;
+    int* active_channels = nullptr;
+    float* wavelength_pdfs = nullptr;
+    int initial_spectral_mode = SpectralRayModePacket;
+
+    int* count = nullptr;
+    int* overflow_count = nullptr;
+    int capacity = 0;
 };
 
 struct ShadowQueue {
-    GpuVec3* origins;
-    GpuVec3* directions;
-    float* max_dist;
-    float* radiance_vals;        // SoA: vals[channel * capacity + idx]
-    float* radiance_wavelengths; // SoA: wls[channel * capacity + idx]
-    int num_spectral_channels;
-    int* spectral_modes;
-    int* active_channels;
-    float* wavelength_pdfs;
-    int* pixel_indices;
+    GpuVec3* origins = nullptr;
+    GpuVec3* directions = nullptr;
+    float* max_dist = nullptr;
+    float* radiance_vals = nullptr;
+    float* radiance_wavelengths = nullptr;
+    int num_spectral_channels = 0;
+    int* spectral_modes = nullptr;
+    int* active_channels = nullptr;
+    float* wavelength_pdfs = nullptr;
+    int* pixel_indices = nullptr;
 
-    int* count;
-    int capacity;
+    int* count = nullptr;
+    int capacity = 0;
 };
 
 struct HitQueue {
-    float* t;
-    GpuVec3* p;
-    GpuVec3* n;
-    GpuVec3* ng; // Geometric Normal
-    GpuVec2* uv; // Texture coordinates
-    int* mat_ids;
-    int* hit_types; // 0 = Sphere, 1 = Mesh
-    int* hit_indices; // Index in spheres[] or meshes[]
+    float* t = nullptr;
+    GpuVec3* p = nullptr;
+    GpuVec3* n = nullptr;
+    GpuVec3* ng = nullptr;
+    GpuVec2* uv = nullptr;
+    int* mat_ids = nullptr;
+    int* hit_types = nullptr;
+    int* hit_indices = nullptr;
 };
 
 } // namespace ure::gpu

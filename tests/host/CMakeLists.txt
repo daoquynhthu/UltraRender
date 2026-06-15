@@ -12,6 +12,14 @@ add_executable(test_asset_pipeline test_asset_pipeline.cpp)
 target_link_libraries(test_asset_pipeline PRIVATE ure_sceneio ure_diag)
 add_test(NAME test_asset_pipeline COMMAND test_asset_pipeline)
 
+add_executable(test_config test_config.cpp)
+target_link_libraries(test_config PRIVATE ure_config ure_diag)
+add_test(NAME test_config COMMAND test_config)
+
+add_executable(test_spectral_oracle test_spectral_oracle.cpp)
+target_link_libraries(test_spectral_oracle PRIVATE ure_types)
+add_test(NAME test_spectral_oracle COMMAND test_spectral_oracle)
+
 add_executable(test_gltf_frontend test_gltf_frontend.cpp)
 target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)

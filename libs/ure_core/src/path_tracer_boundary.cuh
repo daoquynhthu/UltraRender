@@ -86,8 +86,8 @@ struct ConductorMaterialSemantics {
 };
 
 __device__ inline ConductorMaterialSemantics eval_conductor_material_semantics(
-    const GpuSpectrum& metal_eta,
-    const GpuSpectrum& extinction,
+    const SpectralPacket& metal_eta,
+    const SpectralPacket& extinction,
     int num_spec
 ) {
     float eta_len_sq = 0.0f;
@@ -101,7 +101,7 @@ __device__ inline ConductorMaterialSemantics eval_conductor_material_semantics(
 
 __device__ inline float conductor_eta_for_channel(
     const ConductorMaterialSemantics& semantics,
-    const GpuSpectrum& metal_eta,
+    const SpectralPacket& metal_eta,
     float fallback_eta,
     int channel
 ) {

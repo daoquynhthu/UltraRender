@@ -27,7 +27,7 @@ std::vector<float> load_spd(const std::string& path, int num_wavelengths) {
 }
 
 std::vector<float> load_spd(const std::string& path, const RenderConfig& config) {
-    return load_spd(path, config.num_wavelengths);
+    return load_spd(path, spectral_packet_lanes(config));
 }
 
 } // namespace ure::scene_io

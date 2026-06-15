@@ -63,7 +63,7 @@ static int test_gpu_hot_update_identity() {
     // Default material (Lambertian)
     std::vector<ure::gpu::GpuMaterialData> materials(1);
     materials[0].header.type = ure::gpu::MaterialType::Lambertian;
-    materials[0].albedo = ure::gpu::GpuSpectrum(0.8f, 0.8f, 0.8f);
+    materials[0].albedo = ure::gpu::SpectralPacket(0.8f, 0.8f, 0.8f);
     
     // One instance with known transform
     std::vector<ure::gpu::GpuInstance> instances(1);
@@ -143,7 +143,7 @@ static int test_gpu_transform_readback() {
     }
     std::vector<ure::gpu::GpuMaterialData> materials(1);
     materials[0].header.type = ure::gpu::MaterialType::Lambertian;
-    materials[0].albedo = ure::gpu::GpuSpectrum(0.5f,0.5f,0.5f);
+    materials[0].albedo = ure::gpu::SpectralPacket(0.5f,0.5f,0.5f);
     
     std::vector<ure::gpu::GpuInstance> instances(1);
     instances[0].mesh_index = 0;

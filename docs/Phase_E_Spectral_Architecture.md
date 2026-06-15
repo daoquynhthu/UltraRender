@@ -52,9 +52,27 @@
 
 ---
 
-## 2. GpuSpectrum 内存布局
+## 2. SpectralPacket 内存布局
 
-2026-06-11 过渡实现说明：当前代码中的 `GpuSpectrum` 已从旧 4 通道扩容为 `kMaxSpectralChannels=32` 的局部桥接类型，目的是让 runtime-N 迁移期间的 material/shadow/scatter 路径在 N=8 等配置下不再越界或截断。这个类型扩容不是最终架构；最终目标仍是本节定义的 SoA/数组访问模型，避免在高 N 下复制大对象并造成 register/local memory 压力。
+2026-06-11 过渡实现说明：当时代码中的 `GpuSpectrum` 已从旧 4 通道扩容为 `kMaxSpectralChannels=32` 的局部桥接类型，目的是让 runtime-N 迁移期间的 material/shadow/scatter 路径在 N=8 等配置下不再越界或截断。这个类型扩容不是最终架构；最终目标仍是本节定义的 SoA/数组访问模型，避免在高 N 下复制大对象并造成 register/local memory 压力。
+
+2026-06-14 Phase L.3 进展：代码中的旧 `GpuSpectrum` 类型已删除并更名为 `SpectralPacket`，其语义限定为 GPU ray/material 计算中的 packet-width 临时载体；packet cap 已更名为 `kMinPacketLanes`/`kMaxPacketLanes`。新增 `SpectralSample` 用于后续 single sampled wavelength / domain-bin 状态。`GpuTexture` 已从 `SpectralPacket* data` 改为显式 float carrier，不再在 texture resource API 中暴露 fixed 32-array packet；该过渡 carrier 已在 L.8 被 source-sample resource descriptor 取代。
+
+2026-06-14 Phase L.4 进展：RayQueue 已引入初始 spectral mode，primary ray 可以按 `spectral_sampling_mode` 进入 `SpectralRayModeSampled`。`packet_lanes=1` 现在是合法 sampled-wavelength carrier，`packet_lanes=2-7` 仍拒绝；`packet_lanes>=8` 继续表示 packet quadrature。lane split 与 sampled primary ray 通过同一 active-channel / wavelength-pdf estimator 处理 direct lighting、medium proposal 和 Stokes state，避免为 hero/sample/lane 分别维护不同公式。
+
+2026-06-14 Phase L.5 进展：材质光谱输入已新增 `SpectralResource` device descriptor 与 `HostSpectralResource` host bridge。glTF SPD 的 albedo/emission 保留原始 sampled table，RGB-derived albedo/emission/n/k/材质内 medium sigma 编译为 analytic resource，wavefront shading 按 ray 当前 wavelength resource-first 评估；packet SoA 仍保留为 cache/fallback。全局 homogeneous medium 仍是 packet field，归后续 Phase L 子步骤处理；texture resource 化已在 L.8 建立 source-sample descriptor，完整 basis/tile cache 仍是后续性能路径。
+
+2026-06-14 Phase L.6 进展：新增 CPU-only `spectral_oracle.hpp`，默认 360-830nm / 1,000,000 bins reference integration，用现有 CIE 1931 表验证 equal-energy、D65、narrowband、metamer pair 和 high-res resource sampled estimator 偏差。这个 oracle 是后续 L.7 GPU sampled wavelength estimator 的基准；它不表示 GPU 端 million-domain estimator 已完成。
+
+2026-06-14 Phase L.7 进展：GPU sampled estimator 已按 mode 拆分。`SpectralRayModeSampled` 使用连续波长样本和 `1 / (830-360)` PDF density，XYZ estimator 为 `value * CIE(lambda) / pdf_density / cie_y_integral`；`SpectralRayModeLane` 仍使用离散 lane probability 与 packet bin width，保持 deterministic lane split 对 packet quadrature 的等价性。`gpu_test_spectral` 现在用 L.6 CPU oracle 对照 equal-energy、D65 和 high-res D65+narrowband resource，验证 sampled path 不展开 1M lane 也能收敛到 reference。
+
+2026-06-14 Phase L.8 进展：explicit spectral texture 已从 packet-width resident buffer 改为 source-sample resource descriptor。`GpuTexture` 保存 source sample table、sample count 和 visible-domain lambda range；`sample_texture()` 先做 UV 双线性，再按当前 ray wavelength 在 source samples 上插值。RGB texture 不再同时上传 packet-width spectral buffer，只保留 CUDA `texObj` 并在 kernel 端按 wavelength 重建。L.8 解决 texel × packet/domain 展开问题；basis/tile cache、cache miss 诊断和分布式资源分片仍归后续 Phase L 子步骤。
+
+2026-06-15 Phase L.9 进展：MaterialGraph value 节点已从 packet-only flatten 迁移到 spectral expression graph。Texture2D、Add、Multiply、Mix 会编译为材质局部 expression nodes，GPU shading 按当前 ray wavelength/UV 动态求值；albedo、roughness、emission 均可通过 expression root 覆盖 packet cache。`URE_spectral_material` SPD override 仍是 authoritative，存在 SPD 时清除对应 graph root。metal eta/k 与 dielectric ior 的 texture/expression 输入仍需要专用 IOR/scalar expression slot，不在 L.9 内伪装支持。
+
+2026-06-15 Phase L.10 进展：分布式契约已新增 spectral-domain/frame shard metadata。`DistributedSampleRange` 与 `DistributedFrameBuffer` 都携带 domain bins、domain start/count、lambda range、wavelength PDF integral 和 frame index/count；file backend 升级到 v2 并序列化同一 metadata。`merge_partial_framebuffer()` 允许不同 spectral shard 合并到 aggregate accumulator，但拒绝 domain/lambda/frame 不兼容的输入。这解决的是 farm contract 和文件交换层，不等于完整 scheduler/resource cache；worker 调度、basis/tile cache 和 cache preset 仍归 Phase L.11。
+
+2026-06-15 Phase L.11 进展：`SpectralRuntimePlan` 已输出低端/桌面/高端/farm 的 sampler preset、cache preset 和 CUDA stream preset，并估算 material packet cache、sampled resource table 与 explicit spectral texture source grid 的 resident bytes。`spectral_max_resident_mb` 现在是 GPU init 前的硬预算门禁；显式超预算会 fail-loud，而不是试图分配后崩溃或假装已有 streaming fallback。新增 `phase_l_spectral_budget.gltf` 和 benchmark smoke 脚本，已跑通 1M-domain sampled HDR smoke。完整 basis/tile cache runtime、resource prefetch 和系统化 perf suite 仍是后续性能路径。
 
 ### 2.1 约束条件
 
@@ -123,7 +141,7 @@ for (int c = 0; c < num_spec; ++c) {
 }
 ```
 
-**N > 16 的处理**：使用 Shared Memory + 分块，或限制 Wavefront 最大并发光线数以保证寄存器不溢出。`RenderConfig::num_wavelengths` 在 `gpu_auto_config.hpp` 中根据 VRAM + 寄存器压力自动选择。
+**N > 16 的处理**：Phase E 的 `N` 是 GPU path packet 宽度，不是全局光谱资源域分辨率。当前完成态把 packet quadrature lanes 约束在 `[8, 32]`，并在 Phase L.4 允许 `packet_lanes=1` 作为 single sampled wavelength 模式；`2-7` 仍拒绝，避免未经验证的半宽 packet。Phase L 将 `domain_bins` 与 `packet_lanes` 解耦，百万级 SPD/纹理/材质资源不能通过扩大 `SpectralPacket` 或 `num_wavelengths` 来实现。
 
 ### 2.4 已 SoA 的队列
 
@@ -135,16 +153,16 @@ for (int c = 0; c < num_spec; ++c) {
 
 ### 2.5 纹理（特殊处理）
 
-纹理存储经 RGB 重建或 SPD 加载后的 spectrum。对 N 通道，纹理不是 SoA 队列布局，而是每像素一个完整 N 光谱（AoS 的纹理采样）。理由：
+Phase E 的纹理路径最初存储经 RGB 重建或 SPD 加载后的 packet-width spectrum。Phase L.8 后，RGB texture 与 explicit spectral texture 分开：RGB 输入保留 CUDA texture object；explicit spectral texture 作为 source-sample resource descriptor 驻留，source sample count 不再要求等于 packet lanes 或 domain bins。理由：
 
 - `tex2D<float4>` 硬件只支持 1-4 通道，不支持 N>4
 - `sample_texture()` 纹理采样用于材质属性（漫反射 albedo、粗糙度贴图），是连贯内存访问（相邻像素 → 相邻 texels），SoA 没有优势
-- 对于显式 N 通道光谱纹理，当前实现使用 `GpuTexture::data` 存储每 texel 的 N 通道 `GpuSpectrum`，`sample_texture()` 手写双线性插值；layered texture object 保留为后续性能优化
+- 对于 explicit spectral texture，当前实现使用 `GpuTexture::spectral_source_values` 存储 texel-major `pixel * source_sample_count + sample` float table，`sample_texture()` 手写 UV 双线性和 wavelength 插值；这已经切断 texel × packet/domain 展开，但还不是完整 sparse/tiled cache 系统。
 
 **决议**:
-- RGB 输入：`HostTexture::channels == 3`，上传时同时生成 N 通道 `GpuSpectrum[]` 和 `cudaArray<float4>` `texObj`；kernel 端仍可用硬件过滤，再按当前 wavelengths/runtime N 重建。
-- 显式光谱输入：`HostTexture::channels == RenderConfig::num_wavelengths`，上传到 `GpuTexture::data`，不创建 `texObj`；kernel 端按 `num_spec` 遍历 N 通道做双线性插值。
-- 非 3 且非 N 的输入拒绝上传，避免静默错位采样。
+- RGB 输入：`HostTexture::channels == 3`，上传为 `cudaArray<float4>` `texObj`；kernel 端用硬件 filtering 后按当前 wavelengths/runtime packet 重建。
+- Explicit spectral 输入：`HostTexture::channels != 3`，`channels` 表示 source spectral sample count，上传到 `GpuTexture::spectral_source_values`，不创建 `texObj`；kernel 端按当前 ray wavelengths 对 source samples 插值。
+- 非 3 通道不再要求等于 `spectral_packet_lanes(config)`；这正是 L.8 解耦 texture resource 与 packet width 的核心。
 
 ---
 
@@ -163,7 +181,8 @@ for (int c = 0; c < num_spec; ++c) {
 ### 3.2 各阶段 N 的传递
 
 ```
-RenderConfig::num_wavelengths  ← CLI/JSON/auto_config
+RenderConfig::spectral_packet_lanes  ← CLI/JSON/auto_config
+RenderConfig::num_wavelengths        ← legacy alias during Phase L migration
     │
     ▼
 init_gpu_renderer(config)
@@ -388,7 +407,7 @@ Phase E.5 — 色散 + Mueller 光谱化
 
 2026-06-11 进展：`eval_bsdf()` 和 `sample_texture()` 的波长输入从 `float4 wavelengths` 迁移为 `const float* wavelengths, int num_spec`；`shade_kernel` 中 sky、texture、emissive surface、volume direct light 和 NEE direct light 路径不再构造 `make_float4(throughput.wavelengths[0..3])`。新增 `test_sample_texture_invalid_n8` 覆盖 texture fallback 的 N=8 波长透传，新增 `test_eval_bsdf_metal_n8` 覆盖金属 Fresnel BSDF 对第 5-8 通道写入有限正值；`gpu_test_spectral_soa` 现为 8 tests / 257 checks。此时剩余固定 4 通道面主要是 host texture upload 的 `float4`/`tex2D<float4>` 存储路径；下一步应按本设计落地分层纹理或等价 N 通道纹理载体。
 
-2026-06-11 进展：host texture N-channel carrier 已落地。`HostTexture::channels` 和 `GpuTexture::channels` 区分 RGB 输入与显式光谱输入；RGB 路径保留 `cudaArray<float4>` `texObj` 供硬件过滤，同时上传 N 通道 `GpuSpectrum[]`；显式光谱路径要求 `channels == RenderConfig::num_wavelengths`，上传到 `GpuTexture::data` 并由 `sample_texture()` 对 N 通道手写双线性插值。新增 `test_sample_texture_spectral_data_n8` 覆盖 2x2 spectral texture 的 N=8 插值和值/波长透传；`gpu_test_spectral_soa` 现为 9 tests / 283 checks。layered texture object 仍可作为后续性能优化，但不再阻塞 E.3 正确性。
+2026-06-11 进展：host texture N-channel carrier 已落地。`HostTexture::channels` 和 `GpuTexture::channels` 区分 RGB 输入与显式光谱输入；RGB 路径保留 `cudaArray<float4>` `texObj` 供硬件过滤，同时上传 packet-width float spectral buffer；显式光谱路径要求 `channels == RenderConfig::num_wavelengths`，上传到 `GpuTexture::spectral_values` 并由 `sample_texture()` 对 N 通道手写双线性插值。新增 `test_sample_texture_spectral_data_n8` 覆盖 2x2 spectral texture 的 N=8 插值和值/波长透传；`gpu_test_spectral_soa` 现为 9 tests / 283 checks。该段描述的是 Phase E 过渡状态，已被 2026-06-14 Phase L.8 的 source-sample resource descriptor 替代。
 
 2026-06-11 进展：legacy `float4` spectral helper overload 已删除。`tests/gpu/test_spectral_pipeline.cu` 的 roundtrip、`rgb_coeff_to_spectrum` 和 `emission_to_spectrum` 覆盖全部改为 `const float* wavelengths, int num_spec`，其中 emission 匹配测试提升到 N=8；`gpu_test_spectral` 现为 12 tests / 469 checks。`resample_uniform` 同步移除隐藏 4 通道默认值，public `scene_io::load_spd(path, int)` 与 `load_spd(path, RenderConfig)` 透传运行时 N；新增 `test_scene_io_load_spd_runtime_n`，`test_asset_pipeline` 现为 7 tests / 48 checks。
 

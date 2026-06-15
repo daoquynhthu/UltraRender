@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -89,6 +90,15 @@ bool check_scene_path(const std::string& scene_path) {
     return true;
 }
 
+ure::SpectralSamplingMode parse_spectral_sampling_mode(const std::string& mode) {
+    const std::string value = lowercase(mode);
+    if (value == "uniform_sampled") return ure::SpectralSamplingMode::UniformSampled;
+    if (value == "stratified") return ure::SpectralSamplingMode::Stratified;
+    if (value == "importance") return ure::SpectralSamplingMode::Importance;
+    if (value == "farm_shard") return ure::SpectralSamplingMode::FarmShard;
+    return ure::SpectralSamplingMode::PacketUniform;
+}
+
 int cmd_render(const ure::config::CliResult& cli) {
     const auto& app_config = cli.config;
     if (!check_scene_path(app_config.scene_path)) {
@@ -96,15 +106,28 @@ int cmd_render(const ure::config::CliResult& cli) {
     }
 
     ure::RenderConfig gpu_config;
-    gpu_config.num_wavelengths = app_config.spectral.bands;
+    const std::uint64_t domain_bins = app_config.spectral.domain_bins > 0
+        ? app_config.spectral.domain_bins
+        : static_cast<std::uint64_t>(std::max(app_config.spectral.bands, 0));
+    const int packet_lanes = app_config.spectral.packet_lanes > 0
+        ? app_config.spectral.packet_lanes
+        : std::min(std::max(app_config.spectral.bands, ure::gpu::kMinPacketLanes),
+                   ure::gpu::kMaxPacketLanes);
+    gpu_config.spectral_domain_bins = domain_bins;
+    gpu_config.spectral_packet_lanes = packet_lanes;
+    gpu_config.spectral_max_resident_mb = app_config.spectral.max_resident_mb;
+    gpu_config.spectral_sampling_mode = parse_spectral_sampling_mode(app_config.spectral.sampling_mode);
+    gpu_config.num_wavelengths = packet_lanes;
     gpu_config.queue_capacity = app_config.gpu.wavefront_capacity;
     gpu_config.max_trace_depth = app_config.renderer.max_depth;
-    if (gpu_config.num_wavelengths < ure::gpu::kMinSpectralChannels ||
-        gpu_config.num_wavelengths > ure::gpu::kMaxSpectralChannels) {
-        std::cerr << "Error: spectral bands must be in ["
-                  << ure::gpu::kMinSpectralChannels << ", "
-                  << ure::gpu::kMaxSpectralChannels << "], got "
-                  << gpu_config.num_wavelengths << "\n";
+    if (!ure::gpu::valid_packet_lane_count(gpu_config.spectral_packet_lanes)) {
+        std::cerr << "Error: spectral packet lanes must be 1 or in [8, "
+                  << ure::gpu::kMaxPacketLanes << "], got "
+                  << gpu_config.spectral_packet_lanes << "\n";
+        return 1;
+    }
+    if (gpu_config.spectral_domain_bins < static_cast<std::uint64_t>(gpu_config.spectral_packet_lanes)) {
+        std::cerr << "Error: spectral domain bins must be >= packet lanes\n";
         return 1;
     }
 

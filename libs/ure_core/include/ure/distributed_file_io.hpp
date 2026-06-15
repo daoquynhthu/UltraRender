@@ -11,6 +11,7 @@ struct DistributedFrameBufferStorage {
     int width = 0;
     int height = 0;
     int total_samples = 0;
+    DistributedShardMetadata shard;
     std::vector<float> data;
 
     DistributedFrameBuffer view();

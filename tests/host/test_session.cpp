@@ -701,6 +701,34 @@ static int test_c_session_lifecycle() {
     ure_session_cancel(session);
     ure_session_reset_accumulation(session);
     ure_session_destroy(session);
+
+    ure_spectral_config_t spectral_config{};
+    spectral_config.domain_bins = 1000000ULL;
+    spectral_config.packet_lanes = 8;
+    spectral_config.queue_capacity = 64;
+    spectral_config.max_trace_depth = 12;
+    ure_session_t* spectral_session = ure_session_create_spectral_config(&spectral_config);
+    CHECK(spectral_session != nullptr);
+    ure_session_destroy(spectral_session);
+
+    ure_spectral_config_t sampled_config{};
+    sampled_config.domain_bins = 1000000ULL;
+    sampled_config.packet_lanes = 1;
+    sampled_config.queue_capacity = 64;
+    sampled_config.max_trace_depth = 12;
+    ure_session_t* sampled_session = ure_session_create_spectral_config(&sampled_config);
+    CHECK(sampled_session != nullptr);
+    ure_session_destroy(sampled_session);
+
+    ure_spectral_config_t invalid_four_lane_config{};
+    invalid_four_lane_config.domain_bins = 1000000ULL;
+    invalid_four_lane_config.packet_lanes = 4;
+    CHECK(ure_session_create_spectral_config(&invalid_four_lane_config) == nullptr);
+
+    ure_spectral_config_t invalid_spectral_config{};
+    invalid_spectral_config.domain_bins = 4;
+    invalid_spectral_config.packet_lanes = 8;
+    CHECK(ure_session_create_spectral_config(&invalid_spectral_config) == nullptr);
     return 0;
 }
 

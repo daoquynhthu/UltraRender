@@ -17,6 +17,18 @@ static DistributedFrameBuffer make_fb(int w, int h, int samples, float val) {
     return {w, h, samples, data};
 }
 
+static DistributedFrameBuffer make_sharded_fb(int w,
+                                              int h,
+                                              int samples,
+                                              float val,
+                                              const DistributedSpectralDomainShard& spectral,
+                                              const DistributedFrameShard& frame = {}) {
+    DistributedFrameBuffer fb = make_fb(w, h, samples, val);
+    fb.shard.spectral = spectral;
+    fb.shard.frame = frame;
+    return fb;
+}
+
 static void free_fb(const DistributedFrameBuffer& fb) {
     delete[] fb.data;
 }
@@ -107,6 +119,39 @@ static int test_sample_range_errors() {
     return 0;
 }
 
+static int test_spectral_domain_shard_partition() {
+    bool covered[17] = {};
+    int total_count = 0;
+    for (int shard_id = 0; shard_id < 5; ++shard_id) {
+        DistributedSpectralDomainShard shard = make_spectral_domain_shard(shard_id, 5, 17, 360.0f, 830.0f);
+        CHECK(validate_spectral_domain_shard(shard));
+        CHECK(shard.shard_id == shard_id);
+        CHECK(shard.shard_count == 5);
+        CHECK(shard.domain_bins == 17);
+        CHECK(shard.domain_count > 0);
+        CHECK(shard.domain_start + shard.domain_count <= shard.domain_bins);
+        CHECK(shard.wavelength_pdf_integral > 0.0f);
+        total_count += static_cast<int>(shard.domain_count);
+        for (std::uint64_t b = shard.domain_start; b < shard.domain_start + shard.domain_count; ++b) {
+            CHECK(!covered[b]);
+            covered[b] = true;
+        }
+    }
+    CHECK(total_count == 17);
+    for (bool bin : covered) {
+        CHECK(bin);
+    }
+    CHECK(validate_spectral_domain_shard(make_aggregate_spectral_domain(1'000'000, 360.0f, 830.0f)));
+    CHECK(throws_invalid_argument([] { (void)make_spectral_domain_shard(0, 0, 16, 360.0f, 830.0f); }));
+    CHECK(throws_out_of_range([] { (void)make_spectral_domain_shard(2, 2, 16, 360.0f, 830.0f); }));
+    CHECK(throws_invalid_argument([] { (void)make_spectral_domain_shard(0, 2, 0, 360.0f, 830.0f); }));
+    CHECK(throws_invalid_argument([] { (void)make_spectral_domain_shard(0, 2, 16, 830.0f, 360.0f); }));
+    CHECK(validate_frame_shard(make_frame_shard(2, 5)));
+    CHECK(throws_invalid_argument([] { (void)make_frame_shard(0, 0); }));
+    CHECK(throws_out_of_range([] { (void)make_frame_shard(2, 2); }));
+    return 0;
+}
+
 // --- Test: commutativity (merge A then B == merge B then A) ---
 static int test_commutativity() {
     auto fb1 = make_fb(4, 4, 3, 1.0f);
@@ -174,6 +219,48 @@ static int test_identity() {
     return 0;
 }
 
+static int test_spectral_shard_merge_contract() {
+    auto shard_a = make_spectral_domain_shard(0, 2, 1'000'000, 360.0f, 830.0f);
+    auto shard_b = make_spectral_domain_shard(1, 2, 1'000'000, 360.0f, 830.0f);
+    auto frame = make_frame_shard(3, 8);
+    auto accum = make_sharded_fb(2, 2, 0, 0.0f, make_aggregate_spectral_domain(1'000'000, 360.0f, 830.0f), frame);
+    auto fb_a = make_sharded_fb(2, 2, 4, 1.0f, shard_a, frame);
+    auto fb_b = make_sharded_fb(2, 2, 5, 2.0f, shard_b, frame);
+
+    CHECK(compatible_shard_metadata_for_merge(accum.shard, fb_a.shard));
+    CHECK(compatible_shard_metadata_for_merge(accum.shard, fb_b.shard));
+    merge_partial_framebuffer(accum, fb_a);
+    merge_partial_framebuffer(accum, fb_b);
+    CHECK(accum.total_samples == 9);
+    CHECK(accum.shard.spectral.shard_id == kDistributedAggregateShardId);
+    CHECK(accum.shard.spectral.domain_bins == 1'000'000);
+    for (int i = 0; i < 2 * 2 * 3; ++i) {
+        CHECK_FLOAT_EQ(accum.data[i], 3.0f, 1e-6f);
+    }
+
+    free_fb(accum);
+    free_fb(fb_a);
+    free_fb(fb_b);
+    return 0;
+}
+
+static int test_shard_metadata_mismatch_rejected() {
+    auto accum = make_sharded_fb(2, 2, 0, 0.0f, make_aggregate_spectral_domain(1'000'000, 360.0f, 830.0f), make_frame_shard(0, 1));
+    auto bad_domain = make_sharded_fb(2, 2, 1, 1.0f, make_spectral_domain_shard(0, 2, 500'000, 360.0f, 830.0f), make_frame_shard(0, 1));
+    auto bad_lambda = make_sharded_fb(2, 2, 1, 1.0f, make_spectral_domain_shard(0, 2, 1'000'000, 400.0f, 700.0f), make_frame_shard(0, 1));
+    auto bad_frame = make_sharded_fb(2, 2, 1, 1.0f, make_spectral_domain_shard(0, 2, 1'000'000, 360.0f, 830.0f), make_frame_shard(1, 2));
+
+    CHECK(throws_invalid_argument([&] { merge_partial_framebuffer(accum, bad_domain); }));
+    CHECK(throws_invalid_argument([&] { merge_partial_framebuffer(accum, bad_lambda); }));
+    CHECK(throws_invalid_argument([&] { merge_partial_framebuffer(accum, bad_frame); }));
+
+    free_fb(accum);
+    free_fb(bad_domain);
+    free_fb(bad_lambda);
+    free_fb(bad_frame);
+    return 0;
+}
+
 static int test_size_mismatch() {
     auto fb1 = make_fb(4, 4, 5, 1.0f);
     auto fb2 = make_fb(8, 8, 3, 2.0f);
@@ -207,9 +294,12 @@ int main() {
     printf("[Distributed Contract Test]\n");
     RUN_TEST(test_sample_range_partition);
     RUN_TEST(test_sample_range_errors);
+    RUN_TEST(test_spectral_domain_shard_partition);
     RUN_TEST(test_commutativity);
     RUN_TEST(test_associativity);
     RUN_TEST(test_identity);
+    RUN_TEST(test_spectral_shard_merge_contract);
+    RUN_TEST(test_shard_metadata_mismatch_rejected);
     RUN_TEST(test_size_mismatch);
     RUN_TEST(test_merge_invalid_inputs);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);

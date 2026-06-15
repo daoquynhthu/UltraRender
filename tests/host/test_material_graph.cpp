@@ -116,7 +116,7 @@ static int test_lambert_graph_compiles_to_gpu_material() {
     CHECK(compiled.materials.size() == 1);
     const auto& gpu_material = compiled.materials[0];
     CHECK(gpu_material.header.type == ure::gpu::MaterialType::Lambertian);
-    CHECK_FLOAT_EQ(gpu_material.header.roughness, 0.37f, 1e-6f);
+    CHECK(gpu_material.header.roughness_expression_root >= 0);
     for (int c = 0; c < config.num_wavelengths; ++c) {
         CHECK(gpu_material.albedo.wavelengths[c] > 0.0f);
         CHECK(std::isfinite(gpu_material.albedo.values[c]));
@@ -259,9 +259,10 @@ static int test_graph_texture2d_compiles_to_texture_slot() {
     CHECK(compiled.textures[0].width == 2);
     CHECK(compiled.textures[0].height == 2);
     CHECK(compiled.materials.size() == 1);
-    CHECK(compiled.materials[0].header.texture_index == 0);
+    CHECK(compiled.materials[0].header.texture_index == -1);
+    CHECK(compiled.materials[0].header.albedo_expression_root >= 0);
+    CHECK(!compiled.materials[0].expression_nodes.empty());
     CHECK(compiled.materials[0].header.roughness_texture_index == -1);
-    CHECK(compiled.materials[0].albedo.values[4] > 0.25f);
     return 0;
 }
 
@@ -308,9 +309,9 @@ static int test_graph_roughness_texture_compiles_to_texture_slot() {
 
     CHECK(compiled.textures.size() == 1);
     CHECK(compiled.materials.size() == 1);
-    CHECK_FLOAT_EQ(compiled.materials[0].header.roughness, 0.6f, 1e-6f);
+    CHECK(compiled.materials[0].header.roughness_expression_root >= 0);
     CHECK(compiled.materials[0].header.texture_index == -1);
-    CHECK(compiled.materials[0].header.roughness_texture_index == 0);
+    CHECK(compiled.materials[0].header.roughness_texture_index == -1);
     return 0;
 }
 
@@ -369,7 +370,8 @@ static int test_graph_add_and_mix_constants_compile() {
     auto compiled = ure::GpuSceneCompiler::compile(scene_with_material(material), config);
 
     CHECK(compiled.materials.size() == 1);
-    CHECK_FLOAT_EQ(compiled.materials[0].header.roughness, 0.45f, 1e-6f);
+    CHECK(compiled.materials[0].header.roughness_expression_root >= 0);
+    CHECK(!compiled.materials[0].expression_nodes.empty());
     return 0;
 }
 
@@ -473,7 +475,7 @@ static int test_graph_cycles_rejected() {
     return 0;
 }
 
-static int test_texture_add_and_mix_fail_loud() {
+static int test_texture_add_and_mix_compile_to_expression_graph() {
     const std::string texture_path = "test_material_graph_texture_expr.bmp";
     auto texture = write_texture_resource(texture_path);
 
@@ -520,25 +522,27 @@ static int test_texture_add_and_mix_fail_loud() {
         return material;
     };
 
-    bool add_rejected = false;
-    bool mix_rejected = false;
-    try {
+    {
         ure::RenderConfig config;
         config.num_wavelengths = 8;
-        (void)ure::GpuSceneCompiler::compile(scene_with_material(make_material(ure::scene_ir::MaterialGraphNodeKind::Add)), config);
-    } catch (const std::runtime_error&) {
-        add_rejected = true;
+        auto compiled = ure::GpuSceneCompiler::compile(scene_with_material(make_material(ure::scene_ir::MaterialGraphNodeKind::Add)), config);
+        CHECK(compiled.textures.size() == 1);
+        CHECK(compiled.materials.size() == 1);
+        CHECK(compiled.materials[0].header.albedo_expression_root >= 0);
+        CHECK(compiled.materials[0].header.texture_index == -1);
+        CHECK(!compiled.materials[0].expression_nodes.empty());
     }
-    try {
+    {
         ure::RenderConfig config;
         config.num_wavelengths = 8;
-        (void)ure::GpuSceneCompiler::compile(scene_with_material(make_material(ure::scene_ir::MaterialGraphNodeKind::Mix)), config);
-    } catch (const std::runtime_error&) {
-        mix_rejected = true;
+        auto compiled = ure::GpuSceneCompiler::compile(scene_with_material(make_material(ure::scene_ir::MaterialGraphNodeKind::Mix)), config);
+        CHECK(compiled.textures.size() == 1);
+        CHECK(compiled.materials.size() == 1);
+        CHECK(compiled.materials[0].header.albedo_expression_root >= 0);
+        CHECK(compiled.materials[0].header.texture_index == -1);
+        CHECK(!compiled.materials[0].expression_nodes.empty());
     }
     std::remove(texture_path.c_str());
-    CHECK(add_rejected);
-    CHECK(mix_rejected);
     return 0;
 }
 
@@ -563,7 +567,7 @@ int main() {
     failed += run("test_graph_builder_assigns_node_ids", test_graph_builder_assigns_node_ids);
     failed += run("test_graph_duplicate_node_ids_rejected", test_graph_duplicate_node_ids_rejected);
     failed += run("test_graph_cycles_rejected", test_graph_cycles_rejected);
-    failed += run("test_texture_add_and_mix_fail_loud", test_texture_add_and_mix_fail_loud);
+    failed += run("test_texture_add_and_mix_compile_to_expression_graph", test_texture_add_and_mix_compile_to_expression_graph);
 
     fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

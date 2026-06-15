@@ -1,6 +1,8 @@
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "test_framework.cuh"
@@ -116,7 +118,7 @@ __global__ void setup_single_ray_kernel(RayQueue q, GpuVec3 origin, GpuVec3 dir,
     q.origins[idx] = origin;
     q.directions[idx] = dir;
     float4 wls = make_float4(450.0f, 550.0f, 650.0f, 750.0f);
-    GpuSpectrum throughput(1.0f);
+    SpectralPacket throughput(1.0f);
     throughput.wavelengths[0] = wls.x;
     throughput.wavelengths[1] = wls.y;
     throughput.wavelengths[2] = wls.z;
@@ -138,7 +140,7 @@ __global__ void setup_single_ray_n_kernel(RayQueue q, GpuVec3 origin, GpuVec3 di
     int idx = 0;
     q.origins[idx] = origin;
     q.directions[idx] = dir.normalize();
-    GpuSpectrum throughput(1.0f);
+    SpectralPacket throughput(1.0f);
     for (int c = 0; c < q.num_spectral_channels; ++c) {
         float t = (float(c) + 0.5f) / float(q.num_spectral_channels);
         throughput.wavelengths[c] = 360.0f + t * 470.0f;
@@ -166,7 +168,7 @@ __global__ void packet_metal_stokes_channels_kernel(RayQueue q_in, RayQueue q_ou
     int idx = 0;
     q_in.origins[idx] = GpuVec3(0.0f, 0.0f, 1.0f);
     q_in.directions[idx] = GpuVec3(0.6f, 0.0f, -0.8f).normalize();
-    GpuSpectrum throughput(1.0f);
+    SpectralPacket throughput(1.0f);
     for (int c = 0; c < q_in.num_spectral_channels; ++c) {
         throughput.wavelengths[c] = 450.0f + 50.0f * float(c);
     }
@@ -237,7 +239,7 @@ static int test_ray_sphere_intersection() {
     GpuMaterialData h_mats[1];
     h_mats[0] = {};
     h_mats[0].header.type = MaterialType::Lambertian;
-    h_mats[0].albedo = GpuSpectrum(1.0f);
+    h_mats[0].albedo = SpectralPacket(1.0f);
     h_mats[0].header.roughness = 0.5f;
 
     GpuSphere* d_spheres;
@@ -335,11 +337,11 @@ static int test_shade_kernel_emissive() {
     GpuMaterialData h_mats[2];
     h_mats[0] = {};
     h_mats[0].header.type = MaterialType::Lambertian;
-    h_mats[0].albedo = GpuSpectrum(0.8f, 0.8f, 0.8f);
+    h_mats[0].albedo = SpectralPacket(0.8f, 0.8f, 0.8f);
     h_mats[0].header.roughness = 0.5f;
     h_mats[1] = {};
     h_mats[1].header.type = MaterialType::Light;
-    h_mats[1].emission = GpuSpectrum(10.0f);
+    h_mats[1].emission = SpectralPacket(10.0f);
 
     GpuSphere* d_spheres;
     GpuMaterial* d_mats;
@@ -828,8 +830,8 @@ static int test_runtime_n_long_wavelength_light_list() {
 
     GpuMaterialData light = {};
     light.header.type = MaterialType::Light;
-    light.albedo = GpuSpectrum(1.0f);
-    light.emission = GpuSpectrum(0.0f);
+    light.albedo = SpectralPacket(1.0f);
+    light.emission = SpectralPacket(0.0f);
     light.emission.values[7] = 12.0f;
 
     std::vector<RenderMesh> meshes;
@@ -878,6 +880,137 @@ static int test_runtime_n_upload_uses_explicit_material_soa() {
         CHECK_FLOAT_EQ(values[c], 0.1f * static_cast<float>(c + 1), 1e-6f);
     }
     free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_l8_spectral_texture_upload_keeps_source_sample_count() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.spectral_domain_bins = 1'000'000;
+    config.spectral_packet_lanes = 1;
+    config.num_wavelengths = 1;
+    config.spectral_sampling_mode = ure::SpectralSamplingMode::UniformSampled;
+    config.queue_capacity = 16;
+
+    HostTexture texture;
+    texture.width = 2;
+    texture.height = 2;
+    texture.channels = 5;
+    texture.data.resize(static_cast<size_t>(texture.width) * static_cast<size_t>(texture.height) *
+        static_cast<size_t>(texture.channels));
+    for (size_t i = 0; i < texture.data.size(); ++i) {
+        texture.data[i] = 0.01f * static_cast<float>(i + 1);
+    }
+
+    std::vector<RenderMesh> meshes;
+    std::vector<GpuInstance> instances;
+    GpuSphere sphere = {};
+    sphere.radius = 1.0f;
+    sphere.material_index = 0;
+    GpuMaterialData material = {};
+    material.header.type = MaterialType::Lambertian;
+    material.albedo = SpectralPacket(0.8f);
+    std::vector<GpuSphere> spheres{sphere};
+    std::vector<GpuMaterialData> materials;
+    materials.push_back(material);
+    std::vector<HostTexture> textures{texture};
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, meshes, instances, spheres, materials, textures, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->num_spectral_channels == 1);
+    CHECK(ctx->texture_count == 1);
+
+    GpuTexture uploaded = {};
+    CHECK_CUDA(cudaMemcpy(&uploaded, ctx->d_textures, sizeof(GpuTexture), cudaMemcpyDeviceToHost));
+    CHECK(uploaded.texObj == 0);
+    CHECK(uploaded.spectral_kind == SpectralTextureResourceKind::SourceSampleGrid);
+    CHECK(uploaded.spectral_sample_count == texture.channels);
+    CHECK(static_cast<std::uint64_t>(uploaded.spectral_sample_count) != config.spectral_domain_bins);
+    CHECK(uploaded.spectral_source_values != nullptr);
+    CHECK_FLOAT_EQ(uploaded.spectral_lambda_min, kSpectralLambdaMin, 1e-6f);
+    CHECK_FLOAT_EQ(uploaded.spectral_lambda_max, kSpectralLambdaMax, 1e-6f);
+
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_l8_rgb_texture_upload_keeps_hardware_filtering() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.spectral_domain_bins = 1'000'000;
+    config.spectral_packet_lanes = 1;
+    config.num_wavelengths = 1;
+    config.spectral_sampling_mode = ure::SpectralSamplingMode::UniformSampled;
+    config.queue_capacity = 16;
+
+    HostTexture texture;
+    texture.width = 2;
+    texture.height = 2;
+    texture.channels = 3;
+    texture.data.assign(12, 0.25f);
+
+    std::vector<RenderMesh> meshes;
+    std::vector<GpuInstance> instances;
+    GpuSphere sphere = {};
+    sphere.radius = 1.0f;
+    sphere.material_index = 0;
+    GpuMaterialData material = {};
+    material.header.type = MaterialType::Lambertian;
+    material.albedo = SpectralPacket(0.8f);
+    std::vector<GpuSphere> spheres{sphere};
+    std::vector<GpuMaterialData> materials;
+    materials.push_back(material);
+    std::vector<HostTexture> textures{texture};
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, meshes, instances, spheres, materials, textures, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->texture_count == 1);
+
+    GpuTexture uploaded = {};
+    CHECK_CUDA(cudaMemcpy(&uploaded, ctx->d_textures, sizeof(GpuTexture), cudaMemcpyDeviceToHost));
+    CHECK(uploaded.texObj != 0);
+    CHECK(uploaded.spectral_kind == SpectralTextureResourceKind::None);
+    CHECK(uploaded.spectral_source_values == nullptr);
+    CHECK(uploaded.spectral_sample_count == 0);
+
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_l11_spectral_texture_cache_budget_rejects_oversized_resident_upload() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.spectral_domain_bins = 1'000'000;
+    config.spectral_packet_lanes = 1;
+    config.num_wavelengths = 1;
+    config.spectral_sampling_mode = ure::SpectralSamplingMode::UniformSampled;
+    config.spectral_max_resident_mb = 1;
+    config.queue_capacity = 16;
+
+    HostTexture texture;
+    texture.width = 64;
+    texture.height = 64;
+    texture.channels = 256;
+    texture.data.assign(static_cast<size_t>(texture.width) *
+                            static_cast<size_t>(texture.height) *
+                            static_cast<size_t>(texture.channels),
+                        0.25f);
+
+    GpuSphere sphere = {};
+    sphere.radius = 1.0f;
+    sphere.material_index = 0;
+    GpuMaterialData material = {};
+    material.header.type = MaterialType::Lambertian;
+    material.albedo = SpectralPacket(0.8f);
+
+    bool rejected = false;
+    try {
+        GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {sphere}, {material}, {texture}, config);
+        free_gpu_renderer(ctx);
+    } catch (const std::runtime_error& e) {
+        rejected = std::string(e.what()).find("spectral resident resource budget exceeded") != std::string::npos;
+    }
+    CHECK(rejected);
     return 0;
 }
 
@@ -946,6 +1079,9 @@ int main() {
     RUN_TEST(test_packet_average_stokes_for_packet_sampling);
     RUN_TEST(test_runtime_n_long_wavelength_light_list);
     RUN_TEST(test_runtime_n_upload_uses_explicit_material_soa);
+    RUN_TEST(test_l8_spectral_texture_upload_keeps_source_sample_count);
+    RUN_TEST(test_l8_rgb_texture_upload_keeps_hardware_filtering);
+    RUN_TEST(test_l11_spectral_texture_cache_budget_rejects_oversized_resident_upload);
     RUN_TEST(test_update_materials_gpu_rewrites_header_and_soa);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;

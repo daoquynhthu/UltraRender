@@ -45,8 +45,8 @@ void update_camera_gpu(GpuContext* ctx,
 void update_medium_gpu(GpuContext* ctx,
                        float medium_density,
                        float medium_anisotropy,
-                       GpuSpectrum medium_scattering,
-                       GpuSpectrum medium_absorption,
+                       SpectralPacket medium_scattering,
+                       SpectralPacket medium_absorption,
                        float medium_max_distance);
 
 // Reset accumulation buffer (clear to black)

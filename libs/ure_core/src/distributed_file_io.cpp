@@ -11,7 +11,7 @@ namespace {
 
 constexpr std::array<char, 8> kRangeMagic = {'U', 'R', 'D', 'R', 'A', 'N', 'G', 'E'};
 constexpr std::array<char, 8> kFrameMagic = {'U', 'R', 'D', 'F', 'R', 'A', 'M', 'E'};
-constexpr int kVersion = 1;
+constexpr int kVersion = 2;
 
 int pixel_value_count(int width, int height) {
     if (width <= 0 || height <= 0) {
@@ -76,10 +76,44 @@ std::ifstream open_input(const std::filesystem::path& path) {
     return in;
 }
 
+void write_shard_metadata(std::ofstream& out, const DistributedShardMetadata& metadata) {
+    if (!validate_shard_metadata(metadata)) {
+        throw std::invalid_argument("invalid distributed shard metadata");
+    }
+    write_value(out, metadata.spectral.shard_id);
+    write_value(out, metadata.spectral.shard_count);
+    write_value(out, metadata.spectral.domain_bins);
+    write_value(out, metadata.spectral.domain_start);
+    write_value(out, metadata.spectral.domain_count);
+    write_value(out, metadata.spectral.lambda_min);
+    write_value(out, metadata.spectral.lambda_max);
+    write_value(out, metadata.spectral.wavelength_pdf_integral);
+    write_value(out, metadata.frame.frame_index);
+    write_value(out, metadata.frame.frame_count);
+}
+
+DistributedShardMetadata read_shard_metadata(std::ifstream& in) {
+    DistributedShardMetadata metadata{};
+    metadata.spectral.shard_id = read_value<int>(in);
+    metadata.spectral.shard_count = read_value<int>(in);
+    metadata.spectral.domain_bins = read_value<std::uint64_t>(in);
+    metadata.spectral.domain_start = read_value<std::uint64_t>(in);
+    metadata.spectral.domain_count = read_value<std::uint64_t>(in);
+    metadata.spectral.lambda_min = read_value<float>(in);
+    metadata.spectral.lambda_max = read_value<float>(in);
+    metadata.spectral.wavelength_pdf_integral = read_value<float>(in);
+    metadata.frame.frame_index = read_value<int>(in);
+    metadata.frame.frame_count = read_value<int>(in);
+    if (!validate_shard_metadata(metadata)) {
+        throw std::runtime_error("invalid distributed shard metadata payload");
+    }
+    return metadata;
+}
+
 } // namespace
 
 DistributedFrameBuffer DistributedFrameBufferStorage::view() {
-    return {width, height, total_samples, data.data()};
+    return {width, height, total_samples, data.data(), shard};
 }
 
 void write_sample_range_file(const std::filesystem::path& path,
@@ -97,6 +131,7 @@ void write_sample_range_file(const std::filesystem::path& path,
     write_value(out, range.total_samples);
     write_value(out, range.width);
     write_value(out, range.height);
+    write_shard_metadata(out, range.shard);
 }
 
 DistributedSampleRange read_sample_range_file(const std::filesystem::path& path) {
@@ -114,6 +149,7 @@ DistributedSampleRange read_sample_range_file(const std::filesystem::path& path)
     range.total_samples = read_value<int>(in);
     range.width = read_value<int>(in);
     range.height = read_value<int>(in);
+    range.shard = read_shard_metadata(in);
     if (!validate_sample_range(range)) {
         throw std::runtime_error("invalid distributed range file payload");
     }
@@ -135,6 +171,7 @@ void write_framebuffer_file(const std::filesystem::path& path,
     write_value(out, framebuffer.width);
     write_value(out, framebuffer.height);
     write_value(out, framebuffer.total_samples);
+    write_shard_metadata(out, framebuffer.shard);
     out.write(reinterpret_cast<const char*>(framebuffer.data),
               static_cast<std::streamsize>(count * sizeof(float)));
     if (!out) {
@@ -153,6 +190,7 @@ DistributedFrameBufferStorage read_framebuffer_file(const std::filesystem::path&
     storage.width = read_value<int>(in);
     storage.height = read_value<int>(in);
     storage.total_samples = read_value<int>(in);
+    storage.shard = read_shard_metadata(in);
     if (storage.total_samples < 0) {
         throw std::runtime_error("invalid distributed framebuffer sample count");
     }

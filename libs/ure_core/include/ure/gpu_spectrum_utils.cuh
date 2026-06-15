@@ -110,7 +110,7 @@ __device__ inline float cie_y_integral() {
  * @brief 灏嗛噰鏍峰厜璋?packet 杞崲涓?XYZ 棰滆壊绌洪棿
  * 浣跨敤钂欑壒鍗℃礇绉垎锛?DomainWidth / N) * Sum(Value * CMF)
  */
-__device__ inline GpuVec3 spectrum_to_xyz(const GpuSpectrum& spec, int num_spec) {
+__device__ inline GpuVec3 spectrum_to_xyz(const SpectralPacket& spec, int num_spec) {
     float x = 0.0f, y = 0.0f, z = 0.0f;
 
     for (int i = 0; i < num_spec; ++i) {
@@ -141,7 +141,7 @@ __device__ inline GpuVec3 spectrum_to_xyz(const float* values, const float* wave
 }
 
 __device__ inline GpuVec3 sampled_spectrum_to_xyz(
-    const GpuSpectrum& spec,
+    const SpectralPacket& spec,
     int num_spec,
     int active_channel,
     float wavelength_pdf
@@ -164,7 +164,37 @@ __device__ inline GpuVec3 sampled_spectrum_to_xyz(
     ) * normalization;
 }
 
-__host__ __device__ inline float spectral_survival_probability(const GpuSpectrum& spec, int num_spec, float min_prob) {
+__device__ inline GpuVec3 spectral_sample_to_xyz(
+    const SpectralPacket& spec,
+    int num_spec,
+    int active_channel,
+    float wavelength_pdf,
+    int spectral_mode
+) {
+    if (active_channel < 0 || active_channel >= num_spec) {
+        return spectrum_to_xyz(spec, num_spec);
+    }
+
+    if (spectral_mode == SpectralRayModeLane) {
+        return sampled_spectrum_to_xyz(spec, num_spec, active_channel, wavelength_pdf);
+    }
+
+    if (spectral_mode == SpectralRayModeSampled) {
+        float safe_pdf = fmaxf(1e-12f, wavelength_pdf);
+        float lambda = spec.wavelengths[active_channel];
+        float value = spec.values[active_channel];
+        float normalization = (1.0f / safe_pdf) / cie_y_integral();
+        return GpuVec3(
+            value * cie_x(lambda),
+            value * cie_y(lambda),
+            value * cie_z(lambda)
+        ) * normalization;
+    }
+
+    return spectrum_to_xyz(spec, num_spec);
+}
+
+__host__ __device__ inline float spectral_survival_probability(const SpectralPacket& spec, int num_spec, float min_prob) {
     float max_value = 0.0f;
     for (int i = 0; i < num_spec; ++i) {
         max_value = fmaxf(max_value, fmaxf(0.0f, spec.values[i]));
@@ -196,12 +226,12 @@ __host__ __device__ inline float rgb_to_spectrum_value(const GpuVec3& rgb, float
     return val;
 }
 
-__host__ __device__ inline GpuSpectrum rgb_to_spectrum(
+__host__ __device__ inline SpectralPacket rgb_to_spectrum(
     const GpuVec3& rgb,
     const float* wavelengths,
     int num_spec
 ) {
-    GpuSpectrum s;
+    SpectralPacket s;
     for (int c = 0; c < num_spec; ++c) {
         s.wavelengths[c] = wavelengths[c];
         s.values[c] = rgb_to_spectrum_value(rgb, wavelengths[c]);
@@ -235,12 +265,12 @@ __host__ __device__ inline float rgb_coeff_to_spectrum_value(const GpuVec3& rgb,
     return rgb.x;
 }
 
-__host__ __device__ inline GpuSpectrum rgb_coeff_to_spectrum(
+__host__ __device__ inline SpectralPacket rgb_coeff_to_spectrum(
     const GpuVec3& rgb,
     const float* wavelengths,
     int num_spec
 ) {
-    GpuSpectrum s;
+    SpectralPacket s;
     for (int c = 0; c < num_spec; ++c) {
         s.wavelengths[c] = wavelengths[c];
         s.values[c] = rgb_coeff_to_spectrum_value(rgb, wavelengths[c]);
@@ -261,7 +291,7 @@ __host__ __device__ inline void rgb_coeff_to_spectrum(
     }
 }
 
-__host__ __device__ inline GpuSpectrum emission_to_spectrum(
+__host__ __device__ inline SpectralPacket emission_to_spectrum(
     const GpuVec3& rgb,
     const float* wavelengths,
     int num_spec

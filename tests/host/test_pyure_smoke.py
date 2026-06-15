@@ -35,6 +35,12 @@ def main() -> int:
         else:
             raise AssertionError("render_pass without a scene must fail")
 
+    with pyure.create_session(domain_bins=1000000, packet_lanes=1, queue_capacity=64, max_trace_depth=12) as session:
+        progress = session.progress()
+        assert progress.spp == 0
+        assert progress.state == pyure.SessionState.EMPTY
+        assert not progress.has_scene
+
     scene_text = """{
   "asset": {"version": "2.0"},
   "scene": 0,
@@ -108,13 +114,20 @@ def main() -> int:
             assert progress.spp == 0
             assert session.render_pass() >= 1
 
-            session.update_material(
-                0,
-                pyure.MaterialType.LAMBERTIAN,
-                albedo=(0.2, 0.8, 0.3),
-                roughness=0.4,
-                ior=1.45,
-            )
+            try:
+                session.update_material(
+                    0,
+                    pyure.MaterialType.LAMBERTIAN,
+                    albedo=(0.2, 0.8, 0.3),
+                    roughness=0.4,
+                    ior=1.45,
+                )
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("MaterialGraph material mutation must require scene reload")
+
+            session.load_scene_file(scene_path)
             progress = session.progress()
             assert progress.state == pyure.SessionState.READY
             assert progress.spp == 0

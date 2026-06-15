@@ -106,14 +106,16 @@ static int test_save_hdr() {
     bool ok = ure::io::ImageSaver::save_hdr(tmp, 2, 1, pixels);
     CHECK(ok);
 
-    std::ifstream f(tmp, std::ios::binary);
-    CHECK(f.good());
-    std::string header;
-    std::getline(f, header);
-    CHECK(header == "#?RADIANCE");
-    std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    CHECK(content.find("FORMAT=32-bit_rle_rgbe") != std::string::npos);
-    CHECK(content.find("-Y 1 +X 2") != std::string::npos);
+    {
+        std::ifstream f(tmp, std::ios::binary);
+        CHECK(f.good());
+        std::string header;
+        std::getline(f, header);
+        CHECK(header == "#?RADIANCE");
+        std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        CHECK(content.find("FORMAT=32-bit_rle_rgbe") != std::string::npos);
+        CHECK(content.find("-Y 1 +X 2") != std::string::npos);
+    }
     CHECK(std::filesystem::file_size(tmp) > 32);
 
     std::remove(tmp);

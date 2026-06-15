@@ -7,10 +7,10 @@
 #include "ure/path_tracer_sampling.cuh"
 
 __device__ inline bool scatter(
-    const GpuRay& r_in, const GpuMaterial& mat, const GpuSpectrum& albedo, const GpuSpectrum& extinction, const GpuSpectrum& metal_eta,
+    const GpuRay& r_in, const GpuMaterial& mat, const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta,
     const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
-    const GpuSpectrum& current_throughput,
-    GpuSpectrum& attenuation, GpuRay& scattered, StokesVector& stokes, unsigned int& seed,
+    const SpectralPacket& current_throughput,
+    SpectralPacket& attenuation, GpuRay& scattered, StokesVector& stokes, unsigned int& seed,
     float& out_pdf,
     float dispersion_clamp,
     int sample_index,
@@ -92,7 +92,7 @@ __device__ inline bool scatter(
         rotate_stokes(stokes, 2.0f * phi_in);
         
         float cos_theta_h = fmaxf(0.0f, V.dot(H));
-        float conductor_reflectance[kMaxSpectralChannels];
+        float conductor_reflectance[kMaxPacketLanes];
         ConductorMaterialSemantics conductor = eval_conductor_material_semantics(metal_eta, extinction, num_spec);
         for (int c = 0; c < num_spec; ++c) {
             conductor_reflectance[c] = eval_metal_reflectance_for_channel(
@@ -108,7 +108,7 @@ __device__ inline bool scatter(
         }
         
         float stokes_I_in = stokes.I;
-        int stokes_channel = spectral_mode == SpectralRayModeLane
+        int stokes_channel = spectral_mode_is_sampled(spectral_mode)
             ? min(max(active_channel, 0), num_spec - 1)
             : min(max(num_spec / 2, 0), num_spec - 1);
         if (conductor.measured_conductor) {
@@ -211,7 +211,7 @@ __device__ inline bool scatter(
         }
         return (scattered.direction.dot(N) > 0);
     } else if (mat.type == MaterialType::Dielectric) {
-        attenuation = GpuSpectrum(1.0f);
+        attenuation = SpectralPacket(1.0f);
 
         bool front_face = r_in.direction.dot(n) < 0;
         GpuVec3 normal = front_face ? n : -n;
@@ -237,7 +237,7 @@ __device__ inline bool scatter(
 
         GpuVec3 unit_direction = r_in.direction.normalize();
         float cos_theta_i = fminf((-unit_direction).dot(normal), 1.0f);
-        int lane_channel = spectral_mode == SpectralRayModeLane
+        int lane_channel = spectral_mode_is_sampled(spectral_mode)
             ? min(max(active_channel, 0), num_spec - 1)
             : -1;
         bool use_rough_microfacet = is_rough_dielectric_bsdf(mat);
@@ -383,8 +383,8 @@ __device__ inline bool scatter(
         float Is = stokes_s_intensity(stokes);
         float Ip = stokes_p_intensity(stokes);
 
-        float R_vals[kMaxSpectralChannels], T_vals[kMaxSpectralChannels];
-        float eta_i_vals[kMaxSpectralChannels], eta_t_vals[kMaxSpectralChannels];
+        float R_vals[kMaxPacketLanes], T_vals[kMaxPacketLanes];
+        float eta_i_vals[kMaxPacketLanes], eta_t_vals[kMaxPacketLanes];
         float reflect_prob = 0.0f;
         for (int c = 0; c < num_spec; ++c) {
             float lambda = current_throughput.wavelengths[c];
@@ -440,7 +440,7 @@ __device__ inline bool scatter(
             stokes = stokes * (1.0f / pdf);
             attenuation = attenuation * (1.0f / pdf);
         } else {
-            GpuSpectrum transmission_color(1.0f);
+            SpectralPacket transmission_color(1.0f);
             for (int c = 0; c < num_spec; ++c) transmission_color.values[c] *= T_vals[c];
             attenuation = transmission_color;
 

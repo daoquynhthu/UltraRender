@@ -61,7 +61,30 @@ __device__ inline GpuVec2 project_camera_screen(const GpuCamera& camera, const G
     return GpuVec2(rel.dot(h) / h_len_sq, rel.dot(v) / v_len_sq);
 }
 
-__device__ GpuSpectrum sample_texture(const GpuScene& scene, int tex_idx, float u, float v, const float* wavelengths, int num_spec) {
+__device__ float sample_spectral_texture_resource(const GpuTexture& tex, int texel_index, float lambda) {
+    if (tex.spectral_kind != SpectralTextureResourceKind::SourceSampleGrid ||
+        !tex.spectral_source_values ||
+        tex.spectral_sample_count <= 0) {
+        return 0.0f;
+    }
+
+    if (tex.spectral_sample_count == 1 || tex.spectral_lambda_max <= tex.spectral_lambda_min) {
+        return tex.spectral_source_values[static_cast<size_t>(texel_index) * static_cast<size_t>(tex.spectral_sample_count)];
+    }
+
+    const float normalized = fminf(1.0f, fmaxf(0.0f,
+        (lambda - tex.spectral_lambda_min) / (tex.spectral_lambda_max - tex.spectral_lambda_min)));
+    const float sample_pos = normalized * float(tex.spectral_sample_count - 1);
+    const int s0 = min(static_cast<int>(floorf(sample_pos)), tex.spectral_sample_count - 1);
+    const int s1 = min(s0 + 1, tex.spectral_sample_count - 1);
+    const float ds = sample_pos - float(s0);
+    const size_t base = static_cast<size_t>(texel_index) * static_cast<size_t>(tex.spectral_sample_count);
+    const float v0 = tex.spectral_source_values[base + static_cast<size_t>(s0)];
+    const float v1 = tex.spectral_source_values[base + static_cast<size_t>(s1)];
+    return v0 * (1.0f - ds) + v1 * ds;
+}
+
+__device__ SpectralPacket sample_texture(const GpuScene& scene, int tex_idx, float u, float v, const float* wavelengths, int num_spec) {
     if (tex_idx < 0 || tex_idx >= scene.texture_count) return rgb_to_spectrum(GpuVec3(1,0,1), wavelengths, num_spec);
 
     GpuTexture tex = scene.textures[tex_idx];
@@ -71,7 +94,9 @@ __device__ GpuSpectrum sample_texture(const GpuScene& scene, int tex_idx, float 
         return rgb_to_spectrum(GpuVec3(val.x, val.y, val.z), wavelengths, num_spec);
     }
 
-    if (!tex.data) return rgb_to_spectrum(GpuVec3(0,0,0), wavelengths, num_spec);
+    if (tex.spectral_kind != SpectralTextureResourceKind::SourceSampleGrid || !tex.spectral_source_values) {
+        return rgb_to_spectrum(GpuVec3(0,0,0), wavelengths, num_spec);
+    }
 
     u = u - floorf(u);
     v = v - floorf(v);
@@ -87,23 +112,102 @@ __device__ GpuSpectrum sample_texture(const GpuScene& scene, int tex_idx, float 
     float dx = x - x0;
     float dy = y - y0;
 
-    GpuSpectrum _t00 = tex.data[y0 * tex.width + x0];
-    GpuSpectrum _t10 = tex.data[y0 * tex.width + x1];
-    GpuSpectrum _t01 = tex.data[y1 * tex.width + x0];
-    GpuSpectrum _t11 = tex.data[y1 * tex.width + x1];
+    const int idx00 = y0 * tex.width + x0;
+    const int idx10 = y0 * tex.width + x1;
+    const int idx01 = y1 * tex.width + x0;
+    const int idx11 = y1 * tex.width + x1;
 
-    GpuSpectrum result;
+    SpectralPacket result;
     for (int c = 0; c < num_spec; ++c) {
-        float v00 = _t00.values[c];
-        float v10 = _t10.values[c];
-        float v01 = _t01.values[c];
-        float v11 = _t11.values[c];
+        const float lambda = wavelengths[c];
+        float v00 = sample_spectral_texture_resource(tex, idx00, lambda);
+        float v10 = sample_spectral_texture_resource(tex, idx10, lambda);
+        float v01 = sample_spectral_texture_resource(tex, idx01, lambda);
+        float v11 = sample_spectral_texture_resource(tex, idx11, lambda);
         float v0 = v00 * (1.0f - dx) + v10 * dx;
         float v1 = v01 * (1.0f - dx) + v11 * dx;
         result.values[c] = v0 * (1.0f - dy) + v1 * dy;
-        result.wavelengths[c] = wavelengths[c];
+        result.wavelengths[c] = lambda;
     }
     return result;
+}
+
+__device__ SpectralPacket eval_material_expression(
+    const GpuScene& scene,
+    const GpuMaterial& mat,
+    int root,
+    float u,
+    float v,
+    const float* wavelengths,
+    int num_spec
+) {
+    SpectralPacket zero(0.0f);
+    if (!scene.material_expression_nodes ||
+        root < 0 ||
+        mat.expression_node_start < 0 ||
+        mat.expression_node_count <= 0 ||
+        mat.expression_node_count > kMaxMaterialExpressionNodes) {
+        return zero;
+    }
+
+    const int start = mat.expression_node_start;
+    const int count = mat.expression_node_count;
+    const int local_root = root - start;
+    if (local_root < 0 || local_root >= count || start + count > scene.material_expression_node_count) {
+        return zero;
+    }
+
+    SpectralPacket values[kMaxMaterialExpressionNodes];
+    for (int i = 0; i < count; ++i) {
+        const SpectralExpressionNode& node = scene.material_expression_nodes[start + i];
+        SpectralPacket result(0.0f);
+        switch (node.kind) {
+            case SpectralExpressionNodeKind::Resource:
+                for (int c = 0; c < num_spec; ++c) {
+                    const float lambda = wavelengths[c];
+                    result.wavelengths[c] = lambda;
+                    result.values[c] = eval_spectral_resource(node.resource, lambda);
+                }
+                break;
+            case SpectralExpressionNodeKind::Texture:
+                result = sample_texture(scene, node.texture_index, u, v, wavelengths, num_spec);
+                break;
+            case SpectralExpressionNodeKind::Add: {
+                int a = node.input_a - start;
+                int b = node.input_b - start;
+                if (a >= 0 && a < i && b >= 0 && b < i) {
+                    result = values[a] + values[b];
+                }
+                break;
+            }
+            case SpectralExpressionNodeKind::Multiply: {
+                int a = node.input_a - start;
+                int b = node.input_b - start;
+                if (a >= 0 && a < i && b >= 0 && b < i) {
+                    result = values[a] * values[b];
+                }
+                break;
+            }
+            case SpectralExpressionNodeKind::Mix: {
+                int a = node.input_a - start;
+                int b = node.input_b - start;
+                int f = node.input_factor - start;
+                if (a >= 0 && a < i && b >= 0 && b < i && f >= 0 && f < i) {
+                    for (int c = 0; c < num_spec; ++c) {
+                        float t = fminf(1.0f, fmaxf(0.0f, values[f].values[c]));
+                        result.wavelengths[c] = wavelengths[c];
+                        result.values[c] = values[a].values[c] * (1.0f - t) + values[b].values[c] * t;
+                    }
+                }
+                break;
+            }
+            case SpectralExpressionNodeKind::None:
+            default:
+                break;
+        }
+        values[i] = result;
+    }
+    return values[local_root];
 }
 
 __device__ bool any_hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float t_max) {
@@ -234,8 +338,8 @@ __device__ inline int reserve_ray_slot(RayQueue& q) {
     return out_idx;
 }
 
-__device__ inline void store_lane_throughput(RayQueue& q, int idx, const GpuSpectrum& source, int channel, float value) {
-    GpuSpectrum t;
+__device__ inline void store_lane_throughput(RayQueue& q, int idx, const SpectralPacket& source, int channel, float value) {
+    SpectralPacket t;
     for (int c = 0; c < q.num_spectral_channels; ++c) {
         t.values[c] = (c == channel) ? value : 0.0f;
         t.wavelengths[c] = source.wavelengths[c];
@@ -350,7 +454,7 @@ __device__ inline void store_packet_scattered_stokes(
     const GpuRay& scattered,
     const GpuVec3& n,
     const GpuVec2& uv,
-    const GpuSpectrum& throughput,
+    const SpectralPacket& throughput,
     float ior_outside,
     float dispersion_clamp,
     int sample_index,
@@ -473,7 +577,7 @@ __device__ inline bool split_dispersive_dielectric_lanes(
     const GpuVec3& n,
     const GpuVec3& ng,
     const GpuVec2& uv,
-    const GpuSpectrum& throughput,
+    const SpectralPacket& throughput,
     int current_medium_idx,
     int mat_idx,
     int pixel_index,
@@ -484,7 +588,7 @@ __device__ inline bool split_dispersive_dielectric_lanes(
 ) {
     if (mat.type != MaterialType::Dielectric) return false;
     if (is_rough_dielectric_bsdf(mat)) return false;
-    if (current_queue.spectral_modes[idx] == SpectralRayModeLane) return false;
+    if (spectral_mode_is_sampled(current_queue.spectral_modes[idx])) return false;
 
     float effective_thickness = mat.thin_film_thickness;
     if (effective_thickness > 0.0f) {
@@ -602,7 +706,7 @@ __global__ __launch_bounds__(256) void extend_shadow_kernel(
     int spectral_mode = shadow_queue.spectral_modes ? shadow_queue.spectral_modes[idx] : SpectralRayModePacket;
     int active_channel = shadow_queue.active_channels ? shadow_queue.active_channels[idx] : -1;
     float wavelength_pdf = shadow_queue.wavelength_pdfs ? shadow_queue.wavelength_pdfs[idx] : 1.0f;
-    GpuSpectrum radiance;
+    SpectralPacket radiance;
     {
         const int cap = shadow_queue.capacity;
         for (int c = 0; c < scene.num_spectral_channels; ++c) {
@@ -640,8 +744,8 @@ __global__ __launch_bounds__(256) void extend_shadow_kernel(
         return;
     }
 
-    GpuVec3 xyz = spectral_mode == SpectralRayModeLane
-        ? sampled_spectrum_to_xyz(radiance, scene.num_spectral_channels, active_channel, wavelength_pdf)
+    GpuVec3 xyz = spectral_mode_is_sampled(spectral_mode)
+        ? spectral_sample_to_xyz(radiance, scene.num_spectral_channels, active_channel, wavelength_pdf, spectral_mode)
         : spectrum_to_xyz(radiance, scene.num_spectral_channels);
     GpuVec3 rgb = xyz_to_rgb(xyz);
 
@@ -680,7 +784,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
     int pixel_index = current_queue.pixel_indices[idx];
     int mat_idx = hit_queue.mat_ids[idx];
-    GpuSpectrum throughput = load_throughput(current_queue, idx);
+    SpectralPacket throughput = load_throughput(current_queue, idx);
     int depth = current_queue.depths[idx];
     unsigned int seed = current_queue.seeds[idx];
     int flag = current_queue.flags[idx];
@@ -689,7 +793,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
     float t_hit = (mat_idx != -1) ? hit_queue.t[idx] : 1e30f;
     int spectral_mode = current_queue.spectral_modes[idx];
     int active_channel = current_queue.active_channels[idx];
-    if (spectral_mode == SpectralRayModeLane) {
+    if (spectral_mode_is_sampled(spectral_mode)) {
         if (active_channel < 0) active_channel = 0;
         if (active_channel >= scene.num_spectral_channels) active_channel = scene.num_spectral_channels - 1;
     } else {
@@ -698,8 +802,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
     float density = 0.0f;
     float anisotropy = 0.0f;
-    GpuSpectrum sigma_s(0.0f);
-    GpuSpectrum sigma_a(0.0f);
+    SpectralPacket sigma_s(0.0f);
+    SpectralPacket sigma_a(0.0f);
 
     if (current_medium_idx == -1) {
         density = scene.medium_density;
@@ -710,18 +814,18 @@ __global__ __launch_bounds__(256) void shade_kernel(
         GpuMaterial med_mat = scene.materials[current_medium_idx];
         density = med_mat.medium_density;
         anisotropy = med_mat.medium_anisotropy;
-        GpuMaterialSoA med_soa = load_mat_spectra_6x(scene, current_medium_idx);
+        GpuMaterialSoA med_soa = load_mat_spectra_6x(scene, current_medium_idx, throughput.wavelengths);
         sigma_s = med_soa.medium_scattering;
         sigma_a = med_soa.medium_absorption;
     }
 
-    GpuSpectrum sigma_t = (sigma_s + sigma_a) * density;
+    SpectralPacket sigma_t = (sigma_s + sigma_a) * density;
     float sigma_t_avg = 0.0f;
     for (int c = 0; c < scene.num_spectral_channels; ++c) {
         sigma_t_avg += sigma_t.values[c];
     }
     sigma_t_avg /= float(scene.num_spectral_channels);
-    float sigma_t_proposal = (spectral_mode == SpectralRayModeLane)
+    float sigma_t_proposal = spectral_mode_is_sampled(spectral_mode)
         ? sigma_t.values[active_channel]
         : sigma_t_avg;
 
@@ -731,7 +835,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
         float max_allowed = scene.medium_max_distance > 0.0f ? scene.medium_max_distance : 1e30f;
         if (t_medium < t_hit && t_medium < max_allowed) {
-            float tr_vals[kMaxSpectralChannels];
+            float tr_vals[kMaxPacketLanes];
             for (int c = 0; c < scene.num_spectral_channels; ++c) {
                 tr_vals[c] = expf(-sigma_t.values[c] * t_medium);
             }
@@ -779,14 +883,14 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     float t_to_light = -M_dot_D - sqrtf(fmaxf(0.0f, M_dot_D * M_dot_D - c_val));
 
                     if (t_to_light > 1e-4f) {
-                         float tr_light_vals[kMaxSpectralChannels];
+                         float tr_light_vals[kMaxPacketLanes];
                          for (int c = 0; c < scene.num_spectral_channels; ++c) {
                              tr_light_vals[c] = expf(-sigma_t.values[c] * t_to_light);
                          }
 
                          int light_mat_idx = light_sphere.material_index;
-                         GpuSpectrum L_e = load_mat_spectrum(scene.mat_emission_vals, light_mat_idx, scene.num_spectral_channels);
-                         GpuSpectrum contribution;
+                         SpectralPacket L_e = load_mat_emission_spectrum(scene, light_mat_idx, throughput.wavelengths);
+                         SpectralPacket contribution;
                          for (int c = 0; c < scene.num_spectral_channels; ++c) {
                              L_e.wavelengths[c] = throughput.wavelengths[c];
                              contribution.values[c] = throughput.values[c] * L_e.values[c] * phase_val * tr_light_vals[c] * (1.0f / pdf);
@@ -835,7 +939,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
              }
              return;
         } else {
-            float tr_vals[kMaxSpectralChannels];
+            float tr_vals[kMaxPacketLanes];
             float prob_no_scatter = expf(-sigma_t_proposal * t_hit);
             for (int c = 0; c < scene.num_spectral_channels; ++c) {
                 tr_vals[c] = expf(-sigma_t.values[c] * t_hit);
@@ -846,7 +950,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     throughput.values[c] *= tr_vals[c] * (1.0f / prob_no_scatter);
                 }
             } else {
-                throughput = GpuSpectrum(0.0f);
+                throughput = SpectralPacket(0.0f);
             }
         }
     }
@@ -862,14 +966,15 @@ __global__ __launch_bounds__(256) void shade_kernel(
             sky_color = (1.0f - t_sky) * GpuVec3(0.05f, 0.05f, 0.05f) + t_sky * GpuVec3(0.2f, 0.2f, 0.4f);
         }
 
-        GpuSpectrum sky_spectrum = emission_to_spectrum(sky_color, throughput.wavelengths, scene.num_spectral_channels);
-        GpuSpectrum contribution = throughput * sky_spectrum;
+        SpectralPacket sky_spectrum = emission_to_spectrum(sky_color, throughput.wavelengths, scene.num_spectral_channels);
+        SpectralPacket contribution = throughput * sky_spectrum;
 
-        GpuVec3 xyz = sampled_spectrum_to_xyz(
+        GpuVec3 xyz = spectral_sample_to_xyz(
             contribution,
             scene.num_spectral_channels,
             current_queue.active_channels[idx],
-            current_queue.wavelength_pdfs[idx]);
+            current_queue.wavelength_pdfs[idx],
+            current_queue.spectral_modes[idx]);
         GpuVec3 rgb = xyz_to_rgb(xyz);
 
         if (isfinite(rgb.x) && isfinite(rgb.y) && isfinite(rgb.z)) {
@@ -889,15 +994,31 @@ __global__ __launch_bounds__(256) void shade_kernel(
     }
 
     GpuMaterial mat = scene.materials[mat_idx];
-    GpuMaterialSoA mat_soa = load_mat_spectra_6x(scene, mat_idx);
+    GpuMaterialSoA mat_soa = load_mat_spectra_6x(scene, mat_idx, throughput.wavelengths);
 
     GpuVec2 hit_uv = hit_queue.uv[idx];
+    if (mat.albedo_expression_root != -1) {
+        mat_soa.albedo = eval_material_expression(scene, mat, mat.albedo_expression_root, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
+    }
+    if (mat.roughness_expression_root != -1) {
+        SpectralPacket graph_roughness = eval_material_expression(scene, mat, mat.roughness_expression_root, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
+        float roughness_value = 0.0f;
+        for (int c = 0; c < scene.num_spectral_channels; ++c) {
+            roughness_value += graph_roughness.values[c];
+        }
+        roughness_value /= float(scene.num_spectral_channels);
+        mat.roughness = fminf(1.0f, fmaxf(0.001f, roughness_value));
+    }
+    if (mat.emission_expression_root != -1) {
+        mat_soa.emission = eval_material_expression(scene, mat, mat.emission_expression_root, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
+    }
+
     if (mat.texture_index != -1) {
-        GpuSpectrum tex_color = sample_texture(scene, mat.texture_index, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
+        SpectralPacket tex_color = sample_texture(scene, mat.texture_index, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
         mat_soa.albedo = mat_soa.albedo * tex_color;
     }
     if (mat.roughness_texture_index != -1) {
-        GpuSpectrum tex_roughness = sample_texture(scene, mat.roughness_texture_index, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
+        SpectralPacket tex_roughness = sample_texture(scene, mat.roughness_texture_index, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
         float tex_value = 0.0f;
         for (int c = 0; c < scene.num_spectral_channels; ++c) {
             tex_value += tex_roughness.values[c];
@@ -906,7 +1027,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
         mat.roughness = fminf(1.0f, fmaxf(0.001f, mat.roughness * tex_value));
     }
     if (mat.emission_texture_index != -1) {
-        GpuSpectrum tex_emission = sample_texture(scene, mat.emission_texture_index, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
+        SpectralPacket tex_emission = sample_texture(scene, mat.emission_texture_index, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
         mat_soa.emission = mat_soa.emission * tex_emission;
     }
 
@@ -966,17 +1087,18 @@ __global__ __launch_bounds__(256) void shade_kernel(
         }
 
         if (mis_weight > 0.0f) {
-            GpuSpectrum emission_spectrum = mat_soa.emission;
+            SpectralPacket emission_spectrum = mat_soa.emission;
             for (int c = 0; c < scene.num_spectral_channels; ++c) {
                 emission_spectrum.wavelengths[c] = throughput.wavelengths[c];
             }
-            GpuSpectrum contribution = throughput * emission_spectrum * mis_weight;
+            SpectralPacket contribution = throughput * emission_spectrum * mis_weight;
 
-            GpuVec3 xyz = sampled_spectrum_to_xyz(
+            GpuVec3 xyz = spectral_sample_to_xyz(
                 contribution,
                 scene.num_spectral_channels,
                 current_queue.active_channels[idx],
-                current_queue.wavelength_pdfs[idx]);
+                current_queue.wavelength_pdfs[idx],
+                current_queue.spectral_modes[idx]);
             GpuVec3 rgb = xyz_to_rgb(xyz);
 
             if (depth > 0) {
@@ -1040,17 +1162,17 @@ __global__ __launch_bounds__(256) void shade_kernel(
                  pdf = fmaxf(pdf, 1e-12f);
 
                  int light_mat_idx = light_sphere.material_index;
-                 GpuSpectrum L_e = load_mat_spectrum(scene.mat_emission_vals, light_mat_idx, scene.num_spectral_channels);
+                 SpectralPacket L_e = load_mat_emission_spectrum(scene, light_mat_idx, throughput.wavelengths);
                  for (int c = 0; c < scene.num_spectral_channels; ++c) {
                      L_e.wavelengths[c] = throughput.wavelengths[c];
                  }
 
-                 GpuSpectrum f_r = eval_bsdf(mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, p, n, hit_uv, -current_queue.directions[idx], l_dir, throughput.wavelengths, scene.num_spectral_channels);
+                 SpectralPacket f_r = eval_bsdf(mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, p, n, hit_uv, -current_queue.directions[idx], l_dir, throughput.wavelengths, scene.num_spectral_channels);
 
                  float pdf_mat = pdf_bsdf(mat, n, -current_queue.directions[idx], l_dir);
                  float mis_weight = (pdf * pdf) / (pdf * pdf + pdf_mat * pdf_mat);
 
-                 GpuSpectrum contribution = throughput * L_e * f_r * cos_surf * (1.0f / pdf) * mis_weight;
+                 SpectralPacket contribution = throughput * L_e * f_r * cos_surf * (1.0f / pdf) * mis_weight;
 
                  float M_dot_D = -wc.dot(l_dir);
                  float c = dist_sq - radius_sq;
@@ -1061,7 +1183,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
                     if (t_hit_shadow > 1e-4f) {
                         if (sigma_t_avg > 1e-4f) {
-                            float tr_vals[kMaxSpectralChannels];
+                            float tr_vals[kMaxPacketLanes];
                             for (int c = 0; c < scene.num_spectral_channels; ++c) {
                                 tr_vals[c] = expf(-sigma_t.values[c] * t_hit_shadow);
                             }
@@ -1099,9 +1221,9 @@ __global__ __launch_bounds__(256) void shade_kernel(
     r_in.direction = current_queue.directions[idx];
 
     GpuRay scattered;
-    GpuSpectrum attenuation;
+    SpectralPacket attenuation;
 
-    StokesVector current_stokes = spectral_mode == SpectralRayModeLane
+    StokesVector current_stokes = spectral_mode_is_sampled(spectral_mode)
         ? load_stokes(current_queue, idx, active_channel)
         : load_packet_average_stokes(current_queue, idx);
 
@@ -1134,7 +1256,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 return;
             }
             if (scatter(r_in, mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, pdf_val, dispersion_clamp, sample_index, pixel_index, depth, scene.num_spectral_channels, ior_outside, scene.materials[mat_idx].ior, spectral_mode, active_channel)) {
-                GpuSpectrum new_throughput = throughput * attenuation;
+                SpectralPacket new_throughput = throughput * attenuation;
 
                 for (int c = 0; c < scene.num_spectral_channels; ++c) {
                     if (!isfinite(new_throughput.values[c])) {
@@ -1164,7 +1286,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
             next_queue.origins[out_idx] = scattered.origin;
             next_queue.directions[out_idx] = scattered.direction;
             store_throughput(next_queue, out_idx, new_throughput);
-            if (spectral_mode == SpectralRayModeLane) {
+            if (spectral_mode_is_sampled(spectral_mode)) {
                 for (int c = 0; c < scene.num_spectral_channels; ++c) {
                     store_stokes(next_queue, out_idx, c, StokesVector(0.0f, 0.0f, 0.0f, 0.0f));
                 }

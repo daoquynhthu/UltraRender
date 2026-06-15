@@ -57,15 +57,15 @@ __device__ GpuVec3 reflect(const GpuVec3& v, const GpuVec3& n) {
 
 // SoA queue throughput load/store helpers
 // Each channel occupies a contiguous block: vals[ch * capacity + idx]
-__device__ inline GpuSpectrum load_throughput(const RayQueue& q, int idx) {
-    GpuSpectrum t;
+__device__ inline SpectralPacket load_throughput(const RayQueue& q, int idx) {
+    SpectralPacket t;
     for (int c = 0; c < q.num_spectral_channels; ++c) {
         t.set_sample(c, q.throughput_vals[c * q.capacity + idx]);
         t.set_wavelength(c, q.throughput_wavelengths[c * q.capacity + idx]);
     }
     return t;
 }
-__device__ inline void store_throughput(RayQueue& q, int idx, const GpuSpectrum& t) {
+__device__ inline void store_throughput(RayQueue& q, int idx, const SpectralPacket& t) {
     for (int c = 0; c < q.num_spectral_channels; ++c) {
         q.throughput_vals[c * q.capacity + idx] = t.sample(c);
         q.throughput_wavelengths[c * q.capacity + idx] = t.wavelength(c);
@@ -93,10 +93,10 @@ __device__ inline void store_stokes_packet(RayQueue& q, int idx, const StokesVec
 
 // scatter() forward declaration (defined in path_tracer_material.cu, included at end of device TU)
 __device__ inline bool scatter(
-    const GpuRay& r_in, const GpuMaterial& mat, const GpuSpectrum& albedo, const GpuSpectrum& extinction, const GpuSpectrum& metal_eta,
+    const GpuRay& r_in, const GpuMaterial& mat, const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta,
     const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
-    const GpuSpectrum& current_throughput,
-    GpuSpectrum& attenuation, GpuRay& scattered, StokesVector& stokes, unsigned int& seed,
+    const SpectralPacket& current_throughput,
+    SpectralPacket& attenuation, GpuRay& scattered, StokesVector& stokes, unsigned int& seed,
     float& out_pdf,
     float dispersion_clamp,
     int sample_index,

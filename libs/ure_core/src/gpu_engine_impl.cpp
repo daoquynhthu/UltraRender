@@ -266,8 +266,8 @@ private:
     // Medium parameters
     float medium_density_ = 0.0f;
     float medium_anisotropy_ = 0.0f;
-    ure::gpu::GpuSpectrum medium_scattering_;
-    ure::gpu::GpuSpectrum medium_absorption_;
+    ure::gpu::SpectralPacket medium_scattering_;
+    ure::gpu::SpectralPacket medium_absorption_;
     float medium_max_distance_ = 0.0f;
 
     // GPU Context

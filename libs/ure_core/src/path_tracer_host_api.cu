@@ -4,6 +4,8 @@
 #include <assert.h>
 #include <float.h>
 #include <math.h>
+#include <cstdint>
+#include <algorithm>
 #include <vector>
 #include <iostream>
 #include <iomanip>
@@ -15,6 +17,7 @@
 
 #include "ure/gpu_driver.hpp"
 #include "ure/gpu_context.hpp"
+#include "ure/gpu_auto_config.hpp"
 #include "ure/gpu_structs.hpp"
 #include "ure/gpu_spectrum_utils.cuh"
 #include "ure/gpu_material_helpers.cuh"
@@ -94,6 +97,7 @@ namespace ure::gpu {
 void alloc_ray_queue(RayQueue& q, int capacity, int num_spec_channels) {
     q.capacity = capacity;
     q.num_spectral_channels = num_spec_channels;
+    q.initial_spectral_mode = SpectralRayModePacket;
     UR_CUDA_CHECK(cudaMalloc(&q.origins, capacity * sizeof(GpuVec3)));
     UR_CUDA_CHECK(cudaMalloc(&q.directions, capacity * sizeof(GpuVec3)));
     UR_CUDA_CHECK(cudaMalloc(&q.throughput_vals, num_spec_channels * capacity * sizeof(float)));
@@ -215,28 +219,235 @@ static void build_material_soa(std::vector<float>& host_soa,
                                const GpuMaterialData* data,
                                int count,
                                int num_channels,
-                               GpuSpectrum GpuMaterialData::* field) {
+                               SpectralPacket GpuMaterialData::* field,
+                               HostSpectralResource GpuMaterialData::* resource_field) {
     host_soa.assign(static_cast<size_t>(count) * static_cast<size_t>(num_channels), 0.0f);
     for (int i = 0; i < count; ++i) {
-        const GpuSpectrum& spectrum = data[i].*field;
+        const SpectralPacket& spectrum = data[i].*field;
+        const HostSpectralResource& resource = data[i].*resource_field;
         for (int c = 0; c < num_channels; ++c) {
-            host_soa[static_cast<size_t>(i) * num_channels + c] = spectrum.values[c];
+            float lambda = spectrum.wavelengths[c] > 0.0f ? spectrum.wavelengths[c] :
+                kSpectralLambdaMin + (float(c) + 0.5f) *
+                    ((kSpectralLambdaMax - kSpectralLambdaMin) / float(num_channels));
+            SpectralResource view = {};
+            view.kind = resource.kind;
+            view.constant = resource.constant;
+            view.rgb = resource.rgb;
+            view.wavelengths = resource.wavelengths.data();
+            view.values = resource.values.data();
+            view.sample_count = static_cast<int>(std::min(resource.wavelengths.size(), resource.values.size()));
+            host_soa[static_cast<size_t>(i) * num_channels + c] =
+                resource.kind == SpectralResourceKind::None ? spectrum.values[c] : eval_spectral_resource(view, lambda);
         }
     }
 }
 
 static void upload_material_soa(float* d_ptr,
                                 const GpuMaterialData* data,
-                                int count,
+                               int count,
                                int num_channels,
                                int first_material_index,
-                               GpuSpectrum GpuMaterialData::* field) {
+                               SpectralPacket GpuMaterialData::* field,
+                               HostSpectralResource GpuMaterialData::* resource_field) {
     std::vector<float> host_soa;
-    build_material_soa(host_soa, data, count, num_channels, field);
+    build_material_soa(host_soa, data, count, num_channels, field, resource_field);
     for (int i = 0; i < count; ++i) {
         float* dst = d_ptr + static_cast<size_t>(first_material_index + i) * static_cast<size_t>(num_channels);
         const float* src = host_soa.data() + static_cast<size_t>(i) * static_cast<size_t>(num_channels);
         UR_CUDA_CHECK(cudaMemcpy(dst, src, num_channels * sizeof(float), cudaMemcpyHostToDevice));
+    }
+}
+
+static void upload_material_resources(SpectralResource*& d_resources,
+                                      const GpuMaterialData* data,
+                                      int count,
+                                      int first_material_index,
+                                      HostSpectralResource GpuMaterialData::* resource_field,
+                                      std::vector<void*>& free_list) {
+    if (!d_resources || !data || count <= 0) return;
+
+    std::vector<SpectralResource> descriptors(count);
+    for (int i = 0; i < count; ++i) {
+        const HostSpectralResource& host = data[i].*resource_field;
+        SpectralResource desc = {};
+        desc.kind = host.kind;
+        desc.constant = host.constant;
+        desc.rgb = host.rgb;
+        int samples = static_cast<int>(std::min(host.wavelengths.size(), host.values.size()));
+        if (host.kind == SpectralResourceKind::SampledTable && samples > 0) {
+            float* d_wavelengths = nullptr;
+            float* d_values = nullptr;
+            size_t bytes = static_cast<size_t>(samples) * sizeof(float);
+            UR_CUDA_CHECK(cudaMalloc(&d_wavelengths, bytes));
+            UR_CUDA_CHECK(cudaMalloc(&d_values, bytes));
+            UR_CUDA_CHECK(cudaMemcpy(d_wavelengths, host.wavelengths.data(), bytes, cudaMemcpyHostToDevice));
+            UR_CUDA_CHECK(cudaMemcpy(d_values, host.values.data(), bytes, cudaMemcpyHostToDevice));
+            free_list.push_back(d_wavelengths);
+            free_list.push_back(d_values);
+            desc.wavelengths = d_wavelengths;
+            desc.values = d_values;
+            desc.sample_count = samples;
+        }
+        descriptors[i] = desc;
+    }
+
+    UR_CUDA_CHECK(cudaMemcpy(d_resources + first_material_index,
+                             descriptors.data(),
+                             count * sizeof(SpectralResource),
+                             cudaMemcpyHostToDevice));
+}
+
+static SpectralResource upload_host_resource_descriptor(const HostSpectralResource& host,
+                                                        std::vector<void*>& free_list) {
+    SpectralResource desc = {};
+    desc.kind = host.kind;
+    desc.constant = host.constant;
+    desc.rgb = host.rgb;
+    int samples = static_cast<int>(std::min(host.wavelengths.size(), host.values.size()));
+    if (host.kind == SpectralResourceKind::SampledTable && samples > 0) {
+        float* d_wavelengths = nullptr;
+        float* d_values = nullptr;
+        size_t bytes = static_cast<size_t>(samples) * sizeof(float);
+        UR_CUDA_CHECK(cudaMalloc(&d_wavelengths, bytes));
+        UR_CUDA_CHECK(cudaMalloc(&d_values, bytes));
+        UR_CUDA_CHECK(cudaMemcpy(d_wavelengths, host.wavelengths.data(), bytes, cudaMemcpyHostToDevice));
+        UR_CUDA_CHECK(cudaMemcpy(d_values, host.values.data(), bytes, cudaMemcpyHostToDevice));
+        free_list.push_back(d_wavelengths);
+        free_list.push_back(d_values);
+        desc.wavelengths = d_wavelengths;
+        desc.values = d_values;
+        desc.sample_count = samples;
+    }
+    return desc;
+}
+
+static void upload_material_expression_graphs(GpuContext* ctx,
+                                              std::vector<GpuMaterialData>& host_materials,
+                                              std::vector<GpuMaterial>& host_headers) {
+    std::vector<SpectralExpressionNode> nodes;
+    for (size_t mat_idx = 0; mat_idx < host_materials.size(); ++mat_idx) {
+        GpuMaterialData& material = host_materials[mat_idx];
+        GpuMaterial& header = host_headers[mat_idx];
+        const int start = static_cast<int>(nodes.size());
+        const int count = static_cast<int>(material.expression_nodes.size());
+        if (count > kMaxMaterialExpressionNodes) {
+            throw std::runtime_error("material expression graph exceeds kMaxMaterialExpressionNodes");
+        }
+        header.expression_node_start = count > 0 ? start : -1;
+        header.expression_node_count = count;
+        auto root = [start, count](int local_root) {
+            return local_root >= 0 && local_root < count ? start + local_root : -1;
+        };
+        header.albedo_expression_root = root(material.header.albedo_expression_root);
+        header.roughness_expression_root = root(material.header.roughness_expression_root);
+        header.emission_expression_root = root(material.header.emission_expression_root);
+        material.header = header;
+
+        for (const HostSpectralExpressionNode& host_node : material.expression_nodes) {
+            SpectralExpressionNode node = {};
+            node.kind = host_node.kind;
+            node.texture_index = host_node.texture_index;
+            node.input_a = root(host_node.input_a);
+            node.input_b = root(host_node.input_b);
+            node.input_factor = root(host_node.input_factor);
+            node.resource = upload_host_resource_descriptor(host_node.resource, ctx->material_resource_tables_to_free);
+            nodes.push_back(node);
+        }
+    }
+
+    ctx->material_expression_node_count = static_cast<int>(nodes.size());
+    if (!nodes.empty()) {
+        size_t bytes = nodes.size() * sizeof(SpectralExpressionNode);
+        UR_CUDA_CHECK(cudaMalloc(&ctx->d_material_expression_nodes, bytes));
+        UR_CUDA_CHECK(cudaMemcpy(ctx->d_material_expression_nodes, nodes.data(), bytes, cudaMemcpyHostToDevice));
+        ctx->pointers_to_free.push_back(ctx->d_material_expression_nodes);
+    } else {
+        ctx->d_material_expression_nodes = nullptr;
+    }
+}
+
+static void free_material_resource_tables(GpuContext* ctx) {
+    for (void* ptr : ctx->material_resource_tables_to_free) cudaFree(ptr);
+    ctx->material_resource_tables_to_free.clear();
+}
+
+static bool contains_material_expression_graph(const GpuMaterialData* materials, int count) {
+    for (int i = 0; i < count; ++i) {
+        if (!materials[i].expression_nodes.empty()) return true;
+    }
+    return false;
+}
+
+static bool contains_sampled_resource_table(const GpuMaterialData* materials, int count) {
+    for (int i = 0; i < count; ++i) {
+        if (materials[i].albedo_resource.kind == SpectralResourceKind::SampledTable ||
+            materials[i].metal_eta_resource.kind == SpectralResourceKind::SampledTable ||
+            materials[i].extinction_resource.kind == SpectralResourceKind::SampledTable ||
+            materials[i].medium_scattering_resource.kind == SpectralResourceKind::SampledTable ||
+            materials[i].medium_absorption_resource.kind == SpectralResourceKind::SampledTable ||
+            materials[i].emission_resource.kind == SpectralResourceKind::SampledTable) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static std::uint64_t sampled_resource_float_count(const HostSpectralResource& resource) {
+    if (resource.kind != SpectralResourceKind::SampledTable) return 0;
+    const size_t samples = std::min(resource.wavelengths.size(), resource.values.size());
+    return static_cast<std::uint64_t>(samples) * 2ULL;
+}
+
+static std::uint64_t material_resource_float_count(const GpuMaterialData& material) {
+    std::uint64_t count = 0;
+    count += sampled_resource_float_count(material.albedo_resource);
+    count += sampled_resource_float_count(material.metal_eta_resource);
+    count += sampled_resource_float_count(material.extinction_resource);
+    count += sampled_resource_float_count(material.medium_scattering_resource);
+    count += sampled_resource_float_count(material.medium_absorption_resource);
+    count += sampled_resource_float_count(material.emission_resource);
+    for (const HostSpectralExpressionNode& node : material.expression_nodes) {
+        count += sampled_resource_float_count(node.resource);
+    }
+    return count;
+}
+
+static std::uint64_t spectral_texture_float_count(const HostTexture& texture) {
+    const int channels = texture.channels > 0 ? texture.channels : 3;
+    if (channels == 3) return 0;
+    return static_cast<std::uint64_t>(std::max(texture.width, 0)) *
+           static_cast<std::uint64_t>(std::max(texture.height, 0)) *
+           static_cast<std::uint64_t>(channels);
+}
+
+static std::uint64_t explicit_resident_budget_bytes(const ure::RenderConfig& config) {
+    if (config.spectral_max_resident_mb <= 0) return 0;
+    return static_cast<std::uint64_t>(config.spectral_max_resident_mb) * 1024ULL * 1024ULL;
+}
+
+static void validate_explicit_spectral_resident_budget(const std::vector<GpuMaterialData>& materials,
+                                                       const std::vector<HostTexture>& textures,
+                                                       const ure::RenderConfig& config) {
+    const std::uint64_t budget = explicit_resident_budget_bytes(config);
+    if (budget == 0) return;
+
+    ure::SpectralSceneResourceStats stats;
+    stats.material_count = static_cast<int>(std::max<size_t>(materials.size(), 1));
+    for (const GpuMaterialData& material : materials) {
+        stats.sampled_resource_floats += material_resource_float_count(material);
+    }
+    for (const HostTexture& texture : textures) {
+        const std::uint64_t floats = spectral_texture_float_count(texture);
+        stats.spectral_texture_floats += floats;
+        if (floats > 0) {
+            ++stats.spectral_texture_count;
+        }
+    }
+    const std::uint64_t estimated = ure::estimate_resident_spectral_resource_bytes(
+        stats,
+        ure::spectral_packet_lanes(config));
+    if (estimated > budget) {
+        throw std::runtime_error("spectral resident resource budget exceeded; use a larger cache budget or a streamed/tiled resource path");
     }
 }
 
@@ -249,6 +460,8 @@ GpuContext* init_gpu_renderer(int width, int height,
                                const std::vector<ure::gpu::GpuMaterialData>& materials,
                               const std::vector<ure::gpu::HostTexture>& textures,
                               const ure::RenderConfig& config) {
+    validate_explicit_spectral_resident_budget(materials, textures, config);
+
     GpuContext* ctx = new GpuContext();
     ctx->width = width;
     ctx->height = height;
@@ -258,8 +471,8 @@ GpuContext* init_gpu_renderer(int width, int height,
 
     ctx->medium_density = 0.0f;
     ctx->medium_anisotropy = 0.0f;
-    ctx->medium_scattering = GpuSpectrum(0.0f);
-    ctx->medium_absorption = GpuSpectrum(0.0f);
+    ctx->medium_scattering = SpectralPacket(0.0f);
+    ctx->medium_absorption = SpectralPacket(0.0f);
     ctx->medium_max_distance = 1e6f;
 
     UR_LOG_INFO(GPU, "Allocating memory for {}x{} interactive session...", width, height);
@@ -288,14 +501,22 @@ GpuContext* init_gpu_renderer(int width, int height,
     init_debug_log();
 
     int max_rays = config.queue_capacity > 0 ? config.queue_capacity : width * height;
-    int num_spec = config.num_wavelengths;
-    if (num_spec < kMinSpectralChannels || num_spec > kMaxSpectralChannels) {
-        throw std::runtime_error("RenderConfig::num_wavelengths must be in [kMinSpectralChannels, kMaxSpectralChannels]");
+    int num_spec = ure::spectral_packet_lanes(config);
+    if (!valid_packet_lane_count(num_spec)) {
+        throw std::runtime_error("RenderConfig spectral packet lanes must be 1 or in [8, kMaxPacketLanes]");
+    }
+    if (ure::spectral_domain_bins(config) < static_cast<std::uint64_t>(num_spec)) {
+        throw std::runtime_error("RenderConfig spectral domain bins must be >= spectral packet lanes");
     }
     alloc_ray_queue(ctx->queueA, max_rays, num_spec);
     alloc_ray_queue(ctx->queueB, max_rays, num_spec);
     alloc_hit_queue(ctx->hitQueue, max_rays);
     alloc_shadow_queue(ctx->shadowQueue, max_rays, num_spec);
+    int initial_spectral_mode = (config.spectral_sampling_mode == ure::SpectralSamplingMode::PacketUniform && num_spec > 1)
+        ? SpectralRayModePacket
+        : SpectralRayModeSampled;
+    ctx->queueA.initial_spectral_mode = initial_spectral_mode;
+    ctx->queueB.initial_spectral_mode = initial_spectral_mode;
 
     bool use_default_geometry = spheres.empty() && meshes.empty() && instances.empty();
     GpuHostScene host_scene = load_default_scene(!use_default_geometry);
@@ -309,21 +530,21 @@ GpuContext* init_gpu_renderer(int width, int height,
     }
 
     int mat_count = (int)host_materials.size();
-    int num_channels = config.num_wavelengths;
+    int num_channels = num_spec;
 
-    // Extract headers + fill SoA
     std::vector<GpuMaterial> host_headers(mat_count);
     for (int i = 0; i < mat_count; ++i) {
         host_headers[i] = host_materials[i].header;
     }
+    upload_material_expression_graphs(ctx, host_materials, host_headers);
 
-    cudaMalloc(&ctx->d_materials, mat_count * sizeof(GpuMaterial));
-    cudaMemcpy(ctx->d_materials, host_headers.data(), mat_count * sizeof(GpuMaterial), cudaMemcpyHostToDevice);
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_materials, mat_count * sizeof(GpuMaterial)));
+    UR_CUDA_CHECK(cudaMemcpy(ctx->d_materials, host_headers.data(), mat_count * sizeof(GpuMaterial), cudaMemcpyHostToDevice));
     ctx->material_count = mat_count;
 
     auto alloc_soa = [mat_count, num_channels](float*& d_ptr, std::vector<void*>& free_list) {
         if (mat_count > 0) {
-            cudaMalloc(&d_ptr, mat_count * num_channels * sizeof(float));
+            UR_CUDA_CHECK(cudaMalloc(&d_ptr, mat_count * num_channels * sizeof(float)));
             free_list.push_back(d_ptr);
         } else {
             d_ptr = nullptr;
@@ -337,27 +558,55 @@ GpuContext* init_gpu_renderer(int width, int height,
     alloc_soa(ctx->d_mat_emission, ctx->pointers_to_free);
     ctx->num_spectral_channels = num_channels;
 
-    auto upload_soa = [&](float* d_ptr, const GpuMaterialData* data, GpuSpectrum GpuMaterialData::* field) {
+    auto alloc_resources = [mat_count](SpectralResource*& d_ptr, std::vector<void*>& free_list) {
+        if (mat_count > 0) {
+            UR_CUDA_CHECK(cudaMalloc(&d_ptr, mat_count * sizeof(SpectralResource)));
+            free_list.push_back(d_ptr);
+        } else {
+            d_ptr = nullptr;
+        }
+    };
+    alloc_resources(ctx->d_mat_albedo_resources, ctx->pointers_to_free);
+    alloc_resources(ctx->d_mat_metal_eta_resources, ctx->pointers_to_free);
+    alloc_resources(ctx->d_mat_extinction_resources, ctx->pointers_to_free);
+    alloc_resources(ctx->d_mat_medium_scattering_resources, ctx->pointers_to_free);
+    alloc_resources(ctx->d_mat_medium_absorption_resources, ctx->pointers_to_free);
+    alloc_resources(ctx->d_mat_emission_resources, ctx->pointers_to_free);
+
+    auto upload_soa = [&](float* d_ptr,
+                          const GpuMaterialData* data,
+                          SpectralPacket GpuMaterialData::* field,
+                          HostSpectralResource GpuMaterialData::* resource_field) {
         std::vector<float> host_soa;
-        build_material_soa(host_soa, data, mat_count, num_channels, field);
-        cudaMemcpy(d_ptr, host_soa.data(), mat_count * num_channels * sizeof(float), cudaMemcpyHostToDevice);
+        build_material_soa(host_soa, data, mat_count, num_channels, field, resource_field);
+        UR_CUDA_CHECK(cudaMemcpy(d_ptr, host_soa.data(), mat_count * num_channels * sizeof(float), cudaMemcpyHostToDevice));
     };
     if (mat_count > 0 && num_channels > 0) {
         auto data = host_materials.data();
-        upload_soa(ctx->d_mat_albedo, data, &GpuMaterialData::albedo);
-        upload_soa(ctx->d_mat_metal_eta, data, &GpuMaterialData::metal_eta);
-        upload_soa(ctx->d_mat_extinction, data, &GpuMaterialData::extinction);
-        upload_soa(ctx->d_mat_medium_scattering, data, &GpuMaterialData::medium_scattering);
-        upload_soa(ctx->d_mat_medium_absorption, data, &GpuMaterialData::medium_absorption);
-        upload_soa(ctx->d_mat_emission, data, &GpuMaterialData::emission);
+        upload_soa(ctx->d_mat_albedo, data, &GpuMaterialData::albedo, &GpuMaterialData::albedo_resource);
+        upload_soa(ctx->d_mat_metal_eta, data, &GpuMaterialData::metal_eta, &GpuMaterialData::metal_eta_resource);
+        upload_soa(ctx->d_mat_extinction, data, &GpuMaterialData::extinction, &GpuMaterialData::extinction_resource);
+        upload_soa(ctx->d_mat_medium_scattering, data, &GpuMaterialData::medium_scattering, &GpuMaterialData::medium_scattering_resource);
+        upload_soa(ctx->d_mat_medium_absorption, data, &GpuMaterialData::medium_absorption, &GpuMaterialData::medium_absorption_resource);
+        upload_soa(ctx->d_mat_emission, data, &GpuMaterialData::emission, &GpuMaterialData::emission_resource);
+        upload_material_resources(ctx->d_mat_albedo_resources, data, mat_count, 0, &GpuMaterialData::albedo_resource, ctx->material_resource_tables_to_free);
+        upload_material_resources(ctx->d_mat_metal_eta_resources, data, mat_count, 0, &GpuMaterialData::metal_eta_resource, ctx->material_resource_tables_to_free);
+        upload_material_resources(ctx->d_mat_extinction_resources, data, mat_count, 0, &GpuMaterialData::extinction_resource, ctx->material_resource_tables_to_free);
+        upload_material_resources(ctx->d_mat_medium_scattering_resources, data, mat_count, 0, &GpuMaterialData::medium_scattering_resource, ctx->material_resource_tables_to_free);
+        upload_material_resources(ctx->d_mat_medium_absorption_resources, data, mat_count, 0, &GpuMaterialData::medium_absorption_resource, ctx->material_resource_tables_to_free);
+        upload_material_resources(ctx->d_mat_emission_resources, data, mat_count, 0, &GpuMaterialData::emission_resource, ctx->material_resource_tables_to_free);
     }
 
     std::vector<GpuSphere> host_spheres = spheres;
     if (spheres.empty() && meshes.empty()) {
         host_spheres = host_scene.spheres;
     }
-    cudaMalloc(&ctx->d_spheres, host_spheres.size() * sizeof(GpuSphere));
-    cudaMemcpy(ctx->d_spheres, host_spheres.data(), host_spheres.size() * sizeof(GpuSphere), cudaMemcpyHostToDevice);
+    size_t sphere_bytes = host_spheres.size() * sizeof(GpuSphere);
+    if (sphere_bytes == 0) sphere_bytes = sizeof(GpuSphere);
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_spheres, sphere_bytes));
+    if (!host_spheres.empty()) {
+        UR_CUDA_CHECK(cudaMemcpy(ctx->d_spheres, host_spheres.data(), host_spheres.size() * sizeof(GpuSphere), cudaMemcpyHostToDevice));
+    }
     ctx->sphere_count = (int)host_spheres.size();
 
     std::vector<GpuMesh> host_gpu_meshes;
@@ -541,37 +790,17 @@ GpuContext* init_gpu_renderer(int width, int height,
         d_tex.width = h_tex.width;
         d_tex.height = h_tex.height;
         d_tex.channels = h_tex.channels > 0 ? h_tex.channels : 3;
-        d_tex.data = nullptr;
         d_tex.texObj = 0;
+        d_tex.spectral_kind = SpectralTextureResourceKind::None;
+        d_tex.spectral_source_values = nullptr;
+        d_tex.spectral_sample_count = 0;
+        d_tex.spectral_lambda_min = kSpectralLambdaMin;
+        d_tex.spectral_lambda_max = kSpectralLambdaMax;
         const size_t pixel_count = static_cast<size_t>(h_tex.width) * static_cast<size_t>(h_tex.height);
         const size_t expected_values = pixel_count * static_cast<size_t>(d_tex.channels);
         if (h_tex.data.size() < expected_values) {
             throw std::runtime_error("HostTexture data is smaller than width * height * channels");
         }
-
-        size_t size_bytes = h_tex.width * h_tex.height * sizeof(GpuSpectrum);
-        cudaMallocManaged(&d_tex.data, size_bytes);
-        std::vector<GpuSpectrum> temp_spec(h_tex.width * h_tex.height);
-        for (size_t i = 0; i < temp_spec.size(); ++i) {
-            if (d_tex.channels == ctx->num_spectral_channels) {
-                for (int c = 0; c < ctx->num_spectral_channels; ++c) {
-                    temp_spec[i].values[c] = h_tex.data[i * static_cast<size_t>(d_tex.channels) + static_cast<size_t>(c)];
-                }
-            } else if (d_tex.channels == 3) {
-                float r = h_tex.data[i * 3 + 0];
-                float g = h_tex.data[i * 3 + 1];
-                float b = h_tex.data[i * 3 + 2];
-                for (int c = 0; c < ctx->num_spectral_channels; ++c) {
-                    float lambda = kSpectralLambdaMin + (float(c) + 0.5f) *
-                        ((kSpectralLambdaMax - kSpectralLambdaMin) / float(ctx->num_spectral_channels));
-                    temp_spec[i].values[c] = rgb_to_spectrum_value(GpuVec3(r, g, b), lambda);
-                }
-            } else {
-                throw std::runtime_error("HostTexture channels must be 3 or match RenderConfig::num_wavelengths");
-            }
-        }
-        cudaMemcpy(d_tex.data, temp_spec.data(), size_bytes, cudaMemcpyHostToDevice);
-        ctx->pointers_to_free.push_back(d_tex.data);
 
         if (d_tex.channels == 3) {
             std::vector<float4> temp_float4(h_tex.width * h_tex.height);
@@ -601,6 +830,15 @@ GpuContext* init_gpu_renderer(int width, int height,
             texDesc.normalizedCoords = 1;
             UR_CUDA_CHECK(cudaCreateTextureObject(&d_tex.texObj, &resDesc, &texDesc, NULL));
             ctx->tex_objs_to_free.push_back(d_tex.texObj);
+        } else {
+            size_t size_bytes = expected_values * sizeof(float);
+            float* d_values = nullptr;
+            UR_CUDA_CHECK(cudaMalloc(&d_values, size_bytes));
+            UR_CUDA_CHECK(cudaMemcpy(d_values, h_tex.data.data(), size_bytes, cudaMemcpyHostToDevice));
+            ctx->pointers_to_free.push_back(d_values);
+            d_tex.spectral_kind = SpectralTextureResourceKind::SourceSampleGrid;
+            d_tex.spectral_source_values = d_values;
+            d_tex.spectral_sample_count = d_tex.channels;
         }
         host_gpu_textures.push_back(d_tex);
     }
@@ -622,7 +860,19 @@ GpuContext* init_gpu_renderer(int width, int height,
             const auto& mat = host_materials[mat_idx];
             bool has_emission = false;
             for (int c = 0; c < ctx->num_spectral_channels; ++c) {
-                has_emission = has_emission || mat.emission.values[c] > 1e-4f;
+                float lambda = kSpectralLambdaMin + (float(c) + 0.5f) *
+                    ((kSpectralLambdaMax - kSpectralLambdaMin) / float(ctx->num_spectral_channels));
+                SpectralResource view = {};
+                view.kind = mat.emission_resource.kind;
+                view.constant = mat.emission_resource.constant;
+                view.rgb = mat.emission_resource.rgb;
+                view.wavelengths = mat.emission_resource.wavelengths.data();
+                view.values = mat.emission_resource.values.data();
+                view.sample_count = static_cast<int>(std::min(mat.emission_resource.wavelengths.size(), mat.emission_resource.values.size()));
+                float emission = mat.emission_resource.kind == SpectralResourceKind::None
+                    ? mat.emission.values[c]
+                    : eval_spectral_resource(view, lambda);
+                has_emission = has_emission || emission > 1e-4f;
             }
             if (has_emission) {
                 host_light_indices.push_back(i);
@@ -671,7 +921,7 @@ void update_camera_gpu(GpuContext* ctx, const float* cam_pos, const float* cam_l
     reset_accumulation_gpu(ctx);
 }
 
-void update_medium_gpu(GpuContext* ctx, float medium_density, float medium_anisotropy, GpuSpectrum medium_scattering, GpuSpectrum medium_absorption, float medium_max_distance) {
+void update_medium_gpu(GpuContext* ctx, float medium_density, float medium_anisotropy, SpectralPacket medium_scattering, SpectralPacket medium_absorption, float medium_max_distance) {
     ctx->medium_density = medium_density;
     ctx->medium_anisotropy = medium_anisotropy;
     ctx->medium_scattering = medium_scattering;
@@ -695,6 +945,8 @@ void reset_accumulation_gpu(GpuContext* ctx) {
 void free_gpu_renderer(GpuContext* ctx) {
     if (!ctx) return;
 
+    cudaDeviceSynchronize();
+
     cudaFree(ctx->d_output);
     cudaFree(ctx->d_accum_buffer);
     cudaFree(ctx->d_accum_sq_buffer);
@@ -716,9 +968,10 @@ void free_gpu_renderer(GpuContext* ctx) {
     free_hit_queue(ctx->hitQueue);
     free_shadow_queue(ctx->shadowQueue);
 
+    free_material_resource_tables(ctx);
     for (void* ptr : ctx->pointers_to_free) cudaFree(ptr);
-    for (auto a : ctx->arrays_to_free) cudaFreeArray(a);
     for (auto t : ctx->tex_objs_to_free) cudaDestroyTextureObject(t);
+    for (auto a : ctx->arrays_to_free) cudaFreeArray(a);
 
     free_debug_log();
     delete ctx;
@@ -743,6 +996,14 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.mat_medium_scattering_vals = ctx->d_mat_medium_scattering;
     scene.mat_medium_absorption_vals = ctx->d_mat_medium_absorption;
     scene.mat_emission_vals = ctx->d_mat_emission;
+    scene.mat_albedo_resources = ctx->d_mat_albedo_resources;
+    scene.mat_metal_eta_resources = ctx->d_mat_metal_eta_resources;
+    scene.mat_extinction_resources = ctx->d_mat_extinction_resources;
+    scene.mat_medium_scattering_resources = ctx->d_mat_medium_scattering_resources;
+    scene.mat_medium_absorption_resources = ctx->d_mat_medium_absorption_resources;
+    scene.mat_emission_resources = ctx->d_mat_emission_resources;
+    scene.material_expression_nodes = ctx->d_material_expression_nodes;
+    scene.material_expression_node_count = ctx->material_expression_node_count;
     scene.num_spectral_channels = ctx->num_spectral_channels;
     scene.textures = ctx->d_textures;
     scene.texture_count = ctx->texture_count;
@@ -872,6 +1133,20 @@ void update_materials_gpu(GpuContext* ctx,
     assert(first_material_index + count <= ctx->material_count && "update_materials_gpu: material range exceeds GPU material buffer");
     assert(ctx->num_spectral_channels > 0 && "update_materials_gpu: invalid spectral channel count");
 
+    int num_channels = ctx->num_spectral_channels;
+    bool full_material_update = first_material_index == 0 && count == ctx->material_count;
+    if (contains_material_expression_graph(materials, count)) {
+        throw std::runtime_error("material expression graph updates require a full scene reload");
+    }
+    if (full_material_update) {
+        free_material_resource_tables(ctx);
+    }
+    if (contains_sampled_resource_table(materials, count)) {
+        if (!full_material_update) {
+            throw std::runtime_error("partial sampled spectral resource material updates require a full scene reload");
+        }
+    }
+
     std::vector<GpuMaterial> headers(count);
     for (int i = 0; i < count; ++i) {
         headers[i] = materials[i].header;
@@ -881,13 +1156,18 @@ void update_materials_gpu(GpuContext* ctx,
                              count * sizeof(GpuMaterial),
                              cudaMemcpyHostToDevice));
 
-    int num_channels = ctx->num_spectral_channels;
-    upload_material_soa(ctx->d_mat_albedo, materials, count, num_channels, first_material_index, &GpuMaterialData::albedo);
-    upload_material_soa(ctx->d_mat_metal_eta, materials, count, num_channels, first_material_index, &GpuMaterialData::metal_eta);
-    upload_material_soa(ctx->d_mat_extinction, materials, count, num_channels, first_material_index, &GpuMaterialData::extinction);
-    upload_material_soa(ctx->d_mat_medium_scattering, materials, count, num_channels, first_material_index, &GpuMaterialData::medium_scattering);
-    upload_material_soa(ctx->d_mat_medium_absorption, materials, count, num_channels, first_material_index, &GpuMaterialData::medium_absorption);
-    upload_material_soa(ctx->d_mat_emission, materials, count, num_channels, first_material_index, &GpuMaterialData::emission);
+    upload_material_soa(ctx->d_mat_albedo, materials, count, num_channels, first_material_index, &GpuMaterialData::albedo, &GpuMaterialData::albedo_resource);
+    upload_material_soa(ctx->d_mat_metal_eta, materials, count, num_channels, first_material_index, &GpuMaterialData::metal_eta, &GpuMaterialData::metal_eta_resource);
+    upload_material_soa(ctx->d_mat_extinction, materials, count, num_channels, first_material_index, &GpuMaterialData::extinction, &GpuMaterialData::extinction_resource);
+    upload_material_soa(ctx->d_mat_medium_scattering, materials, count, num_channels, first_material_index, &GpuMaterialData::medium_scattering, &GpuMaterialData::medium_scattering_resource);
+    upload_material_soa(ctx->d_mat_medium_absorption, materials, count, num_channels, first_material_index, &GpuMaterialData::medium_absorption, &GpuMaterialData::medium_absorption_resource);
+    upload_material_soa(ctx->d_mat_emission, materials, count, num_channels, first_material_index, &GpuMaterialData::emission, &GpuMaterialData::emission_resource);
+    upload_material_resources(ctx->d_mat_albedo_resources, materials, count, first_material_index, &GpuMaterialData::albedo_resource, ctx->material_resource_tables_to_free);
+    upload_material_resources(ctx->d_mat_metal_eta_resources, materials, count, first_material_index, &GpuMaterialData::metal_eta_resource, ctx->material_resource_tables_to_free);
+    upload_material_resources(ctx->d_mat_extinction_resources, materials, count, first_material_index, &GpuMaterialData::extinction_resource, ctx->material_resource_tables_to_free);
+    upload_material_resources(ctx->d_mat_medium_scattering_resources, materials, count, first_material_index, &GpuMaterialData::medium_scattering_resource, ctx->material_resource_tables_to_free);
+    upload_material_resources(ctx->d_mat_medium_absorption_resources, materials, count, first_material_index, &GpuMaterialData::medium_absorption_resource, ctx->material_resource_tables_to_free);
+    upload_material_resources(ctx->d_mat_emission_resources, materials, count, first_material_index, &GpuMaterialData::emission_resource, ctx->material_resource_tables_to_free);
 }
 
 

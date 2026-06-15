@@ -62,7 +62,7 @@ static void free_test_ray_queue(const RayQueue& q) {
 // ===========================================================================
 
 __global__ void t1_kernel(GpuScene scene, float4* out) {
-    GpuSpectrum s = load_mat_spectrum(scene.mat_albedo_vals, 0, scene.num_spectral_channels);
+    SpectralPacket s = load_mat_spectrum(scene.mat_albedo_vals, 0, scene.num_spectral_channels);
     out[0] = make_float4(s.values[0], s.values[1], s.values[2], s.values[3]);
 }
 
@@ -258,7 +258,7 @@ static int test_sq_soa_roundtrip() {
 __global__ void t4_expected_kernel(GpuVec3* expected,
     const float* vals, const float* wls, int num_spec)
 {
-    GpuSpectrum s;
+    SpectralPacket s;
     for (int c = 0; c < num_spec; ++c) {
         s.values[c] = vals[c];
         s.wavelengths[c] = wls[c];
@@ -269,7 +269,7 @@ __global__ void t4_expected_kernel(GpuVec3* expected,
 __global__ void t4_lane_expected_kernel(GpuVec3* expected,
     const float* vals, const float* wls, int num_spec, int active_channel, float wavelength_pdf)
 {
-    GpuSpectrum s;
+    SpectralPacket s;
     for (int c = 0; c < num_spec; ++c) {
         s.values[c] = vals[c];
         s.wavelengths[c] = wls[c];
@@ -724,7 +724,7 @@ static int test_mat_soa_load_6x() {
 
 __global__ void t6_kernel(GpuScene scene, float* out_single, float* out_6x, int num_spec)
 {
-    GpuSpectrum single = load_mat_spectrum(scene.mat_albedo_vals, 0, scene.num_spectral_channels);
+    SpectralPacket single = load_mat_spectrum(scene.mat_albedo_vals, 0, scene.num_spectral_channels);
     GpuMaterialSoA soa = load_mat_spectra_6x(scene, 0);
     for (int c = 0; c < num_spec; ++c) {
         out_single[c] = single.values[c];
@@ -798,12 +798,12 @@ static int test_mat_soa_load_n8() {
 
 __global__ void t7_kernel(GpuScene scene, float* out_values, float* out_wavelengths, int num_spec)
 {
-    float wavelengths[kMaxSpectralChannels];
+    float wavelengths[kMaxPacketLanes];
     for (int c = 0; c < num_spec; ++c) {
         wavelengths[c] = 380.0f + 40.0f * float(c);
     }
 
-    GpuSpectrum sampled = sample_texture(scene, -1, 0.25f, 0.75f, wavelengths, num_spec);
+    SpectralPacket sampled = sample_texture(scene, -1, 0.25f, 0.75f, wavelengths, num_spec);
     for (int c = 0; c < num_spec; ++c) {
         out_values[c] = sampled.values[c];
         out_wavelengths[c] = sampled.wavelengths[c];
@@ -853,10 +853,10 @@ __global__ void t8_kernel(float* out_values, float* out_wavelengths, int num_spe
     mat.roughness = 0.35f;
     mat.ior = 1.4f;
 
-    GpuSpectrum albedo;
-    GpuSpectrum extinction;
-    GpuSpectrum metal_eta;
-    float wavelengths[kMaxSpectralChannels];
+    SpectralPacket albedo;
+    SpectralPacket extinction;
+    SpectralPacket metal_eta;
+    float wavelengths[kMaxPacketLanes];
     for (int c = 0; c < num_spec; ++c) {
         wavelengths[c] = 390.0f + 45.0f * float(c);
         albedo.values[c] = 0.2f + 0.05f * float(c);
@@ -867,7 +867,7 @@ __global__ void t8_kernel(float* out_values, float* out_wavelengths, int num_spe
         metal_eta.wavelengths[c] = wavelengths[c];
     }
 
-    GpuSpectrum bsdf = eval_bsdf(
+    SpectralPacket bsdf = eval_bsdf(
         mat,
         albedo,
         extinction,
@@ -921,12 +921,13 @@ static int test_eval_bsdf_metal_n8() {
 
 __global__ void t9_kernel(GpuScene scene, float* out_values, float* out_wavelengths, int num_spec)
 {
-    float wavelengths[kMaxSpectralChannels];
+    float wavelengths[kMaxPacketLanes];
+    const float step = (kSpectralLambdaMax - kSpectralLambdaMin) / 3.0f;
     for (int c = 0; c < num_spec; ++c) {
-        wavelengths[c] = 400.0f + 35.0f * float(c);
+        wavelengths[c] = kSpectralLambdaMin + 0.25f * step * float(c);
     }
 
-    GpuSpectrum sampled = sample_texture(scene, 0, 0.5f, 0.5f, wavelengths, num_spec);
+    SpectralPacket sampled = sample_texture(scene, 0, 0.5f, 0.5f, wavelengths, num_spec);
     for (int c = 0; c < num_spec; ++c) {
         out_values[c] = sampled.values[c];
         out_wavelengths[c] = sampled.wavelengths[c];
@@ -936,26 +937,31 @@ __global__ void t9_kernel(GpuScene scene, float* out_values, float* out_waveleng
 static int test_sample_texture_spectral_data_n8() {
     REQUIRE_GPU();
     const int ns = 8;
+    const int source_samples = 4;
     const int texel_count = 4;
 
-    GpuSpectrum h_texels[texel_count];
+    float h_texels[texel_count * source_samples];
     for (int p = 0; p < texel_count; ++p) {
-        for (int c = 0; c < ns; ++c) {
-            h_texels[p].values[c] = float(p * 100 + c);
+        for (int s = 0; s < source_samples; ++s) {
+            h_texels[p * source_samples + s] = float(p * 100 + s * 10);
         }
     }
 
-    GpuSpectrum* d_texels = nullptr;
-    CHECK_CUDA(cudaMalloc(&d_texels, texel_count * sizeof(GpuSpectrum)));
+    float* d_texels = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_texels, texel_count * source_samples * sizeof(float)));
     DeviceMem _dt(d_texels);
-    CHECK_CUDA(cudaMemcpy(d_texels, h_texels, texel_count * sizeof(GpuSpectrum), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_texels, h_texels, texel_count * source_samples * sizeof(float), cudaMemcpyHostToDevice));
 
     GpuTexture h_texture = {};
     h_texture.width = 2;
     h_texture.height = 2;
-    h_texture.channels = ns;
-    h_texture.data = d_texels;
+    h_texture.channels = source_samples;
+    h_texture.spectral_source_values = d_texels;
     h_texture.texObj = 0;
+    h_texture.spectral_kind = SpectralTextureResourceKind::SourceSampleGrid;
+    h_texture.spectral_sample_count = source_samples;
+    h_texture.spectral_lambda_min = kSpectralLambdaMin;
+    h_texture.spectral_lambda_max = kSpectralLambdaMax;
 
     GpuTexture* d_textures = nullptr;
     CHECK_CUDA(cudaMalloc(&d_textures, sizeof(GpuTexture)));
@@ -982,11 +988,98 @@ static int test_sample_texture_spectral_data_n8() {
     CHECK_CUDA(cudaMemcpy(h_values, d_values, ns * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaMemcpy(h_wavelengths, d_wavelengths, ns * sizeof(float), cudaMemcpyDeviceToHost));
 
+    const float step = (kSpectralLambdaMax - kSpectralLambdaMin) / float(source_samples - 1);
     for (int c = 0; c < ns; ++c) {
-        CHECK_FLOAT_EQ(h_values[c], 150.0f + float(c), 1e-6f);
-        CHECK_FLOAT_EQ(h_wavelengths[c], 400.0f + 35.0f * float(c), 1e-6f);
+        const float lambda = kSpectralLambdaMin + 0.25f * step * float(c);
+        const float spectral_pos = (lambda - kSpectralLambdaMin) / step;
+        CHECK_FLOAT_EQ(h_values[c], 150.0f + spectral_pos * 10.0f, 1e-5f);
+        CHECK_FLOAT_EQ(h_wavelengths[c], lambda, 1e-4f);
     }
 
+    return 0;
+}
+
+__global__ void t9_expr_kernel(GpuScene scene, GpuMaterial mat, float* out_values, int num_spec)
+{
+    float wavelengths[kMaxPacketLanes];
+    for (int c = 0; c < num_spec; ++c) {
+        wavelengths[c] = c == 0 ? kSpectralLambdaMin : kSpectralLambdaMax;
+    }
+    SpectralPacket sampled = eval_material_expression(scene, mat, mat.albedo_expression_root, 0.0f, 0.0f, wavelengths, num_spec);
+    for (int c = 0; c < num_spec; ++c) {
+        out_values[c] = sampled.values[c];
+    }
+}
+
+static int test_l9_material_expression_texture_add_mix_device_eval() {
+    REQUIRE_GPU();
+    const int ns = 2;
+    float h_texels[2] = {0.2f, 0.6f};
+    float* d_texels = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_texels, sizeof(h_texels)));
+    DeviceMem _dt(d_texels);
+    CHECK_CUDA(cudaMemcpy(d_texels, h_texels, sizeof(h_texels), cudaMemcpyHostToDevice));
+
+    GpuTexture h_texture = {};
+    h_texture.width = 1;
+    h_texture.height = 1;
+    h_texture.channels = 2;
+    h_texture.spectral_kind = SpectralTextureResourceKind::SourceSampleGrid;
+    h_texture.spectral_source_values = d_texels;
+    h_texture.spectral_sample_count = 2;
+    h_texture.spectral_lambda_min = kSpectralLambdaMin;
+    h_texture.spectral_lambda_max = kSpectralLambdaMax;
+
+    GpuTexture* d_textures = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_textures, sizeof(GpuTexture)));
+    DeviceMem _dtx(d_textures);
+    CHECK_CUDA(cudaMemcpy(d_textures, &h_texture, sizeof(GpuTexture), cudaMemcpyHostToDevice));
+
+    SpectralExpressionNode h_nodes[5] = {};
+    h_nodes[0].kind = SpectralExpressionNodeKind::Texture;
+    h_nodes[0].texture_index = 0;
+    h_nodes[1].kind = SpectralExpressionNodeKind::Resource;
+    h_nodes[1].resource.kind = SpectralResourceKind::Constant;
+    h_nodes[1].resource.constant = 1.0f;
+    h_nodes[2].kind = SpectralExpressionNodeKind::Add;
+    h_nodes[2].input_a = 0;
+    h_nodes[2].input_b = 1;
+    h_nodes[3].kind = SpectralExpressionNodeKind::Resource;
+    h_nodes[3].resource.kind = SpectralResourceKind::Constant;
+    h_nodes[3].resource.constant = 0.25f;
+    h_nodes[4].kind = SpectralExpressionNodeKind::Mix;
+    h_nodes[4].input_a = 0;
+    h_nodes[4].input_b = 2;
+    h_nodes[4].input_factor = 3;
+
+    SpectralExpressionNode* d_nodes = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_nodes, sizeof(h_nodes)));
+    DeviceMem _dn(d_nodes);
+    CHECK_CUDA(cudaMemcpy(d_nodes, h_nodes, sizeof(h_nodes), cudaMemcpyHostToDevice));
+
+    GpuMaterial mat = {};
+    mat.expression_node_start = 0;
+    mat.expression_node_count = 5;
+    mat.albedo_expression_root = 4;
+
+    GpuScene scene = {};
+    scene.textures = d_textures;
+    scene.texture_count = 1;
+    scene.material_expression_nodes = d_nodes;
+    scene.material_expression_node_count = 5;
+    scene.num_spectral_channels = ns;
+
+    float* d_values = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_values, ns * sizeof(float)));
+    DeviceMem _dv(d_values);
+    t9_expr_kernel<<<1, 1>>>(scene, mat, d_values, ns);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float values[ns] = {};
+    CHECK_CUDA(cudaMemcpy(values, d_values, ns * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(values[0], 0.45f, 1e-5f);
+    CHECK_FLOAT_EQ(values[1], 0.85f, 1e-5f);
     return 0;
 }
 
@@ -1003,10 +1096,10 @@ __global__ void t10_kernel(float* out_ior, float* out_attenuation, int num_spec)
     mat.thin_film_thickness = 0.0f;
     mat.thin_film_ior = 1.4f;
 
-    GpuSpectrum albedo(1.0f);
-    GpuSpectrum extinction(0.0f);
-    GpuSpectrum metal_eta(0.0f);
-    GpuSpectrum throughput(1.0f);
+    SpectralPacket albedo(1.0f);
+    SpectralPacket extinction(0.0f);
+    SpectralPacket metal_eta(0.0f);
+    SpectralPacket throughput(1.0f);
     for (int c = 0; c < num_spec; ++c) {
         throughput.wavelengths[c] = 400.0f + 40.0f * float(c);
     }
@@ -1018,7 +1111,7 @@ __global__ void t10_kernel(float* out_ior, float* out_attenuation, int num_spec)
     in.t_max = 1000.0f;
     in.stokes = StokesVector(1.0f, 0.0f, 0.0f, 0.0f);
 
-    GpuSpectrum attenuation;
+    SpectralPacket attenuation;
     GpuRay scattered;
     StokesVector stokes(1.0f, 0.0f, 0.0f, 0.0f);
     unsigned int seed = 1u;
@@ -1097,10 +1190,10 @@ __global__ void t11_kernel(float* out_attenuation, float* out_expected, int num_
     mat.roughness = 0.02f;
     mat.thin_film_thickness = 0.0f;
 
-    GpuSpectrum albedo(1.0f);
-    GpuSpectrum extinction(0.0f);
-    GpuSpectrum metal_eta(1.5f);
-    GpuSpectrum throughput(1.0f);
+    SpectralPacket albedo(1.0f);
+    SpectralPacket extinction(0.0f);
+    SpectralPacket metal_eta(1.5f);
+    SpectralPacket throughput(1.0f);
     for (int c = 0; c < num_spec; ++c) {
         throughput.wavelengths[c] = 400.0f + 40.0f * float(c);
         albedo.values[c] = 0.15f + 0.08f * float(c);
@@ -1115,7 +1208,7 @@ __global__ void t11_kernel(float* out_attenuation, float* out_expected, int num_
     in.t_max = 1000.0f;
     in.stokes = StokesVector(1.0f, 0.0f, 0.0f, 0.0f);
 
-    GpuSpectrum attenuation;
+    SpectralPacket attenuation;
     GpuRay scattered;
     StokesVector stokes(1.0f, 0.0f, 0.0f, 0.0f);
     unsigned int seed = 1u;
@@ -1195,10 +1288,10 @@ static int test_metal_scatter_uses_per_channel_conductor_fresnel() {
 }
 
 __global__ void c2_conductor_semantics_kernel(int* out_flags, float* out_eta) {
-    GpuSpectrum eta_zero(0.0f);
-    GpuSpectrum eta_spectral(0.0f);
-    GpuSpectrum k_zero(0.0f);
-    GpuSpectrum k_spectral(0.0f);
+    SpectralPacket eta_zero(0.0f);
+    SpectralPacket eta_spectral(0.0f);
+    SpectralPacket k_zero(0.0f);
+    SpectralPacket k_spectral(0.0f);
     for (int c = 0; c < 4; ++c) {
         eta_spectral.values[c] = 1.2f + 0.1f * float(c);
         k_spectral.values[c] = 2.0f + 0.2f * float(c);
@@ -1256,10 +1349,10 @@ __global__ void t12_kernel(float* out_weight, float* out_enter, float* out_exit,
     mat.thin_film_thickness = 0.0f;
     mat.thin_film_ior = 1.25f;
 
-    GpuSpectrum albedo(1.0f);
-    GpuSpectrum extinction(0.0f);
-    GpuSpectrum metal_eta(0.0f);
-    GpuSpectrum throughput(1.0f);
+    SpectralPacket albedo(1.0f);
+    SpectralPacket extinction(0.0f);
+    SpectralPacket metal_eta(0.0f);
+    SpectralPacket throughput(1.0f);
     for (int c = 0; c < num_spec; ++c) {
         throughput.wavelengths[c] = 400.0f + 40.0f * float(c);
     }
@@ -1272,7 +1365,7 @@ __global__ void t12_kernel(float* out_weight, float* out_enter, float* out_exit,
         enter_ray.t_max = 1000.0f;
         enter_ray.stokes = StokesVector(1.0f, 0.0f, 0.0f, 0.0f);
 
-        GpuSpectrum enter_attenuation;
+        SpectralPacket enter_attenuation;
         GpuRay inside_ray;
         StokesVector enter_stokes(1.0f, 0.0f, 0.0f, 0.0f);
         unsigned int seed = 1u;
@@ -1302,7 +1395,7 @@ __global__ void t12_kernel(float* out_weight, float* out_enter, float* out_exit,
             continue;
         }
 
-        GpuSpectrum exit_attenuation;
+        SpectralPacket exit_attenuation;
         GpuRay exit_ray;
         StokesVector exit_stokes = enter_stokes;
         seed = 2u;
@@ -1425,7 +1518,7 @@ __global__ void c1_lane_split_medium_kernel(RayQueue current, RayQueue next) {
     current.active_channels[0] = -1;
     current.wavelength_pdfs[0] = 1.0f / float(num_spec);
 
-    GpuSpectrum throughput(1.0f);
+    SpectralPacket throughput(1.0f);
     for (int c = 0; c < num_spec; ++c) {
         throughput.wavelengths[c] = 440.0f + 40.0f * float(c);
         store_stokes(current, 0, c, StokesVector(1.0f, 0.0f, 0.0f, 0.0f));
@@ -1441,7 +1534,7 @@ __global__ void c1_lane_split_medium_kernel(RayQueue current, RayQueue next) {
     mat.thin_film_ior = 1.4f;
 
     GpuMaterialSoA mat_soa = {};
-    mat_soa.albedo = GpuSpectrum(1.0f);
+    mat_soa.albedo = SpectralPacket(1.0f);
 
     split_dispersive_dielectric_lanes(
         current,
@@ -1531,10 +1624,10 @@ __global__ void c7_lane_dielectric_active_channel_kernel(float* out_dir_z, int* 
     mat.thin_film_thickness = 0.0f;
     mat.thin_film_ior = 1.4f;
 
-    GpuSpectrum albedo(1.0f);
-    GpuSpectrum extinction(0.0f);
-    GpuSpectrum metal_eta(0.0f);
-    GpuSpectrum throughput(1.0f);
+    SpectralPacket albedo(1.0f);
+    SpectralPacket extinction(0.0f);
+    SpectralPacket metal_eta(0.0f);
+    SpectralPacket throughput(1.0f);
     throughput.wavelengths[0] = 400.0f;
     throughput.wavelengths[1] = 500.0f;
     throughput.wavelengths[2] = 600.0f;
@@ -1556,7 +1649,7 @@ __global__ void c7_lane_dielectric_active_channel_kernel(float* out_dir_z, int* 
             continue;
         }
 
-        GpuSpectrum attenuation;
+        SpectralPacket attenuation;
         GpuRay scattered;
         StokesVector stokes(1.0f, 0.0f, 0.0f, 0.0f);
         unsigned int seed = 1u;
@@ -1635,7 +1728,7 @@ __global__ void c8_dielectric_lane_split_no_albedo_tint_kernel(RayQueue current,
     current.active_channels[0] = -1;
     current.wavelength_pdfs[0] = 1.0f / float(num_spec);
 
-    GpuSpectrum throughput(1.0f);
+    SpectralPacket throughput(1.0f);
     for (int c = 0; c < num_spec; ++c) {
         throughput.wavelengths[c] = 440.0f + 40.0f * float(c);
         store_stokes(current, 0, c, StokesVector(1.0f, 0.0f, 0.0f, 0.0f));
@@ -1653,7 +1746,7 @@ __global__ void c8_dielectric_lane_split_no_albedo_tint_kernel(RayQueue current,
     mat.thin_film_ior = 1.4f;
 
     GpuMaterialSoA mat_soa = {};
-    mat_soa.albedo = GpuSpectrum(0.25f);
+    mat_soa.albedo = SpectralPacket(0.25f);
 
     split_dispersive_dielectric_lanes(
         current,
@@ -1761,10 +1854,10 @@ __global__ void c10_rough_dielectric_microfacet_kernel(float* out, int* out_samp
     mat.thin_film_thickness = 0.0f;
     mat.thin_film_ior = 1.4f;
 
-    GpuSpectrum albedo(0.2f);
-    GpuSpectrum extinction(0.0f);
-    GpuSpectrum metal_eta(0.0f);
-    GpuSpectrum throughput(1.0f);
+    SpectralPacket albedo(0.2f);
+    SpectralPacket extinction(0.0f);
+    SpectralPacket metal_eta(0.0f);
+    SpectralPacket throughput(1.0f);
     for (int c = 0; c < num_spec; ++c) {
         throughput.wavelengths[c] = 500.0f + 10.0f * float(c);
     }
@@ -1782,7 +1875,7 @@ __global__ void c10_rough_dielectric_microfacet_kernel(float* out, int* out_samp
             continue;
         }
 
-        GpuSpectrum attenuation;
+        SpectralPacket attenuation;
         GpuRay scattered;
         StokesVector stokes(1.0f, 0.0f, 0.0f, 0.0f);
         unsigned int seed = 1u;
@@ -1844,7 +1937,7 @@ __global__ void c10_rough_dielectric_microfacet_kernel(float* out, int* out_samp
         out[6] = albedo.values[0];
         out[7] = pdf;
         float wavelengths[num_spec] = {throughput.wavelengths[0], throughput.wavelengths[1], throughput.wavelengths[2], throughput.wavelengths[3]};
-        GpuSpectrum bsdf = eval_bsdf(
+        SpectralPacket bsdf = eval_bsdf(
             mat,
             albedo,
             extinction,
@@ -1902,15 +1995,15 @@ __global__ void c11_rough_dielectric_eval_pdf_kernel(float* out)
     rough.dispersion = 0.0f;
 
     float wavelengths[num_spec] = {450.0f, 520.0f, 610.0f, 700.0f};
-    GpuSpectrum albedo(1.0f);
-    GpuSpectrum extinction(0.0f);
-    GpuSpectrum metal_eta(0.0f);
+    SpectralPacket albedo(1.0f);
+    SpectralPacket extinction(0.0f);
+    SpectralPacket metal_eta(0.0f);
     GpuVec3 n(0.0f, 0.0f, 1.0f);
     GpuVec3 wo = GpuVec3(0.25f, 0.0f, 0.9682458f).normalize();
     GpuVec3 wi = GpuVec3(-0.20f, 0.15f, 0.9682458f).normalize();
     GpuVec3 wt = GpuVec3(-0.10f, 0.05f, -0.9937303f).normalize();
 
-    GpuSpectrum bsdf = eval_bsdf(
+    SpectralPacket bsdf = eval_bsdf(
         rough,
         albedo,
         extinction,
@@ -1925,7 +2018,7 @@ __global__ void c11_rough_dielectric_eval_pdf_kernel(float* out)
     out[0] = bsdf.values[0];
     out[1] = bsdf.values[3];
     out[2] = pdf_bsdf(rough, n, wo, wi);
-    GpuSpectrum btdf = eval_bsdf(
+    SpectralPacket btdf = eval_bsdf(
         rough,
         albedo,
         extinction,
@@ -1947,7 +2040,7 @@ __global__ void c11_rough_dielectric_eval_pdf_kernel(float* out)
     GpuMaterial thin_film = rough;
     thin_film.thin_film_thickness = 500.0f;
     out[6] = pdf_bsdf(thin_film, n, wo, wi);
-    GpuSpectrum thin_film_bsdf = eval_bsdf(
+    SpectralPacket thin_film_bsdf = eval_bsdf(
         thin_film,
         albedo,
         extinction,
@@ -1963,7 +2056,7 @@ __global__ void c11_rough_dielectric_eval_pdf_kernel(float* out)
 
     GpuMaterial dispersive = rough;
     dispersive.dispersion = 0.25f;
-    GpuSpectrum dispersive_btdf = eval_bsdf(
+    SpectralPacket dispersive_btdf = eval_bsdf(
         dispersive,
         albedo,
         extinction,
@@ -2046,6 +2139,104 @@ static int test_rough_dielectric_direct_light_gate_allows_btdf_side() {
     return 0;
 }
 
+__global__ void l5_spectral_resource_eval_kernel(SpectralResource resource, float* out)
+{
+    out[0] = eval_spectral_resource(resource, 450.0f);
+    out[1] = eval_spectral_resource(resource, 500.0f);
+    out[2] = eval_spectral_resource(resource, 550.0f);
+}
+
+static int test_spectral_resource_sampled_table_eval_lambda() {
+    REQUIRE_GPU();
+    const float h_wavelengths[3] = {450.0f, 500.0f, 550.0f};
+    const float h_values[3] = {0.25f, 1.0f, 0.5f};
+    float* d_wavelengths = nullptr;
+    float* d_values = nullptr;
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_wavelengths, sizeof(h_wavelengths)));
+    CHECK_CUDA(cudaMalloc(&d_values, sizeof(h_values)));
+    CHECK_CUDA(cudaMalloc(&d_out, 3 * sizeof(float)));
+    DeviceMem _w(d_wavelengths), _v(d_values), _o(d_out);
+    CHECK_CUDA(cudaMemcpy(d_wavelengths, h_wavelengths, sizeof(h_wavelengths), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_values, h_values, sizeof(h_values), cudaMemcpyHostToDevice));
+
+    SpectralResource resource = {};
+    resource.kind = SpectralResourceKind::SampledTable;
+    resource.wavelengths = d_wavelengths;
+    resource.values = d_values;
+    resource.sample_count = 3;
+
+    l5_spectral_resource_eval_kernel<<<1, 1>>>(resource, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float h_out[3];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, sizeof(h_out), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(h_out[0], 0.25f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[1], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[2], 0.5f, 1e-6f);
+    return 0;
+}
+
+__global__ void l5_material_resource_overrides_soa_kernel(GpuScene scene, const float* wavelengths, float* out)
+{
+    GpuMaterialSoA s = load_mat_spectra_6x(scene, 0, wavelengths);
+    out[0] = s.albedo.values[0];
+    out[1] = s.albedo.values[1];
+    out[2] = s.albedo.values[2];
+}
+
+static int test_material_resource_eval_overrides_packet_soa() {
+    REQUIRE_GPU();
+    const int num_spec = 3;
+    const float h_query_wavelengths[num_spec] = {450.0f, 500.0f, 550.0f};
+    const float h_resource_wavelengths[3] = {450.0f, 500.0f, 550.0f};
+    const float h_resource_values[3] = {0.1f, 0.8f, 0.3f};
+    const float h_fallback_soa[num_spec] = {9.0f, 9.0f, 9.0f};
+
+    float* d_query_wavelengths = nullptr;
+    float* d_resource_wavelengths = nullptr;
+    float* d_resource_values = nullptr;
+    float* d_fallback_soa = nullptr;
+    float* d_out = nullptr;
+    SpectralResource* d_resources = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_query_wavelengths, sizeof(h_query_wavelengths)));
+    CHECK_CUDA(cudaMalloc(&d_resource_wavelengths, sizeof(h_resource_wavelengths)));
+    CHECK_CUDA(cudaMalloc(&d_resource_values, sizeof(h_resource_values)));
+    CHECK_CUDA(cudaMalloc(&d_fallback_soa, sizeof(h_fallback_soa)));
+    CHECK_CUDA(cudaMalloc(&d_out, num_spec * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_resources, sizeof(SpectralResource)));
+    DeviceMem _qw(d_query_wavelengths), _rw(d_resource_wavelengths), _rv(d_resource_values);
+    DeviceMem _fb(d_fallback_soa), _out(d_out), _res(d_resources);
+    CHECK_CUDA(cudaMemcpy(d_query_wavelengths, h_query_wavelengths, sizeof(h_query_wavelengths), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_resource_wavelengths, h_resource_wavelengths, sizeof(h_resource_wavelengths), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_resource_values, h_resource_values, sizeof(h_resource_values), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_fallback_soa, h_fallback_soa, sizeof(h_fallback_soa), cudaMemcpyHostToDevice));
+
+    SpectralResource h_resource = {};
+    h_resource.kind = SpectralResourceKind::SampledTable;
+    h_resource.wavelengths = d_resource_wavelengths;
+    h_resource.values = d_resource_values;
+    h_resource.sample_count = 3;
+    CHECK_CUDA(cudaMemcpy(d_resources, &h_resource, sizeof(SpectralResource), cudaMemcpyHostToDevice));
+
+    GpuScene scene = {};
+    scene.num_spectral_channels = num_spec;
+    scene.mat_albedo_vals = d_fallback_soa;
+    scene.mat_albedo_resources = d_resources;
+
+    l5_material_resource_overrides_soa_kernel<<<1, 1>>>(scene, d_query_wavelengths, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float h_out[num_spec];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, sizeof(h_out), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(h_out[0], 0.1f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[1], 0.8f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[2], 0.3f, 1e-6f);
+    return 0;
+}
+
 // ===========================================================================
 
 int main() {
@@ -2062,6 +2253,7 @@ int main() {
     RUN_TEST(test_sample_texture_invalid_n8);
     RUN_TEST(test_eval_bsdf_metal_n8);
     RUN_TEST(test_sample_texture_spectral_data_n8);
+    RUN_TEST(test_l9_material_expression_texture_add_mix_device_eval);
     RUN_TEST(test_dielectric_dispersion_runtime_n);
     RUN_TEST(test_metal_scatter_uses_per_channel_conductor_fresnel);
     RUN_TEST(test_conductor_material_semantics);
@@ -2074,6 +2266,8 @@ int main() {
     RUN_TEST(test_rough_dielectric_uses_microfacet_btdf);
     RUN_TEST(test_rough_dielectric_eval_pdf_visible_to_direct_light);
     RUN_TEST(test_rough_dielectric_direct_light_gate_allows_btdf_side);
+    RUN_TEST(test_spectral_resource_sampled_table_eval_lambda);
+    RUN_TEST(test_material_resource_eval_overrides_packet_soa);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;
 }

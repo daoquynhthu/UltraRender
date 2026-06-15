@@ -17,6 +17,14 @@ typedef struct ure_session_progress_t {
     int has_scene;
 } ure_session_progress_t;
 
+typedef struct ure_spectral_config_t {
+    uint64_t domain_bins;
+    int packet_lanes;
+    int max_resident_mb;
+    int queue_capacity;
+    int max_trace_depth;
+} ure_spectral_config_t;
+
 typedef enum ure_aov_type_t {
     URE_AOV_BEAUTY = 0,
     URE_AOV_NORMAL = 1,
@@ -90,6 +98,7 @@ ure_session_t* ure_session_create(void);
 ure_session_t* ure_session_create_config(int num_wavelengths,
                                          int queue_capacity,
                                          int max_trace_depth);
+ure_session_t* ure_session_create_spectral_config(const ure_spectral_config_t* config);
 void ure_session_destroy(ure_session_t* session);
 int ure_session_load_scene_file(ure_session_t* session, const char* path);
 int ure_session_start(ure_session_t* session, int progressive);

@@ -10,15 +10,15 @@ using namespace ure::gpu;
 namespace ure::gpu {
 
 // SoA queue throughput load/store helpers (duplicated for this TU)
-__device__ inline GpuSpectrum load_throughput(const RayQueue& q, int idx) {
-    GpuSpectrum t;
+__device__ inline SpectralPacket load_throughput(const RayQueue& q, int idx) {
+    SpectralPacket t;
     for (int c = 0; c < q.num_spectral_channels; ++c) {
         t.set_sample(c, q.throughput_vals[c * q.capacity + idx]);
         t.set_wavelength(c, q.throughput_wavelengths[c * q.capacity + idx]);
     }
     return t;
 }
-__device__ inline void store_throughput(RayQueue& q, int idx, const GpuSpectrum& t) {
+__device__ inline void store_throughput(RayQueue& q, int idx, const SpectralPacket& t) {
     for (int c = 0; c < q.num_spectral_channels; ++c) {
         q.throughput_vals[c * q.capacity + idx] = t.sample(c);
         q.throughput_wavelengths[c * q.capacity + idx] = t.wavelength(c);
@@ -77,23 +77,44 @@ __global__ __launch_bounds__(512) void generate_rays_kernel(
     queue.origins[ray_index] = r.origin;
     queue.directions[ray_index] = r.direction;
 
+    int spectral_mode = queue.initial_spectral_mode;
+    int active_channel = -1;
+    float r_lambda = 0.0f;
+    if (spectral_mode_is_sampled(spectral_mode)) {
+        r_lambda = sample_dimension(sample_index, pixel_index, 7);
+        active_channel = min(int(r_lambda * queue.num_spectral_channels), queue.num_spectral_channels - 1);
+        if (queue.num_spectral_channels == 1) active_channel = 0;
+    }
+
     float domain = kSpectralLambdaMax - kSpectralLambdaMin;
     float bin_width = domain / float(queue.num_spectral_channels);
     for (int c = 0; c < queue.num_spectral_channels; ++c) {
-        queue.throughput_vals[c * queue.capacity + ray_index] = 1.0f;
+        queue.throughput_vals[c * queue.capacity + ray_index] =
+            spectral_mode_is_sampled(spectral_mode) ? (c == active_channel ? 1.0f : 0.0f) : 1.0f;
         queue.throughput_wavelengths[c * queue.capacity + ray_index] =
-            kSpectralLambdaMin + (float(c) + 0.5f) * bin_width;
+            spectral_mode == SpectralRayModeSampled && c == active_channel
+                ? kSpectralLambdaMin + r_lambda * domain
+                : kSpectralLambdaMin + (float(c) + 0.5f) * bin_width;
     }
-    store_stokes_packet(queue, ray_index, StokesVector(1.0f, 0.0f, 0.0f, 0.0f));
+    if (spectral_mode_is_sampled(spectral_mode)) {
+        for (int c = 0; c < queue.num_spectral_channels; ++c) {
+            store_stokes(queue, ray_index, c,
+                c == active_channel ? StokesVector(1.0f, 0.0f, 0.0f, 0.0f) : StokesVector(0.0f, 0.0f, 0.0f, 0.0f));
+        }
+    } else {
+        store_stokes_packet(queue, ray_index, StokesVector(1.0f, 0.0f, 0.0f, 0.0f));
+    }
     queue.medium_indices[ray_index] = -1;
     queue.seeds[ray_index] = seed;
     queue.pixel_indices[ray_index] = pixel_index;
     queue.depths[ray_index] = 0;
     queue.flags[ray_index] = 1;
     queue.last_pdf[ray_index] = 0.0f;
-    queue.spectral_modes[ray_index] = SpectralRayModePacket;
-    queue.active_channels[ray_index] = -1;
-    queue.wavelength_pdfs[ray_index] = 1.0f / fmaxf(1.0f, float(queue.num_spectral_channels));
+    queue.spectral_modes[ray_index] = spectral_mode;
+    queue.active_channels[ray_index] = active_channel;
+    queue.wavelength_pdfs[ray_index] = spectral_mode == SpectralRayModeSampled
+        ? 1.0f / domain
+        : 1.0f / fmaxf(1.0f, float(queue.num_spectral_channels));
 }
 
 } // namespace ure::gpu

@@ -32,8 +32,13 @@ build_vs/
 build_vs4/
 build_vs_clean/
 build_modular/
+build_modular_x64/
 build_gpu_test/
 .build/
+
+# Python cache
+__pycache__/
+*.pyc
 
 # GUI build artifacts
 gui/**/obj/

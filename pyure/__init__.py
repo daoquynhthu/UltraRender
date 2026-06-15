@@ -49,6 +49,16 @@ class _Progress(ctypes.Structure):
     ]
 
 
+class _SpectralConfig(ctypes.Structure):
+    _fields_ = [
+        ("domain_bins", ctypes.c_uint64),
+        ("packet_lanes", ctypes.c_int),
+        ("max_resident_mb", ctypes.c_int),
+        ("queue_capacity", ctypes.c_int),
+        ("max_trace_depth", ctypes.c_int),
+    ]
+
+
 @dataclass(frozen=True)
 class Progress:
     spp: int
@@ -85,6 +95,8 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
     lib.ure_session_create.restype = ctypes.c_void_p
     lib.ure_session_create_config.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
     lib.ure_session_create_config.restype = ctypes.c_void_p
+    lib.ure_session_create_spectral_config.argtypes = [ctypes.POINTER(_SpectralConfig)]
+    lib.ure_session_create_spectral_config.restype = ctypes.c_void_p
     lib.ure_session_destroy.argtypes = [ctypes.c_void_p]
     lib.ure_session_load_scene_file.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
     lib.ure_session_load_scene_file.restype = ctypes.c_int
@@ -169,8 +181,27 @@ def _vec3(values: tuple[float, float, float] | list[float]) -> ctypes.Array[ctyp
 
 
 class RenderSession:
-    def __init__(self, num_wavelengths: int = 0, queue_capacity: int = 0, max_trace_depth: int = 0):
-        handle = native().ure_session_create_config(num_wavelengths, queue_capacity, max_trace_depth)
+    def __init__(
+        self,
+        num_wavelengths: int = 0,
+        queue_capacity: int = 0,
+        max_trace_depth: int = 0,
+        *,
+        domain_bins: int = 0,
+        packet_lanes: int = 0,
+        max_resident_mb: int = 0,
+    ):
+        if domain_bins > 0 or packet_lanes > 0 or max_resident_mb > 0:
+            cfg = _SpectralConfig(
+                int(domain_bins),
+                int(packet_lanes if packet_lanes > 0 else num_wavelengths),
+                int(max_resident_mb),
+                int(queue_capacity),
+                int(max_trace_depth),
+            )
+            handle = native().ure_session_create_spectral_config(ctypes.byref(cfg))
+        else:
+            handle = native().ure_session_create_config(num_wavelengths, queue_capacity, max_trace_depth)
         if not handle:
             raise RuntimeError("failed to create UltraRender session")
         self._handle: Optional[int] = handle
@@ -340,8 +371,23 @@ class RenderSession:
             raise RuntimeError(f"failed to save HDR: {path}")
 
 
-def create_session(num_wavelengths: int = 0, queue_capacity: int = 0, max_trace_depth: int = 0) -> RenderSession:
-    return RenderSession(num_wavelengths, queue_capacity, max_trace_depth)
+def create_session(
+    num_wavelengths: int = 0,
+    queue_capacity: int = 0,
+    max_trace_depth: int = 0,
+    *,
+    domain_bins: int = 0,
+    packet_lanes: int = 0,
+    max_resident_mb: int = 0,
+) -> RenderSession:
+    return RenderSession(
+        num_wavelengths,
+        queue_capacity,
+        max_trace_depth,
+        domain_bins=domain_bins,
+        packet_lanes=packet_lanes,
+        max_resident_mb=max_resident_mb,
+    )
 
 
 def aov_channel_count(aov: AovType) -> int:

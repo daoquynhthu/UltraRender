@@ -13,63 +13,71 @@
 namespace ure::gpu {
 
 struct GpuContext {
-    int width;
-    int height;
-    int current_spp;
+    int width = 0;
+    int height = 0;
+    int current_spp = 0;
 
-    GpuVec3* d_output;
-    GpuVec3* d_accum_buffer;
-    GpuVec3* d_accum_sq_buffer;
-    int* d_sample_counts;
+    GpuVec3* d_output = nullptr;
+    GpuVec3* d_accum_buffer = nullptr;
+    GpuVec3* d_accum_sq_buffer = nullptr;
+    int* d_sample_counts = nullptr;
 
-    GpuVec3* d_normal_buffer;
-    GpuVec3* d_albedo_buffer;
-    float* d_depth_buffer;
-    GpuVec2* d_uv_buffer;
-    GpuVec2* d_motion_vector_buffer;
+    GpuVec3* d_normal_buffer = nullptr;
+    GpuVec3* d_albedo_buffer = nullptr;
+    float* d_depth_buffer = nullptr;
+    GpuVec2* d_uv_buffer = nullptr;
+    GpuVec2* d_motion_vector_buffer = nullptr;
 
     RayQueue queueA, queueB;
     HitQueue hitQueue;
     ShadowQueue shadowQueue;
 
-    GpuMaterial* d_materials;
-    // Phase E: SoA spectral arrays (allocated alongside d_materials)
-    float* d_mat_albedo;
-    float* d_mat_metal_eta;
-    float* d_mat_extinction;
-    float* d_mat_medium_scattering;
-    float* d_mat_medium_absorption;
-    float* d_mat_emission;
-    int num_spectral_channels;
-    GpuSphere* d_spheres;
-    GpuMesh* d_meshes;
-    GpuInstance* d_instances;
-    GpuInstanceDesc* d_instance_descs;
-    GpuInstanceTransform* d_instance_transforms;
-    GpuInstanceTransform* d_previous_instance_transforms;
-    GpuTexture* d_textures;
-    int* d_light_indices;
+    GpuMaterial* d_materials = nullptr;
+    float* d_mat_albedo = nullptr;
+    float* d_mat_metal_eta = nullptr;
+    float* d_mat_extinction = nullptr;
+    float* d_mat_medium_scattering = nullptr;
+    float* d_mat_medium_absorption = nullptr;
+    float* d_mat_emission = nullptr;
+    SpectralResource* d_mat_albedo_resources = nullptr;
+    SpectralResource* d_mat_metal_eta_resources = nullptr;
+    SpectralResource* d_mat_extinction_resources = nullptr;
+    SpectralResource* d_mat_medium_scattering_resources = nullptr;
+    SpectralResource* d_mat_medium_absorption_resources = nullptr;
+    SpectralResource* d_mat_emission_resources = nullptr;
+    SpectralExpressionNode* d_material_expression_nodes = nullptr;
+    int material_expression_node_count = 0;
+    int num_spectral_channels = 0;
+    GpuSphere* d_spheres = nullptr;
+    GpuMesh* d_meshes = nullptr;
+    GpuInstance* d_instances = nullptr;
+    GpuInstanceDesc* d_instance_descs = nullptr;
+    GpuInstanceTransform* d_instance_transforms = nullptr;
+    GpuInstanceTransform* d_previous_instance_transforms = nullptr;
+    GpuTexture* d_textures = nullptr;
+    int* d_light_indices = nullptr;
 
-    int material_count;
-    int sphere_count;
-    int mesh_count;
-    int instance_count;
-    int texture_count;
-    int light_count;
+    int material_count = 0;
+    int sphere_count = 0;
+    int mesh_count = 0;
+    int instance_count = 0;
+    int texture_count = 0;
+    int light_count = 0;
 
     GpuCamera camera;
     GpuCamera previous_camera;
-    bool has_previous_camera;
+    bool has_previous_camera = false;
 
-    float medium_density;
-    float medium_anisotropy;
-    GpuSpectrum medium_scattering;
-    GpuSpectrum medium_absorption;
-    float medium_max_distance;
+    float medium_density = 0.0f;
+    float medium_anisotropy = 0.0f;
+    SpectralPacket medium_scattering;
+    SpectralPacket medium_absorption;
+    float medium_max_distance = 0.0f;
 
     ure::RenderConfig render_config;
 
     std::vector<void*> pointers_to_free;
+    std::vector<void*> material_resource_tables_to_free;
     std::vector<cudaArray_t> arrays_to_free;
     std::vector<cudaTextureObject_t> tex_objs_to_free;
 };

@@ -210,21 +210,22 @@ cmake --build build_modular --config RelWithDebInfo --target gpu_test_tangents
 | Host (Asset Pipeline) | 48 | `tests/host/test_asset_pipeline.cpp` | Direct EXE |
 | Host (glTF Frontend) | 185 | `tests/host/test_gltf_frontend.cpp` | Direct EXE |
 | Host (Session API) | 188 | `tests/host/test_session.cpp` | Direct EXE |
-| Host (Distributed File I/O) | 35 | `tests/host/test_distributed_file_io.cpp` | Direct EXE |
+| Host (Distributed File I/O) | 71 | `tests/host/test_distributed_file_io.cpp` | Direct EXE |
+| Host (Spectral Oracle) | 20 | `tests/host/test_spectral_oracle.cpp` | Direct EXE |
 | Host (Python API smoke) | 1 CTest | `tests/host/test_pyure_smoke.py` | Python/CTest |
 | GPU (Device) | ~30 | `tests/gpu/test_device.cu` | Direct EXE |
-| GPU (Hardware) | 17 | `tests/gpu/test_hardware.cu` | Direct EXE |
+| GPU (Hardware) | 45 | `tests/gpu/test_hardware.cu` | Direct EXE |
 | GPU (Math) | ~30 | `tests/gpu/test_math_functions.cu` | Direct EXE |
-| GPU (Spectral) | 569 | `tests/gpu/test_spectral_pipeline.cu` | Direct EXE |
-| GPU (Spectral SoA) | 633 | `tests/gpu/test_spectral_pipeline_soa.cu` | Direct EXE |
-| GPU (Render) | 315 | `tests/gpu/test_render_basic.cu` | Direct EXE |
+| GPU (Spectral) | 615 | `tests/gpu/test_spectral_pipeline.cu` | Direct EXE |
+| GPU (Spectral SoA) | 737 | `tests/gpu/test_spectral_pipeline_soa.cu` | Direct EXE |
+| GPU (Render) | 338 | `tests/gpu/test_render_basic.cu` | Direct EXE |
 | GPU (Hot-Update) | 68 | `tests/gpu/test_instance_hotupdate.cu` | Direct EXE |
 | GPU (Tangents) | 27 | `tests/gpu/test_gpu_tangents.cu` | Direct EXE |
 | GPU (Denoise) | CTest target | `tests/gpu/test_gpu_denoise.cu` | Direct EXE |
 | GPU (Polarization) | 126 | `tests/gpu/test_gpu_polarization.cu` | Direct EXE |
 | GPU (Volume) | CTest target | `tests/gpu/test_gpu_volume.cu` | Direct EXE |
-| GPU (Distributed Contract) | CTest target | `tests/gpu/test_distributed_contract.cu` | Direct EXE |
-| **CTest total** | **18/18 passing** | `build_modular` | `ctest -C Release` |
+| GPU (Distributed Contract) | 243 | `tests/gpu/test_distributed_contract.cu` | Direct EXE |
+| **CTest total** | **21/21 passing target after Phase L.11** | `build_modular_x64` | `ctest --test-dir build_modular_x64 --output-on-failure` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values

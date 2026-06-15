@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ure/ure_api.hpp"
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <optional>
@@ -8,7 +9,11 @@
 namespace ure::config {
 
 struct SpectralConfig {
-    int bands = 32;
+    int bands = 32; // Legacy alias: domain bins, with packet lanes capped separately.
+    std::uint64_t domain_bins = 0;
+    int packet_lanes = 0;
+    int max_resident_mb = 0;
+    std::string sampling_mode = "packet_uniform";
     std::vector<std::string> spd_search_paths = {"./spds/"};
 };
 

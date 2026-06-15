@@ -22,8 +22,8 @@ struct CompiledGpuScene {
     Camera camera;
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f;
-    ure::gpu::GpuSpectrum medium_scattering = ure::gpu::GpuSpectrum(0.0f);
-    ure::gpu::GpuSpectrum medium_absorption = ure::gpu::GpuSpectrum(0.0f);
+    ure::gpu::SpectralPacket medium_scattering = ure::gpu::SpectralPacket(0.0f);
+    ure::gpu::SpectralPacket medium_absorption = ure::gpu::SpectralPacket(0.0f);
     float medium_max_distance = 0.0f;
     int width = 1920;
     int height = 1080;
