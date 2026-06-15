@@ -729,6 +729,30 @@ static int test_c_session_lifecycle() {
     invalid_spectral_config.domain_bins = 4;
     invalid_spectral_config.packet_lanes = 8;
     CHECK(ure_session_create_spectral_config(&invalid_spectral_config) == nullptr);
+
+    ure_wave_optics_config_t radiometric_wave_config{};
+    radiometric_wave_config.mode = URE_WAVE_OPTICS_RADIOMETRIC;
+    ure_session_t* radiometric_wave_session =
+        ure_session_create_wave_config(&spectral_config, &radiometric_wave_config);
+    CHECK(radiometric_wave_session != nullptr);
+    ure_session_destroy(radiometric_wave_session);
+
+    ure_wave_optics_config_t preview_only_wave_config{};
+    preview_only_wave_config.mode = URE_WAVE_OPTICS_RADIOMETRIC;
+    preview_only_wave_config.experimental_allow_preview_degradation = 1;
+    ure_session_t* preview_only_session =
+        ure_session_create_wave_config(&spectral_config, &preview_only_wave_config);
+    CHECK(preview_only_session != nullptr);
+    ure_session_destroy(preview_only_session);
+
+    ure_wave_optics_config_t coherent_wave_config{};
+    coherent_wave_config.mode = URE_WAVE_OPTICS_COHERENT_FIELD;
+    coherent_wave_config.coherent_field_enabled = 1;
+    CHECK(ure_session_create_wave_config(&spectral_config, &coherent_wave_config) == nullptr);
+
+    ure_wave_optics_config_t invalid_wave_config{};
+    invalid_wave_config.mode = 99;
+    CHECK(ure_session_create_wave_config(&spectral_config, &invalid_wave_config) == nullptr);
     return 0;
 }
 

@@ -41,6 +41,39 @@ def main() -> int:
         assert progress.state == pyure.SessionState.EMPTY
         assert not progress.has_scene
 
+    with pyure.create_session(
+        domain_bins=1000000,
+        packet_lanes=8,
+        queue_capacity=64,
+        max_trace_depth=12,
+        allow_wave_preview_degradation=True,
+    ) as session:
+        progress = session.progress()
+        assert progress.spp == 0
+        assert progress.state == pyure.SessionState.EMPTY
+        assert not progress.has_scene
+
+    try:
+        pyure.create_session(
+            domain_bins=1000000,
+            packet_lanes=8,
+            queue_capacity=64,
+            max_trace_depth=12,
+            wave_optics_mode="coherent_field",
+            coherent_field=True,
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("unimplemented coherent wave optics mode must fail")
+
+    try:
+        pyure.create_session(wave_optics_mode="invalid")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unknown wave optics mode must fail")
+
     scene_text = """{
   "asset": {"version": "2.0"},
   "scene": 0,

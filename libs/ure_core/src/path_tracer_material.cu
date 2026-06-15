@@ -29,10 +29,7 @@ __device__ inline bool scatter(
     float r_bsdf_3 = sample_dimension(sample_index, pixel_index, dim_offset + 2);
     float r_bsdf_4 = sample_dimension(sample_index, pixel_index, dim_offset + 3);
 
-    float effective_thickness = mat.thin_film_thickness;
-    if (effective_thickness > 0.0f) {
-        effective_thickness = effective_thickness * (1.5f - 1.0f * uv.v);
-    }
+    float effective_thickness = effective_thin_film_thickness(mat, uv);
 
     if (mat.type == MaterialType::Lambertian) {
         GpuVec3 scatter_direction = n + sample_unit_vector_lds(r_bsdf_1, r_bsdf_2);
@@ -316,7 +313,7 @@ __device__ inline bool scatter(
                 scattered.t_min = 1e-4f;
                 scattered.t_max = FLT_MAX;
                 RoughDielectricLobe pdf_lobe = eval_rough_dielectric_reflection_lobe(
-                    mat, normal, V, scattered.direction);
+                    mat, normal, V, scattered.direction, current_throughput.wavelengths[boundary_channel], dispersion_clamp);
                 out_pdf = reflect_prob * rough_dielectric_visible_microfacet_pdf(pdf_lobe) *
                     (pdf_lobe.valid ? pdf_lobe.jacobian : 0.0f);
                 return true;
@@ -374,7 +371,7 @@ __device__ inline bool scatter(
             scattered.t_min = 1e-4f;
             scattered.t_max = FLT_MAX;
             RoughDielectricLobe pdf_lobe = eval_rough_dielectric_transmission_lobe(
-                mat, normal, V, scattered.direction);
+                mat, normal, V, scattered.direction, current_throughput.wavelengths[boundary_channel], dispersion_clamp);
             out_pdf = transmit_prob * rough_dielectric_visible_microfacet_pdf(pdf_lobe) *
                 (pdf_lobe.valid ? pdf_lobe.jacobian : 0.0f);
             return true;

@@ -92,7 +92,7 @@ RenderSession::~RenderSession() {
 
 RenderSession::RenderSession(RenderSession&& other) noexcept {
     other.stop_worker();
-    std::scoped_lock lock(other.mutex_);
+    std::scoped_lock lock(other.state_mutex_, other.engine_mutex_);
     engine_ = std::move(other.engine_);
     config_ = other.config_;
     state_ = other.state_;
@@ -111,7 +111,7 @@ RenderSession& RenderSession::operator=(RenderSession&& other) noexcept {
     }
     stop_worker();
     other.stop_worker();
-    std::scoped_lock lock(mutex_, other.mutex_);
+    std::scoped_lock lock(state_mutex_, engine_mutex_, other.state_mutex_, other.engine_mutex_);
     engine_ = std::move(other.engine_);
     config_ = other.config_;
     state_ = other.state_;
@@ -127,7 +127,7 @@ RenderSession& RenderSession::operator=(RenderSession&& other) noexcept {
 
 void RenderSession::load_scene(const scene_ir::SceneIR& scene_ir) {
     stop_worker();
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_, engine_mutex_);
     require_engine();
     engine_->load_scene_ir(scene_ir);
     current_scene_ir_ = scene_ir;
@@ -137,7 +137,7 @@ void RenderSession::load_scene(const scene_ir::SceneIR& scene_ir) {
 
 void RenderSession::mutate_scene(const SceneDiff& diff) {
     stop_worker();
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_, engine_mutex_);
     require_engine();
     if (diff.empty()) {
         return;
@@ -176,32 +176,41 @@ void RenderSession::mutate_scene(const SceneDiff& diff) {
 
 void RenderSession::start_render(bool progressive) {
     stop_worker();
-    std::unique_lock lock(mutex_);
-    require_scene();
-    progressive_ = progressive;
-    worker_exception_ = nullptr;
-    worker_stop_requested_ = false;
-    state_ = RenderSessionState::Running;
+    {
+        std::scoped_lock lock(state_mutex_);
+        require_scene();
+        progressive_ = progressive;
+        worker_exception_ = nullptr;
+        worker_stop_requested_ = false;
+        state_ = RenderSessionState::Running;
+    }
     if (!progressive_) {
+        std::scoped_lock engine_lock(engine_mutex_);
         engine_->render_pass();
         return;
     }
-    start_worker_locked();
+    start_worker();
 }
 
 int RenderSession::render_pass() {
-    std::scoped_lock lock(mutex_);
-    require_scene();
-    rethrow_worker_exception_locked();
-    if (state_ == RenderSessionState::Paused || state_ == RenderSessionState::Canceled) {
-        return engine_->get_current_spp();
+    {
+        std::scoped_lock lock(state_mutex_);
+        require_scene();
+        rethrow_worker_exception_locked();
+        if (state_ == RenderSessionState::Paused || state_ == RenderSessionState::Canceled) {
+            std::scoped_lock engine_lock(engine_mutex_);
+            return engine_->get_current_spp();
+        }
+        state_ = RenderSessionState::Running;
     }
-    state_ = RenderSessionState::Running;
-    return engine_->render_pass();
+    {
+        std::scoped_lock engine_lock(engine_mutex_);
+        return engine_->render_pass();
+    }
 }
 
 void RenderSession::pause() {
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_);
     require_scene();
     if (state_ == RenderSessionState::Running) {
         state_ = RenderSessionState::Paused;
@@ -209,7 +218,7 @@ void RenderSession::pause() {
 }
 
 void RenderSession::resume() {
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_);
     require_scene();
     if (state_ == RenderSessionState::Paused) {
         state_ = RenderSessionState::Running;
@@ -218,14 +227,14 @@ void RenderSession::resume() {
 
 void RenderSession::cancel() {
     stop_worker();
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_);
     require_scene();
     state_ = RenderSessionState::Canceled;
 }
 
 void RenderSession::reset_accumulation() {
     stop_worker();
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_, engine_mutex_);
     require_scene();
     engine_->reset_accumulation();
     state_ = RenderSessionState::Ready;
@@ -233,48 +242,52 @@ void RenderSession::reset_accumulation() {
 
 void RenderSession::update_camera(const Camera& camera) {
     stop_worker();
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_, engine_mutex_);
     require_scene();
     engine_->update_camera(camera);
     state_ = RenderSessionState::Ready;
 }
 
 RenderProgress RenderSession::get_progress() const {
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_);
     RenderProgress progress;
-    progress.spp = engine_ ? engine_->get_current_spp() : 0;
+    progress.spp = 0;
+    {
+        std::scoped_lock engine_lock(engine_mutex_);
+        progress.spp = engine_ ? engine_->get_current_spp() : 0;
+    }
     progress.state = state_;
     progress.has_scene = has_scene_;
     return progress;
 }
 
 void RenderSession::get_framebuffer_size(int& out_width, int& out_height) const {
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_, engine_mutex_);
     require_scene();
     engine_->get_framebuffer_size(out_width, out_height);
 }
 
 const std::vector<float>& RenderSession::get_framebuffer() const {
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_, engine_mutex_);
     require_scene();
     rethrow_worker_exception_locked();
     return engine_->get_framebuffer();
 }
 
 const std::vector<float>& RenderSession::get_aov(AovType type) const {
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_, engine_mutex_);
     require_scene();
     rethrow_worker_exception_locked();
     return engine_->get_aov(type);
 }
 
 RenderSessionState RenderSession::state() const {
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_);
     return state_;
 }
 
 bool RenderSession::has_scene() const {
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_);
     return has_scene_;
 }
 
@@ -293,17 +306,17 @@ void RenderSession::require_scene() const {
 
 void RenderSession::stop_worker() {
     {
-        std::scoped_lock lock(mutex_);
+        std::scoped_lock lock(state_mutex_);
         worker_stop_requested_ = true;
     }
     if (worker_.joinable()) {
         worker_.join();
     }
-    std::scoped_lock lock(mutex_);
+    std::scoped_lock lock(state_mutex_);
     worker_stop_requested_ = false;
 }
 
-void RenderSession::start_worker_locked() {
+void RenderSession::start_worker() {
     worker_ = std::thread([this] {
         render_worker_loop();
     });
@@ -312,24 +325,25 @@ void RenderSession::start_worker_locked() {
 void RenderSession::render_worker_loop() {
     try {
         for (;;) {
-            bool rendered = false;
+            bool should_render = false;
             {
-                std::scoped_lock lock(mutex_);
+                std::scoped_lock lock(state_mutex_);
                 if (worker_stop_requested_ || state_ == RenderSessionState::Canceled) {
                     return;
                 }
                 if (state_ != RenderSessionState::Running && state_ != RenderSessionState::Paused) {
                     return;
                 }
-                if (state_ == RenderSessionState::Running) {
-                    engine_->render_pass();
-                    rendered = true;
-                }
+                should_render = state_ == RenderSessionState::Running;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(rendered ? 1 : 2));
+            if (should_render) {
+                std::scoped_lock engine_lock(engine_mutex_);
+                engine_->render_pass();
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(should_render ? 1 : 2));
         }
     } catch (...) {
-        std::scoped_lock lock(mutex_);
+        std::scoped_lock lock(state_mutex_);
         worker_exception_ = std::current_exception();
         state_ = RenderSessionState::Canceled;
     }

@@ -65,6 +65,70 @@ static int test_spectral_cli_overrides() {
     return 0;
 }
 
+static int test_wave_optics_json_fields() {
+    const char* path = "test_config_wave_optics.json";
+    {
+        std::ofstream f(path);
+        f << R"({
+  "wave_optics": {
+    "mode": "coherent_field",
+    "camera_diffraction": { "enabled": true },
+    "coherent_field": { "enabled": true },
+    "partial_coherence": { "enabled": true },
+    "diffractive_materials": { "enabled": true },
+    "fluorescence": { "enabled": true },
+    "specular_manifold": { "enabled": true },
+    "local_fullwave": { "enabled": true },
+    "experimental_allow_preview_degradation": true
+  }
+})";
+    }
+
+    auto cfg = ure::config::load_config(path);
+    std::remove(path);
+    CHECK(cfg.wave_optics.mode == "coherent_field");
+    CHECK(cfg.wave_optics.camera_diffraction_enabled);
+    CHECK(cfg.wave_optics.coherent_field_enabled);
+    CHECK(cfg.wave_optics.partial_coherence_enabled);
+    CHECK(cfg.wave_optics.diffractive_materials_enabled);
+    CHECK(cfg.wave_optics.fluorescence_enabled);
+    CHECK(cfg.wave_optics.specular_manifold_enabled);
+    CHECK(cfg.wave_optics.local_fullwave_enabled);
+    CHECK(cfg.wave_optics.experimental_allow_preview_degradation);
+    return 0;
+}
+
+static int test_wave_optics_cli_overrides() {
+    const char* argv[] = {
+        "ure_cli",
+        "render",
+        "scene.gltf",
+        "--wave-optics-mode",
+        "camera_diffraction",
+        "--enable-camera-diffraction",
+        "--enable-coherent-field",
+        "--enable-partial-coherence",
+        "--enable-diffractive-materials",
+        "--enable-fluorescence",
+        "--enable-specular-manifold",
+        "--enable-local-fullwave",
+        "--allow-wave-preview-degradation",
+    };
+    auto cfg = ure::config::parse_cli(static_cast<int>(sizeof(argv) / sizeof(argv[0])),
+                                      const_cast<char**>(argv)).config;
+    CHECK(cfg.scene_path == "scene.gltf");
+    CHECK(cfg.wave_optics.mode == "camera_diffraction");
+    CHECK(cfg.wave_optics.camera_diffraction_enabled);
+    CHECK(cfg.wave_optics.coherent_field_enabled);
+    CHECK(cfg.wave_optics.partial_coherence_enabled);
+    CHECK(cfg.wave_optics.diffractive_materials_enabled);
+    CHECK(cfg.wave_optics.fluorescence_enabled);
+    CHECK(cfg.wave_optics.specular_manifold_enabled);
+    CHECK(cfg.wave_optics.local_fullwave_enabled);
+    CHECK(cfg.wave_optics.experimental_allow_preview_degradation);
+    return 0;
+}
+
 int main() {
     std::fprintf(stderr, "[Config Test]\n");
     auto run = [](const char* name, int (*fn)()) {
@@ -77,6 +141,8 @@ int main() {
     int failed = 0;
     failed += run("test_spectral_json_fields", test_spectral_json_fields);
     failed += run("test_spectral_cli_overrides", test_spectral_cli_overrides);
+    failed += run("test_wave_optics_json_fields", test_wave_optics_json_fields);
+    failed += run("test_wave_optics_cli_overrides", test_wave_optics_cli_overrides);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

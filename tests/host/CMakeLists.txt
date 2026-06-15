@@ -20,6 +20,10 @@ add_executable(test_spectral_oracle test_spectral_oracle.cpp)
 target_link_libraries(test_spectral_oracle PRIVATE ure_types)
 add_test(NAME test_spectral_oracle COMMAND test_spectral_oracle)
 
+add_executable(test_wave_optics test_wave_optics.cpp)
+target_link_libraries(test_wave_optics PRIVATE ure_core ure_diag)
+add_test(NAME test_wave_optics COMMAND test_wave_optics)
+
 add_executable(test_gltf_frontend test_gltf_frontend.cpp)
 target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)

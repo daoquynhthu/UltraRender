@@ -41,6 +41,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | S (Session API) | Done | `RenderSession`, `SceneDiff`, AOVs, C ABI, pyure progressive/mutation workflow |
 | M (Material System) | In progress | SceneIR material graph + first GPU expression graph; MaterialX/layering/presets remain planned |
 | L (Large Spectral Domain) | Done | `domain_bins` / `packet_lanes` split, 1M oracle/sampled smoke, resource descriptors, distributed spectral shard metadata, runtime presets, static audit |
+| W (Wave Optics Solver) | In progress | W.0 audit + rough dielectric spectral/UV PDF/MIS fix done; W.1 WaveOpticsConfig gates done; W.2 Airy PSF oracle started |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -328,7 +329,7 @@ PLAN → IMPLEMENT → VERIFY → REVIEW → REPORT → COMMIT
 - ❌ Do NOT skip PLAN.md or AGENTS.md on session resume
 - ❌ Do NOT commit without user approval
 - ❌ Do NOT ignore failing tests
-- ✅ **Phase E complete**: keep `kNumWavelengths = 4`, `.values.x/y/z/w`, RGB roundtrip APIs, old thin-film helpers, and dielectric transmission clamps from re-entering the codebase. See `docs/Phase_E_Spectral_Architecture.md` for the final design and remaining post-E technical debt.
+- ✅ **Phase E complete**: keep `kNumWavelengths = 4`, `.values.x/y/z/w`, RGB roundtrip APIs, old thin-film helpers, and dielectric transmission clamps from re-entering the codebase. See `docs/Phase_E_Spectral_Architecture.md` for final design history and the current K/M/W follow-up boundaries.
 - ❌ Do NOT modify acoustic/physics modules during Phase Dx (diagnostics) — they are out of scope
 - ❌ Do NOT introduce pink checkerboard generation for missing textures (see PLAN.md Phase H.3)
 - ❌ Do NOT add stb_image_write (engine has own tonemapping pipeline, see PLAN.md Phase H.1)

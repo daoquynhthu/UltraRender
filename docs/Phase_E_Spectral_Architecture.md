@@ -439,9 +439,9 @@ Phase E.5 — 色散 + Mueller 光谱化
 
 ---
 
-## 9. Post-E 技术债与后续 Phase 边界
+## 9. Phase E Closure Record And Follow-up Boundaries
 
-2026-06-13 物理第一性审查补充：当前实现不能声明“完整忠实实现”。新的公式级审查发现 4 个必须立即修复的 correctness blocker：lane-mode dielectric 后续界面仍会回落到 packet hero-channel 逻辑；dielectric interface reflection/transmission 被 baseColor/albedo 染色；rough metal 的 VNDF sampling、eval 和 pdf 参数化不完全一致；球光源 NEE 的实际 solid-angle sampling 与 BSDF-hit MIS 反向 PDF 不一致。另有 2 个明确后续边界：rough dielectric 仍是 normal jitter 近似而非 microfacet BSDF/BTDF；specular dielectric direct lighting 仍采用 blocker policy，完整玻璃直接光需要 specular manifold / refractive shadow path。
+本节是 Phase E 的历史闭环记录和后续 Phase 边界，不表示 Phase E/L 仍未完成。2026-06-13 物理第一性审查发现的 4 个 correctness blocker 已在后续批次收束；仍保留的边界是 K/M/W 级功能扩展或更强 reference/furnace 验证，不再作为 Phase E 完成阻塞。
 
 2026-06-13 第一批修复状态：lane-mode dielectric 已强制使用 active channel；dielectric interface Fresnel 不再乘 albedo；sphere-light MIS reverse PDF 已切到与 NEE 一致的 solid-angle PDF；rough metal 已统一为 `alpha = roughness^2`、VNDF/pdf/eval/scatter 共用 exact Smith GGX；rough dielectric continuation 已从 normal jitter 替换为 GGX visible microfacet reflection/transmission，使用 microfacet boundary frame、Fresnel branch、radiance eta scale 和 `G1(L)` continuation weight，并新增 targeted GPU regressions。后续补齐项已继续推进：rough dielectric reflection/transmission lobe 的 microfacet half-vector、visible-normal PDF 和 transmission Jacobian 已提升到 BSDF 层，`eval_bsdf()` / `pdf_bsdf()` / `scatter()` 不再只在 continuation 私有路径里处理 BTDF；direct lighting/MIS 现在能看见 rough dielectric BTDF，并且 shade direct-light gate 允许 rough dielectric 透射半球，shadow origin 会按出射侧偏移。rough thin-film / dispersive dielectric 也已从 smooth specular lane split 中移出，进入同一 rough microfacet BSDF 路径，per-channel lobe 会按 wavelength 重新计算 dispersive IOR、thin-film boundary 和 transmission Jacobian。specular manifold 仍是更大范围设计工作。
 
@@ -453,14 +453,14 @@ Phase E.5 — 色散 + Mueller 光谱化
 
 | 问题 | 跟踪 | Phase |
 |------|------|-------|
-| Lane-mode dielectric active channel | 单波长 lane 后续 dielectric bounce 必须只使用 active wavelength/channel 的 Fresnel、TIR、方向、Mueller 和 transport；不能再随机 hero channel | K |
-| Dielectric interface tint semantics | 非吸收 dielectric 表面 Fresnel 不能乘 baseColor；有色玻璃应通过介质 absorption/Beer-Lambert 或未来明确 absorption material 输入表达 | M/K |
-| Rough metal BSDF/PDF consistency | 已统一 VNDF sampling、`eval_bsdf()`、`pdf_bsdf()` 和 scatter continuation 的 roughness/alpha 与 exact Smith GGX masking；后续仍可补更完整 white-furnace/PDF normalization scenes | K |
-| Sphere-light MIS consistency | BSDF-hit emissive MIS 的 reverse NEE pdf 必须匹配实际 light sampling strategy；当前 sphere light 使用 solid-angle sampling | K |
+| Lane-mode dielectric active channel | 已收束：单波长 lane 后续 dielectric bounce 使用 active wavelength/channel 的 Fresnel、TIR、方向、Mueller 和 transport | 已完成 |
+| Dielectric interface tint semantics | 已收束：非吸收 dielectric 表面 Fresnel 不再乘 baseColor；有色玻璃表达归介质 absorption/Beer-Lambert 或未来明确 absorption material 输入 | 已完成；M 可扩展材质输入 |
+| Rough metal BSDF/PDF consistency | 已收束：VNDF sampling、`eval_bsdf()`、`pdf_bsdf()` 和 scatter continuation 已统一 roughness/alpha 与 exact Smith GGX masking；更完整 white-furnace/PDF normalization scenes 属验证扩展 | K |
+| Sphere-light MIS consistency | 已收束：BSDF-hit emissive MIS reverse NEE pdf 已匹配 sphere-light solid-angle sampling | 已完成 |
 | Specular dielectric 直接光 | 当前 NEE 对 specular dielectric blocker 是保守无偏 policy；恢复玻璃后的直接光必须实现 specular manifold / refractive shadow path，不能在 ShadowQueue 上做直线折射修补 | K |
 | Rough dielectric microfacet BTDF | rough dielectric path continuation 已替换 normal jitter；reflection/transmission lobe 已接入 `eval_bsdf()` / `pdf_bsdf()` / direct-light MIS，scatter 也返回非 delta PDF；rough thin-film/dispersive 组合进入同一 microfacet BSDF 路径；direct-light gate 已允许 BTDF 半球并按出射侧偏移 shadow origin；transmission continuation 已用 `eval_bsdf * abs(cos) / pdf_bsdf` 等式锁定同分布；后续还需补更完整 furnace/reference scenes | M/K |
 | Output fidelity | CLI 已支持 Radiance HDR 输出；EXR 仍需后续引入 tinyexr/OpenEXR 或自有半浮点 writer，不能继续只依赖 8-bit BMP | K |
-| Scene frontend split | `.scene` 保留为 legacy compatibility frontend，非 `.scene/.gltf/.glb` 不再自动 fallback；后续应提供 `.scene` 到 glTF/SceneIR 的迁移工具，而不是扩展 legacy grammar | G/M |
+| Scene frontend split | legacy `.scene` 路径已正式放弃并从 engine/test 维护范围移除；当前 engine scene input 以 glTF/GLB → SceneIR 为准，不再扩展 legacy grammar 或兼容 shim | 已完成 |
 | RGB/photometry fallback 精度 | Phase E 已完成 explicit wavelength PDF baseline、D65/equal-energy/RR 门禁；更高阶 importance wavelength sampling 和更完整 white-furnace 场景进入后续优化 | K.6 |
 | Volume spectral proposal 方差 | lane mode 已使用 active channel `sigma_t`；packet mode 保持平均 proposal，后续可优化 proposal/MIS 方差 | K |
 | 荧光/磷光（波长间能量转移） | K.5 | K |

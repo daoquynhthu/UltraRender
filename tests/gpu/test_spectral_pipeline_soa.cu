@@ -1949,8 +1949,16 @@ __global__ void c10_rough_dielectric_microfacet_kernel(float* out, int* out_samp
             scattered.direction,
             wavelengths,
             num_spec);
-        float bsdf_pdf = pdf_bsdf(mat, GpuVec3(0.0f, 0.0f, 1.0f), V, scattered.direction);
-        out[8] = bsdf.values[0] * fabsf(scattered.direction.z) / fmaxf(1e-6f, bsdf_pdf);
+        SpectralPacket bsdf_pdf = pdf_bsdf_spectral(
+            mat,
+            GpuVec3(0.0f, 0.0f, 1.0f),
+            GpuVec2(0.0f, 0.0f),
+            V,
+            scattered.direction,
+            wavelengths,
+            num_spec,
+            20.0f);
+        out[8] = bsdf.values[0] * fabsf(scattered.direction.z) / fmaxf(1e-6f, bsdf_pdf.values[0]);
         out_sample[0] = sample;
         return;
     }
@@ -2017,7 +2025,8 @@ __global__ void c11_rough_dielectric_eval_pdf_kernel(float* out)
         num_spec);
     out[0] = bsdf.values[0];
     out[1] = bsdf.values[3];
-    out[2] = pdf_bsdf(rough, n, wo, wi);
+    SpectralPacket pdf_reflect = pdf_bsdf_spectral(rough, n, GpuVec2(0.0f, 0.0f), wo, wi, wavelengths, num_spec, 20.0f);
+    out[2] = pdf_reflect.values[0];
     SpectralPacket btdf = eval_bsdf(
         rough,
         albedo,
@@ -2031,7 +2040,8 @@ __global__ void c11_rough_dielectric_eval_pdf_kernel(float* out)
         wavelengths,
         num_spec);
     out[3] = btdf.values[0];
-    out[4] = pdf_bsdf(rough, n, wo, wt);
+    SpectralPacket pdf_transmit = pdf_bsdf_spectral(rough, n, GpuVec2(0.0f, 0.0f), wo, wt, wavelengths, num_spec, 20.0f);
+    out[4] = pdf_transmit.values[0];
 
     GpuMaterial smooth = rough;
     smooth.roughness = 0.0f;
@@ -2039,7 +2049,9 @@ __global__ void c11_rough_dielectric_eval_pdf_kernel(float* out)
 
     GpuMaterial thin_film = rough;
     thin_film.thin_film_thickness = 500.0f;
-    out[6] = pdf_bsdf(thin_film, n, wo, wi);
+    thin_film.thin_film_ior = 1.35f;
+    SpectralPacket thin_film_pdf = pdf_bsdf_spectral(thin_film, n, GpuVec2(0.0f, 0.0f), wo, wi, wavelengths, num_spec, 20.0f);
+    out[6] = thin_film_pdf.values[0];
     SpectralPacket thin_film_bsdf = eval_bsdf(
         thin_film,
         albedo,
@@ -2070,20 +2082,23 @@ __global__ void c11_rough_dielectric_eval_pdf_kernel(float* out)
         num_spec);
     out[8] = dispersive_btdf.values[0];
     out[9] = dispersive_btdf.values[3];
+    SpectralPacket thin_film_pdf_uv = pdf_bsdf_spectral(thin_film, n, GpuVec2(0.0f, 0.8f), wo, wi, wavelengths, num_spec, 20.0f);
+    out[10] = thin_film_pdf_uv.values[0];
+    out[11] = thin_film_pdf.values[3];
 }
 
 static int test_rough_dielectric_eval_pdf_visible_to_direct_light() {
     REQUIRE_GPU();
     float* d_out = nullptr;
-    CHECK_CUDA(cudaMalloc(&d_out, 10 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_out, 12 * sizeof(float)));
     DeviceMem _do(d_out);
 
     c11_rough_dielectric_eval_pdf_kernel<<<1, 1>>>(d_out);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
 
-    float h_out[10];
-    CHECK_CUDA(cudaMemcpy(h_out, d_out, 10 * sizeof(float), cudaMemcpyDeviceToHost));
+    float h_out[12];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 12 * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK(h_out[0] > 0.0f);
     CHECK(h_out[1] > 0.0f);
     CHECK(h_out[2] > 0.0f);
@@ -2095,6 +2110,8 @@ static int test_rough_dielectric_eval_pdf_visible_to_direct_light() {
     CHECK(h_out[8] > 0.0f);
     CHECK(h_out[9] > 0.0f);
     CHECK(fabsf(h_out[8] - h_out[9]) > 1e-6f);
+    CHECK(fabsf(h_out[6] - h_out[10]) > 1e-6f);
+    CHECK(fabsf(h_out[6] - h_out[11]) > 1e-6f);
     return 0;
 }
 

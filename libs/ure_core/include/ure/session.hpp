@@ -58,7 +58,7 @@ private:
     void require_engine() const;
     void require_scene() const;
     void stop_worker();
-    void start_worker_locked();
+    void start_worker();
     void render_worker_loop();
     void rethrow_worker_exception_locked() const;
     bool apply_topology_mutations(const SceneDiff& diff);
@@ -74,7 +74,8 @@ private:
     bool worker_stop_requested_ = false;
     std::exception_ptr worker_exception_;
     std::optional<scene_ir::SceneIR> current_scene_ir_;
-    mutable std::mutex mutex_;
+    mutable std::mutex state_mutex_;
+    mutable std::mutex engine_mutex_;
     std::thread worker_;
 };
 

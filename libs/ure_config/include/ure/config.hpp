@@ -34,6 +34,18 @@ struct GpuConfig {
     int wavefront_capacity = 0;
 };
 
+struct WaveOpticsConfig {
+    std::string mode = "radiometric";
+    bool camera_diffraction_enabled = false;
+    bool coherent_field_enabled = false;
+    bool partial_coherence_enabled = false;
+    bool diffractive_materials_enabled = false;
+    bool fluorescence_enabled = false;
+    bool specular_manifold_enabled = false;
+    bool local_fullwave_enabled = false;
+    bool experimental_allow_preview_degradation = false;
+};
+
 struct RenderConfig {
     int width = 1280;
     int height = 720;
@@ -50,6 +62,7 @@ struct RenderConfig {
     RendererConfig renderer;
     OutputConfig output;
     GpuConfig gpu;
+    WaveOpticsConfig wave_optics;
 };
 
 enum class CliCommand {

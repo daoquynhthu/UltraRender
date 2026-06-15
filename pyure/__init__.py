@@ -59,6 +59,20 @@ class _SpectralConfig(ctypes.Structure):
     ]
 
 
+class _WaveOpticsConfig(ctypes.Structure):
+    _fields_ = [
+        ("mode", ctypes.c_int),
+        ("camera_diffraction_enabled", ctypes.c_int),
+        ("coherent_field_enabled", ctypes.c_int),
+        ("partial_coherence_enabled", ctypes.c_int),
+        ("diffractive_materials_enabled", ctypes.c_int),
+        ("fluorescence_enabled", ctypes.c_int),
+        ("specular_manifold_enabled", ctypes.c_int),
+        ("local_fullwave_enabled", ctypes.c_int),
+        ("experimental_allow_preview_degradation", ctypes.c_int),
+    ]
+
+
 @dataclass(frozen=True)
 class Progress:
     spp: int
@@ -97,6 +111,11 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
     lib.ure_session_create_config.restype = ctypes.c_void_p
     lib.ure_session_create_spectral_config.argtypes = [ctypes.POINTER(_SpectralConfig)]
     lib.ure_session_create_spectral_config.restype = ctypes.c_void_p
+    lib.ure_session_create_wave_config.argtypes = [
+        ctypes.POINTER(_SpectralConfig),
+        ctypes.POINTER(_WaveOpticsConfig),
+    ]
+    lib.ure_session_create_wave_config.restype = ctypes.c_void_p
     lib.ure_session_destroy.argtypes = [ctypes.c_void_p]
     lib.ure_session_load_scene_file.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
     lib.ure_session_load_scene_file.restype = ctypes.c_int
@@ -174,6 +193,19 @@ def set_min_log_level(level: LogLevel) -> None:
     native().ure_set_min_log_level(int(level))
 
 
+def _wave_optics_mode_id(mode: str) -> int:
+    modes = {
+        "radiometric": 0,
+        "camera_diffraction": 1,
+        "coherent_field": 2,
+        "partial_coherence": 3,
+    }
+    try:
+        return modes[mode]
+    except KeyError as exc:
+        raise ValueError(f"unsupported wave optics mode: {mode}") from exc
+
+
 def _vec3(values: tuple[float, float, float] | list[float]) -> ctypes.Array[ctypes.c_float]:
     if len(values) != 3:
         raise ValueError("expected a 3-float vector")
@@ -190,8 +222,49 @@ class RenderSession:
         domain_bins: int = 0,
         packet_lanes: int = 0,
         max_resident_mb: int = 0,
+        wave_optics_mode: str = "radiometric",
+        camera_diffraction: bool = False,
+        coherent_field: bool = False,
+        partial_coherence: bool = False,
+        diffractive_materials: bool = False,
+        fluorescence: bool = False,
+        specular_manifold: bool = False,
+        local_fullwave: bool = False,
+        allow_wave_preview_degradation: bool = False,
     ):
-        if domain_bins > 0 or packet_lanes > 0 or max_resident_mb > 0:
+        self._handle: Optional[int] = None
+        wave_requested = (
+            wave_optics_mode != "radiometric"
+            or camera_diffraction
+            or coherent_field
+            or partial_coherence
+            or diffractive_materials
+            or fluorescence
+            or specular_manifold
+            or local_fullwave
+            or allow_wave_preview_degradation
+        )
+        if wave_requested:
+            cfg = _SpectralConfig(
+                int(domain_bins),
+                int(packet_lanes if packet_lanes > 0 else num_wavelengths),
+                int(max_resident_mb),
+                int(queue_capacity),
+                int(max_trace_depth),
+            )
+            wave = _WaveOpticsConfig(
+                _wave_optics_mode_id(wave_optics_mode),
+                int(camera_diffraction),
+                int(coherent_field),
+                int(partial_coherence),
+                int(diffractive_materials),
+                int(fluorescence),
+                int(specular_manifold),
+                int(local_fullwave),
+                int(allow_wave_preview_degradation),
+            )
+            handle = native().ure_session_create_wave_config(ctypes.byref(cfg), ctypes.byref(wave))
+        elif domain_bins > 0 or packet_lanes > 0 or max_resident_mb > 0:
             cfg = _SpectralConfig(
                 int(domain_bins),
                 int(packet_lanes if packet_lanes > 0 else num_wavelengths),
@@ -204,11 +277,12 @@ class RenderSession:
             handle = native().ure_session_create_config(num_wavelengths, queue_capacity, max_trace_depth)
         if not handle:
             raise RuntimeError("failed to create UltraRender session")
-        self._handle: Optional[int] = handle
+        self._handle = handle
 
     def close(self) -> None:
-        if self._handle:
-            native().ure_session_destroy(self._handle)
+        handle = getattr(self, "_handle", None)
+        if handle:
+            native().ure_session_destroy(handle)
             self._handle = None
 
     def __enter__(self) -> "RenderSession":
@@ -379,6 +453,15 @@ def create_session(
     domain_bins: int = 0,
     packet_lanes: int = 0,
     max_resident_mb: int = 0,
+    wave_optics_mode: str = "radiometric",
+    camera_diffraction: bool = False,
+    coherent_field: bool = False,
+    partial_coherence: bool = False,
+    diffractive_materials: bool = False,
+    fluorescence: bool = False,
+    specular_manifold: bool = False,
+    local_fullwave: bool = False,
+    allow_wave_preview_degradation: bool = False,
 ) -> RenderSession:
     return RenderSession(
         num_wavelengths,
@@ -387,6 +470,15 @@ def create_session(
         domain_bins=domain_bins,
         packet_lanes=packet_lanes,
         max_resident_mb=max_resident_mb,
+        wave_optics_mode=wave_optics_mode,
+        camera_diffraction=camera_diffraction,
+        coherent_field=coherent_field,
+        partial_coherence=partial_coherence,
+        diffractive_materials=diffractive_materials,
+        fluorescence=fluorescence,
+        specular_manifold=specular_manifold,
+        local_fullwave=local_fullwave,
+        allow_wave_preview_degradation=allow_wave_preview_degradation,
     )
 
 

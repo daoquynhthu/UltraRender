@@ -270,6 +270,11 @@ __device__ inline bool is_rough_dielectric_bsdf(const GpuMaterial& mat) {
            mat.roughness > 1e-4f;
 }
 
+__device__ inline float effective_thin_film_thickness(const GpuMaterial& mat, const GpuVec2& uv) {
+    if (mat.thin_film_thickness <= 0.0f) return 0.0f;
+    return mat.thin_film_thickness * (1.5f - uv.v);
+}
+
 __device__ inline float dispersed_dielectric_ior(float base_ior, float dispersion, float wavelength, float clamp) {
     if (dispersion <= 0.0f) return base_ior;
     float inv_lambda2 = 1.0f / (wavelength * wavelength);

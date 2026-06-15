@@ -41,6 +41,16 @@ Assert-NoMatch "MaterialGraph Add texture fail-loud regression" "MaterialGraph A
 Assert-NoMatch "MaterialGraph Mix texture fail-loud regression" "MaterialGraph Mix with texture inputs"
 Assert-NoMatch "MaterialGraph texture expression Phase M.2 regression" "texture inputs.*Phase M\.2 compiler"
 
+$coreHostCieCopies = @(
+    Join-Path $RepoRoot "libs\ure_core\include\ure\spectral\cie_data.hpp",
+    Join-Path $RepoRoot "libs\ure_core\include\ure\spectral\spectral.hpp"
+) | Where-Object { Test-Path $_ }
+if ($coreHostCieCopies) {
+    Write-Host "Phase L static audit failed: duplicate host spectral/CIE headers in ure_core"
+    $coreHostCieCopies | ForEach-Object { Write-Host $_ }
+    throw "duplicate host spectral/CIE headers in ure_core"
+}
+
 $coreSourceFiles = Get-ChildItem -Path (Join-Path $RepoRoot "libs\ure_core\src") -Recurse -File |
     Where-Object { $_.Extension -in @(".h", ".hpp", ".cuh", ".cpp", ".cu") }
 $rawLaneModeChecks = $coreSourceFiles | Select-String -Pattern "==\s*SpectralRayModeLane"

@@ -47,6 +47,59 @@ bool valid_spectral_runtime_config(std::uint64_t domain_bins, int packet_lanes) 
     return domain_bins >= static_cast<std::uint64_t>(packet_lanes);
 }
 
+bool c_wave_mode(int mode, WaveOpticsMode& out) {
+    switch (mode) {
+    case URE_WAVE_OPTICS_RADIOMETRIC:
+        out = WaveOpticsMode::Radiometric;
+        return true;
+    case URE_WAVE_OPTICS_CAMERA_DIFFRACTION:
+        out = WaveOpticsMode::CameraDiffraction;
+        return true;
+    case URE_WAVE_OPTICS_COHERENT_FIELD:
+        out = WaveOpticsMode::CoherentField;
+        return true;
+    case URE_WAVE_OPTICS_PARTIAL_COHERENCE:
+        out = WaveOpticsMode::PartialCoherence;
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool make_wave_optics_config(const ure_wave_optics_config_t* wave_config, WaveOpticsConfig& cfg) {
+    if (!wave_config) return true;
+    if (!c_wave_mode(wave_config->mode, cfg.mode)) return false;
+    cfg.camera_diffraction_enabled = wave_config->camera_diffraction_enabled != 0;
+    cfg.coherent_field_enabled = wave_config->coherent_field_enabled != 0;
+    cfg.partial_coherence_enabled = wave_config->partial_coherence_enabled != 0;
+    cfg.diffractive_materials_enabled = wave_config->diffractive_materials_enabled != 0;
+    cfg.fluorescence_enabled = wave_config->fluorescence_enabled != 0;
+    cfg.specular_manifold_enabled = wave_config->specular_manifold_enabled != 0;
+    cfg.local_fullwave_enabled = wave_config->local_fullwave_enabled != 0;
+    cfg.experimental_allow_preview_degradation = wave_config->experimental_allow_preview_degradation != 0;
+    return true;
+}
+
+bool apply_spectral_config(RenderConfig& config, const ure_spectral_config_t* spectral_config) {
+    if (!spectral_config) return true;
+    if (spectral_config->packet_lanes > 0) {
+        config.spectral_packet_lanes = spectral_config->packet_lanes;
+        config.num_wavelengths = spectral_config->packet_lanes;
+    }
+    if (spectral_config->domain_bins > 0) {
+        config.spectral_domain_bins = spectral_config->domain_bins;
+    } else if (config.spectral_packet_lanes > 0) {
+        config.spectral_domain_bins = static_cast<std::uint64_t>(config.spectral_packet_lanes);
+    }
+    if (!valid_spectral_runtime_config(spectral_domain_bins(config), spectral_packet_lanes(config))) {
+        return false;
+    }
+    if (spectral_config->max_resident_mb > 0) config.spectral_max_resident_mb = spectral_config->max_resident_mb;
+    if (spectral_config->queue_capacity > 0) config.queue_capacity = spectral_config->queue_capacity;
+    if (spectral_config->max_trace_depth > 0) config.max_trace_depth = spectral_config->max_trace_depth;
+    return true;
+}
+
 ure::log::Level map_log_level(ure_log_level_t level) {
     switch (level) {
     case URE_LOG_TRACE:
@@ -318,21 +371,21 @@ ure_session_t* ure_session_create_spectral_config(const ure_spectral_config_t* s
     if (!spectral_config) return nullptr;
     try {
         RenderConfig config;
-        if (spectral_config->packet_lanes > 0) {
-            config.spectral_packet_lanes = spectral_config->packet_lanes;
-            config.num_wavelengths = spectral_config->packet_lanes;
-        }
-        if (spectral_config->domain_bins > 0) {
-            config.spectral_domain_bins = spectral_config->domain_bins;
-        } else if (config.spectral_packet_lanes > 0) {
-            config.spectral_domain_bins = static_cast<std::uint64_t>(config.spectral_packet_lanes);
-        }
-        if (!valid_spectral_runtime_config(spectral_domain_bins(config), spectral_packet_lanes(config))) {
-            return nullptr;
-        }
-        if (spectral_config->max_resident_mb > 0) config.spectral_max_resident_mb = spectral_config->max_resident_mb;
-        if (spectral_config->queue_capacity > 0) config.queue_capacity = spectral_config->queue_capacity;
-        if (spectral_config->max_trace_depth > 0) config.max_trace_depth = spectral_config->max_trace_depth;
+        if (!apply_spectral_config(config, spectral_config)) return nullptr;
+        auto session = std::make_unique<RenderSession>(RenderSession::create(config));
+        return reinterpret_cast<ure_session_t*>(session.release());
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+ure_session_t* ure_session_create_wave_config(const ure_spectral_config_t* spectral_config,
+                                              const ure_wave_optics_config_t* wave_config) {
+    try {
+        RenderConfig config;
+        if (!apply_spectral_config(config, spectral_config)) return nullptr;
+        if (!make_wave_optics_config(wave_config, config.wave_optics)) return nullptr;
+        if (!wave_optics_is_radiometric_only(config.wave_optics)) return nullptr;
         auto session = std::make_unique<RenderSession>(RenderSession::create(config));
         return reinterpret_cast<ure_session_t*>(session.release());
     } catch (...) {

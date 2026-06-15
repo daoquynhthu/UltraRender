@@ -1169,10 +1169,22 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
                  SpectralPacket f_r = eval_bsdf(mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, p, n, hit_uv, -current_queue.directions[idx], l_dir, throughput.wavelengths, scene.num_spectral_channels);
 
-                 float pdf_mat = pdf_bsdf(mat, n, -current_queue.directions[idx], l_dir);
-                 float mis_weight = (pdf * pdf) / (pdf * pdf + pdf_mat * pdf_mat);
+                 SpectralPacket pdf_mat = pdf_bsdf_spectral(
+                     mat,
+                     n,
+                     hit_uv,
+                     -current_queue.directions[idx],
+                     l_dir,
+                     throughput.wavelengths,
+                     scene.num_spectral_channels,
+                     dispersion_clamp);
 
-                 SpectralPacket contribution = throughput * L_e * f_r * cos_surf * (1.0f / pdf) * mis_weight;
+                 SpectralPacket contribution = throughput * L_e * f_r * cos_surf * (1.0f / pdf);
+                 for (int c = 0; c < scene.num_spectral_channels; ++c) {
+                     float pdf_mat_c = pdf_mat.values[c];
+                     float mis_weight = (pdf * pdf) / (pdf * pdf + pdf_mat_c * pdf_mat_c);
+                     contribution.values[c] *= mis_weight;
+                 }
 
                  float M_dot_D = -wc.dot(l_dir);
                  float c = dist_sq - radius_sq;

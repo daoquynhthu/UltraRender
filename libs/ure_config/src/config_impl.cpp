@@ -47,6 +47,27 @@ RenderConfig load_config(const std::string& path) {
             if (g.contains("wavefront_capacity"))
                 cfg.gpu.wavefront_capacity = g["wavefront_capacity"].get<int>();
         }
+        if (j.contains("wave_optics")) {
+            auto& w = j["wave_optics"];
+            if (w.contains("mode")) cfg.wave_optics.mode = w["mode"].get<std::string>();
+            if (w.contains("camera_diffraction") && w["camera_diffraction"].contains("enabled"))
+                cfg.wave_optics.camera_diffraction_enabled = w["camera_diffraction"]["enabled"].get<bool>();
+            if (w.contains("coherent_field") && w["coherent_field"].contains("enabled"))
+                cfg.wave_optics.coherent_field_enabled = w["coherent_field"]["enabled"].get<bool>();
+            if (w.contains("partial_coherence") && w["partial_coherence"].contains("enabled"))
+                cfg.wave_optics.partial_coherence_enabled = w["partial_coherence"]["enabled"].get<bool>();
+            if (w.contains("diffractive_materials") && w["diffractive_materials"].contains("enabled"))
+                cfg.wave_optics.diffractive_materials_enabled = w["diffractive_materials"]["enabled"].get<bool>();
+            if (w.contains("fluorescence") && w["fluorescence"].contains("enabled"))
+                cfg.wave_optics.fluorescence_enabled = w["fluorescence"]["enabled"].get<bool>();
+            if (w.contains("specular_manifold") && w["specular_manifold"].contains("enabled"))
+                cfg.wave_optics.specular_manifold_enabled = w["specular_manifold"]["enabled"].get<bool>();
+            if (w.contains("local_fullwave") && w["local_fullwave"].contains("enabled"))
+                cfg.wave_optics.local_fullwave_enabled = w["local_fullwave"]["enabled"].get<bool>();
+            if (w.contains("experimental_allow_preview_degradation"))
+                cfg.wave_optics.experimental_allow_preview_degradation =
+                    w["experimental_allow_preview_degradation"].get<bool>();
+        }
     } catch (const std::exception& e) {
         std::cerr << "[config] JSON parse error in '" << path << "': " << e.what() << "\n";
     }
@@ -68,6 +89,15 @@ CliResult parse_cli(int argc, char** argv) {
     std::uint64_t spectral_domain_bins = 0;
     int spectral_packet_lanes = 0, spectral_max_resident_mb = 0;
     std::string spectral_sampling_mode;
+    std::string wave_optics_mode;
+    bool wave_camera_diffraction = false;
+    bool wave_coherent_field = false;
+    bool wave_partial_coherence = false;
+    bool wave_diffractive_materials = false;
+    bool wave_fluorescence = false;
+    bool wave_specular_manifold = false;
+    bool wave_local_fullwave = false;
+    bool wave_preview_degradation = false;
     bool physics = false, audio = false;
     render_cmd->add_option("scene", scene_render, "Path to scene file (glTF)")->required();
     render_cmd->add_option("-c,--config", config_render, "Path to JSON config file");
@@ -80,6 +110,15 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_option("--spectral-packet-lanes", spectral_packet_lanes, "GPU spectral packet lanes");
     render_cmd->add_option("--spectral-max-resident-mb", spectral_max_resident_mb, "Resident spectral resource budget in MB");
     render_cmd->add_option("--spectral-sampling", spectral_sampling_mode, "Spectral sampling mode");
+    render_cmd->add_option("--wave-optics-mode", wave_optics_mode, "Wave optics mode: radiometric, camera_diffraction, coherent_field, partial_coherence");
+    render_cmd->add_flag("--enable-camera-diffraction", wave_camera_diffraction, "Enable wave-optics camera diffraction");
+    render_cmd->add_flag("--enable-coherent-field", wave_coherent_field, "Enable coherent complex-field transport");
+    render_cmd->add_flag("--enable-partial-coherence", wave_partial_coherence, "Enable partial-coherence transport");
+    render_cmd->add_flag("--enable-diffractive-materials", wave_diffractive_materials, "Enable diffractive material operators");
+    render_cmd->add_flag("--enable-fluorescence", wave_fluorescence, "Enable fluorescence wavelength conversion");
+    render_cmd->add_flag("--enable-specular-manifold", wave_specular_manifold, "Enable specular manifold/refractive direct-light paths");
+    render_cmd->add_flag("--enable-local-fullwave", wave_local_fullwave, "Enable local full-wave solver coupling");
+    render_cmd->add_flag("--allow-wave-preview-degradation", wave_preview_degradation, "Allow explicit non-physical preview degradation for unsupported wave nodes");
     render_cmd->add_flag("--physics", physics, "Enable physics simulation");
     render_cmd->add_flag("--audio", audio, "Enable audio rendering");
 
@@ -118,6 +157,15 @@ CliResult parse_cli(int argc, char** argv) {
         if (spectral_packet_lanes > 0) cfg.spectral.packet_lanes = spectral_packet_lanes;
         if (spectral_max_resident_mb > 0) cfg.spectral.max_resident_mb = spectral_max_resident_mb;
         if (!spectral_sampling_mode.empty()) cfg.spectral.sampling_mode = spectral_sampling_mode;
+        if (!wave_optics_mode.empty()) cfg.wave_optics.mode = wave_optics_mode;
+        if (wave_camera_diffraction) cfg.wave_optics.camera_diffraction_enabled = true;
+        if (wave_coherent_field) cfg.wave_optics.coherent_field_enabled = true;
+        if (wave_partial_coherence) cfg.wave_optics.partial_coherence_enabled = true;
+        if (wave_diffractive_materials) cfg.wave_optics.diffractive_materials_enabled = true;
+        if (wave_fluorescence) cfg.wave_optics.fluorescence_enabled = true;
+        if (wave_specular_manifold) cfg.wave_optics.specular_manifold_enabled = true;
+        if (wave_local_fullwave) cfg.wave_optics.local_fullwave_enabled = true;
+        if (wave_preview_degradation) cfg.wave_optics.experimental_allow_preview_degradation = true;
         cfg.physics_enabled = physics;
         cfg.enable_audio = audio;
         cfg.scene_path = scene_render;

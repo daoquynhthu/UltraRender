@@ -25,6 +25,25 @@ typedef struct ure_spectral_config_t {
     int max_trace_depth;
 } ure_spectral_config_t;
 
+typedef enum ure_wave_optics_mode_t {
+    URE_WAVE_OPTICS_RADIOMETRIC = 0,
+    URE_WAVE_OPTICS_CAMERA_DIFFRACTION = 1,
+    URE_WAVE_OPTICS_COHERENT_FIELD = 2,
+    URE_WAVE_OPTICS_PARTIAL_COHERENCE = 3
+} ure_wave_optics_mode_t;
+
+typedef struct ure_wave_optics_config_t {
+    int mode;
+    int camera_diffraction_enabled;
+    int coherent_field_enabled;
+    int partial_coherence_enabled;
+    int diffractive_materials_enabled;
+    int fluorescence_enabled;
+    int specular_manifold_enabled;
+    int local_fullwave_enabled;
+    int experimental_allow_preview_degradation;
+} ure_wave_optics_config_t;
+
 typedef enum ure_aov_type_t {
     URE_AOV_BEAUTY = 0,
     URE_AOV_NORMAL = 1,
@@ -99,6 +118,8 @@ ure_session_t* ure_session_create_config(int num_wavelengths,
                                          int queue_capacity,
                                          int max_trace_depth);
 ure_session_t* ure_session_create_spectral_config(const ure_spectral_config_t* config);
+ure_session_t* ure_session_create_wave_config(const ure_spectral_config_t* spectral_config,
+                                              const ure_wave_optics_config_t* wave_config);
 void ure_session_destroy(ure_session_t* session);
 int ure_session_load_scene_file(ure_session_t* session, const char* path);
 int ure_session_start(ure_session_t* session, int progressive);

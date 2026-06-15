@@ -51,6 +51,50 @@ __device__ float pdf_bsdf(const GpuMaterial& mat, const GpuVec3& n, const GpuVec
     return 0.0f;
 }
 
+__device__ SpectralPacket pdf_bsdf_spectral(
+    const GpuMaterial& mat,
+    const GpuVec3& n,
+    const GpuVec2& uv,
+    const GpuVec3& wo,
+    const GpuVec3& wi,
+    const float* wavelengths,
+    int num_spec,
+    float dispersion_clamp
+) {
+    SpectralPacket result(0.0f);
+    float scalar_pdf = pdf_bsdf(mat, n, wo, wi);
+    if (!is_rough_dielectric_bsdf(mat)) {
+        for (int c = 0; c < num_spec; ++c) {
+            result.values[c] = scalar_pdf;
+            result.wavelengths[c] = wavelengths[c];
+        }
+        return result;
+    }
+
+    bool reflection = n.dot(wo) * n.dot(wi) > 0.0f;
+    float thickness = effective_thin_film_thickness(mat, uv);
+    for (int c = 0; c < num_spec; ++c) {
+        result.wavelengths[c] = wavelengths[c];
+        RoughDielectricLobe l = reflection
+            ? eval_rough_dielectric_reflection_lobe(mat, n, wo, wi, wavelengths[c], dispersion_clamp)
+            : eval_rough_dielectric_transmission_lobe(mat, n, wo, wi, wavelengths[c], dispersion_clamp);
+        if (!l.valid) continue;
+
+        DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
+            wavelengths[c],
+            thickness,
+            l.eta_i,
+            mat.thin_film_ior,
+            l.eta_t,
+            l.VdotM);
+        float F = surface.tir ? 1.0f : eval_unpolarized_reflection_probability(surface);
+        result.values[c] = reflection
+            ? rough_dielectric_reflection_pdf(l, F)
+            : rough_dielectric_transmission_pdf(l, F);
+    }
+    return result;
+}
+
 // Phase E: eval_bsdf receives pre-loaded SoA spectra (albedo may be texture-modulated)
 __device__ SpectralPacket eval_bsdf(
     const GpuMaterial& mat,
@@ -95,10 +139,7 @@ __device__ SpectralPacket eval_bsdf(
 
         ConductorMaterialSemantics conductor = eval_conductor_material_semantics(metal_eta, extinction, num_spec);
 
-        float effective_thickness = mat.thin_film_thickness;
-        if (effective_thickness > 0.0f) {
-            effective_thickness = effective_thickness * (1.5f - uv.v);
-        }
+        float effective_thickness = effective_thin_film_thickness(mat, uv);
         for (int c = 0; c < num_spec; ++c) {
             fresnel_spec.values[c] = eval_metal_reflectance_for_channel(
                 conductor,
@@ -121,6 +162,7 @@ __device__ SpectralPacket eval_bsdf(
         if (!l.valid) return SpectralPacket(0.0f);
 
         SpectralPacket fresnel_spec;
+        float effective_thickness = effective_thin_film_thickness(mat, uv);
         for (int c = 0; c < num_spec; ++c) {
             fresnel_spec.wavelengths[c] = wavelengths[c];
             RoughDielectricLobe channel_lobe = reflection
@@ -144,7 +186,7 @@ __device__ SpectralPacket eval_bsdf(
                 fmaxf(1e-12f, denominator);
             DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
                 wavelengths[c],
-                mat.thin_film_thickness,
+                effective_thickness,
                 channel_lobe.eta_i,
                 mat.thin_film_ior,
                 channel_lobe.eta_t,

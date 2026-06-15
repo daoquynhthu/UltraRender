@@ -99,11 +99,52 @@ ure::SpectralSamplingMode parse_spectral_sampling_mode(const std::string& mode) 
     return ure::SpectralSamplingMode::PacketUniform;
 }
 
+bool parse_wave_optics_mode(const std::string& mode, ure::WaveOpticsMode& out) {
+    const std::string value = lowercase(mode);
+    if (value == "radiometric") {
+        out = ure::WaveOpticsMode::Radiometric;
+        return true;
+    }
+    if (value == "camera_diffraction") {
+        out = ure::WaveOpticsMode::CameraDiffraction;
+        return true;
+    }
+    if (value == "coherent_field") {
+        out = ure::WaveOpticsMode::CoherentField;
+        return true;
+    }
+    if (value == "partial_coherence") {
+        out = ure::WaveOpticsMode::PartialCoherence;
+        return true;
+    }
+    return false;
+}
+
+bool make_wave_optics_config(const ure::config::WaveOpticsConfig& app_config, ure::WaveOpticsConfig& cfg) {
+    if (!parse_wave_optics_mode(app_config.mode, cfg.mode)) {
+        std::cerr << "Error: unsupported wave optics mode '" << app_config.mode << "'\n";
+        return false;
+    }
+    cfg.camera_diffraction_enabled = app_config.camera_diffraction_enabled;
+    cfg.coherent_field_enabled = app_config.coherent_field_enabled;
+    cfg.partial_coherence_enabled = app_config.partial_coherence_enabled;
+    cfg.diffractive_materials_enabled = app_config.diffractive_materials_enabled;
+    cfg.fluorescence_enabled = app_config.fluorescence_enabled;
+    cfg.specular_manifold_enabled = app_config.specular_manifold_enabled;
+    cfg.local_fullwave_enabled = app_config.local_fullwave_enabled;
+    cfg.experimental_allow_preview_degradation = app_config.experimental_allow_preview_degradation;
+    return true;
+}
+
+bool validate_supported_wave_optics(const ure::WaveOpticsConfig& cfg) {
+    if (ure::wave_optics_is_radiometric_only(cfg)) return true;
+    std::cerr << "Error: Phase W wave-optics modes are configuration/API gated but not implemented yet; "
+              << "only radiometric mode is currently supported.\n";
+    return false;
+}
+
 int cmd_render(const ure::config::CliResult& cli) {
     const auto& app_config = cli.config;
-    if (!check_scene_path(app_config.scene_path)) {
-        return 1;
-    }
 
     ure::RenderConfig gpu_config;
     const std::uint64_t domain_bins = app_config.spectral.domain_bins > 0
@@ -117,6 +158,9 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.spectral_packet_lanes = packet_lanes;
     gpu_config.spectral_max_resident_mb = app_config.spectral.max_resident_mb;
     gpu_config.spectral_sampling_mode = parse_spectral_sampling_mode(app_config.spectral.sampling_mode);
+    if (!make_wave_optics_config(app_config.wave_optics, gpu_config.wave_optics)) {
+        return 1;
+    }
     gpu_config.num_wavelengths = packet_lanes;
     gpu_config.queue_capacity = app_config.gpu.wavefront_capacity;
     gpu_config.max_trace_depth = app_config.renderer.max_depth;
@@ -128,6 +172,12 @@ int cmd_render(const ure::config::CliResult& cli) {
     }
     if (gpu_config.spectral_domain_bins < static_cast<std::uint64_t>(gpu_config.spectral_packet_lanes)) {
         std::cerr << "Error: spectral domain bins must be >= packet lanes\n";
+        return 1;
+    }
+    if (!validate_supported_wave_optics(gpu_config.wave_optics)) {
+        return 1;
+    }
+    if (!check_scene_path(app_config.scene_path)) {
         return 1;
     }
 

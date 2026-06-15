@@ -3,23 +3,23 @@
 > **"Light is not RGB. Light is a Spectrum."**
 
 ## 1. 项目定位与愿景 (Vision)
-UltraRender 不仅仅是一个图形渲染器，而是一个**物理光学模拟器**。
-我们的目标是打造**世界最顶尖的物理光学渲染引擎**，不盲目追随工业界主流的 RGB 渲染管线，而是回归物理本质，从光的波粒二象性出发，构建一套完全自研的、具备科研级精度的渲染架构。
+UltraRender 不仅仅是一个图形渲染器，而是一个以**光谱与偏振物理**为核心的离线渲染引擎。
+当前默认求解器是 spectral/polarimetric radiometric path tracer；Phase W 正在把相干场、衍射相机、部分相干输运和局部全波耦合提升为可选的波动光学求解器层。波动光学能力必须显式开启，未实现或不兼容路径必须 fail-loud，不能伪装成已支持。
 
-我们致力于解决传统渲染器无法正确模拟的光学现象：色散 (Dispersion)、同色异谱 (Metamerism)、薄膜干涉 (Thin-film Interference)、偏振 (Polarization) 以及荧光效应 (Fluorescence)。
+我们致力于解决传统 RGB 渲染器难以正确模拟的光学现象：色散 (Dispersion)、同色异谱 (Metamerism)、薄膜干涉 (Thin-film Interference)、偏振 (Polarization)。荧光/磷光、衍射、散斑、全息和相干多路径干涉属于 Phase W 的可选波动求解器范围，尚未作为默认渲染路径完成。
 
 ## 2. 核心哲学 (Core Philosophy)
 *   **光谱优先 (Spectral First)**: 拒绝 RGB 色彩空间的近似。所有计算在 360nm-830nm 可见光波段进行高精度采样。
-*   **物理绝对正确 (Physically Rigorous)**: 材质模型必须通过能量守恒验证；相机模型基于真实光学透镜组而非简单的针孔。
+*   **物理约束优先 (Physically Constrained)**: 材质模型必须通过能量守恒、PDF/MIS 一致性和 reference/oracle 验证；未实现的高级物理必须显式报错。
 *   **原创架构 (Original Architecture)**: 不照搬现有开源代码。我们针对光谱计算的特殊性，设计专有的 Wavefront GPU 架构。
 
 ## 3. 核心技术栈 (Advanced Tech Stack)
 *   **语言标准**: C++23 (利用 `std::expected`, `std::format`, `constexpr` 等特性)
 *   **计算架构**: **Spectral Wavefront Path Tracing** (自研光谱波前路径追踪)
-    *   针对 GPU (CUDA/OptiX) 优化的 Data-Oriented Design
+    *   针对 CUDA GPU 优化的 Data-Oriented Design
     *   支持百万级光谱资源域 (spectral domain/resource bins) 的采样积分；单条 GPU ray 携带小宽度 wavelength packet，而不是百万 lane
 *   **色彩科学**: CIE 1931 Standard Observer (2-degree) + 高斯拟合光谱重建
-*   **几何内核**: NVIDIA OptiX 7+ (硬件加速求交) + 自研 BVH (特殊几何体)
+*   **几何内核**: CUDA path tracing + 自研 BVH/scene compiler；OptiX 不是当前默认依赖。
 
 ## 4. 创新路线图 (Innovation Roadmap)
 
@@ -40,10 +40,10 @@ UltraRender 不仅仅是一个图形渲染器，而是一个**物理光学模拟
 ### 阶段三：超越几何光学 (Beyond Ray Optics) [进行中]
 - [x] **偏振光渲染 (Polarization)**: 引入 Stokes 矢量与 Mueller 矩阵，模拟天空偏振、全反射相位偏移。
 - [x] **光谱金属材质**: 支持基于波长的复折射率 (n, k) 渲染（金、铜、铝等预设）。
-- [x] **薄膜干涉 (Thin-film Interference)**: 实现了完整的 Airy Summation 公式，支持多重反射干涉，并增加了基于 UV 的重力厚度调制。
-- [x] **体积光与次表面散射 (Volume/SSS)**: 已完成内核与场景解析联动，支持全局雾与材质内部 SSS (均质介质)。
-- [] **波动光学接口 (Wave Optics)**: 探索在微观尺度引入波动方程，精确模拟昆虫翅膀的结构色 (Structural Color)。
-- [ ] **荧光与磷光 (Fluorescence & Phosphorescence)**: 支持波长偏移 (Wavelength Shifting) 的材质路径追踪。
+- [x] **薄膜干涉 (Thin-film Interference)**: 已实现局部单层 Airy-style complex boundary evaluator，并接入 Stokes/Mueller。它不是通用多层 coating 或全路径相干传播。
+- [x] **体积光与次表面散射 (Volume/SSS)**: 已完成均质介质 Beer-Lambert + Henyey-Greenstein radiative transfer；Mie/Rayleigh/相干体散射仍属于 Phase W 后续。
+- [ ] **波动光学求解器 (Phase W)**: 统一配置/API/fail-loud 合同，逐步加入衍射相机、coherent field、partial coherence、diffractive materials、fluorescence 和 local full-wave coupling。
+- [ ] **荧光与磷光 (Fluorescence & Phosphorescence)**: Phase W 计划支持 excitation-to-emission wavelength conversion、能量守恒和 PDF 转换。
 
 ### 阶段四：AI 物理融合 (AI-Physics Hybrid) [远期]
 - [ ] **神经光谱缓存 (Neural Spectral Cache)**: 训练神经网络预测光谱分布，而非简单的 RGB 降噪。
@@ -55,27 +55,20 @@ UltraRender 不仅仅是一个图形渲染器，而是一个**物理光学模拟
 - [x] **物理-声学接口**: 定义了碰撞事件监听系统，支持物理交互驱动声学反馈。
 - [x] **Glass Cup 演示**: 集成了包含流体、刚体和静态容器的综合演示场景。
 
-## 5. 最新更新 (Latest Updates - 2026-01-27)
+## 5. 最新更新 (Latest Updates - 2026-06-15)
 
-### 5.1 物理与流体系统集成
-- **流体模拟**: 引入了完整的 SPH 流体系统，支持数千粒子的实时模拟与交互。
-- **伪影修复**: 修复了 Marching Cubes 算法中的三角形绕序问题，消除了流体表面的放射状伪影。
-- **稳定性增强**: 优化了 Marching Cubes 的内存安全检查，防止了缓冲区溢出崩溃。
-- **已知问题**: 目前流体网格在最终渲染中可能存在可见性问题 (Invisible Fluid)，需进一步调试材质与光照设置。
+### 5.1 Phase L: Large Spectral Domain
+- `domain_bins` 与 `packet_lanes` 已解耦：百万级光谱资源域不再意味着单条 GPU ray 携带百万 lane。
+- 显式光谱纹理使用 source-sample resource descriptor，RGB texture 保留硬件 filtering。
+- MaterialGraph texture/Add/Mix 已接入 spectral expression graph，不再回退到 packet-only flatten。
+- Distributed contract/file backend 已携带 spectral-domain shard、wavelength PDF 与 frame shard metadata。
+- Runtime spectral plan 会根据资源工作集和 resident budget 在 GPU 初始化前拒绝超预算配置。
 
-### 5.2 核心修复与优化
-- **体积渲染增强**: 
-  - 实现了 Henyey-Greenstein 相位函数，支持各向异性散射（g因子），能够正确模拟丁达尔效应（光束感）。
-  - 优化了场景解析器，支持在全局介质和 SSS 材质中定义 anisotropy 参数。
-- **用户体验优化**:
-  - 解决了分辨率设置冲突问题：明确了“场景文件优先于命令行”的规则，并增加了冲突警告。
-  - 恢复了默认输出目录为根目录下的 `output/`。
-- **体积渲染修复**: 修复了各向同性散射采样中的数学错误（从球内采样改为球面采样），解决了体积雾在高采样下变暗/消失的问题。
-- **构建系统增强**: 
-  - 修复了 Windows MSVC 环境下的 UTF-8 编码问题 (C4819/C2143)。
-  - 修复了 CUDA 宿主编译器 (Host Compiler) 检测失败的问题。
-  - 实现了 CPU/GPU 混合编译架构，支持在无 CUDA 环境下回退至 CPU 模式（但在 GPU 机器上优先使用 GPU）。
-- **色调映射**: 实现了 ACES (Academy Color Encoding System) 色调映射，提升了高动态范围图像的视觉表现。
+### 5.2 Phase W: Wave Optics Solver Track
+- 新增 `docs/Phase_W_Wave_Optics_Audit.md`，明确当前 renderer 是 spectral/polarimetric radiometric path tracer，而不是通用波动传播器。
+- W.0 已修复 rough dielectric direct-light MIS 与 BSDF/PDF 不一致：wavelength、UV effective thin-film thickness 与 dispersion clamp 现在进入同一 per-channel PDF 语义。
+- W.1 已建立 `WaveOpticsConfig`，贯穿 `RenderConfig`、JSON、CLI、C ABI 和 pyure；非 radiometric 模式与未实现 wave feature 默认在运行前拒绝，未知 mode 不会静默回退。
+- W.2 已启动衍射相机基准：新增圆孔 Airy PSF host oracle，锁定第一暗环、encircled energy、波长缩放和 sensor 半径，后续 GPU diffraction camera 必须对齐该基准。
 
 ## 6. 渲染优化与降噪路线图 (Optimization & Denoising Roadmap) [新增]
 
@@ -108,18 +101,19 @@ UltraRender 不仅仅是一个图形渲染器，而是一个**物理光学模拟
 
 ## 6. 工程目录结构
 ```text
-RenderEngine/
-├── src/                # 源代码
-│   ├── core/           # 核心基础库（数学、内存、日志）
-│   ├── spectral/       # 光谱功率分布 (SPD) 与颜色科学
-│   ├── integrators/    # 渲染积分器（路径追踪、BDPT 等）
-│   ├── materials/      # 材质模型 (BSDF, BSSRDF)
-│   ├── accelerators/   # 加速结构封装
-│   └── scene/          # 场景加载与 USD 接口
-├── include/            # 公共头文件
-├── docs/               # 技术文档与指导书
-├── tests/              # 单元测试 (Catch2/GTest)
-├── external/           # 第三方库依赖
+Render Engine/
+├── libs/
+│   ├── ure_types/      # header-only core types, SceneIR, RenderConfig
+│   ├── ure_core/       # CUDA renderer, BVH, GPU scene compiler
+│   ├── ure_sceneio/    # glTF/GLB, image/SPD loading
+│   ├── ure_config/     # JSON + CLI config
+│   ├── ure_diag/       # logging/diagnostics
+│   └── ure_physics/    # optional physics/acoustic modules
+├── apps/ure_cli/       # offline CLI renderer
+├── tests/              # host + GPU test executables
+├── docs/               # technical docs and phase audits
+├── scripts/            # build/check scripts
+├── third_party/        # header-only dependencies
 └── CMakeLists.txt      # 构建配置文件
 ```
 
@@ -127,13 +121,12 @@ RenderEngine/
 ### 依赖准备
 1.  CMake 3.25+
 2.  支持 C++23 的编译器 (MSVC 19.34+, Clang 16+, GCC 13+)
-3.  **CUDA Toolkit 11.8+** (推荐，用于开启极致性能)
+3.  **CUDA Toolkit 13.0+**
+4.  Visual Studio 2022 Build Tools on Windows
 
 ### 编译步骤
-```bash
-mkdir build && cd build
-cmake ..
-cmake --build . --config Release
+```powershell
+.\scripts\build_x64.ps1 -BuildDir build_modular_x64 -Config Release
 ```
 
 ---
