@@ -4,6 +4,7 @@
 #include "ure/gpu_driver.hpp"
 #include "ure/transform_ring_buffer.hpp"
 #include "ure/render_config.hpp"
+#include "ure/wave_optics.hpp"
 
 #include <ure/log.hpp>
 
@@ -31,6 +32,7 @@ public:
     }
 
     void load_scene_ir(const scene_ir::SceneIR& scene_ir) override {
+        validate_wave_optics_support();
         CompiledGpuScene compiled = GpuSceneCompiler::compile(scene_ir, config_);
         if (!initialized_) {
             load_compiled_scene(compiled);
@@ -41,6 +43,7 @@ public:
     }
 
     void reload_scene_ir(const scene_ir::SceneIR& scene_ir) override {
+        validate_wave_optics_support();
         CompiledGpuScene compiled = GpuSceneCompiler::compile(scene_ir, config_);
         load_compiled_scene(compiled);
         initialized_ = true;
@@ -189,6 +192,15 @@ public:
     }
 
 private:
+    void validate_wave_optics_support() const {
+        if (wave_optics_is_radiometric_only(config_.wave_optics)) return;
+        if (config_.wave_optics.mode == WaveOpticsMode::CameraDiffraction ||
+            config_.wave_optics.camera_diffraction_enabled) {
+            throw std::runtime_error("camera diffraction GPU film is not implemented; build a ure::wave::DiffractionCameraPlan before GPU integration");
+        }
+        throw std::runtime_error("requested wave optics mode is not implemented by the GPU radiometric renderer");
+    }
+
     void load_compiled_scene(const CompiledGpuScene& compiled) {
         if (gpu_context_) {
             ure::gpu::free_gpu_renderer(gpu_context_);
