@@ -1014,6 +1014,44 @@ static int test_l11_spectral_texture_cache_budget_rejects_oversized_resident_upl
     return 0;
 }
 
+static int test_integrator_rejects_queue_capacity_below_primary_rays() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.queue_capacity = 8;
+
+    bool rejected = false;
+    try {
+        GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+        free_gpu_renderer(ctx);
+    } catch (const std::runtime_error& e) {
+        rejected = std::string(e.what()).find("queue_capacity must be >= width * height") != std::string::npos;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
+static int test_integrator_primary_ray_count_uses_pixel_count() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.queue_capacity = 64;
+    config.max_trace_depth = 4;
+    config.rays_per_block = 8;
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->queueA.capacity == 64);
+    int spp = render_pass_gpu(ctx, 1);
+    CHECK(spp == 1);
+    CHECK(ctx->last_integrator_initial_ray_count == 16);
+    CHECK(ctx->last_integrator_peak_ray_count <= 64);
+    CHECK(ctx->last_integrator_depth_iterations > 0);
+    CHECK(ctx->last_integrator_depth_iterations <= config.max_trace_depth);
+    CHECK(ctx->last_integrator_final_ray_count >= 0);
+    CHECK(ctx->last_integrator_final_ray_count <= 64);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
 static int test_update_materials_gpu_rewrites_header_and_soa() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -1082,6 +1120,8 @@ int main() {
     RUN_TEST(test_l8_spectral_texture_upload_keeps_source_sample_count);
     RUN_TEST(test_l8_rgb_texture_upload_keeps_hardware_filtering);
     RUN_TEST(test_l11_spectral_texture_cache_budget_rejects_oversized_resident_upload);
+    RUN_TEST(test_integrator_rejects_queue_capacity_below_primary_rays);
+    RUN_TEST(test_integrator_primary_ray_count_uses_pixel_count);
     RUN_TEST(test_update_materials_gpu_rewrites_header_and_soa);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;

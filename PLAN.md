@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-15 (Phase W wave-optics solver planning added)
+最后更新: 2026-06-15 (Phase R.0/R.1 integrator scheduling batch started)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -25,6 +25,7 @@
 远期 Phase S:   Session API + 脚本化                                已完成
 远期 Phase M:   材质系统                                             进行中
 远期 Phase L:   百万级光谱域 / packet-resolution 解耦                已完成 (L.0-L.12)
+远期 Phase R:   工业级/科研级积分器升级                              进行中
 远期 Phase W:   波动光学求解器 / 相干场输运                          进行中
 ```
 
@@ -305,6 +306,7 @@ Phase G / Phase H / Phase I / Phase C 与 Phase J 无依赖关系，可并行执
 - **Phase A** (SoA 队列) → 依赖 Phase P 的 Transform/World 架构 + Phase 0 的 RenderConfig
 - **Phase C** (契约) → 无依赖，可插队
 - **Phase E** (N 通道光谱) → 已完成。它依赖 Phase A (SoA) + Phase G (glTF 光谱扩展) + Batch 4 测试 (OT1/OT5/OT6)，并已完成 E.0-E.5 的 runtime-N、SPD、色散、Mueller、wavelength PDF 与静态审计门禁。后续 specular manifold、rough dielectric BTDF、advanced spectral MIS 和材质系统进入 Phase K/M，不再作为 Phase E 阻塞项。
+- **Phase R** (工业级/科研级积分器升级) → 依赖 Phase E 的 spectral PDF/transport closure、Phase L 的 domain/packet 解耦、Phase S 的 session/progressive API，并为 Phase W 的 wave solver 提供不被 radiometric 调度瓶颈拖累的 baseline。Phase R 负责 radiometric integrator 的调度、采样、MIS、light transport algorithm 和 benchmark contract；Phase W 负责相干/衍射/局部全波求解，两者不能混淆。
 - **Phase W** (波动光学求解器) → 依赖 Phase E 的 spectral/polarization 基线与 Phase L 的 high-resolution spectral domain/resource contract。W.1/W.2/W.3 可在 Phase M 完成前推进；W.4 diffractive material operators 依赖 Phase M 的 MaterialGraph/MaterialX 语义稳定。Phase W 不允许把相干/衍射能力隐藏在现有 radiometric path tracer 中，必须通过显式 feature switch opt-in，并在 unsupported film/merge/API/material path 上 fail-loud。
 
 ---
@@ -1513,14 +1515,15 @@ UltraRender = 光谱渲染器 + 物理模拟 + 声学合成
 ### 新增远期 Phase
 
 ```
-Phase E ──→ Phase S ──→ Phase M ──→ Phase L ──→ Phase W ──→ Phase U ──→ Phase K (持续)
+Phase E ──→ Phase S ──→ Phase M ──→ Phase L ──┬──→ Phase R ──→ Phase W ──→ Phase U ──→ Phase K (持续)
+                                               └──→ Phase W foundation oracles
                │
                ├──→ Phase X (可并行)
                │
                └──→ Phase C/D (分布式, 可并行)
 ```
 
-与中短期的关系：Phase S 和 Phase X 的部分工作可在 Phase E 完成后立即开始；Phase M 依赖 Phase G 的材质扩展 + Phase E 的光谱引擎；Phase L 是 README “百万级波长通道”承诺的真正架构阶段，必须在 MaterialX/USD/插件把材质语义固化到 `GpuMaterialData + GpuSpectrum[32]` 之前完成；Phase W 是从 spectral/polarimetric path tracer 升级到可选 wave-optics solver 的架构阶段，必须消费 Phase L 的 spectral domain/resource contract，并在 coherent film/distributed merge/API 语义稳定后再让 Phase U/USD 暴露相干与衍射能力；Phase U 依赖 Phase S 的稳定 API，并应消费 Phase L/W 的 resource and wave-optics contracts。
+与中短期的关系：Phase S 和 Phase X 的部分工作可在 Phase E 完成后立即开始；Phase M 依赖 Phase G 的材质扩展 + Phase E 的光谱引擎；Phase L 是 README “百万级波长通道”承诺的真正架构阶段，必须在 MaterialX/USD/插件把材质语义固化到 `GpuMaterialData + GpuSpectrum[32]` 之前完成；Phase R 是 radiometric spectral/polarimetric integrator 的工业级/科研级升级阶段，负责调度、采样、MIS、light/path guiding 和高级路径空间算法，并应先于把 Phase W 的相干/衍射能力暴露给外部生态完成核心 baseline；Phase W 是从 spectral/polarimetric path tracer 升级到可选 wave-optics solver 的架构阶段，必须消费 Phase L/R 的 spectral domain/resource and integrator contracts，并在 coherent film/distributed merge/API 语义稳定后再让 Phase U/USD 暴露相干与衍射能力；Phase U 依赖 Phase S 的稳定 API，并应消费 Phase L/R/W 的 resource, integrator, and wave-optics contracts。
 
 ---
 
@@ -1791,6 +1794,54 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 
 ---
 
+### Phase R — 工业级/科研级积分器升级 / Research-Grade Radiometric Integrator
+
+**状态**: 进行中。R.0 smoke benchmark 入口与 R.1 active-count wavefront scheduling 首批修复已启动。
+
+**目标**: 将当前 CUDA spectral/polarimetric wavefront path tracer 从“可用的物理路径追踪器”升级为工业级/科研级 radiometric light transport integrator。Phase R 不替代 Phase W：Phase R 处理默认非相干 radiance/Stokes transport 的调度、采样、MIS、路径空间算法和性能/收敛基准；Phase W 处理相干场、衍射、部分相干和局部全波求解。任何高级积分器都必须保持 Phase E/L 的 explicit wavelength PDF、spectral domain/resource contract、Stokes/Mueller 语义和 fail-loud wave feature policy。
+
+**当前审计结论**: 现有有效积分器集中在 `libs/ure_core/src/path_tracer_host_api.cu::render_pass_gpu()` 与 `path_tracer_wavefront.cuh`。R.1 首批修复前，每个 sample 固定执行 `generate_rays -> (extend -> shade -> shadow) * max_trace_depth`，默认 `max_trace_depth = 50`，每个 depth 使用按 `max_rays` 计算的固定 launch blocks，并在 kernel 内以 `idx >= *queue.count` 早退；同时 `queue_capacity > width*height` 会把未初始化 queue slot 当 active ray 处理，`queue_capacity < width*height` 会让 primary ray generation 越界写。R.1 首批修复后，初始化会 fail-loud 拒绝小于 primary ray count 的 queue capacity，primary queue count 使用像素数，wavefront kernels 按 active ray/shadow ray count 发射并在空队列提前终止，同时记录 pass-level telemetry。surface BSDF/NEE 使用 `sample_dimension()` 低差异维度，但 volume distance/light/HG sampling 仍混用 `rand_float(seed)`；surface/volume light picking 仍是均匀选 sphere light；packet 模式仍存在 packet-average/hero-event 近似。结论是：最高收益首先来自 wavefront 调度和采样一致性，其次是 light/path guiding，再之后才是 BDPT/MLT/ReSTIR 等高级路径空间算法。
+
+#### Phase R 边界
+
+| 范围 | 属于 Phase R | 不属于 Phase R |
+|------|--------------|----------------|
+| 默认 radiometric path tracer | queue scheduling、active ray compaction/termination、surface/volume MIS、light sampling、path guiding、BDPT/MLT/ReSTIR radiance estimators | coherent film、Jones field transport、wave propagation operator |
+| Spectral transport | wavelength PDF、多策略 wavelength MIS、packet/lane/sample estimator consistency、spectral guiding | 把百万 domain 重新塞回 per-ray lanes |
+| Polarization | Stokes/Mueller 下的 radiometric estimator consistency 和 depolarization validation | Jones/complex coherent interference |
+| Distributed/multi-GPU | sample-space/shard merge 对 integrator estimator 的无偏性和 determinism | coherent field frame merge，归 W.11 |
+| Performance | occupancy/launch count/memory traffic/variance benchmark suite | 单纯 denoiser 替代物理收敛 |
+
+#### 子步骤
+
+| Step | 内容 | 完成判据 |
+|------|------|----------|
+| R.0 | Integrator audit + benchmark harness：建立固定场景集、metric 和性能门禁，覆盖 Cornell/玻璃焦散/多光源/体积雾/百万 spectral resource/sampled wavelength/多 GPU shard | 进行中：`tools/benchmarks/run_phase_r_integrator_smoke.ps1` 已建立本地 smoke 入口并输出 JSON；完整固定场景集、kernel launch count、active ray curve、variance/MSE、spectral color error 仍待 R.12 扩展 |
+| R.1 | Wavefront scheduling：active queue count 驱动 launch blocks、空队列提前终止、可选 depth-count polling 策略、overflow/termination telemetry | 进行中：primary queue count 已改为 pixel count，queue capacity 小于 primary rays fail-loud，extend/shade/shadow 按 active count 发射并记录 pass-level telemetry；后续仍需 Nsight/benchmark 量化 launch 下降 |
+| R.2 | Queue compaction and path state layout：评估 persistent queues、stream compaction、SoA cache locality、shadow queue capacity、sampled wavelength lane state 的内存带宽 | Nsight/benchmark 证明吞吐提升；queue overflow 可观测且不会静默丢贡献；不破坏 Phase E/L spectral carrier |
+| R.3 | Unified sampling dimensions：surface、volume、RR、light picking、lens/camera、wavelength sampling 统一低差异维度分配；消除 volume path 对 xorshift RNG 的独立依赖 | 体积场景方差下降；所有新增维度有静态分配表和测试；deterministic replay 保持稳定 |
+| R.4 | Light sampling upgrade：从均匀 sphere light picking 升级为 power/solid-angle aware sampler，建立 light distribution alias table/light tree 第一版，并同时覆盖 surface 和 volume NEE PDF | 多光源 HDR 场景方差显著下降；surface/volume NEE 与 BSDF/phase MIS PDF 一致；light update 后重建或增量更新语义明确 |
+| R.5 | Spectral MIS and wavelength guiding：在 Phase L sampled wavelength 基础上加入 wavelength proposal families、spectral power/CIE/task-weighted guiding、per-material/resource spectral importance | narrowband/SPD/fluorescence 前置场景无偏；packet/lane/sampled estimator 有 oracle 对照；不会回退到 RGB importance |
+| R.6 | BSDF/phase sampling completeness：rough dielectric BTDF、measured conductor、thin-film、volume HG/Rayleigh/Mie candidate 的 sampling/PDF/eval 三元闭合 | 每个 lobe 有 eval/sample/pdf reciprocity 和 white-furnace/energy test；直连光 MIS 不再依赖近似或固定 550nm |
+| R.7 | Path guiding：建立 radiance/BSDF product guiding 或 spatial-directional guiding cache，支持 spectral/PDF metadata 和 progressive update | 可开关；关闭时默认路径不变；开启时 benchmark 证明复杂间接光场景方差降低；cache 不破坏 determinism contract |
+| R.8 | ReSTIR DI/PT：实现 reservoir direct-light reuse，再评估 path reuse；必须携带 wavelength PDF、Stokes-compatible throughput 和 material lobe PDF | 多光源直接光场景收益明确；temporal/spatial reuse 有 unbiased/biased mode 标记；与 Session progressive reset 语义兼容 |
+| R.9 | Bidirectional / specular manifold：为玻璃直接光、焦散和 SDS 路径建立 specular manifold 或 BDPT/VCM 连接，不恢复旧 straight-through dielectric shadow | glass/caustic reference scene 收敛明显改善；NEE specular dielectric blocker policy 仍正确；PDF/Jacobian 有独立 oracle |
+| R.10 | MLT/primary-sample-space integrator：为困难焦散/低概率路径提供可选科研级 integrator，不作为默认交互 preview | 可独立 seed/replay；与 spectral wavelength sampling 和 path state mutations 兼容；有 reference scene 和统计测试 |
+| R.11 | Integrator API/config：`RenderConfig` / JSON / CLI / C ABI / Session / pyure 增加 integrator mode、sampler、guiding、reuse、quality preset；unsupported combination fail-loud | 配置 parity 测试通过；默认配置保持当前 radiometric path tracer；非法组合不会静默降级 |
+| R.12 | Industrial validation suite：建立 correctness/performance/variance dashboard，固定每个 integrator mode 的允许误差、最小收益和不回归门槛 | `ctest`/benchmark smoke 可在本地跑；长 benchmark 可在 farm 跑；文档列出每个模式适用场景和限制 |
+
+#### 完成标准
+
+- 默认 radiometric renderer 的物理结果不回退，Phase E/L spectral PDF 和 Stokes/Mueller 语义保持有效。
+- `render_pass_gpu()` 调度不再在 active queue 为空时固定跑满 depth；active queue launch policy 有性能证据。
+- Surface、volume、light、RR、wavelength 采样维度统一可追踪，deterministic replay 稳定。
+- 多光源和体积场景的 light sampling / MIS 有无偏 PDF 证明和 benchmark 收益。
+- Spectral MIS/path guiding 不把 RGB luminance 当作真实光谱重要性。
+- 玻璃/焦散直接光通过 specular manifold/BDPT/VCM 等显式路径空间算法解决，不恢复错误的 transparent shadow shortcut。
+- 高级 integrator mode（path guiding、ReSTIR、BDPT/VCM、MLT）均为显式配置，unsupported feature fail-loud，且有 reference scene、variance/performance 指标和文档化适用范围。
+
+---
+
 ### Phase W — 波动光学求解器 / Wave Optics Solver
 
 **状态**: 进行中。
@@ -1978,7 +2029,7 @@ URE_EXPORT void ure_register_output(OutputAPI* api);
 
 ### Phase K — 内核持续优化（全周期）
 
-**目标**: 渲染内核的性能/质量/功能改进，不是单次 Phase 而是长期迭代。
+**目标**: 渲染内核、数据结构和系统层性能改进，不是单次 Phase 而是长期迭代。光传输算法、采样、MIS、path guiding、ReSTIR、BDPT/MLT 等积分器升级归 Phase R；Phase K 只处理不改变 estimator 语义的底层性能工作。
 
 **子步骤**:
 
@@ -1987,9 +2038,9 @@ URE_EXPORT void ure_register_output(OutputAPI* api);
 | K.1 | SBVH / 多级 BVH（提高大场景遍历效率） | Phase A 后 |
 | K.2 | OptiX denoiser 集成（替代 current denoise.cu） | Phase E 后 |
 | K.3 | Wavefront occupancy auto-tuning（基于 SM 计数） | Phase A 后 |
-| K.4 | Light tree / light picking importance sampling | Phase E 后 |
-| K.5 | ReSTIR DI / PT（直接光照重用，提升收敛速度） | 远期考虑 |
-| K.6 | Spectral MIS（波长采样的多重重要性采样） | Phase E 后的高级采样优化 |
+| K.4 | GPU memory allocator / async upload / resource streaming performance | Phase L/R 后 |
+| K.5 | Kernel fusion/splitting、register pressure、occupancy tuning 和 Nsight-driven cleanup | Phase R benchmark harness 后 |
+| K.6 | Production perf dashboard 与长跑 benchmark farm integration | Phase R.12 后 |
 
 ---
 
@@ -2012,6 +2063,9 @@ Phase 0 ─→ Phase F ─┬──→ Phase P ─┬──→ Phase A ─┬─
                                              Phase L ─────┬──────┘
                                                   │
                                                   ▼
+                                             Phase R
+                                                  │
+                                                  ▼
                                              Phase W
                                                   │
                                                   ▼
@@ -2030,6 +2084,7 @@ Phase 0 ─→ Phase F ─┬──→ Phase P ─┬──→ Phase A ─┬─
 | DCC 插件（Maya/Houdini） | Hydra 委托（任何 Hydra 宿主） |
 | 通用 RGB 渲染器 | **光谱渲染 + Mueller 偏振 + 物理声学** |
 | 实时游戏渲染 | 交互渐进式 + 离线帧序列 |
+| 把优化等同于降噪 | Phase R 中以无偏估计器、方差/性能 benchmark 和显式高级积分器提升收敛 |
 
 ### 当前 PLAN.md 中加入远期规划的意义
 

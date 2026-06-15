@@ -75,6 +75,12 @@ struct GpuContext {
     float medium_max_distance = 0.0f;
 
     ure::RenderConfig render_config;
+    int last_integrator_initial_ray_count = 0;
+    int last_integrator_final_ray_count = 0;
+    int last_integrator_peak_ray_count = 0;
+    int last_integrator_peak_shadow_ray_count = 0;
+    int last_integrator_depth_iterations = 0;
+    int last_integrator_early_terminated_samples = 0;
 
     std::vector<void*> pointers_to_free;
     std::vector<void*> material_resource_tables_to_free;

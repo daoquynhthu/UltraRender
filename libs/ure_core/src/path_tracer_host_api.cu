@@ -6,6 +6,7 @@
 #include <math.h>
 #include <cstdint>
 #include <algorithm>
+#include <limits>
 #include <vector>
 #include <iostream>
 #include <iomanip>
@@ -451,6 +452,35 @@ static void validate_explicit_spectral_resident_budget(const std::vector<GpuMate
     }
 }
 
+static int checked_primary_ray_count(int width, int height) {
+    if (width <= 0 || height <= 0) {
+        throw std::runtime_error("render dimensions must be positive");
+    }
+    const std::int64_t pixels = static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height);
+    if (pixels > static_cast<std::int64_t>(std::numeric_limits<int>::max())) {
+        throw std::runtime_error("render dimensions exceed supported ray queue index range");
+    }
+    return static_cast<int>(pixels);
+}
+
+static int configured_ray_queue_capacity(const ure::RenderConfig& config, int primary_ray_count) {
+    const int capacity = config.queue_capacity > 0 ? config.queue_capacity : primary_ray_count;
+    if (capacity < primary_ray_count) {
+        throw std::runtime_error("RenderConfig queue_capacity must be >= width * height for primary ray generation");
+    }
+    return capacity;
+}
+
+static int copy_device_queue_count(const int* device_count, int capacity) {
+    int value = 0;
+    UR_CUDA_CHECK(cudaMemcpy(&value, device_count, sizeof(int), cudaMemcpyDeviceToHost));
+    return std::clamp(value, 0, capacity);
+}
+
+static int launch_blocks_for_active_count(int active_count, int threads_per_block) {
+    return active_count > 0 ? (active_count + threads_per_block - 1) / threads_per_block : 0;
+}
+
 // ===== Interactive API Implementation =====
 
 GpuContext* init_gpu_renderer(int width, int height,
@@ -461,6 +491,8 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<ure::gpu::HostTexture>& textures,
                               const ure::RenderConfig& config) {
     validate_explicit_spectral_resident_budget(materials, textures, config);
+    const int primary_ray_count = checked_primary_ray_count(width, height);
+    const int max_rays = configured_ray_queue_capacity(config, primary_ray_count);
 
     GpuContext* ctx = new GpuContext();
     ctx->width = width;
@@ -500,7 +532,6 @@ GpuContext* init_gpu_renderer(int width, int height,
 
     init_debug_log();
 
-    int max_rays = config.queue_capacity > 0 ? config.queue_capacity : width * height;
     int num_spec = ure::spectral_packet_lanes(config);
     if (!valid_packet_lane_count(num_spec)) {
         throw std::runtime_error("RenderConfig spectral packet lanes must be 1 or in [8, kMaxPacketLanes]");
@@ -1021,14 +1052,24 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
                    (ctx->height + threadsPerBlock.y - 1) / threadsPerBlock.y);
 
     const auto& cfg = ctx->render_config;
-    int max_rays = cfg.queue_capacity > 0 ? cfg.queue_capacity : ctx->width * ctx->height;
-    int num_threads_wf = cfg.rays_per_block;
-    int fixed_blocks = (max_rays + num_threads_wf - 1) / num_threads_wf;
+    const int primary_ray_count = checked_primary_ray_count(ctx->width, ctx->height);
+    const int max_rays = ctx->queueA.capacity;
+    const int num_threads_wf = cfg.rays_per_block;
+    if (num_threads_wf <= 0) {
+        throw std::runtime_error("RenderConfig rays_per_block must be positive");
+    }
+
+    ctx->last_integrator_initial_ray_count = primary_ray_count;
+    ctx->last_integrator_final_ray_count = 0;
+    ctx->last_integrator_peak_ray_count = primary_ray_count;
+    ctx->last_integrator_peak_shadow_ray_count = 0;
+    ctx->last_integrator_depth_iterations = 0;
+    ctx->last_integrator_early_terminated_samples = 0;
 
     for (int s = 0; s < samples_per_pass; ++s) {
         int current_global_sample = ctx->current_spp + s;
 
-        int initial_count = max_rays;
+        int initial_count = primary_ray_count;
         UR_CUDA_CHECK(cudaMemcpy(ctx->queueA.count, &initial_count, sizeof(int), cudaMemcpyHostToDevice));
 
         generate_rays_kernel<<<numBlocks, threadsPerBlock>>>(
@@ -1038,9 +1079,16 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
 
         RayQueue* current_q = &ctx->queueA;
         RayQueue* next_q = &ctx->queueB;
+        int current_ray_count = primary_ray_count;
 
         for (int depth = 0; depth < cfg.max_trace_depth; ++depth) {
-            extend_kernel<<<fixed_blocks, num_threads_wf>>>(*current_q, ctx->hitQueue, scene);
+            if (current_ray_count <= 0) {
+                ++ctx->last_integrator_early_terminated_samples;
+                break;
+            }
+
+            const int active_blocks = launch_blocks_for_active_count(current_ray_count, num_threads_wf);
+            extend_kernel<<<active_blocks, num_threads_wf>>>(*current_q, ctx->hitQueue, scene);
             UR_CUDA_CHECK(cudaGetLastError());
 
             UR_CUDA_CHECK(cudaMemset(next_q->count, 0, sizeof(int)));
@@ -1050,11 +1098,21 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             float current_dispersion_clamp = (current_global_sample < 100) ? 5.0f : 20.0f;
             float current_rr_min_prob = (current_global_sample < 100) ? 0.1f : 0.05f;
 
-            shade_kernel<<<fixed_blocks, num_threads_wf>>>(*current_q, ctx->hitQueue, *next_q, ctx->shadowQueue, ctx->d_accum_buffer, ctx->d_normal_buffer, ctx->d_albedo_buffer, ctx->d_depth_buffer, ctx->d_uv_buffer, ctx->d_motion_vector_buffer, ctx->camera, ctx->previous_camera, scene, current_global_sample, current_dispersion_clamp, current_rr_min_prob);
+            shade_kernel<<<active_blocks, num_threads_wf>>>(*current_q, ctx->hitQueue, *next_q, ctx->shadowQueue, ctx->d_accum_buffer, ctx->d_normal_buffer, ctx->d_albedo_buffer, ctx->d_depth_buffer, ctx->d_uv_buffer, ctx->d_motion_vector_buffer, ctx->camera, ctx->previous_camera, scene, current_global_sample, current_dispersion_clamp, current_rr_min_prob);
             UR_CUDA_CHECK(cudaGetLastError());
 
-            extend_shadow_kernel<<<fixed_blocks, num_threads_wf>>>(ctx->shadowQueue, ctx->d_accum_buffer, scene, current_dispersion_clamp);
-            UR_CUDA_CHECK(cudaGetLastError());
+            const int shadow_ray_count = copy_device_queue_count(ctx->shadowQueue.count, ctx->shadowQueue.capacity);
+            ctx->last_integrator_peak_shadow_ray_count = std::max(ctx->last_integrator_peak_shadow_ray_count, shadow_ray_count);
+            if (shadow_ray_count > 0) {
+                const int shadow_blocks = launch_blocks_for_active_count(shadow_ray_count, num_threads_wf);
+                extend_shadow_kernel<<<shadow_blocks, num_threads_wf>>>(ctx->shadowQueue, ctx->d_accum_buffer, scene, current_dispersion_clamp);
+                UR_CUDA_CHECK(cudaGetLastError());
+            }
+
+            current_ray_count = copy_device_queue_count(next_q->count, max_rays);
+            ctx->last_integrator_peak_ray_count = std::max(ctx->last_integrator_peak_ray_count, current_ray_count);
+            ctx->last_integrator_final_ray_count = current_ray_count;
+            ++ctx->last_integrator_depth_iterations;
 
             RayQueue* temp = current_q;
             current_q = next_q;
