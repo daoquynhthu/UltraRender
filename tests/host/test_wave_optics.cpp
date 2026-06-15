@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <numbers>
 #include <stdexcept>
 #include <string>
 
@@ -180,6 +181,120 @@ static int test_circular_aperture_mtf_samples() {
     CHECK(one.size() == 1);
     CHECK_NEAR(one.front().spatial_frequency_cycles_per_m, 0.0, 0.0);
     CHECK_NEAR(one.front().value, 1.0, 0.0);
+    return 0;
+}
+
+static int test_knife_edge_fresnel_reference() {
+    CHECK_NEAR(ure::wave::knife_edge_fresnel_intensity(0.0), 0.25, 0.0);
+    CHECK(ure::wave::knife_edge_fresnel_intensity(-1.0) <
+          ure::wave::knife_edge_fresnel_intensity(0.0));
+    CHECK(ure::wave::knife_edge_fresnel_intensity(1.0) >
+          ure::wave::knife_edge_fresnel_intensity(0.0));
+    CHECK(ure::wave::knife_edge_fresnel_intensity(1.0) > 1.0);
+    return 0;
+}
+
+static int test_slit_diffraction_reference() {
+    ure::wave::SlitAperture slit;
+    slit.wavelength_m = 500.0e-9;
+    slit.width_m = 10.0e-6;
+
+    CHECK(ure::wave::is_valid(slit));
+    CHECK_NEAR(ure::wave::slit_diffraction_intensity(slit, 0.0), 1.0, 0.0);
+
+    const double first_zero = ure::wave::slit_first_zero_angle_rad(slit);
+    CHECK_NEAR(first_zero, std::asin(slit.wavelength_m / slit.width_m), 0.0);
+    CHECK_NEAR(ure::wave::slit_diffraction_intensity(slit, first_zero), 0.0, 1.0e-30);
+    CHECK_NEAR(ure::wave::slit_diffraction_intensity(slit, 0.25 * first_zero),
+               ure::wave::slit_diffraction_intensity(slit, -0.25 * first_zero),
+               0.0);
+
+    ure::wave::SlitAperture red = slit;
+    red.wavelength_m = 700.0e-9;
+    CHECK(ure::wave::slit_first_zero_angle_rad(red) >
+          ure::wave::slit_first_zero_angle_rad(slit));
+
+    slit.width_m = 0.0;
+    CHECK(!ure::wave::is_valid(slit));
+    CHECK_NEAR(ure::wave::slit_diffraction_intensity(slit, 0.0), 0.0, 0.0);
+    CHECK_NEAR(ure::wave::slit_first_zero_angle_rad(slit), 0.0, 0.0);
+    return 0;
+}
+
+static int test_rectangular_aperture_reference() {
+    ure::wave::RectangularAperture aperture;
+    aperture.wavelength_m = 500.0e-9;
+    aperture.width_m = 20.0e-6;
+    aperture.height_m = 10.0e-6;
+
+    CHECK(ure::wave::is_valid(aperture));
+    CHECK_NEAR(ure::wave::rectangular_aperture_intensity(aperture, 0.0, 0.0), 1.0, 0.0);
+
+    const double x_zero = std::asin(aperture.wavelength_m / aperture.width_m);
+    const double y_zero = std::asin(aperture.wavelength_m / aperture.height_m);
+    CHECK_NEAR(ure::wave::rectangular_aperture_intensity(aperture, x_zero, 0.0), 0.0, 1.0e-30);
+    CHECK_NEAR(ure::wave::rectangular_aperture_intensity(aperture, 0.0, y_zero), 0.0, 1.0e-30);
+
+    ure::wave::SlitAperture x_slit;
+    x_slit.wavelength_m = aperture.wavelength_m;
+    x_slit.width_m = aperture.width_m;
+    ure::wave::SlitAperture y_slit;
+    y_slit.wavelength_m = aperture.wavelength_m;
+    y_slit.width_m = aperture.height_m;
+    const double tx = 0.25 * x_zero;
+    const double ty = 0.25 * y_zero;
+    CHECK_NEAR(ure::wave::rectangular_aperture_intensity(aperture, tx, ty),
+               ure::wave::slit_diffraction_intensity(x_slit, tx) *
+                   ure::wave::slit_diffraction_intensity(y_slit, ty),
+               1.0e-15);
+
+    aperture.height_m = 0.0;
+    CHECK(!ure::wave::is_valid(aperture));
+    CHECK_NEAR(ure::wave::rectangular_aperture_intensity(aperture, 0.0, 0.0), 0.0, 0.0);
+    return 0;
+}
+
+static int test_grating_order_reference() {
+    ure::wave::DiffractionGrating grating;
+    grating.wavelength_m = 500.0e-9;
+    grating.period_m = 2.0e-6;
+    grating.slit_width_m = 0.5e-6;
+    grating.slit_count = 32;
+
+    CHECK(ure::wave::is_valid(grating));
+    const auto zero = ure::wave::grating_order(grating, 0);
+    CHECK(zero.propagating);
+    CHECK_NEAR(zero.angle_rad, 0.0, 0.0);
+    CHECK_NEAR(zero.relative_intensity, 1.0, 0.0);
+
+    const auto plus_two = ure::wave::grating_order(grating, 2);
+    CHECK(plus_two.propagating);
+    CHECK_NEAR(std::sin(plus_two.angle_rad), 0.5, 1.0e-15);
+    CHECK_NEAR(plus_two.relative_intensity, 4.0 / (std::numbers::pi * std::numbers::pi), 1.0e-15);
+
+    const auto minus_two = ure::wave::grating_order(grating, -2);
+    CHECK(minus_two.propagating);
+    CHECK_NEAR(minus_two.angle_rad, -plus_two.angle_rad, 1.0e-15);
+    CHECK_NEAR(minus_two.relative_intensity, plus_two.relative_intensity, 1.0e-15);
+
+    const auto cutoff = ure::wave::grating_order(grating, 4);
+    CHECK(cutoff.propagating);
+    CHECK_NEAR(cutoff.angle_rad, std::numbers::pi / 2.0, 1.0e-15);
+
+    const auto evanescent = ure::wave::grating_order(grating, 5);
+    CHECK(!evanescent.propagating);
+    CHECK_NEAR(evanescent.relative_intensity, 0.0, 0.0);
+
+    const auto orders = ure::wave::grating_orders(grating, -5, 5);
+    CHECK(orders.size() == 11);
+    CHECK(!orders.front().propagating);
+    CHECK(!orders.back().propagating);
+    CHECK(orders[5].order == 0);
+    CHECK(orders[5].propagating);
+
+    grating.slit_width_m = grating.period_m * 2.0;
+    CHECK(!ure::wave::is_valid(grating));
+    CHECK(ure::wave::grating_orders(grating, -1, 1).empty());
     return 0;
 }
 
@@ -749,6 +864,10 @@ int main() {
     failed += run("test_invalid_psf_kernel_fails_closed", test_invalid_psf_kernel_fails_closed);
     failed += run("test_circular_aperture_mtf_oracle", test_circular_aperture_mtf_oracle);
     failed += run("test_circular_aperture_mtf_samples", test_circular_aperture_mtf_samples);
+    failed += run("test_knife_edge_fresnel_reference", test_knife_edge_fresnel_reference);
+    failed += run("test_slit_diffraction_reference", test_slit_diffraction_reference);
+    failed += run("test_rectangular_aperture_reference", test_rectangular_aperture_reference);
+    failed += run("test_grating_order_reference", test_grating_order_reference);
     failed += run("test_circular_pupil_function_defocus_phase", test_circular_pupil_function_defocus_phase);
     failed += run("test_circular_pupil_wave_field_grid", test_circular_pupil_wave_field_grid);
     failed += run("test_fraunhofer_direct_uniform_field_oracle", test_fraunhofer_direct_uniform_field_oracle);

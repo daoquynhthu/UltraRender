@@ -14,6 +14,32 @@ struct CircularAperture {
     double focal_length_m = 50.0e-3;
 };
 
+struct SlitAperture {
+    double wavelength_m = 550.0e-9;
+    double width_m = 10.0e-6;
+};
+
+struct RectangularAperture {
+    double wavelength_m = 550.0e-9;
+    double width_m = 20.0e-6;
+    double height_m = 10.0e-6;
+};
+
+struct DiffractionGrating {
+    double wavelength_m = 550.0e-9;
+    double period_m = 2.0e-6;
+    double slit_width_m = 0.5e-6;
+    int slit_count = 16;
+    double incident_angle_rad = 0.0;
+};
+
+struct DiffractionOrder {
+    int order = 0;
+    bool propagating = false;
+    double angle_rad = 0.0;
+    double relative_intensity = 0.0;
+};
+
 struct PointSpreadSample {
     double sensor_x_m = 0.0;
     double sensor_y_m = 0.0;
@@ -192,6 +218,9 @@ struct PropagationResult {
 constexpr double kAiryFirstZero = 3.8317059702075125;
 
 bool is_valid(const CircularAperture& aperture);
+bool is_valid(const SlitAperture& aperture);
+bool is_valid(const RectangularAperture& aperture);
+bool is_valid(const DiffractionGrating& grating);
 bool is_valid(const PsfKernelConfig& config);
 bool is_valid(const CircularPupil& pupil);
 bool is_valid(const DiffractionCameraConfig& config);
@@ -218,6 +247,18 @@ JonesSpectrum apply_optical_path_phase(const JonesSpectrum& spectrum,
 ComplexFieldFilm make_complex_field_film(int width,
                                          int height,
                                          const std::vector<double>& wavelengths_m);
+double normalized_sinc(double x);
+double knife_edge_fresnel_intensity(double fresnel_v);
+double slit_diffraction_argument(const SlitAperture& aperture, double theta_rad);
+double slit_diffraction_intensity(const SlitAperture& aperture, double theta_rad);
+double slit_first_zero_angle_rad(const SlitAperture& aperture);
+double rectangular_aperture_intensity(const RectangularAperture& aperture,
+                                      double theta_x_rad,
+                                      double theta_y_rad);
+DiffractionOrder grating_order(const DiffractionGrating& grating, int order);
+std::vector<DiffractionOrder> grating_orders(const DiffractionGrating& grating,
+                                             int min_order,
+                                             int max_order);
 double airy_argument_from_angle(const CircularAperture& aperture, double theta_rad);
 double airy_intensity_from_argument(double x);
 double airy_intensity_at_angle(const CircularAperture& aperture, double theta_rad);

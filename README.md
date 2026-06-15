@@ -71,6 +71,7 @@ UltraRender 不仅仅是一个图形渲染器，而是一个以**光谱与偏振
 - W.2 已启动衍射相机基准：新增 `WaveFieldGrid` host complex field carrier、`FraunhoferFieldGrid`、direct Fraunhofer/Fresnel/angular-spectrum CPU propagation oracle、圆孔 Airy PSF host oracle、离散 `PsfKernel` reference、diffraction-limited MTF oracle、`CircularPupil` defocus phase reference 和 feature-gated `DiffractionCameraPlan`，锁定第一暗环、encircled energy、波长缩放、sensor 半径、kernel 归一化、cutoff frequency、pupil 相位/遮罩、复场网格功率、传播算子归一化与半开配置拒绝；direct `GpuRenderEngine` scene load 也会在 GPU 初始化前拒绝未实现 camera diffraction film，后续 GPU diffraction camera 必须对齐该基准。
 - W.3 已建立相干场基础合约：`ComplexSpectrum`、`JonesSpectrum`、`CoherenceMetadata`、OPL phase accumulation helpers 和 `ComplexFieldFilm` host accumulator 已能区分 coherent `|sum E|^2` 与 incoherent `sum |E|^2`；主 GPU path tracer 的相干输运和 distributed coherent merge 仍按 Phase W 后续步骤接入。
 - W.4 已完成首个传播算子闭环：`PropagationOperatorKind` / `PropagationConfig` / `PropagationResult` 统一封装 Fraunhofer、Fresnel、angular-spectrum、Rayleigh-Sommerfeld 与 Huygens-Fresnel CPU oracle；首个 CUDA backend 是 Fraunhofer direct DFT reference backend，后续 FFT/tiling 属于性能升级。
+- W.8 已建立 edge/aperture diffraction 解析 reference：knife-edge Fresnel half-plane、single slit、rectangular aperture 和 finite grating order/grating equation 均有 host oracle；GTD/UTD 或生产 visibility edge event 仍是后续集成。
 
 ## 6. 渲染优化与降噪路线图 (Optimization & Denoising Roadmap) [新增]
 

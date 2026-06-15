@@ -16,6 +16,24 @@ bool is_valid_field(const WaveFieldGrid& field) {
            field.samples.size() == static_cast<std::size_t>(field.width) * static_cast<std::size_t>(field.height);
 }
 
+ComplexAmplitude fresnel_integrals(double v) {
+    if (v == 0.0) return {};
+    const double sign = v < 0.0 ? -1.0 : 1.0;
+    const double upper = std::abs(v);
+    const int intervals = std::max(64, static_cast<int>(std::ceil(upper * 96.0))) & ~1;
+    const double h = upper / static_cast<double>(intervals);
+    double c_sum = 0.0;
+    double s_sum = 0.0;
+    for (int i = 0; i <= intervals; ++i) {
+        const double t = h * static_cast<double>(i);
+        const double phase = 0.5 * std::numbers::pi * t * t;
+        const double weight = (i == 0 || i == intervals) ? 1.0 : (i % 2 == 0 ? 2.0 : 4.0);
+        c_sum += weight * std::cos(phase);
+        s_sum += weight * std::sin(phase);
+    }
+    return {sign * h * c_sum / 3.0, sign * h * s_sum / 3.0};
+}
+
 WaveFieldGrid make_output_field(const WaveFieldGrid& field, const FresnelPropagationConfig& config) {
     WaveFieldGrid out;
     const int width = config.output_width > 0 ? config.output_width : field.width;
@@ -82,6 +100,26 @@ bool is_valid(const CircularAperture& aperture) {
     return aperture.wavelength_m > 0.0 &&
            aperture.aperture_diameter_m > 0.0 &&
            aperture.focal_length_m > 0.0;
+}
+
+bool is_valid(const SlitAperture& aperture) {
+    return aperture.wavelength_m > 0.0 &&
+           aperture.width_m > 0.0;
+}
+
+bool is_valid(const RectangularAperture& aperture) {
+    return aperture.wavelength_m > 0.0 &&
+           aperture.width_m > 0.0 &&
+           aperture.height_m > 0.0;
+}
+
+bool is_valid(const DiffractionGrating& grating) {
+    return grating.wavelength_m > 0.0 &&
+           grating.period_m > 0.0 &&
+           grating.slit_width_m >= 0.0 &&
+           grating.slit_width_m <= grating.period_m &&
+           grating.slit_count > 0 &&
+           std::abs(std::sin(grating.incident_angle_rad)) <= 1.0;
 }
 
 bool is_valid(const PsfKernelConfig& config) {
@@ -303,6 +341,84 @@ ComplexFieldFilm make_complex_field_film(int width,
     film.coherent_amplitudes.assign(sample_count, {});
     film.incoherent_power.assign(sample_count, 0.0);
     return film;
+}
+
+double normalized_sinc(double x) {
+    if (std::abs(x) < 1.0e-8) return 1.0;
+    return std::sin(x) / x;
+}
+
+double knife_edge_fresnel_intensity(double fresnel_v) {
+    const ComplexAmplitude fresnel = fresnel_integrals(fresnel_v);
+    const double c = fresnel.real;
+    const double s = fresnel.imag;
+    const double re = 0.5 + c;
+    const double im = 0.5 + s;
+    return 0.5 * (re * re + im * im);
+}
+
+double slit_diffraction_argument(const SlitAperture& aperture, double theta_rad) {
+    if (!is_valid(aperture)) return 0.0;
+    return std::numbers::pi * aperture.width_m * std::sin(theta_rad) / aperture.wavelength_m;
+}
+
+double slit_diffraction_intensity(const SlitAperture& aperture, double theta_rad) {
+    if (!is_valid(aperture)) return 0.0;
+    const double amplitude = normalized_sinc(slit_diffraction_argument(aperture, theta_rad));
+    return amplitude * amplitude;
+}
+
+double slit_first_zero_angle_rad(const SlitAperture& aperture) {
+    if (!is_valid(aperture)) return 0.0;
+    const double sin_theta = aperture.wavelength_m / aperture.width_m;
+    if (sin_theta >= 1.0) return std::numbers::pi / 2.0;
+    return std::asin(sin_theta);
+}
+
+double rectangular_aperture_intensity(const RectangularAperture& aperture,
+                                      double theta_x_rad,
+                                      double theta_y_rad) {
+    if (!is_valid(aperture)) return 0.0;
+    const double x = std::numbers::pi * aperture.width_m * std::sin(theta_x_rad) / aperture.wavelength_m;
+    const double y = std::numbers::pi * aperture.height_m * std::sin(theta_y_rad) / aperture.wavelength_m;
+    const double ax = normalized_sinc(x);
+    const double ay = normalized_sinc(y);
+    return ax * ax * ay * ay;
+}
+
+DiffractionOrder grating_order(const DiffractionGrating& grating, int order) {
+    DiffractionOrder out;
+    out.order = order;
+    if (!is_valid(grating)) return out;
+
+    const double sin_out = std::sin(grating.incident_angle_rad) +
+                           static_cast<double>(order) * grating.wavelength_m / grating.period_m;
+    if (std::abs(sin_out) > 1.0) return out;
+
+    out.propagating = true;
+    out.angle_rad = std::asin(sin_out);
+    if (grating.slit_width_m == 0.0) {
+        out.relative_intensity = 1.0;
+        return out;
+    }
+
+    SlitAperture slit;
+    slit.wavelength_m = grating.wavelength_m;
+    slit.width_m = grating.slit_width_m;
+    out.relative_intensity = slit_diffraction_intensity(slit, out.angle_rad);
+    return out;
+}
+
+std::vector<DiffractionOrder> grating_orders(const DiffractionGrating& grating,
+                                             int min_order,
+                                             int max_order) {
+    std::vector<DiffractionOrder> orders;
+    if (min_order > max_order || !is_valid(grating)) return orders;
+    orders.reserve(static_cast<std::size_t>(max_order - min_order + 1));
+    for (int order = min_order; order <= max_order; ++order) {
+        orders.push_back(grating_order(grating, order));
+    }
+    return orders;
 }
 
 double PsfKernel::at(int x, int y) const {
