@@ -101,6 +101,8 @@ static int test_alloc_shadow_queue(ShadowQueue& q, int cap, int num_spec = 4) {
     if (cudaMalloc(&q.wavelength_pdfs, cap * sizeof(float)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.pixel_indices, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.count, sizeof(int)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.overflow_count, sizeof(int)) != cudaSuccess) return 1;
+    if (cudaMemset(q.overflow_count, 0, sizeof(int)) != cudaSuccess) return 1;
     q.capacity = cap;
     q.num_spectral_channels = num_spec;
     return 0;
@@ -110,7 +112,7 @@ static void test_free_shadow_queue(const ShadowQueue& q) {
     cudaFree(q.origins); cudaFree(q.directions); cudaFree(q.max_dist);
     cudaFree(q.radiance_vals); cudaFree(q.radiance_wavelengths);
     cudaFree(q.spectral_modes); cudaFree(q.active_channels); cudaFree(q.wavelength_pdfs);
-    cudaFree(q.pixel_indices); cudaFree(q.count);
+    cudaFree(q.pixel_indices); cudaFree(q.count); cudaFree(q.overflow_count);
 }
 
 __global__ void setup_single_ray_kernel(RayQueue q, GpuVec3 origin, GpuVec3 dir, int pixel_idx) {
@@ -162,6 +164,12 @@ __global__ void reserve_three_ray_slots_kernel(RayQueue q) {
     reserve_ray_slot(q);
     reserve_ray_slot(q);
     reserve_ray_slot(q);
+}
+
+__global__ void reserve_three_shadow_slots_kernel(ShadowQueue q) {
+    reserve_shadow_slot(q);
+    reserve_shadow_slot(q);
+    reserve_shadow_slot(q);
 }
 
 __global__ void packet_metal_stokes_channels_kernel(RayQueue q_in, RayQueue q_out) {
@@ -766,6 +774,29 @@ static int test_ray_queue_overflow_count_visible() {
     return 0;
 }
 
+static int test_shadow_queue_overflow_count_visible() {
+    REQUIRE_GPU();
+    ShadowQueue q;
+    if (test_alloc_shadow_queue(q, 2, 4)) return 1;
+    int zero = 0;
+    CHECK_CUDA(cudaMemcpy(q.count, &zero, sizeof(int), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(q.overflow_count, &zero, sizeof(int), cudaMemcpyHostToDevice));
+
+    reserve_three_shadow_slots_kernel<<<1, 1>>>(q);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    int count = 0;
+    int overflow = 0;
+    CHECK_CUDA(cudaMemcpy(&count, q.count, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&overflow, q.overflow_count, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK(count == 2);
+    CHECK(overflow == 1);
+
+    test_free_shadow_queue(q);
+    return 0;
+}
+
 static int test_packet_metal_stokes_are_channel_major() {
     REQUIRE_GPU();
     const int num_spec = 4;
@@ -1085,6 +1116,8 @@ static int test_integrator_primary_ray_count_uses_pixel_count() {
     CHECK(ctx->last_integrator_depth_iterations <= config.max_trace_depth);
     CHECK(ctx->last_integrator_final_ray_count >= 0);
     CHECK(ctx->last_integrator_final_ray_count <= 64);
+    CHECK(ctx->last_integrator_ray_queue_overflow_count >= 0);
+    CHECK(ctx->last_integrator_shadow_queue_overflow_count >= 0);
     free_gpu_renderer(ctx);
     return 0;
 }
@@ -1150,6 +1183,7 @@ int main() {
     RUN_TEST(test_dispersive_dielectric_splits_packet_to_lanes);
     RUN_TEST(test_dispersive_dielectric_critical_angle_splits_n8);
     RUN_TEST(test_ray_queue_overflow_count_visible);
+    RUN_TEST(test_shadow_queue_overflow_count_visible);
     RUN_TEST(test_packet_metal_stokes_are_channel_major);
     RUN_TEST(test_packet_average_stokes_for_packet_sampling);
     RUN_TEST(test_runtime_n_long_wavelength_light_list);

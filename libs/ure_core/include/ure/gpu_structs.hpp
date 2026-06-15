@@ -503,6 +503,7 @@ struct ShadowQueue {
     int* pixel_indices = nullptr;
 
     int* count = nullptr;
+    int* overflow_count = nullptr;
     int capacity = 0;
 };
 

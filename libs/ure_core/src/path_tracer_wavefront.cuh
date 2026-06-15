@@ -338,6 +338,19 @@ __device__ inline int reserve_ray_slot(RayQueue& q) {
     return out_idx;
 }
 
+__device__ inline int reserve_shadow_slot(ShadowQueue& q) {
+    int out_idx = atomicAdd(q.count, 1);
+    if (out_idx >= q.capacity) {
+        atomicMin(q.count, q.capacity);
+        if (q.overflow_count) {
+            atomicAdd(q.overflow_count, 1);
+        }
+        DEVICE_LOG(5102, q.capacity, (unsigned long long)q.count, 0ULL, 0.0f);
+        return -1;
+    }
+    return out_idx;
+}
+
 __device__ inline void store_lane_throughput(RayQueue& q, int idx, const SpectralPacket& source, int channel, float value) {
     SpectralPacket t;
     for (int c = 0; c < q.num_spectral_channels; ++c) {
@@ -941,8 +954,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
                              contribution.wavelengths[c] = throughput.wavelengths[c];
                          }
 
-                         int s_idx = atomicAdd(shadow_queue.count, 1);
-                         if (s_idx < shadow_queue.capacity) {
+                         int s_idx = reserve_shadow_slot(shadow_queue);
+                         if (s_idx >= 0) {
                              const int cap = shadow_queue.capacity;
                              shadow_queue.origins[s_idx] = p_vol;
                              shadow_queue.directions[s_idx] = l_dir;
@@ -1249,8 +1262,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
                             }
                         }
 
-                         int s_idx = atomicAdd(shadow_queue.count, 1);
-                         if (s_idx < shadow_queue.capacity) {
+                         int s_idx = reserve_shadow_slot(shadow_queue);
+                         if (s_idx >= 0) {
                              const int cap = shadow_queue.capacity;
                              GpuVec3 offset_normal = direct_light_offset_normal(ng, l_dir);
                              float adaptive_eps = 1e-4f / fmaxf(0.01f, fabsf(ng.dot(l_dir)));

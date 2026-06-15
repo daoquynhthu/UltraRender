@@ -82,6 +82,8 @@ struct GpuContext {
     int last_integrator_peak_shadow_ray_count = 0;
     int last_integrator_depth_iterations = 0;
     int last_integrator_early_terminated_samples = 0;
+    int last_integrator_ray_queue_overflow_count = 0;
+    int last_integrator_shadow_queue_overflow_count = 0;
 
     std::vector<void*> pointers_to_free;
     std::vector<void*> material_resource_tables_to_free;

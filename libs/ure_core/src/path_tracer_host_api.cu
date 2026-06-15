@@ -178,6 +178,8 @@ void alloc_shadow_queue(ShadowQueue& q, int capacity, int num_spec_channels) {
     UR_CUDA_CHECK(cudaMalloc(&q.wavelength_pdfs, capacity * sizeof(float)));
     UR_CUDA_CHECK(cudaMalloc(&q.pixel_indices, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.count, sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.overflow_count, sizeof(int)));
+    UR_CUDA_CHECK(cudaMemset(q.overflow_count, 0, sizeof(int)));
 }
 
 void free_shadow_queue(ShadowQueue& q) {
@@ -191,6 +193,7 @@ void free_shadow_queue(ShadowQueue& q) {
     cudaFree(q.wavelength_pdfs);
     cudaFree(q.pixel_indices);
     cudaFree(q.count);
+    cudaFree(q.overflow_count);
 }
 
 // ===== compute_aabb helper =====
@@ -1090,6 +1093,8 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     ctx->last_integrator_peak_shadow_ray_count = 0;
     ctx->last_integrator_depth_iterations = 0;
     ctx->last_integrator_early_terminated_samples = 0;
+    ctx->last_integrator_ray_queue_overflow_count = 0;
+    ctx->last_integrator_shadow_queue_overflow_count = 0;
 
     for (int s = 0; s < samples_per_pass; ++s) {
         int current_global_sample = ctx->current_spp + s;
@@ -1119,6 +1124,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             UR_CUDA_CHECK(cudaMemset(next_q->count, 0, sizeof(int)));
             UR_CUDA_CHECK(cudaMemset(next_q->overflow_count, 0, sizeof(int)));
             UR_CUDA_CHECK(cudaMemset(ctx->shadowQueue.count, 0, sizeof(int)));
+            UR_CUDA_CHECK(cudaMemset(ctx->shadowQueue.overflow_count, 0, sizeof(int)));
 
             float current_dispersion_clamp = (current_global_sample < 100) ? 5.0f : 20.0f;
             float current_rr_min_prob = (current_global_sample < 100) ? 0.1f : 0.05f;
@@ -1127,6 +1133,9 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             UR_CUDA_CHECK(cudaGetLastError());
 
             const int shadow_ray_count = copy_device_queue_count(ctx->shadowQueue.count, ctx->shadowQueue.capacity);
+            ctx->last_integrator_shadow_queue_overflow_count += copy_device_queue_count(
+                ctx->shadowQueue.overflow_count,
+                std::numeric_limits<int>::max());
             ctx->last_integrator_peak_shadow_ray_count = std::max(ctx->last_integrator_peak_shadow_ray_count, shadow_ray_count);
             if (shadow_ray_count > 0) {
                 const int shadow_blocks = launch_blocks_for_active_count(shadow_ray_count, num_threads_wf);
@@ -1135,6 +1144,9 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             }
 
             current_ray_count = copy_device_queue_count(next_q->count, max_rays);
+            ctx->last_integrator_ray_queue_overflow_count += copy_device_queue_count(
+                next_q->overflow_count,
+                std::numeric_limits<int>::max());
             ctx->last_integrator_peak_ray_count = std::max(ctx->last_integrator_peak_ray_count, current_ray_count);
             ctx->last_integrator_final_ray_count = current_ray_count;
             ++ctx->last_integrator_depth_iterations;
