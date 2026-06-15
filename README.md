@@ -35,7 +35,7 @@ UltraRender 不仅仅是一个图形渲染器，而是一个**物理光学模拟
 - [x] **Material ID & Uber-Shader**: 已彻底抛弃虚函数，实现基于 Material Type 的分支调度。
 - [x] **Megakernel -> Wavefront 重构**: 正在拆分光线生成、求交、着色逻辑。
 - [x] **光谱并行化**: Phase E 已完成 runtime wavelength packet，当前 GPU packet quadrature lanes 为 8-32；Phase L 已将 packet carrier 命名为 `SpectralPacket`，并允许 `packet_lanes=1` 作为 sampled wavelength 模式，避免把 packet 宽度误认为全局光谱域。
-- [ ] **百万级光谱域**: Phase L 将 `domain_bins` 与 `packet_lanes` 解耦；材质/SPD 已通过 `SpectralResource` 按 lambda 查询，已有 1M-bin CPU oracle 与 GPU sampled estimator 对照，explicit spectral texture 已改为 source-sample resource descriptor；MaterialGraph texture/Add/Mix 已接入 spectral expression graph；distributed contract/file backend 已携带 spectral-domain shard、wavelength PDF 与 frame shard metadata；runtime plan 现在会给出 sampler/cache/stream preset，并在显式 resident cache 超预算时于 GPU 初始化前拒绝。`tools/benchmarks/run_phase_l_spectral_smoke.ps1` 提供 1M-domain sampled HDR smoke 入口；剩余重点是 basis/tile cache runtime 与系统化性能套件。
+- [x] **百万级光谱域**: Phase L 已将 `domain_bins` 与 `packet_lanes` 解耦；材质/SPD 已通过 `SpectralResource` 按 lambda 查询，已有 1M-bin CPU oracle 与 GPU sampled estimator 对照，explicit spectral texture 已改为 source-sample resource descriptor；MaterialGraph texture/Add/Mix 已接入 spectral expression graph；distributed contract/file backend 已携带 spectral-domain shard、wavelength PDF 与 frame shard metadata；runtime plan 现在会给出 sampler/cache/stream preset，并在显式 resident cache 超预算时于 GPU 初始化前拒绝。`tools/benchmarks/run_phase_l_spectral_smoke.ps1` 提供 1M-domain sampled HDR smoke 入口；basis/tile cache runtime 与系统化性能套件归后续性能阶段扩展。
 
 ### 阶段三：超越几何光学 (Beyond Ray Optics) [进行中]
 - [x] **偏振光渲染 (Polarization)**: 引入 Stokes 矢量与 Mueller 矩阵，模拟天空偏振、全反射相位偏移。

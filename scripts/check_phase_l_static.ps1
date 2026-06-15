@@ -385,4 +385,20 @@ if ($benchmarkScript -notmatch "spectral-max-resident-mb") {
     throw "L.12 benchmark smoke must pass resident cache budget"
 }
 
+$planPath = Join-Path $RepoRoot "PLAN.md"
+$plan = Get-Content -Raw $planPath
+if ($plan -notmatch "已完成 \(L\.0-L\.12\)") {
+    throw "L.12 PLAN overview must mark Phase L complete through L.12"
+}
+
+$completionAuditPath = Join-Path $RepoRoot "docs\Phase_L_Completion_Audit.md"
+if (-not (Test-Path $completionAuditPath)) {
+    throw "L.12 completion audit document is missing"
+}
+$completionAudit = Get-Content -Raw $completionAuditPath
+if ($completionAudit -notmatch "Requirements And Evidence" -or
+    $completionAudit -notmatch "Final Gate") {
+    throw "L.12 completion audit must record requirements and final gate"
+}
+
 Write-Host "Phase L static audit passed."

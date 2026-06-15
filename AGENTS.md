@@ -39,7 +39,8 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | D (Distributed Integration) | Done | File backend for sample-range/framebuffer exchange and merge workflow |
 | E (N-Channel Spectral) | Done | Runtime-N spectral pipeline, SPD input, spectral lane split, Mueller/dispersion closure |
 | S (Session API) | Done | `RenderSession`, `SceneDiff`, AOVs, C ABI, pyure progressive/mutation workflow |
-| M (Material System) | Not started | Node graph / MaterialX design remains planned after stable spectral/session baseline |
+| M (Material System) | In progress | SceneIR material graph + first GPU expression graph; MaterialX/layering/presets remain planned |
+| L (Large Spectral Domain) | Done | `domain_bins` / `packet_lanes` split, 1M oracle/sampled smoke, resource descriptors, distributed spectral shard metadata, runtime presets, static audit |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -47,7 +48,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 - Polarization tracking via Stokes vectors and Mueller matrices
 - Wavefront path tracing on CUDA, SIMT-optimized
 - Physical correctness over performance tricks
-- Textures are spectral data carriers (`HostTexture` → `GpuSpectrum[]` → `rgb_to_spectrum()`), not display RGB
+- Textures are spectral resource carriers (`HostTexture` → RGB CUDA texture object or explicit source-sample spectral grid), not display RGB
 
 ### Non-Goals (out of scope)
 - CPU integrator improvements (`src/integrators/` is OBSOLETE — do not modify)
@@ -225,7 +226,7 @@ cmake --build build_modular --config RelWithDebInfo --target gpu_test_tangents
 | GPU (Polarization) | 126 | `tests/gpu/test_gpu_polarization.cu` | Direct EXE |
 | GPU (Volume) | CTest target | `tests/gpu/test_gpu_volume.cu` | Direct EXE |
 | GPU (Distributed Contract) | 243 | `tests/gpu/test_distributed_contract.cu` | Direct EXE |
-| **CTest total** | **21/21 passing target after Phase L.11** | `build_modular_x64` | `ctest --test-dir build_modular_x64 --output-on-failure` |
+| **CTest total** | **21/21 passing target after Phase L.12** | `build_modular_x64` | `ctest --test-dir build_modular_x64 --output-on-failure` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values

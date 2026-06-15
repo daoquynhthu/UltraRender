@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-15 (Phase L L.11 spectral runtime presets and budget gate)
+最后更新: 2026-06-15 (Phase L completed and audited)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -24,7 +24,7 @@
 新 Phase E:     N 通道光谱升级                                      已完成
 远期 Phase S:   Session API + 脚本化                                已完成
 远期 Phase M:   材质系统                                             进行中
-远期 Phase L:   百万级光谱域 / packet-resolution 解耦                进行中 (L.0-L.11)
+远期 Phase L:   百万级光谱域 / packet-resolution 解耦                已完成 (L.0-L.12)
 ```
 
 ---

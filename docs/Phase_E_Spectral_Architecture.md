@@ -74,6 +74,8 @@
 
 2026-06-15 Phase L.11 进展：`SpectralRuntimePlan` 已输出低端/桌面/高端/farm 的 sampler preset、cache preset 和 CUDA stream preset，并估算 material packet cache、sampled resource table 与 explicit spectral texture source grid 的 resident bytes。`spectral_max_resident_mb` 现在是 GPU init 前的硬预算门禁；显式超预算会 fail-loud，而不是试图分配后崩溃或假装已有 streaming fallback。新增 `phase_l_spectral_budget.gltf` 和 benchmark smoke 脚本，已跑通 1M-domain sampled HDR smoke。完整 basis/tile cache runtime、resource prefetch 和系统化 perf suite 仍是后续性能路径。
 
+2026-06-15 Phase L.12 进展：`scripts/check_phase_l_static.ps1` 已作为 Phase L 防回归门禁，阻断旧 `GpuSpectrum` carrier、旧 spectral channel cap、texture packet carrier、`GpuMaterialData` POD cudaMemcpy、domain bins 回填 packet lanes/legacy `num_wavelengths`，以及 GPU init 中按 `spectral_domain_bins` 做 resident allocation。Phase L completion audit 已记录到 `docs/Phase_L_Completion_Audit.md`。
+
 ### 2.1 约束条件
 
 - GPU 内核中寄存器能容纳 N=16（每像素 16 floats = 64 bytes，含波长 128 bytes）。N=64 时需 SoA 或 shared memory 中转。
