@@ -547,6 +547,91 @@ static int test_propagation_operator_rejects_invalid_inputs() {
     return 0;
 }
 
+static int test_complex_spectrum_optical_path_phase_accumulation() {
+    ure::wave::ComplexSpectrum spectrum;
+    spectrum.wavelengths_m = {500.0e-9, 1000.0e-9};
+    spectrum.amplitudes = {{1.0, 0.0}, {1.0, 0.0}};
+    spectrum.coherence = {7, 11, 13, 1.0e-3, true};
+
+    CHECK(ure::wave::is_valid(spectrum));
+    CHECK(spectrum.size() == 2);
+    CHECK_NEAR(spectrum.total_power(), 2.0, 0.0);
+
+    const auto shifted = ure::wave::apply_optical_path_phase(spectrum, 250.0e-9);
+    CHECK(ure::wave::is_valid(shifted));
+    CHECK_NEAR(shifted.optical_path_length_m, 250.0e-9, 0.0);
+    CHECK_NEAR(shifted.at(0).real, -1.0, 1.0e-12);
+    CHECK_NEAR(shifted.at(0).imag, 0.0, 1.0e-12);
+    CHECK_NEAR(shifted.at(1).real, 0.0, 1.0e-12);
+    CHECK_NEAR(shifted.at(1).imag, 1.0, 1.0e-12);
+    CHECK_NEAR(shifted.total_power(), spectrum.total_power(), 1.0e-12);
+    CHECK(shifted.coherence.group_id == 11);
+    CHECK(shifted.coherence.realization_id == 13);
+
+    const auto invalid_lane = shifted.at(7);
+    CHECK_NEAR(invalid_lane.power(), 0.0, 0.0);
+
+    spectrum.coherence.coherence_length_m = -1.0;
+    CHECK(!ure::wave::is_valid(spectrum));
+    CHECK(ure::wave::apply_optical_path_phase(spectrum, 1.0e-6).amplitudes.empty());
+    return 0;
+}
+
+static int test_jones_field_optical_path_phase_preserves_polarized_power() {
+    ure::wave::JonesSpectrum spectrum;
+    spectrum.wavelengths_m = {600.0e-9};
+    spectrum.fields = {{{1.0, 0.0}, {0.0, 1.0}}};
+    spectrum.coherence = {1, 2, 3, 2.0e-3, true};
+
+    CHECK(ure::wave::is_valid(spectrum));
+    CHECK_NEAR(spectrum.total_power(), 2.0, 0.0);
+
+    const auto shifted = ure::wave::apply_optical_path_phase(spectrum, 150.0e-9);
+    CHECK(ure::wave::is_valid(shifted));
+    CHECK_NEAR(shifted.optical_path_length_m, 150.0e-9, 0.0);
+    const auto field = shifted.at(0);
+    CHECK_NEAR(field.x.real, 0.0, 1.0e-12);
+    CHECK_NEAR(field.x.imag, 1.0, 1.0e-12);
+    CHECK_NEAR(field.y.real, -1.0, 1.0e-12);
+    CHECK_NEAR(field.y.imag, 0.0, 1.0e-12);
+    CHECK_NEAR(field.power(), 2.0, 1.0e-12);
+    CHECK_NEAR(shifted.at(9).power(), 0.0, 0.0);
+    return 0;
+}
+
+static int test_complex_field_film_coherent_and_incoherent_order() {
+    auto film = ure::wave::make_complex_field_film(2, 1, {550.0e-9});
+    CHECK(film.is_valid());
+    CHECK(film.lane_count() == 1);
+
+    film.add_coherent_sample(0, 0, 0, {1.0, 0.0});
+    film.add_coherent_sample(0, 0, 0, {1.0, 0.0});
+    film.add_incoherent_sample(0, 0, 0, 1.0);
+    film.add_incoherent_sample(0, 0, 0, 1.0);
+    CHECK_NEAR(film.coherent_amplitude_at(0, 0, 0).real, 2.0, 0.0);
+    CHECK_NEAR(film.coherent_power_at(0, 0, 0), 4.0, 0.0);
+    CHECK_NEAR(film.incoherent_power_at(0, 0, 0), 2.0, 0.0);
+    CHECK_NEAR(film.resolved_power_at(0, 0, 0), 6.0, 0.0);
+
+    film.add_coherent_sample(1, 0, 0, {1.0, 0.0});
+    film.add_coherent_sample(1, 0, 0, {-1.0, 0.0});
+    film.add_incoherent_sample(1, 0, 0, 1.0);
+    film.add_incoherent_sample(1, 0, 0, 1.0);
+    CHECK_NEAR(film.coherent_power_at(1, 0, 0), 0.0, 0.0);
+    CHECK_NEAR(film.incoherent_power_at(1, 0, 0), 2.0, 0.0);
+    CHECK_NEAR(film.resolved_power_at(1, 0, 0), 2.0, 0.0);
+
+    film.add_coherent_sample(7, 0, 0, {8.0, 0.0});
+    film.add_incoherent_sample(0, 0, 4, 8.0);
+    film.add_incoherent_sample(0, 0, 0, -8.0);
+    CHECK_NEAR(film.resolved_power_at(0, 0, 0), 6.0, 0.0);
+    CHECK_NEAR(film.resolved_power_at(-1, 0, 0), 0.0, 0.0);
+
+    CHECK(!ure::wave::make_complex_field_film(0, 1, {550.0e-9}).is_valid());
+    CHECK(!ure::wave::make_complex_field_film(1, 1, {0.0}).is_valid());
+    return 0;
+}
+
 static int test_diffraction_camera_plan_requires_feature_gate() {
     ure::wave::DiffractionCameraConfig camera;
     camera.pupil.aperture.wavelength_m = 550.0e-9;
@@ -674,6 +759,9 @@ int main() {
     failed += run("test_huygens_fresnel_and_rayleigh_sommerfeld_point_field", test_huygens_fresnel_and_rayleigh_sommerfeld_point_field);
     failed += run("test_propagation_operator_dispatches_supported_oracles", test_propagation_operator_dispatches_supported_oracles);
     failed += run("test_propagation_operator_rejects_invalid_inputs", test_propagation_operator_rejects_invalid_inputs);
+    failed += run("test_complex_spectrum_optical_path_phase_accumulation", test_complex_spectrum_optical_path_phase_accumulation);
+    failed += run("test_jones_field_optical_path_phase_preserves_polarized_power", test_jones_field_optical_path_phase_preserves_polarized_power);
+    failed += run("test_complex_field_film_coherent_and_incoherent_order", test_complex_field_film_coherent_and_incoherent_order);
     failed += run("test_diffraction_camera_plan_requires_feature_gate", test_diffraction_camera_plan_requires_feature_gate);
     failed += run("test_diffraction_camera_plan_builds_reference_products", test_diffraction_camera_plan_builds_reference_products);
     failed += run("test_diffraction_camera_plan_rejects_invalid_optics", test_diffraction_camera_plan_rejects_invalid_optics);

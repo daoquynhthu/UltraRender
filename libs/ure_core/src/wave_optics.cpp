@@ -1,5 +1,6 @@
 #include "ure/wave_optics.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <numbers>
 
@@ -13,15 +14,6 @@ bool is_valid_field(const WaveFieldGrid& field) {
            field.sample_pitch_m > 0.0 &&
            field.wavelength_m > 0.0 &&
            field.samples.size() == static_cast<std::size_t>(field.width) * static_cast<std::size_t>(field.height);
-}
-
-ComplexAmplitude multiply(ComplexAmplitude a, ComplexAmplitude b) {
-    return {a.real * b.real - a.imag * b.imag,
-            a.real * b.imag + a.imag * b.real};
-}
-
-ComplexAmplitude phase_amplitude(double phase, double scale = 1.0) {
-    return {scale * std::cos(phase), scale * std::sin(phase)};
 }
 
 WaveFieldGrid make_output_field(const WaveFieldGrid& field, const FresnelPropagationConfig& config) {
@@ -109,6 +101,28 @@ bool is_valid(const DiffractionCameraConfig& config) {
            config.mtf_sample_count > 0;
 }
 
+bool is_valid(const CoherenceMetadata& metadata) {
+    return metadata.coherence_length_m >= 0.0;
+}
+
+bool is_valid(const ComplexSpectrum& spectrum) {
+    return is_valid(spectrum.coherence) &&
+           spectrum.wavelengths_m.size() == spectrum.amplitudes.size() &&
+           !spectrum.wavelengths_m.empty() &&
+           spectrum.optical_path_length_m >= 0.0 &&
+           std::all_of(spectrum.wavelengths_m.begin(), spectrum.wavelengths_m.end(),
+                       [](double wavelength) { return wavelength > 0.0; });
+}
+
+bool is_valid(const JonesSpectrum& spectrum) {
+    return is_valid(spectrum.coherence) &&
+           spectrum.wavelengths_m.size() == spectrum.fields.size() &&
+           !spectrum.wavelengths_m.empty() &&
+           spectrum.optical_path_length_m >= 0.0 &&
+           std::all_of(spectrum.wavelengths_m.begin(), spectrum.wavelengths_m.end(),
+                       [](double wavelength) { return wavelength > 0.0; });
+}
+
 bool is_ready(DiffractionCameraPlanStatus status) {
     return status == DiffractionCameraPlanStatus::Ready;
 }
@@ -119,6 +133,176 @@ bool is_ready(PropagationStatus status) {
 
 double ComplexAmplitude::power() const {
     return real * real + imag * imag;
+}
+
+double JonesVector::power() const {
+    return x.power() + y.power();
+}
+
+std::size_t ComplexSpectrum::size() const {
+    return amplitudes.size();
+}
+
+ComplexAmplitude ComplexSpectrum::at(std::size_t lane) const {
+    if (lane >= amplitudes.size()) return {};
+    return amplitudes[lane];
+}
+
+double ComplexSpectrum::total_power() const {
+    double sum = 0.0;
+    for (const ComplexAmplitude& amplitude : amplitudes) {
+        sum += amplitude.power();
+    }
+    return sum;
+}
+
+std::size_t JonesSpectrum::size() const {
+    return fields.size();
+}
+
+JonesVector JonesSpectrum::at(std::size_t lane) const {
+    if (lane >= fields.size()) return {};
+    return fields[lane];
+}
+
+double JonesSpectrum::total_power() const {
+    double sum = 0.0;
+    for (const JonesVector& field : fields) {
+        sum += field.power();
+    }
+    return sum;
+}
+
+std::size_t ComplexFieldFilm::lane_count() const {
+    return wavelengths_m.size();
+}
+
+bool ComplexFieldFilm::is_valid() const {
+    const std::size_t lanes = lane_count();
+    return width > 0 &&
+           height > 0 &&
+           lanes > 0 &&
+           coherent_amplitudes.size() == static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * lanes &&
+           incoherent_power.size() == coherent_amplitudes.size() &&
+           std::all_of(wavelengths_m.begin(), wavelengths_m.end(),
+                       [](double wavelength) { return wavelength > 0.0; });
+}
+
+void ComplexFieldFilm::add_coherent_sample(int x, int y, std::size_t lane, ComplexAmplitude amplitude) {
+    if (!is_valid() || x < 0 || y < 0 || x >= width || y >= height || lane >= lane_count()) return;
+    const std::size_t index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
+                               static_cast<std::size_t>(x)) * lane_count() + lane;
+    coherent_amplitudes[index] = add(coherent_amplitudes[index], amplitude);
+}
+
+void ComplexFieldFilm::add_incoherent_sample(int x, int y, std::size_t lane, double power) {
+    if (!is_valid() || x < 0 || y < 0 || x >= width || y >= height || lane >= lane_count() || power < 0.0) return;
+    const std::size_t index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
+                               static_cast<std::size_t>(x)) * lane_count() + lane;
+    incoherent_power[index] += power;
+}
+
+ComplexAmplitude ComplexFieldFilm::coherent_amplitude_at(int x, int y, std::size_t lane) const {
+    if (!is_valid() || x < 0 || y < 0 || x >= width || y >= height || lane >= lane_count()) return {};
+    const std::size_t index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
+                               static_cast<std::size_t>(x)) * lane_count() + lane;
+    return coherent_amplitudes[index];
+}
+
+double ComplexFieldFilm::coherent_power_at(int x, int y, std::size_t lane) const {
+    return coherent_amplitude_at(x, y, lane).power();
+}
+
+double ComplexFieldFilm::incoherent_power_at(int x, int y, std::size_t lane) const {
+    if (!is_valid() || x < 0 || y < 0 || x >= width || y >= height || lane >= lane_count()) return 0.0;
+    const std::size_t index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
+                               static_cast<std::size_t>(x)) * lane_count() + lane;
+    return incoherent_power[index];
+}
+
+double ComplexFieldFilm::resolved_power_at(int x, int y, std::size_t lane) const {
+    return coherent_power_at(x, y, lane) + incoherent_power_at(x, y, lane);
+}
+
+ComplexAmplitude add(ComplexAmplitude a, ComplexAmplitude b) {
+    return {a.real + b.real, a.imag + b.imag};
+}
+
+ComplexAmplitude multiply(ComplexAmplitude a, ComplexAmplitude b) {
+    return {a.real * b.real - a.imag * b.imag,
+            a.real * b.imag + a.imag * b.real};
+}
+
+ComplexAmplitude phase_amplitude(double phase, double scale) {
+    return {scale * std::cos(phase), scale * std::sin(phase)};
+}
+
+double optical_phase_radians(double optical_path_length_m, double wavelength_m) {
+    if (optical_path_length_m < 0.0 || wavelength_m <= 0.0) return 0.0;
+    return 2.0 * std::numbers::pi * optical_path_length_m / wavelength_m;
+}
+
+ComplexAmplitude apply_phase(ComplexAmplitude amplitude, double phase) {
+    return multiply(amplitude, phase_amplitude(phase));
+}
+
+ComplexAmplitude apply_optical_path_phase(ComplexAmplitude amplitude,
+                                          double optical_path_length_m,
+                                          double wavelength_m) {
+    return apply_phase(amplitude, optical_phase_radians(optical_path_length_m, wavelength_m));
+}
+
+JonesVector apply_optical_path_phase(const JonesVector& field,
+                                     double optical_path_length_m,
+                                     double wavelength_m) {
+    return {apply_optical_path_phase(field.x, optical_path_length_m, wavelength_m),
+            apply_optical_path_phase(field.y, optical_path_length_m, wavelength_m)};
+}
+
+ComplexSpectrum apply_optical_path_phase(const ComplexSpectrum& spectrum,
+                                         double optical_path_length_m) {
+    if (!is_valid(spectrum) || optical_path_length_m < 0.0) return {};
+    ComplexSpectrum out = spectrum;
+    out.optical_path_length_m += optical_path_length_m;
+    for (std::size_t i = 0; i < out.amplitudes.size(); ++i) {
+        out.amplitudes[i] = apply_optical_path_phase(out.amplitudes[i],
+                                                     optical_path_length_m,
+                                                     out.wavelengths_m[i]);
+    }
+    return out;
+}
+
+JonesSpectrum apply_optical_path_phase(const JonesSpectrum& spectrum,
+                                       double optical_path_length_m) {
+    if (!is_valid(spectrum) || optical_path_length_m < 0.0) return {};
+    JonesSpectrum out = spectrum;
+    out.optical_path_length_m += optical_path_length_m;
+    for (std::size_t i = 0; i < out.fields.size(); ++i) {
+        out.fields[i] = apply_optical_path_phase(out.fields[i],
+                                                 optical_path_length_m,
+                                                 out.wavelengths_m[i]);
+    }
+    return out;
+}
+
+ComplexFieldFilm make_complex_field_film(int width,
+                                         int height,
+                                         const std::vector<double>& wavelengths_m) {
+    ComplexFieldFilm film;
+    if (width <= 0 || height <= 0 || wavelengths_m.empty() ||
+        !std::all_of(wavelengths_m.begin(), wavelengths_m.end(),
+                     [](double wavelength) { return wavelength > 0.0; })) {
+        return film;
+    }
+    film.width = width;
+    film.height = height;
+    film.wavelengths_m = wavelengths_m;
+    const std::size_t sample_count = static_cast<std::size_t>(width) *
+                                     static_cast<std::size_t>(height) *
+                                     wavelengths_m.size();
+    film.coherent_amplitudes.assign(sample_count, {});
+    film.incoherent_power.assign(sample_count, 0.0);
+    return film;
 }
 
 double PsfKernel::at(int x, int y) const {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include <ure/render_config.hpp>
@@ -34,6 +36,60 @@ struct ComplexAmplitude {
     double imag = 0.0;
 
     double power() const;
+};
+
+struct CoherenceMetadata {
+    std::uint64_t source_id = 0;
+    std::uint64_t group_id = 0;
+    std::uint64_t realization_id = 0;
+    double coherence_length_m = 0.0;
+    bool coherent = false;
+};
+
+struct JonesVector {
+    ComplexAmplitude x;
+    ComplexAmplitude y;
+
+    double power() const;
+};
+
+struct ComplexSpectrum {
+    std::vector<double> wavelengths_m;
+    std::vector<ComplexAmplitude> amplitudes;
+    CoherenceMetadata coherence;
+    double optical_path_length_m = 0.0;
+
+    std::size_t size() const;
+    ComplexAmplitude at(std::size_t lane) const;
+    double total_power() const;
+};
+
+struct JonesSpectrum {
+    std::vector<double> wavelengths_m;
+    std::vector<JonesVector> fields;
+    CoherenceMetadata coherence;
+    double optical_path_length_m = 0.0;
+
+    std::size_t size() const;
+    JonesVector at(std::size_t lane) const;
+    double total_power() const;
+};
+
+struct ComplexFieldFilm {
+    int width = 0;
+    int height = 0;
+    std::vector<double> wavelengths_m;
+    std::vector<ComplexAmplitude> coherent_amplitudes;
+    std::vector<double> incoherent_power;
+
+    std::size_t lane_count() const;
+    bool is_valid() const;
+    void add_coherent_sample(int x, int y, std::size_t lane, ComplexAmplitude amplitude);
+    void add_incoherent_sample(int x, int y, std::size_t lane, double power);
+    ComplexAmplitude coherent_amplitude_at(int x, int y, std::size_t lane) const;
+    double coherent_power_at(int x, int y, std::size_t lane) const;
+    double incoherent_power_at(int x, int y, std::size_t lane) const;
+    double resolved_power_at(int x, int y, std::size_t lane) const;
 };
 
 struct PsfKernel {
@@ -139,8 +195,29 @@ bool is_valid(const CircularAperture& aperture);
 bool is_valid(const PsfKernelConfig& config);
 bool is_valid(const CircularPupil& pupil);
 bool is_valid(const DiffractionCameraConfig& config);
+bool is_valid(const CoherenceMetadata& metadata);
+bool is_valid(const ComplexSpectrum& spectrum);
+bool is_valid(const JonesSpectrum& spectrum);
 bool is_ready(DiffractionCameraPlanStatus status);
 bool is_ready(PropagationStatus status);
+ComplexAmplitude add(ComplexAmplitude a, ComplexAmplitude b);
+ComplexAmplitude multiply(ComplexAmplitude a, ComplexAmplitude b);
+ComplexAmplitude phase_amplitude(double phase, double scale = 1.0);
+double optical_phase_radians(double optical_path_length_m, double wavelength_m);
+ComplexAmplitude apply_phase(ComplexAmplitude amplitude, double phase);
+ComplexAmplitude apply_optical_path_phase(ComplexAmplitude amplitude,
+                                          double optical_path_length_m,
+                                          double wavelength_m);
+JonesVector apply_optical_path_phase(const JonesVector& field,
+                                     double optical_path_length_m,
+                                     double wavelength_m);
+ComplexSpectrum apply_optical_path_phase(const ComplexSpectrum& spectrum,
+                                         double optical_path_length_m);
+JonesSpectrum apply_optical_path_phase(const JonesSpectrum& spectrum,
+                                       double optical_path_length_m);
+ComplexFieldFilm make_complex_field_film(int width,
+                                         int height,
+                                         const std::vector<double>& wavelengths_m);
 double airy_argument_from_angle(const CircularAperture& aperture, double theta_rad);
 double airy_intensity_from_argument(double x);
 double airy_intensity_at_angle(const CircularAperture& aperture, double theta_rad);
