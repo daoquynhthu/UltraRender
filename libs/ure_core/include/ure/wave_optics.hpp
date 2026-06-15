@@ -104,6 +104,35 @@ struct FresnelPropagationConfig {
     int output_height = 0;
 };
 
+enum class PropagationOperatorKind {
+    Fraunhofer,
+    Fresnel,
+    AngularSpectrum,
+    RayleighSommerfeld,
+    HuygensFresnel
+};
+
+enum class PropagationStatus {
+    Ready,
+    InvalidInput,
+    UnsupportedOperator
+};
+
+struct PropagationConfig {
+    PropagationOperatorKind kind = PropagationOperatorKind::AngularSpectrum;
+    double distance_m = 0.0;
+    double output_sample_pitch_m = 0.0;
+    int output_width = 0;
+    int output_height = 0;
+};
+
+struct PropagationResult {
+    PropagationStatus status = PropagationStatus::InvalidInput;
+    PropagationOperatorKind kind = PropagationOperatorKind::AngularSpectrum;
+    WaveFieldGrid field;
+    FraunhoferFieldGrid far_field;
+};
+
 constexpr double kAiryFirstZero = 3.8317059702075125;
 
 bool is_valid(const CircularAperture& aperture);
@@ -111,6 +140,7 @@ bool is_valid(const PsfKernelConfig& config);
 bool is_valid(const CircularPupil& pupil);
 bool is_valid(const DiffractionCameraConfig& config);
 bool is_ready(DiffractionCameraPlanStatus status);
+bool is_ready(PropagationStatus status);
 double airy_argument_from_angle(const CircularAperture& aperture, double theta_rad);
 double airy_intensity_from_argument(double x);
 double airy_intensity_at_angle(const CircularAperture& aperture, double theta_rad);
@@ -134,10 +164,17 @@ ComplexAmplitude sample_circular_pupil(const CircularPupil& pupil,
 WaveFieldGrid make_circular_pupil_field(const CircularPupil& pupil,
                                         int diameter_samples);
 FraunhoferFieldGrid propagate_fraunhofer_direct(const WaveFieldGrid& field);
+FraunhoferFieldGrid propagate_fraunhofer_gpu(const WaveFieldGrid& field);
 WaveFieldGrid propagate_fresnel_direct(const WaveFieldGrid& field,
                                        const FresnelPropagationConfig& config);
 WaveFieldGrid propagate_angular_spectrum_direct(const WaveFieldGrid& field,
                                                 double distance_m);
+WaveFieldGrid propagate_huygens_fresnel_direct(const WaveFieldGrid& field,
+                                               const FresnelPropagationConfig& config);
+WaveFieldGrid propagate_rayleigh_sommerfeld_direct(const WaveFieldGrid& field,
+                                                   const FresnelPropagationConfig& config);
+PropagationResult propagate_direct(const WaveFieldGrid& field,
+                                   const PropagationConfig& config);
 DiffractionCameraPlan make_diffraction_camera_plan(const ure::WaveOpticsConfig& wave_config,
                                                    const DiffractionCameraConfig& camera_config);
 

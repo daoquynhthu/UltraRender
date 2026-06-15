@@ -408,6 +408,145 @@ static int test_angular_spectrum_uniform_field_preserves_intensity() {
     return 0;
 }
 
+static int test_huygens_fresnel_and_rayleigh_sommerfeld_point_field() {
+    ure::wave::WaveFieldGrid field;
+    field.width = 3;
+    field.height = 3;
+    field.sample_pitch_m = 1.0e-6;
+    field.wavelength_m = 500.0e-9;
+    field.samples.assign(9, {0.0, 0.0});
+    field.samples[4] = {1.0, 0.0};
+
+    ure::wave::FresnelPropagationConfig config;
+    config.distance_m = 0.1;
+    config.output_width = 5;
+    config.output_height = 5;
+    config.output_sample_pitch_m = 2.0e-6;
+
+    const auto hf = ure::wave::propagate_huygens_fresnel_direct(field, config);
+    const auto rs = ure::wave::propagate_rayleigh_sommerfeld_direct(field, config);
+    CHECK(hf.width == 5);
+    CHECK(rs.width == 5);
+    CHECK(hf.samples.size() == 25);
+    CHECK(rs.samples.size() == 25);
+
+    const double center_scale = field.sample_pitch_m * field.sample_pitch_m /
+                                (field.wavelength_m * config.distance_m);
+    CHECK_NEAR(hf.at(2, 2).power(), center_scale * center_scale, 1.0e-24);
+    CHECK_NEAR(rs.at(2, 2).power(), center_scale * center_scale, 1.0e-24);
+
+    const double corner_x = (0.5 - 2.5) * config.output_sample_pitch_m;
+    const double corner_y = (0.5 - 2.5) * config.output_sample_pitch_m;
+    const double r = std::sqrt(corner_x * corner_x + corner_y * corner_y +
+                               config.distance_m * config.distance_m);
+    const double hf_corner_scale = field.sample_pitch_m * field.sample_pitch_m /
+                                   (field.wavelength_m * r);
+    const double obliquity = config.distance_m / r;
+    CHECK_NEAR(hf.at(0, 0).power(), hf_corner_scale * hf_corner_scale, 1.0e-24);
+    CHECK_NEAR(rs.at(0, 0).power(),
+               hf_corner_scale * hf_corner_scale * obliquity * obliquity,
+               1.0e-24);
+    CHECK(rs.at(0, 0).power() <= hf.at(0, 0).power());
+
+    config.distance_m = 0.0;
+    CHECK(ure::wave::propagate_huygens_fresnel_direct(field, config).samples.empty());
+    CHECK(ure::wave::propagate_rayleigh_sommerfeld_direct(field, config).samples.empty());
+    return 0;
+}
+
+static int test_propagation_operator_dispatches_supported_oracles() {
+    ure::wave::WaveFieldGrid field;
+    field.width = 4;
+    field.height = 4;
+    field.sample_pitch_m = 2.0e-6;
+    field.wavelength_m = 550.0e-9;
+    field.samples.assign(16, {1.0, 0.0});
+
+    ure::wave::PropagationConfig config;
+    config.kind = ure::wave::PropagationOperatorKind::Fraunhofer;
+    auto result = ure::wave::propagate_direct(field, config);
+    CHECK(result.status == ure::wave::PropagationStatus::Ready);
+    CHECK(ure::wave::is_ready(result.status));
+    CHECK(result.kind == ure::wave::PropagationOperatorKind::Fraunhofer);
+    CHECK(result.far_field.width == 4);
+    CHECK_NEAR(result.far_field.intensity_at(2, 2), 256.0, 1.0e-9);
+    CHECK(result.field.samples.empty());
+
+    config.kind = ure::wave::PropagationOperatorKind::Fresnel;
+    config.distance_m = 0.1;
+    config.output_width = 5;
+    config.output_height = 5;
+    config.output_sample_pitch_m = 3.0e-6;
+    result = ure::wave::propagate_direct(field, config);
+    CHECK(result.status == ure::wave::PropagationStatus::Ready);
+    CHECK(result.kind == ure::wave::PropagationOperatorKind::Fresnel);
+    CHECK(result.field.width == 5);
+    CHECK(result.field.height == 5);
+    CHECK_NEAR(result.field.sample_pitch_m, 3.0e-6, 0.0);
+    CHECK(result.far_field.amplitudes.empty());
+
+    config.kind = ure::wave::PropagationOperatorKind::AngularSpectrum;
+    config.distance_m = 0.0;
+    result = ure::wave::propagate_direct(field, config);
+    CHECK(result.status == ure::wave::PropagationStatus::Ready);
+    CHECK(result.kind == ure::wave::PropagationOperatorKind::AngularSpectrum);
+    CHECK(result.field.width == field.width);
+    CHECK_NEAR(result.field.at(0, 0).real, 1.0, 1.0e-12);
+    CHECK_NEAR(result.field.at(0, 0).imag, 0.0, 1.0e-12);
+
+    config.kind = ure::wave::PropagationOperatorKind::RayleighSommerfeld;
+    config.distance_m = 0.1;
+    config.output_width = 3;
+    config.output_height = 3;
+    config.output_sample_pitch_m = 2.0e-6;
+    result = ure::wave::propagate_direct(field, config);
+    CHECK(result.status == ure::wave::PropagationStatus::Ready);
+    CHECK(result.kind == ure::wave::PropagationOperatorKind::RayleighSommerfeld);
+    CHECK(result.field.width == 3);
+    CHECK(result.field.height == 3);
+
+    config.kind = ure::wave::PropagationOperatorKind::HuygensFresnel;
+    result = ure::wave::propagate_direct(field, config);
+    CHECK(result.status == ure::wave::PropagationStatus::Ready);
+    CHECK(result.kind == ure::wave::PropagationOperatorKind::HuygensFresnel);
+    CHECK(result.field.width == 3);
+    CHECK(result.field.height == 3);
+    return 0;
+}
+
+static int test_propagation_operator_rejects_invalid_inputs() {
+    ure::wave::WaveFieldGrid field;
+    field.width = 4;
+    field.height = 4;
+    field.sample_pitch_m = 2.0e-6;
+    field.wavelength_m = 550.0e-9;
+    field.samples.assign(16, {1.0, 0.0});
+
+    ure::wave::PropagationConfig config;
+    config.kind = ure::wave::PropagationOperatorKind::Fresnel;
+    config.distance_m = 0.0;
+    auto result = ure::wave::propagate_direct(field, config);
+    CHECK(result.status == ure::wave::PropagationStatus::InvalidInput);
+    CHECK(!ure::wave::is_ready(result.status));
+    CHECK(result.field.samples.empty());
+
+    config.kind = ure::wave::PropagationOperatorKind::RayleighSommerfeld;
+    result = ure::wave::propagate_direct(field, config);
+    CHECK(result.status == ure::wave::PropagationStatus::InvalidInput);
+
+    config.kind = ure::wave::PropagationOperatorKind::HuygensFresnel;
+    result = ure::wave::propagate_direct(field, config);
+    CHECK(result.status == ure::wave::PropagationStatus::InvalidInput);
+
+    field.samples.pop_back();
+    config.kind = ure::wave::PropagationOperatorKind::AngularSpectrum;
+    result = ure::wave::propagate_direct(field, config);
+    CHECK(result.status == ure::wave::PropagationStatus::InvalidInput);
+    CHECK(result.field.samples.empty());
+    CHECK(result.far_field.amplitudes.empty());
+    return 0;
+}
+
 static int test_diffraction_camera_plan_requires_feature_gate() {
     ure::wave::DiffractionCameraConfig camera;
     camera.pupil.aperture.wavelength_m = 550.0e-9;
@@ -532,6 +671,9 @@ int main() {
     failed += run("test_fresnel_direct_point_field_scale", test_fresnel_direct_point_field_scale);
     failed += run("test_angular_spectrum_zero_distance_reconstructs_field", test_angular_spectrum_zero_distance_reconstructs_field);
     failed += run("test_angular_spectrum_uniform_field_preserves_intensity", test_angular_spectrum_uniform_field_preserves_intensity);
+    failed += run("test_huygens_fresnel_and_rayleigh_sommerfeld_point_field", test_huygens_fresnel_and_rayleigh_sommerfeld_point_field);
+    failed += run("test_propagation_operator_dispatches_supported_oracles", test_propagation_operator_dispatches_supported_oracles);
+    failed += run("test_propagation_operator_rejects_invalid_inputs", test_propagation_operator_rejects_invalid_inputs);
     failed += run("test_diffraction_camera_plan_requires_feature_gate", test_diffraction_camera_plan_requires_feature_gate);
     failed += run("test_diffraction_camera_plan_builds_reference_products", test_diffraction_camera_plan_builds_reference_products);
     failed += run("test_diffraction_camera_plan_rejects_invalid_optics", test_diffraction_camera_plan_rejects_invalid_optics);

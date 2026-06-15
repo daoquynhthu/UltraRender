@@ -69,6 +69,7 @@ UltraRender 不仅仅是一个图形渲染器，而是一个以**光谱与偏振
 - W.0 已修复 rough dielectric direct-light MIS 与 BSDF/PDF 不一致：wavelength、UV effective thin-film thickness 与 dispersion clamp 现在进入同一 per-channel PDF 语义。
 - W.1 已建立 `WaveOpticsConfig`，贯穿 `RenderConfig`、JSON、CLI、C ABI 和 pyure；非 radiometric 模式与未实现 wave feature 默认在运行前拒绝，未知 mode 不会静默回退。
 - W.2 已启动衍射相机基准：新增 `WaveFieldGrid` host complex field carrier、`FraunhoferFieldGrid`、direct Fraunhofer/Fresnel/angular-spectrum CPU propagation oracle、圆孔 Airy PSF host oracle、离散 `PsfKernel` reference、diffraction-limited MTF oracle、`CircularPupil` defocus phase reference 和 feature-gated `DiffractionCameraPlan`，锁定第一暗环、encircled energy、波长缩放、sensor 半径、kernel 归一化、cutoff frequency、pupil 相位/遮罩、复场网格功率、传播算子归一化与半开配置拒绝；direct `GpuRenderEngine` scene load 也会在 GPU 初始化前拒绝未实现 camera diffraction film，后续 GPU diffraction camera 必须对齐该基准。
+- W.4 已完成首个传播算子闭环：`PropagationOperatorKind` / `PropagationConfig` / `PropagationResult` 统一封装 Fraunhofer、Fresnel、angular-spectrum、Rayleigh-Sommerfeld 与 Huygens-Fresnel CPU oracle；首个 CUDA backend 是 Fraunhofer direct DFT reference backend，后续 FFT/tiling 属于性能升级。
 
 ## 6. 渲染优化与降噪路线图 (Optimization & Denoising Roadmap) [新增]
 

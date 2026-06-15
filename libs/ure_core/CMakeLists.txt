@@ -18,6 +18,7 @@ add_library(ure_core STATIC
     src/bvh_accelerator.cpp
     src/render_api.cpp
     src/wave_optics.cpp
+    src/wave_optics_gpu.cu
 )
 
 target_include_directories(ure_core PUBLIC

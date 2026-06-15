@@ -77,8 +77,14 @@ if(CMAKE_CUDA_COMPILER)
     target_include_directories(gpu_test_contract PRIVATE ${GPU_TEST_INCLUDES})
     target_link_libraries(gpu_test_contract PRIVATE ure_core CUDA::cudart)
 
+    add_executable(gpu_test_wave_optics
+        test_wave_optics_gpu.cu
+    )
+    target_include_directories(gpu_test_wave_optics PRIVATE ${GPU_TEST_INCLUDES})
+    target_link_libraries(gpu_test_wave_optics PRIVATE ure_core CUDA::cudart)
+
     if(MSVC)
-    foreach(gpu_test gpu_test_device gpu_test_math gpu_test_spectral gpu_test_spectral_soa gpu_test_hardware gpu_test_render gpu_test_instance gpu_test_tangents gpu_test_denoise gpu_test_polarization gpu_test_volume gpu_test_contract)
+    foreach(gpu_test gpu_test_device gpu_test_math gpu_test_spectral gpu_test_spectral_soa gpu_test_hardware gpu_test_render gpu_test_instance gpu_test_tangents gpu_test_denoise gpu_test_polarization gpu_test_volume gpu_test_contract gpu_test_wave_optics)
         target_compile_options(${gpu_test} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/EHsc;/utf-8;/wd4819>")
             set_target_properties(${gpu_test} PROPERTIES CUDA_RUNTIME_LIBRARY None)
     endforeach()
@@ -96,6 +102,7 @@ if(CMAKE_CUDA_COMPILER)
     add_test(NAME gpu_polarization COMMAND gpu_test_polarization)
     add_test(NAME gpu_volume COMMAND gpu_test_volume)
     add_test(NAME gpu_contract COMMAND gpu_test_contract)
+    add_test(NAME gpu_wave_optics COMMAND gpu_test_wave_optics)
 
     add_custom_target(gpu_tests
         COMMAND gpu_test_device
@@ -110,7 +117,8 @@ if(CMAKE_CUDA_COMPILER)
         COMMAND gpu_test_polarization
         COMMAND gpu_test_volume
         COMMAND gpu_test_contract
-        DEPENDS gpu_test_device gpu_test_math gpu_test_spectral gpu_test_spectral_soa gpu_test_hardware gpu_test_render gpu_test_instance gpu_test_tangents gpu_test_denoise gpu_test_polarization gpu_test_volume gpu_test_contract
+        COMMAND gpu_test_wave_optics
+        DEPENDS gpu_test_device gpu_test_math gpu_test_spectral gpu_test_spectral_soa gpu_test_hardware gpu_test_render gpu_test_instance gpu_test_tangents gpu_test_denoise gpu_test_polarization gpu_test_volume gpu_test_contract gpu_test_wave_optics
         COMMENT "Running all GPU tests"
     )
 endif()

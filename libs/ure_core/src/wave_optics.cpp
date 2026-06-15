@@ -24,6 +24,66 @@ ComplexAmplitude phase_amplitude(double phase, double scale = 1.0) {
     return {scale * std::cos(phase), scale * std::sin(phase)};
 }
 
+WaveFieldGrid make_output_field(const WaveFieldGrid& field, const FresnelPropagationConfig& config) {
+    WaveFieldGrid out;
+    const int width = config.output_width > 0 ? config.output_width : field.width;
+    const int height = config.output_height > 0 ? config.output_height : field.height;
+    const double output_pitch = config.output_sample_pitch_m > 0.0 ?
+        config.output_sample_pitch_m :
+        field.sample_pitch_m;
+    if (width <= 0 || height <= 0 || output_pitch <= 0.0) return out;
+    out.width = width;
+    out.height = height;
+    out.sample_pitch_m = output_pitch;
+    out.wavelength_m = field.wavelength_m;
+    out.samples.assign(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), {});
+    return out;
+}
+
+WaveFieldGrid propagate_spherical_direct(const WaveFieldGrid& field,
+                                         const FresnelPropagationConfig& config,
+                                         bool rayleigh_sommerfeld) {
+    if (!is_valid_field(field) || config.distance_m <= 0.0) return {};
+
+    WaveFieldGrid out = make_output_field(field, config);
+    if (out.samples.empty()) return out;
+
+    const double k = 2.0 * std::numbers::pi / field.wavelength_m;
+    const double area = field.sample_pitch_m * field.sample_pitch_m;
+    const double input_center_x = 0.5 * static_cast<double>(field.width);
+    const double input_center_y = 0.5 * static_cast<double>(field.height);
+    const double output_center_x = 0.5 * static_cast<double>(out.width);
+    const double output_center_y = 0.5 * static_cast<double>(out.height);
+
+    for (int y2 = 0; y2 < out.height; ++y2) {
+        const double out_y = (static_cast<double>(y2) + 0.5 - output_center_y) * out.sample_pitch_m;
+        for (int x2 = 0; x2 < out.width; ++x2) {
+            const double out_x = (static_cast<double>(x2) + 0.5 - output_center_x) * out.sample_pitch_m;
+            ComplexAmplitude sum;
+            for (int y1 = 0; y1 < field.height; ++y1) {
+                const double in_y = (static_cast<double>(y1) + 0.5 - input_center_y) * field.sample_pitch_m;
+                for (int x1 = 0; x1 < field.width; ++x1) {
+                    const double in_x = (static_cast<double>(x1) + 0.5 - input_center_x) * field.sample_pitch_m;
+                    const double dx = out_x - in_x;
+                    const double dy = out_y - in_y;
+                    const double r = std::sqrt(dx * dx + dy * dy + config.distance_m * config.distance_m);
+                    const double obliquity = rayleigh_sommerfeld ? config.distance_m / r : 1.0;
+                    const ComplexAmplitude kernel = multiply(
+                        phase_amplitude(k * r),
+                        {0.0, -area * obliquity / (field.wavelength_m * r)});
+                    const ComplexAmplitude term = multiply(field.at(x1, y1), kernel);
+                    sum.real += term.real;
+                    sum.imag += term.imag;
+                }
+            }
+            out.samples[static_cast<std::size_t>(y2) * static_cast<std::size_t>(out.width) +
+                        static_cast<std::size_t>(x2)] =
+                sum;
+        }
+    }
+    return out;
+}
+
 }
 
 bool is_valid(const CircularAperture& aperture) {
@@ -51,6 +111,10 @@ bool is_valid(const DiffractionCameraConfig& config) {
 
 bool is_ready(DiffractionCameraPlanStatus status) {
     return status == DiffractionCameraPlanStatus::Ready;
+}
+
+bool is_ready(PropagationStatus status) {
+    return status == PropagationStatus::Ready;
 }
 
 double ComplexAmplitude::power() const {
@@ -292,18 +356,8 @@ WaveFieldGrid propagate_fresnel_direct(const WaveFieldGrid& field,
     WaveFieldGrid out;
     if (!is_valid_field(field) || config.distance_m <= 0.0) return out;
 
-    const int width = config.output_width > 0 ? config.output_width : field.width;
-    const int height = config.output_height > 0 ? config.output_height : field.height;
-    const double output_pitch = config.output_sample_pitch_m > 0.0 ?
-        config.output_sample_pitch_m :
-        field.sample_pitch_m;
-    if (width <= 0 || height <= 0 || output_pitch <= 0.0) return {};
-
-    out.width = width;
-    out.height = height;
-    out.sample_pitch_m = output_pitch;
-    out.wavelength_m = field.wavelength_m;
-    out.samples.assign(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), {});
+    out = make_output_field(field, config);
+    if (out.samples.empty()) return out;
 
     const double k = 2.0 * std::numbers::pi / field.wavelength_m;
     const ComplexAmplitude prefactor = multiply(
@@ -311,13 +365,13 @@ WaveFieldGrid propagate_fresnel_direct(const WaveFieldGrid& field,
         {0.0, -field.sample_pitch_m * field.sample_pitch_m / (field.wavelength_m * config.distance_m)});
     const double input_center_x = 0.5 * static_cast<double>(field.width);
     const double input_center_y = 0.5 * static_cast<double>(field.height);
-    const double output_center_x = 0.5 * static_cast<double>(width);
-    const double output_center_y = 0.5 * static_cast<double>(height);
+    const double output_center_x = 0.5 * static_cast<double>(out.width);
+    const double output_center_y = 0.5 * static_cast<double>(out.height);
 
-    for (int y2 = 0; y2 < height; ++y2) {
-        const double out_y = (static_cast<double>(y2) + 0.5 - output_center_y) * output_pitch;
-        for (int x2 = 0; x2 < width; ++x2) {
-            const double out_x = (static_cast<double>(x2) + 0.5 - output_center_x) * output_pitch;
+    for (int y2 = 0; y2 < out.height; ++y2) {
+        const double out_y = (static_cast<double>(y2) + 0.5 - output_center_y) * out.sample_pitch_m;
+        for (int x2 = 0; x2 < out.width; ++x2) {
+            const double out_x = (static_cast<double>(x2) + 0.5 - output_center_x) * out.sample_pitch_m;
             ComplexAmplitude sum;
             for (int y1 = 0; y1 < field.height; ++y1) {
                 const double in_y = (static_cast<double>(y1) + 0.5 - input_center_y) * field.sample_pitch_m;
@@ -331,7 +385,7 @@ WaveFieldGrid propagate_fresnel_direct(const WaveFieldGrid& field,
                     sum.imag += term.imag;
                 }
             }
-            out.samples[static_cast<std::size_t>(y2) * static_cast<std::size_t>(width) +
+            out.samples[static_cast<std::size_t>(y2) * static_cast<std::size_t>(out.width) +
                         static_cast<std::size_t>(x2)] =
                 multiply(prefactor, sum);
         }
@@ -389,6 +443,69 @@ WaveFieldGrid propagate_angular_spectrum_direct(const WaveFieldGrid& field,
         }
     }
     return out;
+}
+
+WaveFieldGrid propagate_huygens_fresnel_direct(const WaveFieldGrid& field,
+                                               const FresnelPropagationConfig& config) {
+    return propagate_spherical_direct(field, config, false);
+}
+
+WaveFieldGrid propagate_rayleigh_sommerfeld_direct(const WaveFieldGrid& field,
+                                                   const FresnelPropagationConfig& config) {
+    return propagate_spherical_direct(field, config, true);
+}
+
+PropagationResult propagate_direct(const WaveFieldGrid& field,
+                                   const PropagationConfig& config) {
+    PropagationResult result;
+    result.kind = config.kind;
+    if (!is_valid_field(field)) {
+        result.status = PropagationStatus::InvalidInput;
+        return result;
+    }
+
+    switch (config.kind) {
+    case PropagationOperatorKind::Fraunhofer:
+        result.far_field = propagate_fraunhofer_direct(field);
+        result.status = result.far_field.amplitudes.empty() ? PropagationStatus::InvalidInput : PropagationStatus::Ready;
+        return result;
+    case PropagationOperatorKind::Fresnel: {
+        FresnelPropagationConfig fresnel;
+        fresnel.distance_m = config.distance_m;
+        fresnel.output_sample_pitch_m = config.output_sample_pitch_m;
+        fresnel.output_width = config.output_width;
+        fresnel.output_height = config.output_height;
+        result.field = propagate_fresnel_direct(field, fresnel);
+        result.status = result.field.samples.empty() ? PropagationStatus::InvalidInput : PropagationStatus::Ready;
+        return result;
+    }
+    case PropagationOperatorKind::AngularSpectrum:
+        result.field = propagate_angular_spectrum_direct(field, config.distance_m);
+        result.status = result.field.samples.empty() ? PropagationStatus::InvalidInput : PropagationStatus::Ready;
+        return result;
+    case PropagationOperatorKind::RayleighSommerfeld: {
+        FresnelPropagationConfig rs;
+        rs.distance_m = config.distance_m;
+        rs.output_sample_pitch_m = config.output_sample_pitch_m;
+        rs.output_width = config.output_width;
+        rs.output_height = config.output_height;
+        result.field = propagate_rayleigh_sommerfeld_direct(field, rs);
+        result.status = result.field.samples.empty() ? PropagationStatus::InvalidInput : PropagationStatus::Ready;
+        return result;
+    }
+    case PropagationOperatorKind::HuygensFresnel: {
+        FresnelPropagationConfig hf;
+        hf.distance_m = config.distance_m;
+        hf.output_sample_pitch_m = config.output_sample_pitch_m;
+        hf.output_width = config.output_width;
+        hf.output_height = config.output_height;
+        result.field = propagate_huygens_fresnel_direct(field, hf);
+        result.status = result.field.samples.empty() ? PropagationStatus::InvalidInput : PropagationStatus::Ready;
+        return result;
+    }
+    }
+    result.status = PropagationStatus::UnsupportedOperator;
+    return result;
 }
 
 DiffractionCameraPlan make_diffraction_camera_plan(const ure::WaveOpticsConfig& wave_config,
