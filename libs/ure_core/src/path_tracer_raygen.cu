@@ -61,8 +61,8 @@ __global__ __launch_bounds__(512) void generate_rays_kernel(
     
     unsigned int seed = wang_hash(1984 + pixel_index + sample_index * width * height);
     
-    float r1 = sample_dimension(sample_index, pixel_index, 0);
-    float r2 = sample_dimension(sample_index, pixel_index, 1);
+    float r1 = sample_dimension(sample_index, pixel_index, kSampleDimCameraX);
+    float r2 = sample_dimension(sample_index, pixel_index, kSampleDimCameraY);
     
     float dx = (r1 < 0.5f) ? sqrtf(2.0f * r1) - 1.0f : 1.0f - sqrtf(2.0f * (1.0f - r1));
     float dy = (r2 < 0.5f) ? sqrtf(2.0f * r2) - 1.0f : 1.0f - sqrtf(2.0f * (1.0f - r2));
@@ -81,7 +81,7 @@ __global__ __launch_bounds__(512) void generate_rays_kernel(
     int active_channel = -1;
     float r_lambda = 0.0f;
     if (spectral_mode_is_sampled(spectral_mode)) {
-        r_lambda = sample_dimension(sample_index, pixel_index, 7);
+        r_lambda = sample_dimension(sample_index, pixel_index, kSampleDimWavelength);
         active_channel = min(int(r_lambda * queue.num_spectral_channels), queue.num_spectral_channels - 1);
         if (queue.num_spectral_channels == 1) active_channel = 0;
     }

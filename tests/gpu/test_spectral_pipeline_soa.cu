@@ -1643,8 +1643,8 @@ __global__ void c7_lane_dielectric_active_channel_kernel(float* out_dir_z, int* 
     in.stokes = StokesVector(1.0f, 0.0f, 0.0f, 0.0f);
 
     for (int sample = 0; sample < 512; ++sample) {
-        float r_branch = sample_dimension(sample, 0, 6);
-        int hero = int(floorf(sample_dimension(sample, 0, 7) * float(num_spec)));
+        float r_branch = sample_path_dimension(sample, 0, 0, kPathDimBsdf2);
+        int hero = int(floorf(sample_path_dimension(sample, 0, 0, kPathDimBsdf3) * float(num_spec)));
         if (hero == 0 || r_branch < 0.75f) {
             continue;
         }
@@ -1870,7 +1870,7 @@ __global__ void c10_rough_dielectric_microfacet_kernel(float* out, int* out_samp
     in.stokes = StokesVector(1.0f, 0.0f, 0.0f, 0.0f);
 
     for (int sample = 0; sample < 128; ++sample) {
-        float r3 = sample_dimension(sample, 0, 6);
+        float r3 = sample_path_dimension(sample, 0, 0, kPathDimBsdf2);
         if (r3 < 0.2f) {
             continue;
         }
@@ -1910,8 +1910,8 @@ __global__ void c10_rough_dielectric_microfacet_kernel(float* out, int* out_samp
 
         GpuVec3 V = GpuVec3(0.0f, 0.0f, 1.0f);
         GpuVec3 H = ImportanceSampleGGXVisible(
-            sample_dimension(sample, 0, 4),
-            sample_dimension(sample, 0, 5),
+            sample_path_dimension(sample, 0, 0, kPathDimBsdf0),
+            sample_path_dimension(sample, 0, 0, kPathDimBsdf1),
             V,
             GpuVec3(0.0f, 0.0f, 1.0f),
             mat.roughness);

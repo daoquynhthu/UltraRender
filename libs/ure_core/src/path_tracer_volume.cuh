@@ -2,13 +2,10 @@
 
 #include "path_tracer_decl.cuh"
 
-__device__ GpuVec3 sample_henyey_greenstein(const GpuVec3& w_in, float g, unsigned int& seed) {
+__device__ GpuVec3 sample_henyey_greenstein_lds(const GpuVec3& w_in, float g, float r1, float r2) {
     if (fabsf(g) < 1e-3f) {
-        return random_unit_vector(seed);
+        return sample_unit_vector_lds(r1, r2);
     }
-
-    float r1 = rand_float(seed);
-    float r2 = rand_float(seed);
 
     float sqr_term = (1.0f - g * g) / (1.0f - g + 2.0f * g * r1);
     float cos_theta = (1.0f + g * g - sqr_term * sqr_term) / (2.0f * g);
@@ -32,6 +29,12 @@ __device__ GpuVec3 sample_henyey_greenstein(const GpuVec3& w_in, float g, unsign
     return (v1 * (cosf(phi) * sin_theta) +
             v2 * (sinf(phi) * sin_theta) +
             forward * cos_theta).normalize();
+}
+
+__device__ GpuVec3 sample_henyey_greenstein(const GpuVec3& w_in, float g, unsigned int& seed) {
+    float r1 = rand_float(seed);
+    float r2 = rand_float(seed);
+    return sample_henyey_greenstein_lds(w_in, g, r1, r2);
 }
 
 __device__ float eval_henyey_greenstein(float cos_theta, float g) {

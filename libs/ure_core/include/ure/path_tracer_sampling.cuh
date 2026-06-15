@@ -6,6 +6,26 @@
 
 namespace ure::gpu {
 
+static constexpr int kSampleDimCameraX = 0;
+static constexpr int kSampleDimCameraY = 1;
+static constexpr int kSampleDimWavelength = 7;
+static constexpr int kSampleDimPathBase = 8;
+static constexpr int kSampleDimPathStride = 16;
+static constexpr int kPathDimBsdf0 = 0;
+static constexpr int kPathDimBsdf1 = 1;
+static constexpr int kPathDimBsdf2 = 2;
+static constexpr int kPathDimBsdf3 = 3;
+static constexpr int kPathDimLightPick = 4;
+static constexpr int kPathDimLightU = 5;
+static constexpr int kPathDimLightV = 6;
+static constexpr int kPathDimVolumeDistance = 7;
+static constexpr int kPathDimVolumeLightPick = 8;
+static constexpr int kPathDimVolumeLightU = 9;
+static constexpr int kPathDimVolumeLightV = 10;
+static constexpr int kPathDimVolumePhaseU = 11;
+static constexpr int kPathDimVolumePhaseV = 12;
+static constexpr int kPathDimRussianRoulette = 13;
+
 __device__ inline unsigned int wang_hash(unsigned int seed) {
     seed = (seed ^ 61) ^ (seed >> 16);
     seed *= 9;
@@ -93,6 +113,14 @@ __device__ inline float sample_dimension(int sample_idx, int pixel_idx, int dim)
     float val = h + s;
     if (val >= 1.0f) val -= 1.0f;
     return val;
+}
+
+__device__ inline int path_sample_dimension_index(int depth, int offset) {
+    return kSampleDimPathBase + depth * kSampleDimPathStride + offset;
+}
+
+__device__ inline float sample_path_dimension(int sample_idx, int pixel_idx, int depth, int offset) {
+    return sample_dimension(sample_idx, pixel_idx, path_sample_dimension_index(depth, offset));
 }
 
 __device__ inline GpuVec3 sample_unit_vector_lds(float r1, float r2) {

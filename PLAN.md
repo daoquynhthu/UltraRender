@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-15 (Phase R.0/R.1 integrator scheduling batch started)
+最后更新: 2026-06-15 (Phase R.3 sampling dimension unification started)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -1819,7 +1819,7 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 | R.0 | Integrator audit + benchmark harness：建立固定场景集、metric 和性能门禁，覆盖 Cornell/玻璃焦散/多光源/体积雾/百万 spectral resource/sampled wavelength/多 GPU shard | 进行中：`tools/benchmarks/run_phase_r_integrator_smoke.ps1` 已建立本地 smoke 入口并输出 JSON；完整固定场景集、kernel launch count、active ray curve、variance/MSE、spectral color error 仍待 R.12 扩展 |
 | R.1 | Wavefront scheduling：active queue count 驱动 launch blocks、空队列提前终止、可选 depth-count polling 策略、overflow/termination telemetry | 进行中：primary queue count 已改为 pixel count，queue capacity 小于 primary rays fail-loud，extend/shade/shadow 按 active count 发射并记录 pass-level telemetry；后续仍需 Nsight/benchmark 量化 launch 下降 |
 | R.2 | Queue compaction and path state layout：评估 persistent queues、stream compaction、SoA cache locality、shadow queue capacity、sampled wavelength lane state 的内存带宽 | Nsight/benchmark 证明吞吐提升；queue overflow 可观测且不会静默丢贡献；不破坏 Phase E/L spectral carrier |
-| R.3 | Unified sampling dimensions：surface、volume、RR、light picking、lens/camera、wavelength sampling 统一低差异维度分配；消除 volume path 对 xorshift RNG 的独立依赖 | 体积场景方差下降；所有新增维度有静态分配表和测试；deterministic replay 保持稳定 |
+| R.3 | Unified sampling dimensions：surface、volume、RR、light picking、lens/camera、wavelength sampling 统一低差异维度分配；消除 volume path 对 xorshift RNG 的独立依赖 | 进行中：camera/wavelength/path-depth 维度表已进入 `path_tracer_sampling.cuh`，surface BSDF/NEE、volume distance/NEE/HG continuation 与 RR 已接入 `sample_path_dimension()`；`gpu_test_volume` 覆盖维度 stride 与 HG LDS sampling。后续仍需体积方差 benchmark 和完整 deterministic replay 门禁 |
 | R.4 | Light sampling upgrade：从均匀 sphere light picking 升级为 power/solid-angle aware sampler，建立 light distribution alias table/light tree 第一版，并同时覆盖 surface 和 volume NEE PDF | 多光源 HDR 场景方差显著下降；surface/volume NEE 与 BSDF/phase MIS PDF 一致；light update 后重建或增量更新语义明确 |
 | R.5 | Spectral MIS and wavelength guiding：在 Phase L sampled wavelength 基础上加入 wavelength proposal families、spectral power/CIE/task-weighted guiding、per-material/resource spectral importance | narrowband/SPD/fluorescence 前置场景无偏；packet/lane/sampled estimator 有 oracle 对照；不会回退到 RGB importance |
 | R.6 | BSDF/phase sampling completeness：rough dielectric BTDF、measured conductor、thin-film、volume HG/Rayleigh/Mie candidate 的 sampling/PDF/eval 三元闭合 | 每个 lobe 有 eval/sample/pdf reciprocity 和 white-furnace/energy test；直连光 MIS 不再依赖近似或固定 550nm |

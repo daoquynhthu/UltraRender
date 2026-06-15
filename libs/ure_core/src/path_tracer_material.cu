@@ -23,11 +23,10 @@ __device__ inline bool scatter(
     int active_channel
 ) {
     (void)ior_inside;
-    int dim_offset = 4 + depth * 6;
-    float r_bsdf_1 = sample_dimension(sample_index, pixel_index, dim_offset + 0);
-    float r_bsdf_2 = sample_dimension(sample_index, pixel_index, dim_offset + 1);
-    float r_bsdf_3 = sample_dimension(sample_index, pixel_index, dim_offset + 2);
-    float r_bsdf_4 = sample_dimension(sample_index, pixel_index, dim_offset + 3);
+    float r_bsdf_1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf0);
+    float r_bsdf_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf1);
+    float r_bsdf_3 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf2);
+    float r_bsdf_4 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf3);
 
     float effective_thickness = effective_thin_film_thickness(mat, uv);
 

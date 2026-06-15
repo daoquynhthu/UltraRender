@@ -4,8 +4,11 @@
 
 #include "test_framework.cuh"
 #include "ure/gpu_structs.hpp"
+#include "ure/path_tracer_sampling.cuh"
 
 using namespace ure::gpu;
+
+#include "../../libs/ure_core/src/path_tracer_volume.cuh"
 
 __global__ void test_transmittance_kernel(float* out) {
     float sigma_t = 0.5f;
@@ -53,6 +56,25 @@ __global__ void test_lane_no_scatter_weight_kernel(float* out) {
     out[1] = expf(-sigma_t[active_channel] * t_hit) / packet_proposal;
     out[2] = lane_proposal;
     out[3] = packet_proposal;
+}
+
+__global__ void test_sampling_dimension_contract_kernel(int* out) {
+    out[0] = kSampleDimCameraX;
+    out[1] = kSampleDimCameraY;
+    out[2] = kSampleDimWavelength;
+    out[3] = path_sample_dimension_index(0, kPathDimBsdf0);
+    out[4] = path_sample_dimension_index(0, kPathDimVolumeDistance);
+    out[5] = path_sample_dimension_index(0, kPathDimRussianRoulette);
+    out[6] = path_sample_dimension_index(1, kPathDimBsdf0);
+    out[7] = path_sample_dimension_index(1, kPathDimVolumeDistance);
+}
+
+__global__ void test_henyey_greenstein_lds_kernel(float* out) {
+    GpuVec3 isotropic = sample_henyey_greenstein_lds(GpuVec3(0.0f, 0.0f, 1.0f), 0.0f, 0.25f, 0.75f);
+    GpuVec3 forward = sample_henyey_greenstein_lds(GpuVec3(0.0f, 0.0f, 1.0f), 0.8f, 0.9f, 0.2f);
+    out[0] = isotropic.length();
+    out[1] = forward.length();
+    out[2] = forward.z;
 }
 
 static int test_transmittance() {
@@ -125,12 +147,52 @@ static int test_lane_no_scatter_proposal_weight() {
     return 0;
 }
 
+static int test_sampling_dimension_contract() {
+    REQUIRE_GPU();
+    int* d_out;
+    CHECK_CUDA(cudaMalloc(&d_out, 8 * sizeof(int)));
+    test_sampling_dimension_contract_kernel<<<1, 1>>>(d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    int h_out[8];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 8 * sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK(h_out[0] == 0);
+    CHECK(h_out[1] == 1);
+    CHECK(h_out[2] == 7);
+    CHECK(h_out[3] >= kSampleDimPathBase);
+    CHECK(h_out[4] > h_out[3]);
+    CHECK(h_out[5] > h_out[4]);
+    CHECK(h_out[6] - h_out[3] == kSampleDimPathStride);
+    CHECK(h_out[7] - h_out[4] == kSampleDimPathStride);
+    cudaFree(d_out);
+    return 0;
+}
+
+static int test_henyey_greenstein_lds_sampling() {
+    REQUIRE_GPU();
+    float* d_out;
+    CHECK_CUDA(cudaMalloc(&d_out, 3 * sizeof(float)));
+    test_henyey_greenstein_lds_kernel<<<1, 1>>>(d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    float h_out[3];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 3 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(h_out[0], 1.0f, 1e-5f);
+    CHECK_FLOAT_EQ(h_out[1], 1.0f, 1e-5f);
+    CHECK(h_out[2] <= 1.0f);
+    CHECK(h_out[2] >= -1.0f);
+    cudaFree(d_out);
+    return 0;
+}
+
 int main() {
     printf("[GPU Volume Scattering Test]\n");
     RUN_TEST(test_transmittance);
     RUN_TEST(test_free_path_sampling);
     RUN_TEST(test_no_scatter_proposal_weight);
     RUN_TEST(test_lane_no_scatter_proposal_weight);
+    RUN_TEST(test_sampling_dimension_contract);
+    RUN_TEST(test_henyey_greenstein_lds_sampling);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;
 }

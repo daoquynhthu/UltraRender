@@ -524,9 +524,8 @@ __device__ inline void store_packet_scattered_stokes(
     }
 
     if (mat.type == MaterialType::Dielectric) {
-        int dim_offset = 4 + depth * 6;
-        float r_bsdf_1 = sample_dimension(sample_index, pixel_index, dim_offset + 0);
-        float r_bsdf_2 = sample_dimension(sample_index, pixel_index, dim_offset + 1);
+        float r_bsdf_1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf0);
+        float r_bsdf_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf1);
         GpuVec3 normal = r_in.direction.dot(n) < 0.0f ? n : -n;
         float jitter_scale = mat.roughness * 0.002f;
         if (jitter_scale > 0.0f) {
@@ -830,7 +829,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
         : sigma_t_avg;
 
     if (sigma_t_proposal > 1e-4f) {
-        float r_dist = rand_float(seed);
+        float r_dist = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeDistance);
         float t_medium = -logf(1.0f - r_dist) / sigma_t_proposal;
 
         float max_allowed = scene.medium_max_distance > 0.0f ? scene.medium_max_distance : 1e30f;
@@ -847,7 +846,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
             }
 
             if (scene.light_count > 0) {
-                int light_idx_idx = min(int(rand_float(seed) * scene.light_count), scene.light_count - 1);
+                float r_light_pick = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightPick);
+                int light_idx_idx = min(int(r_light_pick * scene.light_count), scene.light_count - 1);
                 int light_idx = scene.light_indices[light_idx_idx];
                 GpuSphere light_sphere = scene.spheres[light_idx];
 
@@ -862,8 +862,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     float sin_theta_max2 = radius_sq / dist_sq;
                     float cos_theta_max = sqrtf(fmaxf(0.0f, 1.0f - sin_theta_max2));
 
-                    float r1 = rand_float(seed);
-                    float r2 = rand_float(seed);
+                    float r1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightU);
+                    float r2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightV);
                     float cos_theta = 1.0f - r1 + r1 * cos_theta_max;
                     float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - cos_theta * cos_theta));
                     float phi = 6.2831853f * r2;
@@ -916,7 +916,9 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 }
             }
 
-            GpuVec3 new_dir = sample_henyey_greenstein(current_queue.directions[idx], anisotropy, seed);
+            float r_phase_1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumePhaseU);
+            float r_phase_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumePhaseV);
+            GpuVec3 new_dir = sample_henyey_greenstein_lds(current_queue.directions[idx], anisotropy, r_phase_1, r_phase_2);
             GpuVec3 new_origin = current_queue.origins[idx] + current_queue.directions[idx] * t_medium;
 
              int out_idx = reserve_ray_slot(next_queue);
@@ -1122,11 +1124,9 @@ __global__ __launch_bounds__(256) void shade_kernel(
                                   mat.type == MaterialType::Cloth ||
                                   (mat.type == MaterialType::Metal && mat.roughness > 0.02f) ||
                                   is_rough_dielectric_bsdf(mat))) {
-        int dim_offset = 4 + depth * 6;
-
-        float r_light_pick = sample_dimension(sample_index, pixel_index, dim_offset + 3);
-        float r_light_1 = sample_dimension(sample_index, pixel_index, dim_offset + 4);
-        float r_light_2 = sample_dimension(sample_index, pixel_index, dim_offset + 5);
+        float r_light_pick = sample_path_dimension(sample_index, pixel_index, depth, kPathDimLightPick);
+        float r_light_1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimLightU);
+        float r_light_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimLightV);
 
         int light_idx_idx = min(int(r_light_pick * scene.light_count), scene.light_count - 1);
         int light_idx = scene.light_indices[light_idx_idx];
@@ -1279,7 +1279,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 if (depth > 3) {
                     float prob = spectral_survival_probability(new_throughput, scene.num_spectral_channels, rr_min_prob);
 
-                    if (rand_float(seed) > prob) {
+                    float r_rr = sample_path_dimension(sample_index, pixel_index, depth, kPathDimRussianRoulette);
+                    if (r_rr > prob) {
                         return;
                     }
                     new_throughput = new_throughput * (1.0f / prob);
