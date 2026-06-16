@@ -87,6 +87,8 @@ struct GpuContext {
     int last_integrator_ray_queue_overflow_count = 0;
     int last_integrator_shadow_queue_overflow_count = 0;
 
+    std::vector<GpuSphere> host_spheres_for_light_distribution;
+    std::vector<GpuMaterialData> host_materials_for_light_distribution;
     std::vector<void*> pointers_to_free;
     std::vector<void*> material_resource_tables_to_free;
     std::vector<cudaArray_t> arrays_to_free;

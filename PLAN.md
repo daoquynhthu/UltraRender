@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-16 (Phase R.4 alias-table sphere light sampling started)
+最后更新: 2026-06-16 (Phase R.4 dynamic light sampler rebuild)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -1796,11 +1796,11 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 
 ### Phase R — 工业级/科研级积分器升级 / Research-Grade Radiometric Integrator
 
-**状态**: 进行中。R.0 smoke benchmark 入口与 R.1 active-count wavefront scheduling 首批修复已启动。
+**状态**: 进行中。R.0-R.4 已覆盖 smoke benchmark 入口、active-count wavefront scheduling、queue overflow telemetry、统一采样维度和 sphere light weighted alias sampling；R.5 spectral MIS / wavelength guiding 是下一批核心入口。
 
 **目标**: 将当前 CUDA spectral/polarimetric wavefront path tracer 从“可用的物理路径追踪器”升级为工业级/科研级 radiometric light transport integrator。Phase R 不替代 Phase W：Phase R 处理默认非相干 radiance/Stokes transport 的调度、采样、MIS、路径空间算法和性能/收敛基准；Phase W 处理相干场、衍射、部分相干和局部全波求解。任何高级积分器都必须保持 Phase E/L 的 explicit wavelength PDF、spectral domain/resource contract、Stokes/Mueller 语义和 fail-loud wave feature policy。
 
-**当前审计结论**: 现有有效积分器集中在 `libs/ure_core/src/path_tracer_host_api.cu::render_pass_gpu()` 与 `path_tracer_wavefront.cuh`。R.1 首批修复前，每个 sample 固定执行 `generate_rays -> (extend -> shade -> shadow) * max_trace_depth`，默认 `max_trace_depth = 50`，每个 depth 使用按 `max_rays` 计算的固定 launch blocks，并在 kernel 内以 `idx >= *queue.count` 早退；同时 `queue_capacity > width*height` 会把未初始化 queue slot 当 active ray 处理，`queue_capacity < width*height` 会让 primary ray generation 越界写。R.1 首批修复后，初始化会 fail-loud 拒绝小于 primary ray count 的 queue capacity，primary queue count 使用像素数，wavefront kernels 按 active ray/shadow ray count 发射并在空队列提前终止，同时记录 pass-level telemetry。surface BSDF/NEE 使用 `sample_dimension()` 低差异维度，但 volume distance/light/HG sampling 仍混用 `rand_float(seed)`；surface/volume light picking 仍是均匀选 sphere light；packet 模式仍存在 packet-average/hero-event 近似。结论是：最高收益首先来自 wavefront 调度和采样一致性，其次是 light/path guiding，再之后才是 BDPT/MLT/ReSTIR 等高级路径空间算法。
+**当前审计结论**: 现有有效积分器集中在 `libs/ure_core/src/path_tracer_host_api.cu::render_pass_gpu()` 与 `path_tracer_wavefront.cuh`。R.1 首批修复前，每个 sample 固定执行 `generate_rays -> (extend -> shade -> shadow) * max_trace_depth`，默认 `max_trace_depth = 50`，每个 depth 使用按 `max_rays` 计算的固定 launch blocks，并在 kernel 内以 `idx >= *queue.count` 早退；同时 `queue_capacity > width*height` 会把未初始化 queue slot 当 active ray 处理，`queue_capacity < width*height` 会让 primary ray generation 越界写。R.1-R.4 后，初始化会 fail-loud 拒绝小于 primary ray count 的 queue capacity，primary queue count 使用像素数，wavefront kernels 按 active ray/shadow ray count 发射并在空队列提前终止，surface/volume/RR 共享显式 path-dimension LDS 表，RayQueue/ShadowQueue overflow 汇总进 pass telemetry，sphere lights 已按 surface area × spectral emission power 建立 CDF/alias table，并在材质 emission 热更新后重建 light sampling distribution。packet 模式仍存在 packet-average/hero-event 近似。结论是：下一批最高收益来自 spectral MIS / wavelength guiding 与 BSDF/phase sampling completeness，其次是 path guiding/ReSTIR，再之后才是 BDPT/MLT 等高级路径空间算法。
 
 #### Phase R 边界
 
@@ -1820,7 +1820,7 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 | R.1 | Wavefront scheduling：active queue count 驱动 launch blocks、空队列提前终止、可选 depth-count polling 策略、overflow/termination telemetry | 进行中：primary queue count 已改为 pixel count，queue capacity 小于 primary rays fail-loud，extend/shade/shadow 按 active count 发射并记录 pass-level telemetry；后续仍需 Nsight/benchmark 量化 launch 下降 |
 | R.2 | Queue compaction and path state layout：评估 persistent queues、stream compaction、SoA cache locality、shadow queue capacity、sampled wavelength lane state 的内存带宽 | 进行中：RayQueue overflow 已汇总进 pass telemetry，ShadowQueue 新增 overflow_count 并用 `reserve_shadow_slot()` clamp count + 记录溢出，direct-light shadow contribution 不再静默丢失；`gpu_test_render` 覆盖 ray/shadow overflow 可见性。persistent queue、stream compaction、SoA locality 和 Nsight 带宽评估仍待后续 |
 | R.3 | Unified sampling dimensions：surface、volume、RR、light picking、lens/camera、wavelength sampling 统一低差异维度分配；消除 volume path 对 xorshift RNG 的独立依赖 | 进行中：camera/wavelength/path-depth 维度表已进入 `path_tracer_sampling.cuh`，surface BSDF/NEE、volume distance/NEE/HG continuation 与 RR 已接入 `sample_path_dimension()`；`gpu_test_volume` 覆盖维度 stride 与 HG LDS sampling。后续仍需体积方差 benchmark 和完整 deterministic replay 门禁 |
-| R.4 | Light sampling upgrade：从均匀 sphere light picking 升级为 power/solid-angle aware sampler，建立 light distribution alias table/light tree 第一版，并同时覆盖 surface 和 volume NEE PDF | 进行中：sphere lights 已按 surface area × spectral emission power 建立 normalized CDF 和 O(1) alias table，surface/volume NEE 与命中发光体 MIS 均使用同一 selection PDF；`gpu_test_render` 覆盖 CDF/alias 上传，`gpu_test_spectral_soa` 覆盖 weighted alias selection/pdf helper。light tree、非 sphere light、动态 light update 和方差 benchmark 仍待后续 |
+| R.4 | Light sampling upgrade：从均匀 sphere light picking 升级为 power/solid-angle aware sampler，建立 light distribution alias table/light tree 第一版，并同时覆盖 surface 和 volume NEE PDF | 进行中：sphere lights 已按 surface area × spectral emission power 建立 normalized CDF 和 O(1) alias table，surface/volume NEE 与命中发光体 MIS 均使用同一 selection PDF；`update_materials_gpu()` 会在 emission 材质热更新后重建 light CDF/alias table，避免 Session mutation 后使用 stale direct-light sampler；`gpu_test_render` 覆盖 CDF/alias 上传和材质更新重建，`gpu_test_spectral_soa` 覆盖 weighted alias selection/pdf helper。light tree、非 sphere light 和方差 benchmark 仍待后续 |
 | R.5 | Spectral MIS and wavelength guiding：在 Phase L sampled wavelength 基础上加入 wavelength proposal families、spectral power/CIE/task-weighted guiding、per-material/resource spectral importance | narrowband/SPD/fluorescence 前置场景无偏；packet/lane/sampled estimator 有 oracle 对照；不会回退到 RGB importance |
 | R.6 | BSDF/phase sampling completeness：rough dielectric BTDF、measured conductor、thin-film、volume HG/Rayleigh/Mie candidate 的 sampling/PDF/eval 三元闭合 | 每个 lobe 有 eval/sample/pdf reciprocity 和 white-furnace/energy test；直连光 MIS 不再依赖近似或固定 550nm |
 | R.7 | Path guiding：建立 radiance/BSDF product guiding 或 spatial-directional guiding cache，支持 spectral/PDF metadata 和 progressive update | 可开关；关闭时默认路径不变；开启时 benchmark 证明复杂间接光场景方差降低；cache 不破坏 determinism contract |
