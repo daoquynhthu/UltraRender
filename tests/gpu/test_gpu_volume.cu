@@ -72,9 +72,24 @@ __global__ void test_sampling_dimension_contract_kernel(int* out) {
 __global__ void test_henyey_greenstein_lds_kernel(float* out) {
     GpuVec3 isotropic = sample_henyey_greenstein_lds(GpuVec3(0.0f, 0.0f, 1.0f), 0.0f, 0.25f, 0.75f);
     GpuVec3 forward = sample_henyey_greenstein_lds(GpuVec3(0.0f, 0.0f, 1.0f), 0.8f, 0.9f, 0.2f);
+    float sampled_pdf = 0.0f;
+    GpuVec3 sampled = sample_henyey_greenstein_lds_pdf(GpuVec3(0.0f, 0.0f, 1.0f), 0.8f, 0.9f, 0.2f, &sampled_pdf);
+    float integral = 0.0f;
+    constexpr int kBins = 2048;
+    for (int i = 0; i < kBins; ++i) {
+        float mu = -1.0f + (float(i) + 0.5f) * (2.0f / float(kBins));
+        integral += pdf_henyey_greenstein(mu, 0.8f) * (2.0f / float(kBins)) * 6.28318530718f;
+    }
     out[0] = isotropic.length();
     out[1] = forward.length();
     out[2] = forward.z;
+    out[3] = pdf_henyey_greenstein(0.25f, 0.0f);
+    out[4] = 1.0f / (4.0f * 3.14159265359f);
+    out[5] = sampled_pdf;
+    out[6] = eval_henyey_greenstein(sampled.z, 0.8f);
+    out[7] = pdf_henyey_greenstein(GpuVec3(0.0f, 0.0f, 1.0f), sampled, 0.8f);
+    out[8] = pdf_henyey_greenstein(sampled, GpuVec3(0.0f, 0.0f, 1.0f), 0.8f);
+    out[9] = integral;
 }
 
 static int test_transmittance() {
@@ -171,16 +186,21 @@ static int test_sampling_dimension_contract() {
 static int test_henyey_greenstein_lds_sampling() {
     REQUIRE_GPU();
     float* d_out;
-    CHECK_CUDA(cudaMalloc(&d_out, 3 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_out, 10 * sizeof(float)));
     test_henyey_greenstein_lds_kernel<<<1, 1>>>(d_out);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
-    float h_out[3];
-    CHECK_CUDA(cudaMemcpy(h_out, d_out, 3 * sizeof(float), cudaMemcpyDeviceToHost));
+    float h_out[10];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 10 * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(h_out[0], 1.0f, 1e-5f);
     CHECK_FLOAT_EQ(h_out[1], 1.0f, 1e-5f);
     CHECK(h_out[2] <= 1.0f);
     CHECK(h_out[2] >= -1.0f);
+    CHECK_FLOAT_EQ(h_out[3], h_out[4], 1e-6f);
+    CHECK_FLOAT_EQ(h_out[5], h_out[6], 1e-6f);
+    CHECK_FLOAT_EQ(h_out[5], h_out[7], 1e-6f);
+    CHECK_FLOAT_EQ(h_out[7], h_out[8], 1e-6f);
+    CHECK_FLOAT_EQ(h_out[9], 1.0f, 2e-4f);
     cudaFree(d_out);
     return 0;
 }

@@ -983,7 +983,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
             float r_phase_1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumePhaseU);
             float r_phase_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumePhaseV);
-            GpuVec3 new_dir = sample_henyey_greenstein_lds(current_queue.directions[idx], anisotropy, r_phase_1, r_phase_2);
+            float phase_pdf = 0.0f;
+            GpuVec3 new_dir = sample_henyey_greenstein_lds_pdf(current_queue.directions[idx], anisotropy, r_phase_1, r_phase_2, &phase_pdf);
             GpuVec3 new_origin = current_queue.origins[idx] + current_queue.directions[idx] * t_medium;
 
              int out_idx = reserve_ray_slot(next_queue);
@@ -999,7 +1000,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 next_queue.pixel_indices[out_idx] = pixel_index;
                 next_queue.depths[out_idx] = depth + 1;
                 next_queue.flags[out_idx] = 0;
-                next_queue.last_pdf[out_idx] = 0.0f;
+                next_queue.last_pdf[out_idx] = phase_pdf;
                 next_queue.spectral_modes[out_idx] = current_queue.spectral_modes[idx];
                 next_queue.active_channels[out_idx] = current_queue.active_channels[idx];
                 next_queue.wavelength_pdfs[out_idx] = current_queue.wavelength_pdfs[idx];

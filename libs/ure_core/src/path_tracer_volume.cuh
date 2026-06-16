@@ -43,3 +43,25 @@ __device__ float eval_henyey_greenstein(float cos_theta, float g) {
     float denom = 1.0f + g * g - 2.0f * g * cos_theta;
     return (1.0f - g * g) / (4.0f * 3.14159265359f * denom * sqrtf(fmaxf(0.0f, denom)));
 }
+
+__device__ float pdf_henyey_greenstein(float cos_theta, float g) {
+    return eval_henyey_greenstein(cos_theta, g);
+}
+
+__device__ float pdf_henyey_greenstein(const GpuVec3& w_in, const GpuVec3& w_out, float g) {
+    return pdf_henyey_greenstein(w_in.normalize().dot(w_out.normalize()), g);
+}
+
+__device__ GpuVec3 sample_henyey_greenstein_lds_pdf(
+    const GpuVec3& w_in,
+    float g,
+    float r1,
+    float r2,
+    float* pdf
+) {
+    GpuVec3 out = sample_henyey_greenstein_lds(w_in, g, r1, r2);
+    if (pdf) {
+        *pdf = pdf_henyey_greenstein(w_in, out, g);
+    }
+    return out;
+}
