@@ -165,6 +165,13 @@ __global__ void cie_y_importance_wavelength_kernel(float* out) {
     out[7] = 1.0f / (kSpectralLambdaMax - kSpectralLambdaMin);
 }
 
+__global__ void tabulated_wavelength_proposal_kernel(const float* cdf, const float* pdf, float* out) {
+    float sampled_pdf = 0.0f;
+    float lambda = sample_tabulated_wavelength_proposal(0.55f, cdf, pdf, 2, 500.0f, 510.0f, &sampled_pdf);
+    out[0] = lambda;
+    out[1] = sampled_pdf;
+}
+
 __device__ float l7_d65_5nm(float lambda) {
     const float values[95] = {
         46.6383f, 49.3637f, 52.0891f, 51.0323f, 49.9755f, 52.3118f, 54.6482f, 68.7015f,
@@ -935,6 +942,33 @@ static int test_cie_y_importance_wavelength_proposal() {
     return 0;
 }
 
+static int test_tabulated_wavelength_proposal_inverse_cdf() {
+    REQUIRE_GPU();
+    const float h_cdf[2] = {0.1f, 1.0f};
+    const float h_pdf[2] = {0.02f, 0.18f};
+    float* d_cdf = nullptr;
+    float* d_pdf = nullptr;
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_cdf, 2 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_pdf, 2 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_out, 2 * sizeof(float)));
+    DeviceMem _cdf(d_cdf);
+    DeviceMem _pdf(d_pdf);
+    DeviceMem _out(d_out);
+    CHECK_CUDA(cudaMemcpy(d_cdf, h_cdf, 2 * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_pdf, h_pdf, 2 * sizeof(float), cudaMemcpyHostToDevice));
+
+    tabulated_wavelength_proposal_kernel<<<1, 1>>>(d_cdf, d_pdf, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float out[2] = {};
+    CHECK_CUDA(cudaMemcpy(out, d_out, 2 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(out[0], 507.5f, 1e-5f);
+    CHECK_FLOAT_EQ(out[1], 0.18f, 1e-6f);
+    return 0;
+}
+
 static int test_raygen_importance_mode_uses_cie_y_wavelength_pdf() {
     REQUIRE_GPU();
     const int width = 1;
@@ -1069,6 +1103,7 @@ int main() {
     RUN_TEST(test_raygen_runtime_wavelength_count);
     RUN_TEST(test_raygen_sampled_single_lane_mode);
     RUN_TEST(test_cie_y_importance_wavelength_proposal);
+    RUN_TEST(test_tabulated_wavelength_proposal_inverse_cdf);
     RUN_TEST(test_raygen_importance_mode_uses_cie_y_wavelength_pdf);
     RUN_TEST(test_lane_spectral_state_roundtrip);
     RUN_TEST(test_custom_wavelength_sets);

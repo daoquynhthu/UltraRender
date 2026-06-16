@@ -59,6 +59,9 @@ struct GpuContext {
     float* d_light_selection_cdf = nullptr;
     float* d_light_alias_prob = nullptr;
     int* d_light_alias_index = nullptr;
+    float* d_wavelength_proposal_cdf = nullptr;
+    float* d_wavelength_proposal_pdf = nullptr;
+    int wavelength_proposal_count = 0;
 
     int material_count = 0;
     int sphere_count = 0;

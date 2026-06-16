@@ -464,7 +464,8 @@ enum SpectralRayMode : int {
 
 enum SpectralWavelengthSamplingStrategy : int {
     SpectralWavelengthSamplingUniform = 0,
-    SpectralWavelengthSamplingCieYImportance = 1
+    SpectralWavelengthSamplingCieYImportance = 1,
+    SpectralWavelengthSamplingSceneSpectralPower = 2
 };
 
 __host__ __device__ inline bool spectral_mode_is_sampled(int mode) {
@@ -492,6 +493,11 @@ struct RayQueue {
     float* wavelength_pdfs = nullptr;
     int initial_spectral_mode = SpectralRayModePacket;
     int wavelength_sampling_strategy = SpectralWavelengthSamplingUniform;
+    float* wavelength_proposal_cdf = nullptr;
+    float* wavelength_proposal_pdf = nullptr;
+    int wavelength_proposal_count = 0;
+    float wavelength_proposal_lambda_min = kSpectralLambdaMin;
+    float wavelength_proposal_lambda_max = kSpectralLambdaMax;
 
     int* count = nullptr;
     int* overflow_count = nullptr;

@@ -984,7 +984,7 @@ static int test_update_materials_gpu_rebuilds_light_selection_distribution() {
     return 0;
 }
 
-static int test_importance_spectral_config_selects_cie_y_wavelength_sampler() {
+static int test_importance_spectral_config_selects_nonuniform_wavelength_sampler() {
     REQUIRE_GPU();
     ure::RenderConfig config;
     config.num_wavelengths = 8;
@@ -995,8 +995,92 @@ static int test_importance_spectral_config_selects_cie_y_wavelength_sampler() {
     CHECK(ctx != nullptr);
     CHECK(ctx->queueA.initial_spectral_mode == SpectralRayModeSampled);
     CHECK(ctx->queueB.initial_spectral_mode == SpectralRayModeSampled);
-    CHECK(ctx->queueA.wavelength_sampling_strategy == SpectralWavelengthSamplingCieYImportance);
-    CHECK(ctx->queueB.wavelength_sampling_strategy == SpectralWavelengthSamplingCieYImportance);
+    CHECK(ctx->queueA.wavelength_sampling_strategy != SpectralWavelengthSamplingUniform);
+    CHECK(ctx->queueB.wavelength_sampling_strategy != SpectralWavelengthSamplingUniform);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_importance_spectral_config_uses_scene_spectral_power_proposal() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.spectral_sampling_mode = ure::SpectralSamplingMode::Importance;
+
+    GpuSphere light_sphere;
+    light_sphere.center = GpuVec3(0.0f, 2.0f, 0.0f);
+    light_sphere.radius = 1.0f;
+    light_sphere.material_index = 7;
+
+    GpuMaterialData light = {};
+    light.header.type = MaterialType::Light;
+    light.emission = SpectralPacket(0.0f);
+    light.emission_resource.kind = SpectralResourceKind::SampledTable;
+    light.emission_resource.wavelengths = {360.0f, 610.0f, 830.0f};
+    light.emission_resource.values = {0.0f, 100.0f, 0.0f};
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {light_sphere}, {light}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->queueA.initial_spectral_mode == SpectralRayModeSampled);
+    CHECK(ctx->queueA.wavelength_sampling_strategy == SpectralWavelengthSamplingSceneSpectralPower);
+    CHECK(ctx->queueA.wavelength_proposal_count == 94);
+    CHECK(ctx->queueA.wavelength_proposal_cdf != nullptr);
+    CHECK(ctx->queueA.wavelength_proposal_pdf != nullptr);
+
+    float pdf_370 = 0.0f;
+    float pdf_610 = 0.0f;
+    const int bin_370 = static_cast<int>((370.0f - kSpectralLambdaMin) / 5.0f);
+    const int bin_610 = static_cast<int>((610.0f - kSpectralLambdaMin) / 5.0f);
+    CHECK_CUDA(cudaMemcpy(&pdf_370, ctx->queueA.wavelength_proposal_pdf + bin_370, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&pdf_610, ctx->queueA.wavelength_proposal_pdf + bin_610, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(pdf_610 > pdf_370 * 2.0f);
+
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_update_materials_gpu_rebuilds_scene_wavelength_proposal() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.spectral_sampling_mode = ure::SpectralSamplingMode::Importance;
+
+    GpuSphere light_sphere;
+    light_sphere.center = GpuVec3(0.0f, 2.0f, 0.0f);
+    light_sphere.radius = 1.0f;
+    light_sphere.material_index = 7;
+
+    GpuMaterialData blue_light = {};
+    blue_light.header.type = MaterialType::Light;
+    blue_light.emission = SpectralPacket(0.0f);
+    blue_light.emission.values[1] = 100.0f;
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {light_sphere}, {blue_light}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->queueA.wavelength_sampling_strategy == SpectralWavelengthSamplingSceneSpectralPower);
+
+    const int blue_bin = static_cast<int>((430.0f - kSpectralLambdaMin) / 5.0f);
+    const int red_bin = static_cast<int>((780.0f - kSpectralLambdaMin) / 5.0f);
+    float blue_pdf_before = 0.0f;
+    float red_pdf_before = 0.0f;
+    CHECK_CUDA(cudaMemcpy(&blue_pdf_before, ctx->queueA.wavelength_proposal_pdf + blue_bin, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&red_pdf_before, ctx->queueA.wavelength_proposal_pdf + red_bin, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(blue_pdf_before > red_pdf_before);
+
+    GpuMaterialData red_light = blue_light;
+    red_light.emission = SpectralPacket(0.0f);
+    red_light.emission.values[7] = 100.0f;
+    update_materials_gpu(ctx, &red_light, 1, 7);
+
+    float blue_pdf_after = 0.0f;
+    float red_pdf_after = 0.0f;
+    CHECK(ctx->queueA.wavelength_sampling_strategy == SpectralWavelengthSamplingSceneSpectralPower);
+    CHECK_CUDA(cudaMemcpy(&blue_pdf_after, ctx->queueA.wavelength_proposal_pdf + blue_bin, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&red_pdf_after, ctx->queueA.wavelength_proposal_pdf + red_bin, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(red_pdf_after > blue_pdf_after);
+
     free_gpu_renderer(ctx);
     return 0;
 }
@@ -1274,7 +1358,9 @@ int main() {
     RUN_TEST(test_runtime_n_long_wavelength_light_list);
     RUN_TEST(test_light_selection_cdf_uses_area_and_spectral_power);
     RUN_TEST(test_update_materials_gpu_rebuilds_light_selection_distribution);
-    RUN_TEST(test_importance_spectral_config_selects_cie_y_wavelength_sampler);
+    RUN_TEST(test_importance_spectral_config_selects_nonuniform_wavelength_sampler);
+    RUN_TEST(test_importance_spectral_config_uses_scene_spectral_power_proposal);
+    RUN_TEST(test_update_materials_gpu_rebuilds_scene_wavelength_proposal);
     RUN_TEST(test_runtime_n_upload_uses_explicit_material_soa);
     RUN_TEST(test_l8_spectral_texture_upload_keeps_source_sample_count);
     RUN_TEST(test_l8_rgb_texture_upload_keeps_hardware_filtering);

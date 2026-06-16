@@ -503,6 +503,41 @@ static float average_material_emission_power(const GpuMaterialData& material, in
     return power / float(std::max(num_channels, 1));
 }
 
+static float eval_host_spectral_carrier(const SpectralPacket& spectrum,
+                                        const HostSpectralResource& resource,
+                                        float lambda,
+                                        int num_channels) {
+    SpectralResource view = {};
+    view.kind = resource.kind;
+    view.constant = resource.constant;
+    view.rgb = resource.rgb;
+    view.wavelengths = resource.wavelengths.data();
+    view.values = resource.values.data();
+    view.sample_count = static_cast<int>(std::min(resource.wavelengths.size(), resource.values.size()));
+    if (resource.kind != SpectralResourceKind::None) {
+        return eval_spectral_resource(view, lambda);
+    }
+
+    if (num_channels <= 1) {
+        return spectrum.values[0];
+    }
+
+    float best_delta = std::numeric_limits<float>::max();
+    float best_value = 0.0f;
+    for (int c = 0; c < num_channels; ++c) {
+        const float sample_lambda = spectrum.wavelengths[c] > 0.0f
+            ? spectrum.wavelengths[c]
+            : kSpectralLambdaMin + (float(c) + 0.5f) *
+                ((kSpectralLambdaMax - kSpectralLambdaMin) / float(num_channels));
+        const float delta = fabsf(sample_lambda - lambda);
+        if (delta < best_delta) {
+            best_delta = delta;
+            best_value = spectrum.values[c];
+        }
+    }
+    return best_value;
+}
+
 static void build_light_alias_table(const std::vector<float>& weights,
                                     float total_weight,
                                     std::vector<float>& alias_prob,
@@ -542,6 +577,107 @@ static void build_light_alias_table(const std::vector<float>& weights,
             small.push_back(l);
         }
     }
+}
+
+static void clear_wavelength_proposal_from_queue(RayQueue& queue) {
+    queue.wavelength_proposal_cdf = nullptr;
+    queue.wavelength_proposal_pdf = nullptr;
+    queue.wavelength_proposal_count = 0;
+    queue.wavelength_proposal_lambda_min = kSpectralLambdaMin;
+    queue.wavelength_proposal_lambda_max = kSpectralLambdaMax;
+}
+
+static void assign_wavelength_proposal_to_queue(RayQueue& queue, GpuContext* ctx) {
+    queue.wavelength_proposal_cdf = ctx->d_wavelength_proposal_cdf;
+    queue.wavelength_proposal_pdf = ctx->d_wavelength_proposal_pdf;
+    queue.wavelength_proposal_count = ctx->wavelength_proposal_count;
+    queue.wavelength_proposal_lambda_min = kSpectralLambdaMin;
+    queue.wavelength_proposal_lambda_max = kSpectralLambdaMax;
+}
+
+static void release_wavelength_proposal(GpuContext* ctx) {
+    cudaFree(ctx->d_wavelength_proposal_cdf);
+    cudaFree(ctx->d_wavelength_proposal_pdf);
+    ctx->d_wavelength_proposal_cdf = nullptr;
+    ctx->d_wavelength_proposal_pdf = nullptr;
+    ctx->wavelength_proposal_count = 0;
+    clear_wavelength_proposal_from_queue(ctx->queueA);
+    clear_wavelength_proposal_from_queue(ctx->queueB);
+}
+
+static void rebuild_wavelength_proposal(GpuContext* ctx) {
+    release_wavelength_proposal(ctx);
+    if (ctx->render_config.spectral_sampling_mode != ure::SpectralSamplingMode::Importance) {
+        ctx->queueA.wavelength_sampling_strategy = SpectralWavelengthSamplingUniform;
+        ctx->queueB.wavelength_sampling_strategy = SpectralWavelengthSamplingUniform;
+        return;
+    }
+
+    constexpr int kProposalBins = kGpuCieCount - 1;
+    constexpr float kLambdaMin = float(kGpuCieStart);
+    constexpr float kBinWidth = float(kGpuCieStep);
+    std::vector<float> weights(kProposalBins, 0.0f);
+
+    for (int i = 0; i < kProposalBins; ++i) {
+        const float lambda = kLambdaMin + (float(i) + 0.5f) * kBinWidth;
+        float weight = 0.0f;
+        for (const auto& material : ctx->host_materials_for_light_distribution) {
+            const float emission = std::max(0.0f, eval_host_spectral_carrier(
+                material.emission,
+                material.emission_resource,
+                lambda,
+                ctx->num_spectral_channels));
+            const float albedo = std::max(0.0f, eval_host_spectral_carrier(
+                material.albedo,
+                material.albedo_resource,
+                lambda,
+                ctx->num_spectral_channels));
+            weight += 4.0f * emission + 0.1f * albedo;
+        }
+        weights[i] = weight;
+    }
+
+    float total = 0.0f;
+    float min_weight = std::numeric_limits<float>::max();
+    float max_weight = 0.0f;
+    for (float weight : weights) {
+        total += weight;
+        min_weight = std::min(min_weight, weight);
+        max_weight = std::max(max_weight, weight);
+    }
+
+    if (total <= 0.0f || max_weight <= std::max(1e-8f, min_weight * 1.05f)) {
+        ctx->queueA.wavelength_sampling_strategy = SpectralWavelengthSamplingCieYImportance;
+        ctx->queueB.wavelength_sampling_strategy = SpectralWavelengthSamplingCieYImportance;
+        return;
+    }
+
+    const float floor_weight = std::max(1e-8f, total * 1e-5f / float(kProposalBins));
+    total = 0.0f;
+    for (float& weight : weights) {
+        weight += floor_weight;
+        total += weight;
+    }
+
+    std::vector<float> cdf(kProposalBins, 0.0f);
+    std::vector<float> pdf(kProposalBins, 0.0f);
+    float running = 0.0f;
+    for (int i = 0; i < kProposalBins; ++i) {
+        const float mass = weights[i] / total;
+        running += mass;
+        cdf[i] = i + 1 == kProposalBins ? 1.0f : running;
+        pdf[i] = mass / kBinWidth;
+    }
+
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_wavelength_proposal_cdf, cdf.size() * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_wavelength_proposal_pdf, pdf.size() * sizeof(float)));
+    UR_CUDA_CHECK(cudaMemcpy(ctx->d_wavelength_proposal_cdf, cdf.data(), cdf.size() * sizeof(float), cudaMemcpyHostToDevice));
+    UR_CUDA_CHECK(cudaMemcpy(ctx->d_wavelength_proposal_pdf, pdf.data(), pdf.size() * sizeof(float), cudaMemcpyHostToDevice));
+    ctx->wavelength_proposal_count = kProposalBins;
+    ctx->queueA.wavelength_sampling_strategy = SpectralWavelengthSamplingSceneSpectralPower;
+    ctx->queueB.wavelength_sampling_strategy = SpectralWavelengthSamplingSceneSpectralPower;
+    assign_wavelength_proposal_to_queue(ctx->queueA, ctx);
+    assign_wavelength_proposal_to_queue(ctx->queueB, ctx);
 }
 
 static void release_light_distribution(GpuContext* ctx) {
@@ -1032,6 +1168,7 @@ GpuContext* init_gpu_renderer(int width, int height,
 
     ctx->host_spheres_for_light_distribution = host_spheres;
     ctx->host_materials_for_light_distribution = host_materials;
+    rebuild_wavelength_proposal(ctx);
     rebuild_light_distribution(ctx);
 
     return ctx;
@@ -1111,6 +1248,7 @@ void free_gpu_renderer(GpuContext* ctx) {
     cudaFree(ctx->d_meshes);
     cudaFree(ctx->d_instances);
     release_light_distribution(ctx);
+    release_wavelength_proposal(ctx);
 
     free_ray_queue(ctx->queueA);
     free_ray_queue(ctx->queueB);
@@ -1363,6 +1501,7 @@ void update_materials_gpu(GpuContext* ctx,
     for (int i = 0; i < count; ++i) {
         ctx->host_materials_for_light_distribution[static_cast<size_t>(first_material_index + i)] = materials[i];
     }
+    rebuild_wavelength_proposal(ctx);
     rebuild_light_distribution(ctx);
 }
 

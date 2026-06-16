@@ -145,6 +145,42 @@ __device__ inline float sample_cie_y_importance_wavelength(float u, float* pdf) 
     return float(kGpuCieEnd);
 }
 
+__device__ inline float sample_tabulated_wavelength_proposal(float u,
+                                                            const float* cdf,
+                                                            const float* pdf_table,
+                                                            int count,
+                                                            float lambda_min,
+                                                            float lambda_max,
+                                                            float* pdf) {
+    if (!cdf || !pdf_table || count <= 0 || lambda_max <= lambda_min) {
+        const float domain = kSpectralLambdaMax - kSpectralLambdaMin;
+        if (pdf) {
+            *pdf = 1.0f / domain;
+        }
+        return kSpectralLambdaMin + fminf(0.99999994f, fmaxf(0.0f, u)) * domain;
+    }
+
+    const float clamped_u = fminf(0.99999994f, fmaxf(0.0f, u));
+    int selected = count - 1;
+    float lower = 0.0f;
+    for (int i = 0; i < count; ++i) {
+        const float upper = cdf[i];
+        if (clamped_u <= upper) {
+            selected = i;
+            break;
+        }
+        lower = upper;
+    }
+
+    const float upper = fmaxf(cdf[selected], lower + 1e-12f);
+    const float local_u = fminf(0.99999994f, fmaxf(0.0f, (clamped_u - lower) / (upper - lower)));
+    const float bin_width = (lambda_max - lambda_min) / float(count);
+    if (pdf) {
+        *pdf = fmaxf(1e-12f, pdf_table[selected]);
+    }
+    return lambda_min + (float(selected) + local_u) * bin_width;
+}
+
 /**
  * @brief 灏嗛噰鏍峰厜璋?packet 杞崲涓?XYZ 棰滆壊绌洪棿
  * 浣跨敤钂欑壒鍗℃礇绉垎锛?DomainWidth / N) * Sum(Value * CMF)

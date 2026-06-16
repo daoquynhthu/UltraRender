@@ -85,7 +85,20 @@ __global__ __launch_bounds__(512) void generate_rays_kernel(
     float wavelength_pdf = 1.0f / (kSpectralLambdaMax - kSpectralLambdaMin);
     if (spectral_mode_is_sampled(spectral_mode)) {
         r_lambda = sample_dimension(sample_index, pixel_index, kSampleDimWavelength);
-        if (queue.wavelength_sampling_strategy == SpectralWavelengthSamplingCieYImportance) {
+        if (queue.wavelength_sampling_strategy == SpectralWavelengthSamplingSceneSpectralPower &&
+            queue.wavelength_proposal_cdf &&
+            queue.wavelength_proposal_pdf &&
+            queue.wavelength_proposal_count > 0) {
+            sampled_lambda = sample_tabulated_wavelength_proposal(
+                r_lambda,
+                queue.wavelength_proposal_cdf,
+                queue.wavelength_proposal_pdf,
+                queue.wavelength_proposal_count,
+                queue.wavelength_proposal_lambda_min,
+                queue.wavelength_proposal_lambda_max,
+                &wavelength_pdf);
+        } else if (queue.wavelength_sampling_strategy == SpectralWavelengthSamplingCieYImportance ||
+                   queue.wavelength_sampling_strategy == SpectralWavelengthSamplingSceneSpectralPower) {
             sampled_lambda = sample_cie_y_importance_wavelength(r_lambda, &wavelength_pdf);
         } else {
             float domain = kSpectralLambdaMax - kSpectralLambdaMin;
