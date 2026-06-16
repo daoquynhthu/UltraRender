@@ -92,6 +92,27 @@ __global__ void test_henyey_greenstein_lds_kernel(float* out) {
     out[9] = integral;
 }
 
+__global__ void test_rayleigh_phase_kernel(float* out) {
+    float sampled_pdf = 0.0f;
+    GpuVec3 sampled = sample_rayleigh_phase_lds_pdf(GpuVec3(0.0f, 0.0f, 1.0f), 0.84f, 0.37f, &sampled_pdf);
+    float integral = 0.0f;
+    constexpr int kBins = 2048;
+    for (int i = 0; i < kBins; ++i) {
+        float mu = -1.0f + (float(i) + 0.5f) * (2.0f / float(kBins));
+        integral += pdf_rayleigh_phase(mu) * (2.0f / float(kBins)) * 6.28318530718f;
+    }
+    out[0] = eval_rayleigh_phase(1.0f);
+    out[1] = eval_rayleigh_phase(-1.0f);
+    out[2] = eval_rayleigh_phase(0.0f);
+    out[3] = sampled.length();
+    out[4] = sampled_pdf;
+    out[5] = eval_rayleigh_phase(sampled.z);
+    out[6] = pdf_rayleigh_phase(GpuVec3(0.0f, 0.0f, 1.0f), sampled);
+    out[7] = pdf_rayleigh_phase(sampled, GpuVec3(0.0f, 0.0f, 1.0f));
+    out[8] = integral;
+    out[9] = sampled.z;
+}
+
 static int test_transmittance() {
     REQUIRE_GPU();
     float* d_out;
@@ -205,6 +226,28 @@ static int test_henyey_greenstein_lds_sampling() {
     return 0;
 }
 
+static int test_rayleigh_phase_sampling() {
+    REQUIRE_GPU();
+    float* d_out;
+    CHECK_CUDA(cudaMalloc(&d_out, 10 * sizeof(float)));
+    test_rayleigh_phase_kernel<<<1, 1>>>(d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    float h_out[10];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 10 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(h_out[0], h_out[1], 1e-6f);
+    CHECK(h_out[0] > h_out[2]);
+    CHECK_FLOAT_EQ(h_out[3], 1.0f, 1e-5f);
+    CHECK_FLOAT_EQ(h_out[4], h_out[5], 1e-6f);
+    CHECK_FLOAT_EQ(h_out[4], h_out[6], 1e-6f);
+    CHECK_FLOAT_EQ(h_out[6], h_out[7], 1e-6f);
+    CHECK_FLOAT_EQ(h_out[8], 1.0f, 2e-4f);
+    CHECK(h_out[9] >= -1.0f);
+    CHECK(h_out[9] <= 1.0f);
+    cudaFree(d_out);
+    return 0;
+}
+
 int main() {
     printf("[GPU Volume Scattering Test]\n");
     RUN_TEST(test_transmittance);
@@ -213,6 +256,7 @@ int main() {
     RUN_TEST(test_lane_no_scatter_proposal_weight);
     RUN_TEST(test_sampling_dimension_contract);
     RUN_TEST(test_henyey_greenstein_lds_sampling);
+    RUN_TEST(test_rayleigh_phase_sampling);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;
 }

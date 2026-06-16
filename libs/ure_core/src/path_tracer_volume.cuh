@@ -65,3 +65,52 @@ __device__ GpuVec3 sample_henyey_greenstein_lds_pdf(
     }
     return out;
 }
+
+__device__ float eval_rayleigh_phase(float cos_theta) {
+    float mu = fminf(1.0f, fmaxf(-1.0f, cos_theta));
+    return (3.0f / (16.0f * 3.14159265359f)) * (1.0f + mu * mu);
+}
+
+__device__ float pdf_rayleigh_phase(float cos_theta) {
+    return eval_rayleigh_phase(cos_theta);
+}
+
+__device__ float pdf_rayleigh_phase(const GpuVec3& w_in, const GpuVec3& w_out) {
+    return pdf_rayleigh_phase(w_in.normalize().dot(w_out.normalize()));
+}
+
+__device__ GpuVec3 sample_rayleigh_phase_lds(const GpuVec3& w_in, float r1, float r2) {
+    float mu = 2.0f * r1 - 1.0f;
+    for (int i = 0; i < 8; ++i) {
+        float f = 0.5f + 0.375f * mu + 0.125f * mu * mu * mu - r1;
+        float df = 0.375f * (1.0f + mu * mu);
+        mu -= f / fmaxf(1e-6f, df);
+        mu = fminf(1.0f, fmaxf(-1.0f, mu));
+    }
+
+    float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - mu * mu));
+    float phi = 2.0f * 3.14159265359f * r2;
+    GpuVec3 forward = w_in.normalize();
+    GpuVec3 v1 = fabsf(forward.x) > 0.9f
+        ? GpuVec3(0.0f, 1.0f, 0.0f)
+        : GpuVec3(1.0f, 0.0f, 0.0f);
+    GpuVec3 v2 = forward.cross(v1).normalize();
+    v1 = forward.cross(v2).normalize();
+
+    return (v1 * (cosf(phi) * sin_theta) +
+            v2 * (sinf(phi) * sin_theta) +
+            forward * mu).normalize();
+}
+
+__device__ GpuVec3 sample_rayleigh_phase_lds_pdf(
+    const GpuVec3& w_in,
+    float r1,
+    float r2,
+    float* pdf
+) {
+    GpuVec3 out = sample_rayleigh_phase_lds(w_in, r1, r2);
+    if (pdf) {
+        *pdf = pdf_rayleigh_phase(w_in, out);
+    }
+    return out;
+}
