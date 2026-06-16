@@ -106,6 +106,45 @@ __device__ inline float cie_y_integral() {
     return kGpuCieYIntegral;
 }
 
+__device__ inline float cie_y_importance_pdf(float lambda) {
+    return fmaxf(1e-12f, cie_y(lambda) / cie_y_integral());
+}
+
+__device__ inline float sample_cie_y_importance_wavelength(float u, float* pdf) {
+    const float target = fminf(0.99999994f, fmaxf(0.0f, u)) * cie_y_integral();
+    float cumulative = 0.0f;
+
+    for (int i = 0; i < kGpuCieCount - 1; ++i) {
+        const float y0 = kGpuCieY[i];
+        const float y1 = kGpuCieY[i + 1];
+        const float step = float(kGpuCieStep);
+        const float segment = 0.5f * (y0 + y1) * step;
+        if (target <= cumulative + segment || i == kGpuCieCount - 2) {
+            const float local = fmaxf(0.0f, target - cumulative);
+            const float slope = (y1 - y0) / step;
+            float x = 0.0f;
+            if (fabsf(slope) < 1e-12f) {
+                x = local / fmaxf(y0, 1e-12f);
+            } else {
+                const float discriminant = fmaxf(0.0f, y0 * y0 + 2.0f * slope * local);
+                x = (-y0 + sqrtf(discriminant)) / slope;
+            }
+            x = fminf(step, fmaxf(0.0f, x));
+            const float lambda = float(kGpuCieStart + i * kGpuCieStep) + x;
+            if (pdf) {
+                *pdf = cie_y_importance_pdf(lambda);
+            }
+            return lambda;
+        }
+        cumulative += segment;
+    }
+
+    if (pdf) {
+        *pdf = cie_y_importance_pdf(float(kGpuCieEnd));
+    }
+    return float(kGpuCieEnd);
+}
+
 /**
  * @brief 灏嗛噰鏍峰厜璋?packet 杞崲涓?XYZ 棰滆壊绌洪棿
  * 浣跨敤钂欑壒鍗℃礇绉垎锛?DomainWidth / N) * Sum(Value * CMF)

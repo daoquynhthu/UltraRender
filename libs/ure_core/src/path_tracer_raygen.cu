@@ -3,6 +3,7 @@
 #include <float.h>
 #include <math.h>
 #include "ure/gpu_structs.hpp"
+#include "ure/gpu_spectrum_utils.cuh"
 #include "ure/path_tracer_sampling.cuh"
 
 using namespace ure::gpu;
@@ -80,9 +81,19 @@ __global__ __launch_bounds__(512) void generate_rays_kernel(
     int spectral_mode = queue.initial_spectral_mode;
     int active_channel = -1;
     float r_lambda = 0.0f;
+    float sampled_lambda = kSpectralLambdaMin;
+    float wavelength_pdf = 1.0f / (kSpectralLambdaMax - kSpectralLambdaMin);
     if (spectral_mode_is_sampled(spectral_mode)) {
         r_lambda = sample_dimension(sample_index, pixel_index, kSampleDimWavelength);
-        active_channel = min(int(r_lambda * queue.num_spectral_channels), queue.num_spectral_channels - 1);
+        if (queue.wavelength_sampling_strategy == SpectralWavelengthSamplingCieYImportance) {
+            sampled_lambda = sample_cie_y_importance_wavelength(r_lambda, &wavelength_pdf);
+        } else {
+            float domain = kSpectralLambdaMax - kSpectralLambdaMin;
+            sampled_lambda = kSpectralLambdaMin + r_lambda * domain;
+            wavelength_pdf = 1.0f / domain;
+        }
+        float normalized_lambda = (sampled_lambda - kSpectralLambdaMin) / (kSpectralLambdaMax - kSpectralLambdaMin);
+        active_channel = min(int(normalized_lambda * queue.num_spectral_channels), queue.num_spectral_channels - 1);
         if (queue.num_spectral_channels == 1) active_channel = 0;
     }
 
@@ -93,7 +104,7 @@ __global__ __launch_bounds__(512) void generate_rays_kernel(
             spectral_mode_is_sampled(spectral_mode) ? (c == active_channel ? 1.0f : 0.0f) : 1.0f;
         queue.throughput_wavelengths[c * queue.capacity + ray_index] =
             spectral_mode == SpectralRayModeSampled && c == active_channel
-                ? kSpectralLambdaMin + r_lambda * domain
+                ? sampled_lambda
                 : kSpectralLambdaMin + (float(c) + 0.5f) * bin_width;
     }
     if (spectral_mode_is_sampled(spectral_mode)) {
@@ -113,7 +124,7 @@ __global__ __launch_bounds__(512) void generate_rays_kernel(
     queue.spectral_modes[ray_index] = spectral_mode;
     queue.active_channels[ray_index] = active_channel;
     queue.wavelength_pdfs[ray_index] = spectral_mode == SpectralRayModeSampled
-        ? 1.0f / domain
+        ? wavelength_pdf
         : 1.0f / fmaxf(1.0f, float(queue.num_spectral_channels));
 }
 

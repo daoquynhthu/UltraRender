@@ -462,6 +462,11 @@ enum SpectralRayMode : int {
     SpectralRayModeSampled = 2
 };
 
+enum SpectralWavelengthSamplingStrategy : int {
+    SpectralWavelengthSamplingUniform = 0,
+    SpectralWavelengthSamplingCieYImportance = 1
+};
+
 __host__ __device__ inline bool spectral_mode_is_sampled(int mode) {
     return mode == SpectralRayModeLane || mode == SpectralRayModeSampled;
 }
@@ -486,6 +491,7 @@ struct RayQueue {
     int* active_channels = nullptr;
     float* wavelength_pdfs = nullptr;
     int initial_spectral_mode = SpectralRayModePacket;
+    int wavelength_sampling_strategy = SpectralWavelengthSamplingUniform;
 
     int* count = nullptr;
     int* overflow_count = nullptr;

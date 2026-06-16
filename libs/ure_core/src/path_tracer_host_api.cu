@@ -687,8 +687,13 @@ GpuContext* init_gpu_renderer(int width, int height,
     int initial_spectral_mode = (config.spectral_sampling_mode == ure::SpectralSamplingMode::PacketUniform && num_spec > 1)
         ? SpectralRayModePacket
         : SpectralRayModeSampled;
+    int wavelength_sampling_strategy = config.spectral_sampling_mode == ure::SpectralSamplingMode::Importance
+        ? SpectralWavelengthSamplingCieYImportance
+        : SpectralWavelengthSamplingUniform;
     ctx->queueA.initial_spectral_mode = initial_spectral_mode;
     ctx->queueB.initial_spectral_mode = initial_spectral_mode;
+    ctx->queueA.wavelength_sampling_strategy = wavelength_sampling_strategy;
+    ctx->queueB.wavelength_sampling_strategy = wavelength_sampling_strategy;
 
     bool use_default_geometry = spheres.empty() && meshes.empty() && instances.empty();
     GpuHostScene host_scene = load_default_scene(!use_default_geometry);

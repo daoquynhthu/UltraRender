@@ -984,6 +984,23 @@ static int test_update_materials_gpu_rebuilds_light_selection_distribution() {
     return 0;
 }
 
+static int test_importance_spectral_config_selects_cie_y_wavelength_sampler() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.spectral_sampling_mode = ure::SpectralSamplingMode::Importance;
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->queueA.initial_spectral_mode == SpectralRayModeSampled);
+    CHECK(ctx->queueB.initial_spectral_mode == SpectralRayModeSampled);
+    CHECK(ctx->queueA.wavelength_sampling_strategy == SpectralWavelengthSamplingCieYImportance);
+    CHECK(ctx->queueB.wavelength_sampling_strategy == SpectralWavelengthSamplingCieYImportance);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
 static int test_runtime_n_upload_uses_explicit_material_soa() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -1257,6 +1274,7 @@ int main() {
     RUN_TEST(test_runtime_n_long_wavelength_light_list);
     RUN_TEST(test_light_selection_cdf_uses_area_and_spectral_power);
     RUN_TEST(test_update_materials_gpu_rebuilds_light_selection_distribution);
+    RUN_TEST(test_importance_spectral_config_selects_cie_y_wavelength_sampler);
     RUN_TEST(test_runtime_n_upload_uses_explicit_material_soa);
     RUN_TEST(test_l8_spectral_texture_upload_keeps_source_sample_count);
     RUN_TEST(test_l8_rgb_texture_upload_keeps_hardware_filtering);

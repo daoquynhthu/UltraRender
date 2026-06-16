@@ -148,6 +148,23 @@ __global__ void sampled_spectrum_xyz_kernel(const float* wavelengths, const floa
     out[2] = packet_fallback;
 }
 
+__global__ void cie_y_importance_wavelength_kernel(float* out) {
+    float pdf_low = 0.0f;
+    float pdf_mid = 0.0f;
+    float pdf_high = 0.0f;
+    float lambda_low = sample_cie_y_importance_wavelength(0.01f, &pdf_low);
+    float lambda_mid = sample_cie_y_importance_wavelength(0.50f, &pdf_mid);
+    float lambda_high = sample_cie_y_importance_wavelength(0.99f, &pdf_high);
+    out[0] = lambda_low;
+    out[1] = pdf_low;
+    out[2] = lambda_mid;
+    out[3] = pdf_mid;
+    out[4] = lambda_high;
+    out[5] = pdf_high;
+    out[6] = cie_y_importance_pdf(lambda_mid);
+    out[7] = 1.0f / (kSpectralLambdaMax - kSpectralLambdaMin);
+}
+
 __device__ float l7_d65_5nm(float lambda) {
     const float values[95] = {
         46.6383f, 49.3637f, 52.0891f, 51.0323f, 49.9755f, 52.3118f, 54.6482f, 68.7015f,
@@ -892,6 +909,81 @@ static int test_raygen_sampled_single_lane_mode() {
     return 0;
 }
 
+static int test_cie_y_importance_wavelength_proposal() {
+    REQUIRE_GPU();
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_out, 8 * sizeof(float)));
+    DeviceMem _out(d_out);
+
+    cie_y_importance_wavelength_kernel<<<1, 1>>>(d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float out[8] = {};
+    CHECK_CUDA(cudaMemcpy(out, d_out, 8 * sizeof(float), cudaMemcpyDeviceToHost));
+    const float uniform_pdf = out[7];
+    CHECK(out[0] >= kSpectralLambdaMin);
+    CHECK(out[0] < out[2]);
+    CHECK(out[2] < out[4]);
+    CHECK(out[4] <= kSpectralLambdaMax);
+    CHECK(out[2] > 535.0f);
+    CHECK(out[2] < 575.0f);
+    CHECK(out[3] > uniform_pdf);
+    CHECK_FLOAT_EQ(out[3], out[6], 1e-7f);
+    CHECK(out[1] > 0.0f);
+    CHECK(out[5] > 0.0f);
+    return 0;
+}
+
+static int test_raygen_importance_mode_uses_cie_y_wavelength_pdf() {
+    REQUIRE_GPU();
+    const int width = 1;
+    const int height = 1;
+    const int cap = 1;
+    const int num_spec = 8;
+
+    RayQueue q = {};
+    CHECK(alloc_ray_queue_min(q, cap, num_spec) == 0);
+    q.initial_spectral_mode = SpectralRayModeSampled;
+    q.wavelength_sampling_strategy = SpectralWavelengthSamplingCieYImportance;
+    struct _QC { RayQueue& r; ~_QC() { free_ray_queue_min(r); } } _qc{q};
+
+    int* d_sample_counts = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_sample_counts, cap * sizeof(int)));
+    DeviceMem _sc(d_sample_counts);
+    CHECK_CUDA(cudaMemset(d_sample_counts, 0, cap * sizeof(int)));
+
+    GpuCamera camera = {};
+    camera.origin = GpuVec3(0.0f, 0.0f, 0.0f);
+    camera.lower_left_corner = GpuVec3(-1.0f, -1.0f, -1.0f);
+    camera.horizontal = GpuVec3(2.0f, 0.0f, 0.0f);
+    camera.vertical = GpuVec3(0.0f, 2.0f, 0.0f);
+
+    generate_rays_kernel<<<dim3(1, 1), dim3(1, 1)>>>(q, width, height, camera, 3, d_sample_counts);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    int spectral_mode = -1;
+    int active_channel = -2;
+    float wavelength_pdf = 0.0f;
+    float wavelength = 0.0f;
+    float active_value = 0.0f;
+    CHECK_CUDA(cudaMemcpy(&spectral_mode, q.spectral_modes, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&active_channel, q.active_channels, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&wavelength_pdf, q.wavelength_pdfs, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(spectral_mode == SpectralRayModeSampled);
+    CHECK(active_channel >= 0);
+    CHECK(active_channel < num_spec);
+    CHECK_CUDA(cudaMemcpy(&wavelength, q.throughput_wavelengths + active_channel * cap, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&active_value, q.throughput_vals + active_channel * cap, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(wavelength >= kSpectralLambdaMin);
+    CHECK(wavelength <= kSpectralLambdaMax);
+    CHECK(wavelength_pdf > 0.0f);
+    CHECK(fabsf(wavelength_pdf - 1.0f / (kSpectralLambdaMax - kSpectralLambdaMin)) > 1e-4f);
+    CHECK_FLOAT_EQ(active_value, 1.0f, 1e-6f);
+    return 0;
+}
+
 static int test_lane_spectral_state_roundtrip() {
     REQUIRE_GPU();
     const int cap = 1;
@@ -976,6 +1068,8 @@ int main() {
     RUN_TEST(test_load_store_throughput);
     RUN_TEST(test_raygen_runtime_wavelength_count);
     RUN_TEST(test_raygen_sampled_single_lane_mode);
+    RUN_TEST(test_cie_y_importance_wavelength_proposal);
+    RUN_TEST(test_raygen_importance_mode_uses_cie_y_wavelength_pdf);
     RUN_TEST(test_lane_spectral_state_roundtrip);
     RUN_TEST(test_custom_wavelength_sets);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
