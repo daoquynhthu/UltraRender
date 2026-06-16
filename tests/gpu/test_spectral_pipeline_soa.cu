@@ -1340,6 +1340,111 @@ static int test_conductor_material_semantics() {
     return 0;
 }
 
+__global__ void c3_bsdf_furnace_reciprocity_kernel(float* out) {
+    constexpr int num_spec = 4;
+    float wavelengths[num_spec] = {430.0f, 510.0f, 610.0f, 700.0f};
+    SpectralPacket albedo(0.0f);
+    SpectralPacket extinction(0.0f);
+    SpectralPacket metal_eta(0.0f);
+    for (int c = 0; c < num_spec; ++c) {
+        albedo.wavelengths[c] = wavelengths[c];
+        extinction.wavelengths[c] = wavelengths[c];
+        metal_eta.wavelengths[c] = wavelengths[c];
+    }
+
+    GpuVec3 n(0.0f, 0.0f, 1.0f);
+    GpuVec3 wo = GpuVec3(0.25f, -0.10f, 0.9630680f).normalize();
+    constexpr int n_mu = 32;
+    constexpr int n_phi = 64;
+    constexpr float d_omega = (1.0f / float(n_mu)) * (6.28318530718f / float(n_phi));
+
+    GpuMaterial lambert = {};
+    lambert.type = MaterialType::Lambertian;
+    albedo.values[0] = 0.72f;
+    float lambert_integral = 0.0f;
+
+    GpuMaterial cloth = {};
+    cloth.type = MaterialType::Cloth;
+    albedo.values[0] = 0.60f;
+    GpuVec3 cloth_p(3.14159265359f / 40.0f, 0.0f, 3.14159265359f / 40.0f);
+    float cloth_integral = 0.0f;
+
+    GpuMaterial metal = {};
+    metal.type = MaterialType::Metal;
+    metal.roughness = 0.42f;
+    metal.ior = 1.1f;
+    albedo.values[0] = 1.0f;
+    extinction.values[0] = 3.2f;
+    metal_eta.values[0] = 0.25f;
+    float metal_integral = 0.0f;
+
+    for (int im = 0; im < n_mu; ++im) {
+        float mu = (float(im) + 0.5f) / float(n_mu);
+        float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - mu * mu));
+        for (int ip = 0; ip < n_phi; ++ip) {
+            float phi = (float(ip) + 0.5f) * 6.28318530718f / float(n_phi);
+            GpuVec3 wi(cosf(phi) * sin_theta, sinf(phi) * sin_theta, mu);
+
+            albedo.values[0] = 0.72f;
+            SpectralPacket lambert_bsdf = eval_bsdf(
+                lambert, albedo, extinction, metal_eta, GpuVec3(0.0f, 0.0f, 0.0f), n, GpuVec2(0.0f, 0.0f),
+                wo, wi, wavelengths, num_spec);
+            lambert_integral += lambert_bsdf.values[0] * mu * d_omega;
+
+            albedo.values[0] = 0.60f;
+            SpectralPacket cloth_bsdf = eval_bsdf(
+                cloth, albedo, extinction, metal_eta, cloth_p, n, GpuVec2(0.0f, 0.0f),
+                wo, wi, wavelengths, num_spec);
+            cloth_integral += cloth_bsdf.values[0] * mu * d_omega;
+
+            albedo.values[0] = 1.0f;
+            SpectralPacket metal_bsdf = eval_bsdf(
+                metal, albedo, extinction, metal_eta, GpuVec3(0.0f, 0.0f, 0.0f), n, GpuVec2(0.0f, 0.0f),
+                wo, wi, wavelengths, num_spec);
+            metal_integral += metal_bsdf.values[0] * mu * d_omega;
+        }
+    }
+
+    GpuVec3 wi_recip = GpuVec3(-0.15f, 0.20f, 0.9682458f).normalize();
+    SpectralPacket f_forward = eval_bsdf(
+        metal, albedo, extinction, metal_eta, GpuVec3(0.0f, 0.0f, 0.0f), n, GpuVec2(0.0f, 0.0f),
+        wo, wi_recip, wavelengths, num_spec);
+    SpectralPacket f_reverse = eval_bsdf(
+        metal, albedo, extinction, metal_eta, GpuVec3(0.0f, 0.0f, 0.0f), n, GpuVec2(0.0f, 0.0f),
+        wi_recip, wo, wavelengths, num_spec);
+
+    out[0] = lambert_integral;
+    out[1] = 0.72f;
+    out[2] = cloth_integral;
+    out[3] = 0.60f * get_cloth_intensity(cloth_p);
+    out[4] = metal_integral;
+    out[5] = f_forward.values[0];
+    out[6] = f_reverse.values[0];
+    out[7] = pdf_bsdf(lambert, n, wo, wi_recip);
+    out[8] = fmaxf(0.0f, n.dot(wi_recip)) * 0.318309886f;
+}
+
+static int test_bsdf_energy_and_reciprocity_oracles() {
+    REQUIRE_GPU();
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_out, 9 * sizeof(float)));
+    DeviceMem _out(d_out);
+
+    c3_bsdf_furnace_reciprocity_kernel<<<1, 1>>>(d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float h_out[9];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 9 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(h_out[0], h_out[1], 2e-4f);
+    CHECK_FLOAT_EQ(h_out[2], h_out[3], 2e-4f);
+    CHECK(h_out[4] >= 0.0f);
+    CHECK(h_out[4] <= 1.0f);
+    CHECK_FLOAT_EQ(h_out[5], h_out[6], 1e-5f);
+    CHECK_FLOAT_EQ(h_out[7], h_out[8], 1e-6f);
+    return 0;
+}
+
 __global__ void t12_kernel(float* out_weight, float* out_enter, float* out_exit, int* out_sample, int num_spec)
 {
     GpuMaterial mat = {};
@@ -2331,6 +2436,7 @@ int main() {
     RUN_TEST(test_dielectric_dispersion_runtime_n);
     RUN_TEST(test_metal_scatter_uses_per_channel_conductor_fresnel);
     RUN_TEST(test_conductor_material_semantics);
+    RUN_TEST(test_bsdf_energy_and_reciprocity_oracles);
     RUN_TEST(test_dielectric_slab_scatter_transport_reciprocity);
     RUN_TEST(test_dielectric_medium_transition_helper);
     RUN_TEST(test_lane_split_medium_transition);
