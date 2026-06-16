@@ -170,6 +170,14 @@ __global__ void tabulated_wavelength_proposal_kernel(const float* cdf, const flo
     float lambda = sample_tabulated_wavelength_proposal(0.55f, cdf, pdf, 2, 500.0f, 510.0f, &sampled_pdf);
     out[0] = lambda;
     out[1] = sampled_pdf;
+    out[2] = tabulated_wavelength_proposal_pdf(502.5f, pdf, 2, 500.0f, 510.0f);
+    out[3] = tabulated_wavelength_proposal_pdf(507.5f, pdf, 2, 500.0f, 510.0f);
+    out[4] = scene_cie_mixture_wavelength_pdf(507.5f, pdf, 2, 500.0f, 510.0f);
+    float mixture_pdf = 0.0f;
+    float mixture_lambda = sample_scene_cie_mixture_wavelength(0.275f, cdf, pdf, 2, 500.0f, 510.0f, &mixture_pdf);
+    out[5] = mixture_lambda;
+    out[6] = mixture_pdf;
+    out[7] = scene_cie_mixture_wavelength_pdf(mixture_lambda, pdf, 2, 500.0f, 510.0f);
 }
 
 __device__ float l7_d65_5nm(float lambda) {
@@ -951,7 +959,7 @@ static int test_tabulated_wavelength_proposal_inverse_cdf() {
     float* d_out = nullptr;
     CHECK_CUDA(cudaMalloc(&d_cdf, 2 * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&d_pdf, 2 * sizeof(float)));
-    CHECK_CUDA(cudaMalloc(&d_out, 2 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_out, 8 * sizeof(float)));
     DeviceMem _cdf(d_cdf);
     DeviceMem _pdf(d_pdf);
     DeviceMem _out(d_out);
@@ -962,10 +970,18 @@ static int test_tabulated_wavelength_proposal_inverse_cdf() {
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
 
-    float out[2] = {};
-    CHECK_CUDA(cudaMemcpy(out, d_out, 2 * sizeof(float), cudaMemcpyDeviceToHost));
+    float out[8] = {};
+    CHECK_CUDA(cudaMemcpy(out, d_out, 8 * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(out[0], 507.5f, 1e-5f);
     CHECK_FLOAT_EQ(out[1], 0.18f, 1e-6f);
+    CHECK_FLOAT_EQ(out[2], 0.02f, 1e-6f);
+    CHECK_FLOAT_EQ(out[3], 0.18f, 1e-6f);
+    CHECK(out[4] > 0.09f);
+    CHECK(out[4] < 0.12f);
+    CHECK_FLOAT_EQ(out[5], 507.5f, 1e-5f);
+    CHECK_FLOAT_EQ(out[6], out[7], 1e-7f);
+    CHECK(out[6] > 0.09f);
+    CHECK(out[6] < out[1]);
     return 0;
 }
 

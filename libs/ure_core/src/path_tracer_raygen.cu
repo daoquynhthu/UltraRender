@@ -89,7 +89,7 @@ __global__ __launch_bounds__(512) void generate_rays_kernel(
             queue.wavelength_proposal_cdf &&
             queue.wavelength_proposal_pdf &&
             queue.wavelength_proposal_count > 0) {
-            sampled_lambda = sample_tabulated_wavelength_proposal(
+            sampled_lambda = sample_scene_cie_mixture_wavelength(
                 r_lambda,
                 queue.wavelength_proposal_cdf,
                 queue.wavelength_proposal_pdf,

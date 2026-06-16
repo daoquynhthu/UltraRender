@@ -181,6 +181,55 @@ __device__ inline float sample_tabulated_wavelength_proposal(float u,
     return lambda_min + (float(selected) + local_u) * bin_width;
 }
 
+__device__ inline float tabulated_wavelength_proposal_pdf(float lambda,
+                                                          const float* pdf_table,
+                                                          int count,
+                                                          float lambda_min,
+                                                          float lambda_max) {
+    if (!pdf_table || count <= 0 || lambda_max <= lambda_min) {
+        return 1.0f / (kSpectralLambdaMax - kSpectralLambdaMin);
+    }
+    if (lambda < lambda_min || lambda > lambda_max) {
+        return 1e-12f;
+    }
+    const float bin_width = (lambda_max - lambda_min) / float(count);
+    int bin = int((lambda - lambda_min) / fmaxf(bin_width, 1e-12f));
+    if (bin < 0) bin = 0;
+    if (bin >= count) bin = count - 1;
+    return fmaxf(1e-12f, pdf_table[bin]);
+}
+
+__device__ inline float scene_cie_mixture_wavelength_pdf(float lambda,
+                                                        const float* pdf_table,
+                                                        int count,
+                                                        float lambda_min,
+                                                        float lambda_max) {
+    const float scene_pdf = tabulated_wavelength_proposal_pdf(lambda, pdf_table, count, lambda_min, lambda_max);
+    const float cie_pdf = cie_y_importance_pdf(lambda);
+    return fmaxf(1e-12f, 0.5f * scene_pdf + 0.5f * cie_pdf);
+}
+
+__device__ inline float sample_scene_cie_mixture_wavelength(float u,
+                                                           const float* cdf,
+                                                           const float* pdf_table,
+                                                           int count,
+                                                           float lambda_min,
+                                                           float lambda_max,
+                                                           float* pdf) {
+    const float clamped_u = fminf(0.99999994f, fmaxf(0.0f, u));
+    float lambda = 0.0f;
+    if (clamped_u < 0.5f) {
+        lambda = sample_tabulated_wavelength_proposal(
+            clamped_u * 2.0f, cdf, pdf_table, count, lambda_min, lambda_max, nullptr);
+    } else {
+        lambda = sample_cie_y_importance_wavelength((clamped_u - 0.5f) * 2.0f, nullptr);
+    }
+    if (pdf) {
+        *pdf = scene_cie_mixture_wavelength_pdf(lambda, pdf_table, count, lambda_min, lambda_max);
+    }
+    return lambda;
+}
+
 /**
  * @brief 灏嗛噰鏍峰厜璋?packet 杞崲涓?XYZ 棰滆壊绌洪棿
  * 浣跨敤钂欑壒鍗℃礇绉垎锛?DomainWidth / N) * Sum(Value * CMF)
