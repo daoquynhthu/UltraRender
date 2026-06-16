@@ -503,6 +503,47 @@ static float average_material_emission_power(const GpuMaterialData& material, in
     return power / float(std::max(num_channels, 1));
 }
 
+static void build_light_alias_table(const std::vector<float>& weights,
+                                    float total_weight,
+                                    std::vector<float>& alias_prob,
+                                    std::vector<int>& alias_index) {
+    const size_t n = weights.size();
+    alias_prob.assign(n, 1.0f);
+    alias_index.resize(n);
+    for (size_t i = 0; i < n; ++i) {
+        alias_index[i] = static_cast<int>(i);
+    }
+    if (n == 0 || total_weight <= 0.0f) return;
+
+    std::vector<float> scaled(n);
+    std::vector<int> small;
+    std::vector<int> large;
+    small.reserve(n);
+    large.reserve(n);
+    const float scale = static_cast<float>(n) / total_weight;
+    for (size_t i = 0; i < n; ++i) {
+        scaled[i] = weights[i] * scale;
+        if (scaled[i] < 1.0f) {
+            small.push_back(static_cast<int>(i));
+        } else {
+            large.push_back(static_cast<int>(i));
+        }
+    }
+
+    while (!small.empty() && !large.empty()) {
+        int s = small.back();
+        small.pop_back();
+        int l = large.back();
+        alias_prob[s] = scaled[s];
+        alias_index[s] = l;
+        scaled[l] = scaled[l] + scaled[s] - 1.0f;
+        if (scaled[l] < 1.0f) {
+            large.pop_back();
+            small.push_back(l);
+        }
+    }
+}
+
 // ===== Interactive API Implementation =====
 
 GpuContext* init_gpu_renderer(int width, int height,
@@ -936,9 +977,18 @@ GpuContext* init_gpu_renderer(int width, int height,
         }
         cudaMalloc(&ctx->d_light_selection_cdf, host_light_cdf.size() * sizeof(float));
         cudaMemcpy(ctx->d_light_selection_cdf, host_light_cdf.data(), host_light_cdf.size() * sizeof(float), cudaMemcpyHostToDevice);
+        std::vector<float> host_alias_prob;
+        std::vector<int> host_alias_index;
+        build_light_alias_table(host_light_weights, total_light_weight, host_alias_prob, host_alias_index);
+        cudaMalloc(&ctx->d_light_alias_prob, host_alias_prob.size() * sizeof(float));
+        cudaMalloc(&ctx->d_light_alias_index, host_alias_index.size() * sizeof(int));
+        cudaMemcpy(ctx->d_light_alias_prob, host_alias_prob.data(), host_alias_prob.size() * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpy(ctx->d_light_alias_index, host_alias_index.data(), host_alias_index.size() * sizeof(int), cudaMemcpyHostToDevice);
     } else {
         ctx->d_light_indices = nullptr;
         ctx->d_light_selection_cdf = nullptr;
+        ctx->d_light_alias_prob = nullptr;
+        ctx->d_light_alias_index = nullptr;
     }
     ctx->light_count = (int)host_light_indices.size();
 
@@ -1020,6 +1070,8 @@ void free_gpu_renderer(GpuContext* ctx) {
     cudaFree(ctx->d_instances);
     cudaFree(ctx->d_light_indices);
     cudaFree(ctx->d_light_selection_cdf);
+    cudaFree(ctx->d_light_alias_prob);
+    cudaFree(ctx->d_light_alias_index);
 
     free_ray_queue(ctx->queueA);
     free_ray_queue(ctx->queueB);
@@ -1067,6 +1119,8 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.texture_count = ctx->texture_count;
     scene.light_indices = ctx->d_light_indices;
     scene.light_selection_cdf = ctx->d_light_selection_cdf;
+    scene.light_alias_prob = ctx->d_light_alias_prob;
+    scene.light_alias_index = ctx->d_light_alias_index;
     scene.light_count = ctx->light_count;
 
     scene.medium_density = ctx->medium_density;

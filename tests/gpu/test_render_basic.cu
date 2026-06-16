@@ -907,11 +907,20 @@ static int test_light_selection_cdf_uses_area_and_spectral_power() {
     CHECK(ctx != nullptr);
     CHECK(ctx->light_count == 2);
     CHECK(ctx->d_light_selection_cdf != nullptr);
+    CHECK(ctx->d_light_alias_prob != nullptr);
+    CHECK(ctx->d_light_alias_index != nullptr);
 
     float cdf[2] = {};
+    float alias_prob[2] = {};
+    int alias_index[2] = {};
     CHECK_CUDA(cudaMemcpy(cdf, ctx->d_light_selection_cdf, 2 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(alias_prob, ctx->d_light_alias_prob, 2 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(alias_index, ctx->d_light_alias_index, 2 * sizeof(int), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(cdf[0], 1.0f / 17.0f, 1e-5f);
     CHECK_FLOAT_EQ(cdf[1], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(alias_prob[0], 2.0f / 17.0f, 1e-5f);
+    CHECK(alias_index[0] == 1);
+    CHECK_FLOAT_EQ(alias_prob[1], 1.0f, 1e-6f);
     free_gpu_renderer(ctx);
     return 0;
 }

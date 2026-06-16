@@ -57,6 +57,8 @@ struct GpuContext {
     GpuTexture* d_textures = nullptr;
     int* d_light_indices = nullptr;
     float* d_light_selection_cdf = nullptr;
+    float* d_light_alias_prob = nullptr;
+    int* d_light_alias_index = nullptr;
 
     int material_count = 0;
     int sphere_count = 0;

@@ -419,6 +419,14 @@ __device__ inline float light_selection_pdf(const GpuScene& scene, int light_lis
 
 __device__ inline int sample_light_list_index(const GpuScene& scene, float r) {
     if (scene.light_count <= 0) return -1;
+    if (scene.light_alias_prob && scene.light_alias_index) {
+        float scaled = fminf(fmaxf(r, 0.0f), 0.99999994f) * float(scene.light_count);
+        int column = min(int(scaled), scene.light_count - 1);
+        float coin = scaled - float(column);
+        int alias = scene.light_alias_index[column];
+        if (alias < 0 || alias >= scene.light_count) alias = column;
+        return coin <= scene.light_alias_prob[column] ? column : alias;
+    }
     if (!scene.light_selection_cdf) {
         return min(int(r * scene.light_count), scene.light_count - 1);
     }

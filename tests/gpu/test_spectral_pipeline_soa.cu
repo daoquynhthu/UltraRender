@@ -1827,12 +1827,14 @@ __global__ void c9_sphere_light_pdf_kernel(float* out)
     out[1] = 1.0f / (solid_angle * 2.0f);
 }
 
-__global__ void c9_weighted_sphere_light_pdf_kernel(float* d_cdf, float* out)
+__global__ void c9_weighted_sphere_light_pdf_kernel(float* d_cdf, float* d_alias_prob, int* d_alias_index, float* out)
 {
     int light_indices[2] = {0, 1};
     GpuScene scene = {};
     scene.light_indices = light_indices;
     scene.light_selection_cdf = d_cdf;
+    scene.light_alias_prob = d_alias_prob;
+    scene.light_alias_index = d_alias_index;
     scene.light_count = 2;
 
     GpuSphere light = {};
@@ -1841,11 +1843,12 @@ __global__ void c9_weighted_sphere_light_pdf_kernel(float* d_cdf, float* out)
     GpuVec3 ref(0.0f, 0.0f, 0.0f);
 
     out[0] = float(sample_light_list_index(scene, 0.05f));
-    out[1] = float(sample_light_list_index(scene, 0.50f));
+    out[1] = float(sample_light_list_index(scene, 0.40f));
     out[2] = light_selection_pdf(scene, 0);
     out[3] = light_selection_pdf(scene, 1);
     out[4] = selected_sphere_light_pdf(scene, 1, light, ref);
     out[5] = sphere_light_solid_angle_pdf_only(light, ref) * 0.75f;
+    out[6] = float(sample_light_list_index(scene, 0.75f));
 }
 
 static int test_sphere_light_pdf_matches_solid_angle_sampling() {
@@ -1867,24 +1870,33 @@ static int test_sphere_light_pdf_matches_solid_angle_sampling() {
 static int test_weighted_sphere_light_pdf_uses_selection_cdf() {
     REQUIRE_GPU();
     float h_cdf[2] = {0.25f, 1.0f};
+    float h_alias_prob[2] = {0.5f, 1.0f};
+    int h_alias_index[2] = {1, 1};
     float* d_cdf = nullptr;
+    float* d_alias_prob = nullptr;
+    int* d_alias_index = nullptr;
     float* d_out = nullptr;
     CHECK_CUDA(cudaMalloc(&d_cdf, 2 * sizeof(float)));
-    CHECK_CUDA(cudaMalloc(&d_out, 6 * sizeof(float)));
-    DeviceMem _dc(d_cdf), _do(d_out);
+    CHECK_CUDA(cudaMalloc(&d_alias_prob, 2 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_alias_index, 2 * sizeof(int)));
+    CHECK_CUDA(cudaMalloc(&d_out, 7 * sizeof(float)));
+    DeviceMem _dc(d_cdf), _dap(d_alias_prob), _dai(d_alias_index), _do(d_out);
     CHECK_CUDA(cudaMemcpy(d_cdf, h_cdf, 2 * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_alias_prob, h_alias_prob, 2 * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_alias_index, h_alias_index, 2 * sizeof(int), cudaMemcpyHostToDevice));
 
-    c9_weighted_sphere_light_pdf_kernel<<<1, 1>>>(d_cdf, d_out);
+    c9_weighted_sphere_light_pdf_kernel<<<1, 1>>>(d_cdf, d_alias_prob, d_alias_index, d_out);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
 
-    float h_out[6];
-    CHECK_CUDA(cudaMemcpy(h_out, d_out, 6 * sizeof(float), cudaMemcpyDeviceToHost));
+    float h_out[7];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 7 * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(h_out[0], 0.0f, 1e-6f);
     CHECK_FLOAT_EQ(h_out[1], 1.0f, 1e-6f);
     CHECK_FLOAT_EQ(h_out[2], 0.25f, 1e-6f);
     CHECK_FLOAT_EQ(h_out[3], 0.75f, 1e-6f);
     CHECK_FLOAT_EQ(h_out[4], h_out[5], 1e-5f);
+    CHECK_FLOAT_EQ(h_out[6], 1.0f, 1e-6f);
     return 0;
 }
 
