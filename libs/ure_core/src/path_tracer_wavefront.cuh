@@ -940,7 +940,15 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     GpuVec3 v = w.cross(u);
                     GpuVec3 l_dir = (u * cosf(phi) * sin_theta + v * sinf(phi) * sin_theta + w * cos_theta).normalize();
 
-                    float phase_val = eval_henyey_greenstein(current_queue.directions[idx].dot(l_dir), anisotropy);
+                    bool phase_supported = false;
+                    float phase_val = eval_volume_phase(
+                        VolumePhaseFunction::HenyeyGreenstein,
+                        current_queue.directions[idx].dot(l_dir),
+                        anisotropy,
+                        &phase_supported);
+                    if (!phase_supported) {
+                        return;
+                    }
                     float pdf = selected_sphere_light_pdf(scene, light_idx_idx, light_sphere, p_vol);
 
                     float M_dot_D = -wc.dot(l_dir);
@@ -984,7 +992,17 @@ __global__ __launch_bounds__(256) void shade_kernel(
             float r_phase_1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumePhaseU);
             float r_phase_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumePhaseV);
             float phase_pdf = 0.0f;
-            GpuVec3 new_dir = sample_henyey_greenstein_lds_pdf(current_queue.directions[idx], anisotropy, r_phase_1, r_phase_2, &phase_pdf);
+            GpuVec3 new_dir;
+            if (!sample_volume_phase_lds_pdf(
+                    VolumePhaseFunction::HenyeyGreenstein,
+                    current_queue.directions[idx],
+                    anisotropy,
+                    r_phase_1,
+                    r_phase_2,
+                    &new_dir,
+                    &phase_pdf)) {
+                return;
+            }
             GpuVec3 new_origin = current_queue.origins[idx] + current_queue.directions[idx] * t_medium;
 
              int out_idx = reserve_ray_slot(next_queue);

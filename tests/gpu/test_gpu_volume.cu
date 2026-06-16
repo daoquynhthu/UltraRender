@@ -113,6 +113,44 @@ __global__ void test_rayleigh_phase_kernel(float* out) {
     out[9] = sampled.z;
 }
 
+__global__ void test_volume_phase_selector_kernel(float* out) {
+    bool hg_supported = false;
+    bool rayleigh_supported = false;
+    bool mie_supported = true;
+    float hg_eval = eval_volume_phase(VolumePhaseFunction::HenyeyGreenstein, 0.31f, 0.6f, &hg_supported);
+    float rayleigh_eval = eval_volume_phase(VolumePhaseFunction::Rayleigh, 0.31f, 0.6f, &rayleigh_supported);
+    float mie_eval = eval_volume_phase(VolumePhaseFunction::Mie, 0.31f, 0.6f, &mie_supported);
+
+    GpuVec3 hg_dir;
+    GpuVec3 rayleigh_dir;
+    GpuVec3 mie_dir;
+    float hg_pdf = -1.0f;
+    float rayleigh_pdf = -1.0f;
+    float mie_pdf = -1.0f;
+    bool hg_sample = sample_volume_phase_lds_pdf(
+        VolumePhaseFunction::HenyeyGreenstein, GpuVec3(0.0f, 0.0f, 1.0f), 0.6f, 0.7f, 0.2f, &hg_dir, &hg_pdf);
+    bool rayleigh_sample = sample_volume_phase_lds_pdf(
+        VolumePhaseFunction::Rayleigh, GpuVec3(0.0f, 0.0f, 1.0f), 0.6f, 0.7f, 0.2f, &rayleigh_dir, &rayleigh_pdf);
+    bool mie_sample = sample_volume_phase_lds_pdf(
+        VolumePhaseFunction::Mie, GpuVec3(0.0f, 0.0f, 1.0f), 0.6f, 0.7f, 0.2f, &mie_dir, &mie_pdf);
+
+    out[0] = hg_supported ? 1.0f : 0.0f;
+    out[1] = rayleigh_supported ? 1.0f : 0.0f;
+    out[2] = mie_supported ? 1.0f : 0.0f;
+    out[3] = hg_eval;
+    out[4] = eval_henyey_greenstein(0.31f, 0.6f);
+    out[5] = rayleigh_eval;
+    out[6] = eval_rayleigh_phase(0.31f);
+    out[7] = mie_eval;
+    out[8] = hg_sample ? hg_pdf : 0.0f;
+    out[9] = rayleigh_sample ? rayleigh_pdf : 0.0f;
+    out[10] = mie_sample ? 1.0f : 0.0f;
+    out[11] = mie_pdf;
+    out[12] = hg_dir.length();
+    out[13] = rayleigh_dir.length();
+    out[14] = mie_dir.length();
+}
+
 static int test_transmittance() {
     REQUIRE_GPU();
     float* d_out;
@@ -248,6 +286,32 @@ static int test_rayleigh_phase_sampling() {
     return 0;
 }
 
+static int test_volume_phase_selector_boundary() {
+    REQUIRE_GPU();
+    float* d_out;
+    CHECK_CUDA(cudaMalloc(&d_out, 15 * sizeof(float)));
+    test_volume_phase_selector_kernel<<<1, 1>>>(d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    float h_out[15];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 15 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(h_out[0], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[1], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[2], 0.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[3], h_out[4], 1e-6f);
+    CHECK_FLOAT_EQ(h_out[5], h_out[6], 1e-6f);
+    CHECK_FLOAT_EQ(h_out[7], 0.0f, 1e-6f);
+    CHECK(h_out[8] > 0.0f);
+    CHECK(h_out[9] > 0.0f);
+    CHECK_FLOAT_EQ(h_out[10], 0.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[11], 0.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_out[12], 1.0f, 1e-5f);
+    CHECK_FLOAT_EQ(h_out[13], 1.0f, 1e-5f);
+    CHECK_FLOAT_EQ(h_out[14], 0.0f, 1e-6f);
+    cudaFree(d_out);
+    return 0;
+}
+
 int main() {
     printf("[GPU Volume Scattering Test]\n");
     RUN_TEST(test_transmittance);
@@ -257,6 +321,7 @@ int main() {
     RUN_TEST(test_sampling_dimension_contract);
     RUN_TEST(test_henyey_greenstein_lds_sampling);
     RUN_TEST(test_rayleigh_phase_sampling);
+    RUN_TEST(test_volume_phase_selector_boundary);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;
 }

@@ -2,6 +2,17 @@
 
 #include "path_tracer_decl.cuh"
 
+enum class VolumePhaseFunction {
+    HenyeyGreenstein = 0,
+    Rayleigh = 1,
+    Mie = 2
+};
+
+__host__ __device__ inline bool is_supported_volume_phase_function(VolumePhaseFunction phase) {
+    return phase == VolumePhaseFunction::HenyeyGreenstein ||
+           phase == VolumePhaseFunction::Rayleigh;
+}
+
 __device__ GpuVec3 sample_henyey_greenstein_lds(const GpuVec3& w_in, float g, float r1, float r2) {
     if (fabsf(g) < 1e-3f) {
         return sample_unit_vector_lds(r1, r2);
@@ -113,4 +124,53 @@ __device__ GpuVec3 sample_rayleigh_phase_lds_pdf(
         *pdf = pdf_rayleigh_phase(w_in, out);
     }
     return out;
+}
+
+__device__ float eval_volume_phase(
+    VolumePhaseFunction phase,
+    float cos_theta,
+    float anisotropy,
+    bool* supported
+) {
+    bool ok = is_supported_volume_phase_function(phase);
+    if (supported) {
+        *supported = ok;
+    }
+    if (!ok) {
+        return 0.0f;
+    }
+    if (phase == VolumePhaseFunction::Rayleigh) {
+        return eval_rayleigh_phase(cos_theta);
+    }
+    return eval_henyey_greenstein(cos_theta, anisotropy);
+}
+
+__device__ bool sample_volume_phase_lds_pdf(
+    VolumePhaseFunction phase,
+    const GpuVec3& w_in,
+    float anisotropy,
+    float r1,
+    float r2,
+    GpuVec3* w_out,
+    float* pdf
+) {
+    if (!is_supported_volume_phase_function(phase)) {
+        if (w_out) {
+            *w_out = GpuVec3(0.0f, 0.0f, 0.0f);
+        }
+        if (pdf) {
+            *pdf = 0.0f;
+        }
+        return false;
+    }
+    if (phase == VolumePhaseFunction::Rayleigh) {
+        if (w_out) {
+            *w_out = sample_rayleigh_phase_lds_pdf(w_in, r1, r2, pdf);
+        }
+        return true;
+    }
+    if (w_out) {
+        *w_out = sample_henyey_greenstein_lds_pdf(w_in, anisotropy, r1, r2, pdf);
+    }
+    return true;
 }
