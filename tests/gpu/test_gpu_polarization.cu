@@ -152,6 +152,46 @@ __global__ void test_dielectric_surface_power_conservation_kernel(float* out) {
     out[8] = reverse.radiance_scale * reverse.importance_scale;
 }
 
+__global__ void test_thin_film_sp_energy_grid_kernel(float* out) {
+    const float wavelengths[3] = {430.0f, 550.0f, 700.0f};
+    const float thicknesses[3] = {0.0f, 110.0f, 320.0f};
+    const float cosines[3] = {1.0f, 0.73f, 0.41f};
+    float max_s_error = 0.0f;
+    float max_p_error = 0.0f;
+    float min_power = 1.0f;
+    float max_power = 0.0f;
+
+    for (int iw = 0; iw < 3; ++iw) {
+        for (int it = 0; it < 3; ++it) {
+            for (int ia = 0; ia < 3; ++ia) {
+                ThinFilmBoundary film = eval_thin_film_boundary(
+                    wavelengths[iw], thicknesses[it], 1.0f, 1.38f, 1.62f, cosines[ia]);
+                float s_error = fabsf(film.Rs + film.Ts - 1.0f);
+                float p_error = fabsf(film.Rp + film.Tp - 1.0f);
+                if (s_error > max_s_error) {
+                    max_s_error = s_error;
+                }
+                if (p_error > max_p_error) {
+                    max_p_error = p_error;
+                }
+                float local_min = fminf(fminf(film.Rs, film.Rp), fminf(film.Ts, film.Tp));
+                float local_max = fmaxf(fmaxf(film.Rs, film.Rp), fmaxf(film.Ts, film.Tp));
+                if (local_min < min_power) {
+                    min_power = local_min;
+                }
+                if (local_max > max_power) {
+                    max_power = local_max;
+                }
+            }
+        }
+    }
+
+    out[0] = max_s_error;
+    out[1] = max_p_error;
+    out[2] = min_power;
+    out[3] = max_power;
+}
+
 __global__ void test_dielectric_surface_boundary_kernel(float* out) {
     DielectricBoundary bare = eval_dielectric_boundary(1.0f, 1.5f, 0.73f);
     DielectricSurfaceBoundary surface_bare = eval_dielectric_surface_boundary(550.0f, 0.0f, 1.0f, 1.25f, 1.5f, 0.73f);
@@ -427,6 +467,22 @@ static int test_dielectric_surface_power_conservation() {
     return 0;
 }
 
+static int test_thin_film_sp_energy_grid() {
+    REQUIRE_GPU();
+    float* d_out;
+    CHECK_CUDA(cudaMalloc(&d_out, 4 * sizeof(float)));
+    test_thin_film_sp_energy_grid_kernel<<<1, 1>>>(d_out);
+    CHECK_CUDA(cudaGetLastError());
+    float h_out[4];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 4 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(h_out[0] < 2e-4f);
+    CHECK(h_out[1] < 2e-4f);
+    CHECK(h_out[2] > -1e-5f);
+    CHECK(h_out[3] < 1.0001f);
+    cudaFree(d_out);
+    return 0;
+}
+
 static int test_dielectric_surface_boundary() {
     REQUIRE_GPU();
     float* d_out;
@@ -503,6 +559,7 @@ int main() {
     RUN_TEST(test_boundary_transport_scale);
     RUN_TEST(test_boundary_transport_weight);
     RUN_TEST(test_dielectric_surface_power_conservation);
+    RUN_TEST(test_thin_film_sp_energy_grid);
     RUN_TEST(test_dielectric_surface_boundary);
     RUN_TEST(test_boundary_conductor);
     RUN_TEST(test_boundary_thin_film);

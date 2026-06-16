@@ -2277,6 +2277,79 @@ static int test_rough_dielectric_eval_pdf_visible_to_direct_light() {
     return 0;
 }
 
+__global__ void c13_rough_dielectric_pdf_normalization_kernel(float* out)
+{
+    constexpr int num_spec = 1;
+    GpuMaterial rough = {};
+    rough.type = MaterialType::Dielectric;
+    rough.ior = 1.5f;
+    rough.roughness = 0.55f;
+    rough.thin_film_thickness = 0.0f;
+    rough.thin_film_ior = 1.35f;
+    rough.dispersion = 0.0f;
+
+    float wavelengths[num_spec] = {550.0f};
+    GpuVec3 n(0.0f, 0.0f, 1.0f);
+    GpuVec3 wo = GpuVec3(0.23f, -0.17f, 0.958123f).normalize();
+    constexpr int n_mu = 96;
+    constexpr int n_phi = 192;
+    constexpr float d_omega = (1.0f / float(n_mu)) * (6.28318530718f / float(n_phi));
+    float integral = 0.0f;
+    float reflection_integral = 0.0f;
+    float transmission_integral = 0.0f;
+
+    for (int side = 0; side < 2; ++side) {
+        for (int im = 0; im < n_mu; ++im) {
+            float abs_mu = (float(im) + 0.5f) / float(n_mu);
+            float mu = side == 0 ? abs_mu : -abs_mu;
+            float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - mu * mu));
+            for (int ip = 0; ip < n_phi; ++ip) {
+                float phi = (float(ip) + 0.5f) * 6.28318530718f / float(n_phi);
+                GpuVec3 wi(cosf(phi) * sin_theta, sinf(phi) * sin_theta, mu);
+                SpectralPacket pdf = pdf_bsdf_spectral(
+                    rough,
+                    n,
+                    GpuVec2(0.0f, 0.0f),
+                    wo,
+                    wi,
+                    wavelengths,
+                    num_spec,
+                    20.0f);
+                integral += pdf.values[0] * d_omega;
+                if (side == 0) {
+                    reflection_integral += pdf.values[0] * d_omega;
+                } else {
+                    transmission_integral += pdf.values[0] * d_omega;
+                }
+            }
+        }
+    }
+
+    out[0] = integral;
+    out[1] = reflection_integral;
+    out[2] = transmission_integral;
+}
+
+static int test_rough_dielectric_pdf_normalizes_over_reflection_and_transmission() {
+    REQUIRE_GPU();
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_out, 3 * sizeof(float)));
+    DeviceMem _do(d_out);
+
+    c13_rough_dielectric_pdf_normalization_kernel<<<1, 1>>>(d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float h_out[3];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 3 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(h_out[0], 1.0f, 0.03f);
+    CHECK(h_out[1] > 0.0f);
+    CHECK(h_out[2] > 0.0f);
+    CHECK(h_out[1] + h_out[2] > 0.97f);
+    CHECK(h_out[1] + h_out[2] < 1.03f);
+    return 0;
+}
+
 __global__ void c12_rough_dielectric_direct_light_gate_kernel(float* out)
 {
     GpuMaterial lambert = {};
@@ -2446,6 +2519,7 @@ int main() {
     RUN_TEST(test_weighted_sphere_light_pdf_uses_selection_cdf);
     RUN_TEST(test_rough_dielectric_uses_microfacet_btdf);
     RUN_TEST(test_rough_dielectric_eval_pdf_visible_to_direct_light);
+    RUN_TEST(test_rough_dielectric_pdf_normalizes_over_reflection_and_transmission);
     RUN_TEST(test_rough_dielectric_direct_light_gate_allows_btdf_side);
     RUN_TEST(test_spectral_resource_sampled_table_eval_lambda);
     RUN_TEST(test_material_resource_eval_overrides_packet_soa);
