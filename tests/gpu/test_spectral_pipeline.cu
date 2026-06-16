@@ -1,5 +1,6 @@
 #include <cuda_runtime.h>
 #include <stdio.h>
+#include <vector>
 
 #include "test_framework.cuh"
 #include "ure/gpu_structs.hpp"
@@ -178,6 +179,50 @@ __global__ void tabulated_wavelength_proposal_kernel(const float* cdf, const flo
     out[5] = mixture_lambda;
     out[6] = mixture_pdf;
     out[7] = scene_cie_mixture_wavelength_pdf(mixture_lambda, pdf, 2, 500.0f, 510.0f);
+}
+
+__device__ float r5_narrow_spd_fixture(float lambda) {
+    float x = (lambda - 610.0f) / 3.0f;
+    return expf(-0.5f * x * x);
+}
+
+__global__ void r5_narrowband_scene_proposal_oracle_kernel(const float* cdf, const float* pdf, int count, float* out) {
+    constexpr int kReferenceSamples = 4096;
+    constexpr float domain = kSpectralLambdaMax - kSpectralLambdaMin;
+    constexpr float uniform_pdf = 1.0f / domain;
+    float reference = 0.0f;
+    float uniform_second_moment = 0.0f;
+    float mixture_second_moment = 0.0f;
+    float uniform_max_weight = 0.0f;
+    float mixture_max_weight = 0.0f;
+    for (int i = 0; i < kReferenceSamples; ++i) {
+        float u = (float(i) + 0.5f) / float(kReferenceSamples);
+        float lambda = kSpectralLambdaMin + u * domain;
+        float value = r5_narrow_spd_fixture(lambda);
+        float mixture_pdf = scene_cie_mixture_wavelength_pdf(lambda, pdf, count, float(kGpuCieStart), float(kGpuCieEnd));
+        reference += value * domain / float(kReferenceSamples);
+        uniform_second_moment += value * value / uniform_pdf * domain / float(kReferenceSamples);
+        mixture_second_moment += value * value / fmaxf(1e-12f, mixture_pdf) * domain / float(kReferenceSamples);
+        float weight = value / uniform_pdf;
+        float mixture_weight = value / fmaxf(1e-12f, mixture_pdf);
+        uniform_max_weight = fmaxf(uniform_max_weight, weight);
+        mixture_max_weight = fmaxf(mixture_max_weight, mixture_weight);
+    }
+
+    float sampled_pdf = 0.0f;
+    float sampled_lambda = sample_scene_cie_mixture_wavelength(
+        0.25f, cdf, pdf, count, float(kGpuCieStart), float(kGpuCieEnd), &sampled_pdf);
+    out[0] = reference;
+    out[1] = fmaxf(0.0f, uniform_second_moment - reference * reference);
+    out[2] = fmaxf(0.0f, mixture_second_moment - reference * reference);
+    out[3] = uniform_second_moment;
+    out[4] = mixture_second_moment;
+    out[5] = uniform_max_weight;
+    out[6] = mixture_max_weight;
+    out[7] = scene_cie_mixture_wavelength_pdf(610.0f, pdf, count, float(kGpuCieStart), float(kGpuCieEnd));
+    out[8] = uniform_pdf;
+    out[9] = sampled_lambda;
+    out[10] = sampled_pdf;
 }
 
 __device__ float l7_d65_5nm(float lambda) {
@@ -985,6 +1030,62 @@ static int test_tabulated_wavelength_proposal_inverse_cdf() {
     return 0;
 }
 
+static int test_narrowband_scene_proposal_reduces_spd_estimator_error() {
+    REQUIRE_GPU();
+    constexpr int kProposalBins = kGpuCieCount - 1;
+    constexpr float kBinWidth = float(kGpuCieStep);
+    std::vector<float> weights(kProposalBins, 0.0f);
+    float total = 0.0f;
+    for (int i = 0; i < kProposalBins; ++i) {
+        float lambda = float(kGpuCieStart) + (float(i) + 0.5f) * kBinWidth;
+        float x = (lambda - 610.0f) / 3.0f;
+        weights[i] = expf(-0.5f * x * x);
+        total += weights[i];
+    }
+    float floor_weight = fmaxf(1e-8f, total * 1e-5f / float(kProposalBins));
+    total = 0.0f;
+    for (float& weight : weights) {
+        weight += floor_weight;
+        total += weight;
+    }
+
+    std::vector<float> cdf(kProposalBins, 0.0f);
+    std::vector<float> pdf(kProposalBins, 0.0f);
+    float running = 0.0f;
+    for (int i = 0; i < kProposalBins; ++i) {
+        float mass = weights[i] / total;
+        running += mass;
+        cdf[i] = i + 1 == kProposalBins ? 1.0f : running;
+        pdf[i] = mass / kBinWidth;
+    }
+
+    float* d_cdf = nullptr;
+    float* d_pdf = nullptr;
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_cdf, cdf.size() * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_pdf, pdf.size() * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_out, 11 * sizeof(float)));
+    DeviceMem _cdf(d_cdf), _pdf(d_pdf), _out(d_out);
+    CHECK_CUDA(cudaMemcpy(d_cdf, cdf.data(), cdf.size() * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_pdf, pdf.data(), pdf.size() * sizeof(float), cudaMemcpyHostToDevice));
+
+    r5_narrowband_scene_proposal_oracle_kernel<<<1, 1>>>(d_cdf, d_pdf, kProposalBins, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float out[11];
+    CHECK_CUDA(cudaMemcpy(out, d_out, 11 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(out[0] > 0.0f);
+    CHECK(out[2] < out[1] * 0.25f);
+    CHECK(out[4] < out[3] * 0.25f);
+    CHECK(out[6] < out[5] * 0.5f);
+    CHECK(out[7] > out[8] * 10.0f);
+    CHECK(out[9] >= 600.0f);
+    CHECK(out[9] <= 620.0f);
+    CHECK(out[10] > out[8] * 10.0f);
+    return 0;
+}
+
 static int test_raygen_importance_mode_uses_cie_y_wavelength_pdf() {
     REQUIRE_GPU();
     const int width = 1;
@@ -1120,6 +1221,7 @@ int main() {
     RUN_TEST(test_raygen_sampled_single_lane_mode);
     RUN_TEST(test_cie_y_importance_wavelength_proposal);
     RUN_TEST(test_tabulated_wavelength_proposal_inverse_cdf);
+    RUN_TEST(test_narrowband_scene_proposal_reduces_spd_estimator_error);
     RUN_TEST(test_raygen_importance_mode_uses_cie_y_wavelength_pdf);
     RUN_TEST(test_lane_spectral_state_roundtrip);
     RUN_TEST(test_custom_wavelength_sets);
