@@ -41,5 +41,12 @@ Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "guided_mixture_li
 Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "path_guiding_light_weights" "R.7 guide cache device path"
 Assert-Contains "tests\gpu\test_render_basic.cu" "test_path_guiding_shadow_visibility_updates_light_weight" "R.7 progressive guide update test"
 Assert-Contains "tests\host\test_config.cpp" "test_path_guiding_cli_overrides" "R.7 config parity test"
+Assert-Contains "libs\ure_types\include\ure\render_config.hpp" "RestirDirectConfig" "R.8 ReSTIR DI config"
+Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "enqueue_restir_di_temporal_replay" "R.8 temporal ReSTIR DI replay path"
+Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "store_restir_di_visible_candidate" "R.8 visible candidate reservoir update"
+Assert-Contains "libs\ure_core\include\ure\gpu_structs.hpp" "restir_di_stokes_i" "R.8 Stokes-compatible reservoir metadata"
+Assert-Contains "libs\ure_core\src\path_tracer_host_api.cu" "Unbiased ReSTIR DI is not implemented yet" "R.8 unsupported unbiased mode fail-loud"
+Assert-Contains "tests\gpu\test_render_basic.cu" "test_restir_di_visible_shadow_updates_reservoir_metadata" "R.8 reservoir metadata test"
+Assert-Contains "tests\host\test_config.cpp" "test_restir_di_cli_overrides" "R.8 config parity test"
 
 Write-Host "Phase R static audit passed"

@@ -161,6 +161,11 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.path_guiding.enabled = app_config.path_guiding.enabled;
     gpu_config.path_guiding.light_mixture = static_cast<float>(app_config.path_guiding.light_mixture);
     gpu_config.path_guiding.learning_rate = static_cast<float>(app_config.path_guiding.learning_rate);
+    gpu_config.restir_di.enabled = app_config.restir_di.enabled;
+    gpu_config.restir_di.temporal_reuse = app_config.restir_di.temporal_reuse;
+    gpu_config.restir_di.spatial_reuse = app_config.restir_di.spatial_reuse;
+    gpu_config.restir_di.unbiased = app_config.restir_di.unbiased;
+    gpu_config.restir_di.max_history = app_config.restir_di.max_history;
     if (!make_wave_optics_config(app_config.wave_optics, gpu_config.wave_optics)) {
         return 1;
     }

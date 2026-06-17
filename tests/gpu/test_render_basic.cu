@@ -101,6 +101,12 @@ static int test_alloc_shadow_queue(ShadowQueue& q, int cap, int num_spec = 4) {
     if (cudaMalloc(&q.wavelength_pdfs, cap * sizeof(float)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.pixel_indices, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.light_list_indices, cap * sizeof(int)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.bsdf_lobe_pdfs, cap * sizeof(float)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.stokes_i, cap * sizeof(float)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.stokes_q, cap * sizeof(float)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.stokes_u, cap * sizeof(float)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.stokes_v, cap * sizeof(float)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.restir_replay_flags, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.count, sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.overflow_count, sizeof(int)) != cudaSuccess) return 1;
     if (cudaMemset(q.overflow_count, 0, sizeof(int)) != cudaSuccess) return 1;
@@ -113,7 +119,9 @@ static void test_free_shadow_queue(const ShadowQueue& q) {
     cudaFree(q.origins); cudaFree(q.directions); cudaFree(q.max_dist);
     cudaFree(q.radiance_vals); cudaFree(q.radiance_wavelengths);
     cudaFree(q.spectral_modes); cudaFree(q.active_channels); cudaFree(q.wavelength_pdfs);
-    cudaFree(q.pixel_indices); cudaFree(q.light_list_indices); cudaFree(q.count); cudaFree(q.overflow_count);
+    cudaFree(q.pixel_indices); cudaFree(q.light_list_indices); cudaFree(q.bsdf_lobe_pdfs);
+    cudaFree(q.stokes_i); cudaFree(q.stokes_q); cudaFree(q.stokes_u); cudaFree(q.stokes_v);
+    cudaFree(q.restir_replay_flags); cudaFree(q.count); cudaFree(q.overflow_count);
 }
 
 __global__ void setup_single_ray_kernel(RayQueue q, GpuVec3 origin, GpuVec3 dir, int pixel_idx) {
@@ -201,8 +209,36 @@ __global__ void setup_path_guided_shadow_kernel(ShadowQueue q, float* guide_weig
     q.wavelength_pdfs[0] = 1.0f;
     q.pixel_indices[0] = 0;
     q.light_list_indices[0] = 1;
+    q.bsdf_lobe_pdfs[0] = 0.25f;
+    q.stokes_i[0] = 1.0f;
+    q.stokes_q[0] = 0.0f;
+    q.stokes_u[0] = 0.0f;
+    q.stokes_v[0] = 0.0f;
+    q.restir_replay_flags[0] = 0;
     guide_weights[0] = 0.0f;
     guide_weights[1] = 0.0f;
+    accum[0] = GpuVec3(0.0f, 0.0f, 0.0f);
+}
+
+__global__ void setup_restir_shadow_kernel(ShadowQueue q, GpuVec3* accum) {
+    int one = 1;
+    *q.count = one;
+    q.origins[0] = GpuVec3(0.0f, 0.0f, 0.0f);
+    q.directions[0] = GpuVec3(0.0f, 1.0f, 0.0f);
+    q.max_dist[0] = 10.0f;
+    q.radiance_vals[0] = 4.0f;
+    q.radiance_wavelengths[0] = 550.0f;
+    q.spectral_modes[0] = SpectralRayModeSampled;
+    q.active_channels[0] = 0;
+    q.wavelength_pdfs[0] = 0.02f;
+    q.pixel_indices[0] = 0;
+    q.light_list_indices[0] = 1;
+    q.bsdf_lobe_pdfs[0] = 0.25f;
+    q.stokes_i[0] = 1.0f;
+    q.stokes_q[0] = 0.125f;
+    q.stokes_u[0] = 0.0f;
+    q.stokes_v[0] = 0.0f;
+    q.restir_replay_flags[0] = 0;
     accum[0] = GpuVec3(0.0f, 0.0f, 0.0f);
 }
 
@@ -1116,6 +1152,157 @@ static int test_path_guiding_shadow_visibility_updates_light_weight() {
     return 0;
 }
 
+static int test_restir_di_allocates_and_resets_temporal_reservoirs() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.restir_di.enabled = true;
+    config.restir_di.temporal_reuse = true;
+    config.restir_di.max_history = 3;
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->d_restir_di_valid != nullptr);
+    CHECK(ctx->d_restir_di_radiance_vals != nullptr);
+    CHECK(ctx->last_integrator_restir_reservoir_count == 16);
+
+    int one = 1;
+    CHECK_CUDA(cudaMemcpy(ctx->d_restir_di_valid, &one, sizeof(int), cudaMemcpyHostToDevice));
+    reset_accumulation_gpu(ctx);
+    int valid = -1;
+    CHECK_CUDA(cudaMemcpy(&valid, ctx->d_restir_di_valid, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK(valid == 0);
+    free_gpu_renderer(ctx);
+
+    bool threw_unbiased = false;
+    try {
+        ure::RenderConfig bad = config;
+        bad.restir_di.unbiased = true;
+        GpuContext* bad_ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, bad);
+        free_gpu_renderer(bad_ctx);
+    } catch (const std::runtime_error&) {
+        threw_unbiased = true;
+    }
+    CHECK(threw_unbiased);
+    return 0;
+}
+
+static int test_restir_di_visible_shadow_updates_reservoir_metadata() {
+    REQUIRE_GPU();
+    ShadowQueue q = {};
+    CHECK(test_alloc_shadow_queue(q, 1, 1) == 0);
+    GpuVec3* d_accum = nullptr;
+    GpuVec3* d_origins = nullptr;
+    GpuVec3* d_dirs = nullptr;
+    float* d_max = nullptr;
+    float* d_radiance = nullptr;
+    float* d_waves = nullptr;
+    float* d_target = nullptr;
+    float* d_lobe = nullptr;
+    float* d_wp = nullptr;
+    float* d_si = nullptr;
+    float* d_sq = nullptr;
+    float* d_su = nullptr;
+    float* d_sv = nullptr;
+    int* d_light = nullptr;
+    int* d_mode = nullptr;
+    int* d_active = nullptr;
+    int* d_hist = nullptr;
+    int* d_valid = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_accum, sizeof(GpuVec3)));
+    CHECK_CUDA(cudaMalloc(&d_origins, sizeof(GpuVec3)));
+    CHECK_CUDA(cudaMalloc(&d_dirs, sizeof(GpuVec3)));
+    CHECK_CUDA(cudaMalloc(&d_max, sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_radiance, sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_waves, sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_target, sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_lobe, sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_wp, sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_si, sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_sq, sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_su, sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_sv, sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_light, sizeof(int)));
+    CHECK_CUDA(cudaMalloc(&d_mode, sizeof(int)));
+    CHECK_CUDA(cudaMalloc(&d_active, sizeof(int)));
+    CHECK_CUDA(cudaMalloc(&d_hist, sizeof(int)));
+    CHECK_CUDA(cudaMalloc(&d_valid, sizeof(int)));
+    DeviceMem _accum(d_accum), _origins(d_origins), _dirs(d_dirs), _max(d_max);
+    DeviceMem _radiance(d_radiance), _waves(d_waves), _target(d_target), _lobe(d_lobe), _wp(d_wp);
+    DeviceMem _si(d_si), _sq(d_sq), _su(d_su), _sv(d_sv);
+    DeviceMem _light(d_light), _mode(d_mode), _active(d_active), _hist(d_hist), _valid(d_valid);
+    CHECK_CUDA(cudaMemset(d_valid, 0, sizeof(int)));
+    CHECK_CUDA(cudaMemset(d_hist, 0, sizeof(int)));
+
+    setup_restir_shadow_kernel<<<1, 1>>>(q, d_accum);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    GpuScene scene = {};
+    scene.num_spectral_channels = 1;
+    scene.restir_di_origins = d_origins;
+    scene.restir_di_directions = d_dirs;
+    scene.restir_di_max_dist = d_max;
+    scene.restir_di_radiance_vals = d_radiance;
+    scene.restir_di_radiance_wavelengths = d_waves;
+    scene.restir_di_target_luminance = d_target;
+    scene.restir_di_lobe_pdfs = d_lobe;
+    scene.restir_di_wavelength_pdfs = d_wp;
+    scene.restir_di_stokes_i = d_si;
+    scene.restir_di_stokes_q = d_sq;
+    scene.restir_di_stokes_u = d_su;
+    scene.restir_di_stokes_v = d_sv;
+    scene.restir_di_light_list_indices = d_light;
+    scene.restir_di_spectral_modes = d_mode;
+    scene.restir_di_active_channels = d_active;
+    scene.restir_di_history_lengths = d_hist;
+    scene.restir_di_valid = d_valid;
+    scene.restir_di_pixel_count = 1;
+    scene.restir_di_enabled = 1;
+    scene.restir_di_temporal_reuse = 1;
+    scene.restir_di_unbiased = 0;
+    scene.restir_di_max_history = 2;
+    scene.restir_di_min_target = 1e-6f;
+
+    extend_shadow_kernel<<<1, 1>>>(q, d_accum, scene, 20.0f);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    int valid = 0;
+    int light = -1;
+    int mode = -1;
+    int hist = 0;
+    float target = 0.0f;
+    float lobe = 0.0f;
+    float wp = 0.0f;
+    float wave = 0.0f;
+    float stokes_i = 0.0f;
+    float stokes_q = 0.0f;
+    CHECK_CUDA(cudaMemcpy(&valid, d_valid, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&light, d_light, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&mode, d_mode, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&hist, d_hist, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&target, d_target, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&lobe, d_lobe, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&wp, d_wp, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&wave, d_waves, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&stokes_i, d_si, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&stokes_q, d_sq, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(valid == 1);
+    CHECK(light == 1);
+    CHECK(mode == SpectralRayModeSampled);
+    CHECK(hist == 1);
+    CHECK(target > 0.0f);
+    CHECK_FLOAT_EQ(lobe, 0.25f, 1e-6f);
+    CHECK_FLOAT_EQ(wp, 0.02f, 1e-6f);
+    CHECK_FLOAT_EQ(wave, 550.0f, 1e-6f);
+    CHECK_FLOAT_EQ(stokes_i, 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(stokes_q, 0.125f, 1e-6f);
+    test_free_shadow_queue(q);
+    return 0;
+}
+
 static int test_importance_spectral_config_selects_nonuniform_wavelength_sampler() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -1493,6 +1680,8 @@ int main() {
     RUN_TEST(test_path_guiding_allocates_progressive_light_cache);
     RUN_TEST(test_path_guiding_light_selection_uses_mixture_pdf);
     RUN_TEST(test_path_guiding_shadow_visibility_updates_light_weight);
+    RUN_TEST(test_restir_di_allocates_and_resets_temporal_reservoirs);
+    RUN_TEST(test_restir_di_visible_shadow_updates_reservoir_metadata);
     RUN_TEST(test_importance_spectral_config_selects_nonuniform_wavelength_sampler);
     RUN_TEST(test_importance_spectral_config_uses_scene_spectral_power_proposal);
     RUN_TEST(test_update_materials_gpu_rebuilds_scene_wavelength_proposal);

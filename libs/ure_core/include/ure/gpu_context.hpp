@@ -60,6 +60,23 @@ struct GpuContext {
     float* d_light_alias_prob = nullptr;
     int* d_light_alias_index = nullptr;
     float* d_path_guiding_light_weights = nullptr;
+    GpuVec3* d_restir_di_origins = nullptr;
+    GpuVec3* d_restir_di_directions = nullptr;
+    float* d_restir_di_max_dist = nullptr;
+    float* d_restir_di_radiance_vals = nullptr;
+    float* d_restir_di_radiance_wavelengths = nullptr;
+    float* d_restir_di_target_luminance = nullptr;
+    float* d_restir_di_lobe_pdfs = nullptr;
+    float* d_restir_di_wavelength_pdfs = nullptr;
+    float* d_restir_di_stokes_i = nullptr;
+    float* d_restir_di_stokes_q = nullptr;
+    float* d_restir_di_stokes_u = nullptr;
+    float* d_restir_di_stokes_v = nullptr;
+    int* d_restir_di_light_list_indices = nullptr;
+    int* d_restir_di_spectral_modes = nullptr;
+    int* d_restir_di_active_channels = nullptr;
+    int* d_restir_di_history_lengths = nullptr;
+    int* d_restir_di_valid = nullptr;
     float* d_wavelength_proposal_cdf = nullptr;
     float* d_wavelength_proposal_pdf = nullptr;
     int wavelength_proposal_count = 0;
@@ -91,6 +108,7 @@ struct GpuContext {
     int last_integrator_ray_queue_overflow_count = 0;
     int last_integrator_shadow_queue_overflow_count = 0;
     int last_integrator_path_guiding_light_count = 0;
+    int last_integrator_restir_reservoir_count = 0;
 
     std::vector<GpuSphere> host_spheres_for_light_distribution;
     std::vector<GpuMaterialData> host_materials_for_light_distribution;

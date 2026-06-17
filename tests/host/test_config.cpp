@@ -171,6 +171,49 @@ static int test_path_guiding_cli_overrides() {
     return 0;
 }
 
+static int test_restir_di_json_fields() {
+    const char* path = "test_config_restir_di.json";
+    {
+        std::ofstream out(path);
+        out << R"({
+  "restir_di": {
+    "enabled": true,
+    "temporal_reuse": true,
+    "spatial_reuse": false,
+    "unbiased": false,
+    "max_history": 3
+  }
+})";
+    }
+    auto cfg = ure::config::load_config(path);
+    std::remove(path);
+    CHECK(cfg.restir_di.enabled);
+    CHECK(cfg.restir_di.temporal_reuse);
+    CHECK(!cfg.restir_di.spatial_reuse);
+    CHECK(!cfg.restir_di.unbiased);
+    CHECK(cfg.restir_di.max_history == 3);
+    return 0;
+}
+
+static int test_restir_di_cli_overrides() {
+    const char* argv[] = {
+        "ure_cli",
+        "render",
+        "scene.gltf",
+        "--enable-restir-di",
+        "--restir-di-max-history",
+        "4"
+    };
+    auto result = ure::config::parse_cli(static_cast<int>(sizeof(argv) / sizeof(argv[0])), const_cast<char**>(argv));
+    const auto& cfg = result.config;
+    CHECK(cfg.restir_di.enabled);
+    CHECK(cfg.restir_di.temporal_reuse);
+    CHECK(!cfg.restir_di.spatial_reuse);
+    CHECK(!cfg.restir_di.unbiased);
+    CHECK(cfg.restir_di.max_history == 4);
+    return 0;
+}
+
 int main() {
     std::fprintf(stderr, "[Config Test]\n");
     auto run = [](const char* name, int (*fn)()) {
@@ -187,6 +230,8 @@ int main() {
     failed += run("test_wave_optics_cli_overrides", test_wave_optics_cli_overrides);
     failed += run("test_path_guiding_json_fields", test_path_guiding_json_fields);
     failed += run("test_path_guiding_cli_overrides", test_path_guiding_cli_overrides);
+    failed += run("test_restir_di_json_fields", test_restir_di_json_fields);
+    failed += run("test_restir_di_cli_overrides", test_restir_di_cli_overrides);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

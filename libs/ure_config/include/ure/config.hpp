@@ -52,6 +52,14 @@ struct PathGuidingConfig {
     double learning_rate = 0.25;
 };
 
+struct RestirDirectConfig {
+    bool enabled = false;
+    bool temporal_reuse = true;
+    bool spatial_reuse = false;
+    bool unbiased = false;
+    int max_history = 1;
+};
+
 struct RenderConfig {
     int width = 1280;
     int height = 720;
@@ -70,6 +78,7 @@ struct RenderConfig {
     GpuConfig gpu;
     WaveOpticsConfig wave_optics;
     PathGuidingConfig path_guiding;
+    RestirDirectConfig restir_di;
 };
 
 enum class CliCommand {

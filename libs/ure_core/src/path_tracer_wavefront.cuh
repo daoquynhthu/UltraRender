@@ -510,6 +510,108 @@ __device__ inline float selected_sphere_light_pdf(
            guided_mixture_light_selection_pdf(scene, light_list_index);
 }
 
+__device__ inline float rgb_luminance(const GpuVec3& rgb) {
+    return fmaxf(0.0f, 0.2126f * rgb.x + 0.7152f * rgb.y + 0.0722f * rgb.z);
+}
+
+__device__ inline bool restir_di_ready(const GpuScene& scene, int pixel_index) {
+    return scene.restir_di_enabled &&
+           scene.restir_di_temporal_reuse &&
+           !scene.restir_di_unbiased &&
+           scene.restir_di_valid &&
+           scene.restir_di_origins &&
+           scene.restir_di_directions &&
+           scene.restir_di_max_dist &&
+           scene.restir_di_radiance_vals &&
+           scene.restir_di_radiance_wavelengths &&
+           scene.restir_di_lobe_pdfs &&
+           scene.restir_di_wavelength_pdfs &&
+           scene.restir_di_light_list_indices &&
+           scene.restir_di_spectral_modes &&
+           scene.restir_di_active_channels &&
+           scene.restir_di_stokes_i &&
+           scene.restir_di_stokes_q &&
+           scene.restir_di_stokes_u &&
+           scene.restir_di_stokes_v &&
+           pixel_index >= 0 &&
+           pixel_index < scene.restir_di_pixel_count &&
+           scene.restir_di_valid[pixel_index] != 0;
+}
+
+__device__ inline void enqueue_restir_di_temporal_replay(
+    const GpuScene& scene,
+    ShadowQueue& shadow_queue,
+    int pixel_index
+) {
+    if (!restir_di_ready(scene, pixel_index)) return;
+    int s_idx = reserve_shadow_slot(shadow_queue);
+    if (s_idx < 0) return;
+    const int cap = shadow_queue.capacity;
+    const int history = scene.restir_di_history_lengths && scene.restir_di_history_lengths[pixel_index] > 0
+        ? scene.restir_di_history_lengths[pixel_index]
+        : 1;
+    const float replay_weight = 1.0f / float(history + 1);
+    shadow_queue.origins[s_idx] = scene.restir_di_origins[pixel_index];
+    shadow_queue.directions[s_idx] = scene.restir_di_directions[pixel_index];
+    shadow_queue.max_dist[s_idx] = scene.restir_di_max_dist[pixel_index];
+    for (int c = 0; c < scene.num_spectral_channels; ++c) {
+        const int src = c * scene.restir_di_pixel_count + pixel_index;
+        shadow_queue.radiance_vals[c * cap + s_idx] = scene.restir_di_radiance_vals[src] * replay_weight;
+        shadow_queue.radiance_wavelengths[c * cap + s_idx] = scene.restir_di_radiance_wavelengths[src];
+    }
+    shadow_queue.pixel_indices[s_idx] = pixel_index;
+    shadow_queue.spectral_modes[s_idx] = scene.restir_di_spectral_modes[pixel_index];
+    shadow_queue.active_channels[s_idx] = scene.restir_di_active_channels[pixel_index];
+    shadow_queue.wavelength_pdfs[s_idx] = scene.restir_di_wavelength_pdfs[pixel_index];
+    shadow_queue.light_list_indices[s_idx] = scene.restir_di_light_list_indices[pixel_index];
+    shadow_queue.bsdf_lobe_pdfs[s_idx] = scene.restir_di_lobe_pdfs[pixel_index];
+    shadow_queue.stokes_i[s_idx] = scene.restir_di_stokes_i[pixel_index];
+    shadow_queue.stokes_q[s_idx] = scene.restir_di_stokes_q[pixel_index];
+    shadow_queue.stokes_u[s_idx] = scene.restir_di_stokes_u[pixel_index];
+    shadow_queue.stokes_v[s_idx] = scene.restir_di_stokes_v[pixel_index];
+    shadow_queue.restir_replay_flags[s_idx] = 1;
+}
+
+__device__ inline void store_restir_di_visible_candidate(
+    const GpuScene& scene,
+    const ShadowQueue& shadow_queue,
+    int shadow_index,
+    const GpuVec3& rgb
+) {
+    if (!scene.restir_di_enabled || scene.restir_di_unbiased) return;
+    if (!scene.restir_di_valid || !scene.restir_di_radiance_vals ||
+        !scene.restir_di_stokes_i || !scene.restir_di_stokes_q ||
+        !scene.restir_di_stokes_u || !scene.restir_di_stokes_v) return;
+    const int pixel_index = shadow_queue.pixel_indices[shadow_index];
+    if (pixel_index < 0 || pixel_index >= scene.restir_di_pixel_count) return;
+    const float target = rgb_luminance(rgb);
+    if (!isfinite(target) || target <= scene.restir_di_min_target) return;
+    const int cap = shadow_queue.capacity;
+    scene.restir_di_origins[pixel_index] = shadow_queue.origins[shadow_index];
+    scene.restir_di_directions[pixel_index] = shadow_queue.directions[shadow_index];
+    scene.restir_di_max_dist[pixel_index] = shadow_queue.max_dist[shadow_index];
+    for (int c = 0; c < scene.num_spectral_channels; ++c) {
+        const int dst = c * scene.restir_di_pixel_count + pixel_index;
+        scene.restir_di_radiance_vals[dst] = shadow_queue.radiance_vals[c * cap + shadow_index];
+        scene.restir_di_radiance_wavelengths[dst] = shadow_queue.radiance_wavelengths[c * cap + shadow_index];
+    }
+    scene.restir_di_target_luminance[pixel_index] = target;
+    scene.restir_di_lobe_pdfs[pixel_index] = shadow_queue.bsdf_lobe_pdfs[shadow_index];
+    scene.restir_di_wavelength_pdfs[pixel_index] = shadow_queue.wavelength_pdfs[shadow_index];
+    scene.restir_di_stokes_i[pixel_index] = shadow_queue.stokes_i[shadow_index];
+    scene.restir_di_stokes_q[pixel_index] = shadow_queue.stokes_q[shadow_index];
+    scene.restir_di_stokes_u[pixel_index] = shadow_queue.stokes_u[shadow_index];
+    scene.restir_di_stokes_v[pixel_index] = shadow_queue.stokes_v[shadow_index];
+    scene.restir_di_light_list_indices[pixel_index] = shadow_queue.light_list_indices[shadow_index];
+    scene.restir_di_spectral_modes[pixel_index] = shadow_queue.spectral_modes[shadow_index];
+    scene.restir_di_active_channels[pixel_index] = shadow_queue.active_channels[shadow_index];
+    const int old_history = scene.restir_di_history_lengths[pixel_index];
+    const int max_history = scene.restir_di_max_history > 0 ? scene.restir_di_max_history : 1;
+    const int next_history = old_history + 1 < max_history ? old_history + 1 : max_history;
+    scene.restir_di_history_lengths[pixel_index] = next_history > 0 ? next_history : 1;
+    scene.restir_di_valid[pixel_index] = 1;
+}
+
 __device__ inline bool direct_light_direction_allowed(
     const GpuMaterial& mat,
     const GpuVec3& n,
@@ -885,12 +987,13 @@ __global__ __launch_bounds__(256) void extend_shadow_kernel(
         atomicAdd(&accum_buffer[pixel_index].x, rgb.x);
         atomicAdd(&accum_buffer[pixel_index].y, rgb.y);
         atomicAdd(&accum_buffer[pixel_index].z, rgb.z);
+        store_restir_di_visible_candidate(scene, shadow_queue, idx, rgb);
         if (scene.path_guiding_light_weights &&
             shadow_queue.light_list_indices &&
             scene.path_guiding_learning_rate > 0.0f) {
             int light_list_index = shadow_queue.light_list_indices[idx];
             if (light_list_index >= 0 && light_list_index < scene.path_guiding_light_count) {
-                float luminance = fmaxf(0.0f, 0.2126f * rgb.x + 0.7152f * rgb.y + 0.0722f * rgb.z);
+                float luminance = rgb_luminance(rgb);
                 if (isfinite(luminance) && luminance > scene.path_guiding_min_weight) {
                     atomicAdd(&scene.path_guiding_light_weights[light_list_index],
                               scene.path_guiding_learning_rate * luminance);
@@ -1059,6 +1162,15 @@ __global__ __launch_bounds__(256) void shade_kernel(
                              shadow_queue.active_channels[s_idx] = current_queue.active_channels[idx];
                              shadow_queue.wavelength_pdfs[s_idx] = current_queue.wavelength_pdfs[idx];
                              shadow_queue.light_list_indices[s_idx] = light_idx_idx;
+                             shadow_queue.bsdf_lobe_pdfs[s_idx] = phase_val;
+                             StokesVector restir_stokes = spectral_mode_is_sampled(spectral_mode)
+                                 ? load_stokes(current_queue, idx, active_channel)
+                                 : load_packet_average_stokes(current_queue, idx);
+                             shadow_queue.stokes_i[s_idx] = restir_stokes.I;
+                             shadow_queue.stokes_q[s_idx] = restir_stokes.Q;
+                             shadow_queue.stokes_u[s_idx] = restir_stokes.U;
+                             shadow_queue.stokes_v[s_idx] = restir_stokes.V;
+                             shadow_queue.restir_replay_flags[s_idx] = 0;
                          }
                     }
                 }
@@ -1277,6 +1389,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
         }
     }
 
+    if (depth == 0) {
+        enqueue_restir_di_temporal_replay(scene, shadow_queue, pixel_index);
+    }
+
     if (depth >= 50) return;
 
     if (scene.light_count > 0 && (mat.type == MaterialType::Lambertian ||
@@ -1339,11 +1455,14 @@ __global__ __launch_bounds__(256) void shade_kernel(
                      dispersion_clamp);
 
                  SpectralPacket contribution = throughput * L_e * f_r * cos_surf * (1.0f / pdf);
+                 float lobe_pdf_for_reservoir = 0.0f;
                  for (int c = 0; c < scene.num_spectral_channels; ++c) {
                      float pdf_mat_c = pdf_mat.values[c];
+                     lobe_pdf_for_reservoir += pdf_mat_c;
                      float mis_weight = (pdf * pdf) / (pdf * pdf + pdf_mat_c * pdf_mat_c);
                      contribution.values[c] *= mis_weight;
                  }
+                 lobe_pdf_for_reservoir /= fmaxf(1.0f, float(scene.num_spectral_channels));
 
                  float M_dot_D = -wc.dot(l_dir);
                  float c = dist_sq - radius_sq;
@@ -1381,6 +1500,15 @@ __global__ __launch_bounds__(256) void shade_kernel(
                              shadow_queue.active_channels[s_idx] = current_queue.active_channels[idx];
                              shadow_queue.wavelength_pdfs[s_idx] = current_queue.wavelength_pdfs[idx];
                              shadow_queue.light_list_indices[s_idx] = light_idx_idx;
+                             shadow_queue.bsdf_lobe_pdfs[s_idx] = lobe_pdf_for_reservoir;
+                             StokesVector restir_stokes = spectral_mode_is_sampled(spectral_mode)
+                                 ? load_stokes(current_queue, idx, active_channel)
+                                 : load_packet_average_stokes(current_queue, idx);
+                             shadow_queue.stokes_i[s_idx] = restir_stokes.I;
+                             shadow_queue.stokes_q[s_idx] = restir_stokes.Q;
+                             shadow_queue.stokes_u[s_idx] = restir_stokes.U;
+                             shadow_queue.stokes_v[s_idx] = restir_stokes.V;
+                             shadow_queue.restir_replay_flags[s_idx] = 0;
                          }
                     }
                 }

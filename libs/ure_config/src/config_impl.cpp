@@ -74,6 +74,14 @@ RenderConfig load_config(const std::string& path) {
             if (p.contains("light_mixture")) cfg.path_guiding.light_mixture = p["light_mixture"].get<double>();
             if (p.contains("learning_rate")) cfg.path_guiding.learning_rate = p["learning_rate"].get<double>();
         }
+        if (j.contains("restir_di")) {
+            auto& r = j["restir_di"];
+            if (r.contains("enabled")) cfg.restir_di.enabled = r["enabled"].get<bool>();
+            if (r.contains("temporal_reuse")) cfg.restir_di.temporal_reuse = r["temporal_reuse"].get<bool>();
+            if (r.contains("spatial_reuse")) cfg.restir_di.spatial_reuse = r["spatial_reuse"].get<bool>();
+            if (r.contains("unbiased")) cfg.restir_di.unbiased = r["unbiased"].get<bool>();
+            if (r.contains("max_history")) cfg.restir_di.max_history = r["max_history"].get<int>();
+        }
     } catch (const std::exception& e) {
         std::cerr << "[config] JSON parse error in '" << path << "': " << e.what() << "\n";
     }
@@ -107,6 +115,11 @@ CliResult parse_cli(int argc, char** argv) {
     bool path_guiding = false;
     double path_guiding_light_mixture = -1.0;
     double path_guiding_learning_rate = -1.0;
+    bool restir_di = false;
+    bool restir_di_temporal_reuse = true;
+    bool restir_di_spatial_reuse = false;
+    bool restir_di_unbiased = false;
+    int restir_di_max_history = -1;
     bool physics = false, audio = false;
     render_cmd->add_option("scene", scene_render, "Path to scene file (glTF)")->required();
     render_cmd->add_option("-c,--config", config_render, "Path to JSON config file");
@@ -131,6 +144,11 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_flag("--enable-path-guiding", path_guiding, "Enable progressive path guiding for supported radiometric samplers");
     render_cmd->add_option("--path-guiding-light-mixture", path_guiding_light_mixture, "Mixture weight for guided direct-light sampling");
     render_cmd->add_option("--path-guiding-learning-rate", path_guiding_learning_rate, "Progressive path guiding light-weight update scale");
+    render_cmd->add_flag("--enable-restir-di", restir_di, "Enable ReSTIR direct-light reservoir reuse");
+    render_cmd->add_flag("--restir-di-temporal-reuse,!--no-restir-di-temporal-reuse", restir_di_temporal_reuse, "Enable temporal ReSTIR DI candidate reuse");
+    render_cmd->add_flag("--restir-di-spatial-reuse", restir_di_spatial_reuse, "Request spatial ReSTIR DI reuse");
+    render_cmd->add_flag("--restir-di-unbiased", restir_di_unbiased, "Request unbiased ReSTIR DI mode");
+    render_cmd->add_option("--restir-di-max-history", restir_di_max_history, "Maximum temporal history carried by ReSTIR DI");
     render_cmd->add_flag("--physics", physics, "Enable physics simulation");
     render_cmd->add_flag("--audio", audio, "Enable audio rendering");
 
@@ -181,6 +199,11 @@ CliResult parse_cli(int argc, char** argv) {
         if (path_guiding) cfg.path_guiding.enabled = true;
         if (path_guiding_light_mixture >= 0.0) cfg.path_guiding.light_mixture = path_guiding_light_mixture;
         if (path_guiding_learning_rate >= 0.0) cfg.path_guiding.learning_rate = path_guiding_learning_rate;
+        if (restir_di) cfg.restir_di.enabled = true;
+        cfg.restir_di.temporal_reuse = restir_di_temporal_reuse;
+        if (restir_di_spatial_reuse) cfg.restir_di.spatial_reuse = true;
+        if (restir_di_unbiased) cfg.restir_di.unbiased = true;
+        if (restir_di_max_history > 0) cfg.restir_di.max_history = restir_di_max_history;
         cfg.physics_enabled = physics;
         cfg.enable_audio = audio;
         cfg.scene_path = scene_render;

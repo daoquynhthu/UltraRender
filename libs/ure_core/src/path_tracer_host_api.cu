@@ -178,6 +178,12 @@ void alloc_shadow_queue(ShadowQueue& q, int capacity, int num_spec_channels) {
     UR_CUDA_CHECK(cudaMalloc(&q.wavelength_pdfs, capacity * sizeof(float)));
     UR_CUDA_CHECK(cudaMalloc(&q.pixel_indices, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.light_list_indices, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.bsdf_lobe_pdfs, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.stokes_i, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.stokes_q, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.stokes_u, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.stokes_v, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.restir_replay_flags, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.count, sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.overflow_count, sizeof(int)));
     UR_CUDA_CHECK(cudaMemset(q.overflow_count, 0, sizeof(int)));
@@ -194,6 +200,12 @@ void free_shadow_queue(ShadowQueue& q) {
     cudaFree(q.wavelength_pdfs);
     cudaFree(q.pixel_indices);
     cudaFree(q.light_list_indices);
+    cudaFree(q.bsdf_lobe_pdfs);
+    cudaFree(q.stokes_i);
+    cudaFree(q.stokes_q);
+    cudaFree(q.stokes_u);
+    cudaFree(q.stokes_v);
+    cudaFree(q.restir_replay_flags);
     cudaFree(q.count);
     cudaFree(q.overflow_count);
 }
@@ -703,6 +715,95 @@ static bool path_guiding_enabled(const ure::RenderConfig& config) {
            config.path_guiding.learning_rate > 0.0f;
 }
 
+static bool restir_di_enabled(const ure::RenderConfig& config) {
+    return config.restir_di.enabled && config.restir_di.temporal_reuse;
+}
+
+static void validate_restir_di_config(const ure::RenderConfig& config) {
+    if (!config.restir_di.enabled) return;
+    if (config.restir_di.spatial_reuse) {
+        throw std::runtime_error("ReSTIR DI spatial reuse is not implemented yet");
+    }
+    if (config.restir_di.unbiased) {
+        throw std::runtime_error("Unbiased ReSTIR DI is not implemented yet; current baseline is explicitly biased temporal reuse");
+    }
+    if (!config.restir_di.temporal_reuse) {
+        throw std::runtime_error("ReSTIR DI requires temporal_reuse for the current baseline");
+    }
+}
+
+static void release_restir_di_reservoirs(GpuContext* ctx) {
+    cudaFree(ctx->d_restir_di_origins);
+    cudaFree(ctx->d_restir_di_directions);
+    cudaFree(ctx->d_restir_di_max_dist);
+    cudaFree(ctx->d_restir_di_radiance_vals);
+    cudaFree(ctx->d_restir_di_radiance_wavelengths);
+    cudaFree(ctx->d_restir_di_target_luminance);
+    cudaFree(ctx->d_restir_di_lobe_pdfs);
+    cudaFree(ctx->d_restir_di_wavelength_pdfs);
+    cudaFree(ctx->d_restir_di_stokes_i);
+    cudaFree(ctx->d_restir_di_stokes_q);
+    cudaFree(ctx->d_restir_di_stokes_u);
+    cudaFree(ctx->d_restir_di_stokes_v);
+    cudaFree(ctx->d_restir_di_light_list_indices);
+    cudaFree(ctx->d_restir_di_spectral_modes);
+    cudaFree(ctx->d_restir_di_active_channels);
+    cudaFree(ctx->d_restir_di_history_lengths);
+    cudaFree(ctx->d_restir_di_valid);
+    ctx->d_restir_di_origins = nullptr;
+    ctx->d_restir_di_directions = nullptr;
+    ctx->d_restir_di_max_dist = nullptr;
+    ctx->d_restir_di_radiance_vals = nullptr;
+    ctx->d_restir_di_radiance_wavelengths = nullptr;
+    ctx->d_restir_di_target_luminance = nullptr;
+    ctx->d_restir_di_lobe_pdfs = nullptr;
+    ctx->d_restir_di_wavelength_pdfs = nullptr;
+    ctx->d_restir_di_stokes_i = nullptr;
+    ctx->d_restir_di_stokes_q = nullptr;
+    ctx->d_restir_di_stokes_u = nullptr;
+    ctx->d_restir_di_stokes_v = nullptr;
+    ctx->d_restir_di_light_list_indices = nullptr;
+    ctx->d_restir_di_spectral_modes = nullptr;
+    ctx->d_restir_di_active_channels = nullptr;
+    ctx->d_restir_di_history_lengths = nullptr;
+    ctx->d_restir_di_valid = nullptr;
+    ctx->last_integrator_restir_reservoir_count = 0;
+}
+
+static void clear_restir_di_reservoirs(GpuContext* ctx) {
+    if (!ctx || !ctx->d_restir_di_valid) return;
+    const int pixel_count = ctx->width * ctx->height;
+    UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_valid, 0, pixel_count * sizeof(int)));
+    UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_history_lengths, 0, pixel_count * sizeof(int)));
+    UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_target_luminance, 0, pixel_count * sizeof(float)));
+}
+
+static void alloc_restir_di_reservoirs(GpuContext* ctx) {
+    if (!restir_di_enabled(ctx->render_config)) return;
+    const int pixel_count = checked_primary_ray_count(ctx->width, ctx->height);
+    const size_t pixel_bytes = static_cast<size_t>(pixel_count);
+    const size_t spectral_bytes = pixel_bytes * static_cast<size_t>(ctx->num_spectral_channels) * sizeof(float);
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_origins, pixel_bytes * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_directions, pixel_bytes * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_max_dist, pixel_bytes * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_radiance_vals, spectral_bytes));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_radiance_wavelengths, spectral_bytes));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_target_luminance, pixel_bytes * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_lobe_pdfs, pixel_bytes * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_wavelength_pdfs, pixel_bytes * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_stokes_i, pixel_bytes * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_stokes_q, pixel_bytes * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_stokes_u, pixel_bytes * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_stokes_v, pixel_bytes * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_light_list_indices, pixel_bytes * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_spectral_modes, pixel_bytes * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_active_channels, pixel_bytes * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_history_lengths, pixel_bytes * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_valid, pixel_bytes * sizeof(int)));
+    clear_restir_di_reservoirs(ctx);
+    ctx->last_integrator_restir_reservoir_count = pixel_count;
+}
+
 static void rebuild_light_distribution(GpuContext* ctx) {
     release_light_distribution(ctx);
 
@@ -780,10 +881,11 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<ure::gpu::RenderMesh>& meshes,
                               const std::vector<ure::gpu::GpuInstance>& instances,
                               const std::vector<ure::gpu::GpuSphere>& spheres,
-                               const std::vector<ure::gpu::GpuMaterialData>& materials,
+                              const std::vector<ure::gpu::GpuMaterialData>& materials,
                               const std::vector<ure::gpu::HostTexture>& textures,
                               const ure::RenderConfig& config) {
     validate_explicit_spectral_resident_budget(materials, textures, config);
+    validate_restir_di_config(config);
     const int primary_ray_count = checked_primary_ray_count(width, height);
     const int max_rays = configured_ray_queue_capacity(config, primary_ray_count);
 
@@ -886,6 +988,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     alloc_soa(ctx->d_mat_medium_absorption, ctx->pointers_to_free);
     alloc_soa(ctx->d_mat_emission, ctx->pointers_to_free);
     ctx->num_spectral_channels = num_channels;
+    alloc_restir_di_reservoirs(ctx);
 
     auto alloc_resources = [mat_count](SpectralResource*& d_ptr, std::vector<void*>& free_list) {
         if (mat_count > 0) {
@@ -1241,6 +1344,10 @@ void reset_accumulation_gpu(GpuContext* ctx) {
     cudaMemset(ctx->d_depth_buffer, 0, ctx->width * ctx->height * sizeof(float));
     cudaMemset(ctx->d_uv_buffer, 0, ctx->width * ctx->height * sizeof(GpuVec2));
     cudaMemset(ctx->d_motion_vector_buffer, 0, ctx->width * ctx->height * sizeof(GpuVec2));
+    clear_restir_di_reservoirs(ctx);
+    if (ctx->d_path_guiding_light_weights && ctx->light_count > 0) {
+        UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_light_weights, 0, ctx->light_count * sizeof(float)));
+    }
     ctx->current_spp = 0;
 }
 
@@ -1264,6 +1371,7 @@ void free_gpu_renderer(GpuContext* ctx) {
     cudaFree(ctx->d_meshes);
     cudaFree(ctx->d_instances);
     release_light_distribution(ctx);
+    release_restir_di_reservoirs(ctx);
     release_wavelength_proposal(ctx);
 
     free_ray_queue(ctx->queueA);
@@ -1319,6 +1427,29 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.path_guiding_light_mixture = std::clamp(ctx->render_config.path_guiding.light_mixture, 0.0f, 0.95f);
     scene.path_guiding_learning_rate = std::clamp(ctx->render_config.path_guiding.learning_rate, 0.0f, 1.0f);
     scene.path_guiding_min_weight = std::max(ctx->render_config.path_guiding.min_weight, 0.0f);
+    scene.restir_di_origins = ctx->d_restir_di_origins;
+    scene.restir_di_directions = ctx->d_restir_di_directions;
+    scene.restir_di_max_dist = ctx->d_restir_di_max_dist;
+    scene.restir_di_radiance_vals = ctx->d_restir_di_radiance_vals;
+    scene.restir_di_radiance_wavelengths = ctx->d_restir_di_radiance_wavelengths;
+    scene.restir_di_target_luminance = ctx->d_restir_di_target_luminance;
+    scene.restir_di_lobe_pdfs = ctx->d_restir_di_lobe_pdfs;
+    scene.restir_di_wavelength_pdfs = ctx->d_restir_di_wavelength_pdfs;
+    scene.restir_di_stokes_i = ctx->d_restir_di_stokes_i;
+    scene.restir_di_stokes_q = ctx->d_restir_di_stokes_q;
+    scene.restir_di_stokes_u = ctx->d_restir_di_stokes_u;
+    scene.restir_di_stokes_v = ctx->d_restir_di_stokes_v;
+    scene.restir_di_light_list_indices = ctx->d_restir_di_light_list_indices;
+    scene.restir_di_spectral_modes = ctx->d_restir_di_spectral_modes;
+    scene.restir_di_active_channels = ctx->d_restir_di_active_channels;
+    scene.restir_di_history_lengths = ctx->d_restir_di_history_lengths;
+    scene.restir_di_valid = ctx->d_restir_di_valid;
+    scene.restir_di_pixel_count = ctx->width * ctx->height;
+    scene.restir_di_enabled = restir_di_enabled(ctx->render_config) ? 1 : 0;
+    scene.restir_di_temporal_reuse = ctx->render_config.restir_di.temporal_reuse ? 1 : 0;
+    scene.restir_di_unbiased = ctx->render_config.restir_di.unbiased ? 1 : 0;
+    scene.restir_di_max_history = std::max(1, ctx->render_config.restir_di.max_history);
+    scene.restir_di_min_target = std::max(ctx->render_config.restir_di.min_target, 0.0f);
     scene.light_count = ctx->light_count;
 
     scene.medium_density = ctx->medium_density;

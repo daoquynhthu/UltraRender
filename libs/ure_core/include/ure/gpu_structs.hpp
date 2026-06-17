@@ -450,6 +450,29 @@ struct GpuScene {
     float path_guiding_light_mixture;
     float path_guiding_learning_rate;
     float path_guiding_min_weight;
+    GpuVec3* restir_di_origins;
+    GpuVec3* restir_di_directions;
+    float* restir_di_max_dist;
+    float* restir_di_radiance_vals;
+    float* restir_di_radiance_wavelengths;
+    float* restir_di_target_luminance;
+    float* restir_di_lobe_pdfs;
+    float* restir_di_wavelength_pdfs;
+    float* restir_di_stokes_i;
+    float* restir_di_stokes_q;
+    float* restir_di_stokes_u;
+    float* restir_di_stokes_v;
+    int* restir_di_light_list_indices;
+    int* restir_di_spectral_modes;
+    int* restir_di_active_channels;
+    int* restir_di_history_lengths;
+    int* restir_di_valid;
+    int restir_di_pixel_count;
+    int restir_di_enabled;
+    int restir_di_temporal_reuse;
+    int restir_di_unbiased;
+    int restir_di_max_history;
+    float restir_di_min_target;
     int light_count;
 
     // Global Homogeneous Medium (Volumetric Fog)
@@ -521,6 +544,12 @@ struct ShadowQueue {
     float* wavelength_pdfs = nullptr;
     int* pixel_indices = nullptr;
     int* light_list_indices = nullptr;
+    float* bsdf_lobe_pdfs = nullptr;
+    float* stokes_i = nullptr;
+    float* stokes_q = nullptr;
+    float* stokes_u = nullptr;
+    float* stokes_v = nullptr;
+    int* restir_replay_flags = nullptr;
 
     int* count = nullptr;
     int* overflow_count = nullptr;

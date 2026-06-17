@@ -39,6 +39,15 @@ struct PathGuidingConfig {
     float min_weight = 1e-6f;
 };
 
+struct RestirDirectConfig {
+    bool enabled = false;
+    bool temporal_reuse = true;
+    bool spatial_reuse = false;
+    bool unbiased = false;
+    int max_history = 1;
+    float min_target = 1e-6f;
+};
+
 struct RenderConfig {
     int queue_capacity = 0;       // 0 = auto (width * height)
     int max_trace_depth = 50;
@@ -49,6 +58,7 @@ struct RenderConfig {
     SpectralSamplingMode spectral_sampling_mode = SpectralSamplingMode::PacketUniform;
     WaveOpticsConfig wave_optics;
     PathGuidingConfig path_guiding;
+    RestirDirectConfig restir_di;
     int wg_size = 32;
     int rays_per_block = 256;
     int samples_per_pass = 1;
