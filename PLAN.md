@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-17 (Phase R.12 industrial validation local suite)
+最后更新: 2026-06-17 (Phase V GPU geometry acceleration planning)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -26,6 +26,7 @@
 远期 Phase M:   材质系统                                             进行中
 远期 Phase L:   百万级光谱域 / packet-resolution 解耦                已完成 (L.0-L.12)
 远期 Phase R:   工业级/科研级积分器升级                              进行中
+远期 Phase V:   GPU 几何加速结构 / BVH / OptiX / Clustered Geometry   计划中
 远期 Phase W:   波动光学求解器 / 相干场输运                          进行中
 ```
 
@@ -307,6 +308,7 @@ Phase G / Phase H / Phase I / Phase C 与 Phase J 无依赖关系，可并行执
 - **Phase C** (契约) → 无依赖，可插队
 - **Phase E** (N 通道光谱) → 已完成。它依赖 Phase A (SoA) + Phase G (glTF 光谱扩展) + Batch 4 测试 (OT1/OT5/OT6)，并已完成 E.0-E.5 的 runtime-N、SPD、色散、Mueller、wavelength PDF 与静态审计门禁。后续 specular manifold、rough dielectric BTDF、advanced spectral MIS 和材质系统进入 Phase K/M，不再作为 Phase E 阻塞项。
 - **Phase R** (工业级/科研级积分器升级) → 依赖 Phase E 的 spectral PDF/transport closure、Phase L 的 domain/packet 解耦、Phase S 的 session/progressive API，并为 Phase W 的 wave solver 提供不被 radiometric 调度瓶颈拖累的 baseline。Phase R 负责 radiometric integrator 的调度、采样、MIS、light transport algorithm 和 benchmark contract；Phase W 负责相干/衍射/局部全波求解，两者不能混淆。
+- **Phase V** (GPU 几何加速结构 / BVH / OptiX / Clustered Geometry) → 依赖 Phase P/S 的 retained scene/session 边界、Phase M/L 的 resource/material graph、Phase R 的 validation suite。Phase V 处理 GPU traversal/build/refit/compaction/TLAS/BLAS/clustered geometry/optional OptiX backend；它不改变 radiometric estimator，也不替代 Phase W 的 wave solver。UltraRender 不引入独立 host traversal backend，host 侧只负责构建、调度、资源上传和验证。
 - **Phase W** (波动光学求解器) → 依赖 Phase E 的 spectral/polarization 基线与 Phase L 的 high-resolution spectral domain/resource contract。W.1/W.2/W.3 可在 Phase M 完成前推进；W.4 diffractive material operators 依赖 Phase M 的 MaterialGraph/MaterialX 语义稳定。Phase W 不允许把相干/衍射能力隐藏在现有 radiometric path tracer 中，必须通过显式 feature switch opt-in，并在 unsupported film/merge/API/material path 上 fail-loud。
 
 ---
@@ -1515,7 +1517,7 @@ UltraRender = 光谱渲染器 + 物理模拟 + 声学合成
 ### 新增远期 Phase
 
 ```
-Phase E ──→ Phase S ──→ Phase M ──→ Phase L ──┬──→ Phase R ──→ Phase W ──→ Phase U ──→ Phase K (持续)
+Phase E ──→ Phase S ──→ Phase M ──→ Phase L ──┬──→ Phase R ──→ Phase V ──→ Phase W ──→ Phase U ──→ Phase K (持续)
                                                └──→ Phase W foundation oracles
                │
                ├──→ Phase X (可并行)
@@ -1523,7 +1525,7 @@ Phase E ──→ Phase S ──→ Phase M ──→ Phase L ──┬──→
                └──→ Phase C/D (分布式, 可并行)
 ```
 
-与中短期的关系：Phase S 和 Phase X 的部分工作可在 Phase E 完成后立即开始；Phase M 依赖 Phase G 的材质扩展 + Phase E 的光谱引擎；Phase L 是 README “百万级波长通道”承诺的真正架构阶段，必须在 MaterialX/USD/插件把材质语义固化到 `GpuMaterialData + GpuSpectrum[32]` 之前完成；Phase R 是 radiometric spectral/polarimetric integrator 的工业级/科研级升级阶段，负责调度、采样、MIS、light/path guiding 和高级路径空间算法，并应先于把 Phase W 的相干/衍射能力暴露给外部生态完成核心 baseline；Phase W 是从 spectral/polarimetric path tracer 升级到可选 wave-optics solver 的架构阶段，必须消费 Phase L/R 的 spectral domain/resource and integrator contracts，并在 coherent film/distributed merge/API 语义稳定后再让 Phase U/USD 暴露相干与衍射能力；Phase U 依赖 Phase S 的稳定 API，并应消费 Phase L/R/W 的 resource, integrator, and wave-optics contracts。
+与中短期的关系：Phase S 和 Phase X 的部分工作可在 Phase E 完成后立即开始；Phase M 依赖 Phase G 的材质扩展 + Phase E 的光谱引擎；Phase L 是 README “百万级波长通道”承诺的真正架构阶段，必须在 MaterialX/USD/插件把材质语义固化到 `GpuMaterialData + GpuSpectrum[32]` 之前完成；Phase R 是 radiometric spectral/polarimetric integrator 的工业级/科研级升级阶段，负责调度、采样、MIS、light/path guiding 和高级路径空间算法，并应先于把 Phase W 的相干/衍射能力暴露给外部生态完成核心 baseline；Phase V 是几何加速结构阶段，必须在 Phase W/U/K 继续放大场景复杂度前解决 mesh-local BVH、TLAS/BLAS、dynamic/refit、optional OptiX 和 clustered geometry contract；Phase W 是从 spectral/polarimetric path tracer 升级到可选 wave-optics solver 的架构阶段，必须消费 Phase L/R/V 的 spectral domain/resource, integrator, and acceleration contracts，并在 coherent film/distributed merge/API 语义稳定后再让 Phase U/USD 暴露相干与衍射能力；Phase U 依赖 Phase S 的稳定 API，并应消费 Phase L/R/V/W 的 resource, integrator, acceleration, and wave-optics contracts。
 
 ---
 
@@ -1842,6 +1844,63 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 
 ---
 
+### Phase V — GPU 几何加速结构 / BVH / OptiX / Clustered Geometry
+
+**状态**: 计划中。
+
+**目标**: 将当前 mesh-local BVH 和线性 fallback traversal 升级为适配 UltraRender 光谱、偏振、材质图、动态场景和未来波动光学的 GPU 几何加速栈。Phase V 的核心不是复制外部引擎的可见性系统，而是建立自己的 `AccelerationScene` 合同：同一份 SceneIR/resource graph 能选择自研 CUDA BVH backend 或可选 OptiX backend，并在能力不满足时 fail-loud。
+
+**当前审计结论**: 现有生产路径集中在 `libs/ure_core/src/bvh_builder.cpp`、`path_tracer_intersect.cuh` 和 `path_tracer_wavefront.cuh`。mesh BVH 由 host 端中点/`nth_element` 二叉划分构建，leaf 固定少量 triangle，GPU 端使用 32B `GpuBvhNode`、固定 64 栈、per-mesh object-space traversal；没有正式 TLAS/BLAS、wide BVH、SAH/spatial split、compaction/refit policy、动态几何 rebuild budget、build quality preset、backend abstraction 或 OptiX pipeline。`gpu_accelerator.hpp` 里的 OptiX 类型只是 stub，不能作为真实 backend。旧的 `BVHAccelerator`/`SimpleAccelerator` 类属于过渡历史，不应扩展成第二套 host production traversal 系统。
+
+#### Phase V 边界
+
+| 范围 | 属于 Phase V | 不属于 Phase V |
+|------|--------------|----------------|
+| GPU traversal | CUDA BVH2/BVH4/BVH8 traversal、stack safety、ray sorting compatibility、any-hit/closest-hit parity | host-side production traversal 或第二套非 GPU 渲染路径 |
+| Build/update | BLAS/TLAS、SAH/SBVH/LBVH/HLBVH builder、refit/rebuild policy、compaction、async upload、dynamic transform update | 改变 BSDF/phase estimator 或积分器语义 |
+| Optional backend | OptiX GAS/IAS backend、capability query、fallback policy、backend parity tests | 强制依赖 NVIDIA-only path，或让 OptiX 成为唯一运行路径 |
+| Dense geometry | cluster/meshlet resource format、streaming LoD、physical error budget、clustered acceleration backend | 把外部引擎可见性 pass 作为目标、屏幕空间 LOD 替代 path tracing visibility |
+| Validation | traversal correctness、shadow/visibility parity、build time、trace throughput、VRAM budget、dynamic update benchmark | denoiser、sampling variance dashboard、wave optics solver |
+
+#### 技术路线
+
+| 层级 | 目标 |
+|------|------|
+| Acceleration contract | 新增 `AccelerationConfig` / `AccelerationScene` / `GeometryBuildStats`，贯穿 `RenderConfig`、JSON、CLI、C ABI、Session/pyure；默认 backend 为自研 CUDA，OptiX 为显式可选或 auto-capability backend |
+| Self CUDA backend | 先保留可控性：实现 SAH baseline、wide-node layout、stack overflow fail-loud、node/triangle memory compaction、TLAS/BLAS 分离和 instance transform refit |
+| OptiX backend | 可选支持 OptiX GAS/IAS build/compaction/refit；不支持 spectral/polarization/material graph 的路径必须 fail-loud 或回退 CUDA backend；输出 traversal parity 和 build stats |
+| Clustered geometry | 设计 UltraRender 自己的 cluster/meshlet resource：按 material/spectral resource/displacement/opacity/normal-field 边界切分，用 ray/path physical error 而不是单纯屏幕误差控制 LoD |
+| Dynamic scenes | 对 rigid transform、deformation、topology change、resource streaming 分别定义 refit/rebuild/recluster 策略，并与 Phase P 的 retained scene 和 hot-update 管线对齐 |
+| Benchmark contract | 固定小 mesh、大 mesh、高 instance、动态 transform、dense displacement proxy、shadow-heavy、reflection-heavy、spectral material 场景，记录 build ms、trace Mray/s、VRAM、stack spill、backend parity |
+
+#### 子步骤
+
+| Step | 内容 | 完成判据 |
+|------|------|----------|
+| V.0 | BVH/geometry acceleration audit：列出现有 mesh-local BVH、linear fallback、OptiX stub、fixed stack、无 TLAS/BLAS 等风险；新增 Phase V 文档和静态审计入口 | PLAN/README/docs 口径一致；`rg` 静态审计阻断 host traversal production path 扩展和 OptiX stub 被误称 production |
+| V.1 | `AccelerationConfig` API：新增 backend (`cuda`, `optix`, `auto`)、quality (`fast_build`, `balanced`, `high_quality`)、refit/rebuild policy、clustered geometry gate、stats gate | JSON/CLI/C ABI/pyure parity；unsupported backend fail-loud；默认行为保持现有 CUDA path |
+| V.2 | 自研 CUDA BVH baseline cleanup：修复 builder 注释/索引语义、栈溢出处理、AABB/triangle robust tests、linear fallback policy；暴露 build/traversal stats | GPU tests 覆盖 mesh BVH/linear parity、shadow any-hit parity、stack overflow fail-loud |
+| V.3 | TLAS/BLAS split：mesh BLAS 与 instance TLAS 分离，instance transform hot update 只 refit/update TLAS，不重复上传静态 mesh BVH | `test_instance_hotupdate` 增加 TLAS update gate；多实例场景 build time 和 VRAM stats 可见 |
+| V.4 | SAH/SBVH/BVH4/BVH8 builder：实现质量 preset，支持 compact node layout 与 traversal benchmark | 固定大 mesh benchmark 比当前 median BVH 有明确 traversal/build 指标；结果与 reference traversal 一致 |
+| V.5 | Async build/upload/compaction：把 build stats、temporary memory、compact memory、upload time 纳入 telemetry；大场景超预算 fail-loud | validation suite 记录 build/trace/VRAM；超出 `AccelerationConfig` budget 时拒绝而非 OOM |
+| V.6 | Optional OptiX backend foundation：CMake option、runtime capability query、GAS/IAS build、compaction/refit、CUDA fallback；不支持路径明确报错 | 无 OptiX SDK 时项目仍可构建；有 OptiX 时 backend parity tests 通过 |
+| V.7 | OptiX/backend parity：shadow rays、closest-hit rays、instance transforms、material index、UV/normal/tangent interpolation 与 CUDA backend 对齐 | 同一 SceneIR 下 CUDA/OptiX framebuffer、AOV、hit metadata 在阈值内一致 |
+| V.8 | Clustered geometry resource：定义 cluster/meshlet resource、cluster bounds、material/resource boundary、streaming residency 和 LoD error metric | host/gpu resource tests 覆盖 cluster residency、material boundary、invalid cluster fail-loud |
+| V.9 | Physical error LoD：按 ray differential/path class/material/displacement/spectral resource 选择 cluster LoD，避免 shadow/reflection/caustic 使用错误低精代理 | shadow/reflection-heavy benchmark 证明 visibility 不被预览 LoD 静默破坏 |
+| V.10 | Dynamic/deforming geometry：按 rigid/deforming/topology-change 分类执行 TLAS refit、BLAS refit/rebuild 或 recluster；与 SceneDiff 资源变更对齐 | dynamic benchmark 输出 update ms 与 correctness gate；unsupported topology path fail-loud |
+| V.11 | Phase V validation suite：整合 build time、trace throughput、VRAM、backend parity、dynamic update、dense geometry 和 distributed shard metadata | `run_phase_v_validation_suite.ps1` 本地可跑；farm 长跑入口和 JSON schema 稳定 |
+
+#### 完成标准
+
+- 默认仍是 CUDA GPU path，不引入第二套 host production traversal backend。
+- SceneIR 到 acceleration backend 有统一合同，CUDA/OptiX/clustered geometry 不分裂材质、光谱、偏振或 instance 语义。
+- TLAS/BLAS、refit/rebuild、compaction、build quality preset 和 memory budget 都有显式配置与 fail-loud。
+- OptiX 是可选 backend：无 SDK/无能力时项目照常构建，启用但能力不足时报错或按配置回退。
+- Dense/clustered geometry 的 LoD 由物理路径误差和资源边界约束，不用屏幕可见性近似破坏 shadow/reflection/caustic/wave paths。
+- Validation suite 固定输出 build ms、trace throughput、VRAM、stack/overflow、backend parity 和 dynamic update 指标。
+
+---
+
 ### Phase W — 波动光学求解器 / Wave Optics Solver
 
 **状态**: 进行中。
@@ -2035,11 +2094,11 @@ URE_EXPORT void ure_register_output(OutputAPI* api);
 
 | Step | 内容 | 时机 |
 |------|------|------|
-| K.1 | SBVH / 多级 BVH（提高大场景遍历效率） | Phase A 后 |
+| K.1 | Phase V 后的 traversal kernel occupancy、memory coalescing、ray sorting 与 Nsight-driven tuning | Phase V baseline 后 |
 | K.2 | OptiX denoiser 集成（替代 current denoise.cu） | Phase E 后 |
 | K.3 | Wavefront occupancy auto-tuning（基于 SM 计数） | Phase A 后 |
 | K.4 | GPU memory allocator / async upload / resource streaming performance | Phase L/R 后 |
-| K.5 | Kernel fusion/splitting、register pressure、occupancy tuning 和 Nsight-driven cleanup | Phase R benchmark harness 后 |
+| K.5 | Kernel fusion/splitting、register pressure、occupancy tuning 和 Nsight-driven cleanup | Phase R/V benchmark harness 后 |
 | K.6 | Production perf dashboard 与长跑 benchmark farm integration | Phase R.12 后 |
 
 ---
@@ -2064,6 +2123,9 @@ Phase 0 ─→ Phase F ─┬──→ Phase P ─┬──→ Phase A ─┬─
                                                   │
                                                   ▼
                                              Phase R
+                                                  │
+                                                  ▼
+                                             Phase V
                                                   │
                                                   ▼
                                              Phase W
