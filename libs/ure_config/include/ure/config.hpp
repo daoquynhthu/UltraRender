@@ -60,6 +60,17 @@ struct RestirDirectConfig {
     int max_history = 1;
 };
 
+struct SpecularManifoldConfig {
+    bool enabled = false;
+    int max_specular_events = 2;
+    double solver_tolerance = 1e-4;
+    int max_newton_iterations = 16;
+};
+
+struct IntegratorConfig {
+    SpecularManifoldConfig specular_manifold;
+};
+
 struct RenderConfig {
     int width = 1280;
     int height = 720;
@@ -79,6 +90,7 @@ struct RenderConfig {
     WaveOpticsConfig wave_optics;
     PathGuidingConfig path_guiding;
     RestirDirectConfig restir_di;
+    IntegratorConfig integrator;
 };
 
 enum class CliCommand {

@@ -166,6 +166,10 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.restir_di.spatial_reuse = app_config.restir_di.spatial_reuse;
     gpu_config.restir_di.unbiased = app_config.restir_di.unbiased;
     gpu_config.restir_di.max_history = app_config.restir_di.max_history;
+    gpu_config.specular_manifold.enabled = app_config.integrator.specular_manifold.enabled;
+    gpu_config.specular_manifold.max_specular_events = app_config.integrator.specular_manifold.max_specular_events;
+    gpu_config.specular_manifold.solver_tolerance = static_cast<float>(app_config.integrator.specular_manifold.solver_tolerance);
+    gpu_config.specular_manifold.max_newton_iterations = app_config.integrator.specular_manifold.max_newton_iterations;
     if (!make_wave_optics_config(app_config.wave_optics, gpu_config.wave_optics)) {
         return 1;
     }

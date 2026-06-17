@@ -24,6 +24,10 @@ add_executable(test_wave_optics test_wave_optics.cpp)
 target_link_libraries(test_wave_optics PRIVATE ure_core ure_diag)
 add_test(NAME test_wave_optics COMMAND test_wave_optics)
 
+add_executable(test_integrator test_integrator.cpp)
+target_link_libraries(test_integrator PRIVATE ure_core ure_diag)
+add_test(NAME test_integrator COMMAND test_integrator)
+
 add_executable(test_gltf_frontend test_gltf_frontend.cpp)
 target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)

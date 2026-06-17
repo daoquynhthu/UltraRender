@@ -214,6 +214,52 @@ static int test_restir_di_cli_overrides() {
     return 0;
 }
 
+static int test_integrator_specular_manifold_json_fields() {
+    const char* path = "test_config_integrator_specular.json";
+    {
+        std::ofstream out(path);
+        out << R"({
+  "integrator": {
+    "specular_manifold": {
+      "enabled": true,
+      "max_specular_events": 3,
+      "solver_tolerance": 0.00025,
+      "max_newton_iterations": 24
+    }
+  }
+})";
+    }
+    auto cfg = ure::config::load_config(path);
+    std::remove(path);
+    CHECK(cfg.integrator.specular_manifold.enabled);
+    CHECK(cfg.integrator.specular_manifold.max_specular_events == 3);
+    CHECK(std::fabs(cfg.integrator.specular_manifold.solver_tolerance - 0.00025) < 1e-12);
+    CHECK(cfg.integrator.specular_manifold.max_newton_iterations == 24);
+    return 0;
+}
+
+static int test_integrator_specular_manifold_cli_overrides() {
+    const char* argv[] = {
+        "ure_cli",
+        "render",
+        "scene.gltf",
+        "--enable-integrator-specular-manifold",
+        "--specular-manifold-max-events",
+        "4",
+        "--specular-manifold-tolerance",
+        "0.0005",
+        "--specular-manifold-newton-iterations",
+        "32"
+    };
+    auto result = ure::config::parse_cli(static_cast<int>(sizeof(argv) / sizeof(argv[0])), const_cast<char**>(argv));
+    const auto& cfg = result.config;
+    CHECK(cfg.integrator.specular_manifold.enabled);
+    CHECK(cfg.integrator.specular_manifold.max_specular_events == 4);
+    CHECK(std::fabs(cfg.integrator.specular_manifold.solver_tolerance - 0.0005) < 1e-12);
+    CHECK(cfg.integrator.specular_manifold.max_newton_iterations == 32);
+    return 0;
+}
+
 int main() {
     std::fprintf(stderr, "[Config Test]\n");
     auto run = [](const char* name, int (*fn)()) {
@@ -232,6 +278,8 @@ int main() {
     failed += run("test_path_guiding_cli_overrides", test_path_guiding_cli_overrides);
     failed += run("test_restir_di_json_fields", test_restir_di_json_fields);
     failed += run("test_restir_di_cli_overrides", test_restir_di_cli_overrides);
+    failed += run("test_integrator_specular_manifold_json_fields", test_integrator_specular_manifold_json_fields);
+    failed += run("test_integrator_specular_manifold_cli_overrides", test_integrator_specular_manifold_cli_overrides);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

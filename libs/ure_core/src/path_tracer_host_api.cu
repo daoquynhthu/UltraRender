@@ -732,6 +732,20 @@ static void validate_restir_di_config(const ure::RenderConfig& config) {
     }
 }
 
+static void validate_specular_manifold_config(const ure::RenderConfig& config) {
+    if (!config.specular_manifold.enabled) return;
+    if (config.specular_manifold.max_specular_events <= 0) {
+        throw std::runtime_error("Specular manifold max_specular_events must be positive");
+    }
+    if (config.specular_manifold.solver_tolerance <= 0.0f) {
+        throw std::runtime_error("Specular manifold solver_tolerance must be positive");
+    }
+    if (config.specular_manifold.max_newton_iterations <= 0) {
+        throw std::runtime_error("Specular manifold max_newton_iterations must be positive");
+    }
+    throw std::runtime_error("Specular manifold GPU solver is not implemented yet; specular dielectric NEE remains blocked");
+}
+
 static void release_restir_di_reservoirs(GpuContext* ctx) {
     cudaFree(ctx->d_restir_di_origins);
     cudaFree(ctx->d_restir_di_directions);
@@ -886,6 +900,7 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const ure::RenderConfig& config) {
     validate_explicit_spectral_resident_budget(materials, textures, config);
     validate_restir_di_config(config);
+    validate_specular_manifold_config(config);
     const int primary_ray_count = checked_primary_ray_count(width, height);
     const int max_rays = configured_ray_queue_capacity(config, primary_ray_count);
 

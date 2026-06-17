@@ -82,6 +82,14 @@ RenderConfig load_config(const std::string& path) {
             if (r.contains("unbiased")) cfg.restir_di.unbiased = r["unbiased"].get<bool>();
             if (r.contains("max_history")) cfg.restir_di.max_history = r["max_history"].get<int>();
         }
+        if (j.contains("integrator") &&
+            j["integrator"].contains("specular_manifold")) {
+            auto& s = j["integrator"]["specular_manifold"];
+            if (s.contains("enabled")) cfg.integrator.specular_manifold.enabled = s["enabled"].get<bool>();
+            if (s.contains("max_specular_events")) cfg.integrator.specular_manifold.max_specular_events = s["max_specular_events"].get<int>();
+            if (s.contains("solver_tolerance")) cfg.integrator.specular_manifold.solver_tolerance = s["solver_tolerance"].get<double>();
+            if (s.contains("max_newton_iterations")) cfg.integrator.specular_manifold.max_newton_iterations = s["max_newton_iterations"].get<int>();
+        }
     } catch (const std::exception& e) {
         std::cerr << "[config] JSON parse error in '" << path << "': " << e.what() << "\n";
     }
@@ -120,6 +128,10 @@ CliResult parse_cli(int argc, char** argv) {
     bool restir_di_spatial_reuse = false;
     bool restir_di_unbiased = false;
     int restir_di_max_history = -1;
+    bool integrator_specular_manifold = false;
+    int integrator_specular_max_events = -1;
+    double integrator_specular_tolerance = -1.0;
+    int integrator_specular_newton_iterations = -1;
     bool physics = false, audio = false;
     render_cmd->add_option("scene", scene_render, "Path to scene file (glTF)")->required();
     render_cmd->add_option("-c,--config", config_render, "Path to JSON config file");
@@ -149,6 +161,10 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_flag("--restir-di-spatial-reuse", restir_di_spatial_reuse, "Request spatial ReSTIR DI reuse");
     render_cmd->add_flag("--restir-di-unbiased", restir_di_unbiased, "Request unbiased ReSTIR DI mode");
     render_cmd->add_option("--restir-di-max-history", restir_di_max_history, "Maximum temporal history carried by ReSTIR DI");
+    render_cmd->add_flag("--enable-integrator-specular-manifold", integrator_specular_manifold, "Request radiometric specular manifold integration");
+    render_cmd->add_option("--specular-manifold-max-events", integrator_specular_max_events, "Maximum specular events in a manifold connection");
+    render_cmd->add_option("--specular-manifold-tolerance", integrator_specular_tolerance, "Specular manifold solver tolerance");
+    render_cmd->add_option("--specular-manifold-newton-iterations", integrator_specular_newton_iterations, "Specular manifold Newton iteration cap");
     render_cmd->add_flag("--physics", physics, "Enable physics simulation");
     render_cmd->add_flag("--audio", audio, "Enable audio rendering");
 
@@ -204,6 +220,10 @@ CliResult parse_cli(int argc, char** argv) {
         if (restir_di_spatial_reuse) cfg.restir_di.spatial_reuse = true;
         if (restir_di_unbiased) cfg.restir_di.unbiased = true;
         if (restir_di_max_history > 0) cfg.restir_di.max_history = restir_di_max_history;
+        if (integrator_specular_manifold) cfg.integrator.specular_manifold.enabled = true;
+        if (integrator_specular_max_events > 0) cfg.integrator.specular_manifold.max_specular_events = integrator_specular_max_events;
+        if (integrator_specular_tolerance > 0.0) cfg.integrator.specular_manifold.solver_tolerance = integrator_specular_tolerance;
+        if (integrator_specular_newton_iterations > 0) cfg.integrator.specular_manifold.max_newton_iterations = integrator_specular_newton_iterations;
         cfg.physics_enabled = physics;
         cfg.enable_audio = audio;
         cfg.scene_path = scene_render;

@@ -48,6 +48,13 @@ struct RestirDirectConfig {
     float min_target = 1e-6f;
 };
 
+struct SpecularManifoldConfig {
+    bool enabled = false;
+    int max_specular_events = 2;
+    float solver_tolerance = 1e-4f;
+    int max_newton_iterations = 16;
+};
+
 struct RenderConfig {
     int queue_capacity = 0;       // 0 = auto (width * height)
     int max_trace_depth = 50;
@@ -59,6 +66,7 @@ struct RenderConfig {
     WaveOpticsConfig wave_optics;
     PathGuidingConfig path_guiding;
     RestirDirectConfig restir_di;
+    SpecularManifoldConfig specular_manifold;
     int wg_size = 32;
     int rays_per_block = 256;
     int samples_per_pass = 1;
