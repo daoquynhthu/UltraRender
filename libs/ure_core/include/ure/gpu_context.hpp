@@ -59,6 +59,7 @@ struct GpuContext {
     float* d_light_selection_cdf = nullptr;
     float* d_light_alias_prob = nullptr;
     int* d_light_alias_index = nullptr;
+    float* d_path_guiding_light_weights = nullptr;
     float* d_wavelength_proposal_cdf = nullptr;
     float* d_wavelength_proposal_pdf = nullptr;
     int wavelength_proposal_count = 0;
@@ -89,6 +90,7 @@ struct GpuContext {
     int last_integrator_early_terminated_samples = 0;
     int last_integrator_ray_queue_overflow_count = 0;
     int last_integrator_shadow_queue_overflow_count = 0;
+    int last_integrator_path_guiding_light_count = 0;
 
     std::vector<GpuSphere> host_spheres_for_light_distribution;
     std::vector<GpuMaterialData> host_materials_for_light_distribution;

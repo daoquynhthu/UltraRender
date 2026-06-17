@@ -177,6 +177,7 @@ void alloc_shadow_queue(ShadowQueue& q, int capacity, int num_spec_channels) {
     UR_CUDA_CHECK(cudaMalloc(&q.active_channels, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.wavelength_pdfs, capacity * sizeof(float)));
     UR_CUDA_CHECK(cudaMalloc(&q.pixel_indices, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.light_list_indices, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.count, sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.overflow_count, sizeof(int)));
     UR_CUDA_CHECK(cudaMemset(q.overflow_count, 0, sizeof(int)));
@@ -192,6 +193,7 @@ void free_shadow_queue(ShadowQueue& q) {
     cudaFree(q.active_channels);
     cudaFree(q.wavelength_pdfs);
     cudaFree(q.pixel_indices);
+    cudaFree(q.light_list_indices);
     cudaFree(q.count);
     cudaFree(q.overflow_count);
 }
@@ -685,11 +687,20 @@ static void release_light_distribution(GpuContext* ctx) {
     cudaFree(ctx->d_light_selection_cdf);
     cudaFree(ctx->d_light_alias_prob);
     cudaFree(ctx->d_light_alias_index);
+    cudaFree(ctx->d_path_guiding_light_weights);
     ctx->d_light_indices = nullptr;
     ctx->d_light_selection_cdf = nullptr;
     ctx->d_light_alias_prob = nullptr;
     ctx->d_light_alias_index = nullptr;
+    ctx->d_path_guiding_light_weights = nullptr;
     ctx->light_count = 0;
+    ctx->last_integrator_path_guiding_light_count = 0;
+}
+
+static bool path_guiding_enabled(const ure::RenderConfig& config) {
+    return config.path_guiding.enabled &&
+           config.path_guiding.light_mixture > 0.0f &&
+           config.path_guiding.learning_rate > 0.0f;
 }
 
 static void rebuild_light_distribution(GpuContext* ctx) {
@@ -756,6 +767,11 @@ static void rebuild_light_distribution(GpuContext* ctx) {
                              host_alias_index.size() * sizeof(int),
                              cudaMemcpyHostToDevice));
     ctx->light_count = static_cast<int>(host_light_indices.size());
+    if (path_guiding_enabled(ctx->render_config)) {
+        UR_CUDA_CHECK(cudaMalloc(&ctx->d_path_guiding_light_weights, host_light_indices.size() * sizeof(float)));
+        UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_light_weights, 0, host_light_indices.size() * sizeof(float)));
+        ctx->last_integrator_path_guiding_light_count = ctx->light_count;
+    }
 }
 
 // ===== Interactive API Implementation =====
@@ -1298,6 +1314,11 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.light_selection_cdf = ctx->d_light_selection_cdf;
     scene.light_alias_prob = ctx->d_light_alias_prob;
     scene.light_alias_index = ctx->d_light_alias_index;
+    scene.path_guiding_light_weights = ctx->d_path_guiding_light_weights;
+    scene.path_guiding_light_count = ctx->light_count;
+    scene.path_guiding_light_mixture = std::clamp(ctx->render_config.path_guiding.light_mixture, 0.0f, 0.95f);
+    scene.path_guiding_learning_rate = std::clamp(ctx->render_config.path_guiding.learning_rate, 0.0f, 1.0f);
+    scene.path_guiding_min_weight = std::max(ctx->render_config.path_guiding.min_weight, 0.0f);
     scene.light_count = ctx->light_count;
 
     scene.medium_density = ctx->medium_density;

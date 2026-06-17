@@ -158,6 +158,9 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.spectral_packet_lanes = packet_lanes;
     gpu_config.spectral_max_resident_mb = app_config.spectral.max_resident_mb;
     gpu_config.spectral_sampling_mode = parse_spectral_sampling_mode(app_config.spectral.sampling_mode);
+    gpu_config.path_guiding.enabled = app_config.path_guiding.enabled;
+    gpu_config.path_guiding.light_mixture = static_cast<float>(app_config.path_guiding.light_mixture);
+    gpu_config.path_guiding.learning_rate = static_cast<float>(app_config.path_guiding.learning_rate);
     if (!make_wave_optics_config(app_config.wave_optics, gpu_config.wave_optics)) {
         return 1;
     }

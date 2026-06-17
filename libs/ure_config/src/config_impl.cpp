@@ -68,6 +68,12 @@ RenderConfig load_config(const std::string& path) {
                 cfg.wave_optics.experimental_allow_preview_degradation =
                     w["experimental_allow_preview_degradation"].get<bool>();
         }
+        if (j.contains("path_guiding")) {
+            auto& p = j["path_guiding"];
+            if (p.contains("enabled")) cfg.path_guiding.enabled = p["enabled"].get<bool>();
+            if (p.contains("light_mixture")) cfg.path_guiding.light_mixture = p["light_mixture"].get<double>();
+            if (p.contains("learning_rate")) cfg.path_guiding.learning_rate = p["learning_rate"].get<double>();
+        }
     } catch (const std::exception& e) {
         std::cerr << "[config] JSON parse error in '" << path << "': " << e.what() << "\n";
     }
@@ -98,6 +104,9 @@ CliResult parse_cli(int argc, char** argv) {
     bool wave_specular_manifold = false;
     bool wave_local_fullwave = false;
     bool wave_preview_degradation = false;
+    bool path_guiding = false;
+    double path_guiding_light_mixture = -1.0;
+    double path_guiding_learning_rate = -1.0;
     bool physics = false, audio = false;
     render_cmd->add_option("scene", scene_render, "Path to scene file (glTF)")->required();
     render_cmd->add_option("-c,--config", config_render, "Path to JSON config file");
@@ -119,6 +128,9 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_flag("--enable-specular-manifold", wave_specular_manifold, "Enable specular manifold/refractive direct-light paths");
     render_cmd->add_flag("--enable-local-fullwave", wave_local_fullwave, "Enable local full-wave solver coupling");
     render_cmd->add_flag("--allow-wave-preview-degradation", wave_preview_degradation, "Allow explicit non-physical preview degradation for unsupported wave nodes");
+    render_cmd->add_flag("--enable-path-guiding", path_guiding, "Enable progressive path guiding for supported radiometric samplers");
+    render_cmd->add_option("--path-guiding-light-mixture", path_guiding_light_mixture, "Mixture weight for guided direct-light sampling");
+    render_cmd->add_option("--path-guiding-learning-rate", path_guiding_learning_rate, "Progressive path guiding light-weight update scale");
     render_cmd->add_flag("--physics", physics, "Enable physics simulation");
     render_cmd->add_flag("--audio", audio, "Enable audio rendering");
 
@@ -166,6 +178,9 @@ CliResult parse_cli(int argc, char** argv) {
         if (wave_specular_manifold) cfg.wave_optics.specular_manifold_enabled = true;
         if (wave_local_fullwave) cfg.wave_optics.local_fullwave_enabled = true;
         if (wave_preview_degradation) cfg.wave_optics.experimental_allow_preview_degradation = true;
+        if (path_guiding) cfg.path_guiding.enabled = true;
+        if (path_guiding_light_mixture >= 0.0) cfg.path_guiding.light_mixture = path_guiding_light_mixture;
+        if (path_guiding_learning_rate >= 0.0) cfg.path_guiding.learning_rate = path_guiding_learning_rate;
         cfg.physics_enabled = physics;
         cfg.enable_audio = audio;
         cfg.scene_path = scene_render;

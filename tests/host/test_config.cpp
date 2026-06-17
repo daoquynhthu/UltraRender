@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cmath>
 #include <fstream>
 #include <string>
 
@@ -129,6 +130,47 @@ static int test_wave_optics_cli_overrides() {
     return 0;
 }
 
+static int test_path_guiding_json_fields() {
+    const char* path = "test_config_path_guiding.json";
+    {
+        std::ofstream f(path);
+        f << R"({
+  "path_guiding": {
+    "enabled": true,
+    "light_mixture": 0.625,
+    "learning_rate": 0.125
+  }
+})";
+    }
+
+    auto cfg = ure::config::load_config(path);
+    std::remove(path);
+    CHECK(cfg.path_guiding.enabled);
+    CHECK(std::fabs(cfg.path_guiding.light_mixture - 0.625) < 1e-12);
+    CHECK(std::fabs(cfg.path_guiding.learning_rate - 0.125) < 1e-12);
+    return 0;
+}
+
+static int test_path_guiding_cli_overrides() {
+    const char* argv[] = {
+        "ure_cli",
+        "render",
+        "scene.gltf",
+        "--enable-path-guiding",
+        "--path-guiding-light-mixture",
+        "0.75",
+        "--path-guiding-learning-rate",
+        "0.2",
+    };
+    auto cfg = ure::config::parse_cli(static_cast<int>(sizeof(argv) / sizeof(argv[0])),
+                                      const_cast<char**>(argv)).config;
+    CHECK(cfg.scene_path == "scene.gltf");
+    CHECK(cfg.path_guiding.enabled);
+    CHECK(std::fabs(cfg.path_guiding.light_mixture - 0.75) < 1e-12);
+    CHECK(std::fabs(cfg.path_guiding.learning_rate - 0.2) < 1e-12);
+    return 0;
+}
+
 int main() {
     std::fprintf(stderr, "[Config Test]\n");
     auto run = [](const char* name, int (*fn)()) {
@@ -143,6 +185,8 @@ int main() {
     failed += run("test_spectral_cli_overrides", test_spectral_cli_overrides);
     failed += run("test_wave_optics_json_fields", test_wave_optics_json_fields);
     failed += run("test_wave_optics_cli_overrides", test_wave_optics_cli_overrides);
+    failed += run("test_path_guiding_json_fields", test_path_guiding_json_fields);
+    failed += run("test_path_guiding_cli_overrides", test_path_guiding_cli_overrides);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

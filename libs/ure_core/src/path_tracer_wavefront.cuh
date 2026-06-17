@@ -417,7 +417,36 @@ __device__ inline float light_selection_pdf(const GpuScene& scene, int light_lis
     return fmaxf(0.0f, upper - lower);
 }
 
-__device__ inline int sample_light_list_index(const GpuScene& scene, float r) {
+__device__ inline float path_guiding_light_total(const GpuScene& scene) {
+    if (!scene.path_guiding_light_weights ||
+        scene.path_guiding_light_count != scene.light_count ||
+        scene.light_count <= 0) {
+        return 0.0f;
+    }
+    float total = 0.0f;
+    for (int i = 0; i < scene.light_count; ++i) {
+        total += fmaxf(0.0f, scene.path_guiding_light_weights[i]);
+    }
+    return total;
+}
+
+__device__ inline float path_guiding_effective_mixture(const GpuScene& scene, float guide_total) {
+    if (guide_total <= fmaxf(scene.path_guiding_min_weight, 1e-12f)) return 0.0f;
+    return fminf(0.95f, fmaxf(0.0f, scene.path_guiding_light_mixture));
+}
+
+__device__ inline float guided_light_selection_pdf(const GpuScene& scene, int light_list_index, float guide_total) {
+    if (!scene.path_guiding_light_weights ||
+        scene.path_guiding_light_count != scene.light_count ||
+        light_list_index < 0 ||
+        light_list_index >= scene.light_count ||
+        guide_total <= fmaxf(scene.path_guiding_min_weight, 1e-12f)) {
+        return 0.0f;
+    }
+    return fmaxf(0.0f, scene.path_guiding_light_weights[light_list_index]) / guide_total;
+}
+
+__device__ inline int sample_base_light_list_index(const GpuScene& scene, float r) {
     if (scene.light_count <= 0) return -1;
     if (scene.light_alias_prob && scene.light_alias_index) {
         float scaled = fminf(fmaxf(r, 0.0f), 0.99999994f) * float(scene.light_count);
@@ -438,6 +467,39 @@ __device__ inline int sample_light_list_index(const GpuScene& scene, float r) {
     return scene.light_count - 1;
 }
 
+__device__ inline int sample_guided_light_list_index(const GpuScene& scene, float r, float guide_total) {
+    if (guide_total <= fmaxf(scene.path_guiding_min_weight, 1e-12f)) {
+        return sample_base_light_list_index(scene, r);
+    }
+    const float target = fminf(fmaxf(r, 0.0f), 0.99999994f) * guide_total;
+    float running = 0.0f;
+    for (int i = 0; i < scene.light_count; ++i) {
+        running += fmaxf(0.0f, scene.path_guiding_light_weights[i]);
+        if (target <= running) return i;
+    }
+    return scene.light_count - 1;
+}
+
+__device__ inline int sample_light_list_index(const GpuScene& scene, float r) {
+    if (scene.light_count <= 0) return -1;
+    float guide_total = path_guiding_light_total(scene);
+    float mixture = path_guiding_effective_mixture(scene, guide_total);
+    if (mixture > 0.0f && r < mixture) {
+        return sample_guided_light_list_index(scene, r / mixture, guide_total);
+    }
+    float base_u = mixture < 1.0f ? (r - mixture) / fmaxf(1e-6f, 1.0f - mixture) : r;
+    return sample_base_light_list_index(scene, base_u);
+}
+
+__device__ inline float guided_mixture_light_selection_pdf(const GpuScene& scene, int light_list_index) {
+    const float base_pdf = light_selection_pdf(scene, light_list_index);
+    const float guide_total = path_guiding_light_total(scene);
+    const float mixture = path_guiding_effective_mixture(scene, guide_total);
+    if (mixture <= 0.0f) return base_pdf;
+    const float guide_pdf = guided_light_selection_pdf(scene, light_list_index, guide_total);
+    return (1.0f - mixture) * base_pdf + mixture * guide_pdf;
+}
+
 __device__ inline float selected_sphere_light_pdf(
     const GpuScene& scene,
     int light_list_index,
@@ -445,7 +507,7 @@ __device__ inline float selected_sphere_light_pdf(
     const GpuVec3& reference_point
 ) {
     return sphere_light_solid_angle_pdf_only(light_sphere, reference_point) *
-           light_selection_pdf(scene, light_list_index);
+           guided_mixture_light_selection_pdf(scene, light_list_index);
 }
 
 __device__ inline bool direct_light_direction_allowed(
@@ -823,6 +885,18 @@ __global__ __launch_bounds__(256) void extend_shadow_kernel(
         atomicAdd(&accum_buffer[pixel_index].x, rgb.x);
         atomicAdd(&accum_buffer[pixel_index].y, rgb.y);
         atomicAdd(&accum_buffer[pixel_index].z, rgb.z);
+        if (scene.path_guiding_light_weights &&
+            shadow_queue.light_list_indices &&
+            scene.path_guiding_learning_rate > 0.0f) {
+            int light_list_index = shadow_queue.light_list_indices[idx];
+            if (light_list_index >= 0 && light_list_index < scene.path_guiding_light_count) {
+                float luminance = fmaxf(0.0f, 0.2126f * rgb.x + 0.7152f * rgb.y + 0.0722f * rgb.z);
+                if (isfinite(luminance) && luminance > scene.path_guiding_min_weight) {
+                    atomicAdd(&scene.path_guiding_light_weights[light_list_index],
+                              scene.path_guiding_learning_rate * luminance);
+                }
+            }
+        }
     }
 }
 
@@ -984,6 +1058,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
                              shadow_queue.spectral_modes[s_idx] = spectral_mode;
                              shadow_queue.active_channels[s_idx] = current_queue.active_channels[idx];
                              shadow_queue.wavelength_pdfs[s_idx] = current_queue.wavelength_pdfs[idx];
+                             shadow_queue.light_list_indices[s_idx] = light_idx_idx;
                          }
                     }
                 }
@@ -1305,6 +1380,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
                              shadow_queue.spectral_modes[s_idx] = spectral_mode;
                              shadow_queue.active_channels[s_idx] = current_queue.active_channels[idx];
                              shadow_queue.wavelength_pdfs[s_idx] = current_queue.wavelength_pdfs[idx];
+                             shadow_queue.light_list_indices[s_idx] = light_idx_idx;
                          }
                     }
                 }

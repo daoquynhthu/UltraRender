@@ -36,5 +36,10 @@ Assert-Contains "libs\ure_core\src\path_tracer_volume.cuh" "is_supported_volume_
 Assert-Contains "tests\gpu\test_gpu_volume.cu" "test_volume_phase_selector_boundary" "R.6 volume phase selector test"
 Assert-Contains "tests\gpu\test_spectral_pipeline_soa.cu" "rough_dielectric_energy_bound" "R.6 rough dielectric energy oracle"
 Assert-Contains "tests\gpu\test_gpu_polarization.cu" "test_thin_film_sp_energy_grid" "R.6 thin-film energy oracle"
+Assert-Contains "libs\ure_types\include\ure\render_config.hpp" "PathGuidingConfig" "R.7 path guiding config"
+Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "guided_mixture_light_selection_pdf" "R.7 guided light PDF"
+Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "path_guiding_light_weights" "R.7 guide cache device path"
+Assert-Contains "tests\gpu\test_render_basic.cu" "test_path_guiding_shadow_visibility_updates_light_weight" "R.7 progressive guide update test"
+Assert-Contains "tests\host\test_config.cpp" "test_path_guiding_cli_overrides" "R.7 config parity test"
 
 Write-Host "Phase R static audit passed"

@@ -32,6 +32,13 @@ struct WaveOpticsConfig {
     bool experimental_allow_preview_degradation = false;
 };
 
+struct PathGuidingConfig {
+    bool enabled = false;
+    float light_mixture = 0.5f;
+    float learning_rate = 0.25f;
+    float min_weight = 1e-6f;
+};
+
 struct RenderConfig {
     int queue_capacity = 0;       // 0 = auto (width * height)
     int max_trace_depth = 50;
@@ -41,6 +48,7 @@ struct RenderConfig {
     int spectral_max_resident_mb = 0;
     SpectralSamplingMode spectral_sampling_mode = SpectralSamplingMode::PacketUniform;
     WaveOpticsConfig wave_optics;
+    PathGuidingConfig path_guiding;
     int wg_size = 32;
     int rays_per_block = 256;
     int samples_per_pass = 1;

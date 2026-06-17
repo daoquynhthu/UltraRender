@@ -445,6 +445,11 @@ struct GpuScene {
     float* light_selection_cdf;
     float* light_alias_prob;
     int* light_alias_index;
+    float* path_guiding_light_weights;
+    int path_guiding_light_count;
+    float path_guiding_light_mixture;
+    float path_guiding_learning_rate;
+    float path_guiding_min_weight;
     int light_count;
 
     // Global Homogeneous Medium (Volumetric Fog)
@@ -515,6 +520,7 @@ struct ShadowQueue {
     int* active_channels = nullptr;
     float* wavelength_pdfs = nullptr;
     int* pixel_indices = nullptr;
+    int* light_list_indices = nullptr;
 
     int* count = nullptr;
     int* overflow_count = nullptr;

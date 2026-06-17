@@ -100,6 +100,7 @@ static int test_alloc_shadow_queue(ShadowQueue& q, int cap, int num_spec = 4) {
     if (cudaMalloc(&q.active_channels, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.wavelength_pdfs, cap * sizeof(float)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.pixel_indices, cap * sizeof(int)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.light_list_indices, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.count, sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.overflow_count, sizeof(int)) != cudaSuccess) return 1;
     if (cudaMemset(q.overflow_count, 0, sizeof(int)) != cudaSuccess) return 1;
@@ -112,7 +113,7 @@ static void test_free_shadow_queue(const ShadowQueue& q) {
     cudaFree(q.origins); cudaFree(q.directions); cudaFree(q.max_dist);
     cudaFree(q.radiance_vals); cudaFree(q.radiance_wavelengths);
     cudaFree(q.spectral_modes); cudaFree(q.active_channels); cudaFree(q.wavelength_pdfs);
-    cudaFree(q.pixel_indices); cudaFree(q.count); cudaFree(q.overflow_count);
+    cudaFree(q.pixel_indices); cudaFree(q.light_list_indices); cudaFree(q.count); cudaFree(q.overflow_count);
 }
 
 __global__ void setup_single_ray_kernel(RayQueue q, GpuVec3 origin, GpuVec3 dir, int pixel_idx) {
@@ -170,6 +171,39 @@ __global__ void reserve_three_shadow_slots_kernel(ShadowQueue q) {
     reserve_shadow_slot(q);
     reserve_shadow_slot(q);
     reserve_shadow_slot(q);
+}
+
+__global__ void path_guided_light_selection_kernel(float* cdf, float* guide_weights, float* out) {
+    GpuScene scene = {};
+    scene.light_count = 2;
+    scene.light_selection_cdf = cdf;
+    scene.path_guiding_light_weights = guide_weights;
+    scene.path_guiding_light_count = 2;
+    scene.path_guiding_light_mixture = 0.5f;
+    scene.path_guiding_learning_rate = 0.25f;
+    scene.path_guiding_min_weight = 1e-6f;
+    out[0] = guided_mixture_light_selection_pdf(scene, 0);
+    out[1] = guided_mixture_light_selection_pdf(scene, 1);
+    out[2] = float(sample_light_list_index(scene, 0.25f));
+    out[3] = float(sample_light_list_index(scene, 0.75f));
+}
+
+__global__ void setup_path_guided_shadow_kernel(ShadowQueue q, float* guide_weights, GpuVec3* accum) {
+    int one = 1;
+    *q.count = one;
+    q.origins[0] = GpuVec3(0.0f, 0.0f, 0.0f);
+    q.directions[0] = GpuVec3(0.0f, 1.0f, 0.0f);
+    q.max_dist[0] = 10.0f;
+    q.radiance_vals[0] = 4.0f;
+    q.radiance_wavelengths[0] = 550.0f;
+    q.spectral_modes[0] = SpectralRayModePacket;
+    q.active_channels[0] = -1;
+    q.wavelength_pdfs[0] = 1.0f;
+    q.pixel_indices[0] = 0;
+    q.light_list_indices[0] = 1;
+    guide_weights[0] = 0.0f;
+    guide_weights[1] = 0.0f;
+    accum[0] = GpuVec3(0.0f, 0.0f, 0.0f);
 }
 
 __global__ void packet_metal_stokes_channels_kernel(RayQueue q_in, RayQueue q_out) {
@@ -984,6 +1018,104 @@ static int test_update_materials_gpu_rebuilds_light_selection_distribution() {
     return 0;
 }
 
+static int test_path_guiding_allocates_progressive_light_cache() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+
+    GpuSphere light_sphere;
+    light_sphere.center = GpuVec3(0.0f, 2.0f, 0.0f);
+    light_sphere.radius = 1.0f;
+    light_sphere.material_index = 7;
+
+    GpuMaterialData light = {};
+    light.header.type = MaterialType::Light;
+    light.emission = SpectralPacket(4.0f);
+
+    GpuContext* off_ctx = init_gpu_renderer(4, 4, {}, {}, {light_sphere}, {light}, {}, config);
+    CHECK(off_ctx != nullptr);
+    CHECK(off_ctx->d_path_guiding_light_weights == nullptr);
+    free_gpu_renderer(off_ctx);
+
+    config.path_guiding.enabled = true;
+    config.path_guiding.light_mixture = 0.5f;
+    config.path_guiding.learning_rate = 0.25f;
+    GpuContext* on_ctx = init_gpu_renderer(4, 4, {}, {}, {light_sphere}, {light}, {}, config);
+    CHECK(on_ctx != nullptr);
+    CHECK(on_ctx->light_count == 1);
+    CHECK(on_ctx->d_path_guiding_light_weights != nullptr);
+    CHECK(on_ctx->last_integrator_path_guiding_light_count == 1);
+    float weight = -1.0f;
+    CHECK_CUDA(cudaMemcpy(&weight, on_ctx->d_path_guiding_light_weights, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(weight, 0.0f, 1e-6f);
+    free_gpu_renderer(on_ctx);
+    return 0;
+}
+
+static int test_path_guiding_light_selection_uses_mixture_pdf() {
+    REQUIRE_GPU();
+    float h_cdf[2] = {0.5f, 1.0f};
+    float h_weights[2] = {1.0f, 9.0f};
+    float* d_cdf = nullptr;
+    float* d_weights = nullptr;
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_cdf, 2 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_weights, 2 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_out, 4 * sizeof(float)));
+    DeviceMem _cdf(d_cdf), _weights(d_weights), _out(d_out);
+    CHECK_CUDA(cudaMemcpy(d_cdf, h_cdf, 2 * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_weights, h_weights, 2 * sizeof(float), cudaMemcpyHostToDevice));
+
+    path_guided_light_selection_kernel<<<1, 1>>>(d_cdf, d_weights, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float out[4] = {};
+    CHECK_CUDA(cudaMemcpy(out, d_out, 4 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(out[0], 0.30f, 1e-5f);
+    CHECK_FLOAT_EQ(out[1], 0.70f, 1e-5f);
+    CHECK(int(out[2]) == 1);
+    CHECK(int(out[3]) == 0);
+    return 0;
+}
+
+static int test_path_guiding_shadow_visibility_updates_light_weight() {
+    REQUIRE_GPU();
+    ShadowQueue q = {};
+    CHECK(test_alloc_shadow_queue(q, 1, 1) == 0);
+    float* d_weights = nullptr;
+    GpuVec3* d_accum = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_weights, 2 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_accum, sizeof(GpuVec3)));
+    DeviceMem _weights(d_weights), _accum(d_accum);
+
+    setup_path_guided_shadow_kernel<<<1, 1>>>(q, d_weights, d_accum);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    GpuScene scene = {};
+    scene.num_spectral_channels = 1;
+    scene.path_guiding_light_weights = d_weights;
+    scene.path_guiding_light_count = 2;
+    scene.path_guiding_light_mixture = 0.5f;
+    scene.path_guiding_learning_rate = 0.5f;
+    scene.path_guiding_min_weight = 1e-6f;
+    extend_shadow_kernel<<<1, 1>>>(q, d_accum, scene, 20.0f);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float weights[2] = {};
+    GpuVec3 accum = {};
+    CHECK_CUDA(cudaMemcpy(weights, d_weights, 2 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&accum, d_accum, sizeof(GpuVec3), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(weights[0], 0.0f, 1e-6f);
+    CHECK(weights[1] > 0.0f);
+    CHECK(accum.y > 0.0f);
+    test_free_shadow_queue(q);
+    return 0;
+}
+
 static int test_importance_spectral_config_selects_nonuniform_wavelength_sampler() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -1358,6 +1490,9 @@ int main() {
     RUN_TEST(test_runtime_n_long_wavelength_light_list);
     RUN_TEST(test_light_selection_cdf_uses_area_and_spectral_power);
     RUN_TEST(test_update_materials_gpu_rebuilds_light_selection_distribution);
+    RUN_TEST(test_path_guiding_allocates_progressive_light_cache);
+    RUN_TEST(test_path_guiding_light_selection_uses_mixture_pdf);
+    RUN_TEST(test_path_guiding_shadow_visibility_updates_light_weight);
     RUN_TEST(test_importance_spectral_config_selects_nonuniform_wavelength_sampler);
     RUN_TEST(test_importance_spectral_config_uses_scene_spectral_power_proposal);
     RUN_TEST(test_update_materials_gpu_rebuilds_scene_wavelength_proposal);

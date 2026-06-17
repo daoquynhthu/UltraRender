@@ -46,6 +46,12 @@ struct WaveOpticsConfig {
     bool experimental_allow_preview_degradation = false;
 };
 
+struct PathGuidingConfig {
+    bool enabled = false;
+    double light_mixture = 0.5;
+    double learning_rate = 0.25;
+};
+
 struct RenderConfig {
     int width = 1280;
     int height = 720;
@@ -63,6 +69,7 @@ struct RenderConfig {
     OutputConfig output;
     GpuConfig gpu;
     WaveOpticsConfig wave_optics;
+    PathGuidingConfig path_guiding;
 };
 
 enum class CliCommand {
