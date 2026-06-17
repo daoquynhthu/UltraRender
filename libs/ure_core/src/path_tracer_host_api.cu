@@ -6,6 +6,7 @@
 #include <math.h>
 #include <cstdint>
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <vector>
 #include <iostream>
@@ -719,6 +720,24 @@ static bool restir_di_enabled(const ure::RenderConfig& config) {
     return config.restir_di.enabled && config.restir_di.temporal_reuse;
 }
 
+static void validate_path_guiding_config(const ure::RenderConfig& config) {
+    if (!config.path_guiding.enabled) return;
+    if (!std::isfinite(config.path_guiding.light_mixture) ||
+        config.path_guiding.light_mixture <= 0.0f ||
+        config.path_guiding.light_mixture > 0.95f) {
+        throw std::runtime_error("Path guiding light_mixture must be in (0, 0.95]");
+    }
+    if (!std::isfinite(config.path_guiding.learning_rate) ||
+        config.path_guiding.learning_rate <= 0.0f ||
+        config.path_guiding.learning_rate > 1.0f) {
+        throw std::runtime_error("Path guiding learning_rate must be in (0, 1]");
+    }
+    if (!std::isfinite(config.path_guiding.min_weight) ||
+        config.path_guiding.min_weight < 0.0f) {
+        throw std::runtime_error("Path guiding min_weight must be finite and non-negative");
+    }
+}
+
 static void validate_restir_di_config(const ure::RenderConfig& config) {
     if (!config.restir_di.enabled) return;
     if (config.restir_di.spatial_reuse) {
@@ -899,6 +918,7 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<ure::gpu::HostTexture>& textures,
                               const ure::RenderConfig& config) {
     validate_explicit_spectral_resident_budget(materials, textures, config);
+    validate_path_guiding_config(config);
     validate_restir_di_config(config);
     validate_specular_manifold_config(config);
     const int primary_ray_count = checked_primary_ray_count(width, height);

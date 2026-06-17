@@ -73,6 +73,7 @@ RenderConfig load_config(const std::string& path) {
             if (p.contains("enabled")) cfg.path_guiding.enabled = p["enabled"].get<bool>();
             if (p.contains("light_mixture")) cfg.path_guiding.light_mixture = p["light_mixture"].get<double>();
             if (p.contains("learning_rate")) cfg.path_guiding.learning_rate = p["learning_rate"].get<double>();
+            if (p.contains("min_weight")) cfg.path_guiding.min_weight = p["min_weight"].get<double>();
         }
         if (j.contains("restir_di")) {
             auto& r = j["restir_di"];
@@ -123,6 +124,7 @@ CliResult parse_cli(int argc, char** argv) {
     bool path_guiding = false;
     double path_guiding_light_mixture = -1.0;
     double path_guiding_learning_rate = -1.0;
+    double path_guiding_min_weight = -1.0;
     bool restir_di = false;
     bool restir_di_temporal_reuse = true;
     bool restir_di_spatial_reuse = false;
@@ -156,6 +158,7 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_flag("--enable-path-guiding", path_guiding, "Enable progressive path guiding for supported radiometric samplers");
     render_cmd->add_option("--path-guiding-light-mixture", path_guiding_light_mixture, "Mixture weight for guided direct-light sampling");
     render_cmd->add_option("--path-guiding-learning-rate", path_guiding_learning_rate, "Progressive path guiding light-weight update scale");
+    render_cmd->add_option("--path-guiding-min-weight", path_guiding_min_weight, "Minimum visible contribution recorded by path guiding");
     render_cmd->add_flag("--enable-restir-di", restir_di, "Enable ReSTIR direct-light reservoir reuse");
     render_cmd->add_flag("--restir-di-temporal-reuse,!--no-restir-di-temporal-reuse", restir_di_temporal_reuse, "Enable temporal ReSTIR DI candidate reuse");
     render_cmd->add_flag("--restir-di-spatial-reuse", restir_di_spatial_reuse, "Request spatial ReSTIR DI reuse");
@@ -215,6 +218,7 @@ CliResult parse_cli(int argc, char** argv) {
         if (path_guiding) cfg.path_guiding.enabled = true;
         if (path_guiding_light_mixture >= 0.0) cfg.path_guiding.light_mixture = path_guiding_light_mixture;
         if (path_guiding_learning_rate >= 0.0) cfg.path_guiding.learning_rate = path_guiding_learning_rate;
+        if (path_guiding_min_weight >= 0.0) cfg.path_guiding.min_weight = path_guiding_min_weight;
         if (restir_di) cfg.restir_di.enabled = true;
         cfg.restir_di.temporal_reuse = restir_di_temporal_reuse;
         if (restir_di_spatial_reuse) cfg.restir_di.spatial_reuse = true;

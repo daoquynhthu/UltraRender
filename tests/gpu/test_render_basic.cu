@@ -1089,6 +1089,47 @@ static int test_path_guiding_allocates_progressive_light_cache() {
     return 0;
 }
 
+static int test_path_guiding_rejects_invalid_enabled_config() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.path_guiding.enabled = true;
+    config.path_guiding.light_mixture = 0.0f;
+
+    bool rejected_mixture = false;
+    try {
+        GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+        free_gpu_renderer(ctx);
+    } catch (const std::runtime_error& e) {
+        rejected_mixture = std::string(e.what()).find("Path guiding light_mixture") != std::string::npos;
+    }
+    CHECK(rejected_mixture);
+
+    config.path_guiding.light_mixture = 0.5f;
+    config.path_guiding.learning_rate = -0.1f;
+    bool rejected_learning = false;
+    try {
+        GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+        free_gpu_renderer(ctx);
+    } catch (const std::runtime_error& e) {
+        rejected_learning = std::string(e.what()).find("Path guiding learning_rate") != std::string::npos;
+    }
+    CHECK(rejected_learning);
+
+    config.path_guiding.learning_rate = 0.25f;
+    config.path_guiding.min_weight = -1.0f;
+    bool rejected_min_weight = false;
+    try {
+        GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+        free_gpu_renderer(ctx);
+    } catch (const std::runtime_error& e) {
+        rejected_min_weight = std::string(e.what()).find("Path guiding min_weight") != std::string::npos;
+    }
+    CHECK(rejected_min_weight);
+    return 0;
+}
+
 static int test_path_guiding_light_selection_uses_mixture_pdf() {
     REQUIRE_GPU();
     float h_cdf[2] = {0.5f, 1.0f};
@@ -1678,6 +1719,7 @@ int main() {
     RUN_TEST(test_light_selection_cdf_uses_area_and_spectral_power);
     RUN_TEST(test_update_materials_gpu_rebuilds_light_selection_distribution);
     RUN_TEST(test_path_guiding_allocates_progressive_light_cache);
+    RUN_TEST(test_path_guiding_rejects_invalid_enabled_config);
     RUN_TEST(test_path_guiding_light_selection_uses_mixture_pdf);
     RUN_TEST(test_path_guiding_shadow_visibility_updates_light_weight);
     RUN_TEST(test_restir_di_allocates_and_resets_temporal_reservoirs);

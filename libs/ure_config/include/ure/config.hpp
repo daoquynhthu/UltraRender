@@ -50,6 +50,7 @@ struct PathGuidingConfig {
     bool enabled = false;
     double light_mixture = 0.5;
     double learning_rate = 0.25;
+    double min_weight = 1e-6;
 };
 
 struct RestirDirectConfig {
