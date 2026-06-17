@@ -69,5 +69,9 @@ Assert-Contains "libs\ure_core\src\path_tracer_host_api.cu" "validate_integrator
 Assert-Contains "tests\host\test_config.cpp" "test_integrator_runtime_cli_overrides" "R.11 config parity test"
 Assert-Contains "tests\host\test_integrator.cpp" "test_integrator_rejects_restir_mode_without_biased_ack" "R.11 unsupported combination test"
 Assert-Contains "tests\host\test_session.cpp" "ure_session_create_integrator_config" "R.11 C ABI session test"
+Assert-Contains "tools\benchmarks\run_phase_r_validation_suite.ps1" "industrial_validation_local" "R.12 local validation suite report contract"
+Assert-Contains "tools\benchmarks\run_phase_r_validation_suite.ps1" "MinSamplesPerSecond" "R.12 benchmark threshold"
+Assert-Contains "tools\benchmarks\run_phase_r_validation_suite.ps1" "phase_r_ctest_subset" "R.12 targeted correctness subset"
+Assert-Contains "tools\benchmarks\run_phase_r_validation_suite.ps1" "phase_r_integrator_smoke.json" "R.12 benchmark report ingestion"
 
 Write-Host "Phase R static audit passed"

@@ -1,7 +1,7 @@
 param(
     [string]$BuildDir = "build_modular_x64",
     [string]$Config = "Release",
-    [string]$Scene = "scenes\placeholder.gltf",
+    [string]$Scene = "scenes\benchmarks\phase_l_spectral_budget.gltf",
     [int]$Width = 64,
     [int]$Height = 64,
     [int]$Spp = 4,
