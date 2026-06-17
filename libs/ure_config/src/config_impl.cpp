@@ -91,6 +91,16 @@ RenderConfig load_config(const std::string& path) {
             if (s.contains("solver_tolerance")) cfg.integrator.specular_manifold.solver_tolerance = s["solver_tolerance"].get<double>();
             if (s.contains("max_newton_iterations")) cfg.integrator.specular_manifold.max_newton_iterations = s["max_newton_iterations"].get<int>();
         }
+        if (j.contains("integrator") &&
+            j["integrator"].contains("mlt")) {
+            auto& m = j["integrator"]["mlt"];
+            if (m.contains("enabled")) cfg.integrator.mlt.enabled = m["enabled"].get<bool>();
+            if (m.contains("chain_count")) cfg.integrator.mlt.chain_count = m["chain_count"].get<int>();
+            if (m.contains("mutations_per_chain")) cfg.integrator.mlt.mutations_per_chain = m["mutations_per_chain"].get<int>();
+            if (m.contains("large_step_probability")) cfg.integrator.mlt.large_step_probability = m["large_step_probability"].get<double>();
+            if (m.contains("small_step_sigma")) cfg.integrator.mlt.small_step_sigma = m["small_step_sigma"].get<double>();
+            if (m.contains("seed")) cfg.integrator.mlt.seed = m["seed"].get<std::uint32_t>();
+        }
     } catch (const std::exception& e) {
         std::cerr << "[config] JSON parse error in '" << path << "': " << e.what() << "\n";
     }
@@ -134,6 +144,12 @@ CliResult parse_cli(int argc, char** argv) {
     int integrator_specular_max_events = -1;
     double integrator_specular_tolerance = -1.0;
     int integrator_specular_newton_iterations = -1;
+    bool integrator_mlt = false;
+    int integrator_mlt_chain_count = -1;
+    int integrator_mlt_mutations_per_chain = -1;
+    double integrator_mlt_large_step_probability = -1.0;
+    double integrator_mlt_small_step_sigma = -1.0;
+    std::uint32_t integrator_mlt_seed = 0;
     bool physics = false, audio = false;
     render_cmd->add_option("scene", scene_render, "Path to scene file (glTF)")->required();
     render_cmd->add_option("-c,--config", config_render, "Path to JSON config file");
@@ -168,6 +184,12 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_option("--specular-manifold-max-events", integrator_specular_max_events, "Maximum specular events in a manifold connection");
     render_cmd->add_option("--specular-manifold-tolerance", integrator_specular_tolerance, "Specular manifold solver tolerance");
     render_cmd->add_option("--specular-manifold-newton-iterations", integrator_specular_newton_iterations, "Specular manifold Newton iteration cap");
+    render_cmd->add_flag("--enable-mlt", integrator_mlt, "Request primary-sample-space MLT integration");
+    render_cmd->add_option("--mlt-chain-count", integrator_mlt_chain_count, "Number of independent MLT chains");
+    render_cmd->add_option("--mlt-mutations-per-chain", integrator_mlt_mutations_per_chain, "Mutations per MLT chain");
+    render_cmd->add_option("--mlt-large-step-probability", integrator_mlt_large_step_probability, "MLT large-step probability");
+    render_cmd->add_option("--mlt-small-step-sigma", integrator_mlt_small_step_sigma, "MLT small-step mutation sigma");
+    render_cmd->add_option("--mlt-seed", integrator_mlt_seed, "MLT primary-sample-space seed");
     render_cmd->add_flag("--physics", physics, "Enable physics simulation");
     render_cmd->add_flag("--audio", audio, "Enable audio rendering");
 
@@ -228,6 +250,12 @@ CliResult parse_cli(int argc, char** argv) {
         if (integrator_specular_max_events > 0) cfg.integrator.specular_manifold.max_specular_events = integrator_specular_max_events;
         if (integrator_specular_tolerance > 0.0) cfg.integrator.specular_manifold.solver_tolerance = integrator_specular_tolerance;
         if (integrator_specular_newton_iterations > 0) cfg.integrator.specular_manifold.max_newton_iterations = integrator_specular_newton_iterations;
+        if (integrator_mlt) cfg.integrator.mlt.enabled = true;
+        if (integrator_mlt_chain_count > 0) cfg.integrator.mlt.chain_count = integrator_mlt_chain_count;
+        if (integrator_mlt_mutations_per_chain > 0) cfg.integrator.mlt.mutations_per_chain = integrator_mlt_mutations_per_chain;
+        if (integrator_mlt_large_step_probability >= 0.0) cfg.integrator.mlt.large_step_probability = integrator_mlt_large_step_probability;
+        if (integrator_mlt_small_step_sigma > 0.0) cfg.integrator.mlt.small_step_sigma = integrator_mlt_small_step_sigma;
+        if (integrator_mlt_seed > 0) cfg.integrator.mlt.seed = integrator_mlt_seed;
         cfg.physics_enabled = physics;
         cfg.enable_audio = audio;
         cfg.scene_path = scene_render;

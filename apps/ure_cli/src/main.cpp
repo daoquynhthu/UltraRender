@@ -171,6 +171,12 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.specular_manifold.max_specular_events = app_config.integrator.specular_manifold.max_specular_events;
     gpu_config.specular_manifold.solver_tolerance = static_cast<float>(app_config.integrator.specular_manifold.solver_tolerance);
     gpu_config.specular_manifold.max_newton_iterations = app_config.integrator.specular_manifold.max_newton_iterations;
+    gpu_config.mlt.enabled = app_config.integrator.mlt.enabled;
+    gpu_config.mlt.chain_count = app_config.integrator.mlt.chain_count;
+    gpu_config.mlt.mutations_per_chain = app_config.integrator.mlt.mutations_per_chain;
+    gpu_config.mlt.large_step_probability = static_cast<float>(app_config.integrator.mlt.large_step_probability);
+    gpu_config.mlt.small_step_sigma = static_cast<float>(app_config.integrator.mlt.small_step_sigma);
+    gpu_config.mlt.seed = app_config.integrator.mlt.seed;
     if (!make_wave_optics_config(app_config.wave_optics, gpu_config.wave_optics)) {
         return 1;
     }

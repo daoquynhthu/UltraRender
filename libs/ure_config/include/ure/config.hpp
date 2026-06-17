@@ -68,8 +68,18 @@ struct SpecularManifoldConfig {
     int max_newton_iterations = 16;
 };
 
+struct MltIntegratorConfig {
+    bool enabled = false;
+    int chain_count = 1;
+    int mutations_per_chain = 1024;
+    double large_step_probability = 0.3;
+    double small_step_sigma = 0.01;
+    std::uint32_t seed = 1;
+};
+
 struct IntegratorConfig {
     SpecularManifoldConfig specular_manifold;
+    MltIntegratorConfig mlt;
 };
 
 struct RenderConfig {

@@ -56,5 +56,11 @@ Assert-Contains "libs\ure_core\include\ure\specular_manifold.hpp" "SpecularInter
 Assert-Contains "libs\ure_core\src\specular_manifold.cpp" "forward_solid_angle_jacobian" "R.9 Jacobian oracle"
 Assert-Contains "libs\ure_core\src\path_tracer_host_api.cu" "Specular manifold GPU solver is not implemented yet" "R.9 production solver fail-loud"
 Assert-Contains "tests\host\test_integrator.cpp" "test_specular_interface_oblique_jacobian_reciprocity" "R.9 Jacobian reciprocity test"
+Assert-Contains "libs\ure_types\include\ure\render_config.hpp" "MltIntegratorConfig" "R.10 MLT config"
+Assert-Contains "libs\ure_core\include\ure\specular_manifold.hpp" "PrimarySampleMutation" "R.10 primary sample mutation oracle contract"
+Assert-Contains "libs\ure_core\src\specular_manifold.cpp" "metropolis_acceptance" "R.10 Metropolis acceptance oracle"
+Assert-Contains "libs\ure_core\src\path_tracer_host_api.cu" "MLT primary-sample-space GPU integrator is not implemented yet" "R.10 production integrator fail-loud"
+Assert-Contains "tests\host\test_integrator.cpp" "test_mlt_primary_sample_mutation_replays_deterministically" "R.10 deterministic replay test"
+Assert-Contains "tests\host\test_config.cpp" "test_integrator_mlt_cli_overrides" "R.10 config parity test"
 
 Write-Host "Phase R static audit passed"

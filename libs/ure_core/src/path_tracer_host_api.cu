@@ -765,6 +765,29 @@ static void validate_specular_manifold_config(const ure::RenderConfig& config) {
     throw std::runtime_error("Specular manifold GPU solver is not implemented yet; specular dielectric NEE remains blocked");
 }
 
+static void validate_mlt_config(const ure::RenderConfig& config) {
+    if (!config.mlt.enabled) return;
+    if (config.mlt.chain_count <= 0) {
+        throw std::runtime_error("MLT chain_count must be positive");
+    }
+    if (config.mlt.mutations_per_chain <= 0) {
+        throw std::runtime_error("MLT mutations_per_chain must be positive");
+    }
+    if (!std::isfinite(config.mlt.large_step_probability) ||
+        config.mlt.large_step_probability < 0.0f ||
+        config.mlt.large_step_probability > 1.0f) {
+        throw std::runtime_error("MLT large_step_probability must be in [0, 1]");
+    }
+    if (!std::isfinite(config.mlt.small_step_sigma) ||
+        config.mlt.small_step_sigma <= 0.0f) {
+        throw std::runtime_error("MLT small_step_sigma must be finite and positive");
+    }
+    if (config.mlt.seed == 0) {
+        throw std::runtime_error("MLT seed must be non-zero");
+    }
+    throw std::runtime_error("MLT primary-sample-space GPU integrator is not implemented yet; use the default wavefront path tracer");
+}
+
 static void release_restir_di_reservoirs(GpuContext* ctx) {
     cudaFree(ctx->d_restir_di_origins);
     cudaFree(ctx->d_restir_di_directions);
@@ -921,6 +944,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     validate_path_guiding_config(config);
     validate_restir_di_config(config);
     validate_specular_manifold_config(config);
+    validate_mlt_config(config);
     const int primary_ray_count = checked_primary_ray_count(width, height);
     const int max_rays = configured_ray_queue_capacity(config, primary_ray_count);
 

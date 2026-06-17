@@ -55,6 +55,15 @@ struct SpecularManifoldConfig {
     int max_newton_iterations = 16;
 };
 
+struct MltIntegratorConfig {
+    bool enabled = false;
+    int chain_count = 1;
+    int mutations_per_chain = 1024;
+    float large_step_probability = 0.3f;
+    float small_step_sigma = 0.01f;
+    std::uint32_t seed = 1;
+};
+
 struct RenderConfig {
     int queue_capacity = 0;       // 0 = auto (width * height)
     int max_trace_depth = 50;
@@ -67,6 +76,7 @@ struct RenderConfig {
     PathGuidingConfig path_guiding;
     RestirDirectConfig restir_di;
     SpecularManifoldConfig specular_manifold;
+    MltIntegratorConfig mlt;
     int wg_size = 32;
     int rays_per_block = 256;
     int samples_per_pass = 1;

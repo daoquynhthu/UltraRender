@@ -91,6 +91,80 @@ static int test_gpu_renderer_rejects_unimplemented_specular_manifold() {
     return 0;
 }
 
+static int test_mlt_primary_sample_mutation_replays_deterministically() {
+    ure::integrator::PrimarySampleMutationConfig cfg;
+    cfg.seed = 99;
+    cfg.large_step_probability = 0.0;
+    cfg.small_step_sigma = 0.025;
+
+    const auto a = ure::integrator::mutate_primary_sample(0.42, 7, 13, cfg);
+    const auto b = ure::integrator::mutate_primary_sample(0.42, 7, 13, cfg);
+    CHECK(!a.large_step);
+    CHECK_NEAR(a.value, b.value, 0.0);
+    CHECK_NEAR(a.proposal_pdf_forward, b.proposal_pdf_forward, 0.0);
+    CHECK(a.seed == b.seed);
+    CHECK(a.value >= 0.0 && a.value < 1.0);
+    return 0;
+}
+
+static int test_mlt_small_step_is_symmetric_and_wrapped() {
+    ure::integrator::PrimarySampleMutationConfig cfg;
+    cfg.seed = 7;
+    cfg.large_step_probability = 0.0;
+    cfg.small_step_sigma = 0.01;
+
+    const auto m = ure::integrator::mutate_primary_sample(0.999, 3, 5, cfg);
+    CHECK(!m.large_step);
+    CHECK(m.value >= 0.0 && m.value < 1.0);
+    CHECK(m.proposal_pdf_forward > 0.0);
+    CHECK_NEAR(m.proposal_pdf_forward, m.proposal_pdf_reverse, 1e-15);
+    return 0;
+}
+
+static int test_mlt_large_step_is_uniform_proposal() {
+    ure::integrator::PrimarySampleMutationConfig cfg;
+    cfg.seed = 123;
+    cfg.large_step_probability = 1.0;
+    cfg.small_step_sigma = 0.01;
+
+    const auto m = ure::integrator::mutate_primary_sample(0.1, 2, 9, cfg);
+    CHECK(m.large_step);
+    CHECK(m.value >= 0.0 && m.value < 1.0);
+    CHECK_NEAR(m.proposal_pdf_forward, 1.0, 0.0);
+    CHECK_NEAR(m.proposal_pdf_reverse, 1.0, 0.0);
+    return 0;
+}
+
+static int test_mlt_metropolis_acceptance_ratio() {
+    CHECK_NEAR(ure::integrator::metropolis_acceptance(1.0, 2.0), 1.0, 0.0);
+    CHECK_NEAR(ure::integrator::metropolis_acceptance(4.0, 1.0), 0.25, 0.0);
+    CHECK_NEAR(ure::integrator::metropolis_acceptance(0.0, 1.0), 1.0, 0.0);
+    CHECK_NEAR(ure::integrator::metropolis_acceptance(1.0, 0.0), 0.0, 0.0);
+    CHECK_NEAR(ure::integrator::metropolis_acceptance(1.0, -1.0), 0.0, 0.0);
+    return 0;
+}
+
+static int test_gpu_renderer_rejects_unimplemented_mlt() {
+    ure::RenderConfig config;
+    config.mlt.enabled = true;
+    config.mlt.chain_count = 4;
+    config.mlt.mutations_per_chain = 1024;
+    config.mlt.large_step_probability = 0.3f;
+    config.mlt.small_step_sigma = 0.01f;
+    config.mlt.seed = 7;
+
+    bool rejected = false;
+    try {
+        std::unique_ptr<ure::IRenderEngine> engine = ure::RenderEngineFactory::create_gpu_renderer(config);
+        ure::scene_ir::SceneIR scene;
+        engine->load_scene_ir(scene);
+    } catch (const std::runtime_error& e) {
+        rejected = std::string(e.what()).find("MLT primary-sample-space GPU integrator is not implemented yet") != std::string::npos;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
 static int run(const char* name, int (*fn)()) {
     std::cout << "  test: " << name << " ... ";
     int rc = fn();
@@ -109,6 +183,11 @@ int main() {
     failed += run("test_specular_interface_oblique_jacobian_reciprocity", test_specular_interface_oblique_jacobian_reciprocity);
     failed += run("test_specular_interface_total_internal_reflection_gate", test_specular_interface_total_internal_reflection_gate);
     failed += run("test_gpu_renderer_rejects_unimplemented_specular_manifold", test_gpu_renderer_rejects_unimplemented_specular_manifold);
+    failed += run("test_mlt_primary_sample_mutation_replays_deterministically", test_mlt_primary_sample_mutation_replays_deterministically);
+    failed += run("test_mlt_small_step_is_symmetric_and_wrapped", test_mlt_small_step_is_symmetric_and_wrapped);
+    failed += run("test_mlt_large_step_is_uniform_proposal", test_mlt_large_step_is_uniform_proposal);
+    failed += run("test_mlt_metropolis_acceptance_ratio", test_mlt_metropolis_acceptance_ratio);
+    failed += run("test_gpu_renderer_rejects_unimplemented_mlt", test_gpu_renderer_rejects_unimplemented_mlt);
     std::cout << "  failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

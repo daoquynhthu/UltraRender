@@ -265,6 +265,62 @@ static int test_integrator_specular_manifold_cli_overrides() {
     return 0;
 }
 
+static int test_integrator_mlt_json_fields() {
+    const char* path = "test_config_integrator_mlt.json";
+    {
+        std::ofstream out(path);
+        out << R"({
+  "integrator": {
+    "mlt": {
+      "enabled": true,
+      "chain_count": 8,
+      "mutations_per_chain": 4096,
+      "large_step_probability": 0.2,
+      "small_step_sigma": 0.015,
+      "seed": 12345
+    }
+  }
+})";
+    }
+    auto cfg = ure::config::load_config(path);
+    std::remove(path);
+    CHECK(cfg.integrator.mlt.enabled);
+    CHECK(cfg.integrator.mlt.chain_count == 8);
+    CHECK(cfg.integrator.mlt.mutations_per_chain == 4096);
+    CHECK(std::fabs(cfg.integrator.mlt.large_step_probability - 0.2) < 1e-12);
+    CHECK(std::fabs(cfg.integrator.mlt.small_step_sigma - 0.015) < 1e-12);
+    CHECK(cfg.integrator.mlt.seed == 12345u);
+    return 0;
+}
+
+static int test_integrator_mlt_cli_overrides() {
+    const char* argv[] = {
+        "ure_cli",
+        "render",
+        "scene.gltf",
+        "--enable-mlt",
+        "--mlt-chain-count",
+        "16",
+        "--mlt-mutations-per-chain",
+        "2048",
+        "--mlt-large-step-probability",
+        "0.1",
+        "--mlt-small-step-sigma",
+        "0.02",
+        "--mlt-seed",
+        "77"
+    };
+    auto result = ure::config::parse_cli(static_cast<int>(sizeof(argv) / sizeof(argv[0])), const_cast<char**>(argv));
+    const auto& cfg = result.config;
+    CHECK(cfg.integrator.mlt.enabled);
+    CHECK(cfg.integrator.mlt.chain_count == 16);
+    CHECK(cfg.integrator.mlt.mutations_per_chain == 2048);
+    CHECK(std::fabs(cfg.integrator.mlt.large_step_probability - 0.1) < 1e-12);
+    CHECK(std::fabs(cfg.integrator.mlt.small_step_sigma - 0.02) < 1e-12);
+    CHECK(cfg.integrator.mlt.seed == 77u);
+    return 0;
+}
+
 int main() {
     std::fprintf(stderr, "[Config Test]\n");
     auto run = [](const char* name, int (*fn)()) {
@@ -285,6 +341,8 @@ int main() {
     failed += run("test_restir_di_cli_overrides", test_restir_di_cli_overrides);
     failed += run("test_integrator_specular_manifold_json_fields", test_integrator_specular_manifold_json_fields);
     failed += run("test_integrator_specular_manifold_cli_overrides", test_integrator_specular_manifold_cli_overrides);
+    failed += run("test_integrator_mlt_json_fields", test_integrator_mlt_json_fields);
+    failed += run("test_integrator_mlt_cli_overrides", test_integrator_mlt_cli_overrides);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;
