@@ -321,6 +321,50 @@ static int test_integrator_mlt_cli_overrides() {
     return 0;
 }
 
+static int test_integrator_runtime_json_fields() {
+    const char* path = "test_config_integrator_runtime.json";
+    {
+        std::ofstream out(path);
+        out << R"({
+  "integrator": {
+    "mode": "restir_di",
+    "sampler": "low_discrepancy",
+    "quality_preset": "research",
+    "allow_biased_reuse": true
+  }
+})";
+    }
+    auto cfg = ure::config::load_config(path);
+    std::remove(path);
+    CHECK(cfg.integrator.mode == "restir_di");
+    CHECK(cfg.integrator.sampler == "low_discrepancy");
+    CHECK(cfg.integrator.quality_preset == "research");
+    CHECK(cfg.integrator.allow_biased_reuse);
+    return 0;
+}
+
+static int test_integrator_runtime_cli_overrides() {
+    const char* argv[] = {
+        "ure_cli",
+        "render",
+        "scene.gltf",
+        "--integrator-mode",
+        "path_guided",
+        "--integrator-sampler",
+        "low_discrepancy",
+        "--integrator-quality-preset",
+        "final",
+        "--allow-biased-integrator-reuse"
+    };
+    auto result = ure::config::parse_cli(static_cast<int>(sizeof(argv) / sizeof(argv[0])), const_cast<char**>(argv));
+    const auto& cfg = result.config;
+    CHECK(cfg.integrator.mode == "path_guided");
+    CHECK(cfg.integrator.sampler == "low_discrepancy");
+    CHECK(cfg.integrator.quality_preset == "final");
+    CHECK(cfg.integrator.allow_biased_reuse);
+    return 0;
+}
+
 int main() {
     std::fprintf(stderr, "[Config Test]\n");
     auto run = [](const char* name, int (*fn)()) {
@@ -343,6 +387,8 @@ int main() {
     failed += run("test_integrator_specular_manifold_cli_overrides", test_integrator_specular_manifold_cli_overrides);
     failed += run("test_integrator_mlt_json_fields", test_integrator_mlt_json_fields);
     failed += run("test_integrator_mlt_cli_overrides", test_integrator_mlt_cli_overrides);
+    failed += run("test_integrator_runtime_json_fields", test_integrator_runtime_json_fields);
+    failed += run("test_integrator_runtime_cli_overrides", test_integrator_runtime_cli_overrides);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

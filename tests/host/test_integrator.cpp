@@ -165,6 +165,56 @@ static int test_gpu_renderer_rejects_unimplemented_mlt() {
     return 0;
 }
 
+static int test_integrator_rejects_primary_sample_sampler_without_mlt_mode() {
+    ure::RenderConfig config;
+    config.integrator.sampler = ure::IntegratorSampler::PrimarySampleSpace;
+
+    bool rejected = false;
+    try {
+        std::unique_ptr<ure::IRenderEngine> engine = ure::RenderEngineFactory::create_gpu_renderer(config);
+        ure::scene_ir::SceneIR scene;
+        engine->load_scene_ir(scene);
+    } catch (const std::runtime_error& e) {
+        rejected = std::string(e.what()).find("primary_sample_space sampler is only valid with MLT") != std::string::npos;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
+static int test_integrator_rejects_restir_mode_without_biased_ack() {
+    ure::RenderConfig config;
+    config.integrator.mode = ure::IntegratorMode::RestirDI;
+    config.restir_di.enabled = true;
+    config.restir_di.temporal_reuse = true;
+
+    bool rejected = false;
+    try {
+        std::unique_ptr<ure::IRenderEngine> engine = ure::RenderEngineFactory::create_gpu_renderer(config);
+        ure::scene_ir::SceneIR scene;
+        engine->load_scene_ir(scene);
+    } catch (const std::runtime_error& e) {
+        rejected = std::string(e.what()).find("allow_biased_reuse") != std::string::npos;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
+static int test_integrator_path_guided_mode_requires_enabled_guiding() {
+    ure::RenderConfig config;
+    config.integrator.mode = ure::IntegratorMode::PathGuided;
+
+    bool rejected = false;
+    try {
+        std::unique_ptr<ure::IRenderEngine> engine = ure::RenderEngineFactory::create_gpu_renderer(config);
+        ure::scene_ir::SceneIR scene;
+        engine->load_scene_ir(scene);
+    } catch (const std::runtime_error& e) {
+        rejected = std::string(e.what()).find("path_guided requires path_guiding.enabled") != std::string::npos;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
 static int run(const char* name, int (*fn)()) {
     std::cout << "  test: " << name << " ... ";
     int rc = fn();
@@ -188,6 +238,9 @@ int main() {
     failed += run("test_mlt_large_step_is_uniform_proposal", test_mlt_large_step_is_uniform_proposal);
     failed += run("test_mlt_metropolis_acceptance_ratio", test_mlt_metropolis_acceptance_ratio);
     failed += run("test_gpu_renderer_rejects_unimplemented_mlt", test_gpu_renderer_rejects_unimplemented_mlt);
+    failed += run("test_integrator_rejects_primary_sample_sampler_without_mlt_mode", test_integrator_rejects_primary_sample_sampler_without_mlt_mode);
+    failed += run("test_integrator_rejects_restir_mode_without_biased_ack", test_integrator_rejects_restir_mode_without_biased_ack);
+    failed += run("test_integrator_path_guided_mode_requires_enabled_guiding", test_integrator_path_guided_mode_requires_enabled_guiding);
     std::cout << "  failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

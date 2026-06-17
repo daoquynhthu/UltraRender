@@ -78,6 +78,10 @@ struct MltIntegratorConfig {
 };
 
 struct IntegratorConfig {
+    std::string mode = "wavefront";
+    std::string sampler = "default";
+    std::string quality_preset = "default";
+    bool allow_biased_reuse = false;
     SpecularManifoldConfig specular_manifold;
     MltIntegratorConfig mlt;
 };

@@ -53,6 +53,20 @@ def main() -> int:
         assert progress.state == pyure.SessionState.EMPTY
         assert not progress.has_scene
 
+    with pyure.create_session(
+        num_wavelengths=8,
+        queue_capacity=64,
+        max_trace_depth=12,
+        integrator_mode="path_guided",
+        integrator_sampler="low_discrepancy",
+        integrator_quality_preset="final",
+        path_guiding=True,
+    ) as session:
+        progress = session.progress()
+        assert progress.spp == 0
+        assert progress.state == pyure.SessionState.EMPTY
+        assert not progress.has_scene
+
     try:
         pyure.create_session(
             domain_bins=1000000,
@@ -73,6 +87,13 @@ def main() -> int:
         pass
     else:
         raise AssertionError("unknown wave optics mode must fail")
+
+    try:
+        pyure.create_session(integrator_mode="invalid")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unknown integrator mode must fail")
 
     scene_text = """{
   "asset": {"version": "2.0"},

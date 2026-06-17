@@ -83,23 +83,28 @@ RenderConfig load_config(const std::string& path) {
             if (r.contains("unbiased")) cfg.restir_di.unbiased = r["unbiased"].get<bool>();
             if (r.contains("max_history")) cfg.restir_di.max_history = r["max_history"].get<int>();
         }
-        if (j.contains("integrator") &&
-            j["integrator"].contains("specular_manifold")) {
-            auto& s = j["integrator"]["specular_manifold"];
-            if (s.contains("enabled")) cfg.integrator.specular_manifold.enabled = s["enabled"].get<bool>();
-            if (s.contains("max_specular_events")) cfg.integrator.specular_manifold.max_specular_events = s["max_specular_events"].get<int>();
-            if (s.contains("solver_tolerance")) cfg.integrator.specular_manifold.solver_tolerance = s["solver_tolerance"].get<double>();
-            if (s.contains("max_newton_iterations")) cfg.integrator.specular_manifold.max_newton_iterations = s["max_newton_iterations"].get<int>();
-        }
-        if (j.contains("integrator") &&
-            j["integrator"].contains("mlt")) {
-            auto& m = j["integrator"]["mlt"];
-            if (m.contains("enabled")) cfg.integrator.mlt.enabled = m["enabled"].get<bool>();
-            if (m.contains("chain_count")) cfg.integrator.mlt.chain_count = m["chain_count"].get<int>();
-            if (m.contains("mutations_per_chain")) cfg.integrator.mlt.mutations_per_chain = m["mutations_per_chain"].get<int>();
-            if (m.contains("large_step_probability")) cfg.integrator.mlt.large_step_probability = m["large_step_probability"].get<double>();
-            if (m.contains("small_step_sigma")) cfg.integrator.mlt.small_step_sigma = m["small_step_sigma"].get<double>();
-            if (m.contains("seed")) cfg.integrator.mlt.seed = m["seed"].get<std::uint32_t>();
+        if (j.contains("integrator")) {
+            auto& i = j["integrator"];
+            if (i.contains("mode")) cfg.integrator.mode = i["mode"].get<std::string>();
+            if (i.contains("sampler")) cfg.integrator.sampler = i["sampler"].get<std::string>();
+            if (i.contains("quality_preset")) cfg.integrator.quality_preset = i["quality_preset"].get<std::string>();
+            if (i.contains("allow_biased_reuse")) cfg.integrator.allow_biased_reuse = i["allow_biased_reuse"].get<bool>();
+            if (i.contains("specular_manifold")) {
+                auto& s = i["specular_manifold"];
+                if (s.contains("enabled")) cfg.integrator.specular_manifold.enabled = s["enabled"].get<bool>();
+                if (s.contains("max_specular_events")) cfg.integrator.specular_manifold.max_specular_events = s["max_specular_events"].get<int>();
+                if (s.contains("solver_tolerance")) cfg.integrator.specular_manifold.solver_tolerance = s["solver_tolerance"].get<double>();
+                if (s.contains("max_newton_iterations")) cfg.integrator.specular_manifold.max_newton_iterations = s["max_newton_iterations"].get<int>();
+            }
+            if (i.contains("mlt")) {
+                auto& m = i["mlt"];
+                if (m.contains("enabled")) cfg.integrator.mlt.enabled = m["enabled"].get<bool>();
+                if (m.contains("chain_count")) cfg.integrator.mlt.chain_count = m["chain_count"].get<int>();
+                if (m.contains("mutations_per_chain")) cfg.integrator.mlt.mutations_per_chain = m["mutations_per_chain"].get<int>();
+                if (m.contains("large_step_probability")) cfg.integrator.mlt.large_step_probability = m["large_step_probability"].get<double>();
+                if (m.contains("small_step_sigma")) cfg.integrator.mlt.small_step_sigma = m["small_step_sigma"].get<double>();
+                if (m.contains("seed")) cfg.integrator.mlt.seed = m["seed"].get<std::uint32_t>();
+            }
         }
     } catch (const std::exception& e) {
         std::cerr << "[config] JSON parse error in '" << path << "': " << e.what() << "\n";
@@ -141,6 +146,10 @@ CliResult parse_cli(int argc, char** argv) {
     bool restir_di_unbiased = false;
     int restir_di_max_history = -1;
     bool integrator_specular_manifold = false;
+    std::string integrator_mode;
+    std::string integrator_sampler;
+    std::string integrator_quality_preset;
+    bool integrator_allow_biased_reuse = false;
     int integrator_specular_max_events = -1;
     double integrator_specular_tolerance = -1.0;
     int integrator_specular_newton_iterations = -1;
@@ -181,6 +190,10 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_flag("--restir-di-unbiased", restir_di_unbiased, "Request unbiased ReSTIR DI mode");
     render_cmd->add_option("--restir-di-max-history", restir_di_max_history, "Maximum temporal history carried by ReSTIR DI");
     render_cmd->add_flag("--enable-integrator-specular-manifold", integrator_specular_manifold, "Request radiometric specular manifold integration");
+    render_cmd->add_option("--integrator-mode", integrator_mode, "Integrator mode: wavefront, path_guided, restir_di, specular_manifold, mlt");
+    render_cmd->add_option("--integrator-sampler", integrator_sampler, "Integrator sampler: default, low_discrepancy, primary_sample_space");
+    render_cmd->add_option("--integrator-quality-preset", integrator_quality_preset, "Integrator quality preset: default, preview, final, research");
+    render_cmd->add_flag("--allow-biased-integrator-reuse", integrator_allow_biased_reuse, "Allow explicitly biased reuse integrators such as current ReSTIR DI baseline");
     render_cmd->add_option("--specular-manifold-max-events", integrator_specular_max_events, "Maximum specular events in a manifold connection");
     render_cmd->add_option("--specular-manifold-tolerance", integrator_specular_tolerance, "Specular manifold solver tolerance");
     render_cmd->add_option("--specular-manifold-newton-iterations", integrator_specular_newton_iterations, "Specular manifold Newton iteration cap");
@@ -247,6 +260,10 @@ CliResult parse_cli(int argc, char** argv) {
         if (restir_di_unbiased) cfg.restir_di.unbiased = true;
         if (restir_di_max_history > 0) cfg.restir_di.max_history = restir_di_max_history;
         if (integrator_specular_manifold) cfg.integrator.specular_manifold.enabled = true;
+        if (!integrator_mode.empty()) cfg.integrator.mode = integrator_mode;
+        if (!integrator_sampler.empty()) cfg.integrator.sampler = integrator_sampler;
+        if (!integrator_quality_preset.empty()) cfg.integrator.quality_preset = integrator_quality_preset;
+        if (integrator_allow_biased_reuse) cfg.integrator.allow_biased_reuse = true;
         if (integrator_specular_max_events > 0) cfg.integrator.specular_manifold.max_specular_events = integrator_specular_max_events;
         if (integrator_specular_tolerance > 0.0) cfg.integrator.specular_manifold.solver_tolerance = integrator_specular_tolerance;
         if (integrator_specular_newton_iterations > 0) cfg.integrator.specular_manifold.max_newton_iterations = integrator_specular_newton_iterations;

@@ -753,6 +753,21 @@ static int test_c_session_lifecycle() {
     ure_wave_optics_config_t invalid_wave_config{};
     invalid_wave_config.mode = 99;
     CHECK(ure_session_create_wave_config(&spectral_config, &invalid_wave_config) == nullptr);
+
+    ure_integrator_config_t wavefront_integrator{};
+    wavefront_integrator.mode = URE_INTEGRATOR_WAVEFRONT;
+    wavefront_integrator.sampler = URE_INTEGRATOR_SAMPLER_LOW_DISCREPANCY;
+    wavefront_integrator.quality_preset = URE_INTEGRATOR_QUALITY_FINAL;
+    ure_session_t* integrator_session =
+        ure_session_create_integrator_config(&spectral_config, &radiometric_wave_config, &wavefront_integrator);
+    CHECK(integrator_session != nullptr);
+    ure_session_destroy(integrator_session);
+
+    ure_integrator_config_t invalid_integrator{};
+    invalid_integrator.mode = 99;
+    invalid_integrator.sampler = URE_INTEGRATOR_SAMPLER_DEFAULT;
+    invalid_integrator.quality_preset = URE_INTEGRATOR_QUALITY_DEFAULT;
+    CHECK(ure_session_create_integrator_config(&spectral_config, &radiometric_wave_config, &invalid_integrator) == nullptr);
     return 0;
 }
 

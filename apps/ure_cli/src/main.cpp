@@ -120,6 +120,69 @@ bool parse_wave_optics_mode(const std::string& mode, ure::WaveOpticsMode& out) {
     return false;
 }
 
+bool parse_integrator_mode(const std::string& mode, ure::IntegratorMode& out) {
+    const std::string value = lowercase(mode);
+    if (value == "wavefront" || value.empty()) {
+        out = ure::IntegratorMode::Wavefront;
+        return true;
+    }
+    if (value == "path_guided") {
+        out = ure::IntegratorMode::PathGuided;
+        return true;
+    }
+    if (value == "restir_di") {
+        out = ure::IntegratorMode::RestirDI;
+        return true;
+    }
+    if (value == "specular_manifold") {
+        out = ure::IntegratorMode::SpecularManifold;
+        return true;
+    }
+    if (value == "mlt") {
+        out = ure::IntegratorMode::MLT;
+        return true;
+    }
+    return false;
+}
+
+bool parse_integrator_sampler(const std::string& sampler, ure::IntegratorSampler& out) {
+    const std::string value = lowercase(sampler);
+    if (value == "default" || value.empty()) {
+        out = ure::IntegratorSampler::Default;
+        return true;
+    }
+    if (value == "low_discrepancy") {
+        out = ure::IntegratorSampler::LowDiscrepancy;
+        return true;
+    }
+    if (value == "primary_sample_space") {
+        out = ure::IntegratorSampler::PrimarySampleSpace;
+        return true;
+    }
+    return false;
+}
+
+bool parse_integrator_quality_preset(const std::string& preset, ure::IntegratorQualityPreset& out) {
+    const std::string value = lowercase(preset);
+    if (value == "default" || value.empty()) {
+        out = ure::IntegratorQualityPreset::Default;
+        return true;
+    }
+    if (value == "preview") {
+        out = ure::IntegratorQualityPreset::Preview;
+        return true;
+    }
+    if (value == "final") {
+        out = ure::IntegratorQualityPreset::Final;
+        return true;
+    }
+    if (value == "research") {
+        out = ure::IntegratorQualityPreset::Research;
+        return true;
+    }
+    return false;
+}
+
 bool make_wave_optics_config(const ure::config::WaveOpticsConfig& app_config, ure::WaveOpticsConfig& cfg) {
     if (!parse_wave_optics_mode(app_config.mode, cfg.mode)) {
         std::cerr << "Error: unsupported wave optics mode '" << app_config.mode << "'\n";
@@ -133,6 +196,34 @@ bool make_wave_optics_config(const ure::config::WaveOpticsConfig& app_config, ur
     cfg.specular_manifold_enabled = app_config.specular_manifold_enabled;
     cfg.local_fullwave_enabled = app_config.local_fullwave_enabled;
     cfg.experimental_allow_preview_degradation = app_config.experimental_allow_preview_degradation;
+    return true;
+}
+
+bool make_integrator_config(const ure::config::IntegratorConfig& app_config, ure::RenderConfig& cfg) {
+    if (!parse_integrator_mode(app_config.mode, cfg.integrator.mode)) {
+        std::cerr << "Error: unsupported integrator mode '" << app_config.mode << "'\n";
+        return false;
+    }
+    if (!parse_integrator_sampler(app_config.sampler, cfg.integrator.sampler)) {
+        std::cerr << "Error: unsupported integrator sampler '" << app_config.sampler << "'\n";
+        return false;
+    }
+    if (!parse_integrator_quality_preset(app_config.quality_preset, cfg.integrator.quality_preset)) {
+        std::cerr << "Error: unsupported integrator quality preset '" << app_config.quality_preset << "'\n";
+        return false;
+    }
+    cfg.integrator.allow_biased_reuse = app_config.allow_biased_reuse;
+    if (cfg.integrator.mode == ure::IntegratorMode::PathGuided) {
+        cfg.path_guiding.enabled = true;
+    } else if (cfg.integrator.mode == ure::IntegratorMode::RestirDI) {
+        cfg.restir_di.enabled = true;
+        cfg.restir_di.temporal_reuse = true;
+    } else if (cfg.integrator.mode == ure::IntegratorMode::SpecularManifold) {
+        cfg.specular_manifold.enabled = true;
+    } else if (cfg.integrator.mode == ure::IntegratorMode::MLT) {
+        cfg.mlt.enabled = true;
+        cfg.integrator.sampler = ure::IntegratorSampler::PrimarySampleSpace;
+    }
     return true;
 }
 
@@ -177,6 +268,9 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.mlt.large_step_probability = static_cast<float>(app_config.integrator.mlt.large_step_probability);
     gpu_config.mlt.small_step_sigma = static_cast<float>(app_config.integrator.mlt.small_step_sigma);
     gpu_config.mlt.seed = app_config.integrator.mlt.seed;
+    if (!make_integrator_config(app_config.integrator, gpu_config)) {
+        return 1;
+    }
     if (!make_wave_optics_config(app_config.wave_optics, gpu_config.wave_optics)) {
         return 1;
     }

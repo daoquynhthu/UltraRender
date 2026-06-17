@@ -788,6 +788,35 @@ static void validate_mlt_config(const ure::RenderConfig& config) {
     throw std::runtime_error("MLT primary-sample-space GPU integrator is not implemented yet; use the default wavefront path tracer");
 }
 
+static void validate_integrator_runtime_config(const ure::RenderConfig& config) {
+    if (config.integrator.sampler == ure::IntegratorSampler::PrimarySampleSpace &&
+        config.integrator.mode != ure::IntegratorMode::MLT) {
+        throw std::runtime_error("primary_sample_space sampler is only valid with MLT integrator mode");
+    }
+    if (config.integrator.mode == ure::IntegratorMode::PathGuided && !config.path_guiding.enabled) {
+        throw std::runtime_error("integrator mode path_guided requires path_guiding.enabled");
+    }
+    if (config.integrator.mode == ure::IntegratorMode::RestirDI) {
+        if (!config.restir_di.enabled) {
+            throw std::runtime_error("integrator mode restir_di requires restir_di.enabled");
+        }
+        if (!config.integrator.allow_biased_reuse) {
+            throw std::runtime_error("current ReSTIR DI integrator is biased; set allow_biased_reuse explicitly");
+        }
+    }
+    if (config.integrator.mode == ure::IntegratorMode::SpecularManifold && !config.specular_manifold.enabled) {
+        throw std::runtime_error("integrator mode specular_manifold requires specular_manifold.enabled");
+    }
+    if (config.integrator.mode == ure::IntegratorMode::MLT) {
+        if (!config.mlt.enabled) {
+            throw std::runtime_error("integrator mode mlt requires mlt.enabled");
+        }
+        if (config.integrator.sampler != ure::IntegratorSampler::PrimarySampleSpace) {
+            throw std::runtime_error("MLT integrator mode requires primary_sample_space sampler");
+        }
+    }
+}
+
 static void release_restir_di_reservoirs(GpuContext* ctx) {
     cudaFree(ctx->d_restir_di_origins);
     cudaFree(ctx->d_restir_di_directions);
@@ -941,6 +970,7 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<ure::gpu::HostTexture>& textures,
                               const ure::RenderConfig& config) {
     validate_explicit_spectral_resident_budget(materials, textures, config);
+    validate_integrator_runtime_config(config);
     validate_path_guiding_config(config);
     validate_restir_di_config(config);
     validate_specular_manifold_config(config);

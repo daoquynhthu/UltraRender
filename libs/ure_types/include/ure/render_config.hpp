@@ -20,6 +20,27 @@ enum class WaveOpticsMode {
     PartialCoherence
 };
 
+enum class IntegratorMode {
+    Wavefront,
+    PathGuided,
+    RestirDI,
+    SpecularManifold,
+    MLT
+};
+
+enum class IntegratorSampler {
+    Default,
+    LowDiscrepancy,
+    PrimarySampleSpace
+};
+
+enum class IntegratorQualityPreset {
+    Default,
+    Preview,
+    Final,
+    Research
+};
+
 struct WaveOpticsConfig {
     WaveOpticsMode mode = WaveOpticsMode::Radiometric;
     bool camera_diffraction_enabled = false;
@@ -64,6 +85,13 @@ struct MltIntegratorConfig {
     std::uint32_t seed = 1;
 };
 
+struct IntegratorRuntimeConfig {
+    IntegratorMode mode = IntegratorMode::Wavefront;
+    IntegratorSampler sampler = IntegratorSampler::Default;
+    IntegratorQualityPreset quality_preset = IntegratorQualityPreset::Default;
+    bool allow_biased_reuse = false;
+};
+
 struct RenderConfig {
     int queue_capacity = 0;       // 0 = auto (width * height)
     int max_trace_depth = 50;
@@ -73,6 +101,7 @@ struct RenderConfig {
     int spectral_max_resident_mb = 0;
     SpectralSamplingMode spectral_sampling_mode = SpectralSamplingMode::PacketUniform;
     WaveOpticsConfig wave_optics;
+    IntegratorRuntimeConfig integrator;
     PathGuidingConfig path_guiding;
     RestirDirectConfig restir_di;
     SpecularManifoldConfig specular_manifold;

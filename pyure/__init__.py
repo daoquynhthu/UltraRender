@@ -73,6 +73,34 @@ class _WaveOpticsConfig(ctypes.Structure):
     ]
 
 
+class _IntegratorConfig(ctypes.Structure):
+    _fields_ = [
+        ("mode", ctypes.c_int),
+        ("sampler", ctypes.c_int),
+        ("quality_preset", ctypes.c_int),
+        ("allow_biased_reuse", ctypes.c_int),
+        ("path_guiding_enabled", ctypes.c_int),
+        ("path_guiding_light_mixture", ctypes.c_float),
+        ("path_guiding_learning_rate", ctypes.c_float),
+        ("path_guiding_min_weight", ctypes.c_float),
+        ("restir_di_enabled", ctypes.c_int),
+        ("restir_di_temporal_reuse", ctypes.c_int),
+        ("restir_di_spatial_reuse", ctypes.c_int),
+        ("restir_di_unbiased", ctypes.c_int),
+        ("restir_di_max_history", ctypes.c_int),
+        ("specular_manifold_enabled", ctypes.c_int),
+        ("specular_manifold_max_events", ctypes.c_int),
+        ("specular_manifold_tolerance", ctypes.c_float),
+        ("specular_manifold_newton_iterations", ctypes.c_int),
+        ("mlt_enabled", ctypes.c_int),
+        ("mlt_chain_count", ctypes.c_int),
+        ("mlt_mutations_per_chain", ctypes.c_int),
+        ("mlt_large_step_probability", ctypes.c_float),
+        ("mlt_small_step_sigma", ctypes.c_float),
+        ("mlt_seed", ctypes.c_uint32),
+    ]
+
+
 @dataclass(frozen=True)
 class Progress:
     spp: int
@@ -116,6 +144,12 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(_WaveOpticsConfig),
     ]
     lib.ure_session_create_wave_config.restype = ctypes.c_void_p
+    lib.ure_session_create_integrator_config.argtypes = [
+        ctypes.POINTER(_SpectralConfig),
+        ctypes.POINTER(_WaveOpticsConfig),
+        ctypes.POINTER(_IntegratorConfig),
+    ]
+    lib.ure_session_create_integrator_config.restype = ctypes.c_void_p
     lib.ure_session_destroy.argtypes = [ctypes.c_void_p]
     lib.ure_session_load_scene_file.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
     lib.ure_session_load_scene_file.restype = ctypes.c_int
@@ -206,6 +240,45 @@ def _wave_optics_mode_id(mode: str) -> int:
         raise ValueError(f"unsupported wave optics mode: {mode}") from exc
 
 
+def _integrator_mode_id(mode: str) -> int:
+    modes = {
+        "wavefront": 0,
+        "path_guided": 1,
+        "restir_di": 2,
+        "specular_manifold": 3,
+        "mlt": 4,
+    }
+    try:
+        return modes[mode]
+    except KeyError as exc:
+        raise ValueError(f"unsupported integrator mode: {mode}") from exc
+
+
+def _integrator_sampler_id(sampler: str) -> int:
+    samplers = {
+        "default": 0,
+        "low_discrepancy": 1,
+        "primary_sample_space": 2,
+    }
+    try:
+        return samplers[sampler]
+    except KeyError as exc:
+        raise ValueError(f"unsupported integrator sampler: {sampler}") from exc
+
+
+def _integrator_quality_preset_id(preset: str) -> int:
+    presets = {
+        "default": 0,
+        "preview": 1,
+        "final": 2,
+        "research": 3,
+    }
+    try:
+        return presets[preset]
+    except KeyError as exc:
+        raise ValueError(f"unsupported integrator quality preset: {preset}") from exc
+
+
 def _vec3(values: tuple[float, float, float] | list[float]) -> ctypes.Array[ctypes.c_float]:
     if len(values) != 3:
         raise ValueError("expected a 3-float vector")
@@ -231,6 +304,21 @@ class RenderSession:
         specular_manifold: bool = False,
         local_fullwave: bool = False,
         allow_wave_preview_degradation: bool = False,
+        integrator_mode: str = "wavefront",
+        integrator_sampler: str = "default",
+        integrator_quality_preset: str = "default",
+        allow_biased_integrator_reuse: bool = False,
+        path_guiding: bool = False,
+        path_guiding_light_mixture: float = 0.5,
+        path_guiding_learning_rate: float = 0.25,
+        path_guiding_min_weight: float = 1e-6,
+        restir_di: bool = False,
+        restir_di_max_history: int = 1,
+        mlt_chain_count: int = 1,
+        mlt_mutations_per_chain: int = 1024,
+        mlt_large_step_probability: float = 0.3,
+        mlt_small_step_sigma: float = 0.01,
+        mlt_seed: int = 1,
     ):
         self._handle: Optional[int] = None
         wave_requested = (
@@ -244,7 +332,64 @@ class RenderSession:
             or local_fullwave
             or allow_wave_preview_degradation
         )
-        if wave_requested:
+        integrator_requested = (
+            integrator_mode != "wavefront"
+            or integrator_sampler != "default"
+            or integrator_quality_preset != "default"
+            or allow_biased_integrator_reuse
+            or path_guiding
+            or restir_di
+        )
+        if integrator_requested:
+            cfg = _SpectralConfig(
+                int(domain_bins),
+                int(packet_lanes if packet_lanes > 0 else num_wavelengths),
+                int(max_resident_mb),
+                int(queue_capacity),
+                int(max_trace_depth),
+            )
+            wave = _WaveOpticsConfig(
+                _wave_optics_mode_id(wave_optics_mode),
+                int(camera_diffraction),
+                int(coherent_field),
+                int(partial_coherence),
+                int(diffractive_materials),
+                int(fluorescence),
+                int(specular_manifold),
+                int(local_fullwave),
+                int(allow_wave_preview_degradation),
+            )
+            integrator = _IntegratorConfig(
+                _integrator_mode_id(integrator_mode),
+                _integrator_sampler_id(integrator_sampler),
+                _integrator_quality_preset_id(integrator_quality_preset),
+                int(allow_biased_integrator_reuse),
+                int(path_guiding),
+                float(path_guiding_light_mixture),
+                float(path_guiding_learning_rate),
+                float(path_guiding_min_weight),
+                int(restir_di),
+                1,
+                0,
+                0,
+                int(restir_di_max_history),
+                int(specular_manifold),
+                2,
+                1e-4,
+                16,
+                int(integrator_mode == "mlt"),
+                int(mlt_chain_count),
+                int(mlt_mutations_per_chain),
+                float(mlt_large_step_probability),
+                float(mlt_small_step_sigma),
+                int(mlt_seed),
+            )
+            handle = native().ure_session_create_integrator_config(
+                ctypes.byref(cfg),
+                ctypes.byref(wave),
+                ctypes.byref(integrator),
+            )
+        elif wave_requested:
             cfg = _SpectralConfig(
                 int(domain_bins),
                 int(packet_lanes if packet_lanes > 0 else num_wavelengths),
@@ -462,6 +607,21 @@ def create_session(
     specular_manifold: bool = False,
     local_fullwave: bool = False,
     allow_wave_preview_degradation: bool = False,
+    integrator_mode: str = "wavefront",
+    integrator_sampler: str = "default",
+    integrator_quality_preset: str = "default",
+    allow_biased_integrator_reuse: bool = False,
+    path_guiding: bool = False,
+    path_guiding_light_mixture: float = 0.5,
+    path_guiding_learning_rate: float = 0.25,
+    path_guiding_min_weight: float = 1e-6,
+    restir_di: bool = False,
+    restir_di_max_history: int = 1,
+    mlt_chain_count: int = 1,
+    mlt_mutations_per_chain: int = 1024,
+    mlt_large_step_probability: float = 0.3,
+    mlt_small_step_sigma: float = 0.01,
+    mlt_seed: int = 1,
 ) -> RenderSession:
     return RenderSession(
         num_wavelengths,
@@ -479,6 +639,21 @@ def create_session(
         specular_manifold=specular_manifold,
         local_fullwave=local_fullwave,
         allow_wave_preview_degradation=allow_wave_preview_degradation,
+        integrator_mode=integrator_mode,
+        integrator_sampler=integrator_sampler,
+        integrator_quality_preset=integrator_quality_preset,
+        allow_biased_integrator_reuse=allow_biased_integrator_reuse,
+        path_guiding=path_guiding,
+        path_guiding_light_mixture=path_guiding_light_mixture,
+        path_guiding_learning_rate=path_guiding_learning_rate,
+        path_guiding_min_weight=path_guiding_min_weight,
+        restir_di=restir_di,
+        restir_di_max_history=restir_di_max_history,
+        mlt_chain_count=mlt_chain_count,
+        mlt_mutations_per_chain=mlt_mutations_per_chain,
+        mlt_large_step_probability=mlt_large_step_probability,
+        mlt_small_step_sigma=mlt_small_step_sigma,
+        mlt_seed=mlt_seed,
     )
 
 

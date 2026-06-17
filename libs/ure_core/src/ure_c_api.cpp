@@ -66,6 +66,63 @@ bool c_wave_mode(int mode, WaveOpticsMode& out) {
     }
 }
 
+bool c_integrator_mode(int mode, IntegratorMode& out) {
+    switch (mode) {
+    case URE_INTEGRATOR_WAVEFRONT:
+        out = IntegratorMode::Wavefront;
+        return true;
+    case URE_INTEGRATOR_PATH_GUIDED:
+        out = IntegratorMode::PathGuided;
+        return true;
+    case URE_INTEGRATOR_RESTIR_DI:
+        out = IntegratorMode::RestirDI;
+        return true;
+    case URE_INTEGRATOR_SPECULAR_MANIFOLD:
+        out = IntegratorMode::SpecularManifold;
+        return true;
+    case URE_INTEGRATOR_MLT:
+        out = IntegratorMode::MLT;
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool c_integrator_sampler(int sampler, IntegratorSampler& out) {
+    switch (sampler) {
+    case URE_INTEGRATOR_SAMPLER_DEFAULT:
+        out = IntegratorSampler::Default;
+        return true;
+    case URE_INTEGRATOR_SAMPLER_LOW_DISCREPANCY:
+        out = IntegratorSampler::LowDiscrepancy;
+        return true;
+    case URE_INTEGRATOR_SAMPLER_PRIMARY_SAMPLE_SPACE:
+        out = IntegratorSampler::PrimarySampleSpace;
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool c_integrator_quality(int preset, IntegratorQualityPreset& out) {
+    switch (preset) {
+    case URE_INTEGRATOR_QUALITY_DEFAULT:
+        out = IntegratorQualityPreset::Default;
+        return true;
+    case URE_INTEGRATOR_QUALITY_PREVIEW:
+        out = IntegratorQualityPreset::Preview;
+        return true;
+    case URE_INTEGRATOR_QUALITY_FINAL:
+        out = IntegratorQualityPreset::Final;
+        return true;
+    case URE_INTEGRATOR_QUALITY_RESEARCH:
+        out = IntegratorQualityPreset::Research;
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool make_wave_optics_config(const ure_wave_optics_config_t* wave_config, WaveOpticsConfig& cfg) {
     if (!wave_config) return true;
     if (!c_wave_mode(wave_config->mode, cfg.mode)) return false;
@@ -77,6 +134,44 @@ bool make_wave_optics_config(const ure_wave_optics_config_t* wave_config, WaveOp
     cfg.specular_manifold_enabled = wave_config->specular_manifold_enabled != 0;
     cfg.local_fullwave_enabled = wave_config->local_fullwave_enabled != 0;
     cfg.experimental_allow_preview_degradation = wave_config->experimental_allow_preview_degradation != 0;
+    return true;
+}
+
+bool make_integrator_config(const ure_integrator_config_t* integrator_config, RenderConfig& cfg) {
+    if (!integrator_config) return true;
+    if (!c_integrator_mode(integrator_config->mode, cfg.integrator.mode)) return false;
+    if (!c_integrator_sampler(integrator_config->sampler, cfg.integrator.sampler)) return false;
+    if (!c_integrator_quality(integrator_config->quality_preset, cfg.integrator.quality_preset)) return false;
+    cfg.integrator.allow_biased_reuse = integrator_config->allow_biased_reuse != 0;
+    cfg.path_guiding.enabled = integrator_config->path_guiding_enabled != 0;
+    if (integrator_config->path_guiding_light_mixture > 0.0f) cfg.path_guiding.light_mixture = integrator_config->path_guiding_light_mixture;
+    if (integrator_config->path_guiding_learning_rate > 0.0f) cfg.path_guiding.learning_rate = integrator_config->path_guiding_learning_rate;
+    if (integrator_config->path_guiding_min_weight >= 0.0f) cfg.path_guiding.min_weight = integrator_config->path_guiding_min_weight;
+    cfg.restir_di.enabled = integrator_config->restir_di_enabled != 0;
+    cfg.restir_di.temporal_reuse = integrator_config->restir_di_temporal_reuse != 0;
+    cfg.restir_di.spatial_reuse = integrator_config->restir_di_spatial_reuse != 0;
+    cfg.restir_di.unbiased = integrator_config->restir_di_unbiased != 0;
+    if (integrator_config->restir_di_max_history > 0) cfg.restir_di.max_history = integrator_config->restir_di_max_history;
+    cfg.specular_manifold.enabled = integrator_config->specular_manifold_enabled != 0;
+    if (integrator_config->specular_manifold_max_events > 0) cfg.specular_manifold.max_specular_events = integrator_config->specular_manifold_max_events;
+    if (integrator_config->specular_manifold_tolerance > 0.0f) cfg.specular_manifold.solver_tolerance = integrator_config->specular_manifold_tolerance;
+    if (integrator_config->specular_manifold_newton_iterations > 0) cfg.specular_manifold.max_newton_iterations = integrator_config->specular_manifold_newton_iterations;
+    cfg.mlt.enabled = integrator_config->mlt_enabled != 0;
+    if (integrator_config->mlt_chain_count > 0) cfg.mlt.chain_count = integrator_config->mlt_chain_count;
+    if (integrator_config->mlt_mutations_per_chain > 0) cfg.mlt.mutations_per_chain = integrator_config->mlt_mutations_per_chain;
+    if (integrator_config->mlt_large_step_probability >= 0.0f) cfg.mlt.large_step_probability = integrator_config->mlt_large_step_probability;
+    if (integrator_config->mlt_small_step_sigma > 0.0f) cfg.mlt.small_step_sigma = integrator_config->mlt_small_step_sigma;
+    if (integrator_config->mlt_seed > 0) cfg.mlt.seed = integrator_config->mlt_seed;
+    if (cfg.integrator.mode == IntegratorMode::PathGuided) cfg.path_guiding.enabled = true;
+    if (cfg.integrator.mode == IntegratorMode::RestirDI) {
+        cfg.restir_di.enabled = true;
+        cfg.restir_di.temporal_reuse = true;
+    }
+    if (cfg.integrator.mode == IntegratorMode::SpecularManifold) cfg.specular_manifold.enabled = true;
+    if (cfg.integrator.mode == IntegratorMode::MLT) {
+        cfg.mlt.enabled = true;
+        cfg.integrator.sampler = IntegratorSampler::PrimarySampleSpace;
+    }
     return true;
 }
 
@@ -386,6 +481,22 @@ ure_session_t* ure_session_create_wave_config(const ure_spectral_config_t* spect
         if (!apply_spectral_config(config, spectral_config)) return nullptr;
         if (!make_wave_optics_config(wave_config, config.wave_optics)) return nullptr;
         if (!wave_optics_is_radiometric_only(config.wave_optics)) return nullptr;
+        auto session = std::make_unique<RenderSession>(RenderSession::create(config));
+        return reinterpret_cast<ure_session_t*>(session.release());
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+ure_session_t* ure_session_create_integrator_config(const ure_spectral_config_t* spectral_config,
+                                                    const ure_wave_optics_config_t* wave_config,
+                                                    const ure_integrator_config_t* integrator_config) {
+    try {
+        RenderConfig config;
+        if (!apply_spectral_config(config, spectral_config)) return nullptr;
+        if (!make_wave_optics_config(wave_config, config.wave_optics)) return nullptr;
+        if (!wave_optics_is_radiometric_only(config.wave_optics)) return nullptr;
+        if (!make_integrator_config(integrator_config, config)) return nullptr;
         auto session = std::make_unique<RenderSession>(RenderSession::create(config));
         return reinterpret_cast<ure_session_t*>(session.release());
     } catch (...) {
