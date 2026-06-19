@@ -231,6 +231,20 @@ __global__ void light_tree_reference_point_sampling_kernel(GpuScene scene, float
     out[5] = float(sample_light_list_index_at(scene, near_right, 0.5f));
 }
 
+__global__ void mixed_light_type_pdf_parity_kernel(GpuScene scene, float* out) {
+    const GpuVec3 reference_point(0.25f, 0.25f, 2.0f);
+    float sum = 0.0f;
+    for (int i = 0; i < scene.light_count; ++i) {
+        sum += light_selection_pdf_at(scene, i, reference_point);
+    }
+    out[0] = sum;
+    out[1] = light_selection_pdf_at(scene, 0, reference_point);
+    out[2] = light_selection_pdf_at(scene, 1, reference_point);
+    out[3] = light_selection_pdf_at(scene, 2, reference_point);
+    out[4] = light_selection_pdf_at(scene, 3, reference_point);
+    out[5] = selected_environment_light_pdf(scene, reference_point);
+}
+
 __global__ void triangle_light_sampling_pdf_kernel(GpuScene scene, float* out) {
     SelectedLightSample sample;
     bool ok = sample_selected_light(scene, 0, GpuVec3(0.5f, 0.5f, 1.0f), 0.25f, 0.5f, sample);
@@ -1224,6 +1238,68 @@ static int test_light_tree_sampling_depends_on_reference_point() {
     return 0;
 }
 
+static int test_mixed_light_types_have_normalized_reference_pdf() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.environment_light.direct_sampling = true;
+    config.environment_light.intensity = 1.0f;
+
+    RenderMesh quad = {};
+    quad.vertices = {
+        -1.0f, -1.0f, 0.0f,
+         1.0f, -1.0f, 0.0f,
+         1.0f,  1.0f, 0.0f,
+        -1.0f,  1.0f, 0.0f
+    };
+    quad.indices = {0, 1, 2, 0, 2, 3};
+    quad.material_index = 7;
+
+    GpuSphere sphere;
+    sphere.center = GpuVec3(0.0f, 4.0f, 0.0f);
+    sphere.radius = 1.0f;
+    sphere.material_index = 7;
+
+    GpuMaterialData light = {};
+    light.header.type = MaterialType::Light;
+    light.emission = SpectralPacket(2.0f);
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {quad}, {}, {sphere}, {light}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->light_count == 4);
+    CHECK(ctx->d_light_tree_leaf_nodes != nullptr);
+
+    float* d_out = nullptr;
+    float out[6] = {};
+    CHECK_CUDA(cudaMalloc(&d_out, 6 * sizeof(float)));
+
+    GpuScene scene = {};
+    scene.light_count = ctx->light_count;
+    scene.light_selection_pmf = ctx->d_light_selection_pmf;
+    scene.light_tree_nodes = ctx->d_light_tree_nodes;
+    scene.light_tree_leaf_nodes = ctx->d_light_tree_leaf_nodes;
+    scene.light_tree_node_count = ctx->light_tree_node_count;
+    scene.light_tree_root = ctx->light_tree_root;
+    scene.lights = ctx->d_lights;
+    scene.environment_light_direct_sampling = 1;
+
+    mixed_light_type_pdf_parity_kernel<<<1, 1>>>(scene, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(out, d_out, 6 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(out[0], 1.0f, 1e-5f);
+    CHECK(out[1] > 0.0f);
+    CHECK(out[2] > 0.0f);
+    CHECK(out[3] > 0.0f);
+    CHECK(out[4] > 0.0f);
+    CHECK(out[5] > 0.0f);
+
+    cudaFree(d_out);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
 static int test_instance_triangle_light_builds_typed_light_record() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -1494,13 +1570,21 @@ static int test_update_materials_gpu_rebuilds_light_selection_distribution() {
     boosted.emission = SpectralPacket(64.0f);
     update_materials_gpu(ctx, &boosted, 1, 7);
 
+    float pmf[2] = {};
     float cdf[2] = {};
     float alias_prob[2] = {};
     int alias_index[2] = {};
     CHECK(ctx->light_count == 2);
+    CHECK(ctx->d_light_selection_pmf != nullptr);
+    CHECK(ctx->d_light_tree_nodes != nullptr);
+    CHECK(ctx->d_light_tree_leaf_nodes != nullptr);
+    CHECK(ctx->light_tree_node_count == 3);
+    CHECK_CUDA(cudaMemcpy(pmf, ctx->d_light_selection_pmf, 2 * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaMemcpy(cdf, ctx->d_light_selection_cdf, 2 * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaMemcpy(alias_prob, ctx->d_light_alias_prob, 2 * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaMemcpy(alias_index, ctx->d_light_alias_index, 2 * sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(pmf[0], 0.8f, 1e-5f);
+    CHECK_FLOAT_EQ(pmf[1], 0.2f, 1e-5f);
     CHECK_FLOAT_EQ(cdf[0], 0.8f, 1e-5f);
     CHECK_FLOAT_EQ(cdf[1], 1.0f, 1e-6f);
     CHECK_FLOAT_EQ(alias_prob[0], 1.0f, 1e-6f);
@@ -1514,7 +1598,13 @@ static int test_update_materials_gpu_rebuilds_light_selection_distribution() {
     int light_index = -1;
     CHECK(ctx->light_count == 1);
     CHECK(ctx->d_light_indices != nullptr);
+    CHECK(ctx->d_light_selection_pmf != nullptr);
+    CHECK(ctx->d_light_tree_nodes != nullptr);
+    CHECK(ctx->d_light_tree_leaf_nodes != nullptr);
+    CHECK(ctx->light_tree_node_count == 1);
+    CHECK_CUDA(cudaMemcpy(pmf, ctx->d_light_selection_pmf, sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaMemcpy(&light_index, ctx->d_light_indices, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(pmf[0], 1.0f, 1e-6f);
     CHECK(light_index == 1);
 
     free_gpu_renderer(ctx);
@@ -2187,6 +2277,7 @@ int main() {
     RUN_TEST(test_light_tree_matches_area_and_spectral_power_distribution);
     RUN_TEST(test_light_tree_spatial_split_tracks_subtree_bounds);
     RUN_TEST(test_light_tree_sampling_depends_on_reference_point);
+    RUN_TEST(test_mixed_light_types_have_normalized_reference_pdf);
     RUN_TEST(test_instance_triangle_light_builds_typed_light_record);
     RUN_TEST(test_instance_triangle_light_sampling_pdf_contract);
     RUN_TEST(test_direct_mesh_triangle_light_builds_record_and_pdf_contract);
