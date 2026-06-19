@@ -158,14 +158,15 @@ void RenderSession::mutate_scene(const SceneDiff& diff) {
         require_scene();
     }
     const bool topology_changed = apply_topology_mutations(diff);
+    bool transform_resource_changed = false;
     if (!diff.instance_transforms.empty()) {
-        apply_instance_transform_mutations(diff.instance_transforms, !topology_changed);
+        transform_resource_changed = apply_instance_transform_mutations(diff.instance_transforms, !topology_changed);
     }
     bool resource_changed = false;
     if (!diff.scene_ir_materials.empty()) {
         resource_changed = apply_material_mutations(diff.scene_ir_materials, !topology_changed);
     }
-    if (topology_changed || resource_changed) {
+    if (topology_changed || transform_resource_changed || resource_changed) {
         reload_current_scene();
     }
     if (diff.camera) {
@@ -397,8 +398,9 @@ void RenderSession::reload_current_scene() {
     throw std::runtime_error("SceneDiff full reload requires a retained SceneIR scene");
 }
 
-void RenderSession::apply_instance_transform_mutations(const std::vector<InstanceTransformMutation>& mutations, bool upload) {
+bool RenderSession::apply_instance_transform_mutations(const std::vector<InstanceTransformMutation>& mutations, bool upload) {
     if (current_scene_ir_) {
+        bool requires_reload = false;
         for (const InstanceTransformMutation& mutation : mutations) {
             if (mutation.instance_index >= current_scene_ir_->instances.size()) {
                 throw std::out_of_range("SceneDiff instance transform index is out of range");
@@ -407,16 +409,18 @@ void RenderSession::apply_instance_transform_mutations(const std::vector<Instanc
             if (!instance.mesh || !instance.mesh->mesh) {
                 throw std::runtime_error("SceneDiff instance transform targets a non-renderable SceneIR instance");
             }
+            requires_reload = requires_reload ||
+                              (instance.material && instance.material->model == scene_ir::MaterialModel::Light);
             apply_transform(instance, mutation);
         }
-        if (!upload) {
-            return;
+        if (!upload || requires_reload) {
+            return requires_reload;
         }
         std::vector<gpu::GpuInstanceTransform> transforms;
         compile_scene_ir_transforms(*current_scene_ir_, transforms);
         engine_->update_transforms(transforms.data(), static_cast<int>(transforms.size()));
         state_ = RenderSessionState::Ready;
-        return;
+        return false;
     }
 
     throw std::runtime_error("SceneDiff instance transform requires a retained SceneIR scene");

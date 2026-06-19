@@ -139,7 +139,9 @@ static int test_path_guiding_json_fields() {
     "enabled": true,
     "light_mixture": 0.625,
     "learning_rate": 0.125,
-    "min_weight": 0.0005
+    "min_weight": 0.0005,
+    "spatial_cell_count": 32,
+    "directional_bin_count": 16
   }
 })";
     }
@@ -150,6 +152,8 @@ static int test_path_guiding_json_fields() {
     CHECK(std::fabs(cfg.path_guiding.light_mixture - 0.625) < 1e-12);
     CHECK(std::fabs(cfg.path_guiding.learning_rate - 0.125) < 1e-12);
     CHECK(std::fabs(cfg.path_guiding.min_weight - 0.0005) < 1e-12);
+    CHECK(cfg.path_guiding.spatial_cell_count == 32);
+    CHECK(cfg.path_guiding.directional_bin_count == 16);
     return 0;
 }
 
@@ -165,6 +169,10 @@ static int test_path_guiding_cli_overrides() {
         "0.2",
         "--path-guiding-min-weight",
         "0.00025",
+        "--path-guiding-spatial-cells",
+        "24",
+        "--path-guiding-directional-bins",
+        "12",
     };
     auto cfg = ure::config::parse_cli(static_cast<int>(sizeof(argv) / sizeof(argv[0])),
                                       const_cast<char**>(argv)).config;
@@ -173,6 +181,8 @@ static int test_path_guiding_cli_overrides() {
     CHECK(std::fabs(cfg.path_guiding.light_mixture - 0.75) < 1e-12);
     CHECK(std::fabs(cfg.path_guiding.learning_rate - 0.2) < 1e-12);
     CHECK(std::fabs(cfg.path_guiding.min_weight - 0.00025) < 1e-12);
+    CHECK(cfg.path_guiding.spatial_cell_count == 24);
+    CHECK(cfg.path_guiding.directional_bin_count == 12);
     return 0;
 }
 

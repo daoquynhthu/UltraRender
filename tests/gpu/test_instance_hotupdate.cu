@@ -98,6 +98,8 @@ static int test_gpu_hot_update_identity() {
     new_transforms[0].max_pt = {101, 1, 1};
     
     ure::gpu::update_instance_transforms_gpu(ctx, new_transforms.data(), 1);
+    CHECK(ctx->has_scene_bounds);
+    CHECK(ctx->scene_bounds_max.x >= 101.0f);
     
     // Render another pass (should use updated transform, no crash)
     int spp = ure::gpu::render_pass_gpu(ctx, 1);
@@ -111,6 +113,66 @@ static int test_gpu_hot_update_identity() {
     // so the buffer may be all zeros (no intersection). This is expected.
     // What matters is that the render completed without crash or CUDA error.
     
+    ure::gpu::free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_gpu_hot_update_resets_spatial_guiding_epoch() {
+    REQUIRE_GPU();
+
+    ure::gpu::RenderMesh mesh;
+    mesh.vertices = {-0.5f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.5f, 0.0f};
+    mesh.normals = {0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+    mesh.uvs = {0.0f, 0.0f, 1.0f, 0.0f, 0.5f, 1.0f};
+    mesh.indices = {0, 1, 2};
+    mesh.material_index = 0;
+
+    std::vector<ure::gpu::GpuMaterialData> materials(2);
+    materials[0].header.type = ure::gpu::MaterialType::Lambertian;
+    materials[0].albedo = ure::gpu::SpectralPacket(0.8f);
+    materials[1].header.type = ure::gpu::MaterialType::Light;
+    materials[1].emission = ure::gpu::SpectralPacket(4.0f);
+
+    ure::gpu::GpuInstance instance = {};
+    instance.mesh_index = 0;
+    instance.material_index = 0;
+    instance.transform = ure::gpu::GpuMat4::identity();
+    instance.inverse_transform = ure::gpu::GpuMat4::identity();
+    instance.min_pt = {-1.0f, -1.0f, -1.0f};
+    instance.max_pt = {1.0f, 1.0f, 1.0f};
+
+    ure::gpu::GpuSphere light_sphere;
+    light_sphere.center = {0.0f, 3.0f, 0.0f};
+    light_sphere.radius = 0.5f;
+    light_sphere.material_index = 8;
+
+    ure::RenderConfig config;
+    config.path_guiding.enabled = true;
+    config.path_guiding.spatial_cell_count = 8;
+    config.path_guiding.directional_bin_count = 4;
+    ure::gpu::GpuContext* ctx = ure::gpu::init_gpu_renderer(
+        4, 4, {mesh}, {instance}, {light_sphere}, materials, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->d_path_guiding_light_weights != nullptr);
+    CHECK(ctx->d_path_guiding_spatial_directional_weights != nullptr);
+
+    float weight = 2.0f;
+    CHECK_CUDA(cudaMemcpy(ctx->d_path_guiding_light_weights, &weight, sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(ctx->d_path_guiding_spatial_directional_weights, &weight, sizeof(float), cudaMemcpyHostToDevice));
+
+    ure::gpu::GpuInstanceTransform transform = {};
+    transform.transform = ure::gpu::GpuMat4::identity();
+    transform.inverse_transform = ure::gpu::GpuMat4::identity();
+    transform.min_pt = {9.0f, -1.0f, -1.0f};
+    transform.max_pt = {11.0f, 1.0f, 1.0f};
+    ure::gpu::update_instance_transforms_gpu(ctx, &transform, 1);
+
+    CHECK(ctx->scene_bounds_max.x >= 11.0f);
+    CHECK_CUDA(cudaMemcpy(&weight, ctx->d_path_guiding_light_weights, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(weight, 0.0f, 1e-6f);
+    CHECK_CUDA(cudaMemcpy(&weight, ctx->d_path_guiding_spatial_directional_weights, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(weight, 0.0f, 1e-6f);
+
     ure::gpu::free_gpu_renderer(ctx);
     return 0;
 }
@@ -348,6 +410,7 @@ int main() {
     printf("[GPU Instance Hot-Update Test]\n");
     RUN_TEST(test_instance_layout);
     RUN_TEST(test_gpu_hot_update_identity);
+    RUN_TEST(test_gpu_hot_update_resets_spatial_guiding_epoch);
     RUN_TEST(test_gpu_transform_readback);
     RUN_TEST(test_ring_buffer_basic);
     RUN_TEST(test_ring_buffer_init_from_instances);

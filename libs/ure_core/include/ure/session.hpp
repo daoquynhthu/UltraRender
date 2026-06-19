@@ -63,7 +63,7 @@ private:
     void rethrow_worker_exception_locked() const;
     bool apply_topology_mutations(const SceneDiff& diff);
     void reload_current_scene();
-    void apply_instance_transform_mutations(const std::vector<InstanceTransformMutation>& mutations, bool upload);
+    bool apply_instance_transform_mutations(const std::vector<InstanceTransformMutation>& mutations, bool upload);
     bool apply_material_mutations(const std::vector<SceneIrMaterialMutation>& scene_ir_mutations, bool upload);
 
     std::unique_ptr<IRenderEngine> engine_;

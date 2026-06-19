@@ -67,6 +67,17 @@ struct GpuContext {
     int light_tree_node_count = 0;
     int light_tree_root = -1;
     float* d_path_guiding_light_weights = nullptr;
+    float* d_path_guiding_spatial_directional_weights = nullptr;
+    int path_guiding_spatial_cell_count = 0;
+    int path_guiding_directional_bin_count = 0;
+    GpuVec3 path_guiding_bounds_min = {};
+    GpuVec3 path_guiding_bounds_max = {};
+    GpuVec3 scene_bounds_min = {};
+    GpuVec3 scene_bounds_max = {};
+    bool has_scene_bounds = false;
+    GpuVec3 static_scene_bounds_min = {};
+    GpuVec3 static_scene_bounds_max = {};
+    bool has_static_scene_bounds = false;
     GpuVec3* d_restir_di_origins = nullptr;
     GpuVec3* d_restir_di_directions = nullptr;
     float* d_restir_di_max_dist = nullptr;
@@ -115,6 +126,8 @@ struct GpuContext {
     int last_integrator_ray_queue_overflow_count = 0;
     int last_integrator_shadow_queue_overflow_count = 0;
     int last_integrator_path_guiding_light_count = 0;
+    int last_integrator_path_guiding_spatial_cell_count = 0;
+    int last_integrator_path_guiding_directional_bin_count = 0;
     int last_integrator_restir_reservoir_count = 0;
 
     std::vector<GpuSphere> host_spheres_for_light_distribution;

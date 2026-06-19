@@ -61,6 +61,8 @@ def main() -> int:
         integrator_sampler="low_discrepancy",
         integrator_quality_preset="final",
         path_guiding=True,
+        path_guiding_spatial_cell_count=24,
+        path_guiding_directional_bin_count=12,
     ) as session:
         progress = session.progress()
         assert progress.spp == 0

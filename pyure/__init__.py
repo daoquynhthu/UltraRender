@@ -100,6 +100,8 @@ class _IntegratorConfig(ctypes.Structure):
         ("mlt_seed", ctypes.c_uint32),
         ("environment_light_direct_sampling", ctypes.c_int),
         ("environment_light_intensity", ctypes.c_float),
+        ("path_guiding_spatial_cell_count", ctypes.c_int),
+        ("path_guiding_directional_bin_count", ctypes.c_int),
     ]
 
 
@@ -314,6 +316,8 @@ class RenderSession:
         path_guiding_light_mixture: float = 0.5,
         path_guiding_learning_rate: float = 0.25,
         path_guiding_min_weight: float = 1e-6,
+        path_guiding_spatial_cell_count: int = 16,
+        path_guiding_directional_bin_count: int = 8,
         environment_light_direct_sampling: bool = False,
         environment_light_intensity: float = 1.0,
         restir_di: bool = False,
@@ -342,6 +346,8 @@ class RenderSession:
             or integrator_quality_preset != "default"
             or allow_biased_integrator_reuse
             or path_guiding
+            or path_guiding_spatial_cell_count != 16
+            or path_guiding_directional_bin_count != 8
             or environment_light_direct_sampling
             or restir_di
         )
@@ -390,6 +396,8 @@ class RenderSession:
                 int(mlt_seed),
                 int(environment_light_direct_sampling),
                 float(environment_light_intensity),
+                int(path_guiding_spatial_cell_count),
+                int(path_guiding_directional_bin_count),
             )
             handle = native().ure_session_create_integrator_config(
                 ctypes.byref(cfg),
@@ -622,6 +630,8 @@ def create_session(
     path_guiding_light_mixture: float = 0.5,
     path_guiding_learning_rate: float = 0.25,
     path_guiding_min_weight: float = 1e-6,
+    path_guiding_spatial_cell_count: int = 16,
+    path_guiding_directional_bin_count: int = 8,
     environment_light_direct_sampling: bool = False,
     environment_light_intensity: float = 1.0,
     restir_di: bool = False,
@@ -656,6 +666,8 @@ def create_session(
         path_guiding_light_mixture=path_guiding_light_mixture,
         path_guiding_learning_rate=path_guiding_learning_rate,
         path_guiding_min_weight=path_guiding_min_weight,
+        path_guiding_spatial_cell_count=path_guiding_spatial_cell_count,
+        path_guiding_directional_bin_count=path_guiding_directional_bin_count,
         environment_light_direct_sampling=environment_light_direct_sampling,
         environment_light_intensity=environment_light_intensity,
         restir_di=restir_di,

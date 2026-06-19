@@ -484,6 +484,11 @@ struct GpuScene {
     float path_guiding_light_mixture;
     float path_guiding_learning_rate;
     float path_guiding_min_weight;
+    float* path_guiding_spatial_directional_weights;
+    int path_guiding_spatial_cell_count;
+    int path_guiding_directional_bin_count;
+    GpuVec3 path_guiding_bounds_min;
+    GpuVec3 path_guiding_bounds_max;
     int environment_light_direct_sampling;
     float environment_light_intensity;
     GpuVec3* restir_di_origins;

@@ -976,6 +976,7 @@ static void release_light_distribution(GpuContext* ctx) {
     cudaFree(ctx->d_light_tree_nodes);
     cudaFree(ctx->d_light_tree_leaf_nodes);
     cudaFree(ctx->d_path_guiding_light_weights);
+    cudaFree(ctx->d_path_guiding_spatial_directional_weights);
     ctx->d_lights = nullptr;
     ctx->d_light_indices = nullptr;
     ctx->d_light_selection_pmf = nullptr;
@@ -987,8 +988,97 @@ static void release_light_distribution(GpuContext* ctx) {
     ctx->light_tree_node_count = 0;
     ctx->light_tree_root = -1;
     ctx->d_path_guiding_light_weights = nullptr;
+    ctx->d_path_guiding_spatial_directional_weights = nullptr;
+    ctx->path_guiding_spatial_cell_count = 0;
+    ctx->path_guiding_directional_bin_count = 0;
+    ctx->path_guiding_bounds_min = GpuVec3(0.0f, 0.0f, 0.0f);
+    ctx->path_guiding_bounds_max = GpuVec3(0.0f, 0.0f, 0.0f);
     ctx->light_count = 0;
     ctx->last_integrator_path_guiding_light_count = 0;
+    ctx->last_integrator_path_guiding_spatial_cell_count = 0;
+    ctx->last_integrator_path_guiding_directional_bin_count = 0;
+}
+
+static bool finite_light_bounds(const GpuLightRecord& light) {
+    constexpr float kFiniteBound = 1.0e18f;
+    return std::isfinite(light.bounds_min.x) && std::isfinite(light.bounds_min.y) && std::isfinite(light.bounds_min.z) &&
+           std::isfinite(light.bounds_max.x) && std::isfinite(light.bounds_max.y) && std::isfinite(light.bounds_max.z) &&
+           std::fabs(light.bounds_min.x) < kFiniteBound && std::fabs(light.bounds_min.y) < kFiniteBound && std::fabs(light.bounds_min.z) < kFiniteBound &&
+           std::fabs(light.bounds_max.x) < kFiniteBound && std::fabs(light.bounds_max.y) < kFiniteBound && std::fabs(light.bounds_max.z) < kFiniteBound;
+}
+
+static void include_scene_bounds_point(GpuContext* ctx, const GpuVec3& p) {
+    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) return;
+    if (!ctx->has_scene_bounds) {
+        ctx->scene_bounds_min = p;
+        ctx->scene_bounds_max = p;
+        ctx->has_scene_bounds = true;
+        return;
+    }
+    ctx->scene_bounds_min = light_bounds_min(ctx->scene_bounds_min, p);
+    ctx->scene_bounds_max = light_bounds_max(ctx->scene_bounds_max, p);
+}
+
+static void include_static_scene_bounds_point(GpuContext* ctx, const GpuVec3& p) {
+    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) return;
+    if (!ctx->has_static_scene_bounds) {
+        ctx->static_scene_bounds_min = p;
+        ctx->static_scene_bounds_max = p;
+        ctx->has_static_scene_bounds = true;
+        return;
+    }
+    ctx->static_scene_bounds_min = light_bounds_min(ctx->static_scene_bounds_min, p);
+    ctx->static_scene_bounds_max = light_bounds_max(ctx->static_scene_bounds_max, p);
+}
+
+static void configure_scene_bounds(
+    GpuContext* ctx,
+    const std::vector<RenderMesh>& meshes,
+    const std::vector<GpuInstance>& instances,
+    const std::vector<GpuSphere>& spheres
+) {
+    ctx->has_static_scene_bounds = false;
+    for (const auto& sphere : spheres) {
+        const GpuVec3 radius(sphere.radius, sphere.radius, sphere.radius);
+        include_static_scene_bounds_point(ctx, sphere.center - radius);
+        include_static_scene_bounds_point(ctx, sphere.center + radius);
+    }
+    for (const auto& mesh : meshes) {
+        for (size_t i = 0; i + 2 < mesh.vertices.size(); i += 3) {
+            include_static_scene_bounds_point(ctx, GpuVec3(mesh.vertices[i], mesh.vertices[i + 1], mesh.vertices[i + 2]));
+        }
+    }
+    ctx->has_scene_bounds = ctx->has_static_scene_bounds;
+    ctx->scene_bounds_min = ctx->static_scene_bounds_min;
+    ctx->scene_bounds_max = ctx->static_scene_bounds_max;
+    for (const auto& instance : instances) {
+        include_scene_bounds_point(ctx, instance.min_pt);
+        include_scene_bounds_point(ctx, instance.max_pt);
+    }
+}
+
+static void configure_path_guiding_domain(GpuContext* ctx, const std::vector<GpuLightRecord>& lights) {
+    GpuVec3 bounds_min = ctx->scene_bounds_min;
+    GpuVec3 bounds_max = ctx->scene_bounds_max;
+    bool has_bounds = ctx->has_scene_bounds;
+    if (!has_bounds) {
+        bounds_min = GpuVec3(FLT_MAX, FLT_MAX, FLT_MAX);
+        bounds_max = GpuVec3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+        for (const auto& light : lights) {
+            if (!finite_light_bounds(light)) continue;
+            bounds_min = light_bounds_min(bounds_min, light.bounds_min);
+            bounds_max = light_bounds_max(bounds_max, light.bounds_max);
+            has_bounds = true;
+        }
+    }
+    if (!has_bounds) {
+        bounds_min = GpuVec3(-1.0f, -1.0f, -1.0f);
+        bounds_max = GpuVec3(1.0f, 1.0f, 1.0f);
+    }
+    GpuVec3 extent = bounds_max - bounds_min;
+    const float pad = 0.5f * std::max({extent.x, extent.y, extent.z, 1.0f});
+    ctx->path_guiding_bounds_min = bounds_min - GpuVec3(pad, pad, pad);
+    ctx->path_guiding_bounds_max = bounds_max + GpuVec3(pad, pad, pad);
 }
 
 static bool path_guiding_enabled(const ure::RenderConfig& config) {
@@ -1023,6 +1113,14 @@ static void validate_path_guiding_config(const ure::RenderConfig& config) {
     if (!std::isfinite(config.path_guiding.min_weight) ||
         config.path_guiding.min_weight < 0.0f) {
         throw std::runtime_error("Path guiding min_weight must be finite and non-negative");
+    }
+    if (config.path_guiding.spatial_cell_count <= 0 ||
+        config.path_guiding.spatial_cell_count > 4096) {
+        throw std::runtime_error("Path guiding spatial_cell_count must be in [1, 4096]");
+    }
+    if (config.path_guiding.directional_bin_count <= 0 ||
+        config.path_guiding.directional_bin_count > 64) {
+        throw std::runtime_error("Path guiding directional_bin_count must be in [1, 64]");
     }
 }
 
@@ -1434,7 +1532,18 @@ static void rebuild_light_distribution(GpuContext* ctx) {
     if (path_guiding_enabled(ctx->render_config)) {
         UR_CUDA_CHECK(cudaMalloc(&ctx->d_path_guiding_light_weights, host_light_indices.size() * sizeof(float)));
         UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_light_weights, 0, host_light_indices.size() * sizeof(float)));
+        ctx->path_guiding_spatial_cell_count = ctx->render_config.path_guiding.spatial_cell_count;
+        ctx->path_guiding_directional_bin_count = ctx->render_config.path_guiding.directional_bin_count;
+        const size_t spatial_directional_count =
+            static_cast<size_t>(ctx->light_count) *
+            static_cast<size_t>(ctx->path_guiding_spatial_cell_count) *
+            static_cast<size_t>(ctx->path_guiding_directional_bin_count);
+        UR_CUDA_CHECK(cudaMalloc(&ctx->d_path_guiding_spatial_directional_weights, spatial_directional_count * sizeof(float)));
+        UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_spatial_directional_weights, 0, spatial_directional_count * sizeof(float)));
+        configure_path_guiding_domain(ctx, host_lights);
         ctx->last_integrator_path_guiding_light_count = ctx->light_count;
+        ctx->last_integrator_path_guiding_spatial_cell_count = ctx->path_guiding_spatial_cell_count;
+        ctx->last_integrator_path_guiding_directional_bin_count = ctx->path_guiding_directional_bin_count;
     }
 }
 
@@ -1856,6 +1965,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     }
     ctx->texture_count = (int)host_gpu_textures.size();
 
+    configure_scene_bounds(ctx, meshes, instances, spheres);
     std::vector<GpuLightRecord> host_light_records;
     add_sphere_light_records(host_light_records, host_spheres);
     add_direct_mesh_light_records(host_light_records, host_light_meshes, host_instances);
@@ -1925,6 +2035,18 @@ void reset_accumulation_gpu(GpuContext* ctx) {
     clear_restir_di_reservoirs(ctx);
     if (ctx->d_path_guiding_light_weights && ctx->light_count > 0) {
         UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_light_weights, 0, ctx->light_count * sizeof(float)));
+    }
+    if (ctx->d_path_guiding_spatial_directional_weights &&
+        ctx->light_count > 0 &&
+        ctx->path_guiding_spatial_cell_count > 0 &&
+        ctx->path_guiding_directional_bin_count > 0) {
+        const size_t spatial_directional_count =
+            static_cast<size_t>(ctx->light_count) *
+            static_cast<size_t>(ctx->path_guiding_spatial_cell_count) *
+            static_cast<size_t>(ctx->path_guiding_directional_bin_count);
+        UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_spatial_directional_weights,
+                                 0,
+                                 spatial_directional_count * sizeof(float)));
     }
     ctx->current_spp = 0;
 }
@@ -2011,6 +2133,11 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.path_guiding_light_mixture = std::clamp(ctx->render_config.path_guiding.light_mixture, 0.0f, 0.95f);
     scene.path_guiding_learning_rate = std::clamp(ctx->render_config.path_guiding.learning_rate, 0.0f, 1.0f);
     scene.path_guiding_min_weight = std::max(ctx->render_config.path_guiding.min_weight, 0.0f);
+    scene.path_guiding_spatial_directional_weights = ctx->d_path_guiding_spatial_directional_weights;
+    scene.path_guiding_spatial_cell_count = ctx->path_guiding_spatial_cell_count;
+    scene.path_guiding_directional_bin_count = ctx->path_guiding_directional_bin_count;
+    scene.path_guiding_bounds_min = ctx->path_guiding_bounds_min;
+    scene.path_guiding_bounds_max = ctx->path_guiding_bounds_max;
     scene.environment_light_direct_sampling = ctx->render_config.environment_light.direct_sampling ? 1 : 0;
     scene.environment_light_intensity = std::max(ctx->render_config.environment_light.intensity, 0.0f);
     scene.restir_di_origins = ctx->d_restir_di_origins;
@@ -2181,9 +2308,41 @@ void update_instance_transforms_gpu(GpuContext* ctx,
     assert(ctx->d_previous_instance_transforms != nullptr && "update_instance_transforms: no GPU previous transform buffer");
     assert(count == ctx->instance_count && "update_instance_transforms: count must match scene instance_count");
     assert(transforms != nullptr && "update_instance_transforms: null transforms pointer");
+    for (const auto& light : ctx->host_light_records_for_distribution) {
+        const bool emissive_material =
+            light.material_index >= 0 &&
+            light.material_index < static_cast<int>(ctx->host_materials_for_light_distribution.size()) &&
+            ctx->host_materials_for_light_distribution[static_cast<size_t>(light.material_index)].header.type == MaterialType::Light;
+        if (light.kind == GpuLightKind::InstanceTriangle && emissive_material) {
+            throw std::runtime_error(
+                "emissive instance transform hot-update requires full scene reload to rebuild light geometry/tree");
+        }
+    }
     size_t bytes = count * sizeof(GpuInstanceTransform);
     UR_CUDA_CHECK(cudaMemcpy(ctx->d_previous_instance_transforms, ctx->d_instance_transforms, bytes, cudaMemcpyDeviceToDevice));
     UR_CUDA_CHECK(cudaMemcpy(ctx->d_instance_transforms, transforms, bytes, cudaMemcpyHostToDevice));
+    ctx->has_scene_bounds = ctx->has_static_scene_bounds;
+    ctx->scene_bounds_min = ctx->static_scene_bounds_min;
+    ctx->scene_bounds_max = ctx->static_scene_bounds_max;
+    for (int i = 0; i < count; ++i) {
+        include_scene_bounds_point(ctx, transforms[i].min_pt);
+        include_scene_bounds_point(ctx, transforms[i].max_pt);
+    }
+    if (ctx->d_path_guiding_spatial_directional_weights) {
+        configure_path_guiding_domain(ctx, ctx->host_light_records_for_distribution);
+        const size_t spatial_directional_count =
+            static_cast<size_t>(ctx->light_count) *
+            static_cast<size_t>(ctx->path_guiding_spatial_cell_count) *
+            static_cast<size_t>(ctx->path_guiding_directional_bin_count);
+        UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_spatial_directional_weights,
+                                 0,
+                                 spatial_directional_count * sizeof(float)));
+        if (ctx->d_path_guiding_light_weights) {
+            UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_light_weights,
+                                     0,
+                                     static_cast<size_t>(ctx->light_count) * sizeof(float)));
+        }
+    }
 }
 
 void update_materials_gpu(GpuContext* ctx,

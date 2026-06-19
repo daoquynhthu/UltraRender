@@ -427,6 +427,26 @@ static int test_scene_diff_instance_transform_ir() {
     return 0;
 }
 
+static int test_scene_diff_emissive_instance_transform_ir_full_reload() {
+    auto* raw_engine = new FakeRenderEngine();
+    ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
+
+    ure::scene_ir::SceneIR scene_ir = make_scene_ir_with_instance();
+    scene_ir.materials[0]->model = ure::scene_ir::MaterialModel::Light;
+    scene_ir.materials[0]->emission = {4.0f, 2.0f, 1.0f};
+    session.load_scene(scene_ir);
+    session.render_pass();
+    CHECK(raw_engine->spp == 1);
+
+    session.mutate_scene(ure::SceneDiff::update_instance_transform(0, {2.0f, 0.0f, 0.0f}));
+
+    CHECK(raw_engine->scene_ir_reloads == 1);
+    CHECK(raw_engine->transform_updates == 0);
+    CHECK(raw_engine->spp == 0);
+    CHECK(session.state() == ure::RenderSessionState::Ready);
+    return 0;
+}
+
 static int test_scene_diff_instance_transform_errors() {
     auto* raw_engine = new FakeRenderEngine();
     ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
@@ -838,6 +858,7 @@ int main() {
     failed += run("test_scene_diff_mutation", test_scene_diff_mutation);
     failed += run("test_scene_diff_replace_scene_forces_full_reload", test_scene_diff_replace_scene_forces_full_reload);
     failed += run("test_scene_diff_instance_transform_ir", test_scene_diff_instance_transform_ir);
+    failed += run("test_scene_diff_emissive_instance_transform_ir_full_reload", test_scene_diff_emissive_instance_transform_ir_full_reload);
     failed += run("test_scene_diff_instance_transform_errors", test_scene_diff_instance_transform_errors);
     failed += run("test_scene_diff_material_update_ir", test_scene_diff_material_update_ir);
     failed += run("test_scene_diff_material_texture_update_ir_full_reload", test_scene_diff_material_texture_update_ir_full_reload);

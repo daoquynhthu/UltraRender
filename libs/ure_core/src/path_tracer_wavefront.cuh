@@ -489,6 +489,97 @@ __device__ inline float path_guiding_light_total(const GpuScene& scene) {
     return total;
 }
 
+__device__ inline void path_guiding_grid_dimensions(int cell_count, int& nx, int& ny, int& nz) {
+    nx = 1;
+    while ((nx + 1) * (nx + 1) * (nx + 1) <= cell_count) ++nx;
+    const int remaining = (cell_count + nx - 1) / nx;
+    ny = 1;
+    while ((ny + 1) * (ny + 1) <= remaining) ++ny;
+    nz = (cell_count + nx * ny - 1) / (nx * ny);
+}
+
+__device__ inline int path_guiding_spatial_cell(const GpuScene& scene, const GpuVec3& p) {
+    if (scene.path_guiding_spatial_cell_count <= 1) return 0;
+    const GpuVec3 extent = scene.path_guiding_bounds_max - scene.path_guiding_bounds_min;
+    if (extent.x <= 1.0e-6f || extent.y <= 1.0e-6f || extent.z <= 1.0e-6f) return 0;
+    int grid_x = 1;
+    int grid_y = 1;
+    int grid_z = 1;
+    path_guiding_grid_dimensions(scene.path_guiding_spatial_cell_count, grid_x, grid_y, grid_z);
+    const float normalized_x = fminf(0.99999994f, fmaxf(0.0f, (p.x - scene.path_guiding_bounds_min.x) / extent.x));
+    const float normalized_y = fminf(0.99999994f, fmaxf(0.0f, (p.y - scene.path_guiding_bounds_min.y) / extent.y));
+    const float normalized_z = fminf(0.99999994f, fmaxf(0.0f, (p.z - scene.path_guiding_bounds_min.z) / extent.z));
+    const int ix = min(int(normalized_x * float(grid_x)), grid_x - 1);
+    const int iy = min(int(normalized_y * float(grid_y)), grid_y - 1);
+    const int iz = min(int(normalized_z * float(grid_z)), grid_z - 1);
+    return min(ix + grid_x * (iy + grid_y * iz), scene.path_guiding_spatial_cell_count - 1);
+}
+
+__device__ inline int path_guiding_direction_bin(const GpuScene& scene, const GpuVec3& direction) {
+    if (scene.path_guiding_directional_bin_count <= 1) return 0;
+    const float len_sq = direction.length_sq();
+    if (len_sq <= 1.0e-12f) return 0;
+    const GpuVec3 d = direction * rsqrtf(len_sq);
+    float azimuth = atan2f(d.z, d.x);
+    if (azimuth < 0.0f) azimuth += 6.28318530717958647692f;
+    const float u = fminf(0.99999994f, fmaxf(0.0f, azimuth * 0.15915494309189533577f));
+    const float v = fminf(0.99999994f, fmaxf(0.0f, 0.5f * (d.y + 1.0f)));
+    int azimuth_bins = 1;
+    while (azimuth_bins * azimuth_bins < scene.path_guiding_directional_bin_count) ++azimuth_bins;
+    const int elevation_bins =
+        (scene.path_guiding_directional_bin_count + azimuth_bins - 1) / azimuth_bins;
+    const int azimuth_bin = min(int(u * float(azimuth_bins)), azimuth_bins - 1);
+    const int elevation_bin = min(int(v * float(elevation_bins)), elevation_bins - 1);
+    return min(elevation_bin * azimuth_bins + azimuth_bin,
+               scene.path_guiding_directional_bin_count - 1);
+}
+
+__device__ inline int path_guiding_spatial_directional_index(
+    const GpuScene& scene,
+    int light_list_index,
+    int cell,
+    int direction_bin
+) {
+    if (!scene.path_guiding_spatial_directional_weights ||
+        scene.path_guiding_spatial_cell_count <= 0 ||
+        scene.path_guiding_directional_bin_count <= 0 ||
+        light_list_index < 0 ||
+        light_list_index >= scene.light_count ||
+        cell < 0 ||
+        cell >= scene.path_guiding_spatial_cell_count ||
+        direction_bin < 0 ||
+        direction_bin >= scene.path_guiding_directional_bin_count) {
+        return -1;
+    }
+    return ((cell * scene.light_count) + light_list_index) * scene.path_guiding_directional_bin_count + direction_bin;
+}
+
+__device__ inline float path_guiding_spatial_directional_light_weight(
+    const GpuScene& scene,
+    int light_list_index,
+    const GpuVec3& reference_point
+) {
+    if (!scene.path_guiding_spatial_directional_weights) return 0.0f;
+    const GpuLightRecord record = scene.lights[light_list_index];
+    const int cell = path_guiding_spatial_cell(scene, reference_point);
+    const int direction_bin = path_guiding_direction_bin(scene, record.centroid - reference_point);
+    const int guide_index = path_guiding_spatial_directional_index(scene, light_list_index, cell, direction_bin);
+    return guide_index >= 0 ? fmaxf(0.0f, scene.path_guiding_spatial_directional_weights[guide_index]) : 0.0f;
+}
+
+__device__ inline float path_guiding_spatial_directional_total(const GpuScene& scene, const GpuVec3& reference_point) {
+    if (!scene.path_guiding_spatial_directional_weights ||
+        scene.path_guiding_light_count != scene.light_count ||
+        scene.light_count <= 0) {
+        return 0.0f;
+    }
+    float total = 0.0f;
+    for (int i = 0; i < scene.light_count; ++i) {
+        total += path_guiding_spatial_directional_light_weight(scene, i, reference_point);
+    }
+    return total;
+}
+
 __device__ inline float path_guiding_effective_mixture(const GpuScene& scene, float guide_total) {
     if (guide_total <= fmaxf(scene.path_guiding_min_weight, 1e-12f)) return 0.0f;
     return fminf(0.95f, fmaxf(0.0f, scene.path_guiding_light_mixture));
@@ -600,6 +691,24 @@ __device__ inline int sample_guided_light_list_index(const GpuScene& scene, floa
     return scene.light_count - 1;
 }
 
+__device__ inline int sample_guided_light_list_index_at(
+    const GpuScene& scene,
+    const GpuVec3& reference_point,
+    float r,
+    float guide_total
+) {
+    if (guide_total <= fmaxf(scene.path_guiding_min_weight, 1e-12f)) {
+        return sample_base_light_list_index_at(scene, reference_point, r);
+    }
+    const float target = fminf(fmaxf(r, 0.0f), 0.99999994f) * guide_total;
+    float running = 0.0f;
+    for (int i = 0; i < scene.light_count; ++i) {
+        running += path_guiding_spatial_directional_light_weight(scene, i, reference_point);
+        if (target <= running) return i;
+    }
+    return scene.light_count - 1;
+}
+
 __device__ inline int sample_light_list_index(const GpuScene& scene, float r) {
     if (scene.light_count <= 0) return -1;
     float guide_total = path_guiding_light_total(scene);
@@ -617,9 +726,16 @@ __device__ inline int sample_light_list_index_at(
     float r
 ) {
     if (scene.light_count <= 0) return -1;
-    float guide_total = path_guiding_light_total(scene);
+    float guide_total = path_guiding_spatial_directional_total(scene, reference_point);
+    if (guide_total <= fmaxf(scene.path_guiding_min_weight, 1e-12f)) {
+        guide_total = path_guiding_light_total(scene);
+    }
     float mixture = path_guiding_effective_mixture(scene, guide_total);
     if (mixture > 0.0f && r < mixture) {
+        if (scene.path_guiding_spatial_directional_weights &&
+            path_guiding_spatial_directional_total(scene, reference_point) > fmaxf(scene.path_guiding_min_weight, 1e-12f)) {
+            return sample_guided_light_list_index_at(scene, reference_point, r / mixture, guide_total);
+        }
         return sample_guided_light_list_index(scene, r / mixture, guide_total);
     }
     float base_u = mixture < 1.0f ? (r - mixture) / fmaxf(1e-6f, 1.0f - mixture) : r;
@@ -641,10 +757,15 @@ __device__ inline float guided_mixture_light_selection_pdf_at(
     const GpuVec3& reference_point
 ) {
     const float base_pdf = light_selection_pdf_at(scene, light_list_index, reference_point);
-    const float guide_total = path_guiding_light_total(scene);
+    const float spatial_directional_total = path_guiding_spatial_directional_total(scene, reference_point);
+    const float guide_total = spatial_directional_total > fmaxf(scene.path_guiding_min_weight, 1e-12f)
+        ? spatial_directional_total
+        : path_guiding_light_total(scene);
     const float mixture = path_guiding_effective_mixture(scene, guide_total);
     if (mixture <= 0.0f) return base_pdf;
-    const float guide_pdf = guided_light_selection_pdf(scene, light_list_index, guide_total);
+    const float guide_pdf = spatial_directional_total > fmaxf(scene.path_guiding_min_weight, 1e-12f)
+        ? path_guiding_spatial_directional_light_weight(scene, light_list_index, reference_point) / guide_total
+        : guided_light_selection_pdf(scene, light_list_index, guide_total);
     return (1.0f - mixture) * base_pdf + mixture * guide_pdf;
 }
 
@@ -1358,6 +1479,15 @@ __global__ __launch_bounds__(256) void extend_shadow_kernel(
                 if (isfinite(luminance) && luminance > scene.path_guiding_min_weight) {
                     atomicAdd(&scene.path_guiding_light_weights[light_list_index],
                               scene.path_guiding_learning_rate * luminance);
+                    const int cell = path_guiding_spatial_cell(scene, shadow_queue.origins[idx]);
+                    const GpuVec3 guide_direction =
+                        scene.lights[light_list_index].centroid - shadow_queue.origins[idx];
+                    const int direction_bin = path_guiding_direction_bin(scene, guide_direction);
+                    const int guide_index = path_guiding_spatial_directional_index(scene, light_list_index, cell, direction_bin);
+                    if (guide_index >= 0) {
+                        atomicAdd(&scene.path_guiding_spatial_directional_weights[guide_index],
+                                  scene.path_guiding_learning_rate * luminance);
+                    }
                 }
             }
         }

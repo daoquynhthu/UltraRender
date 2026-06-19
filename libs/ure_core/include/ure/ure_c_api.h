@@ -91,6 +91,8 @@ typedef struct ure_integrator_config_t {
     uint32_t mlt_seed;
     int environment_light_direct_sampling;
     float environment_light_intensity;
+    int path_guiding_spatial_cell_count;
+    int path_guiding_directional_bin_count;
 } ure_integrator_config_t;
 
 typedef enum ure_aov_type_t {

@@ -58,6 +58,8 @@ struct PathGuidingConfig {
     float light_mixture = 0.5f;
     float learning_rate = 0.25f;
     float min_weight = 1e-6f;
+    int spatial_cell_count = 16;
+    int directional_bin_count = 8;
 };
 
 struct EnvironmentLightConfig {

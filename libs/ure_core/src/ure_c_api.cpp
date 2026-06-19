@@ -147,6 +147,10 @@ bool make_integrator_config(const ure_integrator_config_t* integrator_config, Re
     if (integrator_config->path_guiding_light_mixture > 0.0f) cfg.path_guiding.light_mixture = integrator_config->path_guiding_light_mixture;
     if (integrator_config->path_guiding_learning_rate > 0.0f) cfg.path_guiding.learning_rate = integrator_config->path_guiding_learning_rate;
     if (integrator_config->path_guiding_min_weight >= 0.0f) cfg.path_guiding.min_weight = integrator_config->path_guiding_min_weight;
+    if (integrator_config->path_guiding_spatial_cell_count > 0)
+        cfg.path_guiding.spatial_cell_count = integrator_config->path_guiding_spatial_cell_count;
+    if (integrator_config->path_guiding_directional_bin_count > 0)
+        cfg.path_guiding.directional_bin_count = integrator_config->path_guiding_directional_bin_count;
     cfg.restir_di.enabled = integrator_config->restir_di_enabled != 0;
     cfg.restir_di.temporal_reuse = integrator_config->restir_di_temporal_reuse != 0;
     cfg.restir_di.spatial_reuse = integrator_config->restir_di_spatial_reuse != 0;

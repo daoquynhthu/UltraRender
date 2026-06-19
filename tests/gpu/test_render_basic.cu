@@ -197,6 +197,32 @@ __global__ void path_guided_light_selection_kernel(float* cdf, float* guide_weig
     out[3] = float(sample_light_list_index(scene, 0.75f));
 }
 
+__global__ void spatial_directional_guided_light_selection_kernel(
+    GpuLightRecord* lights,
+    float* cdf,
+    float* guide_weights,
+    float* out
+) {
+    GpuScene scene = {};
+    scene.light_count = 2;
+    scene.lights = lights;
+    scene.light_selection_cdf = cdf;
+    scene.path_guiding_light_count = 2;
+    scene.path_guiding_light_mixture = 0.5f;
+    scene.path_guiding_learning_rate = 0.25f;
+    scene.path_guiding_min_weight = 1e-6f;
+    scene.path_guiding_spatial_directional_weights = guide_weights;
+    scene.path_guiding_spatial_cell_count = 1;
+    scene.path_guiding_directional_bin_count = 4;
+    scene.path_guiding_bounds_min = GpuVec3(-2.0f, -2.0f, -2.0f);
+    scene.path_guiding_bounds_max = GpuVec3(2.0f, 2.0f, 2.0f);
+    const GpuVec3 reference(0.0f, 0.0f, 0.0f);
+    out[0] = guided_mixture_light_selection_pdf_at(scene, 0, reference);
+    out[1] = guided_mixture_light_selection_pdf_at(scene, 1, reference);
+    out[2] = float(sample_light_list_index_at(scene, reference, 0.25f));
+    out[3] = float(sample_light_list_index_at(scene, reference, 0.99f));
+}
+
 __global__ void light_tree_selection_kernel(GpuScene scene, float* out) {
     out[0] = light_selection_pdf(scene, 0);
     out[1] = light_selection_pdf(scene, 1);
@@ -265,7 +291,7 @@ __global__ void environment_light_sampling_pdf_kernel(GpuScene scene, float* out
     out[4] = sample.max_dist > 1.0e5f ? 1.0f : 0.0f;
 }
 
-__global__ void setup_path_guided_shadow_kernel(ShadowQueue q, float* guide_weights, GpuVec3* accum) {
+__global__ void setup_path_guided_shadow_kernel(ShadowQueue q, float* guide_weights, float* spatial_weights, GpuVec3* accum) {
     int one = 1;
     *q.count = one;
     q.origins[0] = GpuVec3(0.0f, 0.0f, 0.0f);
@@ -286,6 +312,7 @@ __global__ void setup_path_guided_shadow_kernel(ShadowQueue q, float* guide_weig
     q.restir_replay_flags[0] = 0;
     guide_weights[0] = 0.0f;
     guide_weights[1] = 0.0f;
+    for (int i = 0; i < 8; ++i) spatial_weights[i] = 0.0f;
     accum[0] = GpuVec3(0.0f, 0.0f, 0.0f);
 }
 
@@ -1344,6 +1371,53 @@ static int test_instance_triangle_light_builds_typed_light_record() {
     return 0;
 }
 
+static int test_emissive_instance_transform_hot_update_requires_full_reload() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+
+    RenderMesh mesh = {};
+    mesh.vertices = {
+        0.0f, 0.0f, 0.0f,
+        2.0f, 0.0f, 0.0f,
+        0.0f, 2.0f, 0.0f
+    };
+    mesh.indices = {0, 1, 2};
+    mesh.material_index = -1;
+
+    GpuInstance instance = {};
+    instance.mesh_index = 0;
+    instance.material_index = 7;
+    instance.transform = GpuMat4::identity();
+    instance.inverse_transform = GpuMat4::identity();
+    instance.min_pt = GpuVec3(0.0f, 0.0f, 0.0f);
+    instance.max_pt = GpuVec3(2.0f, 2.0f, 0.0f);
+
+    GpuMaterialData light = {};
+    light.header.type = MaterialType::Light;
+    light.emission = SpectralPacket(3.0f);
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {mesh}, {instance}, {}, {light}, {}, config);
+    CHECK(ctx != nullptr);
+
+    GpuInstanceTransform transform = {};
+    transform.transform = GpuMat4::identity();
+    transform.inverse_transform = GpuMat4::identity();
+    transform.min_pt = GpuVec3(3.0f, 0.0f, 0.0f);
+    transform.max_pt = GpuVec3(5.0f, 2.0f, 0.0f);
+    bool rejected = false;
+    try {
+        update_instance_transforms_gpu(ctx, &transform, 1);
+    } catch (const std::runtime_error& e) {
+        rejected = std::string(e.what()).find("emissive instance transform hot-update") != std::string::npos;
+    }
+    CHECK(rejected);
+
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
 static int test_instance_triangle_light_sampling_pdf_contract() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -1751,9 +1825,24 @@ static int test_path_guiding_allocates_progressive_light_cache() {
     CHECK(on_ctx != nullptr);
     CHECK(on_ctx->light_count == 1);
     CHECK(on_ctx->d_path_guiding_light_weights != nullptr);
+    CHECK(on_ctx->d_path_guiding_spatial_directional_weights != nullptr);
     CHECK(on_ctx->last_integrator_path_guiding_light_count == 1);
+    CHECK(on_ctx->last_integrator_path_guiding_spatial_cell_count == 16);
+    CHECK(on_ctx->last_integrator_path_guiding_directional_bin_count == 8);
+    CHECK(on_ctx->path_guiding_bounds_min.y < 1.0f);
+    CHECK(on_ctx->path_guiding_bounds_max.y > 3.0f);
     float weight = -1.0f;
     CHECK_CUDA(cudaMemcpy(&weight, on_ctx->d_path_guiding_light_weights, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(weight, 0.0f, 1e-6f);
+    CHECK_CUDA(cudaMemcpy(&weight, on_ctx->d_path_guiding_spatial_directional_weights, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(weight, 0.0f, 1e-6f);
+    weight = 3.0f;
+    CHECK_CUDA(cudaMemcpy(on_ctx->d_path_guiding_light_weights, &weight, sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(on_ctx->d_path_guiding_spatial_directional_weights, &weight, sizeof(float), cudaMemcpyHostToDevice));
+    reset_accumulation_gpu(on_ctx);
+    CHECK_CUDA(cudaMemcpy(&weight, on_ctx->d_path_guiding_light_weights, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(weight, 0.0f, 1e-6f);
+    CHECK_CUDA(cudaMemcpy(&weight, on_ctx->d_path_guiding_spatial_directional_weights, sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(weight, 0.0f, 1e-6f);
     free_gpu_renderer(on_ctx);
     return 0;
@@ -1797,6 +1886,28 @@ static int test_path_guiding_rejects_invalid_enabled_config() {
         rejected_min_weight = std::string(e.what()).find("Path guiding min_weight") != std::string::npos;
     }
     CHECK(rejected_min_weight);
+
+    config.path_guiding.min_weight = 1e-6f;
+    config.path_guiding.spatial_cell_count = 0;
+    bool rejected_cells = false;
+    try {
+        GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+        free_gpu_renderer(ctx);
+    } catch (const std::runtime_error& e) {
+        rejected_cells = std::string(e.what()).find("Path guiding spatial_cell_count") != std::string::npos;
+    }
+    CHECK(rejected_cells);
+
+    config.path_guiding.spatial_cell_count = 16;
+    config.path_guiding.directional_bin_count = 0;
+    bool rejected_bins = false;
+    try {
+        GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+        free_gpu_renderer(ctx);
+    } catch (const std::runtime_error& e) {
+        rejected_bins = std::string(e.what()).find("Path guiding directional_bin_count") != std::string::npos;
+    }
+    CHECK(rejected_bins);
     return 0;
 }
 
@@ -1827,37 +1938,93 @@ static int test_path_guiding_light_selection_uses_mixture_pdf() {
     return 0;
 }
 
+static int test_path_guiding_spatial_directional_selection_uses_matching_pdf() {
+    REQUIRE_GPU();
+    float h_cdf[2] = {0.5f, 1.0f};
+    GpuLightRecord h_lights[2] = {};
+    h_lights[0].centroid = GpuVec3(1.0f, 0.0f, 0.0f);
+    h_lights[1].centroid = GpuVec3(-1.0f, 0.0f, 0.0f);
+    float h_weights[8] = {};
+    h_weights[2] = 9.0f;
+    h_weights[7] = 1.0f;
+    GpuLightRecord* d_lights = nullptr;
+    float* d_cdf = nullptr;
+    float* d_weights = nullptr;
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_lights, 2 * sizeof(GpuLightRecord)));
+    CHECK_CUDA(cudaMalloc(&d_cdf, 2 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_weights, 8 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_out, 4 * sizeof(float)));
+    DeviceMem _lights(d_lights), _cdf(d_cdf), _weights(d_weights), _out(d_out);
+    CHECK_CUDA(cudaMemcpy(d_lights, h_lights, 2 * sizeof(GpuLightRecord), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_cdf, h_cdf, 2 * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_weights, h_weights, 8 * sizeof(float), cudaMemcpyHostToDevice));
+
+    spatial_directional_guided_light_selection_kernel<<<1, 1>>>(d_lights, d_cdf, d_weights, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float out[4] = {};
+    CHECK_CUDA(cudaMemcpy(out, d_out, 4 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(out[0], 0.70f, 1e-5f);
+    CHECK_FLOAT_EQ(out[1], 0.30f, 1e-5f);
+    CHECK(int(out[2]) == 0);
+    CHECK(int(out[3]) == 1);
+    return 0;
+}
+
 static int test_path_guiding_shadow_visibility_updates_light_weight() {
     REQUIRE_GPU();
     ShadowQueue q = {};
     CHECK(test_alloc_shadow_queue(q, 1, 1) == 0);
+    GpuLightRecord h_lights[2] = {};
+    h_lights[0].centroid = GpuVec3(-1.0f, 0.0f, 0.0f);
+    h_lights[1].centroid = GpuVec3(1.0f, 0.0f, 0.0f);
+    GpuLightRecord* d_lights = nullptr;
     float* d_weights = nullptr;
+    float* d_spatial_weights = nullptr;
     GpuVec3* d_accum = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_lights, 2 * sizeof(GpuLightRecord)));
     CHECK_CUDA(cudaMalloc(&d_weights, 2 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_spatial_weights, 8 * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&d_accum, sizeof(GpuVec3)));
-    DeviceMem _weights(d_weights), _accum(d_accum);
+    DeviceMem _lights(d_lights), _weights(d_weights), _spatial_weights(d_spatial_weights), _accum(d_accum);
+    CHECK_CUDA(cudaMemcpy(d_lights, h_lights, 2 * sizeof(GpuLightRecord), cudaMemcpyHostToDevice));
 
-    setup_path_guided_shadow_kernel<<<1, 1>>>(q, d_weights, d_accum);
+    setup_path_guided_shadow_kernel<<<1, 1>>>(q, d_weights, d_spatial_weights, d_accum);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
 
     GpuScene scene = {};
     scene.num_spectral_channels = 1;
+    scene.light_count = 2;
+    scene.lights = d_lights;
     scene.path_guiding_light_weights = d_weights;
     scene.path_guiding_light_count = 2;
     scene.path_guiding_light_mixture = 0.5f;
     scene.path_guiding_learning_rate = 0.5f;
     scene.path_guiding_min_weight = 1e-6f;
+    scene.path_guiding_spatial_directional_weights = d_spatial_weights;
+    scene.path_guiding_spatial_cell_count = 1;
+    scene.path_guiding_directional_bin_count = 4;
+    scene.path_guiding_bounds_min = GpuVec3(-1.0f, -1.0f, -1.0f);
+    scene.path_guiding_bounds_max = GpuVec3(1.0f, 1.0f, 1.0f);
     extend_shadow_kernel<<<1, 1>>>(q, d_accum, scene, 20.0f);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
 
     float weights[2] = {};
+    float spatial_weights[8] = {};
     GpuVec3 accum = {};
     CHECK_CUDA(cudaMemcpy(weights, d_weights, 2 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(spatial_weights, d_spatial_weights, 8 * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaMemcpy(&accum, d_accum, sizeof(GpuVec3), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(weights[0], 0.0f, 1e-6f);
     CHECK(weights[1] > 0.0f);
+    const float first_light_spatial = spatial_weights[0] + spatial_weights[1] + spatial_weights[2] + spatial_weights[3];
+    const float second_light_spatial = spatial_weights[4] + spatial_weights[5] + spatial_weights[6] + spatial_weights[7];
+    CHECK_FLOAT_EQ(first_light_spatial, 0.0f, 1e-6f);
+    CHECK(second_light_spatial > 0.0f);
     CHECK(accum.y > 0.0f);
     test_free_shadow_queue(q);
     return 0;
@@ -2392,6 +2559,7 @@ int main() {
     RUN_TEST(test_light_tree_sampling_depends_on_reference_point);
     RUN_TEST(test_mixed_light_types_have_normalized_reference_pdf);
     RUN_TEST(test_instance_triangle_light_builds_typed_light_record);
+    RUN_TEST(test_emissive_instance_transform_hot_update_requires_full_reload);
     RUN_TEST(test_instance_triangle_light_sampling_pdf_contract);
     RUN_TEST(test_direct_mesh_triangle_light_builds_record_and_pdf_contract);
     RUN_TEST(test_environment_light_builds_record_and_pdf_contract);
@@ -2403,6 +2571,7 @@ int main() {
     RUN_TEST(test_path_guiding_allocates_progressive_light_cache);
     RUN_TEST(test_path_guiding_rejects_invalid_enabled_config);
     RUN_TEST(test_path_guiding_light_selection_uses_mixture_pdf);
+    RUN_TEST(test_path_guiding_spatial_directional_selection_uses_matching_pdf);
     RUN_TEST(test_path_guiding_shadow_visibility_updates_light_weight);
     RUN_TEST(test_restir_di_allocates_and_resets_temporal_reservoirs);
     RUN_TEST(test_restir_di_visible_shadow_updates_reservoir_metadata);
