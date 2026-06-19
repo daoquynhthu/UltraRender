@@ -82,7 +82,7 @@ __device__ bool hit_aabb(const GpuRay& r, const GpuVec3& min_pt, const GpuVec3& 
     return tmin <= tmax;
 }
 
-__device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& ng_out, GpuVec3& ns_out, GpuVec2& uv_out) {
+__device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& ng_out, GpuVec3& ns_out, GpuVec2& uv_out, int& primitive_index_out) {
     bool hit_anything = false;
     float t_closest = t_max;
 
@@ -131,6 +131,7 @@ __device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float
                     t_out = t_tri;
                     ng_out = ng_tri;
                     ns_out = ns_tri;
+                    primitive_index_out = i;
 
                     if (mesh.uvs) {
                         GpuVec2 uv0 = mesh.uvs[i0];
@@ -157,7 +158,7 @@ __device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float
     return hit_anything;
 }
 
-__device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& p_out, GpuVec3& n_out, GpuVec3& ng_out, GpuVec2& uv_out, int& mat_idx_out, int& type_out, int& index_out, bool ignore_lights = false) {
+__device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& p_out, GpuVec3& n_out, GpuVec3& ng_out, GpuVec2& uv_out, int& mat_idx_out, int& type_out, int& index_out, int& primitive_index_out, bool ignore_lights = false) {
     float t_closest = t_max;
     bool hit_anything = false;
     float t_temp;
@@ -177,6 +178,7 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
             mat_idx_out = mat_idx_temp;
             type_out = 0;
             index_out = i;
+            primitive_index_out = -1;
 
             GpuVec3 p_local = (p_temp - scene.spheres[i].center).normalize();
             float phi = atan2f(p_local.z, p_local.x);
@@ -205,9 +207,10 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
         GpuVec3 ng_mesh, ns_mesh;
         GpuVec2 uv_mesh;
         bool hit_mesh = false;
+        int primitive_index_mesh = -1;
 
         if (mesh.bvh_node_count > 0) {
-             hit_mesh = hit_bvh(mesh, r_obj, t_min, t_closest, t_mesh, ng_mesh, ns_mesh, uv_mesh);
+             hit_mesh = hit_bvh(mesh, r_obj, t_min, t_closest, t_mesh, ng_mesh, ns_mesh, uv_mesh, primitive_index_mesh);
         } else {
              for (int j = 0; j < mesh.triangle_count; ++j) {
                 int i0 = mesh.indices[j * 3 + 0];
@@ -229,6 +232,7 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
                     t_mesh = t_tri;
                     ng_mesh = ng_tri;
                     ns_mesh = ns_tri;
+                    primitive_index_mesh = j;
 
                     if (mesh.uvs) {
                         GpuVec2 uv0 = mesh.uvs[i0];
@@ -269,6 +273,7 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
             uv_out = uv_mesh;
             type_out = 2;
             index_out = i;
+            primitive_index_out = primitive_index_mesh;
         }
     }
 
@@ -286,7 +291,8 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
             float t_mesh;
             GpuVec3 ng_mesh, ns_mesh;
             GpuVec2 uv_mesh;
-            if (hit_bvh(mesh, r, t_min, t_closest, t_mesh, ng_mesh, ns_mesh, uv_mesh)) {
+            int primitive_index_mesh = -1;
+            if (hit_bvh(mesh, r, t_min, t_closest, t_mesh, ng_mesh, ns_mesh, uv_mesh, primitive_index_mesh)) {
                 hit_anything = true;
                 t_closest = t_mesh;
                 t_out = t_mesh;
@@ -297,6 +303,7 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
                 uv_out = uv_mesh;
                 type_out = 1;
                 index_out = i;
+                primitive_index_out = primitive_index_mesh;
             }
         } else {
             for (int j = 0; j < mesh.triangle_count; ++j) {
@@ -330,6 +337,7 @@ __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, f
                     n_out = ns_tri;
                     ng_out = ng_tri;
                     mat_idx_out = mesh.material_index;
+                    primitive_index_out = j;
 
                     if (mesh.uvs) {
                         GpuVec2 uv0 = mesh.uvs[i0];

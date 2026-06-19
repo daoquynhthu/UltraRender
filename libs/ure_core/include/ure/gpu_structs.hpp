@@ -316,6 +316,28 @@ struct GpuTexture {
     float spectral_lambda_max = kSpectralLambdaMax;
 };
 
+enum class GpuLightKind : int {
+    Sphere = 0,
+    MeshTriangle = 1,
+    InstanceTriangle = 2,
+    Environment = 3
+};
+
+struct GpuLightRecord {
+    GpuLightKind kind = GpuLightKind::Sphere;
+    int primitive_index = -1;
+    int secondary_index = -1;
+    int material_index = -1;
+    float area = 0.0f;
+};
+
+struct GpuLightTreeNode {
+    int left = -1;
+    int right = -1;
+    int light_index = -1;
+    float weight = 0.0f;
+};
+
 // Phase E: Scalar-only material header. Spectral data stored as SoA in GpuScene.
 struct GpuMaterial {
     MaterialType type;
@@ -441,15 +463,22 @@ struct GpuScene {
 
     GpuTexture* textures;
     int texture_count;
+    GpuLightRecord* lights;
     int* light_indices;
+    float* light_selection_pmf;
     float* light_selection_cdf;
     float* light_alias_prob;
     int* light_alias_index;
+    GpuLightTreeNode* light_tree_nodes;
+    int light_tree_node_count;
+    int light_tree_root;
     float* path_guiding_light_weights;
     int path_guiding_light_count;
     float path_guiding_light_mixture;
     float path_guiding_learning_rate;
     float path_guiding_min_weight;
+    int environment_light_direct_sampling;
+    float environment_light_intensity;
     GpuVec3* restir_di_origins;
     GpuVec3* restir_di_directions;
     float* restir_di_max_dist;
@@ -565,6 +594,7 @@ struct HitQueue {
     int* mat_ids = nullptr;
     int* hit_types = nullptr;
     int* hit_indices = nullptr;
+    int* hit_primitive_indices = nullptr;
 };
 
 } // namespace ure::gpu

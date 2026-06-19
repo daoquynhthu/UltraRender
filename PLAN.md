@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-17 (Phase V GPU geometry acceleration planning)
+最后更新: 2026-06-19 (Phase R-P1 typed mesh/environment light sampling foundation)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -25,6 +25,7 @@
 远期 Phase S:   Session API + 脚本化                                已完成
 远期 Phase M:   材质系统                                             进行中
 远期 Phase L:   百万级光谱域 / packet-resolution 解耦                已完成 (L.0-L.12)
+远期 Phase Q:   URE 原生场景系统 / 程序化工业格式                    计划中
 远期 Phase R:   工业级/科研级积分器升级                              进行中
 远期 Phase V:   GPU 几何加速结构 / BVH / OptiX / Clustered Geometry   计划中
 远期 Phase W:   波动光学求解器 / 相干场输运                          进行中
@@ -307,6 +308,7 @@ Phase G / Phase H / Phase I / Phase C 与 Phase J 无依赖关系，可并行执
 - **Phase A** (SoA 队列) → 依赖 Phase P 的 Transform/World 架构 + Phase 0 的 RenderConfig
 - **Phase C** (契约) → 无依赖，可插队
 - **Phase E** (N 通道光谱) → 已完成。它依赖 Phase A (SoA) + Phase G (glTF 光谱扩展) + Batch 4 测试 (OT1/OT5/OT6)，并已完成 E.0-E.5 的 runtime-N、SPD、色散、Mueller、wavelength PDF 与静态审计门禁。后续 specular manifold、rough dielectric BTDF、advanced spectral MIS 和材质系统进入 Phase K/M，不再作为 Phase E 阻塞项。
+- **Phase Q** (URE 原生场景系统 / 程序化工业格式) → 依赖 Phase S 的 retained SceneIR/session 边界、Phase M/L 的 material/resource graph 基础，并为 Phase R/V/W/U/X 提供权威 authoring contract。Phase Q 的职责是定义 `.ure` / `.urescene` / `.urepkg` 原生格式、schema/versioning、程序化描述、能力声明、validation/compiler/cache 和外部格式 adapter 边界。glTF/USD/MaterialX 只能作为可选导入/导出适配层，不能定义 UltraRender 的核心能力边界。
 - **Phase R** (工业级/科研级积分器升级) → 依赖 Phase E 的 spectral PDF/transport closure、Phase L 的 domain/packet 解耦、Phase S 的 session/progressive API，并为 Phase W 的 wave solver 提供不被 radiometric 调度瓶颈拖累的 baseline。Phase R 负责 radiometric integrator 的调度、采样、MIS、light transport algorithm 和 benchmark contract；Phase W 负责相干/衍射/局部全波求解，两者不能混淆。
 - **Phase V** (GPU 几何加速结构 / BVH / OptiX / Clustered Geometry) → 依赖 Phase P/S 的 retained scene/session 边界、Phase M/L 的 resource/material graph、Phase R 的 validation suite。Phase V 处理 GPU traversal/build/refit/compaction/TLAS/BLAS/clustered geometry/optional OptiX backend；它不改变 radiometric estimator，也不替代 Phase W 的 wave solver。UltraRender 不引入独立 host traversal backend，host 侧只负责构建、调度、资源上传和验证。
 - **Phase W** (波动光学求解器) → 依赖 Phase E 的 spectral/polarization 基线与 Phase L 的 high-resolution spectral domain/resource contract。W.1/W.2/W.3 可在 Phase M 完成前推进；W.4 diffractive material operators 依赖 Phase M 的 MaterialGraph/MaterialX 语义稳定。Phase W 不允许把相干/衍射能力隐藏在现有 radiometric path tracer 中，必须通过显式 feature switch opt-in，并在 unsupported film/merge/API/material path 上 fail-loud。
@@ -1508,24 +1510,24 @@ UltraRender = 光谱渲染器 + 物理模拟 + 声学合成
 
 | 维度 | 当前 (Phase 0/F) | Phase E 完成后 | 远期目标 |
 |------|------------------|---------------|---------|
-| 场景描述 | glTF/GLB only | glTF 2.0 + URE 扩展 | USD + Hydra 委托 |
+| 场景描述 | glTF/GLB only | glTF 2.0 + URE 扩展 | URE native scene package；USD/Hydra 只是外部生态 adapter |
 | API 可集成性 | CLI only | C++ 公共 API | Python API + 脚本 |
-| 材质系统 | 硬编码 BSDF | glTF PBR + URE 光谱 | 节点图 (MaterialX/OSL) |
+| 材质系统 | 硬编码 BSDF | glTF PBR + URE 光谱 | URE native MaterialGraph；MaterialX 只是 adapter |
 | 交互性 | 离线帧 → BMP | 渐进式渲染 | 视口交互 + 热重载 |
 | 分发 | 单机 CUDA | 单机 + 多卡 | 分布式 (网络/云) |
 
 ### 新增远期 Phase
 
 ```
-Phase E ──→ Phase S ──→ Phase M ──→ Phase L ──┬──→ Phase R ──→ Phase V ──→ Phase W ──→ Phase U ──→ Phase K (持续)
-                                               └──→ Phase W foundation oracles
+Phase E ──→ Phase S ──→ Phase M ──→ Phase L ──→ Phase Q ──┬──→ Phase R ──→ Phase V ──→ Phase W ──→ Phase U ──→ Phase K (持续)
+                                                           └──→ Phase W foundation oracles
                │
                ├──→ Phase X (可并行)
                │
                └──→ Phase C/D (分布式, 可并行)
 ```
 
-与中短期的关系：Phase S 和 Phase X 的部分工作可在 Phase E 完成后立即开始；Phase M 依赖 Phase G 的材质扩展 + Phase E 的光谱引擎；Phase L 是 README “百万级波长通道”承诺的真正架构阶段，必须在 MaterialX/USD/插件把材质语义固化到 `GpuMaterialData + GpuSpectrum[32]` 之前完成；Phase R 是 radiometric spectral/polarimetric integrator 的工业级/科研级升级阶段，负责调度、采样、MIS、light/path guiding 和高级路径空间算法，并应先于把 Phase W 的相干/衍射能力暴露给外部生态完成核心 baseline；Phase V 是几何加速结构阶段，必须在 Phase W/U/K 继续放大场景复杂度前解决 mesh-local BVH、TLAS/BLAS、dynamic/refit、optional OptiX 和 clustered geometry contract；Phase W 是从 spectral/polarimetric path tracer 升级到可选 wave-optics solver 的架构阶段，必须消费 Phase L/R/V 的 spectral domain/resource, integrator, and acceleration contracts，并在 coherent film/distributed merge/API 语义稳定后再让 Phase U/USD 暴露相干与衍射能力；Phase U 依赖 Phase S 的稳定 API，并应消费 Phase L/R/V/W 的 resource, integrator, acceleration, and wave-optics contracts。
+与中短期的关系：Phase S 和 Phase X 的部分工作可在 Phase E 完成后立即开始；Phase M 依赖 Phase G 的材质扩展 + Phase E 的光谱引擎；Phase L 是 README “百万级波长通道”承诺的真正架构阶段，必须在 MaterialX/USD/插件把材质语义固化到 `GpuMaterialData + GpuSpectrum[32]` 之前完成；Phase Q 是 UltraRender 自己的原生 authoring/package 格式阶段，必须在 Phase R/V/W/U/X 把高级求解器、加速结构、波动光学、物理/声学和插件语义扩散到外部生态前确定权威 schema、程序化描述、能力声明、版本迁移和 fail-loud validation contract；Phase R 是 radiometric spectral/polarimetric integrator 的工业级/科研级升级阶段，负责调度、采样、MIS、light/path guiding 和高级路径空间算法，并应先于把 Phase W 的相干/衍射能力暴露给外部生态完成核心 baseline；Phase V 是几何加速结构阶段，必须在 Phase W/U/K 继续放大场景复杂度前解决 mesh-local BVH、TLAS/BLAS、dynamic/refit、optional OptiX 和 clustered geometry contract；Phase W 是从 spectral/polarimetric path tracer 升级到可选 wave-optics solver 的架构阶段，必须消费 Phase L/R/V/Q 的 spectral domain/resource, integrator, scene authoring, and acceleration contracts，并在 coherent film/distributed merge/API 语义稳定后再让 Phase U/USD 暴露相干与衍射能力；Phase U 依赖 Phase S/Q 的稳定 API 和原生场景 schema，并应消费 Phase L/R/V/W/Q 的 resource, integrator, acceleration, wave-optics, and scene-package contracts。
 
 ---
 
@@ -1798,7 +1800,9 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 
 ### Phase R — 工业级/科研级积分器升级 / Research-Grade Radiometric Integrator
 
-**状态**: 进行中。R.0-R.12 local baseline 已闭环：smoke benchmark 入口、active-count wavefront scheduling、queue overflow telemetry、统一采样维度、sphere light weighted alias sampling、scene/CIE wavelength proposal、narrowband/SPD proposal variance oracle、HG/Rayleigh phase 三元闭合、Mie unsupported gate、Lambertian/cloth/metal/rough dielectric/thin-film energy/PDF oracles、默认关闭的 progressive direct-light path guiding、默认关闭且显式标记 biased 的 temporal ReSTIR DI reservoir baseline、specular manifold/BDPT/VCM 的 radiometric config + PDF/Jacobian oracle + fail-loud production gate、MLT/primary-sample-space 的默认关闭配置 + deterministic replay mutation oracle + production fail-loud gate、integrator mode/sampler/quality preset 的统一 `RenderConfig`/JSON/CLI/C ABI/pyure API 面和 unsupported-combination fail-loud，以及可本地运行的 `run_phase_r_validation_suite.ps1` industrial validation contract 均已有代码和测试/静态审计。R.7 的 `path_guiding.min_weight` 配置 parity 和 invalid enabled config gate 已作为历史补强提交，不代表 R.7 仍未完成。farm dashboard、Nsight 长跑、light tree、非 sphere light、Mie resource、完整跨场景统计验证不挂在 R.0-R.12 local baseline 下，分别归 K.5/K.6 或后续生产化阶段。
+**状态**: 进行中，不能视为 Phase R 完成。R.0-R.12 只闭环了 local contract baseline：smoke benchmark 入口、active-count wavefront scheduling、queue overflow telemetry、统一采样维度、sphere light weighted alias sampling、scene/CIE wavelength proposal、narrowband/SPD proposal variance oracle、HG/Rayleigh phase 三元闭合、Mie unsupported gate、Lambertian/cloth/metal/rough dielectric/thin-film energy/PDF oracles、默认关闭的 progressive direct-light path guiding baseline、默认关闭且显式标记 biased 的 temporal ReSTIR DI reservoir baseline、specular manifold/BDPT/VCM 的 radiometric config + PDF/Jacobian oracle + fail-loud production gate、MLT/primary-sample-space 的默认关闭配置 + deterministic replay mutation oracle + production fail-loud gate、integrator mode/sampler/quality preset 的统一 `RenderConfig`/JSON/CLI/C ABI/pyure API 面和 unsupported-combination fail-loud，以及可本地运行的 `run_phase_r_validation_suite.ps1` local validation contract。R.0-R.12 不代表高级积分器生产化完成；它只证明默认 wavefront path tracer 的若干采样/调度基础、API 合同、数学 oracle、拒绝边界和本地验证链已建立。R.7 的 `path_guiding.min_weight` 配置 parity 和 invalid enabled config gate 已作为历史补强提交，不代表 R.7 仍未完成。R-P1 已进入实现：首批已把 sphere-only light list 升级为 typed light record，实例/直接 mesh triangle light 与 opt-in environment light 可进入 host light distribution，surface/volume NEE 与 emissive-hit/environment-miss MIS 开始消费统一 selection/PDF 合同；base light selection 现在上传 O(1) PMF、兼容 CDF/alias，并增加 GPU resident binary light tree 作为层级采样基础；SceneIR 已新增 `QuadLightNode`，compiler 将 analytic quad area light 编译为 direct emissive mesh 以进入同一 light sampling/tree/MIS 路径。`gpu_test_render` 覆盖 instance triangle、direct mesh triangle、environment record/PDF/config gate 和 light-tree distribution；`test_gltf_frontend` 覆盖 SceneIR quad light compile/fail-loud。完整 light-type parity suite、复杂 emissive mesh、light-tree quality/SBVH-style clustering、多场景 variance/MSE 曲线仍未完成。
+
+**必须显式承认的未生产化能力**: spatial-directional / BSDF-product path guiding、unbiased ReSTIR DI、spatial ReSTIR DI、ReSTIR PT/path reuse、specular manifold GPU solver、BDPT、VCM、MLT chain integrator、light tree、非 sphere light 完整高级采样、真实 Mie phase resource/parameterization、多场景 variance/MSE 收益曲线、farm/Nsight 长跑 dashboard 均未完成。当前代码对其中若干能力是 deliberate fail-loud，而不是实现完成；后续必须作为 Phase R production work 继续推进，不能再把 API/数学合同/拒绝边界包装成生产化交付。
 
 **目标**: 将当前 CUDA spectral/polarimetric wavefront path tracer 从“可用的物理路径追踪器”升级为工业级/科研级 radiometric light transport integrator。Phase R 不替代 Phase W：Phase R 处理默认非相干 radiance/Stokes transport 的调度、采样、MIS、路径空间算法和性能/收敛基准；Phase W 处理相干场、衍射、部分相干和局部全波求解。任何高级积分器都必须保持 Phase E/L 的 explicit wavelength PDF、spectral domain/resource contract、Stokes/Mueller 语义和 fail-loud wave feature policy。
 
@@ -1813,6 +1817,21 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 | Polarization | Stokes/Mueller 下的 radiometric estimator consistency 和 depolarization validation | Jones/complex coherent interference |
 | Distributed/multi-GPU | sample-space/shard merge 对 integrator estimator 的无偏性和 determinism | coherent field frame merge，归 W.11 |
 | Performance | occupancy/launch count/memory traffic/variance benchmark suite | 单纯 denoiser 替代物理收敛 |
+
+#### 未生产化清单（当前核实结论）
+
+| 能力 | 当前状态 | 证据/边界 |
+|------|----------|-----------|
+| Spatial-directional / BSDF-product path guiding | 未生产化 | 只有 per-light visible contribution guide baseline；没有 spatial-directional cache、BSDF-product guiding 或场景级收益曲线 |
+| Unbiased / spatial ReSTIR DI | 未生产化 | `RestirDirectConfig` 有字段，但 spatial reuse 和 unbiased 请求在 GPU 初始化前 fail-loud |
+| ReSTIR PT / path reuse | 未生产化 | 当前只保存 direct-light visible candidate reservoir；没有 path-space reservoir/reconnection/reuse |
+| Specular manifold GPU solver | 未生产化 | 只有 config 和 specular-interface oracle；production solver 请求 fail-loud，glass direct-light 继续 blocker policy |
+| BDPT / VCM | 未生产化 | 只有 Phase R 规划和 specular manifold 相关合同；没有 light subpath、connection、merging 或 MIS 权重生产路径 |
+| MLT chain integrator | 未生产化 | 只有 primary-sample mutation oracle 和 config；GPU MLT integrator 请求 fail-loud |
+| Light tree | baseline 已接入，未完整生产化 | GPU resident binary light tree 已用于 base light sampling，per-light PMF 提供 O(1) PDF；仍缺空间/方向/能量联合分群、动态重建成本控制和多场景收益曲线 |
+| 非 sphere light 完整高级采样 | 部分完成 | Instance/direct mesh triangle、SceneIR analytic quad light 和 opt-in environment light 已有 selection/PDF/eval baseline 与 targeted tests；复杂 emissive mesh variance/MSE、全 light-type parity suite 和生产级 tree clustering 仍未完成 |
+| Mie resource | 未生产化 | `Mie` selector 有 unsupported gate；没有真实 Mie 参数/resource/table |
+| 多场景 variance/MSE 收益曲线 | 未生产化 | R.12 只有 local validation smoke 和 targeted tests；没有 Cornell/caustic/volume/multi-light 等完整收益曲线 |
 
 #### 子步骤
 
@@ -1831,6 +1850,63 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 | R.10 | MLT/primary-sample-space integrator：为困难焦散/低概率路径提供可选科研级 integrator，不作为默认交互 preview | ✅ contract/oracle baseline 完成：新增默认关闭的 `MltIntegratorConfig` 和 `integrator.mlt` JSON/CLI 入口；新增 `ure::integrator::PrimarySampleMutation` oracle，覆盖 seed/dimension/mutation deterministic replay、small-step wrapped symmetric proposal PDF、large-step uniform proposal 和 Metropolis acceptance ratio；GPU renderer 对 enabled MLT production 请求 fail-loud，避免在未实现独立 chain scheduling、path replay 和 contribution normalization 前静默退回默认 wavefront tracer。真正 caustic/low-probability 收敛收益、reference scenes、chain normalization、spectral/path-state mutation replay 和统计 dashboard 归 R.12/K.6 后续生产化验证 |
 | R.11 | Integrator API/config：`RenderConfig` / JSON / CLI / C ABI / Session / pyure 增加 integrator mode、sampler、guiding、reuse、quality preset；unsupported combination fail-loud | ✅ 完成：新增统一 `IntegratorRuntimeConfig`，`mode/sampler/quality_preset/allow_biased_reuse` 贯穿 JSON、CLI、GPU `RenderConfig`、C ABI 和 pyure；`path_guided/restir_di/specular_manifold/mlt` mode 会显式映射到对应 feature config，默认 wavefront 行为不变；primary-sample-space sampler、ReSTIR biased reuse、path-guided/specular/MLT feature gate 等非法组合在 GPU 初始化前 fail-loud；`test_config`、`test_integrator`、`test_session`、pyure smoke 和 Phase R static audit 覆盖配置 parity 与非法组合 |
 | R.12 | Industrial validation suite：建立 correctness/performance/variance dashboard，固定每个 integrator mode 的允许误差、最小收益和不回归门槛 | ✅ local baseline 完成：新增 `tools/benchmarks/run_phase_r_validation_suite.ps1`，本地统一运行全量 build、Phase R static audit、R 相关 CTest 子集（config/integrator/session/pyure/render/spectral/volume/polarization）和 integrator smoke benchmark；输出 `output/benchmarks/phase_r_validation_suite.json`，包含 CTest 计数、benchmark `samples_per_second`/`spp_per_second`、阈值和分步耗时。`run_phase_r_integrator_smoke.ps1` 默认场景改为真实 benchmark glTF，不再依赖 `{}` placeholder。长 benchmark farm、Nsight dashboard、完整多场景收益曲线和性能不回归历史数据库归 K.5/K.6 后续生产化 |
+| R.13 | Production path guiding：spatial-directional / BSDF-product guiding cache，支持 spectral/PDF metadata、progressive update、reset/scene mutation 语义和收益验证 | 默认关闭；开启后不是 per-light scalar guide；固定多场景 variance/MSE 收益曲线证明有效，否则不得标记完成 |
+| R.14 | Production ReSTIR DI/PT：unbiased temporal/spatial ReSTIR DI 和 ReSTIR PT/path reuse，携带 wavelength PDF、Stokes-compatible throughput、material/phase lobe PDF 和 visibility metadata | biased preview 与 unbiased production mode 分离；spatial/unbiased 请求不再 fail-loud；有 reference scenes 和偏差/方差验证 |
+| R.15 | Specular manifold / BDPT / VCM production：实现 SDS/specular manifold solver、light subpath connection、vertex merging、MIS 权重和焦散/玻璃直接光 production path | specular dielectric direct lighting 不再靠 blocker policy；BDPT/VCM/SM 有独立 integrator mode、场景级 Jacobian/PDF/energy gates |
+| R.16 | MLT chain integrator production：实现 independent chains、primary-sample replay、large/small-step scheduling、normalization、burn-in/acceptance stats 和 spectral path-state mutation | MLT mode 不再 fail-loud；输出 chain stats；caustic/low-probability scenes 有收益曲线 |
+| R.17 | Production light sampling：light tree、非 sphere light、mesh/env/area lights、volume NEE 统一 selection/PDF/MIS 合同 | sphere-only alias table 不再是高级采样上限；所有 light type 有 PDF parity tests |
+| R.18 | Volume phase resources：真实 Mie parameter/resource/table，支持 spectral medium resource、sampling/PDF/eval 三元闭合和 energy gates | `Mie` 不再只是 unsupported selector；缺资源仍 fail-loud |
+| R.19 | Full variance/MSE benchmark suite：固定 Cornell/multi-light/glass caustic/volume/dense spectral resource/multi-GPU shard scenes，输出 variance、MSE、spectral color error、time-to-error、VRAM 和 launch metrics | 本地 smoke、farm long-run 和 JSON schema 稳定；每个 production integrator mode 有适用范围和失败边界 |
+
+#### Phase R 后续生产化阶段
+
+R.13-R.19 是能力编号，不是线性施工顺序。实际执行按依赖拆成 R-P1..R-P7：R-P 阶段可以先完成某个编号靠后的基础能力，只要它是编号靠前能力的前置依赖。每个阶段结束时都要让对应高级 mode 从 fail-loud / baseline preview 进入可验证生产路径，或者明确保留 fail-loud 并说明尚未进入下一阶段。不能再用“API 已有”“数学 oracle 已有”“拒绝边界已验证”替代能力完成。
+
+| 能力编号 | 能力目标 | 执行阶段 | 排序理由 |
+|----------|----------|----------|----------|
+| R.17 | Production light sampling / light tree / non-sphere lights | R-P1 | path guiding、ReSTIR、BDPT/VCM、MLT 都依赖统一 light selection/pdf/eval 合同，因此先执行 |
+| R.13 | Spatial-directional / BSDF-product path guiding | R-P2 | 依赖 R-P1 的 light PDF 合同和 light identity；随后建立 guiding cache |
+| R.14 | Unbiased/spatial ReSTIR DI + ReSTIR PT | R-P3 | 依赖 R-P1 的 light/reservoir target PDF；可与 R-P2 并行，但不能早于 R-P1 |
+| R.18 | Mie / volume phase resources | R-P6 | 可与 R-P2/R-P3 并行；进入 R-P7 前必须完成 |
+| R.15 | Specular manifold + BDPT/VCM | R-P4 | 依赖 R-P1 的 light endpoint/PDF，也会消费 R-P2/R-P3 的 benchmark scene pack |
+| R.16 | MLT chain integrator | R-P5 | 依赖 R-P4 的困难路径 contribution evaluator 和 replay contract |
+| R.19 | Full variance/MSE benchmark suite | R-P7 | 最终生产化门禁，汇总 R-P1..R-P6 的 correctness/performance 证据 |
+
+| Stage | 目标 | 必须交付 | 验证门槛 |
+|-------|------|----------|----------|
+| R-P1 | Production light sampling foundation | 统一 light resource abstraction；sphere、mesh area、emissive triangle、environment、analytic area light 的 selection/pdf/eval 接口；light tree 或等价层级采样结构；surface/volume NEE 共享同一 PDF 合同；材质 emission/resource mutation 后 tree/alias 增量或全量 rebuild 语义。进度：typed `GpuLightRecord`、instance/direct mesh triangle light distribution、triangle solid-angle PDF、opt-in environment direct sampling、O(1) PMF PDF、GPU resident binary light tree、SceneIR `QuadLightNode` analytic area light、surface/volume NEE、emissive-hit MIS 与 environment-miss MIS 统一入口已落地；`gpu_test_render` 已覆盖 instance triangle、direct mesh triangle、environment record/PDF、light-tree PMF/PDF/sampling 和 invalid enabled config gate；`test_gltf_frontend` 覆盖 SceneIR quad light compile 与 degenerate area fail-loud；`test_config`/C ABI/pyure smoke 覆盖 environment direct sampling 配置面。剩余完整 light-type parity suite、复杂 emissive mesh、tree clustering/quality、材质/resource mutation 后 tree 增量策略和多场景 variance/MSE 生产验证未完成 | PDF parity tests 覆盖所有 light type；surface/volume NEE 和 hit-light MIS 消费同一 selection PDF；多光源场景 variance/MSE 不低于 sphere-only baseline；不支持的 light type 在 scene compile fail-loud |
+| R-P2 | Spatial-directional / BSDF-product path guiding | GPU resident guiding cache；spatial cell + direction distribution；BSDF-product 或 radiance-product proposal；spectral wavelength PDF metadata；progressive update、decay、reset、scene mutation 和 multi-GPU shard merge 语义；默认关闭并通过 config/API 显式启用 | Guide sampling PDF 与实际 proposal 完全一致；Cornell、多光源、复杂材质、volume 至少四类场景有 variance/MSE/time-to-error 曲线；错误 cache epoch、非法参数和 unsupported material path fail-loud |
+| R-P3 | Unbiased/spatial ReSTIR DI + ReSTIR PT | 将现有 biased temporal DI preview 与 production unbiased mode 分离；实现 temporal + spatial reservoir reuse；visibility/reconnection metadata；wavelength PDF、material/phase lobe PDF、Stokes-compatible throughput；ReSTIR PT/path reuse 独立 mode 和 sample-space contract | Unbiased mode 有偏差测试和 reference comparison；spatial/unbiased 不再 fail-loud；biased preview 必须在输出 metadata 中显式标记；multi-light/occlusion/volume 场景有收益曲线 |
+| R-P4 | Specular manifold solver + BDPT/VCM | GPU specular manifold Newton solve；SDS/specular chain connection；light subpath generation；camera/light subpath connection；vertex merging radius schedule；MIS 权重；spectral/polarimetric throughput 和 Jacobian 合同；glass direct-light blocker policy 替换为真实路径空间算法 | Glass caustic、SDS、small emitter、rough/specular mixed path 场景有 correctness oracle 和收益曲线；BDPT/VCM/specular-manifold 各自 mode 不再 fail-loud；Jacobian/PDF/energy gates 必须通过 |
+| R-P5 | MLT chain integrator | Independent chain scheduler；primary-sample-space replay；large/small step proposal；burn-in、acceptance stats、normalization、chain seeding；spectral wavelength/path-state mutation；与 BDPT/VCM 或 default path tracer 的 contribution evaluator 边界 | MLT mode 不再 fail-loud；输出 chain diagnostics；低概率焦散/小光源/高遮挡场景 time-to-error 优于 default baseline；deterministic replay 和 distributed shard seed contract 通过 |
+| R-P6 | Volume phase resources and Mie production | Mie parameter/resource/table；spectral medium resource；phase eval/pdf/sample 三元闭合；anisotropy/resource interpolation；medium mutation/rebuild 语义；volume NEE 与 path continuation PDF 一致 | `VolumePhaseFunction::Mie` 不再只是 unsupported selector；缺资源或非法参数仍 fail-loud；Rayleigh/HG/Mie 能量、归一化、sampling-PDF 和 variance tests 全覆盖 |
+| R-P7 | Full industrial validation suite | 固定 benchmark scene pack；reference images/metrics；variance、MSE、spectral color error、time-to-error、samples/sec、VRAM、kernel launch、occupancy 指标；local quick gate + farm long-run gate + Nsight dashboard schema；每个 production mode 的适用范围和拒绝边界文档 | 本地 suite 可复现；farm/Nsight 输出稳定 JSON；每个高级 integrator mode 至少有一个正收益场景和一个边界失败场景；Phase R completion 只能在 R-P1..R-P7 全部闭环后声明 |
+
+#### Phase R 执行顺序
+
+```
+R.0-R.12 local baseline (done)
+        │
+        ▼
+R-P1 production light sampling foundation
+        │
+        ├──► R-P2 spatial-directional / BSDF-product path guiding
+        │
+        ├──► R-P3 unbiased/spatial ReSTIR DI + ReSTIR PT
+        │
+        └──► R-P6 Mie / volume phase resources
+        │
+        ▼
+R-P4 specular manifold + BDPT/VCM
+        │
+        ▼
+R-P5 MLT chain integrator
+        │
+        ▼
+R-P7 full variance/MSE + farm/Nsight validation
+```
+
+R-P1 必须先于 R-P2/R-P3/R-P4，因为 path guiding、ReSTIR、BDPT/VCM 都依赖统一 light selection/pdf contract。R-P6 可与 R-P2/R-P3 并行，但必须在体积 benchmark 被纳入 R-P7 前完成。R-P5 应在 R-P4 之后推进，否则 MLT 没有足够可靠的困难路径 contribution evaluator。Phase V 的 GPU acceleration work 可以与 R-P2/R-P3 并行，但不得改变 estimator 语义；如果 traversal backend 尚未稳定，高级 integrator 仍必须在当前 CUDA traversal 上给出 correctness evidence。
 
 #### 完成标准
 
@@ -1840,7 +1916,8 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 - 多光源和体积场景的 light sampling / MIS 有无偏 PDF 证明和 benchmark 收益。
 - Spectral MIS/path guiding 不把 RGB luminance 当作真实光谱重要性。
 - 玻璃/焦散直接光通过 specular manifold/BDPT/VCM 等显式路径空间算法解决，不恢复错误的 transparent shadow shortcut。
-- 高级 integrator mode（path guiding、ReSTIR、BDPT/VCM、MLT）均为显式配置，unsupported feature fail-loud，且有 reference scene、variance/performance 指标和文档化适用范围。
+- 高级 integrator mode（path guiding、ReSTIR、BDPT/VCM、MLT）均有生产路径，不只是显式配置、数学 oracle 或 unsupported fail-loud；每个 mode 都有 reference scene、variance/MSE/performance 指标和文档化适用范围。
+- Light tree、非 sphere light 高级采样、真实 Mie resource 和完整多场景 variance/MSE 收益曲线全部纳入 R-P1/R-P6/R-P7；任一缺失都意味着 Phase R 不能标记完成。
 
 ---
 
@@ -2010,32 +2087,128 @@ struct MaterialGraph {
 
 ---
 
+### Phase Q — URE 原生场景系统 / Procedural Industrial Scene Format
+
+**状态**: 计划中。
+
+**目标**: 建立 UltraRender 自己的第一等场景格式和程序化 authoring contract。`.ure` / `.urescene` / `.urepkg` 是权威格式；SceneIR 是编译后的内部 IR；glTF、USD、MaterialX、EXR、SPD 等只能作为导入/导出 adapter 或资源交换格式，不能限制 UltraRender 的核心能力。Phase Q 必须覆盖当前和规划中的场景、光谱、材质、介质、体积、光源、积分器、几何加速、波动光学、物理、声学、视频流、分布式和脚本化能力，并为未来物理/声学模型改变保留 schema migration 与开放 extension slot。
+
+#### 核心原则
+
+- **URE native first**：外部格式兼容我们；不是我们削弱能力去兼容外部格式。
+- **Authoring 与 runtime 分离**：`.urescene` / `.urepkg` 负责可编辑、可审查、可迁移的 source；SceneIR/RuntimeIR 负责编译后执行。
+- **程序化但可复现**：procedural graph 是默认安全路径；脚本只能作为显式 build step 生成确定性 SceneIR/resource/cache，不允许在 GPU 核心路径动态解释。
+- **能力声明先于执行**：场景必须声明 `requires` / `optional` feature set；renderer 在 scene compile 或 session create 前验证支持度，unsupported feature 必须 fail-loud。
+- **版本化与迁移内建**：format version、schema version、physics/acoustic solver version、resource hash、migration policy 和 deprecation window 是格式的一部分。
+- **接口开放但边界明确**：物理、声学、波动、积分器、插件、视频流和程序化系统保留 typed extension slot；未知 required extension 失败，未知 optional extension 保留 metadata 并警告。
+- **二进制 cache 不是权威源**：compiled cache 可加速 load/farm 分发，但必须可由 source manifest 重建，并用 source hash / compiler hash 验证。
+
+#### 格式定位
+
+| 层 | 建议扩展名 | 职责 |
+|----|------------|------|
+| Project/package | `.urepkg` | 可搬运工程包；包含 manifest、source、resources、cache、validation output 和 provenance |
+| Scene source | `.urescene` 或 `.ure` | 文本 schema；定义 scene graph、resource graph、procedural graph、solver/render contracts |
+| Binary cache | `.urecache` | SceneIR/RuntimeIR、GPU upload plan、acceleration metadata、spectral/resource tile cache；非权威，可删除重建 |
+| Resource bundle | package 内 typed resources | geometry、spectral tables、medium fields、Mie tables、complex-field assets、audio/physics/video resources |
+| Adapter output | `.gltf/.usd/.mtlx/...` | 外部互通导出；能力不完整时必须记录 loss report 或直接拒绝 |
+
+#### 原生 schema 域
+
+| Domain | 必须覆盖的原生语义 |
+|--------|-------------------|
+| Scene graph | entity hierarchy、instance、transform animation、visibility/category mask、AOV tags、mutation scope |
+| Geometry | mesh、curve、sphere/analytic primitives、volumes、clustered geometry、BLAS/TLAS hints、dynamic/refit policy、future deformation stream |
+| Material | MaterialGraph 全量节点、BSDF layering、spectral IOR/eta/k、procedural nodes、texture/resource expression、preset provenance |
+| Spectral resources | domain bins、packet lanes、sampled/basis/tiled resources、emission/albedo/n/k/sigma tables、budget/cache policy |
+| Lights | sphere、mesh/area、environment、procedural/emissive field、light tree resource、selection/PDF metadata |
+| Medium/volume | homogeneous/heterogeneous medium、HG/Rayleigh/Mie resources、phase eval/pdf/sample contract、spectral sigma resources |
+| Integrator | mode、sampler、path guiding/ReSTIR/BDPT/VCM/MLT requirements、bias declaration、validation scene tags |
+| Wave optics | camera diffraction、coherent/partial-coherent field、OPL/Jones/complex spectrum、apertures、gratings/DOE、local full-wave tables |
+| Physics | rigid/soft/fluid placeholder schema、collision resources、time step, coupling channels、solver-versioned extension slot |
+| Acoustic | materials、emitters/listeners、room/geometry coupling、modal/acoustic ray resources、solver-versioned extension slot |
+| Animation/video | camera paths、transform tracks、spectral/video texture stream、time sampling、frame-rate and shutter contract |
+| Procedural | typed procedural graph、scatter/instancing/generator nodes、parameter domains、deterministic seed, build cache key |
+| Scripting | explicit opt-in build scripts, sandbox policy、inputs/outputs、version lock、cache/provenance hash |
+| Distributed/farm | sample/shard policy、spectral shard metadata、coherent merge mode、resource locality、checkpoint/resume contract |
+| Validation | required references、metric set、tolerance、benchmark tags、expected fail-loud boundaries |
+
+#### 程序化描述模型
+
+程序化能力分三层，默认只启用前两层：
+
+| 层 | 默认 | 用途 | 约束 |
+|----|------|------|------|
+| Declarative graph | ✅ | scatter、instancing、spectrum generator、light rig、volume field、camera path、batch variation | typed node + typed output；必须可静态验证和 deterministic rebuild |
+| Native procedural plugin | ❌ | 高性能专用 generator 或 solver-side resource producer | 通过 Phase X ABI 注册；必须声明 input/output schema、version 和 capability |
+| Script build step | ❌ | Python/Lua/WASM 等生成 `.urescene` fragment、SceneIR 或 resource cache | 显式开启；sandbox；锁定解释器/依赖；输出必须 hash；运行时 GPU kernel 不解释脚本 |
+
+#### Adapter 策略
+
+| 外部格式 | 地位 | 规则 |
+|----------|------|------|
+| glTF/GLB | asset importer/exporter | 只承载通用 geometry/PBR/texture/animation；不能作为高级场景主语言；无法表达的 URE feature 导出时 loss report 或 fail-loud |
+| USD/Hydra | DCC/viewport ecosystem adapter | U.1 schema 必须映射到 URE native schema；USD 不是权威 format；Hydra 委托消费 SceneIR/session |
+| MaterialX | material graph adapter | MaterialX import/export 映射到 URE MaterialGraph；不能限制 URE 原生 BSDF/wave/material resource 节点 |
+| EXR/HDR/SPD/table | resource exchange | 可作为资源 payload；resource semantics 由 URE schema 定义 |
+| Legacy `.scene` | 不支持 | 不恢复、不兼容；需要转换时走一次性 migration tool 输出 URE native |
+
+#### 子步骤
+
+| Step | 内容 | 完成判据 |
+|------|------|----------|
+| Q.0 | Audit：列出 SceneIR、RenderConfig、WaveOpticsConfig、IntegratorRuntimeConfig、MaterialGraph、SpectralResource、SessionDiff、distributed metadata 当前所有无法由 glTF 表达的语义 | 产出 `docs/Phase_Q_Native_Scene_Format.md`；每个高级 feature 有 native schema owner 或 open extension slot |
+| Q.1 | 格式身份与 package layout：确定 `.ure` / `.urescene` / `.urepkg` / `.urecache` 命名、目录结构、manifest、resource URI、relative path、hash/provenance、text/binary 边界 | 空 package、单 scene package、resource package 三类 fixture 可 validate；cache 删除后可重建 |
+| Q.2 | Core schema/versioning：定义 scene id、format version、schema version、unit/color/spectral convention、coordinate convention、feature `requires/optional`、unknown extension policy 和 migration metadata | 未知 required extension fail-loud；未知 optional extension 保留 metadata；版本不兼容给出 migration error |
+| Q.3 | Native SceneIR serialization：SceneIR/MaterialGraph/SpectralResource/medium/light/camera/instance 的 lossless source serialization 与 loader/compiler | `.urescene -> SceneIR -> .urescene` roundtrip 保持语义；不借用 glTF 字段作为权威语义 |
+| Q.4 | 程序化 graph：建立 typed procedural node schema、deterministic seed、parameter domain、build cache key、scatter/instancing/spectrum/light rig 首批节点 | procedural graph 可生成 SceneIR fragment；同 seed/source hash 输出稳定；非法 graph fail-loud |
+| Q.5 | Script build hook：定义显式启用的脚本 build step、sandbox policy、dependency lock、I/O contract、provenance hash 和 cache invalidation | 默认禁用；启用后脚本只在 build/compile 阶段运行；运行时不解释脚本；输出 hash 可复现 |
+| Q.6 | 光谱/材质/介质资源：把 Phase L/M/R-P6 所需 spectral resource、MaterialGraph、Mie/phase resource、texture/video stream resource 纳入原生 schema | domain bins、packet lanes、basis/tile/source-sample、Mie table、spectral video stream 均有 typed schema 和 budget metadata |
+| Q.7 | 求解器/积分器 contract：把 Phase R/V/W 的 integrator mode、guiding/ReSTIR/BDPT/VCM/MLT、acceleration backend、wave optics、coherent merge、validation requirement 纳入 feature declaration | 场景请求 unsupported solver/mode/backend 时在 compile/session create 前失败；supported mode 进入 SceneIR/RenderConfig |
+| Q.8 | 物理/声学开放 schema：定义 physics/acoustic extension slot、solver version、coupling channel、time sampling、resource ownership 和 migration policy | 当前 solver 可以只支持 subset；未知 required physics/acoustic extension fail-loud；schema 允许未来替换 solver |
+| Q.9 | CLI/API/tooling：`ure_cli validate/build/pack/unpack/inspect/migrate` 支持 URE native；C/Python Session 可加载 `.ure/.urescene/.urepkg` | CLI validate 给出 schema、feature、resource、budget 和 adapter-loss diagnostics；pyure 可加载 package |
+| Q.10 | Adapter contract：glTF/USD/MaterialX import/export 改为 URE native adapter；能力损失报告标准化；外部格式不能绕过 native validation | glTF importer 输出 URE native/SceneIR；USD/MaterialX 仅映射可表达子集；loss report fixture 覆盖高级 feature |
+| Q.11 | Compiled cache/farm package：`.urecache` 存储 SceneIR hash、compiler hash、GPU upload plan、spectral/resource cache、acceleration metadata、validation metrics | source/cache hash mismatch 必须重建或拒绝；farm shard 可按 package resource locality 调度 |
+| Q.12 | Native scene validation suite：建立原生 scene fixture 集，覆盖基础场景、程序化场景、光谱资源、Mie/volume、wave optics request、integrator request、physics/acoustic placeholder、video stream placeholder、adapter loss | `run_phase_q_validation_suite.ps1` 可本地运行；文档、schema fixture、roundtrip、fail-loud 和 package build 全部通过 |
+
+#### 完成标准
+
+- `.ure/.urescene/.urepkg` 是文档化、可验证、可迁移的第一等格式；glTF/USD/MaterialX 不再定义 UltraRender 核心能力边界。
+- 所有当前核心能力和已规划高级能力都有 native schema owner、feature declaration 或 typed open extension slot。
+- 程序化描述支持 deterministic graph；脚本 build step 默认关闭、显式启用、可 sandbox、可 hash、可缓存。
+- Scene package 能完整表达场景、光谱、材质、介质、光源、积分器、波动光学、几何加速、物理、声学、动画/视频流、分布式/farm 和验证 contract。
+- 缺失能力、未知 required extension、版本不兼容、外部 adapter 能力损失必须 fail-loud 或输出标准化 loss report；不允许静默降级。
+- Source manifest 是权威；compiled cache 可删除重建，且由 source hash、compiler hash 和 schema version 验证。
+- Phase U/USD、Phase X/plugin、Phase R/V/W 高级模式后续只能消费或映射 URE native schema，不得重新把 glTF/USD/MaterialX 作为权威 schema。
+
+---
+
 ### Phase U — USD/Hydra 集成
 
-**目标**: 使 UltraRender 可作为 USD 流程中的渲染后端，通过 Hydra 委托被 Maya/Houdini/Katana 等应用调用。
+**目标**: 使 UltraRender 可作为 USD/Hydra 生态中的渲染后端，同时保持 URE native scene system 的权威地位。USD/Hydra 是 DCC/viewport adapter：它映射到 Phase Q 的原生 schema 和 SceneIR/session，不反向定义 UltraRender 的核心场景语义。
 
 **架构**:
 
 ```
-DCC (Maya/Houdini) → USD Stage → Hydra RenderDelegate → ure_core
+DCC (Maya/Houdini) → USD Stage → HdURE adapter
                                       │
-                                  HdURE (我们的委托)
+                                      ▼
+                         URE native schema / SceneIR
                                       │
-                                  ure_session.cpp
-                                      │
-                                  ure_c_api.h
+                                      ▼
+                           ure_session / ure_core
 ```
 
 **子步骤**:
 
 | Step | 内容 | 复杂度 |
 |------|------|--------|
-| U.1 | USD schema 定义：`URE_spectral_material`, `URE_physics`, `URE_acoustic` | 中 |
+| U.1 | USD schema adapter：把 USD prim/material 属性映射到 Phase Q URE native schema；不能用 USD schema 取代原生 schema | 中 |
 | U.2 | Hydra RenderDelegate 骨架：`HdURE` 继承 `HdRenderDelegate` | 高 |
-| U.3 | RPrim 支持：`HdMesh` → 我们场景 | 高 |
-| U.4 | 材质转换：USD `Material` + `URE_spectral_material` → 节点图 + GpuMaterial | 中 |
+| U.3 | RPrim 支持：`HdMesh` → URE native geometry / SceneIR | 高 |
+| U.4 | 材质转换：USD `Material` + URE adapter schema → URE MaterialGraph；能力损失输出 loss report | 中 |
 | U.5 | 交互渲染：Hydra 视口 → 渐进式渲染会话 | 高 |
-| U.6 | 场景导出：`SceneIR → .usda` | 低 |
+| U.6 | 场景导出：`.ure/.urescene/.urepkg` 或 `SceneIR → .usda` adapter output；无法表达的能力必须 fail-loud 或 loss report | 低 |
 
 **USDA 示例**:
 
@@ -2052,7 +2225,7 @@ over "GlassCup" (
 }
 ```
 
-**核心约束**: 不依赖 OpenGL/Vulkan 上下文。Hydra 委托需要 GPU 上下文时的交互由 `ure_session` 内部管理。
+**核心约束**: 不依赖 OpenGL/Vulkan 上下文。Hydra 委托需要 GPU 上下文时的交互由 `ure_session` 内部管理。USD/Hydra 只作为 Phase Q 之后的 adapter；任何 USD schema 不得绕过 URE native validation。
 
 ---
 
@@ -2122,6 +2295,9 @@ Phase 0 ─→ Phase F ─┬──→ Phase P ─┬──→ Phase A ─┬─
                                              Phase L ─────┬──────┘
                                                   │
                                                   ▼
+                                             Phase Q
+                                                  │
+                                                  ▼
                                              Phase R
                                                   │
                                                   ▼
@@ -2141,9 +2317,9 @@ Phase 0 ─→ Phase F ─┬──→ Phase P ─┬──→ Phase A ─┬─
 | 不做 | 做 |
 |------|----|
 | CPU 渲染后端 | CUDA GPU 专用，极致 SIMT 优化 |
-| OSL 编译器 | 自定义节点图 + MaterialX 兼容 |
+| OSL 编译器 | URE native MaterialGraph；MaterialX 只是 adapter |
 | OpenGL/Vulkan 合成 | CLI 离线 + Python 脚本输出 |
-| DCC 插件（Maya/Houdini） | Hydra 委托（任何 Hydra 宿主） |
+| DCC 插件（Maya/Houdini） | Hydra adapter 消费 URE native scene/session |
 | 通用 RGB 渲染器 | **光谱渲染 + Mueller 偏振 + 物理声学** |
 | 实时游戏渲染 | 交互渐进式 + 离线帧序列 |
 | 把优化等同于降噪 | Phase R 中以无偏估计器、方差/性能 benchmark 和显式高级积分器提升收敛 |
@@ -2151,5 +2327,5 @@ Phase 0 ─→ Phase F ─┬──→ Phase P ─┬──→ Phase A ─┬─
 ### 当前 PLAN.md 中加入远期规划的意义
 
 1. **Phase P/S.1 的 Session API 接口设计需要远期考虑**：今天写的 `update_instance_transforms()` 签名必须被 `RenderSession::mutate_scene()` 调用。接口预对齐，避免远期返工。
-2. **Phase G 的 URE_spectral_material extension 就是 Phase M 的输入**：glTF 扩展格式必须兼容远期节点图。
-3. **Phase C/D 的分布式契约必须考虑 SceneDiff 的网络序列化**。
+2. **Phase G 的 `URE_spectral_material` 只是过渡输入**：glTF 扩展不得继续承担高级场景语言职责；Phase Q 后高级语义必须迁入 URE native schema。
+3. **Phase C/D 的分布式契约必须考虑 SceneDiff 与 URE native package 的网络序列化**。

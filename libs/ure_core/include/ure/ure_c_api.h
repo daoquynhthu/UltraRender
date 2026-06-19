@@ -89,6 +89,8 @@ typedef struct ure_integrator_config_t {
     float mlt_large_step_probability;
     float mlt_small_step_sigma;
     uint32_t mlt_seed;
+    int environment_light_direct_sampling;
+    float environment_light_intensity;
 } ure_integrator_config_t;
 
 typedef enum ure_aov_type_t {

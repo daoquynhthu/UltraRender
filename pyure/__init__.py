@@ -98,6 +98,8 @@ class _IntegratorConfig(ctypes.Structure):
         ("mlt_large_step_probability", ctypes.c_float),
         ("mlt_small_step_sigma", ctypes.c_float),
         ("mlt_seed", ctypes.c_uint32),
+        ("environment_light_direct_sampling", ctypes.c_int),
+        ("environment_light_intensity", ctypes.c_float),
     ]
 
 
@@ -312,6 +314,8 @@ class RenderSession:
         path_guiding_light_mixture: float = 0.5,
         path_guiding_learning_rate: float = 0.25,
         path_guiding_min_weight: float = 1e-6,
+        environment_light_direct_sampling: bool = False,
+        environment_light_intensity: float = 1.0,
         restir_di: bool = False,
         restir_di_max_history: int = 1,
         mlt_chain_count: int = 1,
@@ -338,6 +342,7 @@ class RenderSession:
             or integrator_quality_preset != "default"
             or allow_biased_integrator_reuse
             or path_guiding
+            or environment_light_direct_sampling
             or restir_di
         )
         if integrator_requested:
@@ -383,6 +388,8 @@ class RenderSession:
                 float(mlt_large_step_probability),
                 float(mlt_small_step_sigma),
                 int(mlt_seed),
+                int(environment_light_direct_sampling),
+                float(environment_light_intensity),
             )
             handle = native().ure_session_create_integrator_config(
                 ctypes.byref(cfg),
@@ -615,6 +622,8 @@ def create_session(
     path_guiding_light_mixture: float = 0.5,
     path_guiding_learning_rate: float = 0.25,
     path_guiding_min_weight: float = 1e-6,
+    environment_light_direct_sampling: bool = False,
+    environment_light_intensity: float = 1.0,
     restir_di: bool = False,
     restir_di_max_history: int = 1,
     mlt_chain_count: int = 1,
@@ -647,6 +656,8 @@ def create_session(
         path_guiding_light_mixture=path_guiding_light_mixture,
         path_guiding_learning_rate=path_guiding_learning_rate,
         path_guiding_min_weight=path_guiding_min_weight,
+        environment_light_direct_sampling=environment_light_direct_sampling,
+        environment_light_intensity=environment_light_intensity,
         restir_di=restir_di,
         restir_di_max_history=restir_di_max_history,
         mlt_chain_count=mlt_chain_count,

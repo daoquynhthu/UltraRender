@@ -162,6 +162,8 @@ bool make_integrator_config(const ure_integrator_config_t* integrator_config, Re
     if (integrator_config->mlt_large_step_probability >= 0.0f) cfg.mlt.large_step_probability = integrator_config->mlt_large_step_probability;
     if (integrator_config->mlt_small_step_sigma > 0.0f) cfg.mlt.small_step_sigma = integrator_config->mlt_small_step_sigma;
     if (integrator_config->mlt_seed > 0) cfg.mlt.seed = integrator_config->mlt_seed;
+    cfg.environment_light.direct_sampling = integrator_config->environment_light_direct_sampling != 0;
+    if (integrator_config->environment_light_intensity >= 0.0f) cfg.environment_light.intensity = integrator_config->environment_light_intensity;
     if (cfg.integrator.mode == IntegratorMode::PathGuided) cfg.path_guiding.enabled = true;
     if (cfg.integrator.mode == IntegratorMode::RestirDI) {
         cfg.restir_di.enabled = true;

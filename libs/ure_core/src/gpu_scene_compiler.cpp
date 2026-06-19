@@ -1085,6 +1085,48 @@ CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir, co
         compiled.spheres.push_back(gpu_sphere);
     }
 
+    for (const auto& quad : scene_ir.quad_lights) {
+        if (!quad.material) {
+            throw std::runtime_error("QuadLightNode requires a material");
+        }
+        if (quad.material->model != scene_ir::MaterialModel::Light) {
+            throw std::runtime_error("QuadLightNode material must use MaterialModel::Light");
+        }
+
+        const core::Vec3f normal = quad.edge_u.cross(quad.edge_v);
+        const float area_sq = normal.length_sq();
+        if (area_sq <= 1e-12f) {
+            throw std::runtime_error("QuadLightNode has zero area");
+        }
+
+        const core::Vec3f n = normal.normalize();
+        const core::Vec3f tangent = quad.edge_u.normalize();
+        const core::Vec3f p0 = quad.corner;
+        const core::Vec3f p1 = quad.corner + quad.edge_u;
+        const core::Vec3f p2 = quad.corner + quad.edge_u + quad.edge_v;
+        const core::Vec3f p3 = quad.corner + quad.edge_v;
+
+        ure::gpu::RenderMesh mesh;
+        const core::Vec3f points[4] = {p0, p1, p2, p3};
+        const core::Vec2f uvs[4] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
+        for (int i = 0; i < 4; ++i) {
+            mesh.vertices.push_back(points[i].x);
+            mesh.vertices.push_back(points[i].y);
+            mesh.vertices.push_back(points[i].z);
+            mesh.normals.push_back(n.x);
+            mesh.normals.push_back(n.y);
+            mesh.normals.push_back(n.z);
+            mesh.uvs.push_back(uvs[i].x);
+            mesh.uvs.push_back(uvs[i].y);
+            mesh.tangents.push_back(tangent.x);
+            mesh.tangents.push_back(tangent.y);
+            mesh.tangents.push_back(tangent.z);
+        }
+        mesh.indices = {0, 1, 2, 0, 2, 3};
+        mesh.material_index = cache_material(quad.material);
+        compiled.meshes.push_back(std::move(mesh));
+    }
+
     return compiled;
 }
 

@@ -619,6 +619,66 @@ static int test_metallic_roughness_texture_linear() {
     CHECK(found_texture_node);
     return 0;
 }
+
+static int test_scene_ir_quad_light_compiles_to_direct_emissive_mesh() {
+    auto light = std::make_shared<ure::scene_ir::MaterialNode>();
+    light->model = ure::scene_ir::MaterialModel::Light;
+    light->emission = {2.0f, 3.0f, 4.0f};
+
+    ure::scene_ir::SceneIR scene;
+    ure::scene_ir::QuadLightNode quad;
+    quad.corner = {0.0f, 0.0f, 0.0f};
+    quad.edge_u = {2.0f, 0.0f, 0.0f};
+    quad.edge_v = {0.0f, 1.0f, 0.0f};
+    quad.material = light;
+    scene.quad_lights.push_back(quad);
+
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    auto compiled = ure::GpuSceneCompiler::compile(scene, config);
+    CHECK(compiled.meshes.size() == 1);
+    CHECK(compiled.instances.empty());
+    CHECK(compiled.materials.size() == 1);
+    CHECK(compiled.materials[0].header.type == ure::gpu::MaterialType::Light);
+
+    const auto& mesh = compiled.meshes[0];
+    CHECK(mesh.material_index == ure::gpu::kDefaultMaterialCount);
+    CHECK(mesh.vertices.size() == 12);
+    CHECK(mesh.normals.size() == 12);
+    CHECK(mesh.uvs.size() == 8);
+    CHECK(mesh.tangents.size() == 12);
+    CHECK(mesh.indices.size() == 6);
+    CHECK(mesh.indices[0] == 0 && mesh.indices[1] == 1 && mesh.indices[2] == 2);
+    CHECK(mesh.indices[3] == 0 && mesh.indices[4] == 2 && mesh.indices[5] == 3);
+    CHECK_FLOAT_EQ(mesh.normals[2], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(mesh.tangents[0], 1.0f, 1e-6f);
+    return 0;
+}
+
+static int test_scene_ir_quad_light_rejects_degenerate_area() {
+    auto light = std::make_shared<ure::scene_ir::MaterialNode>();
+    light->model = ure::scene_ir::MaterialModel::Light;
+    light->emission = {1.0f, 1.0f, 1.0f};
+
+    ure::scene_ir::SceneIR scene;
+    ure::scene_ir::QuadLightNode quad;
+    quad.edge_u = {1.0f, 0.0f, 0.0f};
+    quad.edge_v = {2.0f, 0.0f, 0.0f};
+    quad.material = light;
+    scene.quad_lights.push_back(quad);
+
+    bool rejected = false;
+    try {
+        ure::RenderConfig config;
+        config.num_wavelengths = 8;
+        (void)ure::GpuSceneCompiler::compile(scene, config);
+    } catch (const std::runtime_error& e) {
+        rejected = std::string(e.what()).find("zero area") != std::string::npos;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
 int main() {
     fprintf(stderr, "[glTF Frontend Test]\n");
 
@@ -644,6 +704,8 @@ int main() {
     failed += run("test_non_gltf_rejected",               test_non_gltf_rejected);
     failed += run("test_file_not_found",                  test_file_not_found);
     failed += run("test_metallic_roughness_texture_linear", test_metallic_roughness_texture_linear);
+    failed += run("test_scene_ir_quad_light_compiles_to_direct_emissive_mesh", test_scene_ir_quad_light_compiles_to_direct_emissive_mesh);
+    failed += run("test_scene_ir_quad_light_rejects_degenerate_area", test_scene_ir_quad_light_rejects_degenerate_area);
 
     fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

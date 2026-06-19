@@ -229,6 +229,14 @@ struct SphereNode {
     std::shared_ptr<MaterialNode> material;
 };
 
+struct QuadLightNode {
+    std::string name;
+    core::Vec3f corner = {0, 0, 0};
+    core::Vec3f edge_u = {1, 0, 0};
+    core::Vec3f edge_v = {0, 1, 0};
+    std::shared_ptr<MaterialNode> material;
+};
+
 struct SceneIR {
     std::vector<std::shared_ptr<MaterialNode>> materials;
     std::vector<std::shared_ptr<MeshResource>> meshes;
@@ -236,6 +244,7 @@ struct SceneIR {
     std::vector<std::shared_ptr<TextureResource>> textures;
     std::vector<InstanceNode> instances;
     std::vector<SphereNode> spheres;
+    std::vector<QuadLightNode> quad_lights;
     Camera camera;
     PhysicsConfig physics;
     core::Vec3f background_color = {0, 0, 0};

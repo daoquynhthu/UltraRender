@@ -28,8 +28,9 @@ __global__ __launch_bounds__(256) void extend_kernel(
     int mat_idx;
     int hit_type;
     int hit_index;
+    int hit_primitive_index;
 
-    if (world_hit(scene, r, t_min, FLT_MAX, t, p, n, ng, uv, mat_idx, hit_type, hit_index)) {
+    if (world_hit(scene, r, t_min, FLT_MAX, t, p, n, ng, uv, mat_idx, hit_type, hit_index, hit_primitive_index)) {
         hit_queue.t[idx] = t;
         hit_queue.p[idx] = p;
         hit_queue.n[idx] = n;
@@ -38,6 +39,7 @@ __global__ __launch_bounds__(256) void extend_kernel(
         hit_queue.mat_ids[idx] = mat_idx;
         hit_queue.hit_types[idx] = hit_type;
         hit_queue.hit_indices[idx] = hit_index;
+        hit_queue.hit_primitive_indices[idx] = hit_primitive_index;
     } else {
         hit_queue.mat_ids[idx] = -1;
     }
@@ -411,6 +413,7 @@ __device__ inline float sphere_light_solid_angle_pdf_only(
 
 __device__ inline float light_selection_pdf(const GpuScene& scene, int light_list_index) {
     if (scene.light_count <= 0 || light_list_index < 0 || light_list_index >= scene.light_count) return 0.0f;
+    if (scene.light_selection_pmf) return fmaxf(0.0f, scene.light_selection_pmf[light_list_index]);
     if (!scene.light_selection_cdf) return 1.0f / float(scene.light_count);
     float upper = scene.light_selection_cdf[light_list_index];
     float lower = light_list_index == 0 ? 0.0f : scene.light_selection_cdf[light_list_index - 1];
@@ -448,6 +451,32 @@ __device__ inline float guided_light_selection_pdf(const GpuScene& scene, int li
 
 __device__ inline int sample_base_light_list_index(const GpuScene& scene, float r) {
     if (scene.light_count <= 0) return -1;
+    if (scene.light_tree_nodes && scene.light_tree_root >= 0 && scene.light_tree_root < scene.light_tree_node_count) {
+        int node_index = scene.light_tree_root;
+        float u = fminf(fmaxf(r, 0.0f), 0.99999994f);
+        for (int depth = 0; depth < 32; ++depth) {
+            const GpuLightTreeNode node = scene.light_tree_nodes[node_index];
+            if (node.light_index >= 0) {
+                return node.light_index < scene.light_count ? node.light_index : scene.light_count - 1;
+            }
+            const int left = node.left;
+            const int right = node.right;
+            if (left < 0 || right < 0 || left >= scene.light_tree_node_count || right >= scene.light_tree_node_count) break;
+            const float left_weight = fmaxf(scene.light_tree_nodes[left].weight, 0.0f);
+            const float right_weight = fmaxf(scene.light_tree_nodes[right].weight, 0.0f);
+            const float total = left_weight + right_weight;
+            if (total <= 0.0f) break;
+            const float left_probability = left_weight / total;
+            if (u < left_probability) {
+                node_index = left;
+                u = left_probability > 1e-8f ? u / left_probability : 0.0f;
+            } else {
+                node_index = right;
+                const float right_probability = fmaxf(1e-8f, 1.0f - left_probability);
+                u = (u - left_probability) / right_probability;
+            }
+        }
+    }
     if (scene.light_alias_prob && scene.light_alias_index) {
         float scaled = fminf(fmaxf(r, 0.0f), 0.99999994f) * float(scene.light_count);
         int column = min(int(scaled), scene.light_count - 1);
@@ -508,6 +537,219 @@ __device__ inline float selected_sphere_light_pdf(
 ) {
     return sphere_light_solid_angle_pdf_only(light_sphere, reference_point) *
            guided_mixture_light_selection_pdf(scene, light_list_index);
+}
+
+struct SelectedLightSample {
+    GpuVec3 point;
+    GpuVec3 direction;
+    float max_dist = 0.0f;
+    float pdf = 0.0f;
+    int material_index = -1;
+    GpuLightKind kind = GpuLightKind::Sphere;
+    bool valid = false;
+};
+
+__device__ inline GpuVec3 environment_sky_color(
+    const GpuScene& scene,
+    const GpuVec3& direction,
+    int current_medium_idx
+) {
+    const GpuVec3 unit_direction = direction.normalize();
+    const float t_sky = 0.5f * (unit_direction.y + 1.0f);
+    GpuVec3 sky_color;
+    if (scene.medium_density > 1e-6f || current_medium_idx != -1) {
+        const float sky_luma = 0.05f + 0.15f * t_sky;
+        sky_color = GpuVec3(sky_luma, sky_luma, sky_luma);
+    } else {
+        sky_color = (1.0f - t_sky) * GpuVec3(0.05f, 0.05f, 0.05f) + t_sky * GpuVec3(0.2f, 0.2f, 0.4f);
+    }
+    const float intensity = scene.environment_light_intensity > 0.0f ? scene.environment_light_intensity : 1.0f;
+    return sky_color * intensity;
+}
+
+__device__ inline SpectralPacket environment_radiance_spectrum(
+    const GpuScene& scene,
+    const GpuVec3& direction,
+    int current_medium_idx,
+    const float* wavelengths
+) {
+    return emission_to_spectrum(
+        environment_sky_color(scene, direction, current_medium_idx),
+        wavelengths,
+        scene.num_spectral_channels);
+}
+
+__device__ inline GpuLightRecord get_light_record(const GpuScene& scene, int light_list_index) {
+    if (scene.lights) {
+        return scene.lights[light_list_index];
+    }
+    GpuLightRecord record;
+    record.kind = GpuLightKind::Sphere;
+    record.primitive_index = scene.light_indices ? scene.light_indices[light_list_index] : -1;
+    record.secondary_index = -1;
+    if (record.primitive_index >= 0 && record.primitive_index < scene.sphere_count) {
+        const GpuSphere& sphere = scene.spheres[record.primitive_index];
+        record.material_index = sphere.material_index;
+        record.area = 4.0f * 3.14159265358979323846f * sphere.radius * sphere.radius;
+    }
+    return record;
+}
+
+__device__ inline bool light_triangle_vertices(
+    const GpuScene& scene,
+    const GpuLightRecord& record,
+    GpuVec3& v0,
+    GpuVec3& v1,
+    GpuVec3& v2
+) {
+    if (record.kind == GpuLightKind::MeshTriangle) {
+        if (record.primitive_index < 0 || record.primitive_index >= scene.mesh_count) return false;
+        const GpuMesh& mesh = scene.meshes[record.primitive_index];
+        if (record.secondary_index < 0 || record.secondary_index >= mesh.triangle_count) return false;
+        const int i0 = mesh.indices[record.secondary_index * 3 + 0];
+        const int i1 = mesh.indices[record.secondary_index * 3 + 1];
+        const int i2 = mesh.indices[record.secondary_index * 3 + 2];
+        v0 = mesh.vertices[i0];
+        v1 = mesh.vertices[i1];
+        v2 = mesh.vertices[i2];
+        return true;
+    }
+    if (record.kind == GpuLightKind::InstanceTriangle) {
+        if (record.primitive_index < 0 || record.primitive_index >= scene.instance_count) return false;
+        const GpuInstanceDesc& desc = scene.instance_descs[record.primitive_index];
+        if (desc.mesh_index < 0 || desc.mesh_index >= scene.mesh_count) return false;
+        const GpuMesh& mesh = scene.meshes[desc.mesh_index];
+        if (record.secondary_index < 0 || record.secondary_index >= mesh.triangle_count) return false;
+        const int i0 = mesh.indices[record.secondary_index * 3 + 0];
+        const int i1 = mesh.indices[record.secondary_index * 3 + 1];
+        const int i2 = mesh.indices[record.secondary_index * 3 + 2];
+        const GpuInstanceTransform& xform = scene.instance_transforms[record.primitive_index];
+        v0 = xform.transform.transform_point(mesh.vertices[i0]);
+        v1 = xform.transform.transform_point(mesh.vertices[i1]);
+        v2 = xform.transform.transform_point(mesh.vertices[i2]);
+        return true;
+    }
+    return false;
+}
+
+__device__ inline float selected_triangle_light_pdf(
+    const GpuScene& scene,
+    int light_list_index,
+    const GpuLightRecord& record,
+    const GpuVec3& reference_point,
+    const GpuVec3& light_point
+) {
+    GpuVec3 v0, v1, v2;
+    if (!light_triangle_vertices(scene, record, v0, v1, v2)) return 0.0f;
+    const GpuVec3 normal = (v1 - v0).cross(v2 - v0).normalize();
+    const GpuVec3 to_light = light_point - reference_point;
+    const float dist_sq = to_light.length_sq();
+    if (dist_sq <= 1e-12f) return 0.0f;
+    const GpuVec3 dir = to_light * rsqrtf(dist_sq);
+    const float cos_light = fabsf(normal.dot(-dir));
+    const float area = record.area > 0.0f ? record.area : 0.5f * (v1 - v0).cross(v2 - v0).length();
+    if (cos_light <= 1e-6f || area <= 0.0f) return 0.0f;
+    return (dist_sq / (cos_light * area)) * guided_mixture_light_selection_pdf(scene, light_list_index);
+}
+
+__device__ inline float selected_light_hit_pdf(
+    const GpuScene& scene,
+    int light_list_index,
+    const GpuVec3& reference_point,
+    const GpuVec3& light_point
+) {
+    if (light_list_index < 0 || light_list_index >= scene.light_count) return 0.0f;
+    const GpuLightRecord record = get_light_record(scene, light_list_index);
+    if (record.kind == GpuLightKind::Sphere) {
+        if (record.primitive_index < 0 || record.primitive_index >= scene.sphere_count) return 0.0f;
+        return selected_sphere_light_pdf(scene, light_list_index, scene.spheres[record.primitive_index], reference_point);
+    }
+    return selected_triangle_light_pdf(scene, light_list_index, record, reference_point, light_point);
+}
+
+__device__ inline bool sample_selected_light(
+    const GpuScene& scene,
+    int light_list_index,
+    const GpuVec3& reference_point,
+    float r1,
+    float r2,
+    SelectedLightSample& sample
+) {
+    if (light_list_index < 0 || light_list_index >= scene.light_count) return false;
+    const GpuLightRecord record = get_light_record(scene, light_list_index);
+    if (record.kind == GpuLightKind::Sphere) {
+        if (record.primitive_index < 0 || record.primitive_index >= scene.sphere_count) return false;
+        const GpuSphere& light_sphere = scene.spheres[record.primitive_index];
+        GpuVec3 wc = light_sphere.center - reference_point;
+        float dist_sq = wc.length_sq();
+        float radius_sq = light_sphere.radius * light_sphere.radius;
+        if (dist_sq <= radius_sq) return false;
+        float dist = sqrtf(dist_sq);
+        float cos_theta_max = sqrtf(fmaxf(0.0f, 1.0f - radius_sq / dist_sq));
+        float cos_theta = 1.0f - r1 + r1 * cos_theta_max;
+        float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - cos_theta * cos_theta));
+        float phi = 6.2831853f * r2;
+        GpuVec3 w = wc * (1.0f / dist);
+        GpuVec3 u = (fabsf(w.x) > 0.9f) ? GpuVec3(0, 1, 0) : GpuVec3(1, 0, 0);
+        u = u.cross(w).normalize();
+        GpuVec3 v = w.cross(u);
+        sample.direction = (u * cosf(phi) * sin_theta + v * sinf(phi) * sin_theta + w * cos_theta).normalize();
+        float M_dot_D = -wc.dot(sample.direction);
+        float c = dist_sq - radius_sq;
+        float discriminant_val = M_dot_D * M_dot_D - c;
+        if (discriminant_val <= 0.0f) return false;
+        sample.max_dist = -M_dot_D - sqrtf(discriminant_val);
+        if (sample.max_dist <= 1e-4f) return false;
+        sample.point = reference_point + sample.direction * sample.max_dist;
+        sample.pdf = selected_sphere_light_pdf(scene, light_list_index, light_sphere, reference_point);
+        sample.material_index = light_sphere.material_index;
+        sample.kind = GpuLightKind::Sphere;
+        sample.valid = sample.pdf > 0.0f;
+        return sample.valid;
+    }
+    if (record.kind == GpuLightKind::Environment) {
+        const float y = 1.0f - 2.0f * fminf(fmaxf(r1, 0.0f), 0.99999994f);
+        const float radial = sqrtf(fmaxf(0.0f, 1.0f - y * y));
+        const float phi = 6.2831853f * r2;
+        sample.direction = GpuVec3(radial * cosf(phi), y, radial * sinf(phi)).normalize();
+        sample.point = reference_point + sample.direction * 1.0e20f;
+        sample.max_dist = scene.medium_max_distance > 0.0f ? scene.medium_max_distance : 1.0e20f;
+        sample.pdf = guided_mixture_light_selection_pdf(scene, light_list_index) * (1.0f / 12.566370614359172f);
+        sample.material_index = -1;
+        sample.kind = GpuLightKind::Environment;
+        sample.valid = sample.pdf > 0.0f && scene.environment_light_direct_sampling != 0;
+        return sample.valid;
+    }
+
+    GpuVec3 v0, v1, v2;
+    if (!light_triangle_vertices(scene, record, v0, v1, v2)) return false;
+    const float su = sqrtf(fminf(fmaxf(r1, 0.0f), 0.99999994f));
+    const float b0 = 1.0f - su;
+    const float b1 = su * (1.0f - r2);
+    const float b2 = su * r2;
+    sample.point = v0 * b0 + v1 * b1 + v2 * b2;
+    const GpuVec3 to_light = sample.point - reference_point;
+    const float dist_sq = to_light.length_sq();
+    if (dist_sq <= 1e-12f) return false;
+    sample.max_dist = sqrtf(dist_sq);
+    sample.direction = to_light * (1.0f / sample.max_dist);
+    sample.pdf = selected_triangle_light_pdf(scene, light_list_index, record, reference_point, sample.point);
+    sample.material_index = record.material_index;
+    sample.kind = record.kind;
+    sample.valid = sample.pdf > 0.0f && sample.material_index >= 0;
+    return sample.valid;
+}
+
+__device__ inline float selected_environment_light_pdf(const GpuScene& scene) {
+    if (!scene.environment_light_direct_sampling) return 0.0f;
+    float selection_pdf = 0.0f;
+    for (int i = 0; i < scene.light_count; ++i) {
+        const GpuLightRecord record = get_light_record(scene, i);
+        if (record.kind == GpuLightKind::Environment) {
+            selection_pdf += guided_mixture_light_selection_pdf(scene, i);
+        }
+    }
+    return selection_pdf * (1.0f / 12.566370614359172f);
 }
 
 __device__ inline float rgb_luminance(const GpuVec3& rgb) {
@@ -951,9 +1193,9 @@ __global__ __launch_bounds__(256) void extend_shadow_kernel(
         GpuVec3 p, n, ng;
         GpuVec2 uv;
         int mat_idx;
-        int type_dummy; int index_dummy;
+        int type_dummy; int index_dummy; int primitive_dummy;
 
-        if (!world_hit(scene, r, 1e-4f, r.t_max, t, p, n, ng, uv, mat_idx, type_dummy, index_dummy, true)) {
+        if (!world_hit(scene, r, 1e-4f, r.t_max, t, p, n, ng, uv, mat_idx, type_dummy, index_dummy, primitive_dummy, true)) {
             break;
         }
 
@@ -1091,59 +1333,36 @@ __global__ __launch_bounds__(256) void shade_kernel(
             if (scene.light_count > 0) {
                 float r_light_pick = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightPick);
                 int light_idx_idx = sample_light_list_index(scene, r_light_pick);
-                int light_idx = scene.light_indices[light_idx_idx];
-                GpuSphere light_sphere = scene.spheres[light_idx];
 
                 GpuVec3 p_vol = current_queue.origins[idx] + current_queue.directions[idx] * t_medium;
-                GpuVec3 wc = light_sphere.center - p_vol;
-                float dist_sq = wc.length_sq();
-                float radius = light_sphere.radius;
-                float radius_sq = radius * radius;
+                float r1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightU);
+                float r2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightV);
+                SelectedLightSample light_sample;
 
-                if (dist_sq > radius_sq) {
-                    float dist = sqrtf(dist_sq);
-                    float sin_theta_max2 = radius_sq / dist_sq;
-                    float cos_theta_max = sqrtf(fmaxf(0.0f, 1.0f - sin_theta_max2));
-
-                    float r1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightU);
-                    float r2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightV);
-                    float cos_theta = 1.0f - r1 + r1 * cos_theta_max;
-                    float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - cos_theta * cos_theta));
-                    float phi = 6.2831853f * r2;
-
-                    GpuVec3 w = wc * (1.0f / dist);
-                    GpuVec3 u = (fabsf(w.x) > 0.9f) ? GpuVec3(0, 1, 0) : GpuVec3(1, 0, 0);
-                    u = u.cross(w).normalize();
-                    GpuVec3 v = w.cross(u);
-                    GpuVec3 l_dir = (u * cosf(phi) * sin_theta + v * sinf(phi) * sin_theta + w * cos_theta).normalize();
-
+                if (sample_selected_light(scene, light_idx_idx, p_vol, r1, r2, light_sample)) {
                     bool phase_supported = false;
                     float phase_val = eval_volume_phase(
                         VolumePhaseFunction::HenyeyGreenstein,
-                        current_queue.directions[idx].dot(l_dir),
+                        current_queue.directions[idx].dot(light_sample.direction),
                         anisotropy,
                         &phase_supported);
                     if (!phase_supported) {
                         return;
                     }
-                    float pdf = selected_sphere_light_pdf(scene, light_idx_idx, light_sphere, p_vol);
 
-                    float M_dot_D = -wc.dot(l_dir);
-                    float c_val = dist_sq - radius_sq;
-                    float t_to_light = -M_dot_D - sqrtf(fmaxf(0.0f, M_dot_D * M_dot_D - c_val));
-
-                    if (t_to_light > 1e-4f) {
+                    if (light_sample.max_dist > 1e-4f) {
                          float tr_light_vals[kMaxPacketLanes];
                          for (int c = 0; c < scene.num_spectral_channels; ++c) {
-                             tr_light_vals[c] = expf(-sigma_t.values[c] * t_to_light);
+                             tr_light_vals[c] = expf(-sigma_t.values[c] * light_sample.max_dist);
                          }
 
-                         int light_mat_idx = light_sphere.material_index;
-                         SpectralPacket L_e = load_mat_emission_spectrum(scene, light_mat_idx, throughput.wavelengths);
+                         SpectralPacket L_e = light_sample.kind == GpuLightKind::Environment
+                             ? environment_radiance_spectrum(scene, light_sample.direction, current_medium_idx, throughput.wavelengths)
+                             : load_mat_emission_spectrum(scene, light_sample.material_index, throughput.wavelengths);
                          SpectralPacket contribution;
                          for (int c = 0; c < scene.num_spectral_channels; ++c) {
                              L_e.wavelengths[c] = throughput.wavelengths[c];
-                             contribution.values[c] = throughput.values[c] * L_e.values[c] * phase_val * tr_light_vals[c] * (1.0f / pdf);
+                             contribution.values[c] = throughput.values[c] * L_e.values[c] * phase_val * tr_light_vals[c] * (1.0f / light_sample.pdf);
                              contribution.wavelengths[c] = throughput.wavelengths[c];
                          }
 
@@ -1151,8 +1370,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
                          if (s_idx >= 0) {
                              const int cap = shadow_queue.capacity;
                              shadow_queue.origins[s_idx] = p_vol;
-                             shadow_queue.directions[s_idx] = l_dir;
-                             shadow_queue.max_dist[s_idx] = t_to_light - 1e-4f;
+                             shadow_queue.directions[s_idx] = light_sample.direction;
+                             shadow_queue.max_dist[s_idx] = light_sample.max_dist - 1e-4f;
                              for (int c = 0; c < scene.num_spectral_channels; ++c) {
                                  shadow_queue.radiance_vals[c * cap + s_idx] = contribution.values[c];
                                  shadow_queue.radiance_wavelengths[c * cap + s_idx] = contribution.wavelengths[c];
@@ -1229,18 +1448,18 @@ __global__ __launch_bounds__(256) void shade_kernel(
     }
 
     if (mat_idx == -1) {
-        GpuVec3 unit_direction = current_queue.directions[idx].normalize();
-        float t_sky = 0.5f * (unit_direction.y + 1.0f);
-        GpuVec3 sky_color;
-        if (scene.medium_density > 1e-6f || current_medium_idx != -1) {
-            float sky_luma = 0.05f + 0.15f * t_sky;
-            sky_color = GpuVec3(sky_luma, sky_luma, sky_luma);
-        } else {
-            sky_color = (1.0f - t_sky) * GpuVec3(0.05f, 0.05f, 0.05f) + t_sky * GpuVec3(0.2f, 0.2f, 0.4f);
+        float mis_weight = 1.0f;
+        if (depth > 0 && !(flag & 1) && scene.environment_light_direct_sampling) {
+            const float pdf_nee = selected_environment_light_pdf(scene);
+            if (pdf_nee > 0.0f) {
+                const float last_pdf = current_queue.last_pdf[idx];
+                mis_weight = (last_pdf * last_pdf) / (last_pdf * last_pdf + pdf_nee * pdf_nee);
+            }
         }
 
-        SpectralPacket sky_spectrum = emission_to_spectrum(sky_color, throughput.wavelengths, scene.num_spectral_channels);
-        SpectralPacket contribution = throughput * sky_spectrum;
+        GpuVec3 sky_color = environment_sky_color(scene, current_queue.directions[idx], current_medium_idx);
+        SpectralPacket sky_spectrum = environment_radiance_spectrum(scene, current_queue.directions[idx], current_medium_idx, throughput.wavelengths);
+        SpectralPacket contribution = throughput * sky_spectrum * mis_weight;
 
         GpuVec3 xyz = spectral_sample_to_xyz(
             contribution,
@@ -1341,14 +1560,27 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
         if (depth > 0 && !(flag & 1) && scene.light_count > 0) {
              float pdf_nee = 0.0f;
+             int hit_type = hit_queue.hit_types[idx];
+             int hit_index = hit_queue.hit_indices[idx];
+             int hit_primitive_index = hit_queue.hit_primitive_indices ? hit_queue.hit_primitive_indices[idx] : -1;
 
              for(int k=0; k<scene.light_count; ++k) {
-                 int l_idx = scene.light_indices[k];
-                 GpuSphere sph = scene.spheres[l_idx];
-                 if (sph.material_index == mat_idx) {
-                      pdf_nee = selected_sphere_light_pdf(scene, k, sph, current_queue.origins[idx]);
-                      break;
+                 const GpuLightRecord record = get_light_record(scene, k);
+                 bool same_light = false;
+                 if (record.kind == GpuLightKind::Sphere) {
+                     same_light = hit_type == 0 && record.primitive_index == hit_index;
+                 } else if (record.kind == GpuLightKind::MeshTriangle) {
+                     same_light = hit_type == 1 &&
+                                  record.primitive_index == hit_index &&
+                                  record.secondary_index == hit_primitive_index;
+                 } else if (record.kind == GpuLightKind::InstanceTriangle) {
+                     same_light = hit_type == 2 &&
+                                  record.primitive_index == hit_index &&
+                                  record.secondary_index == hit_primitive_index;
                  }
+                 if (!same_light || record.material_index != mat_idx) continue;
+                 pdf_nee = selected_light_hit_pdf(scene, k, current_queue.origins[idx], p);
+                 break;
              }
 
              if (pdf_nee > 0.0f) {
@@ -1404,52 +1636,30 @@ __global__ __launch_bounds__(256) void shade_kernel(
         float r_light_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimLightV);
 
         int light_idx_idx = sample_light_list_index(scene, r_light_pick);
-        int light_idx = scene.light_indices[light_idx_idx];
+        SelectedLightSample light_sample;
 
-        GpuSphere light_sphere = scene.spheres[light_idx];
-        GpuVec3 wc = light_sphere.center - p;
-        float dist_sq = wc.length_sq();
-        float radius = light_sphere.radius;
-        float radius_sq = radius * radius;
+        if (sample_selected_light(scene, light_idx_idx, p, r_light_1, r_light_2, light_sample)) {
+            float cos_surf = direct_light_cosine_factor(mat, n, light_sample.direction);
 
-        if (dist_sq > radius_sq) {
-            float dist = sqrtf(dist_sq);
-            float sin_theta_max2 = radius_sq / dist_sq;
-            float cos_theta_max = sqrtf(fmaxf(0.0f, 1.0f - sin_theta_max2));
-
-            float r1 = r_light_1;
-            float r2 = r_light_2;
-            float cos_theta = 1.0f - r1 + r1 * cos_theta_max;
-            float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - cos_theta * cos_theta));
-            float phi = 6.2831853f * r2;
-
-            GpuVec3 w = wc * (1.0f / dist);
-            GpuVec3 u = (fabsf(w.x) > 0.9f) ? GpuVec3(0, 1, 0) : GpuVec3(1, 0, 0);
-            u = u.cross(w).normalize();
-            GpuVec3 v = w.cross(u);
-
-            GpuVec3 l_dir = (u * cosf(phi) * sin_theta + v * sinf(phi) * sin_theta + w * cos_theta).normalize();
-
-            float cos_surf = direct_light_cosine_factor(mat, n, l_dir);
-
-            if (direct_light_direction_allowed(mat, n, ng, l_dir)) {
-                 float pdf = selected_sphere_light_pdf(scene, light_idx_idx, light_sphere, p);
+            if (direct_light_direction_allowed(mat, n, ng, light_sample.direction)) {
+                 float pdf = light_sample.pdf;
                  pdf = fmaxf(pdf, 1e-12f);
 
-                 int light_mat_idx = light_sphere.material_index;
-                 SpectralPacket L_e = load_mat_emission_spectrum(scene, light_mat_idx, throughput.wavelengths);
+                 SpectralPacket L_e = light_sample.kind == GpuLightKind::Environment
+                     ? environment_radiance_spectrum(scene, light_sample.direction, current_medium_idx, throughput.wavelengths)
+                     : load_mat_emission_spectrum(scene, light_sample.material_index, throughput.wavelengths);
                  for (int c = 0; c < scene.num_spectral_channels; ++c) {
                      L_e.wavelengths[c] = throughput.wavelengths[c];
                  }
 
-                 SpectralPacket f_r = eval_bsdf(mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, p, n, hit_uv, -current_queue.directions[idx], l_dir, throughput.wavelengths, scene.num_spectral_channels);
+                 SpectralPacket f_r = eval_bsdf(mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, p, n, hit_uv, -current_queue.directions[idx], light_sample.direction, throughput.wavelengths, scene.num_spectral_channels);
 
                  SpectralPacket pdf_mat = pdf_bsdf_spectral(
                      mat,
                      n,
                      hit_uv,
                      -current_queue.directions[idx],
-                     l_dir,
+                     light_sample.direction,
                      throughput.wavelengths,
                      scene.num_spectral_channels,
                      dispersion_clamp);
@@ -1464,18 +1674,11 @@ __global__ __launch_bounds__(256) void shade_kernel(
                  }
                  lobe_pdf_for_reservoir /= fmaxf(1.0f, float(scene.num_spectral_channels));
 
-                 float M_dot_D = -wc.dot(l_dir);
-                 float c = dist_sq - radius_sq;
-                 float discriminant_val = M_dot_D * M_dot_D - c;
-
-                 if (discriminant_val > 0.0f) {
-                    float t_hit_shadow = -M_dot_D - sqrtf(discriminant_val);
-
-                    if (t_hit_shadow > 1e-4f) {
+                    if (light_sample.max_dist > 1e-4f) {
                         if (sigma_t_avg > 1e-4f) {
                             float tr_vals[kMaxPacketLanes];
                             for (int c = 0; c < scene.num_spectral_channels; ++c) {
-                                tr_vals[c] = expf(-sigma_t.values[c] * t_hit_shadow);
+                                tr_vals[c] = expf(-sigma_t.values[c] * light_sample.max_dist);
                             }
 
                             for (int c = 0; c < scene.num_spectral_channels; ++c) {
@@ -1486,11 +1689,11 @@ __global__ __launch_bounds__(256) void shade_kernel(
                          int s_idx = reserve_shadow_slot(shadow_queue);
                          if (s_idx >= 0) {
                              const int cap = shadow_queue.capacity;
-                             GpuVec3 offset_normal = direct_light_offset_normal(ng, l_dir);
-                             float adaptive_eps = 1e-4f / fmaxf(0.01f, fabsf(ng.dot(l_dir)));
+                             GpuVec3 offset_normal = direct_light_offset_normal(ng, light_sample.direction);
+                             float adaptive_eps = 1e-4f / fmaxf(0.01f, fabsf(ng.dot(light_sample.direction)));
                              shadow_queue.origins[s_idx] = p + offset_normal * adaptive_eps;
-                             shadow_queue.directions[s_idx] = l_dir;
-                             shadow_queue.max_dist[s_idx] = t_hit_shadow - adaptive_eps;
+                             shadow_queue.directions[s_idx] = light_sample.direction;
+                             shadow_queue.max_dist[s_idx] = light_sample.max_dist - adaptive_eps;
                              for (int c = 0; c < scene.num_spectral_channels; ++c) {
                                  shadow_queue.radiance_vals[c * cap + s_idx] = contribution.values[c];
                                  shadow_queue.radiance_wavelengths[c * cap + s_idx] = contribution.wavelengths[c];
@@ -1511,7 +1714,6 @@ __global__ __launch_bounds__(256) void shade_kernel(
                              shadow_queue.restir_replay_flags[s_idx] = 0;
                          }
                     }
-                }
             }
         }
     }

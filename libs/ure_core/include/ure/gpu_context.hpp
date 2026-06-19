@@ -55,10 +55,15 @@ struct GpuContext {
     GpuInstanceTransform* d_instance_transforms = nullptr;
     GpuInstanceTransform* d_previous_instance_transforms = nullptr;
     GpuTexture* d_textures = nullptr;
+    GpuLightRecord* d_lights = nullptr;
     int* d_light_indices = nullptr;
+    float* d_light_selection_pmf = nullptr;
     float* d_light_selection_cdf = nullptr;
     float* d_light_alias_prob = nullptr;
     int* d_light_alias_index = nullptr;
+    GpuLightTreeNode* d_light_tree_nodes = nullptr;
+    int light_tree_node_count = 0;
+    int light_tree_root = -1;
     float* d_path_guiding_light_weights = nullptr;
     GpuVec3* d_restir_di_origins = nullptr;
     GpuVec3* d_restir_di_directions = nullptr;
@@ -111,6 +116,7 @@ struct GpuContext {
     int last_integrator_restir_reservoir_count = 0;
 
     std::vector<GpuSphere> host_spheres_for_light_distribution;
+    std::vector<GpuLightRecord> host_light_records_for_distribution;
     std::vector<GpuMaterialData> host_materials_for_light_distribution;
     std::vector<void*> pointers_to_free;
     std::vector<void*> material_resource_tables_to_free;

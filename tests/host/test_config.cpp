@@ -176,6 +176,42 @@ static int test_path_guiding_cli_overrides() {
     return 0;
 }
 
+static int test_environment_light_json_fields() {
+    const char* path = "test_config_environment_light.json";
+    {
+        std::ofstream f(path);
+        f << R"({
+  "environment_light": {
+    "direct_sampling": true,
+    "intensity": 2.5
+  }
+})";
+    }
+
+    auto cfg = ure::config::load_config(path);
+    std::remove(path);
+    CHECK(cfg.environment_light.direct_sampling);
+    CHECK(std::fabs(cfg.environment_light.intensity - 2.5) < 1e-12);
+    return 0;
+}
+
+static int test_environment_light_cli_overrides() {
+    const char* argv[] = {
+        "ure_cli",
+        "render",
+        "scene.gltf",
+        "--enable-environment-light-sampling",
+        "--environment-light-intensity",
+        "1.75",
+    };
+    auto cfg = ure::config::parse_cli(static_cast<int>(sizeof(argv) / sizeof(argv[0])),
+                                      const_cast<char**>(argv)).config;
+    CHECK(cfg.scene_path == "scene.gltf");
+    CHECK(cfg.environment_light.direct_sampling);
+    CHECK(std::fabs(cfg.environment_light.intensity - 1.75) < 1e-12);
+    return 0;
+}
+
 static int test_restir_di_json_fields() {
     const char* path = "test_config_restir_di.json";
     {
@@ -381,6 +417,8 @@ int main() {
     failed += run("test_wave_optics_cli_overrides", test_wave_optics_cli_overrides);
     failed += run("test_path_guiding_json_fields", test_path_guiding_json_fields);
     failed += run("test_path_guiding_cli_overrides", test_path_guiding_cli_overrides);
+    failed += run("test_environment_light_json_fields", test_environment_light_json_fields);
+    failed += run("test_environment_light_cli_overrides", test_environment_light_cli_overrides);
     failed += run("test_restir_di_json_fields", test_restir_di_json_fields);
     failed += run("test_restir_di_cli_overrides", test_restir_di_cli_overrides);
     failed += run("test_integrator_specular_manifold_json_fields", test_integrator_specular_manifold_json_fields);

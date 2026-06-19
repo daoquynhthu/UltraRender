@@ -53,6 +53,11 @@ struct PathGuidingConfig {
     double min_weight = 1e-6;
 };
 
+struct EnvironmentLightConfig {
+    bool direct_sampling = false;
+    double intensity = 1.0;
+};
+
 struct RestirDirectConfig {
     bool enabled = false;
     bool temporal_reuse = true;
@@ -104,6 +109,7 @@ struct RenderConfig {
     GpuConfig gpu;
     WaveOpticsConfig wave_optics;
     PathGuidingConfig path_guiding;
+    EnvironmentLightConfig environment_light;
     RestirDirectConfig restir_di;
     IntegratorConfig integrator;
 };

@@ -153,6 +153,7 @@ void alloc_hit_queue(HitQueue& q, int capacity) {
     UR_CUDA_CHECK(cudaMalloc(&q.mat_ids, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.hit_types, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.hit_indices, capacity * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&q.hit_primitive_indices, capacity * sizeof(int)));
 }
 
 void free_hit_queue(HitQueue& q) {
@@ -164,6 +165,7 @@ void free_hit_queue(HitQueue& q) {
     cudaFree(q.mat_ids);
     cudaFree(q.hit_types);
     cudaFree(q.hit_indices);
+    cudaFree(q.hit_primitive_indices);
 }
 
 void alloc_shadow_queue(ShadowQueue& q, int capacity, int num_spec_channels) {
@@ -594,6 +596,42 @@ static void build_light_alias_table(const std::vector<float>& weights,
     }
 }
 
+static void build_light_tree(const std::vector<float>& weights,
+                             std::vector<GpuLightTreeNode>& nodes,
+                             int& root_index) {
+    nodes.clear();
+    root_index = -1;
+    const int light_count = static_cast<int>(weights.size());
+    if (light_count <= 0) return;
+
+    int leaf_capacity = 1;
+    while (leaf_capacity < light_count) {
+        leaf_capacity *= 2;
+    }
+
+    const int node_count = leaf_capacity * 2 - 1;
+    nodes.resize(static_cast<size_t>(node_count));
+    const int leaf_base = leaf_capacity - 1;
+
+    for (int i = 0; i < leaf_capacity; ++i) {
+        GpuLightTreeNode& node = nodes[static_cast<size_t>(leaf_base + i)];
+        node.light_index = i < light_count ? i : -1;
+        node.weight = i < light_count ? std::max(weights[static_cast<size_t>(i)], 0.0f) : 0.0f;
+    }
+
+    for (int i = leaf_base - 1; i >= 0; --i) {
+        const int left = i * 2 + 1;
+        const int right = left + 1;
+        nodes[static_cast<size_t>(i)].left = left;
+        nodes[static_cast<size_t>(i)].right = right;
+        nodes[static_cast<size_t>(i)].light_index = -1;
+        nodes[static_cast<size_t>(i)].weight =
+            nodes[static_cast<size_t>(left)].weight + nodes[static_cast<size_t>(right)].weight;
+    }
+
+    root_index = nodes.empty() || nodes[0].weight <= 0.0f ? -1 : 0;
+}
+
 static void clear_wavelength_proposal_from_queue(RayQueue& queue) {
     queue.wavelength_proposal_cdf = nullptr;
     queue.wavelength_proposal_pdf = nullptr;
@@ -696,15 +734,23 @@ static void rebuild_wavelength_proposal(GpuContext* ctx) {
 }
 
 static void release_light_distribution(GpuContext* ctx) {
+    cudaFree(ctx->d_lights);
     cudaFree(ctx->d_light_indices);
+    cudaFree(ctx->d_light_selection_pmf);
     cudaFree(ctx->d_light_selection_cdf);
     cudaFree(ctx->d_light_alias_prob);
     cudaFree(ctx->d_light_alias_index);
+    cudaFree(ctx->d_light_tree_nodes);
     cudaFree(ctx->d_path_guiding_light_weights);
+    ctx->d_lights = nullptr;
     ctx->d_light_indices = nullptr;
+    ctx->d_light_selection_pmf = nullptr;
     ctx->d_light_selection_cdf = nullptr;
     ctx->d_light_alias_prob = nullptr;
     ctx->d_light_alias_index = nullptr;
+    ctx->d_light_tree_nodes = nullptr;
+    ctx->light_tree_node_count = 0;
+    ctx->light_tree_root = -1;
     ctx->d_path_guiding_light_weights = nullptr;
     ctx->light_count = 0;
     ctx->last_integrator_path_guiding_light_count = 0;
@@ -718,6 +764,13 @@ static bool path_guiding_enabled(const ure::RenderConfig& config) {
 
 static bool restir_di_enabled(const ure::RenderConfig& config) {
     return config.restir_di.enabled && config.restir_di.temporal_reuse;
+}
+
+static void validate_environment_light_config(const ure::RenderConfig& config) {
+    if (!config.environment_light.direct_sampling) return;
+    if (!std::isfinite(config.environment_light.intensity) || config.environment_light.intensity <= 0.0f) {
+        throw std::runtime_error("Environment light intensity must be finite and positive when direct sampling is enabled");
+    }
 }
 
 static void validate_path_guiding_config(const ure::RenderConfig& config) {
@@ -889,29 +942,142 @@ static void alloc_restir_di_reservoirs(GpuContext* ctx) {
     ctx->last_integrator_restir_reservoir_count = pixel_count;
 }
 
+struct HostLightMeshData {
+    std::vector<float> vertices;
+    std::vector<int> indices;
+    int material_index = -1;
+};
+
+static float host_triangle_area(const std::vector<float>& vertices, const std::vector<int>& indices, int tri) {
+    const int i0 = indices[tri * 3 + 0];
+    const int i1 = indices[tri * 3 + 1];
+    const int i2 = indices[tri * 3 + 2];
+    const GpuVec3 v0(vertices[i0 * 3 + 0], vertices[i0 * 3 + 1], vertices[i0 * 3 + 2]);
+    const GpuVec3 v1(vertices[i1 * 3 + 0], vertices[i1 * 3 + 1], vertices[i1 * 3 + 2]);
+    const GpuVec3 v2(vertices[i2 * 3 + 0], vertices[i2 * 3 + 1], vertices[i2 * 3 + 2]);
+    return 0.5f * (v1 - v0).cross(v2 - v0).length();
+}
+
+static float host_instance_triangle_area(
+    const HostLightMeshData& mesh,
+    const GpuInstance& instance,
+    int tri
+) {
+    const int i0 = mesh.indices[tri * 3 + 0];
+    const int i1 = mesh.indices[tri * 3 + 1];
+    const int i2 = mesh.indices[tri * 3 + 2];
+    const GpuVec3 v0 = instance.transform.transform_point(GpuVec3(mesh.vertices[i0 * 3 + 0], mesh.vertices[i0 * 3 + 1], mesh.vertices[i0 * 3 + 2]));
+    const GpuVec3 v1 = instance.transform.transform_point(GpuVec3(mesh.vertices[i1 * 3 + 0], mesh.vertices[i1 * 3 + 1], mesh.vertices[i1 * 3 + 2]));
+    const GpuVec3 v2 = instance.transform.transform_point(GpuVec3(mesh.vertices[i2 * 3 + 0], mesh.vertices[i2 * 3 + 1], mesh.vertices[i2 * 3 + 2]));
+    return 0.5f * (v1 - v0).cross(v2 - v0).length();
+}
+
+static void add_sphere_light_records(std::vector<GpuLightRecord>& records, const std::vector<GpuSphere>& spheres) {
+    for (int i = 0; i < static_cast<int>(spheres.size()); ++i) {
+        GpuLightRecord record;
+        record.kind = GpuLightKind::Sphere;
+        record.primitive_index = i;
+        record.secondary_index = -1;
+        record.material_index = spheres[i].material_index;
+        record.area = 4.0f * 3.14159265358979323846f * spheres[i].radius * spheres[i].radius;
+        if (record.area > 0.0f) {
+            records.push_back(record);
+        }
+    }
+}
+
+static void add_direct_mesh_light_records(
+    std::vector<GpuLightRecord>& records,
+    const std::vector<HostLightMeshData>& meshes,
+    const std::vector<GpuInstance>&
+) {
+    for (int mesh_index = 0; mesh_index < static_cast<int>(meshes.size()); ++mesh_index) {
+        const auto& mesh = meshes[mesh_index];
+        if (mesh.material_index < 0) continue;
+        for (int tri = 0; tri < static_cast<int>(mesh.indices.size() / 3); ++tri) {
+            const float area = host_triangle_area(mesh.vertices, mesh.indices, tri);
+            if (area <= 0.0f) continue;
+            GpuLightRecord record;
+            record.kind = GpuLightKind::MeshTriangle;
+            record.primitive_index = mesh_index;
+            record.secondary_index = tri;
+            record.material_index = mesh.material_index;
+            record.area = area;
+            records.push_back(record);
+        }
+    }
+}
+
+static void add_instance_light_records(
+    std::vector<GpuLightRecord>& records,
+    const std::vector<HostLightMeshData>& meshes,
+    const std::vector<GpuInstance>& instances
+) {
+    for (int instance_index = 0; instance_index < static_cast<int>(instances.size()); ++instance_index) {
+        const auto& instance = instances[instance_index];
+        if (instance.mesh_index < 0 || instance.mesh_index >= static_cast<int>(meshes.size())) continue;
+        const auto& mesh = meshes[instance.mesh_index];
+        const int material_index = instance.material_index >= 0 ? instance.material_index : mesh.material_index;
+        for (int tri = 0; tri < static_cast<int>(mesh.indices.size() / 3); ++tri) {
+            const float area = host_instance_triangle_area(mesh, instance, tri);
+            if (area <= 0.0f) continue;
+            GpuLightRecord record;
+            record.kind = GpuLightKind::InstanceTriangle;
+            record.primitive_index = instance_index;
+            record.secondary_index = tri;
+            record.material_index = material_index;
+            record.area = area;
+            records.push_back(record);
+        }
+    }
+}
+
+static void add_environment_light_record(std::vector<GpuLightRecord>& records, const ure::RenderConfig& config) {
+    if (!config.environment_light.direct_sampling) return;
+    GpuLightRecord record;
+    record.kind = GpuLightKind::Environment;
+    record.primitive_index = -1;
+    record.secondary_index = -1;
+    record.material_index = -1;
+    record.area = 4.0f * 3.14159265358979323846f;
+    records.push_back(record);
+}
+
 static void rebuild_light_distribution(GpuContext* ctx) {
     release_light_distribution(ctx);
 
     std::vector<int> host_light_indices;
+    std::vector<GpuLightRecord> host_lights;
     std::vector<float> host_light_weights;
-    const auto& host_spheres = ctx->host_spheres_for_light_distribution;
     const auto& host_materials = ctx->host_materials_for_light_distribution;
-    for (int i = 0; i < static_cast<int>(host_spheres.size()); ++i) {
-        const int mat_idx = host_spheres[i].material_index;
+    const auto& host_records = ctx->host_light_records_for_distribution;
+    for (int i = 0; i < static_cast<int>(host_records.size()); ++i) {
+        if (host_records[i].kind == GpuLightKind::Environment) {
+            const float environment_power = std::max(ctx->render_config.environment_light.intensity, 1e-8f);
+            host_lights.push_back(host_records[i]);
+            host_light_indices.push_back(-1);
+            host_light_weights.push_back(std::max(host_records[i].area * environment_power, 1e-8f));
+            continue;
+        }
+        const int mat_idx = host_records[i].material_index;
         if (mat_idx >= 0 && mat_idx < static_cast<int>(host_materials.size())) {
             const auto& mat = host_materials[mat_idx];
             const float emission_power = average_material_emission_power(mat, ctx->num_spectral_channels);
             if (emission_power > 1e-4f) {
-                host_light_indices.push_back(i);
-                const float area = 4.0f * 3.14159265358979323846f *
-                    host_spheres[i].radius * host_spheres[i].radius;
-                host_light_weights.push_back(std::max(area * emission_power, 1e-8f));
+                host_lights.push_back(host_records[i]);
+                host_light_indices.push_back(host_records[i].primitive_index);
+                host_light_weights.push_back(std::max(host_records[i].area * emission_power, 1e-8f));
             }
         }
     }
 
-    if (host_light_indices.empty()) return;
+    if (host_lights.empty()) return;
 
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_lights, host_lights.size() * sizeof(GpuLightRecord)));
+    UR_CUDA_CHECK(cudaMemcpy(ctx->d_lights,
+                             host_lights.data(),
+                             host_lights.size() * sizeof(GpuLightRecord),
+                             cudaMemcpyHostToDevice));
     UR_CUDA_CHECK(cudaMalloc(&ctx->d_light_indices, host_light_indices.size() * sizeof(int)));
     UR_CUDA_CHECK(cudaMemcpy(ctx->d_light_indices,
                              host_light_indices.data(),
@@ -923,16 +1089,23 @@ static void rebuild_light_distribution(GpuContext* ctx) {
         total_light_weight += weight;
     }
 
+    std::vector<float> host_light_pmf(host_light_weights.size(), 0.0f);
     std::vector<float> host_light_cdf(host_light_weights.size(), 0.0f);
     float running = 0.0f;
     const float inv_total = total_light_weight > 0.0f
         ? 1.0f / total_light_weight
         : 1.0f / float(host_light_weights.size());
     for (size_t i = 0; i < host_light_weights.size(); ++i) {
-        running += total_light_weight > 0.0f ? host_light_weights[i] * inv_total : inv_total;
+        host_light_pmf[i] = total_light_weight > 0.0f ? host_light_weights[i] * inv_total : inv_total;
+        running += host_light_pmf[i];
         host_light_cdf[i] = i + 1 == host_light_weights.size() ? 1.0f : running;
     }
 
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_light_selection_pmf, host_light_pmf.size() * sizeof(float)));
+    UR_CUDA_CHECK(cudaMemcpy(ctx->d_light_selection_pmf,
+                             host_light_pmf.data(),
+                             host_light_pmf.size() * sizeof(float),
+                             cudaMemcpyHostToDevice));
     UR_CUDA_CHECK(cudaMalloc(&ctx->d_light_selection_cdf, host_light_cdf.size() * sizeof(float)));
     UR_CUDA_CHECK(cudaMemcpy(ctx->d_light_selection_cdf,
                              host_light_cdf.data(),
@@ -952,7 +1125,20 @@ static void rebuild_light_distribution(GpuContext* ctx) {
                              host_alias_index.data(),
                              host_alias_index.size() * sizeof(int),
                              cudaMemcpyHostToDevice));
-    ctx->light_count = static_cast<int>(host_light_indices.size());
+
+    std::vector<GpuLightTreeNode> host_light_tree;
+    int host_light_tree_root = -1;
+    build_light_tree(host_light_weights, host_light_tree, host_light_tree_root);
+    if (!host_light_tree.empty() && host_light_tree_root >= 0) {
+        UR_CUDA_CHECK(cudaMalloc(&ctx->d_light_tree_nodes, host_light_tree.size() * sizeof(GpuLightTreeNode)));
+        UR_CUDA_CHECK(cudaMemcpy(ctx->d_light_tree_nodes,
+                                 host_light_tree.data(),
+                                 host_light_tree.size() * sizeof(GpuLightTreeNode),
+                                 cudaMemcpyHostToDevice));
+        ctx->light_tree_node_count = static_cast<int>(host_light_tree.size());
+        ctx->light_tree_root = host_light_tree_root;
+    }
+    ctx->light_count = static_cast<int>(host_lights.size());
     if (path_guiding_enabled(ctx->render_config)) {
         UR_CUDA_CHECK(cudaMalloc(&ctx->d_path_guiding_light_weights, host_light_indices.size() * sizeof(float)));
         UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_light_weights, 0, host_light_indices.size() * sizeof(float)));
@@ -971,6 +1157,7 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const ure::RenderConfig& config) {
     validate_explicit_spectral_resident_budget(materials, textures, config);
     validate_integrator_runtime_config(config);
+    validate_environment_light_config(config);
     validate_path_guiding_config(config);
     validate_restir_di_config(config);
     validate_specular_manifold_config(config);
@@ -1131,6 +1318,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     ctx->sphere_count = (int)host_spheres.size();
 
     std::vector<GpuMesh> host_gpu_meshes;
+    std::vector<HostLightMeshData> host_light_meshes;
 
     for (const auto& input_mesh : meshes) {
         GpuMesh mesh;
@@ -1195,6 +1383,7 @@ GpuContext* init_gpu_renderer(int width, int height,
         ctx->pointers_to_free.push_back(d_i);
 
         host_gpu_meshes.push_back(mesh);
+        host_light_meshes.push_back(HostLightMeshData{input_mesh.vertices, temp_indices, input_mesh.material_index});
     }
 
     for (auto& hm : host_scene.meshes) {
@@ -1250,6 +1439,7 @@ GpuContext* init_gpu_renderer(int width, int height,
         mesh.indices = d_i;
         ctx->pointers_to_free.push_back(d_i);
         host_gpu_meshes.push_back(mesh);
+        host_light_meshes.push_back(HostLightMeshData{hm.vertices, hm.indices, hm.material_index});
     }
 
     {
@@ -1374,7 +1564,13 @@ GpuContext* init_gpu_renderer(int width, int height,
     }
     ctx->texture_count = (int)host_gpu_textures.size();
 
+    std::vector<GpuLightRecord> host_light_records;
+    add_sphere_light_records(host_light_records, host_spheres);
+    add_direct_mesh_light_records(host_light_records, host_light_meshes, host_instances);
+    add_instance_light_records(host_light_records, host_light_meshes, host_instances);
+    add_environment_light_record(host_light_records, config);
     ctx->host_spheres_for_light_distribution = host_spheres;
+    ctx->host_light_records_for_distribution = host_light_records;
     ctx->host_materials_for_light_distribution = host_materials;
     rebuild_wavelength_proposal(ctx);
     rebuild_light_distribution(ctx);
@@ -1507,15 +1703,22 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.num_spectral_channels = ctx->num_spectral_channels;
     scene.textures = ctx->d_textures;
     scene.texture_count = ctx->texture_count;
+    scene.lights = ctx->d_lights;
     scene.light_indices = ctx->d_light_indices;
+    scene.light_selection_pmf = ctx->d_light_selection_pmf;
     scene.light_selection_cdf = ctx->d_light_selection_cdf;
     scene.light_alias_prob = ctx->d_light_alias_prob;
     scene.light_alias_index = ctx->d_light_alias_index;
+    scene.light_tree_nodes = ctx->d_light_tree_nodes;
+    scene.light_tree_node_count = ctx->light_tree_node_count;
+    scene.light_tree_root = ctx->light_tree_root;
     scene.path_guiding_light_weights = ctx->d_path_guiding_light_weights;
     scene.path_guiding_light_count = ctx->light_count;
     scene.path_guiding_light_mixture = std::clamp(ctx->render_config.path_guiding.light_mixture, 0.0f, 0.95f);
     scene.path_guiding_learning_rate = std::clamp(ctx->render_config.path_guiding.learning_rate, 0.0f, 1.0f);
     scene.path_guiding_min_weight = std::max(ctx->render_config.path_guiding.min_weight, 0.0f);
+    scene.environment_light_direct_sampling = ctx->render_config.environment_light.direct_sampling ? 1 : 0;
+    scene.environment_light_intensity = std::max(ctx->render_config.environment_light.intensity, 0.0f);
     scene.restir_di_origins = ctx->d_restir_di_origins;
     scene.restir_di_directions = ctx->d_restir_di_directions;
     scene.restir_di_max_dist = ctx->d_restir_di_max_dist;
