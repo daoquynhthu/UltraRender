@@ -62,6 +62,7 @@ struct GpuContext {
     float* d_light_alias_prob = nullptr;
     int* d_light_alias_index = nullptr;
     GpuLightTreeNode* d_light_tree_nodes = nullptr;
+    int* d_light_tree_leaf_nodes = nullptr;
     int light_tree_node_count = 0;
     int light_tree_root = -1;
     float* d_path_guiding_light_weights = nullptr;

@@ -615,10 +615,13 @@ static int build_light_tree_recursive(const std::vector<GpuLightRecord>& lights,
                                       std::vector<int>& indices,
                                       int begin,
                                       int end,
-                                      std::vector<GpuLightTreeNode>& nodes) {
+                                      int parent,
+                                      std::vector<GpuLightTreeNode>& nodes,
+                                      std::vector<int>& leaf_nodes) {
     const int node_index = static_cast<int>(nodes.size());
     nodes.push_back(GpuLightTreeNode{});
     GpuLightTreeNode& node = nodes.back();
+    node.parent = parent;
 
     GpuVec3 bounds_min(FLT_MAX, FLT_MAX, FLT_MAX);
     GpuVec3 bounds_max(-FLT_MAX, -FLT_MAX, -FLT_MAX);
@@ -640,6 +643,7 @@ static int build_light_tree_recursive(const std::vector<GpuLightRecord>& lights,
 
     if (end - begin == 1) {
         node.light_index = indices[static_cast<size_t>(begin)];
+        leaf_nodes[static_cast<size_t>(node.light_index)] = node_index;
         return node_index;
     }
 
@@ -674,8 +678,8 @@ static int build_light_tree_recursive(const std::vector<GpuLightRecord>& lights,
         split = (begin + end) / 2;
     }
 
-    const int left = build_light_tree_recursive(lights, weights, indices, begin, split, nodes);
-    const int right = build_light_tree_recursive(lights, weights, indices, split, end, nodes);
+    const int left = build_light_tree_recursive(lights, weights, indices, begin, split, node_index, nodes, leaf_nodes);
+    const int right = build_light_tree_recursive(lights, weights, indices, split, end, node_index, nodes, leaf_nodes);
     nodes[static_cast<size_t>(node_index)].left = left;
     nodes[static_cast<size_t>(node_index)].right = right;
     return node_index;
@@ -684,8 +688,10 @@ static int build_light_tree_recursive(const std::vector<GpuLightRecord>& lights,
 static void build_light_tree(const std::vector<GpuLightRecord>& lights,
                              const std::vector<float>& weights,
                              std::vector<GpuLightTreeNode>& nodes,
+                             std::vector<int>& leaf_nodes,
                              int& root_index) {
     nodes.clear();
+    leaf_nodes.assign(weights.size(), -1);
     root_index = -1;
     const int light_count = static_cast<int>(weights.size());
     if (light_count <= 0 || lights.size() != weights.size()) return;
@@ -695,7 +701,7 @@ static void build_light_tree(const std::vector<GpuLightRecord>& lights,
         indices[static_cast<size_t>(i)] = i;
     }
 
-    root_index = build_light_tree_recursive(lights, weights, indices, 0, light_count, nodes);
+    root_index = build_light_tree_recursive(lights, weights, indices, 0, light_count, -1, nodes, leaf_nodes);
     if (root_index < 0 || nodes[static_cast<size_t>(root_index)].weight <= 0.0f) {
         nodes.clear();
         root_index = -1;
@@ -811,6 +817,7 @@ static void release_light_distribution(GpuContext* ctx) {
     cudaFree(ctx->d_light_alias_prob);
     cudaFree(ctx->d_light_alias_index);
     cudaFree(ctx->d_light_tree_nodes);
+    cudaFree(ctx->d_light_tree_leaf_nodes);
     cudaFree(ctx->d_path_guiding_light_weights);
     ctx->d_lights = nullptr;
     ctx->d_light_indices = nullptr;
@@ -819,6 +826,7 @@ static void release_light_distribution(GpuContext* ctx) {
     ctx->d_light_alias_prob = nullptr;
     ctx->d_light_alias_index = nullptr;
     ctx->d_light_tree_nodes = nullptr;
+    ctx->d_light_tree_leaf_nodes = nullptr;
     ctx->light_tree_node_count = 0;
     ctx->light_tree_root = -1;
     ctx->d_path_guiding_light_weights = nullptr;
@@ -1247,13 +1255,19 @@ static void rebuild_light_distribution(GpuContext* ctx) {
                              cudaMemcpyHostToDevice));
 
     std::vector<GpuLightTreeNode> host_light_tree;
+    std::vector<int> host_light_tree_leaf_nodes;
     int host_light_tree_root = -1;
-    build_light_tree(host_lights, host_light_weights, host_light_tree, host_light_tree_root);
+    build_light_tree(host_lights, host_light_weights, host_light_tree, host_light_tree_leaf_nodes, host_light_tree_root);
     if (!host_light_tree.empty() && host_light_tree_root >= 0) {
         UR_CUDA_CHECK(cudaMalloc(&ctx->d_light_tree_nodes, host_light_tree.size() * sizeof(GpuLightTreeNode)));
+        UR_CUDA_CHECK(cudaMalloc(&ctx->d_light_tree_leaf_nodes, host_light_tree_leaf_nodes.size() * sizeof(int)));
         UR_CUDA_CHECK(cudaMemcpy(ctx->d_light_tree_nodes,
                                  host_light_tree.data(),
                                  host_light_tree.size() * sizeof(GpuLightTreeNode),
+                                 cudaMemcpyHostToDevice));
+        UR_CUDA_CHECK(cudaMemcpy(ctx->d_light_tree_leaf_nodes,
+                                 host_light_tree_leaf_nodes.data(),
+                                 host_light_tree_leaf_nodes.size() * sizeof(int),
                                  cudaMemcpyHostToDevice));
         ctx->light_tree_node_count = static_cast<int>(host_light_tree.size());
         ctx->light_tree_root = host_light_tree_root;
@@ -1830,6 +1844,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.light_alias_prob = ctx->d_light_alias_prob;
     scene.light_alias_index = ctx->d_light_alias_index;
     scene.light_tree_nodes = ctx->d_light_tree_nodes;
+    scene.light_tree_leaf_nodes = ctx->d_light_tree_leaf_nodes;
     scene.light_tree_node_count = ctx->light_tree_node_count;
     scene.light_tree_root = ctx->light_tree_root;
     scene.path_guiding_light_weights = ctx->d_path_guiding_light_weights;

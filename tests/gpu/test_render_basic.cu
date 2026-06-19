@@ -220,6 +220,17 @@ __global__ void light_tree_spatial_bounds_kernel(GpuScene scene, float* out) {
     out[8] = scene.light_tree_nodes[root].weight;
 }
 
+__global__ void light_tree_reference_point_sampling_kernel(GpuScene scene, float* out) {
+    const GpuVec3 near_left(-10.0f, 2.0f, 0.0f);
+    const GpuVec3 near_right(10.0f, 2.0f, 0.0f);
+    out[0] = light_selection_pdf_at(scene, 0, near_left);
+    out[1] = light_selection_pdf_at(scene, 2, near_left);
+    out[2] = light_selection_pdf_at(scene, 0, near_right);
+    out[3] = light_selection_pdf_at(scene, 2, near_right);
+    out[4] = float(sample_light_list_index_at(scene, near_left, 0.5f));
+    out[5] = float(sample_light_list_index_at(scene, near_right, 0.5f));
+}
+
 __global__ void triangle_light_sampling_pdf_kernel(GpuScene scene, float* out) {
     SelectedLightSample sample;
     bool ok = sample_selected_light(scene, 0, GpuVec3(0.5f, 0.5f, 1.0f), 0.25f, 0.5f, sample);
@@ -235,7 +246,7 @@ __global__ void environment_light_sampling_pdf_kernel(GpuScene scene, float* out
     bool ok = sample_selected_light(scene, 0, GpuVec3(0.0f, 0.0f, 0.0f), 0.5f, 0.25f, sample);
     out[0] = ok ? 1.0f : 0.0f;
     out[1] = sample.pdf;
-    out[2] = selected_environment_light_pdf(scene);
+    out[2] = selected_environment_light_pdf(scene, GpuVec3(0.0f, 0.0f, 0.0f));
     out[3] = static_cast<float>(sample.kind == GpuLightKind::Environment ? 1 : 0);
     out[4] = sample.max_dist > 1.0e5f ? 1.0f : 0.0f;
 }
@@ -1138,6 +1149,7 @@ static int test_light_tree_spatial_split_tracks_subtree_bounds() {
     scene.light_count = ctx->light_count;
     scene.light_selection_pmf = ctx->d_light_selection_pmf;
     scene.light_tree_nodes = ctx->d_light_tree_nodes;
+    scene.light_tree_leaf_nodes = ctx->d_light_tree_leaf_nodes;
     scene.light_tree_node_count = ctx->light_tree_node_count;
     scene.light_tree_root = ctx->light_tree_root;
 
@@ -1154,6 +1166,58 @@ static int test_light_tree_spatial_split_tracks_subtree_bounds() {
     CHECK(out[6] <= -11.0f);
     CHECK(out[7] >= 11.0f);
     CHECK(out[8] > 0.0f);
+
+    cudaFree(d_out);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_light_tree_sampling_depends_on_reference_point() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+
+    std::vector<GpuSphere> lights;
+    for (int i = 0; i < 3; ++i) {
+        GpuSphere sphere;
+        sphere.center = GpuVec3(-10.0f + 10.0f * float(i), 2.0f, 0.0f);
+        sphere.radius = 1.0f;
+        sphere.material_index = 7;
+        lights.push_back(sphere);
+    }
+
+    GpuMaterialData light = {};
+    light.header.type = MaterialType::Light;
+    light.emission = SpectralPacket(1.0f);
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, lights, {light}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->light_count == 3);
+    CHECK(ctx->d_light_tree_leaf_nodes != nullptr);
+
+    float* d_out = nullptr;
+    float out[6] = {};
+    CHECK_CUDA(cudaMalloc(&d_out, 6 * sizeof(float)));
+
+    GpuScene scene = {};
+    scene.light_count = ctx->light_count;
+    scene.light_selection_pmf = ctx->d_light_selection_pmf;
+    scene.light_tree_nodes = ctx->d_light_tree_nodes;
+    scene.light_tree_leaf_nodes = ctx->d_light_tree_leaf_nodes;
+    scene.light_tree_node_count = ctx->light_tree_node_count;
+    scene.light_tree_root = ctx->light_tree_root;
+
+    light_tree_reference_point_sampling_kernel<<<1, 1>>>(scene, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(out, d_out, 6 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(out[0] > 0.95f);
+    CHECK(out[1] < 0.01f);
+    CHECK(out[2] < 0.01f);
+    CHECK(out[3] > 0.95f);
+    CHECK_FLOAT_EQ(out[4], 0.0f, 1e-6f);
+    CHECK_FLOAT_EQ(out[5], 2.0f, 1e-6f);
 
     cudaFree(d_out);
     free_gpu_renderer(ctx);
@@ -2122,6 +2186,7 @@ int main() {
     RUN_TEST(test_light_selection_cdf_uses_area_and_spectral_power);
     RUN_TEST(test_light_tree_matches_area_and_spectral_power_distribution);
     RUN_TEST(test_light_tree_spatial_split_tracks_subtree_bounds);
+    RUN_TEST(test_light_tree_sampling_depends_on_reference_point);
     RUN_TEST(test_instance_triangle_light_builds_typed_light_record);
     RUN_TEST(test_instance_triangle_light_sampling_pdf_contract);
     RUN_TEST(test_direct_mesh_triangle_light_builds_record_and_pdf_contract);

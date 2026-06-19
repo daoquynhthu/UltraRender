@@ -420,6 +420,62 @@ __device__ inline float light_selection_pdf(const GpuScene& scene, int light_lis
     return fmaxf(0.0f, upper - lower);
 }
 
+__device__ inline float light_tree_node_importance(
+    const GpuScene& scene,
+    int node_index,
+    const GpuVec3& reference_point
+) {
+    if (!scene.light_tree_nodes || node_index < 0 || node_index >= scene.light_tree_node_count) return 0.0f;
+    const GpuLightTreeNode node = scene.light_tree_nodes[node_index];
+    const float weight = fmaxf(node.weight, 0.0f);
+    if (weight <= 0.0f) return 0.0f;
+
+    const GpuVec3 extent = node.bounds_max - node.bounds_min;
+    if (extent.x > 1.0e18f || extent.y > 1.0e18f || extent.z > 1.0e18f) {
+        return weight;
+    }
+
+    const GpuVec3 center = (node.bounds_min + node.bounds_max) * 0.5f;
+    const GpuVec3 half_extent = extent * 0.5f;
+    const float radius_sq = fmaxf(half_extent.length_sq(), 1.0e-8f);
+    const float dist_sq = (center - reference_point).length_sq();
+    if (dist_sq <= radius_sq) return weight;
+    return weight / fmaxf(dist_sq - radius_sq, 1.0e-6f);
+}
+
+__device__ inline float light_selection_pdf_at(
+    const GpuScene& scene,
+    int light_list_index,
+    const GpuVec3& reference_point
+) {
+    if (scene.light_count <= 0 || light_list_index < 0 || light_list_index >= scene.light_count) return 0.0f;
+    if (scene.light_tree_nodes &&
+        scene.light_tree_leaf_nodes &&
+        scene.light_tree_root >= 0 &&
+        scene.light_tree_root < scene.light_tree_node_count) {
+        int node_index = scene.light_tree_leaf_nodes[light_list_index];
+        if (node_index < 0 || node_index >= scene.light_tree_node_count) return 0.0f;
+
+        float pdf = 1.0f;
+        for (int depth = 0; depth < 32; ++depth) {
+            const GpuLightTreeNode node = scene.light_tree_nodes[node_index];
+            const int parent_index = node.parent;
+            if (parent_index < 0) return pdf;
+            if (parent_index >= scene.light_tree_node_count) return 0.0f;
+            const GpuLightTreeNode parent = scene.light_tree_nodes[parent_index];
+            const float left_importance = light_tree_node_importance(scene, parent.left, reference_point);
+            const float right_importance = light_tree_node_importance(scene, parent.right, reference_point);
+            const float total = left_importance + right_importance;
+            if (total <= 0.0f) return 0.0f;
+            const float branch_pdf = node_index == parent.left ? left_importance / total : right_importance / total;
+            pdf *= fmaxf(0.0f, branch_pdf);
+            node_index = parent_index;
+        }
+        return 0.0f;
+    }
+    return light_selection_pdf(scene, light_list_index);
+}
+
 __device__ inline float path_guiding_light_total(const GpuScene& scene) {
     if (!scene.path_guiding_light_weights ||
         scene.path_guiding_light_count != scene.light_count ||
@@ -496,6 +552,41 @@ __device__ inline int sample_base_light_list_index(const GpuScene& scene, float 
     return scene.light_count - 1;
 }
 
+__device__ inline int sample_base_light_list_index_at(
+    const GpuScene& scene,
+    const GpuVec3& reference_point,
+    float r
+) {
+    if (scene.light_count <= 0) return -1;
+    if (scene.light_tree_nodes && scene.light_tree_root >= 0 && scene.light_tree_root < scene.light_tree_node_count) {
+        int node_index = scene.light_tree_root;
+        float u = fminf(fmaxf(r, 0.0f), 0.99999994f);
+        for (int depth = 0; depth < 32; ++depth) {
+            const GpuLightTreeNode node = scene.light_tree_nodes[node_index];
+            if (node.light_index >= 0) {
+                return node.light_index < scene.light_count ? node.light_index : scene.light_count - 1;
+            }
+            const int left = node.left;
+            const int right = node.right;
+            if (left < 0 || right < 0 || left >= scene.light_tree_node_count || right >= scene.light_tree_node_count) break;
+            const float left_importance = light_tree_node_importance(scene, left, reference_point);
+            const float right_importance = light_tree_node_importance(scene, right, reference_point);
+            const float total = left_importance + right_importance;
+            if (total <= 0.0f) break;
+            const float left_probability = left_importance / total;
+            if (u < left_probability) {
+                node_index = left;
+                u = left_probability > 1e-8f ? u / left_probability : 0.0f;
+            } else {
+                node_index = right;
+                const float right_probability = fmaxf(1e-8f, 1.0f - left_probability);
+                u = (u - left_probability) / right_probability;
+            }
+        }
+    }
+    return sample_base_light_list_index(scene, r);
+}
+
 __device__ inline int sample_guided_light_list_index(const GpuScene& scene, float r, float guide_total) {
     if (guide_total <= fmaxf(scene.path_guiding_min_weight, 1e-12f)) {
         return sample_base_light_list_index(scene, r);
@@ -520,8 +611,36 @@ __device__ inline int sample_light_list_index(const GpuScene& scene, float r) {
     return sample_base_light_list_index(scene, base_u);
 }
 
+__device__ inline int sample_light_list_index_at(
+    const GpuScene& scene,
+    const GpuVec3& reference_point,
+    float r
+) {
+    if (scene.light_count <= 0) return -1;
+    float guide_total = path_guiding_light_total(scene);
+    float mixture = path_guiding_effective_mixture(scene, guide_total);
+    if (mixture > 0.0f && r < mixture) {
+        return sample_guided_light_list_index(scene, r / mixture, guide_total);
+    }
+    float base_u = mixture < 1.0f ? (r - mixture) / fmaxf(1e-6f, 1.0f - mixture) : r;
+    return sample_base_light_list_index_at(scene, reference_point, base_u);
+}
+
 __device__ inline float guided_mixture_light_selection_pdf(const GpuScene& scene, int light_list_index) {
     const float base_pdf = light_selection_pdf(scene, light_list_index);
+    const float guide_total = path_guiding_light_total(scene);
+    const float mixture = path_guiding_effective_mixture(scene, guide_total);
+    if (mixture <= 0.0f) return base_pdf;
+    const float guide_pdf = guided_light_selection_pdf(scene, light_list_index, guide_total);
+    return (1.0f - mixture) * base_pdf + mixture * guide_pdf;
+}
+
+__device__ inline float guided_mixture_light_selection_pdf_at(
+    const GpuScene& scene,
+    int light_list_index,
+    const GpuVec3& reference_point
+) {
+    const float base_pdf = light_selection_pdf_at(scene, light_list_index, reference_point);
     const float guide_total = path_guiding_light_total(scene);
     const float mixture = path_guiding_effective_mixture(scene, guide_total);
     if (mixture <= 0.0f) return base_pdf;
@@ -536,7 +655,7 @@ __device__ inline float selected_sphere_light_pdf(
     const GpuVec3& reference_point
 ) {
     return sphere_light_solid_angle_pdf_only(light_sphere, reference_point) *
-           guided_mixture_light_selection_pdf(scene, light_list_index);
+           guided_mixture_light_selection_pdf_at(scene, light_list_index, reference_point);
 }
 
 struct SelectedLightSample {
@@ -649,7 +768,7 @@ __device__ inline float selected_triangle_light_pdf(
     const float cos_light = fabsf(normal.dot(-dir));
     const float area = record.area > 0.0f ? record.area : 0.5f * (v1 - v0).cross(v2 - v0).length();
     if (cos_light <= 1e-6f || area <= 0.0f) return 0.0f;
-    return (dist_sq / (cos_light * area)) * guided_mixture_light_selection_pdf(scene, light_list_index);
+    return (dist_sq / (cos_light * area)) * guided_mixture_light_selection_pdf_at(scene, light_list_index, reference_point);
 }
 
 __device__ inline float selected_light_hit_pdf(
@@ -714,7 +833,7 @@ __device__ inline bool sample_selected_light(
         sample.direction = GpuVec3(radial * cosf(phi), y, radial * sinf(phi)).normalize();
         sample.point = reference_point + sample.direction * 1.0e20f;
         sample.max_dist = scene.medium_max_distance > 0.0f ? scene.medium_max_distance : 1.0e20f;
-        sample.pdf = guided_mixture_light_selection_pdf(scene, light_list_index) * (1.0f / 12.566370614359172f);
+        sample.pdf = guided_mixture_light_selection_pdf_at(scene, light_list_index, reference_point) * (1.0f / 12.566370614359172f);
         sample.material_index = -1;
         sample.kind = GpuLightKind::Environment;
         sample.valid = sample.pdf > 0.0f && scene.environment_light_direct_sampling != 0;
@@ -740,13 +859,13 @@ __device__ inline bool sample_selected_light(
     return sample.valid;
 }
 
-__device__ inline float selected_environment_light_pdf(const GpuScene& scene) {
+__device__ inline float selected_environment_light_pdf(const GpuScene& scene, const GpuVec3& reference_point) {
     if (!scene.environment_light_direct_sampling) return 0.0f;
     float selection_pdf = 0.0f;
     for (int i = 0; i < scene.light_count; ++i) {
         const GpuLightRecord record = get_light_record(scene, i);
         if (record.kind == GpuLightKind::Environment) {
-            selection_pdf += guided_mixture_light_selection_pdf(scene, i);
+            selection_pdf += guided_mixture_light_selection_pdf_at(scene, i, reference_point);
         }
     }
     return selection_pdf * (1.0f / 12.566370614359172f);
@@ -1332,9 +1451,9 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
             if (scene.light_count > 0) {
                 float r_light_pick = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightPick);
-                int light_idx_idx = sample_light_list_index(scene, r_light_pick);
 
                 GpuVec3 p_vol = current_queue.origins[idx] + current_queue.directions[idx] * t_medium;
+                int light_idx_idx = sample_light_list_index_at(scene, p_vol, r_light_pick);
                 float r1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightU);
                 float r2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightV);
                 SelectedLightSample light_sample;
@@ -1450,7 +1569,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
     if (mat_idx == -1) {
         float mis_weight = 1.0f;
         if (depth > 0 && !(flag & 1) && scene.environment_light_direct_sampling) {
-            const float pdf_nee = selected_environment_light_pdf(scene);
+            const float pdf_nee = selected_environment_light_pdf(scene, current_queue.origins[idx]);
             if (pdf_nee > 0.0f) {
                 const float last_pdf = current_queue.last_pdf[idx];
                 mis_weight = (last_pdf * last_pdf) / (last_pdf * last_pdf + pdf_nee * pdf_nee);
@@ -1635,7 +1754,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
         float r_light_1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimLightU);
         float r_light_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimLightV);
 
-        int light_idx_idx = sample_light_list_index(scene, r_light_pick);
+        int light_idx_idx = sample_light_list_index_at(scene, p, r_light_pick);
         SelectedLightSample light_sample;
 
         if (sample_selected_light(scene, light_idx_idx, p, r_light_1, r_light_2, light_sample)) {

@@ -335,6 +335,7 @@ struct GpuLightRecord {
 };
 
 struct GpuLightTreeNode {
+    int parent = -1;
     int left = -1;
     int right = -1;
     int light_index = -1;
@@ -475,6 +476,7 @@ struct GpuScene {
     float* light_alias_prob;
     int* light_alias_index;
     GpuLightTreeNode* light_tree_nodes;
+    int* light_tree_leaf_nodes;
     int light_tree_node_count;
     int light_tree_root;
     float* path_guiding_light_weights;
