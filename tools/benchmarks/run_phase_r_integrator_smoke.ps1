@@ -28,7 +28,7 @@ if (-not (Test-Path $ScenePath)) { throw "scene not found: $ScenePath" }
 New-Item -ItemType Directory -Path $ResultDir -Force | Out-Null
 
 $elapsed = Measure-Command {
-    & $ExePath render $ScenePath --width $Width --height $Height --spp $Spp --format $Format --output $Output
+    & $ExePath --quiet render $ScenePath --width $Width --height $Height --spp $Spp --format $Format --output $Output
     if ($LASTEXITCODE -ne 0) { throw "render command failed" }
 }
 

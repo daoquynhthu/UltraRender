@@ -15,6 +15,7 @@ $BuildPath = Join-Path $RepoRoot $BuildDir
 $ReportDir = Join-Path $RepoRoot "output\benchmarks"
 $ReportPath = Join-Path $ReportDir "phase_r_validation_suite.json"
 $SmokeReportPath = Join-Path $ReportDir "phase_r_integrator_smoke.json"
+$LightSamplingReportPath = Join-Path $ReportDir "phase_r_light_sampling_suite.json"
 $CtestRegex = "^(test_config|test_integrator|test_session|test_pyure_smoke|gpu_render|gpu_spectral|gpu_volume|gpu_polarization)$"
 
 function Invoke-PhaseRStep {
@@ -44,7 +45,6 @@ try {
 
     $steps += Invoke-PhaseRStep "phase_r_static_audit" {
         & (Join-Path $RepoRoot "scripts\check_phase_r_static.ps1")
-        if ($LASTEXITCODE -ne 0) { throw "Phase R static audit failed" }
     }
 
     $ctestOutput = $null
@@ -75,7 +75,6 @@ try {
             -Height $Height `
             -Spp $Spp `
             -SkipBuild
-        if ($LASTEXITCODE -ne 0) { throw "Phase R integrator smoke benchmark failed" }
     }
 
     if (-not (Test-Path $SmokeReportPath)) {
@@ -89,6 +88,28 @@ try {
         throw "spp_per_second below validation floor"
     }
 
+    $steps += Invoke-PhaseRStep "light_sampling_variance_mse_suite" {
+        & (Join-Path $RepoRoot "tools\benchmarks\run_phase_r_light_sampling_suite.ps1") `
+            -BuildDir $BuildDir `
+            -Config $Config `
+            -Width $Width `
+            -Height $Height `
+            -SkipBuild
+    }
+
+    if (-not (Test-Path $LightSamplingReportPath)) {
+        throw "missing light sampling report: $LightSamplingReportPath"
+    }
+    $lightSampling = Get-Content -Raw -LiteralPath $LightSamplingReportPath | ConvertFrom-Json
+    if ($lightSampling.status -ne "passed" -or $lightSampling.scenes.Count -lt 2) {
+        throw "Phase R light sampling suite did not prove multi-scene coverage"
+    }
+    foreach ($scene in $lightSampling.scenes) {
+        if ($scene.convergence.status -ne "passed") {
+            throw "Phase R light sampling convergence failed for $($scene.name)"
+        }
+    }
+
     $report = [ordered]@{
         phase = "R"
         suite = "industrial_validation_local"
@@ -99,6 +120,7 @@ try {
         ctest_total = $ctestTotal
         ctest_failed = $ctestFailed
         benchmark = $smoke
+        light_sampling = $lightSampling
         thresholds = [ordered]@{
             min_samples_per_second = $MinSamplesPerSecond
             min_spp_per_second = $MinSppPerSecond

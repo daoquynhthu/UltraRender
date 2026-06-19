@@ -14,11 +14,18 @@ void apply_transform(scene_ir::InstanceNode& instance, const InstanceTransformMu
     instance.rotation = mutation.rotation;
 }
 
-bool has_texture_resource(const scene_ir::MaterialNode& material) {
-    return material.base_color_texture ||
-           material.roughness_texture ||
-           material.emission_texture ||
-           material.normal_texture;
+bool requires_scene_reload_for_material_update(const scene_ir::MaterialNode& material) {
+    const bool has_texture =
+        material.base_color_texture ||
+        material.roughness_texture ||
+        material.emission_texture ||
+        material.normal_texture;
+    const bool has_graph = material.graph && !material.graph->empty();
+    const bool has_spectral_resource =
+        material.spectral_extension &&
+        (!material.spectral_extension->albedo_spd.empty() ||
+         !material.spectral_extension->emission_spd.empty());
+    return has_texture || has_graph || has_spectral_resource;
 }
 
 void validate_renderable_instance(const scene_ir::InstanceNode& instance) {
@@ -423,7 +430,7 @@ bool RenderSession::apply_material_mutations(const std::vector<SceneIrMaterialMu
             if (mutation.material_index >= current_scene_ir_->materials.size()) {
                 throw std::out_of_range("SceneDiff material index is out of range");
             }
-            if (has_texture_resource(mutation.material)) {
+            if (requires_scene_reload_for_material_update(mutation.material)) {
                 requires_reload = true;
             }
             if (!current_scene_ir_->materials[mutation.material_index]) {

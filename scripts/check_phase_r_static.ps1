@@ -73,5 +73,11 @@ Assert-Contains "tools\benchmarks\run_phase_r_validation_suite.ps1" "industrial_
 Assert-Contains "tools\benchmarks\run_phase_r_validation_suite.ps1" "MinSamplesPerSecond" "R.12 benchmark threshold"
 Assert-Contains "tools\benchmarks\run_phase_r_validation_suite.ps1" "phase_r_ctest_subset" "R.12 targeted correctness subset"
 Assert-Contains "tools\benchmarks\run_phase_r_validation_suite.ps1" "phase_r_integrator_smoke.json" "R.12 benchmark report ingestion"
+Assert-Contains "tools\benchmarks\run_phase_r_light_sampling_suite.ps1" "light_sampling_variance_mse_local" "R-P1 multi-scene light sampling variance/MSE suite"
+Assert-Contains "tools\benchmarks\run_phase_r_validation_suite.ps1" "light_sampling_variance_mse_suite" "R-P1 validation suite light sampling gate"
+Assert-Contains "scenes\benchmarks\phase_r_multi_light_sampling.gltf" "phase_r_emissive_quad" "R-P1 multi-light benchmark scene"
+Assert-Contains "libs\ure_core\src\session.cpp" "requires_scene_reload_for_material_update" "R-P1 resource material mutation full-reload boundary"
+Assert-Contains "tests\host\test_session.cpp" "test_scene_diff_material_graph_update_ir_full_reload" "R-P1 MaterialGraph mutation reload test"
+Assert-Contains "tests\host\test_session.cpp" "test_scene_diff_material_spd_update_ir_full_reload" "R-P1 spectral resource mutation reload test"
 
 Write-Host "Phase R static audit passed"

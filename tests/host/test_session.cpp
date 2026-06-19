@@ -492,6 +492,55 @@ static int test_scene_diff_material_texture_update_ir_full_reload() {
     return 0;
 }
 
+static int test_scene_diff_material_graph_update_ir_full_reload() {
+    auto* raw_engine = new FakeRenderEngine();
+    ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
+
+    session.load_scene(make_scene_ir_with_instance());
+    ure::scene_ir::MaterialNode material;
+    material.name = "graph_resource";
+    material.model = ure::scene_ir::MaterialModel::Light;
+    material.emission = {1.0f, 1.0f, 1.0f};
+    auto graph = std::make_shared<ure::scene_ir::MaterialGraph>();
+    ure::scene_ir::MaterialGraphNode emission;
+    emission.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLight;
+    emission.color = {2.0f, 1.0f, 0.5f};
+    const auto emission_id = graph->add_node(emission);
+    ure::scene_ir::MaterialGraphNode output;
+    output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    output.inputs.push_back(ure::scene_ir::material_graph_input("surface", emission_id));
+    graph->output_node_id = graph->add_node(output);
+    material.graph = graph;
+
+    session.mutate_scene(ure::SceneDiff::update_material(0, material));
+
+    CHECK(raw_engine->scene_ir_reloads == 1);
+    CHECK(raw_engine->material_updates == 0);
+    CHECK(raw_engine->spp == 0);
+    CHECK(session.state() == ure::RenderSessionState::Ready);
+    return 0;
+}
+
+static int test_scene_diff_material_spd_update_ir_full_reload() {
+    auto* raw_engine = new FakeRenderEngine();
+    ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
+
+    session.load_scene(make_scene_ir_with_instance());
+    ure::scene_ir::MaterialNode material;
+    material.name = "spectral_resource";
+    material.model = ure::scene_ir::MaterialModel::Light;
+    material.spectral_extension = std::make_shared<ure::scene_ir::SpectralMaterialExtension>();
+    material.spectral_extension->emission_spd = "resource_change_requires_reload.spd";
+
+    session.mutate_scene(ure::SceneDiff::update_material(0, material));
+
+    CHECK(raw_engine->scene_ir_reloads == 1);
+    CHECK(raw_engine->material_updates == 0);
+    CHECK(raw_engine->spp == 0);
+    CHECK(session.state() == ure::RenderSessionState::Ready);
+    return 0;
+}
+
 static int test_scene_diff_material_update_errors() {
     auto* raw_engine = new FakeRenderEngine();
     ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
@@ -792,6 +841,8 @@ int main() {
     failed += run("test_scene_diff_instance_transform_errors", test_scene_diff_instance_transform_errors);
     failed += run("test_scene_diff_material_update_ir", test_scene_diff_material_update_ir);
     failed += run("test_scene_diff_material_texture_update_ir_full_reload", test_scene_diff_material_texture_update_ir_full_reload);
+    failed += run("test_scene_diff_material_graph_update_ir_full_reload", test_scene_diff_material_graph_update_ir_full_reload);
+    failed += run("test_scene_diff_material_spd_update_ir_full_reload", test_scene_diff_material_spd_update_ir_full_reload);
     failed += run("test_scene_diff_material_update_errors", test_scene_diff_material_update_errors);
     failed += run("test_scene_diff_topology_update_ir_full_reload", test_scene_diff_topology_update_ir_full_reload);
     failed += run("test_scene_diff_topology_errors", test_scene_diff_topology_errors);

@@ -168,18 +168,17 @@ def main() -> int:
             assert progress.spp == 0
             assert session.render_pass() >= 1
 
-            try:
-                session.update_material(
-                    0,
-                    pyure.MaterialType.LAMBERTIAN,
-                    albedo=(0.2, 0.8, 0.3),
-                    roughness=0.4,
-                    ior=1.45,
-                )
-            except RuntimeError:
-                pass
-            else:
-                raise AssertionError("MaterialGraph material mutation must require scene reload")
+            session.update_material(
+                0,
+                pyure.MaterialType.LAMBERTIAN,
+                albedo=(0.2, 0.8, 0.3),
+                roughness=0.4,
+                ior=1.45,
+            )
+            progress = session.progress()
+            assert progress.state == pyure.SessionState.READY
+            assert progress.spp == 0
+            assert session.render_pass() >= 1
 
             session.load_scene_file(scene_path)
             progress = session.progress()
