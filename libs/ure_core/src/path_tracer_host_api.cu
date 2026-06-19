@@ -596,40 +596,110 @@ static void build_light_alias_table(const std::vector<float>& weights,
     }
 }
 
-static void build_light_tree(const std::vector<float>& weights,
+static GpuVec3 light_bounds_min(const GpuVec3& a, const GpuVec3& b) {
+    return GpuVec3(std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z));
+}
+
+static GpuVec3 light_bounds_max(const GpuVec3& a, const GpuVec3& b) {
+    return GpuVec3(std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z));
+}
+
+static float light_axis_value(const GpuVec3& p, int axis) {
+    if (axis == 0) return p.x;
+    if (axis == 1) return p.y;
+    return p.z;
+}
+
+static int build_light_tree_recursive(const std::vector<GpuLightRecord>& lights,
+                                      const std::vector<float>& weights,
+                                      std::vector<int>& indices,
+                                      int begin,
+                                      int end,
+                                      std::vector<GpuLightTreeNode>& nodes) {
+    const int node_index = static_cast<int>(nodes.size());
+    nodes.push_back(GpuLightTreeNode{});
+    GpuLightTreeNode& node = nodes.back();
+
+    GpuVec3 bounds_min(FLT_MAX, FLT_MAX, FLT_MAX);
+    GpuVec3 bounds_max(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+    GpuVec3 centroid_min(FLT_MAX, FLT_MAX, FLT_MAX);
+    GpuVec3 centroid_max(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+    float weight = 0.0f;
+    for (int i = begin; i < end; ++i) {
+        const int light_index = indices[static_cast<size_t>(i)];
+        const GpuLightRecord& light = lights[static_cast<size_t>(light_index)];
+        bounds_min = light_bounds_min(bounds_min, light.bounds_min);
+        bounds_max = light_bounds_max(bounds_max, light.bounds_max);
+        centroid_min = light_bounds_min(centroid_min, light.centroid);
+        centroid_max = light_bounds_max(centroid_max, light.centroid);
+        weight += std::max(weights[static_cast<size_t>(light_index)], 0.0f);
+    }
+    node.bounds_min = bounds_min;
+    node.bounds_max = bounds_max;
+    node.weight = weight;
+
+    if (end - begin == 1) {
+        node.light_index = indices[static_cast<size_t>(begin)];
+        return node_index;
+    }
+
+    const GpuVec3 extent = centroid_max - centroid_min;
+    int axis = 0;
+    if (extent.y > extent.x && extent.y >= extent.z) {
+        axis = 1;
+    } else if (extent.z > extent.x && extent.z > extent.y) {
+        axis = 2;
+    }
+
+    std::sort(indices.begin() + begin, indices.begin() + end, [&](int a, int b) {
+        const float av = light_axis_value(lights[static_cast<size_t>(a)].centroid, axis);
+        const float bv = light_axis_value(lights[static_cast<size_t>(b)].centroid, axis);
+        if (av == bv) return weights[static_cast<size_t>(a)] > weights[static_cast<size_t>(b)];
+        return av < bv;
+    });
+
+    int split = (begin + end) / 2;
+    float left_weight = 0.0f;
+    float right_weight = 0.0f;
+    const float half_weight = weight * 0.5f;
+    for (int i = begin; i < end - 1; ++i) {
+        left_weight += std::max(weights[static_cast<size_t>(indices[static_cast<size_t>(i)])], 0.0f);
+        right_weight = weight - left_weight;
+        if (left_weight >= half_weight) {
+            split = i + 1;
+            break;
+        }
+    }
+    if (split <= begin || split >= end || left_weight <= 0.0f || right_weight <= 0.0f) {
+        split = (begin + end) / 2;
+    }
+
+    const int left = build_light_tree_recursive(lights, weights, indices, begin, split, nodes);
+    const int right = build_light_tree_recursive(lights, weights, indices, split, end, nodes);
+    nodes[static_cast<size_t>(node_index)].left = left;
+    nodes[static_cast<size_t>(node_index)].right = right;
+    return node_index;
+}
+
+static void build_light_tree(const std::vector<GpuLightRecord>& lights,
+                             const std::vector<float>& weights,
                              std::vector<GpuLightTreeNode>& nodes,
                              int& root_index) {
     nodes.clear();
     root_index = -1;
     const int light_count = static_cast<int>(weights.size());
-    if (light_count <= 0) return;
+    if (light_count <= 0 || lights.size() != weights.size()) return;
 
-    int leaf_capacity = 1;
-    while (leaf_capacity < light_count) {
-        leaf_capacity *= 2;
+    std::vector<int> indices(static_cast<size_t>(light_count));
+    for (int i = 0; i < light_count; ++i) {
+        indices[static_cast<size_t>(i)] = i;
     }
 
-    const int node_count = leaf_capacity * 2 - 1;
-    nodes.resize(static_cast<size_t>(node_count));
-    const int leaf_base = leaf_capacity - 1;
-
-    for (int i = 0; i < leaf_capacity; ++i) {
-        GpuLightTreeNode& node = nodes[static_cast<size_t>(leaf_base + i)];
-        node.light_index = i < light_count ? i : -1;
-        node.weight = i < light_count ? std::max(weights[static_cast<size_t>(i)], 0.0f) : 0.0f;
+    root_index = build_light_tree_recursive(lights, weights, indices, 0, light_count, nodes);
+    if (root_index < 0 || nodes[static_cast<size_t>(root_index)].weight <= 0.0f) {
+        nodes.clear();
+        root_index = -1;
     }
-
-    for (int i = leaf_base - 1; i >= 0; --i) {
-        const int left = i * 2 + 1;
-        const int right = left + 1;
-        nodes[static_cast<size_t>(i)].left = left;
-        nodes[static_cast<size_t>(i)].right = right;
-        nodes[static_cast<size_t>(i)].light_index = -1;
-        nodes[static_cast<size_t>(i)].weight =
-            nodes[static_cast<size_t>(left)].weight + nodes[static_cast<size_t>(right)].weight;
-    }
-
-    root_index = nodes.empty() || nodes[0].weight <= 0.0f ? -1 : 0;
 }
 
 static void clear_wavelength_proposal_from_queue(RayQueue& queue) {
@@ -958,6 +1028,28 @@ static float host_triangle_area(const std::vector<float>& vertices, const std::v
     return 0.5f * (v1 - v0).cross(v2 - v0).length();
 }
 
+static void assign_triangle_light_bounds(GpuLightRecord& record, const GpuVec3& v0, const GpuVec3& v1, const GpuVec3& v2) {
+    record.centroid = (v0 + v1 + v2) * (1.0f / 3.0f);
+    record.bounds_min = light_bounds_min(light_bounds_min(v0, v1), v2);
+    record.bounds_max = light_bounds_max(light_bounds_max(v0, v1), v2);
+}
+
+static void host_triangle_vertices(
+    const std::vector<float>& vertices,
+    const std::vector<int>& indices,
+    int tri,
+    GpuVec3& v0,
+    GpuVec3& v1,
+    GpuVec3& v2
+) {
+    const int i0 = indices[tri * 3 + 0];
+    const int i1 = indices[tri * 3 + 1];
+    const int i2 = indices[tri * 3 + 2];
+    v0 = GpuVec3(vertices[i0 * 3 + 0], vertices[i0 * 3 + 1], vertices[i0 * 3 + 2]);
+    v1 = GpuVec3(vertices[i1 * 3 + 0], vertices[i1 * 3 + 1], vertices[i1 * 3 + 2]);
+    v2 = GpuVec3(vertices[i2 * 3 + 0], vertices[i2 * 3 + 1], vertices[i2 * 3 + 2]);
+}
+
 static float host_instance_triangle_area(
     const HostLightMeshData& mesh,
     const GpuInstance& instance,
@@ -972,6 +1064,22 @@ static float host_instance_triangle_area(
     return 0.5f * (v1 - v0).cross(v2 - v0).length();
 }
 
+static void host_instance_triangle_vertices(
+    const HostLightMeshData& mesh,
+    const GpuInstance& instance,
+    int tri,
+    GpuVec3& v0,
+    GpuVec3& v1,
+    GpuVec3& v2
+) {
+    const int i0 = mesh.indices[tri * 3 + 0];
+    const int i1 = mesh.indices[tri * 3 + 1];
+    const int i2 = mesh.indices[tri * 3 + 2];
+    v0 = instance.transform.transform_point(GpuVec3(mesh.vertices[i0 * 3 + 0], mesh.vertices[i0 * 3 + 1], mesh.vertices[i0 * 3 + 2]));
+    v1 = instance.transform.transform_point(GpuVec3(mesh.vertices[i1 * 3 + 0], mesh.vertices[i1 * 3 + 1], mesh.vertices[i1 * 3 + 2]));
+    v2 = instance.transform.transform_point(GpuVec3(mesh.vertices[i2 * 3 + 0], mesh.vertices[i2 * 3 + 1], mesh.vertices[i2 * 3 + 2]));
+}
+
 static void add_sphere_light_records(std::vector<GpuLightRecord>& records, const std::vector<GpuSphere>& spheres) {
     for (int i = 0; i < static_cast<int>(spheres.size()); ++i) {
         GpuLightRecord record;
@@ -980,6 +1088,9 @@ static void add_sphere_light_records(std::vector<GpuLightRecord>& records, const
         record.secondary_index = -1;
         record.material_index = spheres[i].material_index;
         record.area = 4.0f * 3.14159265358979323846f * spheres[i].radius * spheres[i].radius;
+        record.centroid = spheres[i].center;
+        record.bounds_min = spheres[i].center - GpuVec3(spheres[i].radius, spheres[i].radius, spheres[i].radius);
+        record.bounds_max = spheres[i].center + GpuVec3(spheres[i].radius, spheres[i].radius, spheres[i].radius);
         if (record.area > 0.0f) {
             records.push_back(record);
         }
@@ -1003,6 +1114,9 @@ static void add_direct_mesh_light_records(
             record.secondary_index = tri;
             record.material_index = mesh.material_index;
             record.area = area;
+            GpuVec3 v0, v1, v2;
+            host_triangle_vertices(mesh.vertices, mesh.indices, tri, v0, v1, v2);
+            assign_triangle_light_bounds(record, v0, v1, v2);
             records.push_back(record);
         }
     }
@@ -1027,6 +1141,9 @@ static void add_instance_light_records(
             record.secondary_index = tri;
             record.material_index = material_index;
             record.area = area;
+            GpuVec3 v0, v1, v2;
+            host_instance_triangle_vertices(mesh, instance, tri, v0, v1, v2);
+            assign_triangle_light_bounds(record, v0, v1, v2);
             records.push_back(record);
         }
     }
@@ -1040,6 +1157,9 @@ static void add_environment_light_record(std::vector<GpuLightRecord>& records, c
     record.secondary_index = -1;
     record.material_index = -1;
     record.area = 4.0f * 3.14159265358979323846f;
+    record.centroid = GpuVec3(0.0f, 0.0f, 0.0f);
+    record.bounds_min = GpuVec3(-1.0e20f, -1.0e20f, -1.0e20f);
+    record.bounds_max = GpuVec3(1.0e20f, 1.0e20f, 1.0e20f);
     records.push_back(record);
 }
 
@@ -1128,7 +1248,7 @@ static void rebuild_light_distribution(GpuContext* ctx) {
 
     std::vector<GpuLightTreeNode> host_light_tree;
     int host_light_tree_root = -1;
-    build_light_tree(host_light_weights, host_light_tree, host_light_tree_root);
+    build_light_tree(host_lights, host_light_weights, host_light_tree, host_light_tree_root);
     if (!host_light_tree.empty() && host_light_tree_root >= 0) {
         UR_CUDA_CHECK(cudaMalloc(&ctx->d_light_tree_nodes, host_light_tree.size() * sizeof(GpuLightTreeNode)));
         UR_CUDA_CHECK(cudaMemcpy(ctx->d_light_tree_nodes,

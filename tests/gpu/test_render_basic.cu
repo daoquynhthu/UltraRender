@@ -207,6 +207,19 @@ __global__ void light_tree_selection_kernel(GpuScene scene, float* out) {
         : 0.0f;
 }
 
+__global__ void light_tree_spatial_bounds_kernel(GpuScene scene, float* out) {
+    const int root = scene.light_tree_root;
+    out[0] = light_selection_pdf(scene, 0);
+    out[1] = light_selection_pdf(scene, 1);
+    out[2] = light_selection_pdf(scene, 2);
+    out[3] = float(sample_light_list_index(scene, 0.10f));
+    out[4] = float(sample_light_list_index(scene, 0.50f));
+    out[5] = float(sample_light_list_index(scene, 0.90f));
+    out[6] = scene.light_tree_nodes[root].bounds_min.x;
+    out[7] = scene.light_tree_nodes[root].bounds_max.x;
+    out[8] = scene.light_tree_nodes[root].weight;
+}
+
 __global__ void triangle_light_sampling_pdf_kernel(GpuScene scene, float* out) {
     SelectedLightSample sample;
     bool ok = sample_selected_light(scene, 0, GpuVec3(0.5f, 0.5f, 1.0f), 0.25f, 0.5f, sample);
@@ -1085,6 +1098,62 @@ static int test_light_tree_matches_area_and_spectral_power_distribution() {
     CHECK_FLOAT_EQ(out[2], 0.0f, 1e-6f);
     CHECK_FLOAT_EQ(out[3], 1.0f, 1e-6f);
     CHECK(out[4] > 0.0f);
+
+    cudaFree(d_out);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_light_tree_spatial_split_tracks_subtree_bounds() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+
+    std::vector<GpuSphere> lights;
+    for (int i = 0; i < 3; ++i) {
+        GpuSphere sphere;
+        sphere.center = GpuVec3(-10.0f + 10.0f * float(i), 2.0f, 0.0f);
+        sphere.radius = 1.0f;
+        sphere.material_index = 7;
+        lights.push_back(sphere);
+    }
+
+    GpuMaterialData light = {};
+    light.header.type = MaterialType::Light;
+    light.emission = SpectralPacket(1.0f);
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, lights, {light}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->light_count == 3);
+    CHECK(ctx->d_light_tree_nodes != nullptr);
+    CHECK(ctx->light_tree_node_count == 5);
+    CHECK(ctx->light_tree_root == 0);
+
+    float* d_out = nullptr;
+    float out[9] = {};
+    CHECK_CUDA(cudaMalloc(&d_out, 9 * sizeof(float)));
+
+    GpuScene scene = {};
+    scene.light_count = ctx->light_count;
+    scene.light_selection_pmf = ctx->d_light_selection_pmf;
+    scene.light_tree_nodes = ctx->d_light_tree_nodes;
+    scene.light_tree_node_count = ctx->light_tree_node_count;
+    scene.light_tree_root = ctx->light_tree_root;
+
+    light_tree_spatial_bounds_kernel<<<1, 1>>>(scene, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(out, d_out, 9 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(out[0], 1.0f / 3.0f, 1e-5f);
+    CHECK_FLOAT_EQ(out[1], 1.0f / 3.0f, 1e-5f);
+    CHECK_FLOAT_EQ(out[2], 1.0f / 3.0f, 1e-5f);
+    CHECK_FLOAT_EQ(out[3], 0.0f, 1e-6f);
+    CHECK_FLOAT_EQ(out[4], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(out[5], 2.0f, 1e-6f);
+    CHECK(out[6] <= -11.0f);
+    CHECK(out[7] >= 11.0f);
+    CHECK(out[8] > 0.0f);
 
     cudaFree(d_out);
     free_gpu_renderer(ctx);
@@ -2052,6 +2121,7 @@ int main() {
     RUN_TEST(test_runtime_n_long_wavelength_light_list);
     RUN_TEST(test_light_selection_cdf_uses_area_and_spectral_power);
     RUN_TEST(test_light_tree_matches_area_and_spectral_power_distribution);
+    RUN_TEST(test_light_tree_spatial_split_tracks_subtree_bounds);
     RUN_TEST(test_instance_triangle_light_builds_typed_light_record);
     RUN_TEST(test_instance_triangle_light_sampling_pdf_contract);
     RUN_TEST(test_direct_mesh_triangle_light_builds_record_and_pdf_contract);

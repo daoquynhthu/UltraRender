@@ -329,6 +329,9 @@ struct GpuLightRecord {
     int secondary_index = -1;
     int material_index = -1;
     float area = 0.0f;
+    GpuVec3 centroid = {};
+    GpuVec3 bounds_min = {};
+    GpuVec3 bounds_max = {};
 };
 
 struct GpuLightTreeNode {
@@ -336,6 +339,8 @@ struct GpuLightTreeNode {
     int right = -1;
     int light_index = -1;
     float weight = 0.0f;
+    GpuVec3 bounds_min = {};
+    GpuVec3 bounds_max = {};
 };
 
 // Phase E: Scalar-only material header. Spectral data stored as SoA in GpuScene.
