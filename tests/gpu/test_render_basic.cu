@@ -1611,6 +1611,119 @@ static int test_update_materials_gpu_rebuilds_light_selection_distribution() {
     return 0;
 }
 
+static int test_emission_texture_contributes_to_light_distribution_power() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+
+    GpuSphere textured_light;
+    textured_light.center = GpuVec3(-2.0f, 2.0f, 0.0f);
+    textured_light.radius = 1.0f;
+    textured_light.material_index = 7;
+
+    GpuSphere scalar_light;
+    scalar_light.center = GpuVec3(2.0f, 2.0f, 0.0f);
+    scalar_light.radius = 1.0f;
+    scalar_light.material_index = 8;
+
+    HostTexture emission_texture;
+    emission_texture.width = 2;
+    emission_texture.height = 2;
+    emission_texture.channels = 8;
+    emission_texture.data.assign(
+        static_cast<size_t>(emission_texture.width) *
+            static_cast<size_t>(emission_texture.height) *
+            static_cast<size_t>(emission_texture.channels),
+        2.0f);
+
+    GpuMaterialData textured = {};
+    textured.header.type = MaterialType::Light;
+    textured.header.emission_texture_index = 0;
+    textured.emission = SpectralPacket(1.0f);
+
+    GpuMaterialData scalar = {};
+    scalar.header.type = MaterialType::Light;
+    scalar.emission = SpectralPacket(1.0f);
+
+    GpuContext* ctx = init_gpu_renderer(
+        4, 4, {}, {}, {textured_light, scalar_light}, {textured, scalar}, {emission_texture}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->light_count == 2);
+
+    float pmf[2] = {};
+    CHECK_CUDA(cudaMemcpy(pmf, ctx->d_light_selection_pmf, 2 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(pmf[0], 2.0f / 3.0f, 1e-5f);
+    CHECK_FLOAT_EQ(pmf[1], 1.0f / 3.0f, 1e-5f);
+
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_emission_expression_contributes_to_mesh_light_distribution_power() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+
+    RenderMesh mesh = {};
+    mesh.vertices = {
+        0.0f, 0.0f, 0.0f,
+        2.0f, 0.0f, 0.0f,
+        0.0f, 2.0f, 0.0f
+    };
+    mesh.indices = {0, 1, 2};
+    mesh.material_index = 7;
+
+    GpuMaterialData graph_light = {};
+    graph_light.header.type = MaterialType::Light;
+    graph_light.header.emission_expression_root = 0;
+    HostSpectralExpressionNode resource = {};
+    resource.kind = SpectralExpressionNodeKind::Resource;
+    resource.resource.kind = SpectralResourceKind::Constant;
+    resource.resource.constant = 5.0f;
+    graph_light.expression_nodes.push_back(resource);
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {mesh}, {}, {}, {graph_light}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->light_count == 1);
+    CHECK(ctx->d_light_selection_pmf != nullptr);
+
+    float pmf = 0.0f;
+    CHECK_CUDA(cudaMemcpy(&pmf, ctx->d_light_selection_pmf, sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(pmf, 1.0f, 1e-6f);
+
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_emissive_material_rejects_missing_light_power_texture() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+
+    GpuSphere light;
+    light.center = GpuVec3(0.0f, 2.0f, 0.0f);
+    light.radius = 1.0f;
+    light.material_index = 7;
+
+    GpuMaterialData material = {};
+    material.header.type = MaterialType::Light;
+    material.header.emission_texture_index = 4;
+    material.emission = SpectralPacket(1.0f);
+
+    bool rejected = false;
+    try {
+        GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {light}, {material}, {}, config);
+        free_gpu_renderer(ctx);
+    } catch (const std::runtime_error& e) {
+        rejected = std::string(e.what()).find("outside the uploaded texture set") != std::string::npos;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
 static int test_path_guiding_allocates_progressive_light_cache() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -2284,6 +2397,9 @@ int main() {
     RUN_TEST(test_environment_light_builds_record_and_pdf_contract);
     RUN_TEST(test_environment_light_rejects_invalid_enabled_config);
     RUN_TEST(test_update_materials_gpu_rebuilds_light_selection_distribution);
+    RUN_TEST(test_emission_texture_contributes_to_light_distribution_power);
+    RUN_TEST(test_emission_expression_contributes_to_mesh_light_distribution_power);
+    RUN_TEST(test_emissive_material_rejects_missing_light_power_texture);
     RUN_TEST(test_path_guiding_allocates_progressive_light_cache);
     RUN_TEST(test_path_guiding_rejects_invalid_enabled_config);
     RUN_TEST(test_path_guiding_light_selection_uses_mixture_pdf);

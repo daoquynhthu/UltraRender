@@ -501,11 +501,141 @@ static int launch_blocks_for_active_count(int active_count, int threads_per_bloc
     return active_count > 0 ? (active_count + threads_per_block - 1) / threads_per_block : 0;
 }
 
-static float average_material_emission_power(const GpuMaterialData& material, int num_channels) {
+static float canonical_lambda_for_channel(int channel, int num_channels) {
+    return kSpectralLambdaMin + (float(channel) + 0.5f) *
+        ((kSpectralLambdaMax - kSpectralLambdaMin) / float(num_channels));
+}
+
+static void validate_host_texture_for_light_power(const HostTexture& texture) {
+    const int channels = texture.channels > 0 ? texture.channels : 3;
+    if (texture.width <= 0 || texture.height <= 0 || channels <= 0) {
+        throw std::runtime_error("emissive texture light power requires a positive texture size and channel count");
+    }
+    const size_t expected = static_cast<size_t>(texture.width) *
+        static_cast<size_t>(texture.height) *
+        static_cast<size_t>(channels);
+    if (texture.data.size() < expected) {
+        throw std::runtime_error("emissive texture light power texture data is smaller than width * height * channels");
+    }
+}
+
+static float host_spectral_texture_sample(const HostTexture& texture, size_t pixel_index, float lambda) {
+    const int channels = texture.channels > 0 ? texture.channels : 3;
+    const size_t base = pixel_index * static_cast<size_t>(channels);
+    if (channels == 3) {
+        return rgb_to_spectrum_value(
+            GpuVec3(texture.data[base + 0], texture.data[base + 1], texture.data[base + 2]),
+            lambda);
+    }
+    if (channels == 1 || kSpectralLambdaMax <= kSpectralLambdaMin) {
+        return texture.data[base];
+    }
+
+    const float normalized = std::clamp(
+        (lambda - kSpectralLambdaMin) / (kSpectralLambdaMax - kSpectralLambdaMin),
+        0.0f,
+        1.0f);
+    const float sample_pos = normalized * float(channels - 1);
+    const int s0 = std::min(static_cast<int>(floorf(sample_pos)), channels - 1);
+    const int s1 = std::min(s0 + 1, channels - 1);
+    const float ds = sample_pos - float(s0);
+    return texture.data[base + static_cast<size_t>(s0)] * (1.0f - ds) +
+        texture.data[base + static_cast<size_t>(s1)] * ds;
+}
+
+static float average_host_texture_power_at_lambda(const std::vector<HostTexture>& textures,
+                                                  int texture_index,
+                                                  float lambda) {
+    if (texture_index < 0 || texture_index >= static_cast<int>(textures.size())) {
+        throw std::runtime_error("emissive material references a texture outside the uploaded texture set");
+    }
+    const HostTexture& texture = textures[static_cast<size_t>(texture_index)];
+    validate_host_texture_for_light_power(texture);
+    const size_t pixel_count = static_cast<size_t>(texture.width) * static_cast<size_t>(texture.height);
     float power = 0.0f;
-    for (int c = 0; c < num_channels; ++c) {
-        float lambda = kSpectralLambdaMin + (float(c) + 0.5f) *
-            ((kSpectralLambdaMax - kSpectralLambdaMin) / float(num_channels));
+    for (size_t pixel = 0; pixel < pixel_count; ++pixel) {
+        power += std::max(0.0f, host_spectral_texture_sample(texture, pixel, lambda));
+    }
+    return power / float(pixel_count);
+}
+
+static int host_expression_local_index(const GpuMaterialData& material, int index) {
+    const int count = static_cast<int>(material.expression_nodes.size());
+    const int start = material.header.expression_node_start;
+    if (start >= 0 && index >= start && index < start + count) return index - start;
+    return index;
+}
+
+static float eval_host_emission_expression_at_lambda(const GpuMaterialData& material,
+                                                     const std::vector<HostTexture>& textures,
+                                                     float lambda) {
+    const int count = static_cast<int>(material.expression_nodes.size());
+    if (count <= 0 || count > kMaxMaterialExpressionNodes) {
+        throw std::runtime_error("emissive material expression graph has an invalid node count");
+    }
+    const int root = host_expression_local_index(material, material.header.emission_expression_root);
+    if (root < 0 || root >= count) {
+        throw std::runtime_error("emissive material expression graph root is outside the node range");
+    }
+
+    float values[kMaxMaterialExpressionNodes] = {};
+    for (int i = 0; i < count; ++i) {
+        const HostSpectralExpressionNode& node = material.expression_nodes[static_cast<size_t>(i)];
+        float result = 0.0f;
+        switch (node.kind) {
+            case SpectralExpressionNodeKind::Resource: {
+                SpectralResource view = {};
+                view.kind = node.resource.kind;
+                view.constant = node.resource.constant;
+                view.rgb = node.resource.rgb;
+                view.wavelengths = node.resource.wavelengths.data();
+                view.values = node.resource.values.data();
+                view.sample_count = static_cast<int>(std::min(node.resource.wavelengths.size(), node.resource.values.size()));
+                result = eval_spectral_resource(view, lambda);
+                break;
+            }
+            case SpectralExpressionNodeKind::Texture:
+                result = average_host_texture_power_at_lambda(textures, node.texture_index, lambda);
+                break;
+            case SpectralExpressionNodeKind::Add: {
+                const int a = host_expression_local_index(material, node.input_a);
+                const int b = host_expression_local_index(material, node.input_b);
+                if (a >= 0 && a < i && b >= 0 && b < i) result = values[a] + values[b];
+                break;
+            }
+            case SpectralExpressionNodeKind::Multiply: {
+                const int a = host_expression_local_index(material, node.input_a);
+                const int b = host_expression_local_index(material, node.input_b);
+                if (a >= 0 && a < i && b >= 0 && b < i) result = values[a] * values[b];
+                break;
+            }
+            case SpectralExpressionNodeKind::Mix: {
+                const int a = host_expression_local_index(material, node.input_a);
+                const int b = host_expression_local_index(material, node.input_b);
+                const int f = host_expression_local_index(material, node.input_factor);
+                if (a >= 0 && a < i && b >= 0 && b < i && f >= 0 && f < i) {
+                    const float t = std::clamp(values[f], 0.0f, 1.0f);
+                    result = values[a] * (1.0f - t) + values[b] * t;
+                }
+                break;
+            }
+            case SpectralExpressionNodeKind::None:
+            default:
+                break;
+        }
+        values[i] = result;
+    }
+    return values[root];
+}
+
+static float material_emission_power_at_lambda(const GpuMaterialData& material,
+                                               const std::vector<HostTexture>& textures,
+                                               float lambda,
+                                               int num_channels) {
+    float power = 0.0f;
+    if (material.header.emission_expression_root != -1) {
+        power = eval_host_emission_expression_at_lambda(material, textures, lambda);
+    } else {
         SpectralResource view = {};
         view.kind = material.emission_resource.kind;
         view.constant = material.emission_resource.constant;
@@ -513,9 +643,36 @@ static float average_material_emission_power(const GpuMaterialData& material, in
         view.wavelengths = material.emission_resource.wavelengths.data();
         view.values = material.emission_resource.values.data();
         view.sample_count = static_cast<int>(std::min(material.emission_resource.wavelengths.size(), material.emission_resource.values.size()));
-        power += material.emission_resource.kind == SpectralResourceKind::None
-            ? material.emission.values[c]
-            : eval_spectral_resource(view, lambda);
+        if (material.emission_resource.kind == SpectralResourceKind::None) {
+            float best_delta = std::numeric_limits<float>::max();
+            for (int c = 0; c < num_channels; ++c) {
+                const float sample_lambda = material.emission.wavelengths[c] > 0.0f
+                    ? material.emission.wavelengths[c]
+                    : canonical_lambda_for_channel(c, num_channels);
+                const float delta = fabsf(sample_lambda - lambda);
+                if (delta < best_delta) {
+                    best_delta = delta;
+                    power = material.emission.values[c];
+                }
+            }
+        } else {
+            power = eval_spectral_resource(view, lambda);
+        }
+    }
+
+    if (material.header.emission_texture_index != -1) {
+        power *= average_host_texture_power_at_lambda(textures, material.header.emission_texture_index, lambda);
+    }
+    return std::max(0.0f, power);
+}
+
+static float average_material_emission_power(const GpuMaterialData& material,
+                                             const std::vector<HostTexture>& textures,
+                                             int num_channels) {
+    float power = 0.0f;
+    for (int c = 0; c < num_channels; ++c) {
+        const float lambda = canonical_lambda_for_channel(c, num_channels);
+        power += material_emission_power_at_lambda(material, textures, lambda, num_channels);
     }
     return power / float(std::max(num_channels, 1));
 }
@@ -1179,6 +1336,7 @@ static void rebuild_light_distribution(GpuContext* ctx) {
     std::vector<float> host_light_weights;
     const auto& host_materials = ctx->host_materials_for_light_distribution;
     const auto& host_records = ctx->host_light_records_for_distribution;
+    const auto& host_textures = ctx->host_textures_for_light_distribution;
     for (int i = 0; i < static_cast<int>(host_records.size()); ++i) {
         if (host_records[i].kind == GpuLightKind::Environment) {
             const float environment_power = std::max(ctx->render_config.environment_light.intensity, 1e-8f);
@@ -1190,7 +1348,7 @@ static void rebuild_light_distribution(GpuContext* ctx) {
         const int mat_idx = host_records[i].material_index;
         if (mat_idx >= 0 && mat_idx < static_cast<int>(host_materials.size())) {
             const auto& mat = host_materials[mat_idx];
-            const float emission_power = average_material_emission_power(mat, ctx->num_spectral_channels);
+            const float emission_power = average_material_emission_power(mat, host_textures, ctx->num_spectral_channels);
             if (emission_power > 1e-4f) {
                 host_lights.push_back(host_records[i]);
                 host_light_indices.push_back(host_records[i].primitive_index);
@@ -1706,6 +1864,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     ctx->host_spheres_for_light_distribution = host_spheres;
     ctx->host_light_records_for_distribution = host_light_records;
     ctx->host_materials_for_light_distribution = host_materials;
+    ctx->host_textures_for_light_distribution = host_scene.textures;
     rebuild_wavelength_proposal(ctx);
     rebuild_light_distribution(ctx);
 

@@ -3,6 +3,7 @@
 #include <vector>
 #include <cuda_runtime.h>
 #include "ure/gpu_structs.hpp"
+#include "ure/host_texture.hpp"
 #include "ure/render_config.hpp"
 
 #if defined(_MSC_VER)
@@ -119,6 +120,7 @@ struct GpuContext {
     std::vector<GpuSphere> host_spheres_for_light_distribution;
     std::vector<GpuLightRecord> host_light_records_for_distribution;
     std::vector<GpuMaterialData> host_materials_for_light_distribution;
+    std::vector<HostTexture> host_textures_for_light_distribution;
     std::vector<void*> pointers_to_free;
     std::vector<void*> material_resource_tables_to_free;
     std::vector<cudaArray_t> arrays_to_free;
