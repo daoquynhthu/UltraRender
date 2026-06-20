@@ -159,6 +159,7 @@ static int test_gpu_hot_update_resets_spatial_guiding_epoch() {
     float weight = 2.0f;
     CHECK_CUDA(cudaMemcpy(ctx->d_path_guiding_light_weights, &weight, sizeof(float), cudaMemcpyHostToDevice));
     CHECK_CUDA(cudaMemcpy(ctx->d_path_guiding_spatial_directional_weights, &weight, sizeof(float), cudaMemcpyHostToDevice));
+    const std::uint32_t epoch_before = ctx->path_guiding_epoch;
 
     ure::gpu::GpuInstanceTransform transform = {};
     transform.transform = ure::gpu::GpuMat4::identity();
@@ -168,6 +169,7 @@ static int test_gpu_hot_update_resets_spatial_guiding_epoch() {
     ure::gpu::update_instance_transforms_gpu(ctx, &transform, 1);
 
     CHECK(ctx->scene_bounds_max.x >= 11.0f);
+    CHECK(ctx->path_guiding_epoch == epoch_before + 1);
     CHECK_CUDA(cudaMemcpy(&weight, ctx->d_path_guiding_light_weights, sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(weight, 0.0f, 1e-6f);
     CHECK_CUDA(cudaMemcpy(&weight, ctx->d_path_guiding_spatial_directional_weights, sizeof(float), cudaMemcpyDeviceToHost));

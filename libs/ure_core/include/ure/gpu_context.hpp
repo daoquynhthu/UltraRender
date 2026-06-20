@@ -72,6 +72,8 @@ struct GpuContext {
     int path_guiding_directional_bin_count = 0;
     GpuVec3 path_guiding_bounds_min = {};
     GpuVec3 path_guiding_bounds_max = {};
+    std::uint32_t path_guiding_epoch = 1;
+    int path_guiding_passes_since_decay = 0;
     GpuVec3 scene_bounds_min = {};
     GpuVec3 scene_bounds_max = {};
     bool has_scene_bounds = false;

@@ -151,6 +151,10 @@ bool make_integrator_config(const ure_integrator_config_t* integrator_config, Re
         cfg.path_guiding.spatial_cell_count = integrator_config->path_guiding_spatial_cell_count;
     if (integrator_config->path_guiding_directional_bin_count > 0)
         cfg.path_guiding.directional_bin_count = integrator_config->path_guiding_directional_bin_count;
+    if (integrator_config->path_guiding_decay > 0.0f)
+        cfg.path_guiding.decay = integrator_config->path_guiding_decay;
+    if (integrator_config->path_guiding_decay_interval > 0)
+        cfg.path_guiding.decay_interval = integrator_config->path_guiding_decay_interval;
     cfg.restir_di.enabled = integrator_config->restir_di_enabled != 0;
     cfg.restir_di.temporal_reuse = integrator_config->restir_di_temporal_reuse != 0;
     cfg.restir_di.spatial_reuse = integrator_config->restir_di_spatial_reuse != 0;

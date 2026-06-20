@@ -585,6 +585,44 @@ __device__ inline float path_guiding_effective_mixture(const GpuScene& scene, fl
     return fminf(0.95f, fmaxf(0.0f, scene.path_guiding_light_mixture));
 }
 
+struct PathGuidingProductMetadata {
+    float luminance = 0.0f;
+    float wavelength_nm = 0.0f;
+};
+
+__device__ inline PathGuidingProductMetadata path_guiding_product_metadata(
+    const SpectralPacket& product,
+    int num_spec,
+    int spectral_mode,
+    int active_channel,
+    float wavelength_pdf
+) {
+    PathGuidingProductMetadata metadata;
+    const GpuVec3 xyz = spectral_mode_is_sampled(spectral_mode)
+        ? spectral_sample_to_xyz(product, num_spec, active_channel, wavelength_pdf, spectral_mode)
+        : spectrum_to_xyz(product, num_spec);
+    metadata.luminance = fmaxf(0.0f, xyz.y);
+    if (spectral_mode_is_sampled(spectral_mode) && active_channel >= 0 && active_channel < num_spec) {
+        metadata.wavelength_nm = product.wavelengths[active_channel];
+        return metadata;
+    }
+    float weighted_lambda = 0.0f;
+    float weight_sum = 0.0f;
+    for (int c = 0; c < num_spec; ++c) {
+        const float weight = fmaxf(0.0f, product.values[c]);
+        weighted_lambda += weight * product.wavelengths[c];
+        weight_sum += weight;
+    }
+    metadata.wavelength_nm = weight_sum > 0.0f ? weighted_lambda / weight_sum : 0.0f;
+    return metadata;
+}
+
+__global__ void decay_path_guiding_weights_kernel(float* weights, size_t count, float decay) {
+    const size_t index = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (index >= count) return;
+    weights[index] *= decay;
+}
+
 __device__ inline float guided_light_selection_pdf(const GpuScene& scene, int light_list_index, float guide_total) {
     if (!scene.path_guiding_light_weights ||
         scene.path_guiding_light_count != scene.light_count ||
@@ -1047,6 +1085,9 @@ __device__ inline void enqueue_restir_di_temporal_replay(
     shadow_queue.wavelength_pdfs[s_idx] = scene.restir_di_wavelength_pdfs[pixel_index];
     shadow_queue.light_list_indices[s_idx] = scene.restir_di_light_list_indices[pixel_index];
     shadow_queue.bsdf_lobe_pdfs[s_idx] = scene.restir_di_lobe_pdfs[pixel_index];
+    shadow_queue.guiding_product_luminance[s_idx] = 0.0f;
+    shadow_queue.guiding_wavelength_nm[s_idx] = 0.0f;
+    shadow_queue.guiding_epochs[s_idx] = scene.path_guiding_epoch;
     shadow_queue.stokes_i[s_idx] = scene.restir_di_stokes_i[pixel_index];
     shadow_queue.stokes_q[s_idx] = scene.restir_di_stokes_q[pixel_index];
     shadow_queue.stokes_u[s_idx] = scene.restir_di_stokes_u[pixel_index];
@@ -1475,8 +1516,9 @@ __global__ __launch_bounds__(256) void extend_shadow_kernel(
             scene.path_guiding_learning_rate > 0.0f) {
             int light_list_index = shadow_queue.light_list_indices[idx];
             if (light_list_index >= 0 && light_list_index < scene.path_guiding_light_count) {
-                float luminance = rgb_luminance(rgb);
+                float luminance = shadow_queue.guiding_product_luminance[idx];
                 if (isfinite(luminance) && luminance > scene.path_guiding_min_weight) {
+                    if (shadow_queue.guiding_epochs[idx] != scene.path_guiding_epoch) return;
                     atomicAdd(&scene.path_guiding_light_weights[light_list_index],
                               scene.path_guiding_learning_rate * luminance);
                     const int cell = path_guiding_spatial_cell(scene, shadow_queue.origins[idx]);
@@ -1609,8 +1651,11 @@ __global__ __launch_bounds__(256) void shade_kernel(
                              ? environment_radiance_spectrum(scene, light_sample.direction, current_medium_idx, throughput.wavelengths)
                              : load_mat_emission_spectrum(scene, light_sample.material_index, throughput.wavelengths);
                          SpectralPacket contribution;
+                         SpectralPacket guiding_product;
                          for (int c = 0; c < scene.num_spectral_channels; ++c) {
                              L_e.wavelengths[c] = throughput.wavelengths[c];
+                             guiding_product.values[c] = L_e.values[c] * phase_val * tr_light_vals[c];
+                             guiding_product.wavelengths[c] = throughput.wavelengths[c];
                              contribution.values[c] = throughput.values[c] * L_e.values[c] * phase_val * tr_light_vals[c] * (1.0f / light_sample.pdf);
                              contribution.wavelengths[c] = throughput.wavelengths[c];
                          }
@@ -1631,6 +1676,15 @@ __global__ __launch_bounds__(256) void shade_kernel(
                              shadow_queue.wavelength_pdfs[s_idx] = current_queue.wavelength_pdfs[idx];
                              shadow_queue.light_list_indices[s_idx] = light_idx_idx;
                              shadow_queue.bsdf_lobe_pdfs[s_idx] = phase_val;
+                             PathGuidingProductMetadata guide_metadata = path_guiding_product_metadata(
+                                 guiding_product,
+                                 scene.num_spectral_channels,
+                                 spectral_mode,
+                                 current_queue.active_channels[idx],
+                                 current_queue.wavelength_pdfs[idx]);
+                             shadow_queue.guiding_product_luminance[s_idx] = guide_metadata.luminance;
+                             shadow_queue.guiding_wavelength_nm[s_idx] = guide_metadata.wavelength_nm;
+                             shadow_queue.guiding_epochs[s_idx] = scene.path_guiding_epoch;
                              StokesVector restir_stokes = spectral_mode_is_sampled(spectral_mode)
                                  ? load_stokes(current_queue, idx, active_channel)
                                  : load_packet_average_stokes(current_queue, idx);
@@ -1913,7 +1967,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
                      scene.num_spectral_channels,
                      dispersion_clamp);
 
-                 SpectralPacket contribution = throughput * L_e * f_r * cos_surf * (1.0f / pdf);
+                 SpectralPacket guiding_product = L_e * f_r * cos_surf;
+                 SpectralPacket contribution = throughput * guiding_product * (1.0f / pdf);
                  float lobe_pdf_for_reservoir = 0.0f;
                  for (int c = 0; c < scene.num_spectral_channels; ++c) {
                      float pdf_mat_c = pdf_mat.values[c];
@@ -1932,6 +1987,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
                             for (int c = 0; c < scene.num_spectral_channels; ++c) {
                                 contribution.values[c] *= tr_vals[c];
+                                guiding_product.values[c] *= tr_vals[c];
                             }
                         }
 
@@ -1953,6 +2009,15 @@ __global__ __launch_bounds__(256) void shade_kernel(
                              shadow_queue.wavelength_pdfs[s_idx] = current_queue.wavelength_pdfs[idx];
                              shadow_queue.light_list_indices[s_idx] = light_idx_idx;
                              shadow_queue.bsdf_lobe_pdfs[s_idx] = lobe_pdf_for_reservoir;
+                             PathGuidingProductMetadata guide_metadata = path_guiding_product_metadata(
+                                 guiding_product,
+                                 scene.num_spectral_channels,
+                                 spectral_mode,
+                                 current_queue.active_channels[idx],
+                                 current_queue.wavelength_pdfs[idx]);
+                             shadow_queue.guiding_product_luminance[s_idx] = guide_metadata.luminance;
+                             shadow_queue.guiding_wavelength_nm[s_idx] = guide_metadata.wavelength_nm;
+                             shadow_queue.guiding_epochs[s_idx] = scene.path_guiding_epoch;
                              StokesVector restir_stokes = spectral_mode_is_sampled(spectral_mode)
                                  ? load_stokes(current_queue, idx, active_channel)
                                  : load_packet_average_stokes(current_queue, idx);

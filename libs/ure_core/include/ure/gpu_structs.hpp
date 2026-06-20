@@ -2,6 +2,7 @@
 
 #include <cuda_runtime.h>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 #if defined(_MSC_VER)
@@ -489,6 +490,7 @@ struct GpuScene {
     int path_guiding_directional_bin_count;
     GpuVec3 path_guiding_bounds_min;
     GpuVec3 path_guiding_bounds_max;
+    std::uint32_t path_guiding_epoch;
     int environment_light_direct_sampling;
     float environment_light_intensity;
     GpuVec3* restir_di_origins;
@@ -586,6 +588,9 @@ struct ShadowQueue {
     int* pixel_indices = nullptr;
     int* light_list_indices = nullptr;
     float* bsdf_lobe_pdfs = nullptr;
+    float* guiding_product_luminance = nullptr;
+    float* guiding_wavelength_nm = nullptr;
+    std::uint32_t* guiding_epochs = nullptr;
     float* stokes_i = nullptr;
     float* stokes_q = nullptr;
     float* stokes_u = nullptr;

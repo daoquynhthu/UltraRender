@@ -88,5 +88,10 @@ Assert-Contains "tests\gpu\test_render_basic.cu" "test_path_guiding_spatial_dire
 Assert-Contains "tests\host\test_session.cpp" "test_scene_diff_emissive_instance_transform_ir_full_reload" "R-P2 emissive transform reload test"
 Assert-Contains "tests\gpu\test_render_basic.cu" "test_emissive_instance_transform_hot_update_requires_full_reload" "R-P2 raw GPU emissive transform fail-loud"
 Assert-Contains "tests\gpu\test_instance_hotupdate.cu" "test_gpu_hot_update_resets_spatial_guiding_epoch" "R-P2 transform guide epoch reset"
+Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "path_guiding_product_metadata" "R-P2 spectral product target metadata"
+Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "decay_path_guiding_weights_kernel" "R-P2 guide decay kernel"
+Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "guiding_epochs.*path_guiding_epoch" "R-P2 stale epoch rejection"
+Assert-Contains "tests\gpu\test_render_basic.cu" "test_path_guiding_product_target_uses_wavelength_pdf_metadata" "R-P2 product target spectral metadata test"
+Assert-Contains "tests\gpu\test_render_basic.cu" "test_path_guiding_decay_kernel_applies_epoch_factor" "R-P2 decay test"
 
 Write-Host "Phase R static audit passed"

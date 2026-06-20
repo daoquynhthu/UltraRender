@@ -253,6 +253,8 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.path_guiding.light_mixture = static_cast<float>(app_config.path_guiding.light_mixture);
     gpu_config.path_guiding.learning_rate = static_cast<float>(app_config.path_guiding.learning_rate);
     gpu_config.path_guiding.min_weight = static_cast<float>(app_config.path_guiding.min_weight);
+    gpu_config.path_guiding.decay = static_cast<float>(app_config.path_guiding.decay);
+    gpu_config.path_guiding.decay_interval = app_config.path_guiding.decay_interval;
     gpu_config.path_guiding.spatial_cell_count = app_config.path_guiding.spatial_cell_count;
     gpu_config.path_guiding.directional_bin_count = app_config.path_guiding.directional_bin_count;
     gpu_config.environment_light.direct_sampling = app_config.environment_light.direct_sampling;

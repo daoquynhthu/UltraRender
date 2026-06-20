@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cuda_runtime.h>
 #include "ure/gpu_structs.hpp"
 
@@ -52,6 +53,8 @@ __global__ __launch_bounds__(256) void suppress_dark_outliers_kernel(
 );
 
 // From path_tracer_wavefront.cuh (included into device TU)
+__global__ void decay_path_guiding_weights_kernel(float* weights, size_t count, float decay);
+
 __global__ __launch_bounds__(256) void extend_kernel(
     RayQueue ray_queue,
     HitQueue hit_queue,

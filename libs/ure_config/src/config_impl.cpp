@@ -74,6 +74,8 @@ RenderConfig load_config(const std::string& path) {
             if (p.contains("light_mixture")) cfg.path_guiding.light_mixture = p["light_mixture"].get<double>();
             if (p.contains("learning_rate")) cfg.path_guiding.learning_rate = p["learning_rate"].get<double>();
             if (p.contains("min_weight")) cfg.path_guiding.min_weight = p["min_weight"].get<double>();
+            if (p.contains("decay")) cfg.path_guiding.decay = p["decay"].get<double>();
+            if (p.contains("decay_interval")) cfg.path_guiding.decay_interval = p["decay_interval"].get<int>();
             if (p.contains("spatial_cell_count")) cfg.path_guiding.spatial_cell_count = p["spatial_cell_count"].get<int>();
             if (p.contains("directional_bin_count")) cfg.path_guiding.directional_bin_count = p["directional_bin_count"].get<int>();
         }
@@ -147,6 +149,8 @@ CliResult parse_cli(int argc, char** argv) {
     double path_guiding_light_mixture = -1.0;
     double path_guiding_learning_rate = -1.0;
     double path_guiding_min_weight = -1.0;
+    double path_guiding_decay = -1.0;
+    int path_guiding_decay_interval = -1;
     int path_guiding_spatial_cell_count = -1;
     int path_guiding_directional_bin_count = -1;
     bool environment_light_direct_sampling = false;
@@ -195,6 +199,8 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_option("--path-guiding-light-mixture", path_guiding_light_mixture, "Mixture weight for guided direct-light sampling");
     render_cmd->add_option("--path-guiding-learning-rate", path_guiding_learning_rate, "Progressive path guiding light-weight update scale");
     render_cmd->add_option("--path-guiding-min-weight", path_guiding_min_weight, "Minimum visible contribution recorded by path guiding");
+    render_cmd->add_option("--path-guiding-decay", path_guiding_decay, "Multiplicative path guiding history decay");
+    render_cmd->add_option("--path-guiding-decay-interval", path_guiding_decay_interval, "Render passes between path guiding decay epochs");
     render_cmd->add_option("--path-guiding-spatial-cells", path_guiding_spatial_cell_count, "Spatial cell count for GPU path guiding cache");
     render_cmd->add_option("--path-guiding-directional-bins", path_guiding_directional_bin_count, "Direction bin count per spatial cell/light for GPU path guiding cache");
     render_cmd->add_flag("--enable-environment-light-sampling", environment_light_direct_sampling, "Add the radiometric sky/background to explicit direct-light sampling");
@@ -269,6 +275,8 @@ CliResult parse_cli(int argc, char** argv) {
         if (path_guiding_light_mixture >= 0.0) cfg.path_guiding.light_mixture = path_guiding_light_mixture;
         if (path_guiding_learning_rate >= 0.0) cfg.path_guiding.learning_rate = path_guiding_learning_rate;
         if (path_guiding_min_weight >= 0.0) cfg.path_guiding.min_weight = path_guiding_min_weight;
+        if (path_guiding_decay >= 0.0) cfg.path_guiding.decay = path_guiding_decay;
+        if (path_guiding_decay_interval >= 0) cfg.path_guiding.decay_interval = path_guiding_decay_interval;
         if (path_guiding_spatial_cell_count >= 0) cfg.path_guiding.spatial_cell_count = path_guiding_spatial_cell_count;
         if (path_guiding_directional_bin_count >= 0) cfg.path_guiding.directional_bin_count = path_guiding_directional_bin_count;
         if (environment_light_direct_sampling) cfg.environment_light.direct_sampling = true;

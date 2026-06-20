@@ -63,6 +63,8 @@ def main() -> int:
         path_guiding=True,
         path_guiding_spatial_cell_count=24,
         path_guiding_directional_bin_count=12,
+        path_guiding_decay=0.9,
+        path_guiding_decay_interval=8,
     ) as session:
         progress = session.progress()
         assert progress.spp == 0

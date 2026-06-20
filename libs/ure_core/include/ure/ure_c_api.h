@@ -93,6 +93,8 @@ typedef struct ure_integrator_config_t {
     float environment_light_intensity;
     int path_guiding_spatial_cell_count;
     int path_guiding_directional_bin_count;
+    float path_guiding_decay;
+    int path_guiding_decay_interval;
 } ure_integrator_config_t;
 
 typedef enum ure_aov_type_t {

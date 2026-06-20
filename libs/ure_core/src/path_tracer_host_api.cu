@@ -182,6 +182,9 @@ void alloc_shadow_queue(ShadowQueue& q, int capacity, int num_spec_channels) {
     UR_CUDA_CHECK(cudaMalloc(&q.pixel_indices, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.light_list_indices, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.bsdf_lobe_pdfs, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.guiding_product_luminance, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.guiding_wavelength_nm, capacity * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&q.guiding_epochs, capacity * sizeof(std::uint32_t)));
     UR_CUDA_CHECK(cudaMalloc(&q.stokes_i, capacity * sizeof(float)));
     UR_CUDA_CHECK(cudaMalloc(&q.stokes_q, capacity * sizeof(float)));
     UR_CUDA_CHECK(cudaMalloc(&q.stokes_u, capacity * sizeof(float)));
@@ -204,6 +207,9 @@ void free_shadow_queue(ShadowQueue& q) {
     cudaFree(q.pixel_indices);
     cudaFree(q.light_list_indices);
     cudaFree(q.bsdf_lobe_pdfs);
+    cudaFree(q.guiding_product_luminance);
+    cudaFree(q.guiding_wavelength_nm);
+    cudaFree(q.guiding_epochs);
     cudaFree(q.stokes_i);
     cudaFree(q.stokes_q);
     cudaFree(q.stokes_u);
@@ -1114,6 +1120,14 @@ static void validate_path_guiding_config(const ure::RenderConfig& config) {
         config.path_guiding.min_weight < 0.0f) {
         throw std::runtime_error("Path guiding min_weight must be finite and non-negative");
     }
+    if (!std::isfinite(config.path_guiding.decay) ||
+        config.path_guiding.decay <= 0.0f ||
+        config.path_guiding.decay > 1.0f) {
+        throw std::runtime_error("Path guiding decay must be in (0, 1]");
+    }
+    if (config.path_guiding.decay_interval <= 0) {
+        throw std::runtime_error("Path guiding decay_interval must be positive");
+    }
     if (config.path_guiding.spatial_cell_count <= 0 ||
         config.path_guiding.spatial_cell_count > 4096) {
         throw std::runtime_error("Path guiding spatial_cell_count must be in [1, 4096]");
@@ -1428,6 +1442,9 @@ static void add_environment_light_record(std::vector<GpuLightRecord>& records, c
 
 static void rebuild_light_distribution(GpuContext* ctx) {
     release_light_distribution(ctx);
+    ctx->path_guiding_passes_since_decay = 0;
+    ++ctx->path_guiding_epoch;
+    if (ctx->path_guiding_epoch == 0) ctx->path_guiding_epoch = 1;
 
     std::vector<int> host_light_indices;
     std::vector<GpuLightRecord> host_lights;
@@ -2048,6 +2065,9 @@ void reset_accumulation_gpu(GpuContext* ctx) {
                                  0,
                                  spatial_directional_count * sizeof(float)));
     }
+    ctx->path_guiding_passes_since_decay = 0;
+    ++ctx->path_guiding_epoch;
+    if (ctx->path_guiding_epoch == 0) ctx->path_guiding_epoch = 1;
     ctx->current_spp = 0;
 }
 
@@ -2089,6 +2109,29 @@ void free_gpu_renderer(GpuContext* ctx) {
 }
 
 int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
+    if (ctx->d_path_guiding_light_weights && ctx->light_count > 0) {
+        ++ctx->path_guiding_passes_since_decay;
+        if (ctx->path_guiding_passes_since_decay >= ctx->render_config.path_guiding.decay_interval) {
+            constexpr int kDecayBlockSize = 256;
+            const float decay = ctx->render_config.path_guiding.decay;
+            const size_t light_count = static_cast<size_t>(ctx->light_count);
+            decay_path_guiding_weights_kernel<<<
+                static_cast<unsigned int>((light_count + kDecayBlockSize - 1) / kDecayBlockSize),
+                kDecayBlockSize>>>(ctx->d_path_guiding_light_weights, light_count, decay);
+            UR_CUDA_CHECK(cudaGetLastError());
+            const size_t spatial_directional_count =
+                light_count *
+                static_cast<size_t>(ctx->path_guiding_spatial_cell_count) *
+                static_cast<size_t>(ctx->path_guiding_directional_bin_count);
+            decay_path_guiding_weights_kernel<<<
+                static_cast<unsigned int>((spatial_directional_count + kDecayBlockSize - 1) / kDecayBlockSize),
+                kDecayBlockSize>>>(ctx->d_path_guiding_spatial_directional_weights, spatial_directional_count, decay);
+            UR_CUDA_CHECK(cudaGetLastError());
+            ctx->path_guiding_passes_since_decay = 0;
+            ++ctx->path_guiding_epoch;
+            if (ctx->path_guiding_epoch == 0) ctx->path_guiding_epoch = 1;
+        }
+    }
     GpuScene scene;
     scene.spheres = ctx->d_spheres;
     scene.sphere_count = ctx->sphere_count;
@@ -2138,6 +2181,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.path_guiding_directional_bin_count = ctx->path_guiding_directional_bin_count;
     scene.path_guiding_bounds_min = ctx->path_guiding_bounds_min;
     scene.path_guiding_bounds_max = ctx->path_guiding_bounds_max;
+    scene.path_guiding_epoch = ctx->path_guiding_epoch;
     scene.environment_light_direct_sampling = ctx->render_config.environment_light.direct_sampling ? 1 : 0;
     scene.environment_light_intensity = std::max(ctx->render_config.environment_light.intensity, 0.0f);
     scene.restir_di_origins = ctx->d_restir_di_origins;
@@ -2342,6 +2386,9 @@ void update_instance_transforms_gpu(GpuContext* ctx,
                                      0,
                                      static_cast<size_t>(ctx->light_count) * sizeof(float)));
         }
+        ctx->path_guiding_passes_since_decay = 0;
+        ++ctx->path_guiding_epoch;
+        if (ctx->path_guiding_epoch == 0) ctx->path_guiding_epoch = 1;
     }
 }
 

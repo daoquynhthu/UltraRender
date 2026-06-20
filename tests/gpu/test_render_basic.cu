@@ -103,6 +103,9 @@ static int test_alloc_shadow_queue(ShadowQueue& q, int cap, int num_spec = 4) {
     if (cudaMalloc(&q.pixel_indices, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.light_list_indices, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.bsdf_lobe_pdfs, cap * sizeof(float)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.guiding_product_luminance, cap * sizeof(float)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.guiding_wavelength_nm, cap * sizeof(float)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.guiding_epochs, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.stokes_i, cap * sizeof(float)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.stokes_q, cap * sizeof(float)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.stokes_u, cap * sizeof(float)) != cudaSuccess) return 1;
@@ -121,6 +124,7 @@ static void test_free_shadow_queue(const ShadowQueue& q) {
     cudaFree(q.radiance_vals); cudaFree(q.radiance_wavelengths);
     cudaFree(q.spectral_modes); cudaFree(q.active_channels); cudaFree(q.wavelength_pdfs);
     cudaFree(q.pixel_indices); cudaFree(q.light_list_indices); cudaFree(q.bsdf_lobe_pdfs);
+    cudaFree(q.guiding_product_luminance); cudaFree(q.guiding_wavelength_nm); cudaFree(q.guiding_epochs);
     cudaFree(q.stokes_i); cudaFree(q.stokes_q); cudaFree(q.stokes_u); cudaFree(q.stokes_v);
     cudaFree(q.restir_replay_flags); cudaFree(q.count); cudaFree(q.overflow_count);
 }
@@ -223,6 +227,26 @@ __global__ void spatial_directional_guided_light_selection_kernel(
     out[3] = float(sample_light_list_index_at(scene, reference, 0.99f));
 }
 
+__global__ void path_guiding_product_metadata_kernel(float* out) {
+    SpectralPacket product(0.0f);
+    product.values[0] = 2.0f;
+    product.wavelengths[0] = 550.0f;
+    PathGuidingProductMetadata sampled = path_guiding_product_metadata(
+        product, 1, SpectralRayModeSampled, 0, 0.02f);
+    PathGuidingProductMetadata sampled_half_pdf = path_guiding_product_metadata(
+        product, 1, SpectralRayModeSampled, 0, 0.01f);
+    product.values[0] = 1.0f;
+    product.wavelengths[0] = 450.0f;
+    product.values[1] = 3.0f;
+    product.wavelengths[1] = 650.0f;
+    PathGuidingProductMetadata packet = path_guiding_product_metadata(
+        product, 2, SpectralRayModePacket, -1, 1.0f);
+    out[0] = sampled.luminance;
+    out[1] = sampled_half_pdf.luminance;
+    out[2] = sampled.wavelength_nm;
+    out[3] = packet.wavelength_nm;
+}
+
 __global__ void light_tree_selection_kernel(GpuScene scene, float* out) {
     out[0] = light_selection_pdf(scene, 0);
     out[1] = light_selection_pdf(scene, 1);
@@ -305,6 +329,9 @@ __global__ void setup_path_guided_shadow_kernel(ShadowQueue q, float* guide_weig
     q.pixel_indices[0] = 0;
     q.light_list_indices[0] = 1;
     q.bsdf_lobe_pdfs[0] = 0.25f;
+    q.guiding_product_luminance[0] = 2.0f;
+    q.guiding_wavelength_nm[0] = 550.0f;
+    q.guiding_epochs[0] = 7;
     q.stokes_i[0] = 1.0f;
     q.stokes_q[0] = 0.0f;
     q.stokes_u[0] = 0.0f;
@@ -330,6 +357,9 @@ __global__ void setup_restir_shadow_kernel(ShadowQueue q, GpuVec3* accum) {
     q.pixel_indices[0] = 0;
     q.light_list_indices[0] = 1;
     q.bsdf_lobe_pdfs[0] = 0.25f;
+    q.guiding_product_luminance[0] = 0.0f;
+    q.guiding_wavelength_nm[0] = 550.0f;
+    q.guiding_epochs[0] = 0;
     q.stokes_i[0] = 1.0f;
     q.stokes_q[0] = 0.125f;
     q.stokes_u[0] = 0.0f;
@@ -1908,6 +1938,28 @@ static int test_path_guiding_rejects_invalid_enabled_config() {
         rejected_bins = std::string(e.what()).find("Path guiding directional_bin_count") != std::string::npos;
     }
     CHECK(rejected_bins);
+
+    config.path_guiding.directional_bin_count = 8;
+    config.path_guiding.decay = 0.0f;
+    bool rejected_decay = false;
+    try {
+        GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+        free_gpu_renderer(ctx);
+    } catch (const std::runtime_error& e) {
+        rejected_decay = std::string(e.what()).find("Path guiding decay") != std::string::npos;
+    }
+    CHECK(rejected_decay);
+
+    config.path_guiding.decay = 0.95f;
+    config.path_guiding.decay_interval = 0;
+    bool rejected_decay_interval = false;
+    try {
+        GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+        free_gpu_renderer(ctx);
+    } catch (const std::runtime_error& e) {
+        rejected_decay_interval = std::string(e.what()).find("Path guiding decay_interval") != std::string::npos;
+    }
+    CHECK(rejected_decay_interval);
     return 0;
 }
 
@@ -1973,6 +2025,41 @@ static int test_path_guiding_spatial_directional_selection_uses_matching_pdf() {
     return 0;
 }
 
+static int test_path_guiding_product_target_uses_wavelength_pdf_metadata() {
+    REQUIRE_GPU();
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_out, 4 * sizeof(float)));
+    DeviceMem _out(d_out);
+    path_guiding_product_metadata_kernel<<<1, 1>>>(d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    float out[4] = {};
+    CHECK_CUDA(cudaMemcpy(out, d_out, sizeof(out), cudaMemcpyDeviceToHost));
+    CHECK(out[0] > 0.0f);
+    CHECK_FLOAT_EQ(out[1], 2.0f * out[0], 1e-4f);
+    CHECK_FLOAT_EQ(out[2], 550.0f, 1e-4f);
+    CHECK_FLOAT_EQ(out[3], 600.0f, 1e-4f);
+    return 0;
+}
+
+static int test_path_guiding_decay_kernel_applies_epoch_factor() {
+    REQUIRE_GPU();
+    float values[4] = {2.0f, 4.0f, 8.0f, 16.0f};
+    float* d_values = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_values, sizeof(values)));
+    DeviceMem _values(d_values);
+    CHECK_CUDA(cudaMemcpy(d_values, values, sizeof(values), cudaMemcpyHostToDevice));
+    decay_path_guiding_weights_kernel<<<1, 32>>>(d_values, 4, 0.75f);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(values, d_values, sizeof(values), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(values[0], 1.5f, 1e-6f);
+    CHECK_FLOAT_EQ(values[1], 3.0f, 1e-6f);
+    CHECK_FLOAT_EQ(values[2], 6.0f, 1e-6f);
+    CHECK_FLOAT_EQ(values[3], 12.0f, 1e-6f);
+    return 0;
+}
+
 static int test_path_guiding_shadow_visibility_updates_light_weight() {
     REQUIRE_GPU();
     ShadowQueue q = {};
@@ -2009,6 +2096,7 @@ static int test_path_guiding_shadow_visibility_updates_light_weight() {
     scene.path_guiding_directional_bin_count = 4;
     scene.path_guiding_bounds_min = GpuVec3(-1.0f, -1.0f, -1.0f);
     scene.path_guiding_bounds_max = GpuVec3(1.0f, 1.0f, 1.0f);
+    scene.path_guiding_epoch = 7;
     extend_shadow_kernel<<<1, 1>>>(q, d_accum, scene, 20.0f);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
@@ -2020,12 +2108,21 @@ static int test_path_guiding_shadow_visibility_updates_light_weight() {
     CHECK_CUDA(cudaMemcpy(spatial_weights, d_spatial_weights, 8 * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaMemcpy(&accum, d_accum, sizeof(GpuVec3), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(weights[0], 0.0f, 1e-6f);
-    CHECK(weights[1] > 0.0f);
+    CHECK_FLOAT_EQ(weights[1], 1.0f, 1e-6f);
     const float first_light_spatial = spatial_weights[0] + spatial_weights[1] + spatial_weights[2] + spatial_weights[3];
     const float second_light_spatial = spatial_weights[4] + spatial_weights[5] + spatial_weights[6] + spatial_weights[7];
     CHECK_FLOAT_EQ(first_light_spatial, 0.0f, 1e-6f);
-    CHECK(second_light_spatial > 0.0f);
+    CHECK_FLOAT_EQ(second_light_spatial, 1.0f, 1e-6f);
     CHECK(accum.y > 0.0f);
+    const std::uint32_t stale_epoch = 6;
+    CHECK_CUDA(cudaMemcpy(q.guiding_epochs, &stale_epoch, sizeof(stale_epoch), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemset(d_weights, 0, 2 * sizeof(float)));
+    CHECK_CUDA(cudaMemset(d_spatial_weights, 0, 8 * sizeof(float)));
+    extend_shadow_kernel<<<1, 1>>>(q, d_accum, scene, 20.0f);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(weights, d_weights, 2 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(weights[1], 0.0f, 1e-6f);
     test_free_shadow_queue(q);
     return 0;
 }
@@ -2572,6 +2669,8 @@ int main() {
     RUN_TEST(test_path_guiding_rejects_invalid_enabled_config);
     RUN_TEST(test_path_guiding_light_selection_uses_mixture_pdf);
     RUN_TEST(test_path_guiding_spatial_directional_selection_uses_matching_pdf);
+    RUN_TEST(test_path_guiding_product_target_uses_wavelength_pdf_metadata);
+    RUN_TEST(test_path_guiding_decay_kernel_applies_epoch_factor);
     RUN_TEST(test_path_guiding_shadow_visibility_updates_light_weight);
     RUN_TEST(test_restir_di_allocates_and_resets_temporal_reservoirs);
     RUN_TEST(test_restir_di_visible_shadow_updates_reservoir_metadata);
