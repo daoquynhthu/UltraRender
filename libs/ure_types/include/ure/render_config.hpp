@@ -62,6 +62,7 @@ struct PathGuidingConfig {
     int decay_interval = 16;
     int spatial_cell_count = 16;
     int directional_bin_count = 8;
+    int memory_budget_mb = 0;
 };
 
 struct EnvironmentLightConfig {

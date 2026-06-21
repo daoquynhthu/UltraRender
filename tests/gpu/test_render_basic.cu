@@ -16,6 +16,14 @@
 
 using namespace ure::gpu;
 
+namespace ure::gpu {
+__global__ void merge_path_guiding_delta_kernel(float* dst,
+                                                 const float* src,
+                                                 const float* baseline,
+                                                 size_t count,
+                                                 float baseline_factor);
+}
+
 static GpuCamera make_test_camera(float center_x) {
     GpuCamera camera = {};
     camera.origin = GpuVec3(center_x, 0.0f, 1.0f);
@@ -1859,6 +1867,8 @@ static int test_path_guiding_allocates_progressive_light_cache() {
     CHECK(on_ctx->last_integrator_path_guiding_light_count == 1);
     CHECK(on_ctx->last_integrator_path_guiding_spatial_cell_count == 16);
     CHECK(on_ctx->last_integrator_path_guiding_directional_bin_count == 8);
+    CHECK(on_ctx->path_guiding_required_bytes == (1u + 16u * 8u) * sizeof(float));
+    CHECK(on_ctx->path_guiding_budget_bytes >= on_ctx->path_guiding_required_bytes);
     CHECK(on_ctx->path_guiding_bounds_min.y < 1.0f);
     CHECK(on_ctx->path_guiding_bounds_max.y > 3.0f);
     float weight = -1.0f;
@@ -1875,6 +1885,55 @@ static int test_path_guiding_allocates_progressive_light_cache() {
     CHECK_CUDA(cudaMemcpy(&weight, on_ctx->d_path_guiding_spatial_directional_weights, sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(weight, 0.0f, 1e-6f);
     free_gpu_renderer(on_ctx);
+    return 0;
+}
+
+static int test_path_guiding_memory_plan_enforces_device_budget() {
+    ure::RenderConfig config;
+    config.path_guiding.enabled = true;
+    config.path_guiding.spatial_cell_count = 16;
+    config.path_guiding.directional_bin_count = 8;
+    config.path_guiding.memory_budget_mb = 64;
+    const auto plan = plan_path_guiding_memory(config, 32, 2ull << 30, 8ull << 30);
+    CHECK(plan.light_weight_count == 32);
+    CHECK(plan.spatial_directional_weight_count == 32u * 16u * 8u);
+    CHECK(plan.required_bytes == (32u + 32u * 16u * 8u) * sizeof(float));
+    CHECK(plan.budget_bytes == 64ull * 1024ull * 1024ull);
+
+    config.path_guiding.spatial_cell_count = 4096;
+    config.path_guiding.directional_bin_count = 64;
+    config.path_guiding.memory_budget_mb = 1;
+    bool rejected = false;
+    try {
+        (void)plan_path_guiding_memory(config, 1, 2ull << 30, 8ull << 30);
+    } catch (const std::runtime_error& e) {
+        rejected = std::string(e.what()).find("device budget permits") != std::string::npos;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
+static int test_multi_gpu_path_guiding_merge_preserves_single_history() {
+    REQUIRE_GPU();
+    float baseline[2] = {10.0f, 20.0f};
+    float destination[2] = {9.5f, 19.0f};
+    float source[2] = {10.0f, 18.5f};
+    float* d_baseline = nullptr;
+    float* d_destination = nullptr;
+    float* d_source = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_baseline, sizeof(baseline)));
+    CHECK_CUDA(cudaMalloc(&d_destination, sizeof(destination)));
+    CHECK_CUDA(cudaMalloc(&d_source, sizeof(source)));
+    DeviceMem _baseline(d_baseline), _destination(d_destination), _source(d_source);
+    CHECK_CUDA(cudaMemcpy(d_baseline, baseline, sizeof(baseline), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_destination, destination, sizeof(destination), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_source, source, sizeof(source), cudaMemcpyHostToDevice));
+    merge_path_guiding_delta_kernel<<<1, 32>>>(d_destination, d_source, d_baseline, 2, 0.9f);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(destination, d_destination, sizeof(destination), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(destination[0], 10.5f, 1e-6f);
+    CHECK_FLOAT_EQ(destination[1], 19.5f, 1e-6f);
     return 0;
 }
 
@@ -2666,6 +2725,8 @@ int main() {
     RUN_TEST(test_emission_expression_contributes_to_mesh_light_distribution_power);
     RUN_TEST(test_emissive_material_rejects_missing_light_power_texture);
     RUN_TEST(test_path_guiding_allocates_progressive_light_cache);
+    RUN_TEST(test_path_guiding_memory_plan_enforces_device_budget);
+    RUN_TEST(test_multi_gpu_path_guiding_merge_preserves_single_history);
     RUN_TEST(test_path_guiding_rejects_invalid_enabled_config);
     RUN_TEST(test_path_guiding_light_selection_uses_mixture_pdf);
     RUN_TEST(test_path_guiding_spatial_directional_selection_uses_matching_pdf);

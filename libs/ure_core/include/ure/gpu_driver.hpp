@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <vector>
 #include "ure/gpu_scene_loader.hpp"
 #include "ure/gpu_structs.hpp"
@@ -24,6 +25,18 @@ struct RenderMesh {
 // --- Interactive API ---
 
 struct GpuContext; // Opaque handle to GPU resources
+
+struct PathGuidingMemoryPlan {
+    size_t light_weight_count = 0;
+    size_t spatial_directional_weight_count = 0;
+    size_t required_bytes = 0;
+    size_t budget_bytes = 0;
+};
+
+PathGuidingMemoryPlan plan_path_guiding_memory(const ure::RenderConfig& config,
+                                               size_t light_count,
+                                               size_t free_device_bytes,
+                                               size_t total_device_bytes);
 
 // Initialize GPU resources (allocate buffers, upload static scene data)
 GpuContext* init_gpu_renderer(int width, int height,

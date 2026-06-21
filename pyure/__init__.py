@@ -104,6 +104,7 @@ class _IntegratorConfig(ctypes.Structure):
         ("path_guiding_directional_bin_count", ctypes.c_int),
         ("path_guiding_decay", ctypes.c_float),
         ("path_guiding_decay_interval", ctypes.c_int),
+        ("path_guiding_memory_budget_mb", ctypes.c_int),
     ]
 
 
@@ -322,6 +323,7 @@ class RenderSession:
         path_guiding_directional_bin_count: int = 8,
         path_guiding_decay: float = 0.95,
         path_guiding_decay_interval: int = 16,
+        path_guiding_memory_budget_mb: int = 0,
         environment_light_direct_sampling: bool = False,
         environment_light_intensity: float = 1.0,
         restir_di: bool = False,
@@ -354,6 +356,7 @@ class RenderSession:
             or path_guiding_directional_bin_count != 8
             or path_guiding_decay != 0.95
             or path_guiding_decay_interval != 16
+            or path_guiding_memory_budget_mb != 0
             or environment_light_direct_sampling
             or restir_di
         )
@@ -406,6 +409,7 @@ class RenderSession:
                 int(path_guiding_directional_bin_count),
                 float(path_guiding_decay),
                 int(path_guiding_decay_interval),
+                int(path_guiding_memory_budget_mb),
             )
             handle = native().ure_session_create_integrator_config(
                 ctypes.byref(cfg),
@@ -642,6 +646,7 @@ def create_session(
     path_guiding_directional_bin_count: int = 8,
     path_guiding_decay: float = 0.95,
     path_guiding_decay_interval: int = 16,
+    path_guiding_memory_budget_mb: int = 0,
     environment_light_direct_sampling: bool = False,
     environment_light_intensity: float = 1.0,
     restir_di: bool = False,
@@ -680,6 +685,7 @@ def create_session(
         path_guiding_directional_bin_count=path_guiding_directional_bin_count,
         path_guiding_decay=path_guiding_decay,
         path_guiding_decay_interval=path_guiding_decay_interval,
+        path_guiding_memory_budget_mb=path_guiding_memory_budget_mb,
         environment_light_direct_sampling=environment_light_direct_sampling,
         environment_light_intensity=environment_light_intensity,
         restir_di=restir_di,

@@ -95,6 +95,7 @@ typedef struct ure_integrator_config_t {
     int path_guiding_directional_bin_count;
     float path_guiding_decay;
     int path_guiding_decay_interval;
+    int path_guiding_memory_budget_mb;
 } ure_integrator_config_t;
 
 typedef enum ure_aov_type_t {

@@ -70,6 +70,8 @@ struct GpuContext {
     float* d_path_guiding_spatial_directional_weights = nullptr;
     int path_guiding_spatial_cell_count = 0;
     int path_guiding_directional_bin_count = 0;
+    size_t path_guiding_required_bytes = 0;
+    size_t path_guiding_budget_bytes = 0;
     GpuVec3 path_guiding_bounds_min = {};
     GpuVec3 path_guiding_bounds_max = {};
     std::uint32_t path_guiding_epoch = 1;

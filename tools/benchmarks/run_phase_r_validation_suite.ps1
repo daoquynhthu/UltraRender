@@ -16,6 +16,7 @@ $ReportDir = Join-Path $RepoRoot "output\benchmarks"
 $ReportPath = Join-Path $ReportDir "phase_r_validation_suite.json"
 $SmokeReportPath = Join-Path $ReportDir "phase_r_integrator_smoke.json"
 $LightSamplingReportPath = Join-Path $ReportDir "phase_r_light_sampling_suite.json"
+$PathGuidingReportPath = Join-Path $ReportDir "phase_r_path_guiding_suite.json"
 $CtestRegex = "^(test_config|test_integrator|test_session|test_pyure_smoke|gpu_render|gpu_spectral|gpu_volume|gpu_polarization)$"
 
 function Invoke-PhaseRStep {
@@ -110,6 +111,20 @@ try {
         }
     }
 
+    $steps += Invoke-PhaseRStep "path_guiding_variance_mse_time_to_error_suite" {
+        & (Join-Path $RepoRoot "tools\benchmarks\run_phase_r_path_guiding_suite.ps1") `
+            -BuildDir $BuildDir `
+            -Config $Config `
+            -Width $Width `
+            -Height $Height `
+            -SkipBuild
+    }
+    if (-not (Test-Path $PathGuidingReportPath)) { throw "missing path guiding report: $PathGuidingReportPath" }
+    $pathGuiding = Get-Content -Raw -LiteralPath $PathGuidingReportPath | ConvertFrom-Json
+    if ($pathGuiding.status -ne "passed" -or $pathGuiding.scenes.Count -ne 4) {
+        throw "Phase R-P2 path guiding suite did not prove four-scene coverage"
+    }
+
     $report = [ordered]@{
         phase = "R"
         suite = "industrial_validation_local"
@@ -121,6 +136,7 @@ try {
         ctest_failed = $ctestFailed
         benchmark = $smoke
         light_sampling = $lightSampling
+        path_guiding = $pathGuiding
         thresholds = [ordered]@{
             min_samples_per_second = $MinSamplesPerSecond
             min_spp_per_second = $MinSppPerSecond

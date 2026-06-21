@@ -997,6 +997,8 @@ static void release_light_distribution(GpuContext* ctx) {
     ctx->d_path_guiding_spatial_directional_weights = nullptr;
     ctx->path_guiding_spatial_cell_count = 0;
     ctx->path_guiding_directional_bin_count = 0;
+    ctx->path_guiding_required_bytes = 0;
+    ctx->path_guiding_budget_bytes = 0;
     ctx->path_guiding_bounds_min = GpuVec3(0.0f, 0.0f, 0.0f);
     ctx->path_guiding_bounds_max = GpuVec3(0.0f, 0.0f, 0.0f);
     ctx->light_count = 0;
@@ -1093,6 +1095,42 @@ static bool path_guiding_enabled(const ure::RenderConfig& config) {
            config.path_guiding.learning_rate > 0.0f;
 }
 
+PathGuidingMemoryPlan plan_path_guiding_memory(const ure::RenderConfig& config,
+                                               size_t light_count,
+                                               size_t free_device_bytes,
+                                               size_t total_device_bytes) {
+    PathGuidingMemoryPlan plan;
+    plan.light_weight_count = light_count;
+    if (light_count == 0) return plan;
+    const size_t cells = static_cast<size_t>(config.path_guiding.spatial_cell_count);
+    const size_t bins = static_cast<size_t>(config.path_guiding.directional_bin_count);
+    if (cells > std::numeric_limits<size_t>::max() / bins ||
+        light_count > std::numeric_limits<size_t>::max() / (cells * bins)) {
+        throw std::runtime_error("Path guiding cache dimensions overflow size_t");
+    }
+    plan.spatial_directional_weight_count = light_count * cells * bins;
+    if (plan.spatial_directional_weight_count > std::numeric_limits<size_t>::max() - light_count ||
+        plan.spatial_directional_weight_count + light_count > std::numeric_limits<size_t>::max() / sizeof(float)) {
+        throw std::runtime_error("Path guiding cache byte size overflows size_t");
+    }
+    plan.required_bytes = (plan.spatial_directional_weight_count + light_count) * sizeof(float);
+    constexpr size_t kMiB = 1024ull * 1024ull;
+    const size_t reserve = std::max<size_t>(256ull * kMiB, total_device_bytes / 10);
+    const size_t allocatable = free_device_bytes > reserve ? free_device_bytes - reserve : 0;
+    if (config.path_guiding.memory_budget_mb > 0) {
+        const size_t requested = static_cast<size_t>(config.path_guiding.memory_budget_mb) * kMiB;
+        plan.budget_bytes = std::min(requested, allocatable);
+    } else {
+        plan.budget_bytes = std::min({allocatable, total_device_bytes / 20, 512ull * kMiB});
+    }
+    if (plan.required_bytes > plan.budget_bytes) {
+        throw std::runtime_error(
+            "Path guiding cache requires " + std::to_string(plan.required_bytes) +
+            " bytes but device budget permits " + std::to_string(plan.budget_bytes));
+    }
+    return plan;
+}
+
 static bool restir_di_enabled(const ure::RenderConfig& config) {
     return config.restir_di.enabled && config.restir_di.temporal_reuse;
 }
@@ -1135,6 +1173,9 @@ static void validate_path_guiding_config(const ure::RenderConfig& config) {
     if (config.path_guiding.directional_bin_count <= 0 ||
         config.path_guiding.directional_bin_count > 64) {
         throw std::runtime_error("Path guiding directional_bin_count must be in [1, 64]");
+    }
+    if (config.path_guiding.memory_budget_mb < 0 || config.path_guiding.memory_budget_mb > 1048576) {
+        throw std::runtime_error("Path guiding memory_budget_mb must be in [0, 1048576]");
     }
 }
 
@@ -1547,16 +1588,22 @@ static void rebuild_light_distribution(GpuContext* ctx) {
     }
     ctx->light_count = static_cast<int>(host_lights.size());
     if (path_guiding_enabled(ctx->render_config)) {
-        UR_CUDA_CHECK(cudaMalloc(&ctx->d_path_guiding_light_weights, host_light_indices.size() * sizeof(float)));
-        UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_light_weights, 0, host_light_indices.size() * sizeof(float)));
         ctx->path_guiding_spatial_cell_count = ctx->render_config.path_guiding.spatial_cell_count;
         ctx->path_guiding_directional_bin_count = ctx->render_config.path_guiding.directional_bin_count;
-        const size_t spatial_directional_count =
-            static_cast<size_t>(ctx->light_count) *
-            static_cast<size_t>(ctx->path_guiding_spatial_cell_count) *
-            static_cast<size_t>(ctx->path_guiding_directional_bin_count);
-        UR_CUDA_CHECK(cudaMalloc(&ctx->d_path_guiding_spatial_directional_weights, spatial_directional_count * sizeof(float)));
-        UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_spatial_directional_weights, 0, spatial_directional_count * sizeof(float)));
+        size_t free_device_bytes = 0;
+        size_t total_device_bytes = 0;
+        UR_CUDA_CHECK(cudaMemGetInfo(&free_device_bytes, &total_device_bytes));
+        const PathGuidingMemoryPlan plan = plan_path_guiding_memory(
+            ctx->render_config, host_light_indices.size(), free_device_bytes, total_device_bytes);
+        ctx->path_guiding_required_bytes = plan.required_bytes;
+        ctx->path_guiding_budget_bytes = plan.budget_bytes;
+        UR_CUDA_CHECK(cudaMalloc(&ctx->d_path_guiding_light_weights, plan.light_weight_count * sizeof(float)));
+        UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_light_weights, 0, plan.light_weight_count * sizeof(float)));
+        UR_CUDA_CHECK(cudaMalloc(&ctx->d_path_guiding_spatial_directional_weights,
+                                 plan.spatial_directional_weight_count * sizeof(float)));
+        UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_spatial_directional_weights,
+                                 0,
+                                 plan.spatial_directional_weight_count * sizeof(float)));
         configure_path_guiding_domain(ctx, host_lights);
         ctx->last_integrator_path_guiding_light_count = ctx->light_count;
         ctx->last_integrator_path_guiding_spatial_cell_count = ctx->path_guiding_spatial_cell_count;

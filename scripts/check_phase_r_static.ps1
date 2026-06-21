@@ -93,5 +93,13 @@ Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "decay_path_guidin
 Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "guiding_epochs.*path_guiding_epoch" "R-P2 stale epoch rejection"
 Assert-Contains "tests\gpu\test_render_basic.cu" "test_path_guiding_product_target_uses_wavelength_pdf_metadata" "R-P2 product target spectral metadata test"
 Assert-Contains "tests\gpu\test_render_basic.cu" "test_path_guiding_decay_kernel_applies_epoch_factor" "R-P2 decay test"
+Assert-Contains "libs\ure_core\src\gpu_multi_driver.cu" "merge_path_guiding_delta_kernel" "R-P2 multi-GPU guide delta merge"
+Assert-Contains "libs\ure_core\src\gpu_multi_driver.cu" "d_path_guiding_baseline_light" "R-P2 multi-GPU shared guide baseline"
+Assert-Contains "libs\ure_core\src\path_tracer_host_api.cu" "plan_path_guiding_memory" "R-P2 guide memory planner"
+Assert-Contains "libs\ure_config\src\config_impl.cpp" "path-guiding-memory-budget-mb" "R-P2 guide memory budget config parity"
+Assert-Contains "tests\gpu\test_render_basic.cu" "test_multi_gpu_path_guiding_merge_preserves_single_history" "R-P2 multi-GPU merge formula test"
+Assert-Contains "tools\benchmarks\run_phase_r_path_guiding_suite.ps1" "path_guiding_variance_mse_time_to_error" "R-P2 four-scene benefit curves"
+Assert-Contains "tests\gpu\phase_r_guiding_benchmark.cu" "complex_material" "R-P2 complex material benchmark workload"
+Assert-Contains "tests\gpu\phase_r_guiding_benchmark.cu" "update_medium_gpu" "R-P2 participating medium benchmark workload"
 
 Write-Host "Phase R static audit passed"

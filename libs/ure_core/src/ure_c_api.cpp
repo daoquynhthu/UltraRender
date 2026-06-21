@@ -155,6 +155,8 @@ bool make_integrator_config(const ure_integrator_config_t* integrator_config, Re
         cfg.path_guiding.decay = integrator_config->path_guiding_decay;
     if (integrator_config->path_guiding_decay_interval > 0)
         cfg.path_guiding.decay_interval = integrator_config->path_guiding_decay_interval;
+    if (integrator_config->path_guiding_memory_budget_mb >= 0)
+        cfg.path_guiding.memory_budget_mb = integrator_config->path_guiding_memory_budget_mb;
     cfg.restir_di.enabled = integrator_config->restir_di_enabled != 0;
     cfg.restir_di.temporal_reuse = integrator_config->restir_di_temporal_reuse != 0;
     cfg.restir_di.spatial_reuse = integrator_config->restir_di_spatial_reuse != 0;

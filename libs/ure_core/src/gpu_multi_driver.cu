@@ -3,8 +3,11 @@
 #include "ure/gpu_context.hpp"
 #include <cuda_runtime.h>
 #include <ure/log.hpp>
+#include <ure/check_cuda.hpp>
 #include <algorithm>
 #include <cstring>
+#include <limits>
+#include <stdexcept>
 
 namespace ure::gpu {
 
@@ -19,6 +22,98 @@ __global__ void merge_counts_kernel(int* dst, const int* src, int count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         dst[idx] += src[idx];
+    }
+}
+
+__global__ void merge_path_guiding_delta_kernel(float* dst,
+                                                 const float* src,
+                                                 const float* baseline,
+                                                 size_t count,
+                                                 float baseline_factor) {
+    const size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (idx < count) dst[idx] += src[idx] - baseline_factor * baseline[idx];
+}
+
+static void allocate_path_guiding_merge_buffers(MultiGpuContext* ctx) {
+    if (ctx->num_gpus <= 1) return;
+    GpuContext* first = ctx->contexts[0];
+    if (!first->d_path_guiding_light_weights) return;
+    if (first->path_guiding_required_bytes > std::numeric_limits<size_t>::max() / 3 ||
+        first->path_guiding_required_bytes * 3 > first->path_guiding_budget_bytes) {
+        throw std::runtime_error(
+            "Multi-GPU path guiding merge requires three resident guide-cache footprints on device 0");
+    }
+    ctx->path_guiding_light_count = static_cast<size_t>(first->light_count);
+    ctx->path_guiding_spatial_count =
+        ctx->path_guiding_light_count *
+        static_cast<size_t>(first->path_guiding_spatial_cell_count) *
+        static_cast<size_t>(first->path_guiding_directional_bin_count);
+    const size_t light_bytes = ctx->path_guiding_light_count * sizeof(float);
+    const size_t spatial_bytes = ctx->path_guiding_spatial_count * sizeof(float);
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_path_guiding_baseline_light, light_bytes));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_path_guiding_baseline_spatial, spatial_bytes));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_path_guiding_temp_light, light_bytes));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_path_guiding_temp_spatial, spatial_bytes));
+}
+
+static void validate_path_guiding_merge_state(const MultiGpuContext* ctx) {
+    if (ctx->path_guiding_light_count == 0) return;
+    const GpuContext* first = ctx->contexts[0];
+    for (int i = 1; i < ctx->num_gpus; ++i) {
+        const GpuContext* current = ctx->contexts[i];
+        const size_t spatial_count =
+            static_cast<size_t>(current->light_count) *
+            static_cast<size_t>(current->path_guiding_spatial_cell_count) *
+            static_cast<size_t>(current->path_guiding_directional_bin_count);
+        if (!current->d_path_guiding_light_weights ||
+            current->light_count != first->light_count ||
+            spatial_count != ctx->path_guiding_spatial_count ||
+            current->path_guiding_epoch != first->path_guiding_epoch ||
+            current->path_guiding_passes_since_decay != first->path_guiding_passes_since_decay) {
+            throw std::runtime_error("Multi-GPU path guiding state is incompatible across devices");
+        }
+    }
+}
+
+static void merge_and_broadcast_path_guiding(MultiGpuContext* ctx, float baseline_factor) {
+    if (ctx->path_guiding_light_count == 0) return;
+    validate_path_guiding_merge_state(ctx);
+    constexpr int kBlockSize = 256;
+    const size_t light_bytes = ctx->path_guiding_light_count * sizeof(float);
+    const size_t spatial_bytes = ctx->path_guiding_spatial_count * sizeof(float);
+    cudaSetDevice(0);
+    for (int i = 1; i < ctx->num_gpus; ++i) {
+        UR_CUDA_CHECK(cudaMemcpyPeer(ctx->d_path_guiding_temp_light, 0,
+                                     ctx->contexts[i]->d_path_guiding_light_weights, i,
+                                     light_bytes));
+        UR_CUDA_CHECK(cudaMemcpyPeer(ctx->d_path_guiding_temp_spatial, 0,
+                                     ctx->contexts[i]->d_path_guiding_spatial_directional_weights, i,
+                                     spatial_bytes));
+        merge_path_guiding_delta_kernel<<<
+            static_cast<unsigned int>((ctx->path_guiding_light_count + kBlockSize - 1) / kBlockSize),
+            kBlockSize>>>(ctx->contexts[0]->d_path_guiding_light_weights,
+                          ctx->d_path_guiding_temp_light,
+                          ctx->d_path_guiding_baseline_light,
+                          ctx->path_guiding_light_count,
+                          baseline_factor);
+        UR_CUDA_CHECK(cudaGetLastError());
+        merge_path_guiding_delta_kernel<<<
+            static_cast<unsigned int>((ctx->path_guiding_spatial_count + kBlockSize - 1) / kBlockSize),
+            kBlockSize>>>(ctx->contexts[0]->d_path_guiding_spatial_directional_weights,
+                          ctx->d_path_guiding_temp_spatial,
+                          ctx->d_path_guiding_baseline_spatial,
+                          ctx->path_guiding_spatial_count,
+                          baseline_factor);
+        UR_CUDA_CHECK(cudaGetLastError());
+    }
+    UR_CUDA_CHECK(cudaDeviceSynchronize());
+    for (int i = 1; i < ctx->num_gpus; ++i) {
+        UR_CUDA_CHECK(cudaMemcpyPeer(ctx->contexts[i]->d_path_guiding_light_weights, i,
+                                     ctx->contexts[0]->d_path_guiding_light_weights, 0,
+                                     light_bytes));
+        UR_CUDA_CHECK(cudaMemcpyPeer(ctx->contexts[i]->d_path_guiding_spatial_directional_weights, i,
+                                     ctx->contexts[0]->d_path_guiding_spatial_directional_weights, 0,
+                                     spatial_bytes));
     }
 }
 
@@ -56,6 +151,7 @@ MultiGpuContext* init_multi_gpu_renderer(int width, int height,
     cudaMemset(ctx->d_merged_accum, 0, fb_size);
     cudaMalloc(&ctx->d_merged_counts, width * height * sizeof(int));
     cudaMemset(ctx->d_merged_counts, 0, width * height * sizeof(int));
+    allocate_path_guiding_merge_buffers(ctx);
 
     return ctx;
 }
@@ -68,6 +164,10 @@ void free_multi_gpu_renderer(MultiGpuContext* ctx) {
     cudaSetDevice(0);
     cudaFree(ctx->d_merged_accum);
     cudaFree(ctx->d_merged_counts);
+    cudaFree(ctx->d_path_guiding_baseline_light);
+    cudaFree(ctx->d_path_guiding_baseline_spatial);
+    cudaFree(ctx->d_path_guiding_temp_light);
+    cudaFree(ctx->d_path_guiding_temp_spatial);
     delete[] ctx->contexts;
     delete ctx;
 }
@@ -77,12 +177,32 @@ int render_pass_multi_gpu(MultiGpuContext* ctx, int samples_per_pass) {
     // GPU i: samples [base + i*spp, base + (i+1)*spp)
     // After the pass, all GPUs share the same new base.
     int current_base = ctx->contexts[0]->current_spp;
+    float path_guiding_baseline_factor = 1.0f;
+    if (ctx->path_guiding_light_count > 0) {
+        validate_path_guiding_merge_state(ctx);
+        GpuContext* first = ctx->contexts[0];
+        const bool decay_this_pass =
+            first->path_guiding_passes_since_decay + 1 >= first->render_config.path_guiding.decay_interval;
+        path_guiding_baseline_factor = decay_this_pass ? first->render_config.path_guiding.decay : 1.0f;
+        cudaSetDevice(0);
+        UR_CUDA_CHECK(cudaMemcpy(ctx->d_path_guiding_baseline_light,
+                                 first->d_path_guiding_light_weights,
+                                 ctx->path_guiding_light_count * sizeof(float),
+                                 cudaMemcpyDeviceToDevice));
+        UR_CUDA_CHECK(cudaMemcpy(ctx->d_path_guiding_baseline_spatial,
+                                 first->d_path_guiding_spatial_directional_weights,
+                                 ctx->path_guiding_spatial_count * sizeof(float),
+                                 cudaMemcpyDeviceToDevice));
+    }
 
     for (int i = 0; i < ctx->num_gpus; ++i) {
         cudaSetDevice(i);
         ctx->contexts[i]->current_spp = current_base + i * samples_per_pass;
         render_pass_gpu(ctx->contexts[i], samples_per_pass);
+        UR_CUDA_CHECK(cudaDeviceSynchronize());
     }
+
+    merge_and_broadcast_path_guiding(ctx, path_guiding_baseline_factor);
 
     int new_base = current_base + ctx->num_gpus * samples_per_pass;
     for (int i = 0; i < ctx->num_gpus; ++i) {

@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-21 (Phase T portable GPU runtime and multi-backend execution plan)
+最后更新: 2026-06-21 (authoritative execution queue and R-P2 production closure)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -31,6 +31,55 @@
 远期 Phase V:   GPU 几何加速结构 / BVH / OptiX / Clustered Geometry   计划中
 远期 Phase W:   波动光学求解器 / 相干场输运                          进行中
 ```
+
+---
+
+## 权威执行顺序（唯一施工队列）
+
+本节是所有阶段状态、依赖和施工顺序的唯一执行口径。后文各 Phase 章节描述范围与内部步骤，不得据此绕过本节并行启动新的施工阶段。除明确列出的长期门禁外，同一时间只允许一个主阶段处于施工状态；已经提前完成的其他阶段成果保留，但其后续工作冻结到队列游标到达。
+
+```
+R-P2 closure [done]
+   │
+   ▼
+当前游标: Phase M complete
+   │
+   ▼
+R-P6 Mie / volume resources
+   │
+   ▼
+Phase Q complete
+   │
+   ▼
+R-P3 → R-P4 → R-P5 → R-P7
+   │
+   ▼
+Phase T complete
+   │
+   ▼
+Phase V complete
+   │
+   ▼
+Phase W complete
+   │
+   ▼
+Phase U complete
+   │
+   ▼
+Phase X complete
+```
+
+### 执行约束
+
+- **R-P2 已闭环**: multi-GPU guide delta merge/broadcast、device-derived 或显式 memory budget，以及 Cornell/multi-light/complex-material/volume 的 variance、MSE、time-to-error 曲线均已进入生产与验证路径。
+- **当前唯一施工项 — Phase M**: 完整收口 MaterialGraph、BSDF layering、procedural nodes、MaterialX import/export 和 presets，先稳定材质语义。
+- **R-P6**: 在 Phase Q 前完成真实 Mie/volume phase resource，使 Q.6 消费已验证资源合同而不是占位 schema。
+- **Phase Q**: 在剩余高级积分器和多后端执行扩散前，完整冻结 URE native schema、serialization、programmatic graph、feature declaration 和 package contract。
+- **Phase R remainder**: 固定顺序为 R-P3、R-P4、R-P5、R-P7；R-P1/R-P2 已完成，R-P6 在 Q 前单独完成。Phase R 未通过 R-P7 不得启动 Phase T 实现。
+- **Phase T → V → W**: T 先稳定 backend-neutral runtime 并迁移 CUDA/Vulkan/DXR；V 再建设统一 acceleration provider；W 最后把已有 reference/oracle 工作接入稳定执行与加速合同。现有 W 成果保留，新增 W production work 冻结。
+- **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
+- **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
+- 文档中的“进行中”表示已有未闭环成果，不等于允许并行施工。发生冲突时，以本节当前游标为准。
 
 ---
 
@@ -1802,9 +1851,9 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 
 ### Phase R — 工业级/科研级积分器升级 / Research-Grade Radiometric Integrator
 
-**状态**: 进行中，不能视为 Phase R 完成。R.0-R.12 只闭环 local contract baseline；R-P1 已完成 production light sampling foundation 的当前本地闭环，执行光标位于 R-P2。R-P2 已把全局 per-light scalar guide 扩展为 GPU resident `spatial cell × light × direction bin` cache：guide domain 来自完整 scene bounds，surface/volume NEE、emissive-hit MIS 与 environment-miss MIS 的 `*_at(reference_point)` 路径使用同一 reference-conditioned mixture proposal/PDF，cache 无样本时回退 light tree/global guide。第二批已纠正训练目标：visible shadow 不再把已除 light PDF、已乘 path throughput 和 MIS 的最终像素贡献写回 cache，而是学习局部 `Le × BSDF/phase × cosine × transmittance` 光谱 product；sampled/lane 模式通过显式 wavelength PDF 转换为 photometric Y target，queue 同时保留 representative wavelength、spectral mode、wavelength PDF 和 cache epoch。`decay` / `decay_interval` 已贯穿 RenderConfig、JSON、CLI、C ABI 和 pyure；pass-boundary decay 会推进 epoch，reset、light distribution/material rebuild 和 instance-domain mutation 会清空历史并推进 epoch，stale shadow sample 不得污染新 cache。SceneDiff 移动 emissive instance时 retained SceneIR 自动 full reload，裸 GPU transform API 对 emissive instance fail-loud。R-P2 尚未完成：multi-GPU merge、四类场景 variance/MSE/time-to-error 和 production memory-budget policy 仍待实现。
+**状态**: 进行中，不能视为 Phase R 完成。R.0-R.12 只闭环 local contract baseline；R-P1 与 R-P2 已完成 production closure，权威执行游标已移动到 Phase M，Phase R 暂停到 Phase M 后的 R-P6。R-P2 已把全局 per-light scalar guide 扩展为 GPU resident `spatial cell × light × direction bin` cache：guide domain 来自完整 scene bounds，surface/volume NEE、emissive-hit MIS 与 environment-miss MIS 的 `*_at(reference_point)` 路径使用同一 reference-conditioned mixture proposal/PDF，cache 无样本时回退 light tree/global guide。训练目标学习局部 `Le × BSDF/phase × cosine × transmittance` 光谱 product；sampled/lane 模式通过显式 wavelength PDF 转换为 photometric Y target，并记录 representative wavelength、spectral mode、wavelength PDF 和 cache epoch。pass-boundary decay、reset、light/material rebuild、instance-domain mutation 和 stale epoch rejection均已闭环。multi-GPU 使用“衰减后的共同基线 + 各设备本轮增量”合并并广播，避免重复累加共同历史；device 0 merge scratch 纳入三份 guide footprint 的预算门禁。`memory_budget_mb=0` 根据 free/total VRAM、保留量和硬上限自动规划，显式预算和自动预算都在分配前做 checked size 与 fail-loud。专用 GPU benchmark 内建 Cornell enclosure、多光源、复杂材质和参与介质四类 workload，并输出 baseline/guided variance、MSE、time-to-error 曲线。
 
-**必须显式承认的未生产化能力**: spatial-directional direct-light product guide、spectral estimator metadata 和 decay/epoch 生命周期已进入生产路径，但 R-P2 的 multi-GPU merge、memory-budget policy 和完整收益证据尚未生产化；unbiased ReSTIR DI、spatial ReSTIR DI、ReSTIR PT/path reuse、specular manifold GPU solver、BDPT、VCM、MLT chain integrator、真实 Mie phase resource/parameterization、完整多场景 variance/MSE 收益曲线、farm/Nsight 长跑 dashboard 均未完成。当前代码对其中若干能力是 deliberate fail-loud，而不是实现完成；后续必须作为 Phase R production work 继续推进，不能再把 API/数学合同/拒绝边界包装成生产化交付。
+**必须显式承认的未生产化能力**: R-P2 spatial-directional product guide、spectral metadata、decay/epoch、multi-GPU merge、memory budget 和四类本地收益曲线已生产化；unbiased ReSTIR DI、spatial ReSTIR DI、ReSTIR PT/path reuse、specular manifold GPU solver、BDPT、VCM、MLT chain integrator、真实 Mie phase resource/parameterization，以及跨 R-P3-R-P6 的完整多场景/farm/Nsight 长跑 dashboard 均未完成。当前代码对其中若干能力是 deliberate fail-loud，而不是实现完成；后续必须按权威执行顺序继续推进。
 
 **目标**: 将当前 CUDA spectral/polarimetric wavefront path tracer 从“可用的物理路径追踪器”升级为工业级/科研级 radiometric light transport integrator。Phase R 不替代 Phase W：Phase R 处理默认非相干 radiance/Stokes transport 的调度、采样、MIS、路径空间算法和性能/收敛基准；Phase W 处理相干场、衍射、部分相干和局部全波求解。任何高级积分器都必须保持 Phase E/L 的 explicit wavelength PDF、spectral domain/resource contract、Stokes/Mueller 语义和 fail-loud wave feature policy。
 
@@ -1877,7 +1926,7 @@ R.13-R.19 是能力编号，不是线性施工顺序。实际执行按依赖拆�
 | Stage | 目标 | 必须交付 | 验证门槛 |
 |-------|------|----------|----------|
 | R-P1 | Production light sampling foundation | 统一 light resource abstraction；sphere、mesh area、emissive triangle、environment、analytic area light 的 selection/pdf/eval 接口；light tree 或等价层级采样结构；surface/volume NEE 共享同一 PDF 合同；材质 emission/resource mutation 后 tree/alias 增量或全量 rebuild 语义。进度：typed `GpuLightRecord`、instance/direct mesh triangle light distribution、triangle solid-angle PDF、opt-in environment direct sampling、O(1) PMF PDF、带 bounds 的 GPU resident recursive light tree、空间最长轴/能量平衡 host tree build、reference-point aware device tree traversal/PDF、SceneIR `QuadLightNode` analytic area light、surface/volume NEE、emissive-hit MIS 与 environment-miss MIS 统一入口已落地；host light distribution power 已覆盖 scalar emission、SPD/resource emission、emission texture 和 MaterialGraph emission expression，非法发光纹理引用 fail-loud；SceneDiff texture/MaterialGraph/SPD resource mutation 已按 retained SceneIR full reload 触发 tree/alias/resource cache 全量 rebuild；`gpu_test_render` 已覆盖 instance triangle、direct mesh triangle、environment record/PDF、light-tree PMF/PDF/sampling、三光源 spatial split/subtree bounds、reference-point dependent sampling/PDF、混合 sphere/mesh/env PDF 归一、material emission update 后 PMF/tree/leaf rebuild、emission texture/expression power 和 invalid emissive texture gate；`test_session` 覆盖 texture/graph/SPD material mutation full reload；`test_gltf_frontend` 覆盖 SceneIR quad light compile 与 degenerate area fail-loud；`test_config`/C ABI/pyure smoke 覆盖 environment direct sampling 配置面；`run_phase_r_light_sampling_suite.ps1` 接入 Phase R validation suite 并输出 two-scene MSE/variance JSON。剩余生产级 tree clustering、增量 rebuild 成本控制、完整 reference scene pack/farm long-run 和 Nsight dashboard 未完成 | PDF parity tests 覆盖所有 light type；surface/volume NEE 和 hit-light MIS 消费同一 selection PDF；多光源场景 variance/MSE 不低于 sphere-only baseline；不支持的 light type 在 scene compile fail-loud |
-| R-P2 | Spatial-directional / BSDF-product path guiding | GPU resident guiding cache；spatial cell + direction distribution；BSDF-product 或 radiance-product proposal；spectral wavelength PDF metadata；progressive update、decay、reset、scene mutation 和 multi-GPU shard merge 语义；默认关闭并通过 config/API 显式启用。进度：`spatial cell × light × direction bin` cache、完整 scene bounds domain、reference-conditioned proposal/PDF、global/light-tree fallback、JSON/CLI/C ABI/pyure 参数 parity 和非法维度 gate 已落地；surface/volume visible shadow 已改为学习不含 light-selection inverse PDF、path throughput 和 MIS 的局部光谱 product，sampled/lane estimator 显式消费 wavelength PDF 并记录 representative wavelength/spectral mode/cache epoch；pass-boundary decay、reset、light/material rebuild、instance-domain mutation 和 stale epoch rejection 已落地；SceneDiff emissive-instance transform 自动 full reload，裸 GPU API fail-loud。剩余 multi-GPU merge、memory-budget policy 与 Cornell/多光源/复杂材质/volume 四类收益曲线 | Guide sampling PDF 与实际 proposal 完全一致；Cornell、多光源、复杂材质、volume 至少四类场景有 variance/MSE/time-to-error 曲线；错误 cache epoch、非法参数和 unsupported material path fail-loud |
+| R-P2 | Spatial-directional / BSDF-product path guiding | ✅ 已完成：GPU resident `spatial cell × light × direction bin` cache、完整 scene bounds domain、reference-conditioned proposal/PDF、global/light-tree fallback、局部光谱 product target、wavelength PDF metadata、decay/epoch/reset/mutation、emissive transform reload boundary、multi-GPU baseline+delta merge/broadcast、checked device-derived/explicit memory budget，以及内建 Cornell/多光源/复杂材质/volume workload 的 variance/MSE/time-to-error suite | Guide sampling PDF 与实际 proposal 完全一致；四类场景曲线由 `run_phase_r_path_guiding_suite.ps1` 生成；错误 cache epoch、预算不足、非法参数和 unsupported material path fail-loud |
 | R-P3 | Unbiased/spatial ReSTIR DI + ReSTIR PT | 将现有 biased temporal DI preview 与 production unbiased mode 分离；实现 temporal + spatial reservoir reuse；visibility/reconnection metadata；wavelength PDF、material/phase lobe PDF、Stokes-compatible throughput；ReSTIR PT/path reuse 独立 mode 和 sample-space contract | Unbiased mode 有偏差测试和 reference comparison；spatial/unbiased 不再 fail-loud；biased preview 必须在输出 metadata 中显式标记；multi-light/occlusion/volume 场景有收益曲线 |
 | R-P4 | Specular manifold solver + BDPT/VCM | GPU specular manifold Newton solve；SDS/specular chain connection；light subpath generation；camera/light subpath connection；vertex merging radius schedule；MIS 权重；spectral/polarimetric throughput 和 Jacobian 合同；glass direct-light blocker policy 替换为真实路径空间算法 | Glass caustic、SDS、small emitter、rough/specular mixed path 场景有 correctness oracle 和收益曲线；BDPT/VCM/specular-manifold 各自 mode 不再 fail-loud；Jacobian/PDF/energy gates 必须通过 |
 | R-P5 | MLT chain integrator | Independent chain scheduler；primary-sample-space replay；large/small step proposal；burn-in、acceptance stats、normalization、chain seeding；spectral wavelength/path-state mutation；与 BDPT/VCM 或 default path tracer 的 contribution evaluator 边界 | MLT mode 不再 fail-loud；输出 chain diagnostics；低概率焦散/小光源/高遮挡场景 time-to-error 优于 default baseline；deterministic replay 和 distributed shard seed contract 通过 |

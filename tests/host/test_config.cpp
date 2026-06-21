@@ -143,7 +143,8 @@ static int test_path_guiding_json_fields() {
     "decay": 0.875,
     "decay_interval": 9,
     "spatial_cell_count": 32,
-    "directional_bin_count": 16
+    "directional_bin_count": 16,
+    "memory_budget_mb": 96
   }
 })";
     }
@@ -158,6 +159,7 @@ static int test_path_guiding_json_fields() {
     CHECK(cfg.path_guiding.decay_interval == 9);
     CHECK(cfg.path_guiding.spatial_cell_count == 32);
     CHECK(cfg.path_guiding.directional_bin_count == 16);
+    CHECK(cfg.path_guiding.memory_budget_mb == 96);
     return 0;
 }
 
@@ -181,6 +183,8 @@ static int test_path_guiding_cli_overrides() {
         "24",
         "--path-guiding-directional-bins",
         "12",
+        "--path-guiding-memory-budget-mb",
+        "128",
     };
     auto cfg = ure::config::parse_cli(static_cast<int>(sizeof(argv) / sizeof(argv[0])),
                                       const_cast<char**>(argv)).config;
@@ -193,6 +197,7 @@ static int test_path_guiding_cli_overrides() {
     CHECK(cfg.path_guiding.decay_interval == 7);
     CHECK(cfg.path_guiding.spatial_cell_count == 24);
     CHECK(cfg.path_guiding.directional_bin_count == 12);
+    CHECK(cfg.path_guiding.memory_budget_mb == 128);
     return 0;
 }
 

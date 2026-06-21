@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <vector>
 #include "ure/gpu_driver.hpp"
 #include "ure/render_config.hpp"
@@ -7,12 +8,18 @@
 namespace ure::gpu {
 
 struct MultiGpuContext {
-    int num_gpus;
-    int width;
-    int height;
-    GpuContext** contexts;
-    GpuVec3* d_merged_accum;
-    int* d_merged_counts;
+    int num_gpus = 0;
+    int width = 0;
+    int height = 0;
+    GpuContext** contexts = nullptr;
+    GpuVec3* d_merged_accum = nullptr;
+    int* d_merged_counts = nullptr;
+    float* d_path_guiding_baseline_light = nullptr;
+    float* d_path_guiding_baseline_spatial = nullptr;
+    float* d_path_guiding_temp_light = nullptr;
+    float* d_path_guiding_temp_spatial = nullptr;
+    size_t path_guiding_light_count = 0;
+    size_t path_guiding_spatial_count = 0;
 };
 
 MultiGpuContext* init_multi_gpu_renderer(int width, int height,
