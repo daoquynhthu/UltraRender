@@ -134,6 +134,34 @@ __device__ SpectralPacket sample_texture(const GpuScene& scene, int tex_idx, flo
     return result;
 }
 
+__device__ SpectralPacket sample_expression_texture(const GpuScene& scene,
+                                                    int tex_idx,
+                                                    SpectralExpressionSemantic semantic,
+                                                    float u,
+                                                    float v,
+                                                    const float* wavelengths,
+                                                    int num_spec) {
+    if (tex_idx < 0 || tex_idx >= scene.texture_count) return SpectralPacket(0.0f);
+    const GpuTexture tex = scene.textures[tex_idx];
+    if (!tex.texObj || tex.spectral_kind == SpectralTextureResourceKind::SourceSampleGrid) {
+        return sample_texture(scene, tex_idx, u, v, wavelengths, num_spec);
+    }
+    const float4 value = tex2D<float4>(tex.texObj, u, v);
+    const GpuVec3 rgb(value.x, value.y, value.z);
+    SpectralPacket result;
+    for (int c = 0; c < num_spec; ++c) {
+        result.wavelengths[c] = wavelengths[c];
+        if (semantic == SpectralExpressionSemantic::OpticalConstant) {
+            result.values[c] = rgb_coeff_to_spectrum_value(rgb, wavelengths[c]);
+        } else if (semantic == SpectralExpressionSemantic::Scalar) {
+            result.values[c] = 0.2126f * rgb.x + 0.7152f * rgb.y + 0.0722f * rgb.z;
+        } else {
+            result.values[c] = rgb_to_spectrum_value(rgb, wavelengths[c]);
+        }
+    }
+    return result;
+}
+
 __device__ SpectralPacket eval_material_expression(
     const GpuScene& scene,
     const GpuMaterial& mat,
@@ -160,6 +188,24 @@ __device__ SpectralPacket eval_material_expression(
     }
 
     SpectralPacket values[kMaxMaterialExpressionNodes];
+    auto procedural_noise = [](float x, float y) {
+        int xi = int(floorf(x));
+        int yi = int(floorf(y));
+        float fx = x - float(xi);
+        float fy = y - float(yi);
+        fx = fx * fx * (3.0f - 2.0f * fx);
+        fy = fy * fy * (3.0f - 2.0f * fy);
+        auto hash = [](int px, int py) {
+            unsigned int h = unsigned(px) * 0x8da6b343u ^ unsigned(py) * 0xd8163841u;
+            h ^= h >> 13;
+            h *= 0x85ebca6bu;
+            h ^= h >> 16;
+            return float(h & 0x00ffffffu) * (1.0f / 16777215.0f);
+        };
+        float x0 = hash(xi, yi) * (1.0f - fx) + hash(xi + 1, yi) * fx;
+        float x1 = hash(xi, yi + 1) * (1.0f - fx) + hash(xi + 1, yi + 1) * fx;
+        return x0 * (1.0f - fy) + x1 * fy;
+    };
     for (int i = 0; i < count; ++i) {
         const SpectralExpressionNode& node = scene.material_expression_nodes[start + i];
         SpectralPacket result(0.0f);
@@ -172,7 +218,7 @@ __device__ SpectralPacket eval_material_expression(
                 }
                 break;
             case SpectralExpressionNodeKind::Texture:
-                result = sample_texture(scene, node.texture_index, u, v, wavelengths, num_spec);
+                result = sample_expression_texture(scene, node.texture_index, node.semantic, u, v, wavelengths, num_spec);
                 break;
             case SpectralExpressionNodeKind::Add: {
                 int a = node.input_a - start;
@@ -203,6 +249,23 @@ __device__ SpectralPacket eval_material_expression(
                 }
                 break;
             }
+            case SpectralExpressionNodeKind::Checker2D:
+            case SpectralExpressionNodeKind::Noise2D: {
+                int a = node.input_a - start;
+                int b = node.input_b - start;
+                int s = node.input_factor - start;
+                if (a >= 0 && a < i && b >= 0 && b < i && s >= 0 && s < i) {
+                    float scale = fmaxf(1e-6f, fabsf(values[s].values[0]));
+                    float t = node.kind == SpectralExpressionNodeKind::Checker2D
+                        ? float((int(floorf(u * scale)) + int(floorf(v * scale))) & 1)
+                        : procedural_noise(u * scale, v * scale);
+                    for (int c = 0; c < num_spec; ++c) {
+                        result.wavelengths[c] = wavelengths[c];
+                        result.values[c] = values[a].values[c] * (1.0f - t) + values[b].values[c] * t;
+                    }
+                }
+                break;
+            }
             case SpectralExpressionNodeKind::None:
             default:
                 break;
@@ -210,6 +273,287 @@ __device__ SpectralPacket eval_material_expression(
         values[i] = result;
     }
     return values[local_root];
+}
+
+struct ResolvedMaterialBsdfLobe {
+    GpuMaterial material;
+    GpuMaterialSoA spectra;
+    SpectralPacket dielectric_ior;
+};
+
+__device__ inline void rotate_stokes_into_boundary_frame(StokesVector& s, const GpuVec3& ray_dir, const GpuVec3& boundary_normal);
+__device__ inline void rotate_stokes_from_boundary_frame(StokesVector& s, const GpuVec3& ray_dir, const GpuVec3& boundary_normal);
+
+__device__ float material_expression_scalar(const GpuScene& scene,
+                                            const GpuMaterial& material,
+                                            int root,
+                                            const GpuVec2& uv,
+                                            const float* wavelengths) {
+    SpectralPacket value = eval_material_expression(
+        scene, material, root, uv.u, uv.v, wavelengths, scene.num_spectral_channels);
+    float sum = 0.0f;
+    for (int c = 0; c < scene.num_spectral_channels; ++c) sum += value.values[c];
+    return sum / fmaxf(1.0f, float(scene.num_spectral_channels));
+}
+
+__device__ ResolvedMaterialBsdfLobe resolve_material_bsdf_lobe(
+    const GpuScene& scene,
+    const GpuMaterial& parent,
+    int lobe_index,
+    const GpuVec2& uv,
+    const float* wavelengths
+) {
+    ResolvedMaterialBsdfLobe resolved = {};
+    const GpuMaterialBsdfLobe& source =
+        scene.material_bsdf_lobes[parent.bsdf_lobe_start + lobe_index];
+    resolved.material.type = source.type;
+    resolved.material.roughness = source.roughness;
+    resolved.material.ior = source.ior;
+    resolved.material.dispersion = source.dispersion;
+    resolved.material.thin_film_thickness = source.thin_film_thickness;
+    resolved.material.thin_film_ior = source.thin_film_ior;
+    resolved.material.ior_expression_root = source.ior_expression_root;
+    resolved.spectra.albedo = eval_material_expression(
+        scene, parent, source.albedo_expression_root, uv.u, uv.v, wavelengths, scene.num_spectral_channels);
+    if (source.roughness_expression_root >= 0) {
+        resolved.material.roughness = fminf(1.0f, fmaxf(0.001f, material_expression_scalar(
+            scene, parent, source.roughness_expression_root, uv, wavelengths)));
+    }
+    if (source.metal_eta_expression_root >= 0) {
+        resolved.spectra.metal_eta = eval_material_expression(
+            scene, parent, source.metal_eta_expression_root, uv.u, uv.v, wavelengths, scene.num_spectral_channels);
+    }
+    if (source.extinction_expression_root >= 0) {
+        resolved.spectra.extinction = eval_material_expression(
+            scene, parent, source.extinction_expression_root, uv.u, uv.v, wavelengths, scene.num_spectral_channels);
+    }
+    resolved.dielectric_ior = SpectralPacket(source.ior);
+    for (int c = 0; c < scene.num_spectral_channels; ++c) {
+        resolved.dielectric_ior.wavelengths[c] = wavelengths[c];
+    }
+    if (source.ior_expression_root >= 0) {
+        resolved.dielectric_ior = eval_material_expression(
+            scene, parent, source.ior_expression_root, uv.u, uv.v, wavelengths, scene.num_spectral_channels);
+    }
+    return resolved;
+}
+
+__device__ float composite_material_mix_factor(const GpuScene& scene,
+                                               const GpuMaterial& material,
+                                               const GpuVec2& uv,
+                                               const float* wavelengths) {
+    return fminf(1.0f, fmaxf(0.0f, material_expression_scalar(
+        scene, material, material.bsdf_mix_expression_root, uv, wavelengths)));
+}
+
+struct ResolvedLayeredMaterial {
+    ResolvedMaterialBsdfLobe coating;
+    ResolvedMaterialBsdfLobe substrate;
+    SpectralPacket absorption;
+    float thickness = 0.0f;
+};
+
+__device__ ResolvedLayeredMaterial resolve_layered_material(
+    const GpuScene& scene,
+    const GpuMaterial& parent,
+    const GpuVec2& uv,
+    const float* wavelengths
+) {
+    ResolvedLayeredMaterial layer = {};
+    layer.coating = resolve_material_bsdf_lobe(scene, parent, 0, uv, wavelengths);
+    layer.substrate = resolve_material_bsdf_lobe(scene, parent, 1, uv, wavelengths);
+    if (parent.layer_thickness_expression_root >= 0) {
+        layer.thickness = fmaxf(0.0f, material_expression_scalar(
+            scene, parent, parent.layer_thickness_expression_root, uv, wavelengths));
+    }
+    if (parent.layer_absorption_expression_root >= 0) {
+        layer.absorption = eval_material_expression(
+            scene, parent, parent.layer_absorption_expression_root,
+            uv.u, uv.v, wavelengths, scene.num_spectral_channels);
+    } else {
+        layer.absorption = SpectralPacket(0.0f);
+    }
+    return layer;
+}
+
+__device__ bool refract_smooth(const GpuVec3& wi, const GpuVec3& n, float eta_i, float eta_t, GpuVec3& wt) {
+    float cos_i = fminf(1.0f, fmaxf(0.0f, (-wi).dot(n)));
+    float eta = eta_i / eta_t;
+    GpuVec3 perp = eta * (wi + cos_i * n);
+    float sin_t2 = perp.length_sq();
+    if (sin_t2 >= 1.0f) return false;
+    GpuVec3 para = -sqrtf(fmaxf(0.0f, 1.0f - sin_t2)) * n;
+    wt = (perp + para).normalize();
+    return true;
+}
+
+__device__ SpectralPacket layered_substrate_transmittance(
+    const ResolvedLayeredMaterial& layer,
+    const GpuVec3& n,
+    const GpuVec3& wo,
+    const GpuVec3& wi,
+    const float* wavelengths,
+    int num_spec
+) {
+    SpectralPacket result(0.0f);
+    for (int c = 0; c < num_spec; ++c) {
+        result.wavelengths[c] = wavelengths[c];
+        float eta = layer.coating.dielectric_ior.values[c];
+        if (!isfinite(eta) || eta <= 0.0f) continue;
+        GpuVec3 wo_inside;
+        GpuVec3 wi_inside;
+        if (!refract_smooth(-wo, n, 1.0f, eta, wo_inside)) continue;
+        if (!refract_smooth(-wi, n, 1.0f, eta, wi_inside)) continue;
+        float cos_o = fmaxf(1e-6f, fabsf(wo_inside.dot(n)));
+        float cos_i = fmaxf(1e-6f, fabsf(wi_inside.dot(n)));
+        DielectricSurfaceBoundary in_boundary = eval_dielectric_surface_boundary(
+            wavelengths[c], 0.0f, 1.0f, 1.0f, eta, fmaxf(0.0f, wo.dot(n)));
+        DielectricSurfaceBoundary out_boundary = eval_dielectric_surface_boundary(
+            wavelengths[c], 0.0f, eta, 1.0f, 1.0f, fmaxf(0.0f, (-wi_inside).dot(n)));
+        if (in_boundary.tir || out_boundary.tir) continue;
+        float optical_path = layer.thickness * (1.0f / cos_o + 1.0f / cos_i);
+        float absorb = expf(-fmaxf(0.0f, layer.absorption.values[c]) * optical_path);
+        float t_in = 0.5f * (in_boundary.Ts + in_boundary.Tp);
+        float t_out = 0.5f * (out_boundary.Ts + out_boundary.Tp) *
+            select_boundary_transport_scale(
+                out_boundary.radiance_scale,
+                out_boundary.importance_scale,
+                BoundaryTransportMode::Radiance);
+        result.values[c] = fmaxf(0.0f, t_in * t_out * absorb);
+    }
+    return result;
+}
+
+__device__ SpectralPacket eval_layered_bsdf(
+    const ResolvedLayeredMaterial& layer,
+    const GpuVec3& p,
+    const GpuVec3& n,
+    const GpuVec2& uv,
+    const GpuVec3& wo,
+    const GpuVec3& wi,
+    const float* wavelengths,
+    int num_spec
+) {
+    if (layer.substrate.material.type != MaterialType::Lambertian) return SpectralPacket(0.0f);
+    if (n.dot(wo) <= 0.0f || n.dot(wi) <= 0.0f) return SpectralPacket(0.0f);
+    SpectralPacket substrate = eval_bsdf(
+        layer.substrate.material,
+        layer.substrate.spectra.albedo,
+        layer.substrate.spectra.extinction,
+        layer.substrate.spectra.metal_eta,
+        layer.substrate.dielectric_ior,
+        p,
+        n,
+        uv,
+        wo,
+        wi,
+        wavelengths,
+        num_spec);
+    return substrate * layered_substrate_transmittance(layer, n, wo, wi, wavelengths, num_spec);
+}
+
+__device__ SpectralPacket pdf_layered_bsdf_spectral(
+    const ResolvedLayeredMaterial& layer,
+    const GpuVec3& n,
+    const GpuVec2& uv,
+    const GpuVec3& wo,
+    const GpuVec3& wi,
+    const float* wavelengths,
+    int num_spec,
+    float dispersion_clamp
+) {
+    if (layer.substrate.material.type != MaterialType::Lambertian) return SpectralPacket(0.0f);
+    return pdf_bsdf_spectral(
+        layer.substrate.material,
+        layer.substrate.dielectric_ior,
+        n,
+        uv,
+        wo,
+        wi,
+        wavelengths,
+        num_spec,
+        dispersion_clamp);
+}
+
+__device__ bool scatter_layered_material(
+    const ResolvedLayeredMaterial& layer,
+    const GpuRay& r_in,
+    const GpuVec3& p,
+    const GpuVec3& n,
+    const GpuVec2& uv,
+    const SpectralPacket& throughput,
+    SpectralPacket& attenuation,
+    GpuRay& scattered,
+    StokesVector& stokes,
+    float& out_pdf,
+    int sample_index,
+    int pixel_index,
+    int depth,
+    int num_spec
+) {
+    if (layer.coating.material.type != MaterialType::Dielectric ||
+        layer.substrate.material.type != MaterialType::Lambertian) return false;
+
+    float r0 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf0);
+    float r1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf1);
+    float r2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf2);
+    GpuVec3 unit_direction = r_in.direction.normalize();
+    if (unit_direction.dot(n) >= 0.0f) return false;
+    float cos_i = fminf(1.0f, fmaxf(0.0f, (-unit_direction).dot(n)));
+
+    float reflect_prob = 0.0f;
+    float reflectance[kMaxPacketLanes];
+    for (int c = 0; c < num_spec; ++c) {
+        float eta = layer.coating.dielectric_ior.values[c];
+        if (!isfinite(eta) || eta <= 0.0f) return false;
+        DielectricSurfaceBoundary boundary = eval_dielectric_surface_boundary(
+            throughput.wavelengths[c], 0.0f, 1.0f, 1.0f, eta, cos_i);
+        reflectance[c] = boundary.tir ? 1.0f : 0.5f * (boundary.Rs + boundary.Rp);
+        reflect_prob += reflectance[c];
+    }
+    reflect_prob = fminf(1.0f, fmaxf(0.0f, reflect_prob / fmaxf(1.0f, float(num_spec))));
+
+    if (r2 < reflect_prob) {
+        scattered.direction = reflect(unit_direction, n).normalize();
+        scattered.origin = p + n * 1e-4f;
+        scattered.t_min = 1e-4f;
+        scattered.t_max = FLT_MAX;
+        float pdf = fmaxf(1e-6f, reflect_prob);
+        for (int c = 0; c < num_spec; ++c) {
+            attenuation.values[c] = reflectance[c] / pdf;
+            attenuation.wavelengths[c] = throughput.wavelengths[c];
+        }
+        rotate_stokes_into_boundary_frame(stokes, r_in.direction, n);
+        int channel = min(max(num_spec / 2, 0), num_spec - 1);
+        float eta = layer.coating.dielectric_ior.values[channel];
+        DielectricSurfaceBoundary boundary = eval_dielectric_surface_boundary(
+            throughput.wavelengths[channel], 0.0f, 1.0f, 1.0f, eta, cos_i);
+        apply_mueller_reflection_boundary(stokes, boundary.rs, boundary.rp, boundary.Rs, boundary.Rp);
+        stokes = stokes * (1.0f / pdf);
+        rotate_stokes_from_boundary_frame(stokes, scattered.direction, n);
+        out_pdf = 0.0f;
+        return true;
+    }
+
+    GpuVec3 sampled = n + sample_unit_vector_lds(r0, r1);
+    if (sampled.length_sq() < 1e-16f) sampled = n;
+    scattered.direction = sampled.normalize();
+    scattered.origin = p + n * 1e-4f;
+    scattered.t_min = 1e-4f;
+    scattered.t_max = FLT_MAX;
+
+    SpectralPacket trans = layered_substrate_transmittance(
+        layer, n, -unit_direction, scattered.direction, throughput.wavelengths, num_spec);
+    float transmit_prob = fmaxf(1e-6f, 1.0f - reflect_prob);
+    for (int c = 0; c < num_spec; ++c) {
+        attenuation.values[c] = layer.substrate.spectra.albedo.values[c] * trans.values[c] / transmit_prob;
+        attenuation.wavelengths[c] = throughput.wavelengths[c];
+    }
+    stokes.Q = 0.0f;
+    stokes.U = 0.0f;
+    stokes.V = 0.0f;
+    out_pdf = transmit_prob * fmaxf(1e-6f, scattered.direction.dot(n)) * 0.318309886f;
+    return true;
 }
 
 __device__ bool any_hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float t_max) {
@@ -1203,6 +1547,7 @@ __device__ inline void store_packet_scattered_stokes(
     int out_idx,
     const GpuMaterial& mat,
     const GpuMaterialSoA& mat_soa,
+    const SpectralPacket& dielectric_ior,
     const GpuRay& r_in,
     const GpuRay& scattered,
     const GpuVec3& n,
@@ -1295,7 +1640,9 @@ __device__ inline void store_packet_scattered_stokes(
         }
 
         for (int c = 0; c < current_queue.num_spectral_channels; ++c) {
-            float material_ior = dispersed_dielectric_ior(mat.ior, mat.dispersion, throughput.wavelengths[c], dispersion_clamp);
+            float material_ior = mat.ior_expression_root != -1
+                ? dielectric_ior.values[c]
+                : dispersed_dielectric_ior(mat.ior, mat.dispersion, throughput.wavelengths[c], dispersion_clamp);
             float eta_i = front_face ? ior_outside : material_ior;
             float eta_t = front_face ? material_ior : ior_outside;
             DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
@@ -1325,6 +1672,7 @@ __device__ inline bool split_dispersive_dielectric_lanes(
     int idx,
     const GpuMaterial& mat,
     const GpuMaterialSoA& mat_soa,
+    const SpectralPacket& dielectric_ior,
     const GpuVec3& p,
     const GpuVec3& n,
     const GpuVec3& ng,
@@ -1347,7 +1695,7 @@ __device__ inline bool split_dispersive_dielectric_lanes(
         effective_thickness = effective_thickness * (1.5f - uv.v);
     }
 
-    if (mat.dispersion <= 0.0f && effective_thickness <= 0.0f) return false;
+    if (mat.dispersion <= 0.0f && effective_thickness <= 0.0f && mat.ior_expression_root == -1) return false;
 
     GpuRay r_in;
     r_in.origin = current_queue.origins[idx];
@@ -1360,7 +1708,9 @@ __device__ inline bool split_dispersive_dielectric_lanes(
 
     for (int c = 0; c < current_queue.num_spectral_channels; ++c) {
         float lambda = throughput.wavelengths[c];
-        float material_ior = dispersed_dielectric_ior(mat.ior, mat.dispersion, lambda, dispersion_clamp);
+        float material_ior = mat.ior_expression_root != -1
+            ? dielectric_ior.values[c]
+            : dispersed_dielectric_ior(mat.ior, mat.dispersion, lambda, dispersion_clamp);
         float eta_i = front_face ? ior_outside : material_ior;
         float eta_t = front_face ? material_ior : ior_outside;
 
@@ -1439,6 +1789,46 @@ __device__ inline bool split_dispersive_dielectric_lanes(
         }
     }
     return true;
+}
+
+__device__ inline bool split_dispersive_dielectric_lanes(
+    const RayQueue& current_queue,
+    RayQueue& next_queue,
+    int idx,
+    const GpuMaterial& mat,
+    const GpuMaterialSoA& mat_soa,
+    const GpuVec3& p,
+    const GpuVec3& n,
+    const GpuVec3& ng,
+    const GpuVec2& uv,
+    const SpectralPacket& throughput,
+    int current_medium_idx,
+    int mat_idx,
+    int pixel_index,
+    int depth,
+    unsigned int seed,
+    float dispersion_clamp,
+    float ior_outside
+) {
+    return split_dispersive_dielectric_lanes(
+        current_queue,
+        next_queue,
+        idx,
+        mat,
+        mat_soa,
+        SpectralPacket(mat.ior),
+        p,
+        n,
+        ng,
+        uv,
+        throughput,
+        current_medium_idx,
+        mat_idx,
+        pixel_index,
+        depth,
+        seed,
+        dispersion_clamp,
+        ior_outside);
 }
 
 __global__ __launch_bounds__(256) void extend_shadow_kernel(
@@ -1789,6 +2179,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
     }
 
     GpuMaterial mat = scene.materials[mat_idx];
+    const bool is_composite = mat.type == MaterialType::Composite;
+    const bool is_layered = mat.type == MaterialType::Layered;
     GpuMaterialSoA mat_soa = load_mat_spectra_6x(scene, mat_idx, throughput.wavelengths);
 
     GpuVec2 hit_uv = hit_queue.uv[idx];
@@ -1807,6 +2199,20 @@ __global__ __launch_bounds__(256) void shade_kernel(
     if (mat.emission_expression_root != -1) {
         mat_soa.emission = eval_material_expression(scene, mat, mat.emission_expression_root, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
     }
+    if (mat.metal_eta_expression_root != -1) {
+        mat_soa.metal_eta = eval_material_expression(scene, mat, mat.metal_eta_expression_root, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
+    }
+    if (mat.extinction_expression_root != -1) {
+        mat_soa.extinction = eval_material_expression(scene, mat, mat.extinction_expression_root, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
+    }
+    SpectralPacket dielectric_ior(mat.ior);
+    for (int c = 0; c < scene.num_spectral_channels; ++c) dielectric_ior.wavelengths[c] = throughput.wavelengths[c];
+    if (mat.ior_expression_root != -1) {
+        dielectric_ior = eval_material_expression(scene, mat, mat.ior_expression_root, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
+        for (int c = 0; c < scene.num_spectral_channels; ++c) {
+            if (!isfinite(dielectric_ior.values[c]) || dielectric_ior.values[c] <= 0.0f) return;
+        }
+    }
 
     if (mat.texture_index != -1) {
         SpectralPacket tex_color = sample_texture(scene, mat.texture_index, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
@@ -1824,6 +2230,37 @@ __global__ __launch_bounds__(256) void shade_kernel(
     if (mat.emission_texture_index != -1) {
         SpectralPacket tex_emission = sample_texture(scene, mat.emission_texture_index, hit_uv.u, hit_uv.v, throughput.wavelengths, scene.num_spectral_channels);
         mat_soa.emission = mat_soa.emission * tex_emission;
+    }
+
+    ResolvedMaterialBsdfLobe composite_a = {};
+    ResolvedMaterialBsdfLobe composite_b = {};
+    ResolvedLayeredMaterial layered = {};
+    float composite_mix = 0.0f;
+    if (is_composite) {
+        if (!scene.material_bsdf_lobes ||
+            mat.bsdf_lobe_count != 2 ||
+            mat.bsdf_lobe_start < 0 ||
+            mat.bsdf_lobe_start + mat.bsdf_lobe_count > scene.material_bsdf_lobe_count ||
+            mat.bsdf_mix_expression_root < 0) return;
+        composite_a = resolve_material_bsdf_lobe(scene, mat, 0, hit_uv, throughput.wavelengths);
+        composite_b = resolve_material_bsdf_lobe(scene, mat, 1, hit_uv, throughput.wavelengths);
+        composite_mix = composite_material_mix_factor(scene, mat, hit_uv, throughput.wavelengths);
+        for (int c = 0; c < scene.num_spectral_channels; ++c) {
+            mat_soa.albedo.values[c] = composite_a.spectra.albedo.values[c] * (1.0f - composite_mix) +
+                composite_b.spectra.albedo.values[c] * composite_mix;
+            mat_soa.albedo.wavelengths[c] = throughput.wavelengths[c];
+        }
+    } else if (is_layered) {
+        if (!scene.material_bsdf_lobes ||
+            mat.bsdf_lobe_count != 2 ||
+            mat.bsdf_lobe_start < 0 ||
+            mat.bsdf_lobe_start + mat.bsdf_lobe_count > scene.material_bsdf_lobe_count ||
+            mat.layer_thickness_expression_root < 0 ||
+            mat.layer_absorption_expression_root < 0) return;
+        layered = resolve_layered_material(scene, mat, hit_uv, throughput.wavelengths);
+        if (layered.coating.material.type != MaterialType::Dielectric ||
+            layered.substrate.material.type != MaterialType::Lambertian) return;
+        mat_soa.albedo = layered.substrate.spectra.albedo;
     }
 
     GpuVec3 p = hit_queue.p[idx];
@@ -1930,7 +2367,9 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
     if (depth >= 50) return;
 
-    if (scene.light_count > 0 && (mat.type == MaterialType::Lambertian ||
+    if (scene.light_count > 0 && (mat.type == MaterialType::Composite ||
+                                  mat.type == MaterialType::Layered ||
+                                  mat.type == MaterialType::Lambertian ||
                                   mat.type == MaterialType::Cloth ||
                                   (mat.type == MaterialType::Metal && mat.roughness > 0.02f) ||
                                   is_rough_dielectric_bsdf(mat))) {
@@ -1942,9 +2381,13 @@ __global__ __launch_bounds__(256) void shade_kernel(
         SelectedLightSample light_sample;
 
         if (sample_selected_light(scene, light_idx_idx, p, r_light_1, r_light_2, light_sample)) {
-            float cos_surf = direct_light_cosine_factor(mat, n, light_sample.direction);
+            float cos_surf = (is_composite || is_layered)
+                ? fmaxf(0.0f, n.dot(light_sample.direction))
+                : direct_light_cosine_factor(mat, n, light_sample.direction);
 
-            if (direct_light_direction_allowed(mat, n, ng, light_sample.direction)) {
+            if (((is_composite || is_layered)
+                    ? n.dot(light_sample.direction) > 1e-6f && ng.dot(light_sample.direction) > 1e-6f
+                    : direct_light_direction_allowed(mat, n, ng, light_sample.direction))) {
                  float pdf = light_sample.pdf;
                  pdf = fmaxf(pdf, 1e-12f);
 
@@ -1955,17 +2398,48 @@ __global__ __launch_bounds__(256) void shade_kernel(
                      L_e.wavelengths[c] = throughput.wavelengths[c];
                  }
 
-                 SpectralPacket f_r = eval_bsdf(mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, p, n, hit_uv, -current_queue.directions[idx], light_sample.direction, throughput.wavelengths, scene.num_spectral_channels);
-
-                 SpectralPacket pdf_mat = pdf_bsdf_spectral(
-                     mat,
-                     n,
-                     hit_uv,
-                     -current_queue.directions[idx],
-                     light_sample.direction,
-                     throughput.wavelengths,
-                     scene.num_spectral_channels,
-                     dispersion_clamp);
+                 SpectralPacket f_r;
+                 SpectralPacket pdf_mat;
+                 if (is_composite) {
+                     SpectralPacket f_a = eval_bsdf(
+                         composite_a.material, composite_a.spectra.albedo, composite_a.spectra.extinction,
+                         composite_a.spectra.metal_eta, composite_a.dielectric_ior, p, n, hit_uv,
+                         -current_queue.directions[idx], light_sample.direction, throughput.wavelengths,
+                         scene.num_spectral_channels);
+                     SpectralPacket f_b = eval_bsdf(
+                         composite_b.material, composite_b.spectra.albedo, composite_b.spectra.extinction,
+                         composite_b.spectra.metal_eta, composite_b.dielectric_ior, p, n, hit_uv,
+                         -current_queue.directions[idx], light_sample.direction, throughput.wavelengths,
+                         scene.num_spectral_channels);
+                     SpectralPacket pdf_a = pdf_bsdf_spectral(
+                         composite_a.material, composite_a.dielectric_ior, n, hit_uv,
+                         -current_queue.directions[idx], light_sample.direction, throughput.wavelengths,
+                         scene.num_spectral_channels, dispersion_clamp);
+                     SpectralPacket pdf_b = pdf_bsdf_spectral(
+                         composite_b.material, composite_b.dielectric_ior, n, hit_uv,
+                         -current_queue.directions[idx], light_sample.direction, throughput.wavelengths,
+                         scene.num_spectral_channels, dispersion_clamp);
+                     for (int c = 0; c < scene.num_spectral_channels; ++c) {
+                         f_r.values[c] = f_a.values[c] * (1.0f - composite_mix) + f_b.values[c] * composite_mix;
+                         f_r.wavelengths[c] = throughput.wavelengths[c];
+                         pdf_mat.values[c] = pdf_a.values[c] * (1.0f - composite_mix) + pdf_b.values[c] * composite_mix;
+                         pdf_mat.wavelengths[c] = throughput.wavelengths[c];
+                     }
+                 } else if (is_layered) {
+                     f_r = eval_layered_bsdf(
+                         layered, p, n, hit_uv, -current_queue.directions[idx],
+                         light_sample.direction, throughput.wavelengths, scene.num_spectral_channels);
+                     pdf_mat = pdf_layered_bsdf_spectral(
+                         layered, n, hit_uv, -current_queue.directions[idx],
+                         light_sample.direction, throughput.wavelengths,
+                         scene.num_spectral_channels, dispersion_clamp);
+                 } else {
+                     f_r = eval_bsdf(mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, dielectric_ior, p, n, hit_uv, -current_queue.directions[idx], light_sample.direction, throughput.wavelengths, scene.num_spectral_channels);
+                     pdf_mat = pdf_bsdf_spectral(
+                         mat, dielectric_ior, n, hit_uv, -current_queue.directions[idx],
+                         light_sample.direction, throughput.wavelengths, scene.num_spectral_channels,
+                         dispersion_clamp);
+                 }
 
                  SpectralPacket guiding_product = L_e * f_r * cos_surf;
                  SpectralPacket contribution = throughput * guiding_product * (1.0f / pdf);
@@ -2045,18 +2519,34 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
     GpuVec2 uv = hit_queue.uv[idx];
 
+            if (is_composite) {
+                float lobe_sample = sample_path_dimension(
+                    sample_index, pixel_index, depth, kPathDimBsdfLobe);
+                const ResolvedMaterialBsdfLobe& selected = lobe_sample < composite_mix
+                    ? composite_b
+                    : composite_a;
+                mat = selected.material;
+                mat_soa = selected.spectra;
+                dielectric_ior = selected.dielectric_ior;
+                for (int c = 0; c < scene.num_spectral_channels; ++c) {
+                    if (mat.type == MaterialType::Dielectric &&
+                        (!isfinite(dielectric_ior.values[c]) || dielectric_ior.values[c] <= 0.0f)) return;
+                }
+            }
+
             float pdf_val = 0.0f;
             float ior_outside = 1.0f;
             bool front_face = r_in.direction.dot(ng) < 0.0f;
             if (front_face && current_medium_idx >= 0) {
                 ior_outside = scene.materials[current_medium_idx].ior;
             }
-            if (split_dispersive_dielectric_lanes(
+            if (!is_layered && split_dispersive_dielectric_lanes(
                     current_queue,
                     next_queue,
                     idx,
                     mat,
                     mat_soa,
+                    dielectric_ior,
                     p,
                     n,
                     ng,
@@ -2071,7 +2561,40 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     ior_outside)) {
                 return;
             }
-            if (scatter(r_in, mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, pdf_val, dispersion_clamp, sample_index, pixel_index, depth, scene.num_spectral_channels, ior_outside, scene.materials[mat_idx].ior, spectral_mode, active_channel)) {
+            bool scattered_ok = is_layered
+                ? scatter_layered_material(
+                    layered,
+                    r_in,
+                    p,
+                    n,
+                    uv,
+                    throughput,
+                    attenuation,
+                    scattered,
+                    current_stokes,
+                    pdf_val,
+                    sample_index,
+                    pixel_index,
+                    depth,
+                    scene.num_spectral_channels)
+                : scatter(r_in, mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, dielectric_ior, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, pdf_val, dispersion_clamp, sample_index, pixel_index, depth, scene.num_spectral_channels, ior_outside, scene.materials[mat_idx].ior, spectral_mode, active_channel);
+            if (scattered_ok) {
+                if (is_composite && pdf_val > 0.0f) {
+                    SpectralPacket pdf_a = pdf_bsdf_spectral(
+                        composite_a.material, composite_a.dielectric_ior, n, uv,
+                        -r_in.direction, scattered.direction, throughput.wavelengths,
+                        scene.num_spectral_channels, dispersion_clamp);
+                    SpectralPacket pdf_b = pdf_bsdf_spectral(
+                        composite_b.material, composite_b.dielectric_ior, n, uv,
+                        -r_in.direction, scattered.direction, throughput.wavelengths,
+                        scene.num_spectral_channels, dispersion_clamp);
+                    pdf_val = 0.0f;
+                    for (int c = 0; c < scene.num_spectral_channels; ++c) {
+                        pdf_val += pdf_a.values[c] * (1.0f - composite_mix) +
+                            pdf_b.values[c] * composite_mix;
+                    }
+                    pdf_val /= fmaxf(1.0f, float(scene.num_spectral_channels));
+                }
                 SpectralPacket new_throughput = throughput * attenuation;
 
                 for (int c = 0; c < scene.num_spectral_channels; ++c) {
@@ -2093,7 +2616,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 int next_flag = 0;
                 bool is_delta = scene.light_count == 0 ||
                     (mat.type == MaterialType::Metal && mat.roughness <= 0.02f) ||
-                    (mat.type == MaterialType::Dielectric && pdf_val <= 0.0f);
+                    (mat.type == MaterialType::Dielectric && pdf_val <= 0.0f) ||
+                    (is_layered && pdf_val <= 0.0f);
                 if (is_delta) {
                     next_flag = 1;
                 }
@@ -2108,6 +2632,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     store_stokes(next_queue, out_idx, c, StokesVector(0.0f, 0.0f, 0.0f, 0.0f));
                 }
                 store_stokes(next_queue, out_idx, active_channel, current_stokes);
+            } else if (is_layered) {
+                store_stokes_packet(next_queue, out_idx, current_stokes);
             } else {
                 store_packet_scattered_stokes(
                     current_queue,
@@ -2116,6 +2642,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     out_idx,
                     mat,
                     mat_soa,
+                    dielectric_ior,
                     r_in,
                     scattered,
                     n,
@@ -2130,7 +2657,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
             next_queue.last_pdf[out_idx] = pdf_val;
 
             int next_medium = current_medium_idx;
-            if (mat.type == MaterialType::Dielectric) {
+            if (!is_layered && mat.type == MaterialType::Dielectric) {
                 next_medium = next_dielectric_medium_index(
                     current_medium_idx, mat_idx, r_in.direction, scattered.direction, ng);
             }

@@ -25,6 +25,7 @@ static constexpr int kPathDimVolumeLightV = 10;
 static constexpr int kPathDimVolumePhaseU = 11;
 static constexpr int kPathDimVolumePhaseV = 12;
 static constexpr int kPathDimRussianRoulette = 13;
+static constexpr int kPathDimBsdfLobe = 14;
 
 __device__ inline unsigned int wang_hash(unsigned int seed) {
     seed = (seed ^ 61) ^ (seed >> 16);

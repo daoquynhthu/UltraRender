@@ -1083,6 +1083,319 @@ static int test_l9_material_expression_texture_add_mix_device_eval() {
     return 0;
 }
 
+static int test_material_expression_optical_constant_texture_semantic() {
+    REQUIRE_GPU();
+    const int ns = 2;
+    const float4 texel = make_float4(1.25f, 1.5f, 1.75f, 1.0f);
+    cudaArray_t texture_array = nullptr;
+    const cudaChannelFormatDesc channel_desc = cudaCreateChannelDesc<float4>();
+    CHECK_CUDA(cudaMallocArray(&texture_array, &channel_desc, 1, 1));
+    CHECK_CUDA(cudaMemcpy2DToArray(texture_array, 0, 0, &texel, sizeof(texel), sizeof(texel), 1, cudaMemcpyHostToDevice));
+
+    cudaResourceDesc resource_desc = {};
+    resource_desc.resType = cudaResourceTypeArray;
+    resource_desc.res.array.array = texture_array;
+    cudaTextureDesc texture_desc = {};
+    texture_desc.addressMode[0] = cudaAddressModeClamp;
+    texture_desc.addressMode[1] = cudaAddressModeClamp;
+    texture_desc.filterMode = cudaFilterModePoint;
+    texture_desc.readMode = cudaReadModeElementType;
+    texture_desc.normalizedCoords = 1;
+    cudaTextureObject_t texture_object = 0;
+    CHECK_CUDA(cudaCreateTextureObject(&texture_object, &resource_desc, &texture_desc, nullptr));
+
+    GpuTexture h_texture = {};
+    h_texture.width = 1;
+    h_texture.height = 1;
+    h_texture.channels = 4;
+    h_texture.texObj = texture_object;
+    GpuTexture* d_textures = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_textures, sizeof(GpuTexture)));
+    DeviceMem texture_storage(d_textures);
+    CHECK_CUDA(cudaMemcpy(d_textures, &h_texture, sizeof(GpuTexture), cudaMemcpyHostToDevice));
+
+    SpectralExpressionNode h_node = {};
+    h_node.kind = SpectralExpressionNodeKind::Texture;
+    h_node.semantic = SpectralExpressionSemantic::OpticalConstant;
+    h_node.texture_index = 0;
+    SpectralExpressionNode* d_node = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_node, sizeof(SpectralExpressionNode)));
+    DeviceMem node_storage(d_node);
+    CHECK_CUDA(cudaMemcpy(d_node, &h_node, sizeof(SpectralExpressionNode), cudaMemcpyHostToDevice));
+
+    GpuMaterial mat = {};
+    mat.expression_node_start = 0;
+    mat.expression_node_count = 1;
+    mat.albedo_expression_root = 0;
+    GpuScene scene = {};
+    scene.textures = d_textures;
+    scene.texture_count = 1;
+    scene.material_expression_nodes = d_node;
+    scene.material_expression_node_count = 1;
+    scene.num_spectral_channels = ns;
+
+    float* d_values = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_values, ns * sizeof(float)));
+    DeviceMem values_storage(d_values);
+    t9_expr_kernel<<<1, 1>>>(scene, mat, d_values, ns);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    float values[ns] = {};
+    CHECK_CUDA(cudaMemcpy(values, d_values, sizeof(values), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(values[0], texel.z, 1e-6f);
+    CHECK_FLOAT_EQ(values[1], texel.x, 1e-6f);
+    CHECK_CUDA(cudaDestroyTextureObject(texture_object));
+    CHECK_CUDA(cudaFreeArray(texture_array));
+    return 0;
+}
+
+__global__ void procedural_expression_kernel(GpuScene scene, GpuMaterial mat, float u, float v, float* out) {
+    const float wavelengths[2] = {440.0f, 630.0f};
+    SpectralPacket value = eval_material_expression(scene, mat, mat.albedo_expression_root, u, v, wavelengths, 2);
+    out[0] = value.values[0];
+    out[1] = value.values[1];
+}
+
+static int test_material_expression_procedural_nodes_device_eval() {
+    REQUIRE_GPU();
+    SpectralExpressionNode h_nodes[5] = {};
+    h_nodes[0].kind = SpectralExpressionNodeKind::Resource;
+    h_nodes[0].resource.kind = SpectralResourceKind::Constant;
+    h_nodes[0].resource.constant = 0.2f;
+    h_nodes[1].kind = SpectralExpressionNodeKind::Resource;
+    h_nodes[1].resource.kind = SpectralResourceKind::Constant;
+    h_nodes[1].resource.constant = 0.8f;
+    h_nodes[2].kind = SpectralExpressionNodeKind::Resource;
+    h_nodes[2].resource.kind = SpectralResourceKind::Constant;
+    h_nodes[2].resource.constant = 4.0f;
+    h_nodes[3].kind = SpectralExpressionNodeKind::Checker2D;
+    h_nodes[3].input_a = 0;
+    h_nodes[3].input_b = 1;
+    h_nodes[3].input_factor = 2;
+    h_nodes[4].kind = SpectralExpressionNodeKind::Noise2D;
+    h_nodes[4].input_a = 0;
+    h_nodes[4].input_b = 1;
+    h_nodes[4].input_factor = 2;
+    SpectralExpressionNode* d_nodes = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_nodes, sizeof(h_nodes)));
+    DeviceMem nodes_storage(d_nodes);
+    CHECK_CUDA(cudaMemcpy(d_nodes, h_nodes, sizeof(h_nodes), cudaMemcpyHostToDevice));
+    GpuScene scene = {};
+    scene.material_expression_nodes = d_nodes;
+    scene.material_expression_node_count = 5;
+    scene.num_spectral_channels = 2;
+    GpuMaterial mat = {};
+    mat.expression_node_start = 0;
+    mat.expression_node_count = 5;
+    mat.albedo_expression_root = 3;
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_out, 2 * sizeof(float)));
+    DeviceMem output_storage(d_out);
+    procedural_expression_kernel<<<1, 1>>>(scene, mat, 0.1f, 0.1f, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    float out[2] = {};
+    CHECK_CUDA(cudaMemcpy(out, d_out, sizeof(out), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(out[0], 0.2f, 1e-6f);
+    CHECK_FLOAT_EQ(out[1], 0.2f, 1e-6f);
+    mat.albedo_expression_root = 4;
+    procedural_expression_kernel<<<1, 1>>>(scene, mat, 0.31f, 0.67f, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    CHECK_CUDA(cudaMemcpy(out, d_out, sizeof(out), cudaMemcpyDeviceToHost));
+    CHECK(out[0] >= 0.2f && out[0] <= 0.8f);
+    CHECK_FLOAT_EQ(out[0], out[1], 1e-6f);
+    return 0;
+}
+
+__global__ void bsdf_mix_contract_kernel(GpuScene scene, GpuMaterial parent, float* out) {
+    const float wavelengths[2] = {500.0f, 600.0f};
+    const GpuVec2 uv(0.2f, 0.4f);
+    ResolvedMaterialBsdfLobe a = resolve_material_bsdf_lobe(scene, parent, 0, uv, wavelengths);
+    ResolvedMaterialBsdfLobe b = resolve_material_bsdf_lobe(scene, parent, 1, uv, wavelengths);
+    float mix = composite_material_mix_factor(scene, parent, uv, wavelengths);
+    const GpuVec3 p(0.0f, 0.0f, 0.0f);
+    const GpuVec3 n(0.0f, 0.0f, 1.0f);
+    const GpuVec3 wo(0.0f, 0.0f, 1.0f);
+    const GpuVec3 wi(0.0f, 0.0f, 1.0f);
+    SpectralPacket fa = eval_bsdf(a.material, a.spectra.albedo, a.spectra.extinction,
+        a.spectra.metal_eta, a.dielectric_ior, p, n, uv, wo, wi, wavelengths, 2);
+    SpectralPacket fb = eval_bsdf(b.material, b.spectra.albedo, b.spectra.extinction,
+        b.spectra.metal_eta, b.dielectric_ior, p, n, uv, wo, wi, wavelengths, 2);
+    SpectralPacket pa = pdf_bsdf_spectral(a.material, a.dielectric_ior, n, uv, wo, wi, wavelengths, 2, 20.0f);
+    SpectralPacket pb = pdf_bsdf_spectral(b.material, b.dielectric_ior, n, uv, wo, wi, wavelengths, 2, 20.0f);
+    out[0] = mix;
+    out[1] = fa.values[0] * (1.0f - mix) + fb.values[0] * mix;
+    out[2] = pa.values[0] * (1.0f - mix) + pb.values[0] * mix;
+
+    constexpr int sample_count = 4096;
+    float attenuation_sum = 0.0f;
+    int b_count = 0;
+    for (int sample = 0; sample < sample_count; ++sample) {
+        bool choose_b = sample_path_dimension(sample, 17, 0, kPathDimBsdfLobe) < mix;
+        const ResolvedMaterialBsdfLobe& selected = choose_b ? b : a;
+        b_count += choose_b ? 1 : 0;
+        GpuRay incoming;
+        incoming.origin = GpuVec3(0.0f, 0.0f, 1.0f);
+        incoming.direction = GpuVec3(0.0f, 0.0f, -1.0f);
+        SpectralPacket throughput(1.0f);
+        throughput.wavelengths[0] = wavelengths[0];
+        throughput.wavelengths[1] = wavelengths[1];
+        SpectralPacket attenuation;
+        GpuRay scattered;
+        StokesVector stokes(1.0f, 0.0f, 0.0f, 0.0f);
+        unsigned int seed = unsigned(sample + 1);
+        float pdf = 0.0f;
+        bool ok = scatter(incoming, selected.material, selected.spectra.albedo,
+            selected.spectra.extinction, selected.spectra.metal_eta, selected.dielectric_ior,
+            p, n, uv, throughput, attenuation, scattered, stokes, seed, pdf, 20.0f,
+            sample, 17, 0, 2, 1.0f, 1.0f, SpectralRayModePacket, -1);
+        if (ok) attenuation_sum += attenuation.values[0];
+    }
+    out[3] = attenuation_sum / float(sample_count);
+    out[4] = float(b_count) / float(sample_count);
+}
+
+static int test_bsdf_mix_unbiased_eval_pdf_sample_contract() {
+    REQUIRE_GPU();
+    SpectralExpressionNode h_nodes[5] = {};
+    const float constants[5] = {0.2f, 0.5f, 0.8f, 0.5f, 0.25f};
+    for (int i = 0; i < 5; ++i) {
+        h_nodes[i].kind = SpectralExpressionNodeKind::Resource;
+        h_nodes[i].resource.kind = SpectralResourceKind::Constant;
+        h_nodes[i].resource.constant = constants[i];
+    }
+    SpectralExpressionNode* d_nodes = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_nodes, sizeof(h_nodes)));
+    DeviceMem nodes_storage(d_nodes);
+    CHECK_CUDA(cudaMemcpy(d_nodes, h_nodes, sizeof(h_nodes), cudaMemcpyHostToDevice));
+    GpuMaterial parent = {};
+    parent.type = MaterialType::Composite;
+    parent.expression_node_start = 0;
+    parent.expression_node_count = 5;
+    parent.bsdf_lobe_count = 2;
+    parent.bsdf_lobe_start = 0;
+    parent.bsdf_mix_expression_root = 4;
+    GpuMaterialBsdfLobe h_lobes[2] = {};
+    h_lobes[0].type = MaterialType::Lambertian;
+    h_lobes[0].albedo_expression_root = 0;
+    h_lobes[0].roughness_expression_root = 1;
+    h_lobes[1].type = MaterialType::Lambertian;
+    h_lobes[1].albedo_expression_root = 2;
+    h_lobes[1].roughness_expression_root = 3;
+    GpuMaterialBsdfLobe* d_lobes = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_lobes, sizeof(h_lobes)));
+    DeviceMem lobes_storage(d_lobes);
+    CHECK_CUDA(cudaMemcpy(d_lobes, h_lobes, sizeof(h_lobes), cudaMemcpyHostToDevice));
+    GpuScene scene = {};
+    scene.material_expression_nodes = d_nodes;
+    scene.material_expression_node_count = 5;
+    scene.material_bsdf_lobes = d_lobes;
+    scene.material_bsdf_lobe_count = 2;
+    scene.num_spectral_channels = 2;
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_out, 5 * sizeof(float)));
+    DeviceMem output_storage(d_out);
+    bsdf_mix_contract_kernel<<<1, 1>>>(scene, parent, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    float out[5] = {};
+    CHECK_CUDA(cudaMemcpy(out, d_out, sizeof(out), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(out[0], 0.25f, 1e-6f);
+    CHECK_FLOAT_EQ(out[1], 0.35f * 0.318309886f, 1e-6f);
+    CHECK_FLOAT_EQ(out[2], 0.318309886f, 1e-6f);
+    CHECK_FLOAT_EQ(out[3], 0.35f, 0.01f);
+    CHECK_FLOAT_EQ(out[4], 0.25f, 0.01f);
+    return 0;
+}
+
+__global__ void bsdf_layer_contract_kernel(GpuScene scene, GpuMaterial parent, float* out) {
+    const float wavelengths[2] = {500.0f, 600.0f};
+    const GpuVec2 uv(0.2f, 0.4f);
+    ResolvedLayeredMaterial layer = resolve_layered_material(scene, parent, uv, wavelengths);
+    const GpuVec3 p(0.0f, 0.0f, 0.0f);
+    const GpuVec3 n(0.0f, 0.0f, 1.0f);
+    const GpuVec3 wo(0.0f, 0.0f, 1.0f);
+    const GpuVec3 wi(0.0f, 0.0f, 1.0f);
+    SpectralPacket f = eval_layered_bsdf(layer, p, n, uv, wo, wi, wavelengths, 2);
+    SpectralPacket pdf = pdf_layered_bsdf_spectral(layer, n, uv, wo, wi, wavelengths, 2, 20.0f);
+    GpuRay incoming;
+    incoming.origin = GpuVec3(0.0f, 0.0f, 1.0f);
+    incoming.direction = GpuVec3(0.0f, 0.0f, -1.0f);
+    SpectralPacket throughput(1.0f);
+    throughput.wavelengths[0] = wavelengths[0];
+    throughput.wavelengths[1] = wavelengths[1];
+    SpectralPacket attenuation;
+    GpuRay scattered;
+    StokesVector stokes(1.0f, 0.0f, 0.0f, 0.0f);
+    float sample_pdf = 0.0f;
+    bool ok = scatter_layered_material(
+        layer, incoming, p, n, uv, throughput, attenuation, scattered, stokes, sample_pdf, 0, 13, 0, 2);
+    out[0] = layer.thickness;
+    out[1] = layer.absorption.values[0];
+    out[2] = f.values[0];
+    out[3] = pdf.values[0];
+    out[4] = ok ? attenuation.values[0] : -1.0f;
+    out[5] = sample_pdf;
+}
+
+static int test_bsdf_layer_eval_pdf_sample_contract() {
+    REQUIRE_GPU();
+    SpectralExpressionNode h_nodes[5] = {};
+    const float constants[5] = {1.5f, 0.5f, 0.5f, 0.02f, 0.0f};
+    for (int i = 0; i < 5; ++i) {
+        h_nodes[i].kind = SpectralExpressionNodeKind::Resource;
+        h_nodes[i].resource.kind = SpectralResourceKind::Constant;
+        h_nodes[i].resource.constant = constants[i];
+    }
+    SpectralExpressionNode* d_nodes = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_nodes, sizeof(h_nodes)));
+    DeviceMem nodes_storage(d_nodes);
+    CHECK_CUDA(cudaMemcpy(d_nodes, h_nodes, sizeof(h_nodes), cudaMemcpyHostToDevice));
+    GpuMaterial parent = {};
+    parent.type = MaterialType::Layered;
+    parent.expression_node_start = 0;
+    parent.expression_node_count = 5;
+    parent.bsdf_lobe_count = 2;
+    parent.bsdf_lobe_start = 0;
+    parent.layer_thickness_expression_root = 3;
+    parent.layer_absorption_expression_root = 4;
+    GpuMaterialBsdfLobe h_lobes[2] = {};
+    h_lobes[0].type = MaterialType::Dielectric;
+    h_lobes[0].ior = 1.5f;
+    h_lobes[0].ior_expression_root = 0;
+    h_lobes[0].albedo_expression_root = 1;
+    h_lobes[1].type = MaterialType::Lambertian;
+    h_lobes[1].albedo_expression_root = 2;
+    h_lobes[1].roughness_expression_root = 1;
+    GpuMaterialBsdfLobe* d_lobes = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_lobes, sizeof(h_lobes)));
+    DeviceMem lobes_storage(d_lobes);
+    CHECK_CUDA(cudaMemcpy(d_lobes, h_lobes, sizeof(h_lobes), cudaMemcpyHostToDevice));
+    GpuScene scene = {};
+    scene.material_expression_nodes = d_nodes;
+    scene.material_expression_node_count = 5;
+    scene.material_bsdf_lobes = d_lobes;
+    scene.material_bsdf_lobe_count = 2;
+    scene.num_spectral_channels = 2;
+    float* d_out = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_out, 6 * sizeof(float)));
+    DeviceMem output_storage(d_out);
+    bsdf_layer_contract_kernel<<<1, 1>>>(scene, parent, d_out);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    float out[6] = {};
+    CHECK_CUDA(cudaMemcpy(out, d_out, sizeof(out), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(out[0], 0.02f, 1e-6f);
+    CHECK_FLOAT_EQ(out[1], 0.0f, 1e-6f);
+    CHECK(isfinite(out[2]) && out[2] > 0.0f);
+    CHECK_FLOAT_EQ(out[3], 0.318309886f, 1e-6f);
+    CHECK(out[4] > 0.0f);
+    CHECK(out[5] >= 0.0f);
+    return 0;
+}
+
 __global__ void t10_kernel(float* out_ior, float* out_attenuation, int num_spec)
 {
     out_ior[0] = dispersed_dielectric_ior(1.5f, 0.5f, 420.0f, 20.0f);
@@ -2606,6 +2919,10 @@ int main() {
     RUN_TEST(test_eval_bsdf_metal_n8);
     RUN_TEST(test_sample_texture_spectral_data_n8);
     RUN_TEST(test_l9_material_expression_texture_add_mix_device_eval);
+    RUN_TEST(test_material_expression_optical_constant_texture_semantic);
+    RUN_TEST(test_material_expression_procedural_nodes_device_eval);
+    RUN_TEST(test_bsdf_mix_unbiased_eval_pdf_sample_contract);
+    RUN_TEST(test_bsdf_layer_eval_pdf_sample_contract);
     RUN_TEST(test_dielectric_dispersion_runtime_n);
     RUN_TEST(test_metal_scatter_uses_per_channel_conductor_fresnel);
     RUN_TEST(test_conductor_material_semantics);

@@ -93,6 +93,23 @@ __device__ inline void store_stokes_packet(RayQueue& q, int idx, const StokesVec
 
 // scatter() forward declaration (defined in path_tracer_material.cu, included at end of device TU)
 __device__ inline bool scatter(
+    const GpuRay& r_in, const GpuMaterial& mat, const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta, const SpectralPacket& dielectric_ior,
+    const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
+    const SpectralPacket& current_throughput,
+    SpectralPacket& attenuation, GpuRay& scattered, StokesVector& stokes, unsigned int& seed,
+    float& out_pdf,
+    float dispersion_clamp,
+    int sample_index,
+    int pixel_index,
+    int depth,
+    int num_spec,
+    float ior_outside = 1.0f,
+    float ior_inside = 1.0f,
+    int spectral_mode = SpectralRayModePacket,
+    int active_channel = 0
+);
+
+__device__ inline bool scatter(
     const GpuRay& r_in, const GpuMaterial& mat, const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta,
     const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
     const SpectralPacket& current_throughput,

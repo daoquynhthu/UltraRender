@@ -53,10 +53,14 @@ enum class MaterialGraphNodeKind {
     Add,
     Multiply,
     Mix,
+    Checker2D,
+    Noise2D,
     BsdfLambert,
     BsdfMetal,
     BsdfDielectric,
     BsdfLight,
+    BsdfMix,
+    BsdfLayer,
     OutputSurface
 };
 

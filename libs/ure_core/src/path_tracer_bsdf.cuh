@@ -53,6 +53,7 @@ __device__ float pdf_bsdf(const GpuMaterial& mat, const GpuVec3& n, const GpuVec
 
 __device__ SpectralPacket pdf_bsdf_spectral(
     const GpuMaterial& mat,
+    const SpectralPacket& dielectric_ior,
     const GpuVec3& n,
     const GpuVec2& uv,
     const GpuVec3& wo,
@@ -75,9 +76,14 @@ __device__ SpectralPacket pdf_bsdf_spectral(
     float thickness = effective_thin_film_thickness(mat, uv);
     for (int c = 0; c < num_spec; ++c) {
         result.wavelengths[c] = wavelengths[c];
+        GpuMaterial channel_mat = mat;
+        if (mat.ior_expression_root != -1) {
+            channel_mat.ior = dielectric_ior.values[c];
+            channel_mat.dispersion = 0.0f;
+        }
         RoughDielectricLobe l = reflection
-            ? eval_rough_dielectric_reflection_lobe(mat, n, wo, wi, wavelengths[c], dispersion_clamp)
-            : eval_rough_dielectric_transmission_lobe(mat, n, wo, wi, wavelengths[c], dispersion_clamp);
+            ? eval_rough_dielectric_reflection_lobe(channel_mat, n, wo, wi, wavelengths[c], dispersion_clamp)
+            : eval_rough_dielectric_transmission_lobe(channel_mat, n, wo, wi, wavelengths[c], dispersion_clamp);
         if (!l.valid) continue;
 
         DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
@@ -95,10 +101,24 @@ __device__ SpectralPacket pdf_bsdf_spectral(
     return result;
 }
 
+__device__ SpectralPacket pdf_bsdf_spectral(
+    const GpuMaterial& mat,
+    const GpuVec3& n,
+    const GpuVec2& uv,
+    const GpuVec3& wo,
+    const GpuVec3& wi,
+    const float* wavelengths,
+    int num_spec,
+    float dispersion_clamp
+) {
+    return pdf_bsdf_spectral(mat, SpectralPacket(mat.ior), n, uv, wo, wi,
+                             wavelengths, num_spec, dispersion_clamp);
+}
+
 // Phase E: eval_bsdf receives pre-loaded SoA spectra (albedo may be texture-modulated)
 __device__ SpectralPacket eval_bsdf(
     const GpuMaterial& mat,
-    const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta,
+    const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta, const SpectralPacket& dielectric_ior,
     const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv, const GpuVec3& wo, const GpuVec3& wi,
     const float* wavelengths,
     int num_spec)
@@ -165,9 +185,14 @@ __device__ SpectralPacket eval_bsdf(
         float effective_thickness = effective_thin_film_thickness(mat, uv);
         for (int c = 0; c < num_spec; ++c) {
             fresnel_spec.wavelengths[c] = wavelengths[c];
+            GpuMaterial channel_mat = mat;
+            if (mat.ior_expression_root != -1) {
+                channel_mat.ior = dielectric_ior.values[c];
+                channel_mat.dispersion = 0.0f;
+            }
             RoughDielectricLobe channel_lobe = reflection
-                ? eval_rough_dielectric_reflection_lobe(mat, n, wo, wi, wavelengths[c])
-                : eval_rough_dielectric_transmission_lobe(mat, n, wo, wi, wavelengths[c]);
+                ? eval_rough_dielectric_reflection_lobe(channel_mat, n, wo, wi, wavelengths[c])
+                : eval_rough_dielectric_transmission_lobe(channel_mat, n, wo, wi, wavelengths[c]);
             if (!channel_lobe.valid) {
                 fresnel_spec.values[c] = 0.0f;
                 continue;
@@ -201,4 +226,15 @@ __device__ SpectralPacket eval_bsdf(
         return SpectralPacket(0.0f);
     }
     return SpectralPacket(0.0f);
+}
+
+__device__ SpectralPacket eval_bsdf(
+    const GpuMaterial& mat,
+    const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta,
+    const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv, const GpuVec3& wo, const GpuVec3& wi,
+    const float* wavelengths,
+    int num_spec)
+{
+    return eval_bsdf(mat, albedo, extinction, metal_eta, SpectralPacket(mat.ior),
+                     p, n, uv, wo, wi, wavelengths, num_spec);
 }

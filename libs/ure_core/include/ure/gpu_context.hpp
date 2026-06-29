@@ -48,6 +48,8 @@ struct GpuContext {
     SpectralResource* d_mat_emission_resources = nullptr;
     SpectralExpressionNode* d_material_expression_nodes = nullptr;
     int material_expression_node_count = 0;
+    GpuMaterialBsdfLobe* d_material_bsdf_lobes = nullptr;
+    int material_bsdf_lobe_count = 0;
     int num_spectral_channels = 0;
     GpuSphere* d_spheres = nullptr;
     GpuMesh* d_meshes = nullptr;

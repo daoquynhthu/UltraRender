@@ -164,7 +164,16 @@ enum class SpectralExpressionNodeKind : int {
     Texture = 2,
     Add = 3,
     Multiply = 4,
-    Mix = 5
+    Mix = 5,
+    Checker2D = 6,
+    Noise2D = 7
+};
+
+enum class SpectralExpressionSemantic : int {
+    Reflectance = 0,
+    Emission = 1,
+    OpticalConstant = 2,
+    Scalar = 3
 };
 
 constexpr int kMaxMaterialExpressionNodes = 32;
@@ -188,6 +197,7 @@ struct HostSpectralResource {
 
 struct SpectralExpressionNode {
     SpectralExpressionNodeKind kind = SpectralExpressionNodeKind::None;
+    SpectralExpressionSemantic semantic = SpectralExpressionSemantic::Reflectance;
     SpectralResource resource;
     int texture_index = -1;
     int input_a = -1;
@@ -197,6 +207,7 @@ struct SpectralExpressionNode {
 
 struct HostSpectralExpressionNode {
     SpectralExpressionNodeKind kind = SpectralExpressionNodeKind::None;
+    SpectralExpressionSemantic semantic = SpectralExpressionSemantic::Reflectance;
     HostSpectralResource resource;
     int texture_index = -1;
     int input_a = -1;
@@ -302,7 +313,25 @@ enum class MaterialType {
     Metal,
     Dielectric,
     Light,
-    Cloth
+    Cloth,
+    Composite,
+    Layered
+};
+
+constexpr int kMaxMaterialBsdfLobes = 4;
+
+struct GpuMaterialBsdfLobe {
+    MaterialType type = MaterialType::Lambertian;
+    float roughness = 0.5f;
+    float ior = 1.45f;
+    float dispersion = 0.0f;
+    float thin_film_thickness = 0.0f;
+    float thin_film_ior = 1.0f;
+    int albedo_expression_root = -1;
+    int roughness_expression_root = -1;
+    int metal_eta_expression_root = -1;
+    int extinction_expression_root = -1;
+    int ior_expression_root = -1;
 };
 
 struct GpuTexture {
@@ -363,6 +392,14 @@ struct GpuMaterial {
     int albedo_expression_root = -1;
     int roughness_expression_root = -1;
     int emission_expression_root = -1;
+    int metal_eta_expression_root = -1;
+    int extinction_expression_root = -1;
+    int ior_expression_root = -1;
+    int bsdf_lobe_count = 0;
+    int bsdf_lobe_start = -1;
+    int bsdf_mix_expression_root = -1;
+    int layer_thickness_expression_root = -1;
+    int layer_absorption_expression_root = -1;
 };
 
 // Host-side companion holding spectral data alongside the GPU header.
@@ -381,6 +418,7 @@ struct GpuMaterialData {
     HostSpectralResource medium_absorption_resource;
     HostSpectralResource emission_resource;
     std::vector<HostSpectralExpressionNode> expression_nodes;
+    std::vector<GpuMaterialBsdfLobe> bsdf_lobes;
 };
 
 struct GpuSphere {
@@ -466,6 +504,8 @@ struct GpuScene {
     SpectralResource* mat_emission_resources;
     SpectralExpressionNode* material_expression_nodes;
     int material_expression_node_count;
+    GpuMaterialBsdfLobe* material_bsdf_lobes;
+    int material_bsdf_lobe_count;
     int num_spectral_channels;
 
     GpuTexture* textures;

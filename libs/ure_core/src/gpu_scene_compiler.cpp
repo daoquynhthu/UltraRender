@@ -6,6 +6,7 @@
 #include "ure/spectral/spectral.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <stdexcept>
@@ -156,12 +157,14 @@ struct GraphExpressionBuilder {
     const scene_ir::MaterialGraph& graph;
     const std::function<int(const std::shared_ptr<scene_ir::TextureResource>&)>& texture_resolver;
     std::vector<ure::gpu::HostSpectralExpressionNode> nodes;
-    std::map<scene_ir::MaterialGraphNodeId, int> color_cache;
+    std::map<std::int64_t, int> color_cache;
     std::map<scene_ir::MaterialGraphNodeId, int> float_cache;
 
-    int add_resource(ure::gpu::HostSpectralResource resource) {
+    int add_resource(ure::gpu::HostSpectralResource resource,
+                     ure::gpu::SpectralExpressionSemantic semantic = ure::gpu::SpectralExpressionSemantic::Reflectance) {
         ure::gpu::HostSpectralExpressionNode node;
         node.kind = ure::gpu::SpectralExpressionNodeKind::Resource;
+        node.semantic = semantic;
         node.resource = std::move(resource);
         nodes.push_back(std::move(node));
         return static_cast<int>(nodes.size()) - 1;
@@ -182,9 +185,11 @@ struct GraphExpressionBuilder {
         return add_resource(std::move(resource));
     }
 
-    int add_texture(const std::shared_ptr<scene_ir::TextureResource>& texture) {
+    int add_texture(const std::shared_ptr<scene_ir::TextureResource>& texture,
+                    ure::gpu::SpectralExpressionSemantic semantic) {
         ure::gpu::HostSpectralExpressionNode node;
         node.kind = ure::gpu::SpectralExpressionNodeKind::Texture;
+        node.semantic = semantic;
         node.texture_index = texture_resolver(texture);
         nodes.push_back(node);
         return static_cast<int>(nodes.size()) - 1;
@@ -209,20 +214,34 @@ struct GraphExpressionBuilder {
         return static_cast<int>(nodes.size()) - 1;
     }
 
-    int color_root(const scene_ir::MaterialGraphNode& value_node, bool emission = false) {
-        auto cache_it = color_cache.find(value_node.id);
+    int add_procedural(ure::gpu::SpectralExpressionNodeKind kind, int a, int b, int scale) {
+        ure::gpu::HostSpectralExpressionNode node;
+        node.kind = kind;
+        node.input_a = a;
+        node.input_b = b;
+        node.input_factor = scale;
+        nodes.push_back(node);
+        return static_cast<int>(nodes.size()) - 1;
+    }
+
+    int color_root(const scene_ir::MaterialGraphNode& value_node,
+                   ure::gpu::SpectralExpressionSemantic semantic = ure::gpu::SpectralExpressionSemantic::Reflectance) {
+        const std::int64_t cache_key = static_cast<std::int64_t>(value_node.id) * 4 + static_cast<int>(semantic);
+        auto cache_it = color_cache.find(cache_key);
         if (cache_it != color_cache.end()) return cache_it->second;
 
         int root = -1;
         switch (value_node.kind) {
             case scene_ir::MaterialGraphNodeKind::ConstantColor:
-                root = emission ? add_rgb_emission(value_node.color) : add_rgb_reflectance(value_node.color);
+                root = semantic == ure::gpu::SpectralExpressionSemantic::Emission
+                    ? add_rgb_emission(value_node.color)
+                    : add_rgb_reflectance(value_node.color);
                 break;
             case scene_ir::MaterialGraphNodeKind::ConstantFloat:
                 root = add_constant(value_node.value);
                 break;
             case scene_ir::MaterialGraphNodeKind::Texture2D:
-                root = add_texture(value_node.texture);
+                root = add_texture(value_node.texture, semantic);
                 break;
             case scene_ir::MaterialGraphNodeKind::Multiply:
             case scene_ir::MaterialGraphNodeKind::Add: {
@@ -233,8 +252,8 @@ struct GraphExpressionBuilder {
                     b->node_id == scene_ir::kInvalidMaterialGraphNode) {
                     throw std::runtime_error("MaterialGraph binary expression requires a and b inputs");
                 }
-                int av = color_root(require_graph_node(graph, a->node_id, "expression input a"), emission);
-                int bv = color_root(require_graph_node(graph, b->node_id, "expression input b"), emission);
+                int av = color_root(require_graph_node(graph, a->node_id, "expression input a"), semantic);
+                int bv = color_root(require_graph_node(graph, b->node_id, "expression input b"), semantic);
                 root = add_binary(value_node.kind == scene_ir::MaterialGraphNodeKind::Add
                     ? ure::gpu::SpectralExpressionNodeKind::Add
                     : ure::gpu::SpectralExpressionNodeKind::Multiply, av, bv);
@@ -250,17 +269,40 @@ struct GraphExpressionBuilder {
                     factor->node_id == scene_ir::kInvalidMaterialGraphNode) {
                     throw std::runtime_error("MaterialGraph Mix requires a, b, and factor inputs");
                 }
-                int av = color_root(require_graph_node(graph, a->node_id, "mix input a"), emission);
-                int bv = color_root(require_graph_node(graph, b->node_id, "mix input b"), emission);
+                int av = color_root(require_graph_node(graph, a->node_id, "mix input a"), semantic);
+                int bv = color_root(require_graph_node(graph, b->node_id, "mix input b"), semantic);
                 int fv = float_root(require_graph_node(graph, factor->node_id, "mix factor"));
                 root = add_mix(av, bv, fv);
                 break;
             }
+            case scene_ir::MaterialGraphNodeKind::Checker2D:
+            case scene_ir::MaterialGraphNodeKind::Noise2D: {
+                const scene_ir::MaterialGraphInput* a = find_input(value_node, "a");
+                const scene_ir::MaterialGraphInput* b = find_input(value_node, "b");
+                const scene_ir::MaterialGraphInput* scale = find_input(value_node, "scale");
+                if (!a || !b || !scale ||
+                    a->node_id == scene_ir::kInvalidMaterialGraphNode ||
+                    b->node_id == scene_ir::kInvalidMaterialGraphNode ||
+                    scale->node_id == scene_ir::kInvalidMaterialGraphNode) {
+                    throw std::runtime_error("MaterialGraph procedural node requires a, b, and scale inputs");
+                }
+                int av = color_root(require_graph_node(graph, a->node_id, "procedural input a"), semantic);
+                int bv = color_root(require_graph_node(graph, b->node_id, "procedural input b"), semantic);
+                int sv = float_root(require_graph_node(graph, scale->node_id, "procedural scale"));
+                root = add_procedural(
+                    value_node.kind == scene_ir::MaterialGraphNodeKind::Checker2D
+                        ? ure::gpu::SpectralExpressionNodeKind::Checker2D
+                        : ure::gpu::SpectralExpressionNodeKind::Noise2D,
+                    av,
+                    bv,
+                    sv);
+                break;
+            }
             default:
-                throw std::runtime_error("MaterialGraph color input requires ConstantColor, ConstantFloat, Texture2D, Add, Multiply, or Mix");
+                throw std::runtime_error("MaterialGraph color input requires a supported value or procedural node");
         }
 
-        color_cache[value_node.id] = root;
+        color_cache[cache_key] = root;
         return root;
     }
 
@@ -277,7 +319,7 @@ struct GraphExpressionBuilder {
                 root = add_rgb_reflectance(value_node.color);
                 break;
             case scene_ir::MaterialGraphNodeKind::Texture2D:
-                root = add_texture(value_node.texture);
+                root = add_texture(value_node.texture, ure::gpu::SpectralExpressionSemantic::Scalar);
                 break;
             case scene_ir::MaterialGraphNodeKind::Multiply:
             case scene_ir::MaterialGraphNodeKind::Add: {
@@ -311,8 +353,12 @@ struct GraphExpressionBuilder {
                 root = add_mix(av, bv, fv);
                 break;
             }
+            case scene_ir::MaterialGraphNodeKind::Checker2D:
+            case scene_ir::MaterialGraphNodeKind::Noise2D:
+                root = color_root(value_node, ure::gpu::SpectralExpressionSemantic::Scalar);
+                break;
             default:
-                throw std::runtime_error("MaterialGraph float input requires ConstantFloat, ConstantColor, Texture2D, Add, Multiply, or Mix");
+                throw std::runtime_error("MaterialGraph float input requires a supported value or procedural node");
         }
 
         float_cache[value_node.id] = root;
@@ -480,10 +526,14 @@ void validate_phase_m1_graph_node(const scene_ir::MaterialGraphNode& node) {
         case scene_ir::MaterialGraphNodeKind::Add:
         case scene_ir::MaterialGraphNodeKind::Multiply:
         case scene_ir::MaterialGraphNodeKind::Mix:
+        case scene_ir::MaterialGraphNodeKind::Checker2D:
+        case scene_ir::MaterialGraphNodeKind::Noise2D:
         case scene_ir::MaterialGraphNodeKind::BsdfLambert:
         case scene_ir::MaterialGraphNodeKind::BsdfMetal:
         case scene_ir::MaterialGraphNodeKind::BsdfDielectric:
         case scene_ir::MaterialGraphNodeKind::BsdfLight:
+        case scene_ir::MaterialGraphNodeKind::BsdfMix:
+        case scene_ir::MaterialGraphNodeKind::BsdfLayer:
         case scene_ir::MaterialGraphNodeKind::OutputSurface:
             return;
         default:
@@ -719,12 +769,172 @@ ure::gpu::GpuMaterialData compile_material(const std::shared_ptr<scene_ir::Mater
         int albedo_root = -1;
         int roughness_root = -1;
         int emission_root = -1;
+        int metal_eta_root = -1;
+        int extinction_root = -1;
+        int ior_root = -1;
 
         auto input_node = [&](const scene_ir::MaterialGraphNode& node, const char* name) -> const scene_ir::MaterialGraphNode* {
             const scene_ir::MaterialGraphInput* in = find_input(node, name);
             if (!in || in->node_id == scene_ir::kInvalidMaterialGraphNode) return nullptr;
             return &require_graph_node(*mat->graph, in->node_id, name);
         };
+
+        auto compile_lobe = [&](const scene_ir::MaterialGraphNode& node) {
+            ure::gpu::GpuMaterialBsdfLobe lobe;
+            switch (node.kind) {
+                case scene_ir::MaterialGraphNodeKind::BsdfLambert:
+                    lobe.type = ure::gpu::MaterialType::Lambertian;
+                    break;
+                case scene_ir::MaterialGraphNodeKind::BsdfMetal:
+                    lobe.type = ure::gpu::MaterialType::Metal;
+                    break;
+                case scene_ir::MaterialGraphNodeKind::BsdfDielectric:
+                    lobe.type = ure::gpu::MaterialType::Dielectric;
+                    break;
+                default:
+                    throw std::runtime_error("MaterialGraph BSDF descriptor requires Lambert, Metal, or Dielectric");
+            }
+            const core::Vec3f default_albedo = node.kind == scene_ir::MaterialGraphNodeKind::BsdfDielectric
+                ? mat->base_color
+                : node.color;
+            if (const auto* value = input_node(node, "base_color")) {
+                lobe.albedo_expression_root = builder.color_root(*value);
+            } else {
+                lobe.albedo_expression_root = builder.add_rgb_reflectance(default_albedo);
+            }
+            if (const auto* value = input_node(node, "roughness")) {
+                lobe.roughness_expression_root = builder.float_root(*value);
+            } else {
+                lobe.roughness_expression_root = builder.add_constant(mat->roughness);
+            }
+            lobe.roughness = mat->roughness;
+            lobe.ior = mat->ior;
+            lobe.dispersion = mat->dispersion;
+            lobe.thin_film_thickness = mat->thin_film_thickness;
+            lobe.thin_film_ior = mat->thin_film_ior;
+            if (lobe.type == ure::gpu::MaterialType::Metal) {
+                if (const auto* value = input_node(node, "eta")) {
+                    lobe.metal_eta_expression_root = builder.color_root(
+                        *value, ure::gpu::SpectralExpressionSemantic::OpticalConstant);
+                } else {
+                    lobe.metal_eta_expression_root = builder.add_resource(
+                        rgb_coeff_resource(mat->metal_eta), ure::gpu::SpectralExpressionSemantic::OpticalConstant);
+                }
+                if (const auto* value = input_node(node, "k")) {
+                    lobe.extinction_expression_root = builder.color_root(
+                        *value, ure::gpu::SpectralExpressionSemantic::OpticalConstant);
+                } else {
+                    lobe.extinction_expression_root = builder.add_resource(
+                        rgb_coeff_resource(mat->metal_k), ure::gpu::SpectralExpressionSemantic::OpticalConstant);
+                }
+            }
+            if (lobe.type == ure::gpu::MaterialType::Dielectric) {
+                if (const auto* value = input_node(node, "ior")) {
+                    if (value->kind == scene_ir::MaterialGraphNodeKind::ConstantFloat) lobe.ior = value->value;
+                    lobe.ior_expression_root = builder.color_root(
+                        *value, ure::gpu::SpectralExpressionSemantic::OpticalConstant);
+                }
+                if (const auto* value = input_node(node, "thickness")) {
+                    lobe.thin_film_thickness = value->kind == scene_ir::MaterialGraphNodeKind::ConstantFloat
+                        ? value->value
+                        : mat->thin_film_thickness;
+                }
+            }
+            return lobe;
+        };
+
+        if (bsdf.kind == scene_ir::MaterialGraphNodeKind::BsdfMix) {
+            const auto* a_input = input_node(bsdf, "a");
+            const auto* b_input = input_node(bsdf, "b");
+            const auto* factor_input = input_node(bsdf, "factor");
+            if (!a_input || !b_input || !factor_input) {
+                throw std::runtime_error("MaterialGraph BsdfMix requires a, b, and factor inputs");
+            }
+            if (a_input->kind == scene_ir::MaterialGraphNodeKind::BsdfDielectric ||
+                b_input->kind == scene_ir::MaterialGraphNodeKind::BsdfDielectric) {
+                throw std::runtime_error(
+                    "MaterialGraph BsdfMix children must be Lambert or Metal; dielectric interfaces require BsdfLayer");
+            }
+
+            ure::gpu::GpuMaterialData data = compile_material_node(
+                scene_ir::MaterialModel::Lambertian,
+                mat->base_color,
+                {0.0f, 0.0f, 0.0f},
+                mat->roughness,
+                mat->ior,
+                mat->metal_eta,
+                mat->dispersion,
+                mat->thin_film_thickness,
+                mat->thin_film_ior,
+                mat->medium_density,
+                mat->medium_anisotropy,
+                mat->medium_scattering,
+                mat->medium_absorption,
+                mat->metal_k,
+                wavelengths,
+                -1,
+                -1,
+                -1);
+            data.header.type = ure::gpu::MaterialType::Composite;
+            data.header.bsdf_lobe_count = 2;
+            data.bsdf_lobes.push_back(compile_lobe(*a_input));
+            data.bsdf_lobes.push_back(compile_lobe(*b_input));
+            data.header.bsdf_mix_expression_root = builder.float_root(*factor_input);
+            data.expression_nodes = std::move(builder.nodes);
+            apply_spectral_extension(data, *mat, wavelengths);
+            return data;
+        }
+
+        if (bsdf.kind == scene_ir::MaterialGraphNodeKind::BsdfLayer) {
+            const auto* coating_input = input_node(bsdf, "coating");
+            const auto* substrate_input = input_node(bsdf, "substrate");
+            if (!coating_input || !substrate_input) {
+                throw std::runtime_error("MaterialGraph BsdfLayer requires coating and substrate inputs");
+            }
+            if (coating_input->kind != scene_ir::MaterialGraphNodeKind::BsdfDielectric) {
+                throw std::runtime_error("MaterialGraph BsdfLayer coating must be BsdfDielectric");
+            }
+            if (substrate_input->kind != scene_ir::MaterialGraphNodeKind::BsdfLambert) {
+                throw std::runtime_error("MaterialGraph BsdfLayer currently requires an opaque Lambert substrate");
+            }
+            ure::gpu::GpuMaterialData data = compile_material_node(
+                scene_ir::MaterialModel::Lambertian,
+                mat->base_color,
+                {0.0f, 0.0f, 0.0f},
+                mat->roughness,
+                mat->ior,
+                mat->metal_eta,
+                mat->dispersion,
+                mat->thin_film_thickness,
+                mat->thin_film_ior,
+                mat->medium_density,
+                mat->medium_anisotropy,
+                mat->medium_scattering,
+                mat->medium_absorption,
+                mat->metal_k,
+                wavelengths,
+                -1,
+                -1,
+                -1);
+            data.header.type = ure::gpu::MaterialType::Layered;
+            data.header.bsdf_lobe_count = 2;
+            data.bsdf_lobes.push_back(compile_lobe(*coating_input));
+            data.bsdf_lobes.push_back(compile_lobe(*substrate_input));
+            if (const auto* value = input_node(bsdf, "thickness")) {
+                data.header.layer_thickness_expression_root = builder.float_root(*value);
+            } else {
+                data.header.layer_thickness_expression_root = builder.add_constant(0.0f);
+            }
+            if (const auto* value = input_node(bsdf, "absorption")) {
+                data.header.layer_absorption_expression_root = builder.color_root(
+                    *value, ure::gpu::SpectralExpressionSemantic::OpticalConstant);
+            } else {
+                data.header.layer_absorption_expression_root = builder.add_constant(0.0f);
+            }
+            data.expression_nodes = std::move(builder.nodes);
+            apply_spectral_extension(data, *mat, wavelengths);
+            return data;
+        }
 
         switch (bsdf.kind) {
             case scene_ir::MaterialGraphNodeKind::BsdfLambert:
@@ -746,14 +956,15 @@ ure::gpu::GpuMaterialData compile_material(const std::shared_ptr<scene_ir::Mater
                 if (const auto* node = input_node(bsdf, "roughness")) {
                     roughness_root = builder.float_root(*node);
                 }
-                {
-                    GraphColorValue eta = read_graph_color(*mat->graph, bsdf, "eta", mat->metal_eta);
-                    GraphColorValue k = read_graph_color(*mat->graph, bsdf, "k", mat->metal_k);
-                    if (eta.texture || k.texture) {
-                        throw std::runtime_error("MaterialGraph metal eta/k texture inputs require a dedicated spectral IOR expression slot");
-                    }
-                    metal_eta = eta.color;
-                    metal_k = k.color;
+                if (const auto* node = input_node(bsdf, "eta")) {
+                    if (node->kind == scene_ir::MaterialGraphNodeKind::ConstantColor) metal_eta = node->color;
+                    if (node->kind == scene_ir::MaterialGraphNodeKind::ConstantFloat) metal_eta = {node->value, node->value, node->value};
+                    metal_eta_root = builder.color_root(*node, ure::gpu::SpectralExpressionSemantic::OpticalConstant);
+                }
+                if (const auto* node = input_node(bsdf, "k")) {
+                    if (node->kind == scene_ir::MaterialGraphNodeKind::ConstantColor) metal_k = node->color;
+                    if (node->kind == scene_ir::MaterialGraphNodeKind::ConstantFloat) metal_k = {node->value, node->value, node->value};
+                    extinction_root = builder.color_root(*node, ure::gpu::SpectralExpressionSemantic::OpticalConstant);
                 }
                 break;
             case scene_ir::MaterialGraphNodeKind::BsdfDielectric:
@@ -765,19 +976,16 @@ ure::gpu::GpuMaterialData compile_material(const std::shared_ptr<scene_ir::Mater
                 if (const auto* node = input_node(bsdf, "roughness")) {
                     roughness_root = builder.float_root(*node);
                 }
-                {
-                    GraphFloatValue ior_value = read_graph_float(*mat->graph, bsdf, "ior", mat->ior);
-                    if (ior_value.texture) {
-                        throw std::runtime_error("MaterialGraph dielectric ior texture input requires a dedicated scalar expression slot");
-                    }
-                    ior = ior_value.value;
+                if (const auto* node = input_node(bsdf, "ior")) {
+                    if (node->kind == scene_ir::MaterialGraphNodeKind::ConstantFloat) ior = node->value;
+                    ior_root = builder.color_root(*node, ure::gpu::SpectralExpressionSemantic::OpticalConstant);
                 }
                 break;
             case scene_ir::MaterialGraphNodeKind::BsdfLight:
                 model = scene_ir::MaterialModel::Light;
                 emission = bsdf.color;
                 if (const auto* node = input_node(bsdf, "emission")) {
-                    emission_root = builder.color_root(*node, true);
+                    emission_root = builder.color_root(*node, ure::gpu::SpectralExpressionSemantic::Emission);
                 }
                 break;
             default:
@@ -806,6 +1014,9 @@ ure::gpu::GpuMaterialData compile_material(const std::shared_ptr<scene_ir::Mater
         data.header.albedo_expression_root = albedo_root;
         data.header.roughness_expression_root = roughness_root;
         data.header.emission_expression_root = emission_root;
+        data.header.metal_eta_expression_root = metal_eta_root;
+        data.header.extinction_expression_root = extinction_root;
+        data.header.ior_expression_root = ior_root;
         apply_spectral_extension(data, *mat, wavelengths);
         return data;
     }

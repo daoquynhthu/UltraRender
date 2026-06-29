@@ -546,6 +546,278 @@ static int test_texture_add_and_mix_compile_to_expression_graph() {
     return 0;
 }
 
+static int test_optical_parameter_textures_compile_to_typed_expression_roots() {
+    const std::string texture_path = "test_material_graph_optical.bmp";
+    auto texture = write_texture_resource(texture_path);
+
+    auto metal = std::make_shared<ure::scene_ir::MaterialNode>();
+    metal->graph = std::make_shared<ure::scene_ir::MaterialGraph>();
+    ure::scene_ir::MaterialGraphNode eta;
+    eta.id = 1;
+    eta.kind = ure::scene_ir::MaterialGraphNodeKind::Texture2D;
+    eta.texture = texture;
+    ure::scene_ir::MaterialGraphNode k = eta;
+    k.id = 2;
+    ure::scene_ir::MaterialGraphNode metal_bsdf;
+    metal_bsdf.id = 3;
+    metal_bsdf.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfMetal;
+    metal_bsdf.inputs.push_back(input("eta", eta.id));
+    metal_bsdf.inputs.push_back(input("k", k.id));
+    ure::scene_ir::MaterialGraphNode metal_output;
+    metal_output.id = 4;
+    metal_output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    metal_output.inputs.push_back(input("surface", metal_bsdf.id));
+    metal->graph->nodes = {eta, k, metal_bsdf, metal_output};
+    metal->graph->output_node_id = metal_output.id;
+
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    auto compiled_metal = ure::GpuSceneCompiler::compile(scene_with_material(metal), config);
+    CHECK(compiled_metal.materials[0].header.metal_eta_expression_root >= 0);
+    CHECK(compiled_metal.materials[0].header.extinction_expression_root >= 0);
+    CHECK(compiled_metal.materials[0].expression_nodes[0].semantic == ure::gpu::SpectralExpressionSemantic::OpticalConstant);
+
+    auto dielectric = std::make_shared<ure::scene_ir::MaterialNode>();
+    dielectric->graph = std::make_shared<ure::scene_ir::MaterialGraph>();
+    ure::scene_ir::MaterialGraphNode ior = eta;
+    ior.id = 1;
+    ure::scene_ir::MaterialGraphNode dielectric_bsdf;
+    dielectric_bsdf.id = 2;
+    dielectric_bsdf.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfDielectric;
+    dielectric_bsdf.inputs.push_back(input("ior", ior.id));
+    ure::scene_ir::MaterialGraphNode dielectric_output;
+    dielectric_output.id = 3;
+    dielectric_output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    dielectric_output.inputs.push_back(input("surface", dielectric_bsdf.id));
+    dielectric->graph->nodes = {ior, dielectric_bsdf, dielectric_output};
+    dielectric->graph->output_node_id = dielectric_output.id;
+    auto compiled_dielectric = ure::GpuSceneCompiler::compile(scene_with_material(dielectric), config);
+    std::remove(texture_path.c_str());
+    CHECK(compiled_dielectric.materials[0].header.ior_expression_root >= 0);
+    CHECK(compiled_dielectric.materials[0].expression_nodes[0].semantic == ure::gpu::SpectralExpressionSemantic::OpticalConstant);
+    return 0;
+}
+
+static int test_procedural_nodes_compile_to_device_expression_graph() {
+    auto material = std::make_shared<ure::scene_ir::MaterialNode>();
+    material->graph = std::make_shared<ure::scene_ir::MaterialGraph>();
+    ure::scene_ir::MaterialGraphNode a;
+    a.id = 1;
+    a.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantColor;
+    a.color = {0.1f, 0.2f, 0.3f};
+    ure::scene_ir::MaterialGraphNode b = a;
+    b.id = 2;
+    b.color = {0.7f, 0.8f, 0.9f};
+    ure::scene_ir::MaterialGraphNode scale;
+    scale.id = 3;
+    scale.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    scale.value = 8.0f;
+    ure::scene_ir::MaterialGraphNode checker;
+    checker.id = 4;
+    checker.kind = ure::scene_ir::MaterialGraphNodeKind::Checker2D;
+    checker.inputs = {input("a", a.id), input("b", b.id), input("scale", scale.id)};
+    ure::scene_ir::MaterialGraphNode noise;
+    noise.id = 5;
+    noise.kind = ure::scene_ir::MaterialGraphNodeKind::Noise2D;
+    noise.inputs = {input("a", checker.id), input("b", b.id), input("scale", scale.id)};
+    ure::scene_ir::MaterialGraphNode bsdf;
+    bsdf.id = 6;
+    bsdf.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLambert;
+    bsdf.inputs.push_back(input("base_color", noise.id));
+    ure::scene_ir::MaterialGraphNode output;
+    output.id = 7;
+    output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    output.inputs.push_back(input("surface", bsdf.id));
+    material->graph->nodes = {a, b, scale, checker, noise, bsdf, output};
+    material->graph->output_node_id = output.id;
+
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    auto compiled = ure::GpuSceneCompiler::compile(scene_with_material(material), config);
+    CHECK(compiled.materials.size() == 1);
+    CHECK(compiled.materials[0].header.albedo_expression_root >= 0);
+    CHECK(compiled.materials[0].expression_nodes.size() == 5);
+    CHECK(compiled.materials[0].expression_nodes[3].kind == ure::gpu::SpectralExpressionNodeKind::Checker2D);
+    CHECK(compiled.materials[0].expression_nodes[4].kind == ure::gpu::SpectralExpressionNodeKind::Noise2D);
+    return 0;
+}
+
+static int test_bsdf_mix_compiles_explicit_lobes_and_weight() {
+    auto material = std::make_shared<ure::scene_ir::MaterialNode>();
+    material->roughness = 0.3f;
+    material->metal_eta = {0.2f, 0.4f, 0.8f};
+    material->metal_k = {3.0f, 2.5f, 2.0f};
+    material->graph = std::make_shared<ure::scene_ir::MaterialGraph>();
+    ure::scene_ir::MaterialGraphNode diffuse_color;
+    diffuse_color.id = 1;
+    diffuse_color.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantColor;
+    diffuse_color.color = {0.25f, 0.5f, 0.75f};
+    ure::scene_ir::MaterialGraphNode diffuse;
+    diffuse.id = 2;
+    diffuse.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLambert;
+    diffuse.inputs.push_back(input("base_color", diffuse_color.id));
+    ure::scene_ir::MaterialGraphNode metal;
+    metal.id = 3;
+    metal.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfMetal;
+    ure::scene_ir::MaterialGraphNode factor;
+    factor.id = 4;
+    factor.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    factor.value = 0.35f;
+    ure::scene_ir::MaterialGraphNode mix;
+    mix.id = 5;
+    mix.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfMix;
+    mix.inputs = {input("a", diffuse.id), input("b", metal.id), input("factor", factor.id)};
+    ure::scene_ir::MaterialGraphNode output;
+    output.id = 6;
+    output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    output.inputs.push_back(input("surface", mix.id));
+    material->graph->nodes = {diffuse_color, diffuse, metal, factor, mix, output};
+    material->graph->output_node_id = output.id;
+
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    auto compiled = ure::GpuSceneCompiler::compile(scene_with_material(material), config);
+    CHECK(compiled.materials.size() == 1);
+    const auto& header = compiled.materials[0].header;
+    CHECK(header.type == ure::gpu::MaterialType::Composite);
+    CHECK(header.bsdf_lobe_count == 2);
+    CHECK(compiled.materials[0].bsdf_lobes.size() == 2);
+    CHECK(compiled.materials[0].bsdf_lobes[0].type == ure::gpu::MaterialType::Lambertian);
+    CHECK(compiled.materials[0].bsdf_lobes[1].type == ure::gpu::MaterialType::Metal);
+    CHECK(compiled.materials[0].bsdf_lobes[0].albedo_expression_root >= 0);
+    CHECK(compiled.materials[0].bsdf_lobes[1].metal_eta_expression_root >= 0);
+    CHECK(compiled.materials[0].bsdf_lobes[1].extinction_expression_root >= 0);
+    CHECK(header.bsdf_mix_expression_root >= 0);
+    CHECK(!compiled.materials[0].expression_nodes.empty());
+    return 0;
+}
+
+static int test_bsdf_mix_rejects_dielectric_medium_ambiguity() {
+    auto material = std::make_shared<ure::scene_ir::MaterialNode>();
+    material->graph = std::make_shared<ure::scene_ir::MaterialGraph>();
+    ure::scene_ir::MaterialGraphNode dielectric;
+    dielectric.id = 1;
+    dielectric.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfDielectric;
+    ure::scene_ir::MaterialGraphNode diffuse;
+    diffuse.id = 2;
+    diffuse.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLambert;
+    ure::scene_ir::MaterialGraphNode factor;
+    factor.id = 3;
+    factor.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    factor.value = 0.5f;
+    ure::scene_ir::MaterialGraphNode mix;
+    mix.id = 4;
+    mix.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfMix;
+    mix.inputs = {input("a", dielectric.id), input("b", diffuse.id), input("factor", factor.id)};
+    ure::scene_ir::MaterialGraphNode output;
+    output.id = 5;
+    output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    output.inputs.push_back(input("surface", mix.id));
+    material->graph->nodes = {dielectric, diffuse, factor, mix, output};
+    material->graph->output_node_id = output.id;
+    bool rejected = false;
+    try {
+        ure::RenderConfig config;
+        config.num_wavelengths = 8;
+        (void)ure::GpuSceneCompiler::compile(scene_with_material(material), config);
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
+static int test_bsdf_layer_compiles_dielectric_coating_over_diffuse_substrate() {
+    auto material = std::make_shared<ure::scene_ir::MaterialNode>();
+    material->graph = std::make_shared<ure::scene_ir::MaterialGraph>();
+    ure::scene_ir::MaterialGraphNode ior;
+    ior.id = 1;
+    ior.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    ior.value = 1.5f;
+    ure::scene_ir::MaterialGraphNode coating;
+    coating.id = 2;
+    coating.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfDielectric;
+    coating.inputs.push_back(input("ior", ior.id));
+    ure::scene_ir::MaterialGraphNode color;
+    color.id = 3;
+    color.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantColor;
+    color.color = {0.2f, 0.4f, 0.6f};
+    ure::scene_ir::MaterialGraphNode substrate;
+    substrate.id = 4;
+    substrate.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLambert;
+    substrate.inputs.push_back(input("base_color", color.id));
+    ure::scene_ir::MaterialGraphNode thickness;
+    thickness.id = 5;
+    thickness.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantFloat;
+    thickness.value = 0.01f;
+    ure::scene_ir::MaterialGraphNode absorption;
+    absorption.id = 6;
+    absorption.kind = ure::scene_ir::MaterialGraphNodeKind::ConstantColor;
+    absorption.color = {0.1f, 0.2f, 0.3f};
+    ure::scene_ir::MaterialGraphNode layer;
+    layer.id = 7;
+    layer.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLayer;
+    layer.inputs = {
+        input("coating", coating.id),
+        input("substrate", substrate.id),
+        input("thickness", thickness.id),
+        input("absorption", absorption.id)};
+    ure::scene_ir::MaterialGraphNode output;
+    output.id = 8;
+    output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    output.inputs.push_back(input("surface", layer.id));
+    material->graph->nodes = {ior, coating, color, substrate, thickness, absorption, layer, output};
+    material->graph->output_node_id = output.id;
+
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    auto compiled = ure::GpuSceneCompiler::compile(scene_with_material(material), config);
+    CHECK(compiled.materials.size() == 1);
+    const auto& data = compiled.materials[0];
+    CHECK(data.header.type == ure::gpu::MaterialType::Layered);
+    CHECK(data.header.bsdf_lobe_count == 2);
+    CHECK(data.bsdf_lobes.size() == 2);
+    CHECK(data.bsdf_lobes[0].type == ure::gpu::MaterialType::Dielectric);
+    CHECK(data.bsdf_lobes[0].ior_expression_root >= 0);
+    CHECK(data.bsdf_lobes[1].type == ure::gpu::MaterialType::Lambertian);
+    CHECK(data.bsdf_lobes[1].albedo_expression_root >= 0);
+    CHECK(data.header.layer_thickness_expression_root >= 0);
+    CHECK(data.header.layer_absorption_expression_root >= 0);
+    return 0;
+}
+
+static int test_bsdf_layer_rejects_non_dielectric_coating() {
+    auto material = std::make_shared<ure::scene_ir::MaterialNode>();
+    material->graph = std::make_shared<ure::scene_ir::MaterialGraph>();
+    ure::scene_ir::MaterialGraphNode coating;
+    coating.id = 1;
+    coating.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfMetal;
+    ure::scene_ir::MaterialGraphNode substrate;
+    substrate.id = 2;
+    substrate.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLambert;
+    ure::scene_ir::MaterialGraphNode layer;
+    layer.id = 3;
+    layer.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLayer;
+    layer.inputs = {input("coating", coating.id), input("substrate", substrate.id)};
+    ure::scene_ir::MaterialGraphNode output;
+    output.id = 4;
+    output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    output.inputs.push_back(input("surface", layer.id));
+    material->graph->nodes = {coating, substrate, layer, output};
+    material->graph->output_node_id = output.id;
+
+    bool rejected = false;
+    try {
+        ure::RenderConfig config;
+        config.num_wavelengths = 8;
+        (void)ure::GpuSceneCompiler::compile(scene_with_material(material), config);
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
 int main() {
     fprintf(stderr, "[Material Graph Test]\n");
 
@@ -568,6 +840,12 @@ int main() {
     failed += run("test_graph_duplicate_node_ids_rejected", test_graph_duplicate_node_ids_rejected);
     failed += run("test_graph_cycles_rejected", test_graph_cycles_rejected);
     failed += run("test_texture_add_and_mix_compile_to_expression_graph", test_texture_add_and_mix_compile_to_expression_graph);
+    failed += run("test_optical_parameter_textures_compile_to_typed_expression_roots", test_optical_parameter_textures_compile_to_typed_expression_roots);
+    failed += run("test_procedural_nodes_compile_to_device_expression_graph", test_procedural_nodes_compile_to_device_expression_graph);
+    failed += run("test_bsdf_mix_compiles_explicit_lobes_and_weight", test_bsdf_mix_compiles_explicit_lobes_and_weight);
+    failed += run("test_bsdf_mix_rejects_dielectric_medium_ambiguity", test_bsdf_mix_rejects_dielectric_medium_ambiguity);
+    failed += run("test_bsdf_layer_compiles_dielectric_coating_over_diffuse_substrate", test_bsdf_layer_compiles_dielectric_coating_over_diffuse_substrate);
+    failed += run("test_bsdf_layer_rejects_non_dielectric_coating", test_bsdf_layer_rejects_non_dielectric_coating);
 
     fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

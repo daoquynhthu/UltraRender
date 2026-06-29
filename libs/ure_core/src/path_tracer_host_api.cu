@@ -352,6 +352,7 @@ static void upload_material_expression_graphs(GpuContext* ctx,
                                               std::vector<GpuMaterialData>& host_materials,
                                               std::vector<GpuMaterial>& host_headers) {
     std::vector<SpectralExpressionNode> nodes;
+    std::vector<GpuMaterialBsdfLobe> lobes;
     for (size_t mat_idx = 0; mat_idx < host_materials.size(); ++mat_idx) {
         GpuMaterialData& material = host_materials[mat_idx];
         GpuMaterial& header = host_headers[mat_idx];
@@ -368,11 +369,31 @@ static void upload_material_expression_graphs(GpuContext* ctx,
         header.albedo_expression_root = root(material.header.albedo_expression_root);
         header.roughness_expression_root = root(material.header.roughness_expression_root);
         header.emission_expression_root = root(material.header.emission_expression_root);
+        header.metal_eta_expression_root = root(material.header.metal_eta_expression_root);
+        header.extinction_expression_root = root(material.header.extinction_expression_root);
+        header.ior_expression_root = root(material.header.ior_expression_root);
+        header.bsdf_mix_expression_root = root(material.header.bsdf_mix_expression_root);
+        header.layer_thickness_expression_root = root(material.header.layer_thickness_expression_root);
+        header.layer_absorption_expression_root = root(material.header.layer_absorption_expression_root);
+        if (material.bsdf_lobes.size() != static_cast<size_t>(header.bsdf_lobe_count) ||
+            header.bsdf_lobe_count > kMaxMaterialBsdfLobes) {
+            throw std::runtime_error("material BSDF lobe descriptor count is invalid");
+        }
+        header.bsdf_lobe_start = header.bsdf_lobe_count > 0 ? static_cast<int>(lobes.size()) : -1;
+        for (GpuMaterialBsdfLobe lobe : material.bsdf_lobes) {
+            lobe.albedo_expression_root = root(lobe.albedo_expression_root);
+            lobe.roughness_expression_root = root(lobe.roughness_expression_root);
+            lobe.metal_eta_expression_root = root(lobe.metal_eta_expression_root);
+            lobe.extinction_expression_root = root(lobe.extinction_expression_root);
+            lobe.ior_expression_root = root(lobe.ior_expression_root);
+            lobes.push_back(lobe);
+        }
         material.header = header;
 
         for (const HostSpectralExpressionNode& host_node : material.expression_nodes) {
             SpectralExpressionNode node = {};
             node.kind = host_node.kind;
+            node.semantic = host_node.semantic;
             node.texture_index = host_node.texture_index;
             node.input_a = root(host_node.input_a);
             node.input_b = root(host_node.input_b);
@@ -390,6 +411,16 @@ static void upload_material_expression_graphs(GpuContext* ctx,
         ctx->pointers_to_free.push_back(ctx->d_material_expression_nodes);
     } else {
         ctx->d_material_expression_nodes = nullptr;
+    }
+
+    ctx->material_bsdf_lobe_count = static_cast<int>(lobes.size());
+    if (!lobes.empty()) {
+        size_t bytes = lobes.size() * sizeof(GpuMaterialBsdfLobe);
+        UR_CUDA_CHECK(cudaMalloc(&ctx->d_material_bsdf_lobes, bytes));
+        UR_CUDA_CHECK(cudaMemcpy(ctx->d_material_bsdf_lobes, lobes.data(), bytes, cudaMemcpyHostToDevice));
+        ctx->pointers_to_free.push_back(ctx->d_material_bsdf_lobes);
+    } else {
+        ctx->d_material_bsdf_lobes = nullptr;
     }
 }
 
@@ -622,6 +653,15 @@ static float eval_host_emission_expression_at_lambda(const GpuMaterialData& mate
                 if (a >= 0 && a < i && b >= 0 && b < i && f >= 0 && f < i) {
                     const float t = std::clamp(values[f], 0.0f, 1.0f);
                     result = values[a] * (1.0f - t) + values[b] * t;
+                }
+                break;
+            }
+            case SpectralExpressionNodeKind::Checker2D:
+            case SpectralExpressionNodeKind::Noise2D: {
+                const int a = host_expression_local_index(material, node.input_a);
+                const int b = host_expression_local_index(material, node.input_b);
+                if (a >= 0 && a < i && b >= 0 && b < i) {
+                    result = 0.5f * (values[a] + values[b]);
                 }
                 break;
             }
@@ -2205,6 +2245,8 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.mat_emission_resources = ctx->d_mat_emission_resources;
     scene.material_expression_nodes = ctx->d_material_expression_nodes;
     scene.material_expression_node_count = ctx->material_expression_node_count;
+    scene.material_bsdf_lobes = ctx->d_material_bsdf_lobes;
+    scene.material_bsdf_lobe_count = ctx->material_bsdf_lobe_count;
     scene.num_spectral_channels = ctx->num_spectral_channels;
     scene.textures = ctx->d_textures;
     scene.texture_count = ctx->texture_count;

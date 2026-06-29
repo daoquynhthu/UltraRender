@@ -413,6 +413,7 @@ __global__ void packet_metal_stokes_channels_kernel(RayQueue q_in, RayQueue q_ou
         0,
         mat,
         mat_soa,
+        SpectralPacket(1.5f),
         r_in,
         scattered,
         GpuVec3(0.0f, 0.0f, 1.0f),

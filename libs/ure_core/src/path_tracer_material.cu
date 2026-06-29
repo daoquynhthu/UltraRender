@@ -6,8 +6,18 @@
 #include "ure/gpu_material_helpers.cuh"
 #include "ure/path_tracer_sampling.cuh"
 
+__device__ inline float resolved_dielectric_ior(const GpuMaterial& mat,
+                                                const SpectralPacket& dielectric_ior,
+                                                int channel,
+                                                float wavelength,
+                                                float dispersion_clamp) {
+    return mat.ior_expression_root != -1
+        ? dielectric_ior.values[channel]
+        : dispersed_dielectric_ior(mat.ior, mat.dispersion, wavelength, dispersion_clamp);
+}
+
 __device__ inline bool scatter(
-    const GpuRay& r_in, const GpuMaterial& mat, const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta,
+    const GpuRay& r_in, const GpuMaterial& mat, const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta, const SpectralPacket& dielectric_ior,
     const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
     const SpectralPacket& current_throughput,
     SpectralPacket& attenuation, GpuRay& scattered, StokesVector& stokes, unsigned int& seed,
@@ -244,11 +254,12 @@ __device__ inline bool scatter(
             if (V.dot(H) < 0.0f) H = -H;
             float cos_theta_h = fmaxf(0.0f, V.dot(H));
             int boundary_channel = lane_channel >= 0 ? lane_channel : 0;
-            float boundary_material_ior = dispersed_dielectric_ior(
-                mat.ior,
-                mat.dispersion,
-                current_throughput.wavelengths[boundary_channel],
-                dispersion_clamp);
+            float boundary_material_ior = resolved_dielectric_ior(
+                mat, dielectric_ior, boundary_channel,
+                current_throughput.wavelengths[boundary_channel], dispersion_clamp);
+            GpuMaterial boundary_mat = mat;
+            boundary_mat.ior = boundary_material_ior;
+            boundary_mat.dispersion = 0.0f;
             float boundary_eta_i = front_face ? ior_outside : boundary_material_ior;
             float boundary_eta_t = front_face ? boundary_material_ior : ior_outside;
             stokes = incident_stokes;
@@ -288,7 +299,8 @@ __device__ inline bool scatter(
                 float G1_L = smith_G1_ggx(NdotL, alpha);
                 float pdf = fmaxf(1e-6f, reflect_prob);
                 for (int c = 0; c < num_spec; ++c) {
-                    float material_ior = dispersed_dielectric_ior(mat.ior, mat.dispersion, current_throughput.wavelengths[c], dispersion_clamp);
+                    float material_ior = resolved_dielectric_ior(
+                        mat, dielectric_ior, c, current_throughput.wavelengths[c], dispersion_clamp);
                     float eta_i_c = front_face ? ior_outside : material_ior;
                     float eta_t_c = front_face ? material_ior : ior_outside;
                     DielectricSurfaceBoundary surface_c = eval_dielectric_surface_boundary(
@@ -312,7 +324,7 @@ __device__ inline bool scatter(
                 scattered.t_min = 1e-4f;
                 scattered.t_max = FLT_MAX;
                 RoughDielectricLobe pdf_lobe = eval_rough_dielectric_reflection_lobe(
-                    mat, normal, V, scattered.direction, current_throughput.wavelengths[boundary_channel], dispersion_clamp);
+                    boundary_mat, normal, V, scattered.direction, current_throughput.wavelengths[boundary_channel], dispersion_clamp);
                 out_pdf = reflect_prob * rough_dielectric_visible_microfacet_pdf(pdf_lobe) *
                     (pdf_lobe.valid ? pdf_lobe.jacobian : 0.0f);
                 return true;
@@ -342,7 +354,8 @@ __device__ inline bool scatter(
                 BoundaryTransportMode::Radiance);
             stokes = stokes * radiance_scale * (1.0f / transmit_prob);
             for (int c = 0; c < num_spec; ++c) {
-                float material_ior = dispersed_dielectric_ior(mat.ior, mat.dispersion, current_throughput.wavelengths[c], dispersion_clamp);
+                float material_ior = resolved_dielectric_ior(
+                    mat, dielectric_ior, c, current_throughput.wavelengths[c], dispersion_clamp);
                 float eta_i_c = front_face ? ior_outside : material_ior;
                 float eta_t_c = front_face ? material_ior : ior_outside;
                 DielectricSurfaceBoundary surface_c = eval_dielectric_surface_boundary(
@@ -370,7 +383,7 @@ __device__ inline bool scatter(
             scattered.t_min = 1e-4f;
             scattered.t_max = FLT_MAX;
             RoughDielectricLobe pdf_lobe = eval_rough_dielectric_transmission_lobe(
-                mat, normal, V, scattered.direction, current_throughput.wavelengths[boundary_channel], dispersion_clamp);
+                boundary_mat, normal, V, scattered.direction, current_throughput.wavelengths[boundary_channel], dispersion_clamp);
             out_pdf = transmit_prob * rough_dielectric_visible_microfacet_pdf(pdf_lobe) *
                 (pdf_lobe.valid ? pdf_lobe.jacobian : 0.0f);
             return true;
@@ -384,7 +397,7 @@ __device__ inline bool scatter(
         float reflect_prob = 0.0f;
         for (int c = 0; c < num_spec; ++c) {
             float lambda = current_throughput.wavelengths[c];
-            float material_ior = dispersed_dielectric_ior(mat.ior, mat.dispersion, lambda, dispersion_clamp);
+            float material_ior = resolved_dielectric_ior(mat, dielectric_ior, c, lambda, dispersion_clamp);
 
             float eta_i_c = front_face ? ior_outside : material_ior;
             float eta_t_c = front_face ? material_ior : ior_outside;
@@ -508,4 +521,27 @@ __device__ inline bool scatter(
     }
     out_pdf = 0.0f;
     return false;
+}
+
+__device__ inline bool scatter(
+    const GpuRay& r_in, const GpuMaterial& mat, const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta,
+    const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
+    const SpectralPacket& current_throughput,
+    SpectralPacket& attenuation, GpuRay& scattered, StokesVector& stokes, unsigned int& seed,
+    float& out_pdf,
+    float dispersion_clamp,
+    int sample_index,
+    int pixel_index,
+    int depth,
+    int num_spec,
+    float ior_outside,
+    float ior_inside,
+    int spectral_mode,
+    int active_channel
+) {
+    SpectralPacket dielectric_ior(mat.ior);
+    return scatter(r_in, mat, albedo, extinction, metal_eta, dielectric_ior,
+                   p, n, uv, current_throughput, attenuation, scattered, stokes, seed,
+                   out_pdf, dispersion_clamp, sample_index, pixel_index, depth, num_spec,
+                   ior_outside, ior_inside, spectral_mode, active_channel);
 }
