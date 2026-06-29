@@ -827,7 +827,8 @@ static int test_material_presets_compile_to_material_graphs() {
         "clear_glass",
         "diamond_glass",
         "woven_fabric",
-        "automotive_paint"
+        "automotive_paint",
+        "skin"
     };
     ure::RenderConfig config;
     config.num_wavelengths = 8;
@@ -842,14 +843,17 @@ static int test_material_presets_compile_to_material_graphs() {
     return 0;
 }
 
-static int test_skin_preset_refuses_lambert_fallback() {
-    bool rejected = false;
-    try {
-        (void)ure::scene_ir::make_material_preset("skin");
-    } catch (const std::runtime_error&) {
-        rejected = true;
-    }
-    CHECK(rejected);
+static int test_skin_preset_uses_participating_dielectric_medium() {
+    auto material = ure::scene_ir::make_material_preset("skin");
+    CHECK(material->model == ure::scene_ir::MaterialModel::Dielectric);
+    CHECK(material->medium_density > 0.0f);
+    CHECK(material->medium_scattering.x > material->medium_absorption.x);
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    auto compiled = ure::GpuSceneCompiler::compile(scene_with_material(material), config);
+    CHECK(compiled.materials.size() == 1);
+    CHECK(compiled.materials[0].header.type == ure::gpu::MaterialType::Dielectric);
+    CHECK(compiled.materials[0].header.medium_density > 0.0f);
     return 0;
 }
 
@@ -882,7 +886,7 @@ int main() {
     failed += run("test_bsdf_layer_compiles_dielectric_coating_over_diffuse_substrate", test_bsdf_layer_compiles_dielectric_coating_over_diffuse_substrate);
     failed += run("test_bsdf_layer_rejects_non_dielectric_coating", test_bsdf_layer_rejects_non_dielectric_coating);
     failed += run("test_material_presets_compile_to_material_graphs", test_material_presets_compile_to_material_graphs);
-    failed += run("test_skin_preset_refuses_lambert_fallback", test_skin_preset_refuses_lambert_fallback);
+    failed += run("test_skin_preset_uses_participating_dielectric_medium", test_skin_preset_uses_participating_dielectric_medium);
 
     fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

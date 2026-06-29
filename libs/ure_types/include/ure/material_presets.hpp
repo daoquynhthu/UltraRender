@@ -16,7 +16,8 @@ enum class MaterialPresetKind {
     ClearGlass,
     DiamondGlass,
     WovenFabric,
-    AutomotivePaint
+    AutomotivePaint,
+    SkinVolume
 };
 
 inline std::vector<std::string_view> material_preset_names() {
@@ -148,6 +149,15 @@ inline std::shared_ptr<MaterialNode> make_automotive_paint_preset() {
     return detail::material_with_graph("automotive_paint", std::move(graph), MaterialModel::Lambertian);
 }
 
+inline std::shared_ptr<MaterialNode> make_skin_volume_preset() {
+    auto material = make_dielectric_preset("skin", 1.40f, 0.0f);
+    material->medium_density = 1.0f;
+    material->medium_anisotropy = 0.75f;
+    material->medium_scattering = {1.45f, 1.10f, 0.85f};
+    material->medium_absorption = {0.18f, 0.32f, 0.55f};
+    return material;
+}
+
 inline std::shared_ptr<MaterialNode> make_material_preset(MaterialPresetKind kind) {
     switch (kind) {
     case MaterialPresetKind::Gold:
@@ -164,6 +174,8 @@ inline std::shared_ptr<MaterialNode> make_material_preset(MaterialPresetKind kin
         return make_woven_fabric_preset();
     case MaterialPresetKind::AutomotivePaint:
         return make_automotive_paint_preset();
+    case MaterialPresetKind::SkinVolume:
+        return make_skin_volume_preset();
     }
     throw std::runtime_error("unknown material preset kind");
 }
@@ -176,9 +188,7 @@ inline std::shared_ptr<MaterialNode> make_material_preset(std::string_view name)
     if (name == "diamond_glass") return make_material_preset(MaterialPresetKind::DiamondGlass);
     if (name == "woven_fabric") return make_material_preset(MaterialPresetKind::WovenFabric);
     if (name == "automotive_paint") return make_material_preset(MaterialPresetKind::AutomotivePaint);
-    if (name == "skin") {
-        throw std::runtime_error("skin preset requires a production BSSRDF/subsurface material model; refusing Lambert fallback");
-    }
+    if (name == "skin") return make_material_preset(MaterialPresetKind::SkinVolume);
     throw std::runtime_error("unknown material preset: " + std::string(name));
 }
 

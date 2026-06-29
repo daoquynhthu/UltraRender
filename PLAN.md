@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-21 (authoritative execution queue and R-P2 production closure)
+最后更新: 2026-06-29 (Phase M closure and R-P6 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -23,7 +23,7 @@
 新 Phase D:     分布式集成                                          已完成
 新 Phase E:     N 通道光谱升级                                      已完成
 远期 Phase S:   Session API + 脚本化                                已完成
-远期 Phase M:   材质系统                                             进行中
+远期 Phase M:   材质系统                                             已完成
 远期 Phase L:   百万级光谱域 / packet-resolution 解耦                已完成 (L.0-L.12)
 远期 Phase Q:   URE 原生场景系统 / 程序化工业格式                    计划中
 远期 Phase R:   工业级/科研级积分器升级                              进行中
@@ -42,10 +42,10 @@
 R-P2 closure [done]
    │
    ▼
-当前游标: Phase M complete
+Phase M complete [done]
    │
    ▼
-R-P6 Mie / volume resources
+当前游标: R-P6 Mie / volume resources
    │
    ▼
 Phase Q complete
@@ -72,8 +72,8 @@ Phase X complete
 ### 执行约束
 
 - **R-P2 已闭环**: multi-GPU guide delta merge/broadcast、device-derived 或显式 memory budget，以及 Cornell/multi-light/complex-material/volume 的 variance、MSE、time-to-error 曲线均已进入生产与验证路径。
-- **当前唯一施工项 — Phase M**: 完整收口 MaterialGraph、BSDF layering、procedural nodes、MaterialX import/export 和 presets，先稳定材质语义。
-- **R-P6**: 在 Phase Q 前完成真实 Mie/volume phase resource，使 Q.6 消费已验证资源合同而不是占位 schema。
+- **Phase M 已闭环**: MaterialGraph、BSDF layering、procedural nodes、MaterialX import/export 和 presets 已稳定材质语义；skin 采用 participating dielectric medium preset，不做 Lambert fallback。
+- **当前唯一施工项 — R-P6**: 在 Phase Q 前完成真实 Mie/volume phase resource，使 Q.6 消费已验证资源合同而不是占位 schema。
 - **Phase Q**: 在剩余高级积分器和多后端执行扩散前，完整冻结 URE native schema、serialization、programmatic graph、feature declaration 和 package contract。
 - **Phase R remainder**: 固定顺序为 R-P3、R-P4、R-P5、R-P7；R-P1/R-P2 已完成，R-P6 在 Q 前单独完成。Phase R 未通过 R-P7 不得启动 Phase T 实现。
 - **Phase T → V → W**: T 先稳定 backend-neutral runtime 并迁移 CUDA/Vulkan/DXR；V 再建设统一 acceleration provider；W 最后把已有 reference/oracle 工作接入稳定执行与加速合同。现有 W 成果保留，新增 W production work 冻结。
@@ -2185,10 +2185,10 @@ struct MaterialGraph {
 | Step | 内容 | 前置依赖 |
 |------|------|---------|
 | M.1 | 设计节点图 IR（不依赖 OSL，自定义格式） | ✅ `scene_ir::MaterialGraph` / `MaterialGraphNode` / `MaterialGraphInput` 已进入公共 SceneIR；首批节点覆盖 ConstantColor/ConstantFloat/BSDF/OutputSurface，Texture/Add/Mix 等复杂节点保留为显式 unsupported |
-| M.2 | GPU 编译：节点图 → GpuMaterial + 内核参数 | 进行中：`GpuSceneCompiler` 已支持单 OutputSurface → 单 BSDF，并在 Phase L.9 接入 MaterialGraph expression graph；ConstantColor/ConstantFloat、Texture2D、Add、Multiply、Mix、Checker2D、Noise2D 可作为 typed resource expression 在 device 端按 wavelength/UV 评估，不再退回 32-lane packet flatten。Metal eta/k、dielectric IOR、layer absorption 已进入 OpticalConstant typed expression slot；Graph 输出为 authoritative，旧 scalar texture fields 不参与 graph material GPU 编译。`BsdfMix` 已收口为 unbiased opaque Lambert/Metal lobe mixture 并拒绝 dielectric；`BsdfLayer` 已新增 finite-thickness dielectric coating over opaque Lambert substrate，包含 top-interface Fresnel、Beer-Lambert absorption、substrate eval/pdf/sample 和 fail-loud unsupported boundary。旧文本场景、Scene parser shim、SceneIR→Scene compiler、procedural CLI fallback、IRenderEngine Scene overload 与旧视觉 smoke 资产均已移除；raw in-memory texture mutation 直接失败，后续资源变更必须走 graph/resource 节点。剩余：材质预设库生产化 |
+| M.2 | GPU 编译：节点图 → GpuMaterial + 内核参数 | ✅ `GpuSceneCompiler` 已支持单 OutputSurface → 单 BSDF，并在 Phase L.9 接入 MaterialGraph expression graph；ConstantColor/ConstantFloat、Texture2D、Add、Multiply、Mix、Checker2D、Noise2D 可作为 typed resource expression 在 device 端按 wavelength/UV 评估，不再退回 32-lane packet flatten。Metal eta/k、dielectric IOR、layer absorption 已进入 OpticalConstant typed expression slot；Graph 输出为 authoritative，旧 scalar texture fields 不参与 graph material GPU 编译。`BsdfMix` 已收口为 unbiased opaque Lambert/Metal lobe mixture 并拒绝 dielectric；`BsdfLayer` 已新增 finite-thickness dielectric coating over opaque Lambert substrate，包含 top-interface Fresnel、Beer-Lambert absorption、substrate eval/pdf/sample 和 fail-loud unsupported boundary。旧文本场景、Scene parser shim、SceneIR→Scene compiler、procedural CLI fallback、IRenderEngine Scene overload 与旧视觉 smoke 资产均已移除；raw in-memory texture mutation 直接失败，后续资源变更必须走 graph/resource 节点 |
 | M.3 | MaterialX 导入（`mtlx` → 节点图 IR） | ✅ `ure_sceneio` MaterialX adapter 已导入 URE custom MaterialGraph XML subset，并支持 `standard_surface`/`dielectric_bsdf` 基础映射；导入结果直接进入 `GpuSceneCompiler`，未知或不可保真的节点 fail-loud |
 | M.4 | MaterialX 导出（节点图 IR → `mtlx`） | ✅ `export_materialx_graph()` 输出 URE custom MaterialGraph MaterialX XML，覆盖 Constant/Texture/value ops/BSDF/Mix/Layer/OutputSurface；MaterialX 是 adapter，不成为 UltraRender 权威 schema |
-| M.5 | 材质预设库（金属/玻璃/皮肤/织物/汽车漆） | 进行中：`ure::scene_ir::make_material_preset()` 已输出 MaterialGraph 级 gold/copper/aluminum、clear/diamond glass、woven fabric、automotive paint，并通过 `GpuSceneCompiler` 覆盖；skin preset 当前 fail-loud，因为真实皮肤需要 production BSSRDF/subsurface random-walk material model，禁止 Lambert fallback |
+| M.5 | 材质预设库（金属/玻璃/皮肤/织物/汽车漆） | ✅ `ure::scene_ir::make_material_preset()` 已输出 MaterialGraph 级 gold/copper/aluminum、clear/diamond glass、woven fabric、automotive paint 和 skin participating dielectric medium preset，并通过 `GpuSceneCompiler` 覆盖；skin 不走 Lambert fallback，真实多层皮肤/BSSRDF 仍作为后续材质物理增强边界 |
 
 **前置条件**: Batch 4 BSDF 测试 (OT2, OT3) 必须在此步骤前通过，确保现有 BSDF 行为基线锁定。
 
