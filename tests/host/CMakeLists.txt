@@ -36,6 +36,10 @@ add_executable(test_material_graph test_material_graph.cpp)
 target_link_libraries(test_material_graph PRIVATE ure_core ure_diag)
 add_test(NAME test_material_graph COMMAND test_material_graph)
 
+add_executable(test_materialx_io test_materialx_io.cpp)
+target_link_libraries(test_materialx_io PRIVATE ure_sceneio ure_core ure_diag)
+add_test(NAME test_materialx_io COMMAND test_materialx_io)
+
 add_executable(test_session test_session.cpp)
 target_link_libraries(test_session PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_session COMMAND test_session)
