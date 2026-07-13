@@ -1,0 +1,19 @@
+{
+  "caches": [],
+  "dependencies": [],
+  "format": "ure.container.package/1.0",
+  "format_version": {
+    "major": 1,
+    "minor": 0
+  },
+  "id": "fixture/single",
+  "kind": "package",
+  "resources": [],
+  "scenes": [
+    {
+      "content_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "id": "scene/main",
+      "uri": "scenes/main.urescene"
+    }
+  ]
+}

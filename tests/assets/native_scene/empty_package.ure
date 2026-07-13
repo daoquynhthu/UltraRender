@@ -1,0 +1,13 @@
+{
+  "caches": [],
+  "dependencies": [],
+  "format": "ure.container.package/1.0",
+  "format_version": {
+    "major": 1,
+    "minor": 0
+  },
+  "id": "fixture/empty",
+  "kind": "package",
+  "resources": [],
+  "scenes": []
+}

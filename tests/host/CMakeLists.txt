@@ -35,6 +35,13 @@ target_compile_definitions(test_mie_phase PRIVATE
 )
 add_test(NAME test_mie_phase COMMAND test_mie_phase)
 
+add_executable(test_native_scene test_native_scene.cpp)
+target_link_libraries(test_native_scene PRIVATE ure_sceneio ure_diag)
+target_compile_definitions(test_native_scene PRIVATE
+    URE_TEST_ASSET_DIR="${CMAKE_SOURCE_DIR}/tests/assets/native_scene"
+)
+add_test(NAME test_native_scene COMMAND test_native_scene)
+
 add_executable(test_gltf_frontend test_gltf_frontend.cpp)
 target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)

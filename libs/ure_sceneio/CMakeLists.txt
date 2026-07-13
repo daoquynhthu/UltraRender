@@ -7,6 +7,11 @@ add_library(ure_sceneio STATIC
     src/spd_loader.cpp
     src/materialx_io.cpp
     src/mie_phase_io.cpp
+    src/native_scene_hash.cpp
+    src/native_scene_container.cpp
+    src/native_scene_metadata.cpp
+    src/native_scene_text.cpp
+    src/native_scene_validation.cpp
     src/wav_saver.cpp
     src/scene_ir.cpp
     src/camera.cpp
@@ -22,6 +27,8 @@ target_include_directories(ure_sceneio PUBLIC
 )
 target_include_directories(ure_sceneio PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party
+    ${CMAKE_SOURCE_DIR}/third_party/flatbuffers/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/generated
 )
 target_link_libraries(ure_sceneio PUBLIC ure_types ure_diag)
 

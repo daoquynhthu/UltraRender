@@ -1,0 +1,38 @@
+{
+  "caches": [],
+  "dependencies": [],
+  "format": "ure.container.package/1.0",
+  "format_version": {
+    "major": 1,
+    "minor": 0
+  },
+  "id": "fixture/shared",
+  "kind": "package",
+  "resources": [
+    {
+      "byte_length": 4,
+      "content_hash": "edeaaff3f1774ad2888673770c6d64097e391bc362d7d6fb34982ddf0efd18cb",
+      "dependencies": [],
+      "id": "resource/shared_spectrum",
+      "kind": "spectral_table",
+      "resident_bytes": 4,
+      "schema_version": {
+        "major": 1,
+        "minor": 0
+      },
+      "uri": "resources/shared_spectrum.bin"
+    }
+  ],
+  "scenes": [
+    {
+      "content_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "id": "scene/first",
+      "uri": "scenes/first.urescene"
+    },
+    {
+      "content_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+      "id": "scene/second",
+      "uri": "scenes/second.urescene"
+    }
+  ]
+}

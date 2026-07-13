@@ -1,0 +1,99 @@
+namespace ure.native.fb;
+
+enum RequirementLevel : ubyte { Required = 0, Optional = 1, Advisory = 2 }
+enum MetadataKind : ubyte { Scene = 0, Package = 1 }
+
+struct Version {
+  major:uint;
+  minor:uint;
+}
+
+table Conventions {
+  angle_unit:string (id: 0);
+  camera_forward:string (id: 1);
+  color_encoding:string (id: 2);
+  handedness:string (id: 3);
+  length_unit:string (id: 4);
+  mass_unit:string (id: 5);
+  time_unit:string (id: 6);
+  up_axis:string (id: 7);
+  wavelength_unit:string (id: 8);
+}
+
+table Feature {
+  dependencies:[string] (id: 0);
+  minimum_version:Version (id: 1);
+  name:string (id: 2);
+  parameters:string (id: 3);
+  provider:string (id: 4);
+  requirement:RequirementLevel (id: 5);
+}
+
+table Extension {
+  name:string (id: 0);
+  opaque_payload:[ubyte] (id: 1);
+  payload_type:string (id: 2);
+  requirement:RequirementLevel (id: 3);
+  version:Version (id: 4);
+}
+
+table Resource {
+  byte_length:ulong (id: 0);
+  content_hash:string (id: 1);
+  dependencies:[string] (id: 2);
+  id:string (id: 3);
+  kind:uint (id: 4);
+  resident_bytes:ulong (id: 5);
+  schema_version:Version (id: 6);
+  uri:string (id: 7);
+}
+
+table Migration {
+  input_hash:string (id: 0);
+  lossy:bool (id: 1);
+  output_hash:string (id: 2);
+  source_version:Version (id: 3);
+  target_version:Version (id: 4);
+  tool_id:string (id: 5);
+  tool_version:Version (id: 6);
+}
+
+table SceneReference {
+  content_hash:string (id: 0);
+  id:string (id: 1);
+  uri:string (id: 2);
+}
+
+table PackageDependency {
+  manifest_hash:string (id: 0);
+  package_id:string (id: 1);
+}
+
+table SceneMetadata {
+  conventions:Conventions (id: 0);
+  extensions:[Extension] (id: 1);
+  features:[Feature] (id: 2);
+  id:string (id: 3);
+  migrations:[Migration] (id: 4);
+  resources:[Resource] (id: 5);
+  schema_version:Version (id: 6);
+}
+
+table PackageMetadata {
+  caches:[Resource] (id: 0);
+  dependencies:[PackageDependency] (id: 1);
+  format_version:Version (id: 2);
+  id:string (id: 3);
+  resources:[Resource] (id: 4);
+  scenes:[SceneReference] (id: 5);
+}
+
+table MetadataEnvelope {
+  kind:MetadataKind (id: 0);
+  package:PackageMetadata (id: 1);
+  scene:SceneMetadata (id: 2);
+}
+
+root_type MetadataEnvelope;
+file_identifier "UREM";
+file_extension "uremeta";

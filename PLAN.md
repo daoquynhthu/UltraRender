@@ -2200,14 +2200,14 @@ struct MaterialGraph {
 
 ### Phase Q — URE 原生场景系统 / Procedural Industrial Scene Format
 
-**状态**: 计划中。
+**状态**: 进行中。Q.0-Q.2 原生格式基础已完成；当前后续游标为 Q.3。
 
 **目标**: 建立 UltraRender 自己的第一等场景格式和程序化 authoring contract。`.ure` / `.urescene` / `.urepkg` 是权威格式；SceneIR 是编译后的内部 IR；glTF、USD、MaterialX、EXR、SPD 等只能作为导入/导出 adapter 或资源交换格式，不能限制 UltraRender 的核心能力。Phase Q 必须覆盖当前和规划中的场景、光谱、材质、介质、体积、光源、积分器、几何加速、波动光学、物理、声学、视频流、分布式和脚本化能力，并为未来物理/声学模型改变保留 schema migration 与开放 extension slot。
 
 #### 核心原则
 
 - **URE native first**：外部格式兼容我们；不是我们削弱能力去兼容外部格式。
-- **Authoring 与 runtime 分离**：`.urescene` / `.urepkg` 负责可编辑、可审查、可迁移的 source；SceneIR/RuntimeIR 负责编译后执行。
+- **Authoring 与 runtime 分离**：`.urescene` / `.urepkg` 是可迁移、可索引的二进制 production source；`.ure` 是 lossless canonical text projection；SceneIR/RuntimeIR 负责编译后执行。
 - **程序化但可复现**：procedural graph 是默认安全路径；脚本只能作为显式 build step 生成确定性 SceneIR/resource/cache，不允许在 GPU 核心路径动态解释。
 - **能力声明先于执行**：场景必须声明 `requires` / `optional` feature set；renderer 在 scene compile 或 session create 前验证支持度，unsupported feature 必须 fail-loud。
 - **版本化与迁移内建**：format version、schema version、physics/acoustic solver version、resource hash、migration policy 和 deprecation window 是格式的一部分。
@@ -2218,8 +2218,9 @@ struct MaterialGraph {
 
 | 层 | 建议扩展名 | 职责 |
 |----|------------|------|
-| Project/package | `.urepkg` | 可搬运工程包；包含 manifest、source、resources、cache、validation output 和 provenance |
-| Scene source | `.urescene` 或 `.ure` | 文本 schema；定义 scene graph、resource graph、procedural graph、solver/render contracts |
+| Project/package | `.urepkg` | indexed binary 可搬运工程包；包含 manifest、source、resources、cache、validation output 和 provenance |
+| Scene source | `.urescene` | indexed binary production source；metadata 使用 versioned FlatBuffers，large payload 保持独立 chunk |
+| Text projection | `.ure` | canonical UTF-8 JSON；用于 review、source control、migration diagnostics 和 exploded project manifest，不内联 large typed arrays/Base64 |
 | Binary cache | `.urecache` | SceneIR/RuntimeIR、GPU upload plan、acceleration metadata、spectral/resource tile cache；非权威，可删除重建 |
 | Resource bundle | package 内 typed resources | geometry、spectral tables、medium fields、Mie tables、complex-field assets、audio/physics/video resources |
 | Adapter output | `.gltf/.usd/.mtlx/...` | 外部互通导出；能力不完整时必须记录 loss report 或直接拒绝 |
@@ -2268,9 +2269,9 @@ struct MaterialGraph {
 
 | Step | 内容 | 完成判据 |
 |------|------|----------|
-| Q.0 | Audit：列出 SceneIR、RenderConfig、WaveOpticsConfig、IntegratorRuntimeConfig、MaterialGraph、SpectralResource、SessionDiff、distributed metadata 当前所有无法由 glTF 表达的语义 | 产出 `docs/Phase_Q_Native_Scene_Format.md`；每个高级 feature 有 native schema owner 或 open extension slot |
-| Q.1 | 格式身份与 package layout：确定 `.ure` / `.urescene` / `.urepkg` / `.urecache` 命名、目录结构、manifest、resource URI、relative path、hash/provenance、text/binary 边界 | 空 package、单 scene package、resource package 三类 fixture 可 validate；cache 删除后可重建 |
-| Q.2 | Core schema/versioning：定义 scene id、format version、schema version、unit/color/spectral convention、coordinate convention、feature `requires/optional`、unknown extension policy 和 migration metadata | 未知 required extension fail-loud；未知 optional extension 保留 metadata；版本不兼容给出 migration error |
+| Q.0 | ✅ Audit：`docs/Phase_Q_Native_Scene_Format.md` 已覆盖 SceneIR、RenderConfig、WaveOpticsConfig、IntegratorRuntimeConfig、MaterialGraph、Mie/spectral resources、SceneDiff 和 distributed metadata；每个语义均有 native typed owner 或 versioned extension slot | Phase Q static gate 锁定 owner/domain 覆盖与 backend-neutral header |
+| Q.1 | ✅ 格式身份与 package layout：`.urescene` binary production scene、`.ure` canonical text projection、`.urepkg` binary package、`.urecache` non-authoritative cache；relative/content URI、SHA-256、128-byte header、checked 64-bit chunk directory 已实现 | empty、single-scene、shared-resource fixtures 可 validate；cache 删除不改变 package semantic hash |
+| Q.2 | ✅ Core schema/versioning：scene/package ID、container/schema version、canonical conventions、required/optional/advisory feature、opaque extension、migration metadata、FlatBuffers 25.12.19 schema/baseline 和 structured diagnostics 已实现 | unknown required fail-loud；unknown optional bytes 保留；major migration gate、minor compatibility、path/hash/dependency/budget/overflow/alignment/overlap validation 已进入 host tests |
 | Q.3 | Native SceneIR serialization：SceneIR/MaterialGraph/SpectralResource/medium/light/camera/instance 的 lossless source serialization 与 loader/compiler | `.urescene -> SceneIR -> .urescene` roundtrip 保持语义；不借用 glTF 字段作为权威语义 |
 | Q.4 | 程序化 graph：建立 typed procedural node schema、deterministic seed、parameter domain、build cache key、scatter/instancing/spectrum/light rig 首批节点 | procedural graph 可生成 SceneIR fragment；同 seed/source hash 输出稳定；非法 graph fail-loud |
 | Q.5 | Script build hook：定义显式启用的脚本 build step、sandbox policy、dependency lock、I/O contract、provenance hash 和 cache invalidation | 默认禁用；启用后脚本只在 build/compile 阶段运行；运行时不解释脚本；输出 hash 可复现 |
