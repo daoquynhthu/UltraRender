@@ -1,0 +1,23 @@
+namespace ure.native.schema;
+
+enum MiePolarizationModel : uint8 {
+  ScalarDepolarizing = 0
+}
+
+table MiePayload {
+  wavelengths_nm:[float] (id: 0);
+  cos_theta:[float] (id: 1);
+  phase:[float] (id: 2);
+  cdf:[float] (id: 3);
+  scattering_cross_section_m2:[float] (id: 4);
+  extinction_cross_section_m2:[float] (id: 5);
+  absorption_cross_section_m2:[float] (id: 6);
+  asymmetry:[float] (id: 7);
+  polarization_model:MiePolarizationModel = ScalarDepolarizing (id: 8);
+  provenance:string (id: 9);
+  source_hash:string (id: 10);
+  content_hash:string (id: 11);
+}
+
+root_type MiePayload;
+file_identifier "URMI";

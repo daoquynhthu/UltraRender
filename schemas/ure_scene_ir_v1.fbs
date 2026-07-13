@@ -1,0 +1,190 @@
+namespace ure.native.schema;
+
+struct Vec2 { x:float; y:float; }
+struct Vec3 { x:float; y:float; z:float; }
+struct Quat { w:float; x:float; y:float; z:float; }
+
+enum MaterialModel : uint8 { Lambertian = 0, Metal = 1, Dielectric = 2, Light = 3, Cloth = 4 }
+enum ImageColorSpace : uint8 { Linear = 0, SRGB = 1 }
+enum VolumePhaseFunction : uint8 { HenyeyGreenstein = 0, Rayleigh = 1, Mie = 2 }
+enum MaterialGraphNodeKind : uint8 {
+  ConstantColor = 0, ConstantFloat = 1, Texture2D = 2, Add = 3,
+  Multiply = 4, Mix = 5, Checker2D = 6, Noise2D = 7,
+  BsdfLambert = 8, BsdfMetal = 9, BsdfDielectric = 10, BsdfLight = 11,
+  BsdfMix = 12, BsdfLayer = 13, OutputSurface = 14
+}
+
+table ResourceReference {
+  id:string (id: 0);
+  content_hash:string (id: 1);
+}
+
+table MaterialGraphInput {
+  name:string (id: 0);
+  node_id:uint32 = 4294967295 (id: 1);
+  output:string (id: 2);
+}
+
+table MaterialGraphNode {
+  id:uint32 = 4294967295 (id: 0);
+  kind:MaterialGraphNodeKind = ConstantColor (id: 1);
+  name:string (id: 2);
+  color:Vec3 (id: 3);
+  value:float (id: 4);
+  texture_id:string (id: 5);
+  inputs:[MaterialGraphInput] (id: 6);
+}
+
+table MaterialGraph {
+  nodes:[MaterialGraphNode] (id: 0);
+  output_node_id:uint32 = 4294967295 (id: 1);
+}
+
+table SpectralMaterialExtension {
+  spectral_bands:int32 (id: 0);
+  albedo_spd:string (id: 1);
+  emission_spd:string (id: 2);
+}
+
+table Material {
+  id:string (id: 0);
+  name:string (id: 1);
+  model:MaterialModel = Lambertian (id: 2);
+  base_color:Vec3 (id: 3);
+  roughness:float = 0.5 (id: 4);
+  ior:float = 1.45 (id: 5);
+  dispersion:float (id: 6);
+  metal_eta:Vec3 (id: 7);
+  metal_k:Vec3 (id: 8);
+  thin_film_thickness:float (id: 9);
+  thin_film_ior:float = 1.0 (id: 10);
+  emission:Vec3 (id: 11);
+  medium_density:float (id: 12);
+  medium_anisotropy:float (id: 13);
+  medium_phase:VolumePhaseFunction = HenyeyGreenstein (id: 14);
+  medium_mie:ResourceReference (id: 15);
+  medium_scattering:Vec3 (id: 16);
+  medium_absorption:Vec3 (id: 17);
+  base_color_texture_id:string (id: 18);
+  roughness_texture_id:string (id: 19);
+  emission_texture_id:string (id: 20);
+  normal_texture_id:string (id: 21);
+  normal_scale:float = 1.0 (id: 22);
+  spectral_extension:SpectralMaterialExtension (id: 23);
+  graph:MaterialGraph (id: 24);
+}
+
+table Image {
+  id:string (id: 0);
+  name:string (id: 1);
+  uri:string (id: 2);
+  color_space:ImageColorSpace = SRGB (id: 3);
+}
+
+table Texture {
+  id:string (id: 0);
+  name:string (id: 1);
+  image_id:string (id: 2);
+  uv_set:int32 (id: 3);
+}
+
+table MeshRecord {
+  id:string (id: 0);
+  name:string (id: 1);
+  payload:ResourceReference (id: 2);
+}
+
+table RigidBody {
+  enabled:bool (id: 0);
+  mass:float (id: 1);
+  friction:float = 0.5 (id: 2);
+  restitution:float = 0.5 (id: 3);
+  linear_damping:float = 0.01 (id: 4);
+  angular_damping:float = 0.01 (id: 5);
+  velocity:Vec3 (id: 6);
+  collider_type:string (id: 7);
+  collider_size:Vec3 (id: 8);
+  collider_radius:float = 0.5 (id: 9);
+  material_id:int32 (id: 10);
+}
+
+table Instance {
+  id:string (id: 0);
+  name:string (id: 1);
+  mesh_id:string (id: 2);
+  material_id:string (id: 3);
+  position:Vec3 (id: 4);
+  scale:Vec3 (id: 5);
+  rotation:Quat (id: 6);
+  rigid_body:RigidBody (id: 7);
+}
+
+table Sphere {
+  id:string (id: 0);
+  name:string (id: 1);
+  center:Vec3 (id: 2);
+  radius:float = 0.5 (id: 3);
+  material_id:string (id: 4);
+}
+
+table QuadLight {
+  id:string (id: 0);
+  name:string (id: 1);
+  corner:Vec3 (id: 2);
+  edge_u:Vec3 (id: 3);
+  edge_v:Vec3 (id: 4);
+  material_id:string (id: 5);
+}
+
+table Camera {
+  position:Vec3 (id: 0);
+  look_at:Vec3 (id: 1);
+  up:Vec3 (id: 2);
+  fov:float = 45.0 (id: 3);
+  aspect_ratio:float = 1.7777778 (id: 4);
+  aperture:float (id: 5);
+  focus_dist:float = 10.0 (id: 6);
+}
+
+table Fluid {
+  enabled:bool (id: 0);
+  bounds_min:Vec3 (id: 1);
+  bounds_max:Vec3 (id: 2);
+  particle_spacing:float = 0.1 (id: 3);
+  fill_min:Vec3 (id: 4);
+  fill_max:Vec3 (id: 5);
+}
+
+table Physics {
+  enabled:bool (id: 0);
+  dt:float = 0.016666667 (id: 1);
+  total_frames:int32 = 180 (id: 2);
+  spp_per_frame:int32 = 32 (id: 3);
+  fluid:Fluid (id: 4);
+}
+
+table SceneGraph {
+  materials:[Material] (id: 0);
+  meshes:[MeshRecord] (id: 1);
+  images:[Image] (id: 2);
+  textures:[Texture] (id: 3);
+  instances:[Instance] (id: 4);
+  spheres:[Sphere] (id: 5);
+  quad_lights:[QuadLight] (id: 6);
+  camera:Camera (id: 7);
+  physics:Physics (id: 8);
+  background_color:Vec3 (id: 9);
+  medium_density:float (id: 10);
+  medium_anisotropy:float (id: 11);
+  medium_phase:VolumePhaseFunction = HenyeyGreenstein (id: 12);
+  medium_mie:ResourceReference (id: 13);
+  medium_scattering:Vec3 (id: 14);
+  medium_absorption:Vec3 (id: 15);
+  medium_max_distance:float = 50.0 (id: 16);
+  width:int32 (id: 17);
+  height:int32 (id: 18);
+  spp:int32 (id: 19);
+}
+
+root_type SceneGraph;
+file_identifier "URIG";

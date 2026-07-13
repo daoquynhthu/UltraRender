@@ -42,6 +42,13 @@ target_compile_definitions(test_native_scene PRIVATE
 )
 add_test(NAME test_native_scene COMMAND test_native_scene)
 
+add_executable(test_native_scene_ir test_native_scene_ir.cpp)
+target_link_libraries(test_native_scene_ir PRIVATE ure_sceneio ure_core ure_diag)
+target_compile_definitions(test_native_scene_ir PRIVATE
+    URE_TEST_ASSET_DIR="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene"
+)
+add_test(NAME test_native_scene_ir COMMAND test_native_scene_ir)
+
 add_executable(test_gltf_frontend test_gltf_frontend.cpp)
 target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)

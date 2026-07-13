@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document is the Q.0 capability-ownership audit and the Q.1-Q.2 encoding contract. It records what UltraRender owns independently of glTF, USD, MaterialX, CUDA, and future backends.
+This document is the Q.0 capability-ownership audit and the Q.1-Q.3 encoding contract. It records what UltraRender owns independently of glTF, USD, MaterialX, CUDA, and future backends.
 
 Implemented in this foundation:
 
@@ -13,8 +13,12 @@ Implemented in this foundation:
 - checked binary header/chunk-directory I/O;
 - SHA-256 physical identity and encoding-independent semantic identity;
 - structured validation and the empty, single-scene, and shared-resource fixtures.
+- complete current SceneIR source serialization with stable object identities;
+- `URIG` typed source graphs plus independently content-addressed `URMS` mesh and `URMI` Mie resources;
+- bit-preserving binary and canonical exploded text roundtrips, deep-freeze ownership, safe atomic file I/O, and a retained full-scene fixture;
+- a loader boundary verified by the existing `GpuSceneCompiler` without linking `ure_sceneio` to `ure_core` or CUDA.
 
-Not implemented here: complete SceneIR serialization, procedural execution, script hooks, solver lowering, CLI pack/unpack, adapter conversion, production compression, compiled farm caches, signatures, or encryption. Those remain Q.3-Q.12.
+Not implemented here: procedural execution, script hooks, generalized Q.6 spectral resources, solver lowering, CLI pack/unpack, adapter conversion, production compression, compiled farm caches, signatures, or encryption. Those remain Q.4-Q.12.
 
 ## Authority and encoding
 
@@ -150,7 +154,17 @@ Third-party extension names cannot claim the reserved `ure.*` namespace. Unknown
 
 The v1 container uses a 128-byte fixed header, little-endian scalar encoding, 16-byte-aligned terminal directory, and independently aligned chunks. C++ structs are never written directly. Readers validate magic, endian marker, version, reserved bytes, flags, directory bounds, entry count, offsets, lengths, alignment, overlap, dependency graph, codec, SHA-256, decompression ratio, stored-byte budget, and resident/uncompressed budget before payload allocation.
 
-Core metadata is FlatBuffers with identifier `UREM`. The generated C++ header and runtime are pinned to 25.12.19. Large payloads stay outside the metadata buffer.
+Core metadata is FlatBuffers with identifier `UREM`. Q.3 adds `URIG` for the current source graph, `URMS` for mesh vertices/indices, and `URMI` for immutable Mie tables. The generated C++ headers and runtime are pinned to 25.12.19. Large payloads stay outside metadata and graph buffers.
+
+## Q.3 SceneIR source contract
+
+`NativeSceneArchive` owns a deep-frozen SceneIR, aligned stable source-ID tables, the Q.2 scene document, and preserved unknown optional chunks. Default IDs use eight-digit indices such as `material/00000000`; loaded IDs survive rewrite, and registry-size or reference mutations fail instead of silently renumbering objects.
+
+The binary layout contains one metadata chunk, one typed source-graph chunk, and sorted content-addressed mesh/Mie chunks. Equal immutable payloads coalesce while distinct registered materials retain identity. The graph covers every current material and MaterialGraph field, images/textures, mesh records and tangents, instances and rigid-body fields, spheres, quad lights, camera, current physics/fluid fields, global/material media, spectral SPD references, Mie resources, and the current width/height/SPP compatibility fields.
+
+The exploded `.ure` projection stores the complete graph as canonical JSON and keeps mesh/Mie arrays in separate typed files. Both encodings reconstruct shared registered references, preserve finite float bits including signed zero, and produce the same SceneIR semantic hash; signed zero is normalized only for semantic identity. File helpers use bounded reads, package-root containment, and same-directory atomic replacement.
+
+Validation is verifier-first and fail-loud. It checks identity grammar and uniqueness, registered references, enum domains, MaterialGraph cycles/references, typed-payload identifiers and hashes, mesh topology/index bounds, Mie dimensions/normalization/CDF/optical domains, finite and physical scalar domains, resource budgets, missing or unreferenced payloads, and optional-chunk preservation before returning SceneIR to the compiler.
 
 ## Semantic identity
 
@@ -176,5 +190,8 @@ Validation returns diagnostics and never prints directly. Stable code families a
 | `URE-Q-CONTAINER-*` | binary header, directory, ranges, and alignment |
 | `URE-Q-CHUNK-*` | chunk type support |
 | `URE-Q-CODEC-*` | compression support |
+| `URE-Q3-ID/REF-*` | Q.3 source identities and registered references |
+| `URE-Q3-GRAPH/MESH/MIE-*` | typed SceneIR graph and physical resource validation |
+| `URE-Q3-TEXT/CONTAINER/FILE-*` | Q.3 projection, composition, and atomic file I/O |
 
 Structural and budget errors prevent a validated value. Unsupported optional data emits warnings and remains preserved.

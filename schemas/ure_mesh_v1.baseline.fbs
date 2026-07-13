@@ -1,0 +1,12 @@
+namespace ure.native.schema;
+
+table MeshPayload {
+  positions:[float] (id: 0);
+  normals:[float] (id: 1);
+  uvs:[float] (id: 2);
+  indices:[int32] (id: 3);
+  tangents:[float] (id: 4);
+}
+
+root_type MeshPayload;
+file_identifier "URMS";

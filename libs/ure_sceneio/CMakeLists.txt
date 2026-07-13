@@ -12,6 +12,11 @@ add_library(ure_sceneio STATIC
     src/native_scene_metadata.cpp
     src/native_scene_text.cpp
     src/native_scene_validation.cpp
+    src/native_scene_ir_model.cpp
+    src/native_scene_ir_resources.cpp
+    src/native_scene_ir_graph.cpp
+    src/native_scene_ir_io.cpp
+    src/native_scene_ir_text.cpp
     src/wav_saver.cpp
     src/scene_ir.cpp
     src/camera.cpp

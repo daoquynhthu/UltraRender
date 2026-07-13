@@ -1,0 +1,607 @@
+{
+  "document": {
+    "conventions": {
+      "angle_unit": "radian",
+      "camera_forward": "-Z",
+      "color_encoding": "linear_radiometric",
+      "handedness": "right",
+      "length_unit": "metre",
+      "mass_unit": "kilogram",
+      "time_unit": "second",
+      "up_axis": "+Y",
+      "wavelength_unit": "vacuum_nanometre"
+    },
+    "extensions": [],
+    "features": [],
+    "format": "ure.scene/1.0",
+    "id": "scene/full",
+    "kind": "scene",
+    "migrations": [],
+    "resources": [
+      {
+        "byte_length": 212,
+        "content_hash": "fa61d9fc35770009b2b613101309dfc781c7756032c2795a7a979ad3c3ebf870",
+        "dependencies": [],
+        "id": "mesh/fa61d9fc35770009b2b613101309dfc781c7756032c2795a7a979ad3c3ebf870",
+        "kind": "geometry",
+        "resident_bytes": 212,
+        "schema_version": {
+          "major": 1,
+          "minor": 0
+        },
+        "uri": "resources/mesh/fa61d9fc35770009b2b613101309dfc781c7756032c2795a7a979ad3c3ebf870.urmesh"
+      },
+      {
+        "byte_length": 300,
+        "content_hash": "f6430ed5dd4f4ae4105d416e4ffe3aeba5f0ee38a7e1df05aa47c3915654d9aa",
+        "dependencies": [],
+        "id": "mie/f6430ed5dd4f4ae4105d416e4ffe3aeba5f0ee38a7e1df05aa47c3915654d9aa",
+        "kind": "mie_phase",
+        "resident_bytes": 300,
+        "schema_version": {
+          "major": 1,
+          "minor": 0
+        },
+        "uri": "resources/mie/f6430ed5dd4f4ae4105d416e4ffe3aeba5f0ee38a7e1df05aa47c3915654d9aa.urmie"
+      }
+    ],
+    "schema_version": {
+      "major": 1,
+      "minor": 0
+    }
+  },
+  "kind": "ure_scene_ir",
+  "version": 1,
+  "scene_ir": {
+    "images": [
+      {
+        "color_space": 0,
+        "id": "image/00000000",
+        "name": "albedo",
+        "uri": "textures/albedo.ppm"
+      }
+    ],
+    "textures": [
+      {
+        "id": "texture/00000000",
+        "image_id": "image/00000000",
+        "name": "albedo",
+        "uv_set": 2
+      }
+    ],
+    "materials": [
+      {
+        "base_color": [
+          0.10000000149011612,
+          -0.0,
+          0.30000001192092896
+        ],
+        "base_color_texture_id": "texture/00000000",
+        "dispersion": 0.019999999552965164,
+        "emission": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "emission_texture_id": "texture/00000000",
+        "id": "material/00000000",
+        "ior": 1.7000000476837158,
+        "medium_absorption": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "medium_anisotropy": 0.0,
+        "medium_density": 0.4000000059604645,
+        "medium_mie": {
+          "content_hash": "f6430ed5dd4f4ae4105d416e4ffe3aeba5f0ee38a7e1df05aa47c3915654d9aa",
+          "id": "mie/f6430ed5dd4f4ae4105d416e4ffe3aeba5f0ee38a7e1df05aa47c3915654d9aa"
+        },
+        "medium_phase": 2,
+        "medium_scattering": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "metal_eta": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "metal_k": [
+          4.0,
+          5.0,
+          6.0
+        ],
+        "model": 1,
+        "name": "shared",
+        "normal_scale": 0.75,
+        "normal_texture_id": "texture/00000000",
+        "roughness": 0.25,
+        "roughness_texture_id": "texture/00000000",
+        "thin_film_ior": 1.3300000429153442,
+        "thin_film_thickness": 420.0,
+        "spectral_extension": {
+          "albedo_spd": "spectra/albedo.spd",
+          "emission_spd": "spectra/emission.spd",
+          "spectral_bands": 17
+        },
+        "graph": {
+          "nodes": [
+            {
+              "color": [
+                0.0,
+                0.25,
+                0.5
+              ],
+              "id": 1,
+              "inputs": [],
+              "kind": 0,
+              "name": "node-0",
+              "texture_id": "",
+              "value": 0.0
+            },
+            {
+              "color": [
+                1.0,
+                0.25,
+                0.5
+              ],
+              "id": 2,
+              "inputs": [],
+              "kind": 1,
+              "name": "node-1",
+              "texture_id": "",
+              "value": 0.10000000149011612
+            },
+            {
+              "color": [
+                2.0,
+                0.25,
+                0.5
+              ],
+              "id": 3,
+              "inputs": [],
+              "kind": 2,
+              "name": "node-2",
+              "texture_id": "texture/00000000",
+              "value": 0.20000000298023224
+            },
+            {
+              "color": [
+                3.0,
+                0.25,
+                0.5
+              ],
+              "id": 4,
+              "inputs": [],
+              "kind": 3,
+              "name": "node-3",
+              "texture_id": "",
+              "value": 0.30000001192092896
+            },
+            {
+              "color": [
+                4.0,
+                0.25,
+                0.5
+              ],
+              "id": 5,
+              "inputs": [],
+              "kind": 4,
+              "name": "node-4",
+              "texture_id": "",
+              "value": 0.4000000059604645
+            },
+            {
+              "color": [
+                5.0,
+                0.25,
+                0.5
+              ],
+              "id": 6,
+              "inputs": [],
+              "kind": 5,
+              "name": "node-5",
+              "texture_id": "",
+              "value": 0.5
+            },
+            {
+              "color": [
+                6.0,
+                0.25,
+                0.5
+              ],
+              "id": 7,
+              "inputs": [],
+              "kind": 6,
+              "name": "node-6",
+              "texture_id": "",
+              "value": 0.6000000238418579
+            },
+            {
+              "color": [
+                7.0,
+                0.25,
+                0.5
+              ],
+              "id": 8,
+              "inputs": [],
+              "kind": 7,
+              "name": "node-7",
+              "texture_id": "",
+              "value": 0.699999988079071
+            },
+            {
+              "color": [
+                8.0,
+                0.25,
+                0.5
+              ],
+              "id": 9,
+              "inputs": [],
+              "kind": 8,
+              "name": "node-8",
+              "texture_id": "",
+              "value": 0.800000011920929
+            },
+            {
+              "color": [
+                9.0,
+                0.25,
+                0.5
+              ],
+              "id": 10,
+              "inputs": [],
+              "kind": 9,
+              "name": "node-9",
+              "texture_id": "",
+              "value": 0.9000000357627869
+            },
+            {
+              "color": [
+                10.0,
+                0.25,
+                0.5
+              ],
+              "id": 11,
+              "inputs": [],
+              "kind": 10,
+              "name": "node-10",
+              "texture_id": "",
+              "value": 1.0
+            },
+            {
+              "color": [
+                11.0,
+                0.25,
+                0.5
+              ],
+              "id": 12,
+              "inputs": [],
+              "kind": 11,
+              "name": "node-11",
+              "texture_id": "",
+              "value": 1.100000023841858
+            },
+            {
+              "color": [
+                12.0,
+                0.25,
+                0.5
+              ],
+              "id": 13,
+              "inputs": [],
+              "kind": 12,
+              "name": "node-12",
+              "texture_id": "",
+              "value": 1.2000000476837158
+            },
+            {
+              "color": [
+                13.0,
+                0.25,
+                0.5
+              ],
+              "id": 14,
+              "inputs": [],
+              "kind": 13,
+              "name": "node-13",
+              "texture_id": "",
+              "value": 1.3000000715255737
+            },
+            {
+              "color": [
+                14.0,
+                0.25,
+                0.5
+              ],
+              "id": 15,
+              "inputs": [
+                {
+                  "name": "surface",
+                  "node_id": 9,
+                  "output": "out"
+                }
+              ],
+              "kind": 14,
+              "name": "node-14",
+              "texture_id": "",
+              "value": 1.399999976158142
+            }
+          ],
+          "output_node_id": 15
+        }
+      },
+      {
+        "base_color": [
+          0.800000011920929,
+          0.800000011920929,
+          0.800000011920929
+        ],
+        "base_color_texture_id": "",
+        "dispersion": 0.0,
+        "emission": [
+          8.0,
+          7.0,
+          6.0
+        ],
+        "emission_texture_id": "",
+        "id": "material/00000001",
+        "ior": 1.4500000476837158,
+        "medium_absorption": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "medium_anisotropy": 0.0,
+        "medium_density": 0.0,
+        "medium_mie": null,
+        "medium_phase": 0,
+        "medium_scattering": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "metal_eta": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "metal_k": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model": 3,
+        "name": "fixture-light",
+        "normal_scale": 1.0,
+        "normal_texture_id": "",
+        "roughness": 0.5,
+        "roughness_texture_id": "",
+        "thin_film_ior": 1.0,
+        "thin_film_thickness": 0.0,
+        "spectral_extension": null,
+        "graph": null
+      },
+      {
+        "base_color": [
+          0.800000011920929,
+          0.800000011920929,
+          0.800000011920929
+        ],
+        "base_color_texture_id": "",
+        "dispersion": 0.0,
+        "emission": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emission_texture_id": "",
+        "id": "material/00000002",
+        "ior": 1.4500000476837158,
+        "medium_absorption": [
+          0.019999999552965164,
+          0.029999999329447746,
+          0.03999999910593033
+        ],
+        "medium_anisotropy": -0.20000000298023224,
+        "medium_density": 0.30000001192092896,
+        "medium_mie": null,
+        "medium_phase": 0,
+        "medium_scattering": [
+          0.20000000298023224,
+          0.30000001192092896,
+          0.4000000059604645
+        ],
+        "metal_eta": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "metal_k": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model": 0,
+        "name": "fixture-analytic-medium",
+        "normal_scale": 1.0,
+        "normal_texture_id": "",
+        "roughness": 0.5,
+        "roughness_texture_id": "",
+        "thin_film_ior": 1.0,
+        "thin_film_thickness": 0.0,
+        "spectral_extension": null,
+        "graph": null
+      }
+    ],
+    "meshes": [
+      {
+        "id": "mesh/00000000",
+        "name": "triangle",
+        "payload": {
+          "content_hash": "fa61d9fc35770009b2b613101309dfc781c7756032c2795a7a979ad3c3ebf870",
+          "id": "mesh/fa61d9fc35770009b2b613101309dfc781c7756032c2795a7a979ad3c3ebf870"
+        }
+      }
+    ],
+    "instances": [
+      {
+        "id": "instance/00000000",
+        "material_id": "material/00000000",
+        "mesh_id": "mesh/00000000",
+        "name": "instance",
+        "position": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "rigid_body": {
+          "angular_damping": 0.009999999776482582,
+          "collider_radius": 0.5,
+          "collider_size": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "collider_type": "mesh",
+          "enabled": true,
+          "friction": 0.5,
+          "linear_damping": 0.009999999776482582,
+          "mass": 3.0,
+          "material_id": 0,
+          "restitution": 0.5,
+          "velocity": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "rotation": [
+          0.5,
+          0.10000000149011612,
+          0.20000000298023224,
+          0.30000001192092896
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      }
+    ],
+    "spheres": [
+      {
+        "center": [
+          0.0,
+          2.0,
+          0.0
+        ],
+        "id": "sphere/00000000",
+        "material_id": "material/00000002",
+        "name": "sphere",
+        "radius": 0.75
+      }
+    ],
+    "quad_lights": [
+      {
+        "corner": [
+          -1.0,
+          4.0,
+          -1.0
+        ],
+        "edge_u": [
+          2.0,
+          0.0,
+          0.0
+        ],
+        "edge_v": [
+          0.0,
+          0.0,
+          2.0
+        ],
+        "id": "light/quad/00000000",
+        "material_id": "material/00000001",
+        "name": "quad"
+      }
+    ],
+    "camera": {
+      "aperture": 0.10000000149011612,
+      "aspect_ratio": 2.0,
+      "focus_dist": 12.0,
+      "fov": 60.0,
+      "look_at": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "position": [
+        2.0,
+        3.0,
+        4.0
+      ],
+      "up": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    "physics": {
+      "dt": 0.019999999552965164,
+      "enabled": true,
+      "fluid": {
+        "bounds_max": [
+          2.0,
+          3.0,
+          4.0
+        ],
+        "bounds_min": [
+          -2.0,
+          -3.0,
+          -4.0
+        ],
+        "enabled": true,
+        "fill_max": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "fill_min": [
+          -1.0,
+          -1.0,
+          -1.0
+        ],
+        "particle_spacing": 0.20000000298023224
+      },
+      "spp_per_frame": 7,
+      "total_frames": 12
+    },
+    "background_color": [
+      0.009999999776482582,
+      0.019999999552965164,
+      0.029999999329447746
+    ],
+    "height": 32,
+    "medium_absorption": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "medium_anisotropy": 0.0,
+    "medium_density": 0.5,
+    "medium_max_distance": 123.0,
+    "medium_mie": {
+      "content_hash": "f6430ed5dd4f4ae4105d416e4ffe3aeba5f0ee38a7e1df05aa47c3915654d9aa",
+      "id": "mie/f6430ed5dd4f4ae4105d416e4ffe3aeba5f0ee38a7e1df05aa47c3915654d9aa"
+    },
+    "medium_phase": 2,
+    "medium_scattering": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "spp": 8,
+    "width": 64
+  }
+}
