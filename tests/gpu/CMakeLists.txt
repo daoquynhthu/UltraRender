@@ -69,7 +69,7 @@ if(CMAKE_CUDA_COMPILER)
         test_gpu_volume.cu
     )
     target_include_directories(gpu_test_volume PRIVATE ${GPU_TEST_INCLUDES})
-    target_link_libraries(gpu_test_volume PRIVATE ure_core CUDA::cudart)
+    target_link_libraries(gpu_test_volume PRIVATE ure_core ure_sceneio CUDA::cudart)
 
     add_executable(gpu_test_contract
         test_distributed_contract.cu

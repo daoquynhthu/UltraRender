@@ -19,6 +19,21 @@ function Assert-Contains {
     }
 }
 
+function Assert-NotContains {
+    param(
+        [string]$Path,
+        [string]$Pattern,
+        [string]$Label
+    )
+    $FullPath = Join-Path $RepoRoot $Path
+    if (-not (Test-Path $FullPath)) {
+        throw "missing file for $Label`: $Path"
+    }
+    if (Select-String -LiteralPath $FullPath -Pattern $Pattern -Quiet) {
+        throw "forbidden Phase R static marker [$Label] in $Path`: $Pattern"
+    }
+}
+
 Assert-Contains "tools\benchmarks\run_phase_r_integrator_smoke.ps1" "samples_per_second" "R.0 benchmark smoke metric"
 Assert-Contains "libs\ure_core\src\path_tracer_host_api.cu" "launch_blocks_for_active_count" "R.1 active-count launch"
 Assert-Contains "libs\ure_core\src\path_tracer_host_api.cu" "current_ray_count <= 0" "R.1 empty-queue termination"
@@ -32,7 +47,7 @@ Assert-Contains "libs\ure_core\include\ure\gpu_spectrum_utils.cuh" "scene_cie_mi
 Assert-Contains "libs\ure_core\src\path_tracer_raygen.cu" "sample_scene_cie_mixture_wavelength" "R.5 proposal-driven raygen"
 Assert-Contains "tests\gpu\test_spectral_pipeline.cu" "test_narrowband_scene_proposal_reduces_spd_estimator_error" "R.5 narrowband proposal oracle"
 Assert-Contains "libs\ure_core\src\path_tracer_volume.cuh" "Mie = 2" "R.6 Mie enum boundary"
-Assert-Contains "libs\ure_core\src\path_tracer_volume.cuh" "is_supported_volume_phase_function" "R.6 phase support gate"
+Assert-Contains "libs\ure_core\src\path_tracer_volume.cuh" "is_supported_analytic_volume_phase_function" "R.6 analytic phase support gate"
 Assert-Contains "tests\gpu\test_gpu_volume.cu" "test_volume_phase_selector_boundary" "R.6 volume phase selector test"
 Assert-Contains "tests\gpu\test_spectral_pipeline_soa.cu" "rough_dielectric_energy_bound" "R.6 rough dielectric energy oracle"
 Assert-Contains "tests\gpu\test_gpu_polarization.cu" "test_thin_film_sp_energy_grid" "R.6 thin-film energy oracle"
@@ -101,5 +116,16 @@ Assert-Contains "tests\gpu\test_render_basic.cu" "test_multi_gpu_path_guiding_me
 Assert-Contains "tools\benchmarks\run_phase_r_path_guiding_suite.ps1" "path_guiding_variance_mse_time_to_error" "R-P2 four-scene benefit curves"
 Assert-Contains "tests\gpu\phase_r_guiding_benchmark.cu" "complex_material" "R-P2 complex material benchmark workload"
 Assert-Contains "tests\gpu\phase_r_guiding_benchmark.cu" "update_medium_gpu" "R-P2 participating medium benchmark workload"
+Assert-Contains "libs\ure_core\include\ure\gpu_structs.hpp" "GpuMiePhaseResource" "R-P6 GPU Mie descriptor"
+Assert-Contains "libs\ure_core\src\mie_solver.cpp" "generate_mie_phase_resource" "R-P6 Lorenz-Mie generator"
+Assert-Contains "libs\ure_sceneio\src\mie_phase_io.cpp" "load_mie_phase_table" "R-P6 imported table adapter"
+Assert-Contains "libs\ure_types\include\ure\mie_phase_validation.hpp" "validate_mie_phase_resource" "R-P6 shared validation boundary"
+Assert-Contains "libs\ure_core\src\gpu_scene_compiler.cpp" "Mie medium requires a phase resource" "R-P6 missing-resource fail-loud"
+Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "load_mie_medium_cross_sections" "R-P6 spectral cross sections"
+Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "sample_mie_packet_phase_lds_pdf" "R-P6 continuation proposal"
+Assert-Contains "libs\ure_core\src\path_tracer_wavefront.cuh" "apply_volume_phase_polarization" "R-P6 depolarizing Stokes contract"
+Assert-Contains "tests\gpu\test_gpu_volume.cu" "test_mie_scene_ir_generated_and_imported_lifecycle" "R-P6 end-to-end lifecycle"
+Assert-Contains "tests\host\test_session.cpp" "test_scene_diff_changed_mie_resource_forces_full_reload" "R-P6 retained-scene rebuild"
+Assert-NotContains "libs\ure_core\src\path_tracer_wavefront.cuh" "sample_volume_phase_lds_pdf\s*\(\s*VolumePhaseFunction::HenyeyGreenstein" "R-P6 hard-coded HG production dispatch"
 
 Write-Host "Phase R static audit passed"

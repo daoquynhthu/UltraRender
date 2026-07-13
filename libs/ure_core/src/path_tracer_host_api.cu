@@ -23,6 +23,7 @@
 #include "ure/gpu_structs.hpp"
 #include "ure/gpu_spectrum_utils.cuh"
 #include "ure/gpu_material_helpers.cuh"
+#include "ure/mie_phase_validation.hpp"
 #include "ure/path_tracer_sampling.cuh"
 #include "ure/gpu_scene_loader.hpp"
 #include "ure/bvh_builder.hpp"
@@ -485,6 +486,7 @@ static std::uint64_t explicit_resident_budget_bytes(const ure::RenderConfig& con
 
 static void validate_explicit_spectral_resident_budget(const std::vector<GpuMaterialData>& materials,
                                                        const std::vector<HostTexture>& textures,
+                                                       const std::vector<scene_ir::MiePhaseResource>& mie_resources,
                                                        const ure::RenderConfig& config) {
     const std::uint64_t budget = explicit_resident_budget_bytes(config);
     if (budget == 0) return;
@@ -501,9 +503,20 @@ static void validate_explicit_spectral_resident_budget(const std::vector<GpuMate
             ++stats.spectral_texture_count;
         }
     }
-    const std::uint64_t estimated = ure::estimate_resident_spectral_resource_bytes(
+    std::uint64_t estimated = ure::estimate_resident_spectral_resource_bytes(
         stats,
         ure::spectral_packet_lanes(config));
+    for (const auto& resource : mie_resources) {
+        const std::uint64_t values = resource.wavelengths_nm.size() +
+            resource.cos_theta.size() + resource.phase.size() + resource.cdf.size() +
+            resource.scattering_cross_section_m2.size() +
+            resource.extinction_cross_section_m2.size() +
+            resource.absorption_cross_section_m2.size() + resource.asymmetry.size();
+        if (values > (std::numeric_limits<std::uint64_t>::max() - estimated) / sizeof(float)) {
+            throw std::runtime_error("spectral resident resource size overflow");
+        }
+        estimated += values * sizeof(float);
+    }
     if (estimated > budget) {
         throw std::runtime_error("spectral resident resource budget exceeded; use a larger cache budget or a streamed/tiled resource path");
     }
@@ -1653,20 +1666,100 @@ static void rebuild_light_distribution(GpuContext* ctx) {
 
 // ===== Interactive API Implementation =====
 
+template <typename Value>
+static void upload_mie_array(Value*& device,
+                             const std::vector<Value>& host,
+                             std::vector<void*>& free_list) {
+    if (host.empty()) {
+        device = nullptr;
+        return;
+    }
+    UR_CUDA_CHECK(cudaMalloc(&device, host.size() * sizeof(Value)));
+    UR_CUDA_CHECK(cudaMemcpy(device, host.data(), host.size() * sizeof(Value),
+                             cudaMemcpyHostToDevice));
+    free_list.push_back(device);
+}
+
+static int checked_mie_offset(std::size_t value) {
+    if (value > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        throw std::invalid_argument("Mie GPU table offset exceeds int range");
+    }
+    return static_cast<int>(value);
+}
+
+static void upload_mie_phase_resources(
+    GpuContext* ctx,
+    const std::vector<scene_ir::MiePhaseResource>& input_resources) {
+    std::vector<GpuMiePhaseResource> descriptors;
+    std::vector<float> wavelengths;
+    std::vector<float> cosines;
+    std::vector<float> phase;
+    std::vector<float> cdf;
+    std::vector<float> scattering;
+    std::vector<float> extinction;
+    std::vector<float> absorption;
+    std::vector<float> asymmetry;
+    descriptors.reserve(input_resources.size());
+    for (const auto& input : input_resources) {
+        auto resource = input;
+        scene_ir::validate_mie_phase_resource(resource);
+        GpuMiePhaseResource descriptor;
+        descriptor.wavelength_offset = checked_mie_offset(wavelengths.size());
+        descriptor.wavelength_count = checked_mie_offset(resource.wavelengths_nm.size());
+        descriptor.angle_offset = checked_mie_offset(cosines.size());
+        descriptor.angle_count = checked_mie_offset(resource.cos_theta.size());
+        descriptor.phase_offset = checked_mie_offset(phase.size());
+        descriptor.cross_section_offset = checked_mie_offset(scattering.size());
+        wavelengths.insert(wavelengths.end(), resource.wavelengths_nm.begin(),
+                           resource.wavelengths_nm.end());
+        cosines.insert(cosines.end(), resource.cos_theta.begin(), resource.cos_theta.end());
+        phase.insert(phase.end(), resource.phase.begin(), resource.phase.end());
+        cdf.insert(cdf.end(), resource.cdf.begin(), resource.cdf.end());
+        scattering.insert(scattering.end(), resource.scattering_cross_section_m2.begin(),
+                          resource.scattering_cross_section_m2.end());
+        extinction.insert(extinction.end(), resource.extinction_cross_section_m2.begin(),
+                          resource.extinction_cross_section_m2.end());
+        absorption.insert(absorption.end(), resource.absorption_cross_section_m2.begin(),
+                          resource.absorption_cross_section_m2.end());
+        asymmetry.insert(asymmetry.end(), resource.asymmetry.begin(), resource.asymmetry.end());
+        descriptors.push_back(descriptor);
+    }
+    upload_mie_array(ctx->d_mie_phase_resources, descriptors, ctx->pointers_to_free);
+    upload_mie_array(ctx->d_mie_wavelengths, wavelengths, ctx->pointers_to_free);
+    upload_mie_array(ctx->d_mie_cos_theta, cosines, ctx->pointers_to_free);
+    upload_mie_array(ctx->d_mie_phase_values, phase, ctx->pointers_to_free);
+    upload_mie_array(ctx->d_mie_cdf_values, cdf, ctx->pointers_to_free);
+    upload_mie_array(ctx->d_mie_scattering_cross_sections, scattering, ctx->pointers_to_free);
+    upload_mie_array(ctx->d_mie_extinction_cross_sections, extinction, ctx->pointers_to_free);
+    upload_mie_array(ctx->d_mie_absorption_cross_sections, absorption, ctx->pointers_to_free);
+    upload_mie_array(ctx->d_mie_asymmetry, asymmetry, ctx->pointers_to_free);
+    ctx->mie_phase_resource_count = checked_mie_offset(descriptors.size());
+    ctx->mie_wavelength_count = checked_mie_offset(wavelengths.size());
+    ctx->mie_angle_count = checked_mie_offset(cosines.size());
+    ctx->mie_phase_value_count = checked_mie_offset(phase.size());
+    ctx->mie_cdf_value_count = checked_mie_offset(cdf.size());
+    ctx->mie_cross_section_count = checked_mie_offset(scattering.size());
+}
+
 GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<ure::gpu::RenderMesh>& meshes,
                               const std::vector<ure::gpu::GpuInstance>& instances,
                               const std::vector<ure::gpu::GpuSphere>& spheres,
                               const std::vector<ure::gpu::GpuMaterialData>& materials,
                               const std::vector<ure::gpu::HostTexture>& textures,
-                              const ure::RenderConfig& config) {
-    validate_explicit_spectral_resident_budget(materials, textures, config);
+                              const ure::RenderConfig& config,
+                              const std::vector<scene_ir::MiePhaseResource>& mie_phase_resources) {
+    validate_explicit_spectral_resident_budget(materials, textures, mie_phase_resources, config);
     validate_integrator_runtime_config(config);
     validate_environment_light_config(config);
     validate_path_guiding_config(config);
     validate_restir_di_config(config);
     validate_specular_manifold_config(config);
     validate_mlt_config(config);
+    for (const auto& resource : mie_phase_resources) {
+        auto canonical = resource;
+        scene_ir::validate_mie_phase_resource(canonical);
+    }
     const int primary_ray_count = checked_primary_ray_count(width, height);
     const int max_rays = configured_ray_queue_capacity(config, primary_ray_count);
 
@@ -1682,6 +1775,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     ctx->medium_scattering = SpectralPacket(0.0f);
     ctx->medium_absorption = SpectralPacket(0.0f);
     ctx->medium_max_distance = 1e6f;
+    upload_mie_phase_resources(ctx, mie_phase_resources);
 
     UR_LOG_INFO(GPU, "Allocating memory for {}x{} interactive session...", width, height);
 
@@ -2118,9 +2212,14 @@ void update_camera_gpu(GpuContext* ctx, const float* cam_pos, const float* cam_l
     reset_accumulation_gpu(ctx);
 }
 
-void update_medium_gpu(GpuContext* ctx, float medium_density, float medium_anisotropy, SpectralPacket medium_scattering, SpectralPacket medium_absorption, float medium_max_distance) {
+void update_medium_gpu(GpuContext* ctx, float medium_density, float medium_anisotropy,
+                       SpectralPacket medium_scattering, SpectralPacket medium_absorption,
+                       float medium_max_distance, int medium_phase,
+                       int medium_phase_resource_index) {
     ctx->medium_density = medium_density;
     ctx->medium_anisotropy = medium_anisotropy;
+    ctx->medium_phase = medium_phase;
+    ctx->medium_phase_resource_index = medium_phase_resource_index;
     ctx->medium_scattering = medium_scattering;
     ctx->medium_absorption = medium_absorption;
     ctx->medium_max_distance = medium_max_distance;
@@ -2248,6 +2347,21 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.material_bsdf_lobes = ctx->d_material_bsdf_lobes;
     scene.material_bsdf_lobe_count = ctx->material_bsdf_lobe_count;
     scene.num_spectral_channels = ctx->num_spectral_channels;
+    scene.mie_phase_resources = ctx->d_mie_phase_resources;
+    scene.mie_phase_resource_count = ctx->mie_phase_resource_count;
+    scene.mie_wavelengths = ctx->d_mie_wavelengths;
+    scene.mie_cos_theta = ctx->d_mie_cos_theta;
+    scene.mie_phase_values = ctx->d_mie_phase_values;
+    scene.mie_cdf_values = ctx->d_mie_cdf_values;
+    scene.mie_scattering_cross_sections = ctx->d_mie_scattering_cross_sections;
+    scene.mie_extinction_cross_sections = ctx->d_mie_extinction_cross_sections;
+    scene.mie_absorption_cross_sections = ctx->d_mie_absorption_cross_sections;
+    scene.mie_asymmetry = ctx->d_mie_asymmetry;
+    scene.mie_wavelength_count = ctx->mie_wavelength_count;
+    scene.mie_angle_count = ctx->mie_angle_count;
+    scene.mie_phase_value_count = ctx->mie_phase_value_count;
+    scene.mie_cdf_value_count = ctx->mie_cdf_value_count;
+    scene.mie_cross_section_count = ctx->mie_cross_section_count;
     scene.textures = ctx->d_textures;
     scene.texture_count = ctx->texture_count;
     scene.lights = ctx->d_lights;
@@ -2300,6 +2414,8 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
 
     scene.medium_density = ctx->medium_density;
     scene.medium_anisotropy = ctx->medium_anisotropy;
+    scene.medium_phase = ctx->medium_phase;
+    scene.medium_phase_resource_index = ctx->medium_phase_resource_index;
     scene.medium_scattering = ctx->medium_scattering;
     scene.medium_absorption = ctx->medium_absorption;
     scene.medium_max_distance = ctx->medium_max_distance;

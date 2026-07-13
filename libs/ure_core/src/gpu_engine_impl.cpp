@@ -216,7 +216,9 @@ private:
         medium_absorption_ = compiled.medium_absorption;
         medium_max_distance_ = compiled.medium_max_distance;
 
-        gpu_context_ = ure::gpu::init_gpu_renderer(compiled.width, compiled.height, cached_meshes_, compiled.instances, cached_spheres_, cached_materials_, compiled.textures, config_);
+        gpu_context_ = ure::gpu::init_gpu_renderer(
+            compiled.width, compiled.height, cached_meshes_, compiled.instances, cached_spheres_,
+            cached_materials_, compiled.textures, config_, compiled.mie_phase_resources);
         assert(gpu_context_ != nullptr && "init_gpu_renderer failed -- check CUDA state");
         
         // Phase P.3: initialize ring buffer with all frames from compiled instances
@@ -233,7 +235,9 @@ private:
             medium_anisotropy_,
             medium_scattering_,
             medium_absorption_,
-            medium_max_distance_
+            medium_max_distance_,
+            static_cast<int>(compiled.medium_phase),
+            compiled.medium_phase_resource_index
         );
 
         // Prepare Host Buffer

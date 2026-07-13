@@ -1,0 +1,21 @@
+{
+  "cos_theta": [-1.0, 0.0, 1.0],
+  "extinction_cross_section_m2": [1.5e-12, 2.5e-12],
+  "format": "ure-mie-phase-table",
+  "phase": [
+    [0.07957747154594767, 0.07957747154594767, 0.07957747154594767],
+    [0.07957747154594767, 0.07957747154594767, 0.07957747154594767]
+  ],
+  "polarization_model": "scalar_depolarizing",
+  "provenance": "UltraRender isotropic adapter fixture",
+  "scattering_cross_section_m2": [1e-12, 2e-12],
+  "source_hash": "fixture-v1",
+  "units": {
+    "cos_theta": "dimensionless",
+    "cross_section": "m^2",
+    "phase": "sr^-1",
+    "wavelength": "nm"
+  },
+  "version": 1,
+  "wavelengths_nm": [360.0, 830.0]
+}

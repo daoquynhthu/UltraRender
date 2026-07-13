@@ -2,6 +2,7 @@ param(
     [string]$BuildDir = "build_modular_x64",
     [string]$Config = "Release",
     [string]$Generator = "Ninja",
+    [string]$CudaArchitectures = "",
     [Alias("Target")][string[]]$Targets = @(),
     [switch]$Clean,
     [switch]$CleanOnly,
@@ -151,6 +152,9 @@ function Configure-Project {
         "-DCMAKE_BUILD_TYPE=$Config",
         "-DCMAKE_MAKE_PROGRAM=`"$(Find-VsNinja)`""
     )
+    if (-not [string]::IsNullOrWhiteSpace($CudaArchitectures)) {
+        $cmakeArgs += "-DCMAKE_CUDA_ARCHITECTURES=$CudaArchitectures"
+    }
 
     $configureCommand = "`"$(Find-VsCMake)`" $($cmakeArgs -join ' ')"
     Write-Info "Configuring project"
@@ -171,11 +175,23 @@ function Build-Project {
 }
 
 $Targets = @(Normalize-Targets $Targets)
+$EffectiveCudaArchitectures = $CudaArchitectures
+if ([string]::IsNullOrWhiteSpace($EffectiveCudaArchitectures) -and $SkipConfigure) {
+    $cachePath = Join-Path $BuildPath "CMakeCache.txt"
+    if (Test-Path $cachePath) {
+        $cacheEntry = Select-String -Path $cachePath -Pattern '^CMAKE_CUDA_ARCHITECTURES:[^=]*=(.+)$' |
+            Select-Object -First 1
+        if ($cacheEntry) {
+            $EffectiveCudaArchitectures = $cacheEntry.Matches[0].Groups[1].Value
+        }
+    }
+}
 
 Write-Info "Repo root: $RepoRoot"
 Write-Info "Build dir: $BuildPath"
 Write-Info "Configuration: $Config"
 Write-Info "Generator: $Generator"
+Write-Info "CUDA architectures: $(if ($EffectiveCudaArchitectures) { $EffectiveCudaArchitectures } else { 'project default' })"
 Write-Info "Targets: $($Targets -join ', ')"
 Write-Info "Clean: $Clean"
 Write-Info "SkipConfigure: $SkipConfigure"

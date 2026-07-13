@@ -1,4 +1,5 @@
 add_library(ure_core STATIC
+    src/mie_solver.cpp
     src/ure_c_api.cpp
     src/path_tracer_kernel.cu
     src/path_tracer_host_api.cu
@@ -40,7 +41,7 @@ target_link_libraries(ure_core PRIVATE CUDA::cudart)
 target_compile_definitions(ure_core PUBLIC USE_CUDA)
 
 set_target_properties(ure_core PROPERTIES
-    CUDA_ARCHITECTURES "all-major"
+    CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
     CUDA_RUNTIME_LIBRARY None
     CUDA_STANDARD 20
     CUDA_STANDARD_REQUIRED ON

@@ -6,6 +6,7 @@ add_library(ure_sceneio STATIC
     src/image_saver.cpp
     src/spd_loader.cpp
     src/materialx_io.cpp
+    src/mie_phase_io.cpp
     src/wav_saver.cpp
     src/scene_ir.cpp
     src/camera.cpp

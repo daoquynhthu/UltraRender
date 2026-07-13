@@ -1,12 +1,42 @@
 #include "ure/session.hpp"
 #include "ure/gpu_scene_compiler.hpp"
+#include "ure/mie_phase_validation.hpp"
 
 #include <algorithm>
 #include <chrono>
+#include <unordered_map>
 
 namespace ure {
 
 namespace {
+
+std::shared_ptr<const scene_ir::MiePhaseResource> freeze_mie_resource(
+    const std::shared_ptr<const scene_ir::MiePhaseResource>& input) {
+    if (!input) return {};
+    auto frozen = std::make_shared<scene_ir::MiePhaseResource>(*input);
+    scene_ir::validate_mie_phase_resource(*frozen);
+    return frozen;
+}
+
+scene_ir::SceneIR freeze_scene_mie_resources(const scene_ir::SceneIR& input) {
+    scene_ir::SceneIR frozen = input;
+    frozen.medium_mie_resource = freeze_mie_resource(input.medium_mie_resource);
+    std::unordered_map<const scene_ir::MaterialNode*, std::shared_ptr<scene_ir::MaterialNode>> materials;
+    auto freeze_material = [&](const std::shared_ptr<scene_ir::MaterialNode>& material) {
+        if (!material) return std::shared_ptr<scene_ir::MaterialNode>{};
+        auto existing = materials.find(material.get());
+        if (existing != materials.end()) return existing->second;
+        auto copy = std::make_shared<scene_ir::MaterialNode>(*material);
+        copy->medium_mie_resource = freeze_mie_resource(material->medium_mie_resource);
+        materials.emplace(material.get(), copy);
+        return copy;
+    };
+    for (auto& material : frozen.materials) material = freeze_material(material);
+    for (auto& instance : frozen.instances) instance.material = freeze_material(instance.material);
+    for (auto& sphere : frozen.spheres) sphere.material = freeze_material(sphere.material);
+    for (auto& light : frozen.quad_lights) light.material = freeze_material(light.material);
+    return frozen;
+}
 
 void apply_transform(scene_ir::InstanceNode& instance, const InstanceTransformMutation& mutation) {
     instance.position = mutation.position;
@@ -14,7 +44,28 @@ void apply_transform(scene_ir::InstanceNode& instance, const InstanceTransformMu
     instance.rotation = mutation.rotation;
 }
 
-bool requires_scene_reload_for_material_update(const scene_ir::MaterialNode& material) {
+bool equal_mie_resource_content(
+    const std::shared_ptr<const scene_ir::MiePhaseResource>& first,
+    const std::shared_ptr<const scene_ir::MiePhaseResource>& second) {
+    if (!first || !second) return first == second;
+    auto canonical_first = *first;
+    auto canonical_second = *second;
+    scene_ir::validate_mie_phase_resource(canonical_first);
+    scene_ir::validate_mie_phase_resource(canonical_second);
+    if (canonical_first.content_hash != canonical_second.content_hash) return false;
+    return canonical_first.wavelengths_nm == canonical_second.wavelengths_nm &&
+           canonical_first.cos_theta == canonical_second.cos_theta &&
+           canonical_first.phase == canonical_second.phase &&
+           canonical_first.cdf == canonical_second.cdf &&
+           canonical_first.scattering_cross_section_m2 == canonical_second.scattering_cross_section_m2 &&
+           canonical_first.extinction_cross_section_m2 == canonical_second.extinction_cross_section_m2 &&
+           canonical_first.absorption_cross_section_m2 == canonical_second.absorption_cross_section_m2 &&
+           canonical_first.asymmetry == canonical_second.asymmetry &&
+           canonical_first.polarization_model == canonical_second.polarization_model;
+}
+
+bool requires_scene_reload_for_material_update(const scene_ir::MaterialNode& current,
+                                               const scene_ir::MaterialNode& material) {
     const bool has_texture =
         material.base_color_texture ||
         material.roughness_texture ||
@@ -25,7 +76,11 @@ bool requires_scene_reload_for_material_update(const scene_ir::MaterialNode& mat
         material.spectral_extension &&
         (!material.spectral_extension->albedo_spd.empty() ||
          !material.spectral_extension->emission_spd.empty());
-    return has_texture || has_graph || has_spectral_resource;
+    const bool mie_resource_changed =
+        current.medium_phase != material.medium_phase ||
+        !equal_mie_resource_content(current.medium_mie_resource,
+                                    material.medium_mie_resource);
+    return has_texture || has_graph || has_spectral_resource || mie_resource_changed;
 }
 
 void validate_renderable_instance(const scene_ir::InstanceNode& instance) {
@@ -136,8 +191,9 @@ void RenderSession::load_scene(const scene_ir::SceneIR& scene_ir) {
     stop_worker();
     std::scoped_lock lock(state_mutex_, engine_mutex_);
     require_engine();
-    engine_->load_scene_ir(scene_ir);
-    current_scene_ir_ = scene_ir;
+    auto frozen_scene = freeze_scene_mie_resources(scene_ir);
+    engine_->load_scene_ir(frozen_scene);
+    current_scene_ir_ = std::move(frozen_scene);
     has_scene_ = true;
     state_ = RenderSessionState::Ready;
 }
@@ -150,8 +206,9 @@ void RenderSession::mutate_scene(const SceneDiff& diff) {
         return;
     }
     if (diff.replacement_scene) {
-        engine_->reload_scene_ir(*diff.replacement_scene);
-        current_scene_ir_ = *diff.replacement_scene;
+        auto frozen_scene = freeze_scene_mie_resources(*diff.replacement_scene);
+        engine_->reload_scene_ir(frozen_scene);
+        current_scene_ir_ = std::move(frozen_scene);
         has_scene_ = true;
         state_ = RenderSessionState::Ready;
     } else {
@@ -434,13 +491,19 @@ bool RenderSession::apply_material_mutations(const std::vector<SceneIrMaterialMu
             if (mutation.material_index >= current_scene_ir_->materials.size()) {
                 throw std::out_of_range("SceneDiff material index is out of range");
             }
-            if (requires_scene_reload_for_material_update(mutation.material)) {
+            auto frozen_material = mutation.material;
+            frozen_material.medium_mie_resource = freeze_mie_resource(
+                mutation.material.medium_mie_resource);
+            const auto& current_material = current_scene_ir_->materials[mutation.material_index];
+            const scene_ir::MaterialNode empty_material;
+            if (requires_scene_reload_for_material_update(
+                    current_material ? *current_material : empty_material, frozen_material)) {
                 requires_reload = true;
             }
             if (!current_scene_ir_->materials[mutation.material_index]) {
                 current_scene_ir_->materials[mutation.material_index] = std::make_shared<scene_ir::MaterialNode>();
             }
-            *current_scene_ir_->materials[mutation.material_index] = mutation.material;
+            *current_scene_ir_->materials[mutation.material_index] = std::move(frozen_material);
         }
         if (!upload || requires_reload) {
             return requires_reload;

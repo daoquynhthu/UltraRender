@@ -195,6 +195,15 @@ struct HostSpectralResource {
     std::vector<float> values;
 };
 
+struct GpuMiePhaseResource {
+    int wavelength_offset = 0;
+    int wavelength_count = 0;
+    int angle_offset = 0;
+    int angle_count = 0;
+    int phase_offset = 0;
+    int cross_section_offset = 0;
+};
+
 struct SpectralExpressionNode {
     SpectralExpressionNodeKind kind = SpectralExpressionNodeKind::None;
     SpectralExpressionSemantic semantic = SpectralExpressionSemantic::Reflectance;
@@ -384,6 +393,8 @@ struct GpuMaterial {
     float thin_film_ior;
     float medium_density;
     float medium_anisotropy;
+    int medium_phase = 0;
+    int medium_phase_resource_index = -1;
     int texture_index = -1;
     int roughness_texture_index = -1;
     int emission_texture_index = -1;
@@ -508,6 +519,22 @@ struct GpuScene {
     int material_bsdf_lobe_count;
     int num_spectral_channels;
 
+    GpuMiePhaseResource* mie_phase_resources;
+    int mie_phase_resource_count;
+    float* mie_wavelengths;
+    float* mie_cos_theta;
+    float* mie_phase_values;
+    float* mie_cdf_values;
+    float* mie_scattering_cross_sections;
+    float* mie_extinction_cross_sections;
+    float* mie_absorption_cross_sections;
+    float* mie_asymmetry;
+    int mie_wavelength_count;
+    int mie_angle_count;
+    int mie_phase_value_count;
+    int mie_cdf_value_count;
+    int mie_cross_section_count;
+
     GpuTexture* textures;
     int texture_count;
     GpuLightRecord* lights;
@@ -561,6 +588,8 @@ struct GpuScene {
     // Global Homogeneous Medium (Volumetric Fog)
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f; // 0.0 = Isotropic
+    int medium_phase = 0;
+    int medium_phase_resource_index = -1;
     SpectralPacket medium_scattering;
     SpectralPacket medium_absorption;
     float medium_max_distance = 0.0f;

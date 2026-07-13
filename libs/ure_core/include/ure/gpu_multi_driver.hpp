@@ -28,7 +28,8 @@ MultiGpuContext* init_multi_gpu_renderer(int width, int height,
                                          const std::vector<GpuSphere>& spheres,
                                          const std::vector<GpuMaterialData>& materials,
                                          const std::vector<HostTexture>& textures = {},
-                                         const ure::RenderConfig& config = ure::RenderConfig{});
+                                         const ure::RenderConfig& config = ure::RenderConfig{},
+                                         const std::vector<scene_ir::MiePhaseResource>& mie_phase_resources = {});
 
 void free_multi_gpu_renderer(MultiGpuContext* ctx);
 

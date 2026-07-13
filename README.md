@@ -6,7 +6,7 @@
 UltraRender 不仅仅是一个图形渲染器，而是一个以**光谱与偏振物理**为核心的离线渲染引擎。
 当前默认求解器是 spectral/polarimetric radiometric path tracer；Phase W 正在把相干场、衍射相机、部分相干输运和局部全波耦合提升为可选的波动光学求解器层。波动光学能力必须显式开启，未实现或不兼容路径必须 fail-loud，不能伪装成已支持。
 
-当前权威施工游标是 **R-P6 Mie / volume phase resources**。R-P6 完成后进入 Phase Q 原生场景系统，再按 `R-P3 -> R-P4 -> R-P5 -> R-P7` 完成剩余生产级积分器工作。已有 Phase W reference/oracle 成果保留，但新增 W production work 在队列到达前冻结。
+R-P6 Mie / volume phase resources 已完成，当前权威施工游标进入 **Phase Q 原生场景系统**；之后按 `R-P3 -> R-P4 -> R-P5 -> R-P7` 完成剩余生产级积分器工作。已有 Phase W reference/oracle 成果保留，但新增 W production work 在队列到达前冻结。
 
 我们致力于解决传统 RGB 渲染器难以正确模拟的光学现象：色散 (Dispersion)、同色异谱 (Metamerism)、薄膜干涉 (Thin-film Interference)、偏振 (Polarization)。荧光/磷光、衍射、散斑、全息和相干多路径干涉属于 Phase W 的可选波动求解器范围，尚未作为默认渲染路径完成。
 
@@ -43,7 +43,7 @@ UltraRender 不仅仅是一个图形渲染器，而是一个以**光谱与偏振
 - [x] **偏振光渲染 (Polarization)**: 引入 Stokes 矢量与 Mueller 矩阵，模拟天空偏振、全反射相位偏移。
 - [x] **光谱金属材质**: 支持基于波长的复折射率 (n, k) 渲染（金、铜、铝等预设）。
 - [x] **薄膜干涉 (Thin-film Interference)**: 已实现局部单层 Airy-style complex boundary evaluator，并接入 Stokes/Mueller。它不是通用多层 coating 或全路径相干传播。
-- [x] **体积光与次表面散射 (Volume/SSS)**: 已完成均质介质 Beer-Lambert、Henyey-Greenstein 和 Rayleigh phase 的 radiometric baseline；真实 Mie 光谱资源与 `eval/pdf/sample` 生产闭环是当前 R-P6，体积相干输运仍属于 Phase W。
+- [x] **体积光与次表面散射 (Volume/SSS)**: 已完成均质介质 Beer-Lambert、Henyey-Greenstein、Rayleigh，以及由生成/导入资源驱动的光谱 Mie `eval/pdf/sample`、NEE、continuation 和 scalar-depolarizing Stokes 闭环；体积相干输运仍属于 Phase W。
 - [ ] **波动光学求解器 (Phase W)**: 统一配置/API/fail-loud 合同，逐步加入衍射相机、coherent field、partial coherence、diffractive materials、fluorescence 和 local full-wave coupling。
 - [ ] **荧光与磷光 (Fluorescence & Phosphorescence)**: Phase W 计划支持 excitation-to-emission wavelength conversion、能量守恒和 PDF 转换。
 
@@ -57,12 +57,13 @@ UltraRender 不仅仅是一个图形渲染器，而是一个以**光谱与偏振
 - [x] **物理-声学接口**: 定义了碰撞事件监听系统，支持物理交互驱动声学反馈。
 - [x] **Glass Cup 演示**: 集成了包含流体、刚体和静态容器的综合演示场景。
 
-## 5. 最新更新 (Latest Updates - 2026-07-11)
+## 5. 最新更新 (Latest Updates - 2026-07-13)
 
 ### 5.0 Current Construction State
 - Phase M 已完成 MaterialGraph、GPU expression graph、opaque BSDF mix、有限厚度 dielectric layer、MaterialX adapter 和材质预设。
 - Phase R-P1/R-P2 已完成 production light sampling 与 spatial-directional product path guiding 闭环。
-- 当前唯一施工项是 R-P6 Mie / volume phase resources；unbiased/spatial ReSTIR、BDPT/VCM、specular manifold GPU solver 和 MLT chain 仍未生产化。
+- Phase R-P6 已完成 deterministic Lorenz-Mie solver、严格 JSON table adapter、不可变 SceneIR resource、GPU lookup/sampling、全局/有界介质端到端生命周期和 retained-session rebuild 语义。
+- 当前唯一施工项是 Phase Q；unbiased/spatial ReSTIR、BDPT/VCM、specular manifold GPU solver 和 MLT chain 仍未生产化。
 
 ### 5.1 Phase L: Large Spectral Domain
 - `domain_bins` 与 `packet_lanes` 已解耦：百万级光谱资源域不再意味着单条 GPU ray 携带百万 lane。

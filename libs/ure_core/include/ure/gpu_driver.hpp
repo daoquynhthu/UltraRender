@@ -5,6 +5,7 @@
 #include "ure/gpu_scene_loader.hpp"
 #include "ure/gpu_structs.hpp"
 #include "ure/instance_transform.hpp"
+#include "ure/mie_phase.hpp"
 #include "ure/render_config.hpp"
 
 // Disable C4819 warning for MSVC (encoding issue)
@@ -45,7 +46,8 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<GpuSphere>& spheres,
                               const std::vector<GpuMaterialData>& materials,
                               const std::vector<HostTexture>& textures = {},
-                              const ure::RenderConfig& config = ure::RenderConfig{});
+                              const ure::RenderConfig& config = ure::RenderConfig{},
+                              const std::vector<scene_ir::MiePhaseResource>& mie_phase_resources = {});
 
 // Cleanup GPU resources
 void free_gpu_renderer(GpuContext* ctx);
@@ -60,7 +62,9 @@ void update_medium_gpu(GpuContext* ctx,
                        float medium_anisotropy,
                        SpectralPacket medium_scattering,
                        SpectralPacket medium_absorption,
-                       float medium_max_distance);
+                       float medium_max_distance,
+                       int medium_phase = 0,
+                       int medium_phase_resource_index = -1);
 
 // Reset accumulation buffer (clear to black)
 void reset_accumulation_gpu(GpuContext* ctx);

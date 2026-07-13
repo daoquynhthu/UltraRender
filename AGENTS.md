@@ -2,7 +2,7 @@
 
 This file defines the rules, conventions, and workflow that any AI agent must follow when working on this project.
 
-**Critical rule**: After every conversation compaction, context reset, session resume, tool merge, or dream cycle (memory consolidation), the agent **must read this file (AGENTS.md) AND PLAN.md in full** before taking any actions. This ensures all governance rules remain in effect across sessions.
+**Critical rule**: After every conversation compaction, context reset, session resume, tool merge, or dream cycle (memory consolidation), the agent **must read this file (AGENTS.md) in full, then use the PLAN.md index/search to read only the authoritative queue, current phase, dependencies, and directly relevant status sections** before taking project actions. Never load PLAN.md wholesale; it is intentionally long and must be accessed progressively.
 
 ---
 
@@ -41,6 +41,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | S (Session API) | Done | `RenderSession`, `SceneDiff`, AOVs, C ABI, pyure progressive/mutation workflow |
 | M (Material System) | Done | MaterialGraph, GPU expression graph, BSDF mix/layer, MaterialX adapter, presets |
 | L (Large Spectral Domain) | Done | `domain_bins` / `packet_lanes` split, 1M oracle/sampled smoke, resource descriptors, distributed spectral shard metadata, runtime presets, static audit |
+| R-P6 (Mie Volume Resources) | Done | Deterministic Lorenz-Mie generation, strict table adapter, immutable SceneIR resources, spectral GPU eval/pdf/sample, NEE/continuation, Session rebuild |
 | W (Wave Optics Solver) | In progress | W.0 audit + rough dielectric spectral/UV PDF/MIS fix done; W.1 WaveOpticsConfig gates done; W.2 Airy PSF oracle started |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
@@ -191,10 +192,10 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 |-------|--------------------------|
 | GPU core | `gpu_device`, `gpu_math`, `gpu_spectral`, `gpu_spectral_soa`, `gpu_hardware`, `gpu_render`, `gpu_instance`, `gpu_tangents`, `gpu_denoise` |
 | GPU physics/contracts | `gpu_polarization`, `gpu_volume`, `gpu_contract`, `gpu_wave_optics` |
-| Host core | `test_world`, `test_asset_pipeline`, `test_config`, `test_spectral_oracle`, `test_wave_optics`, `test_integrator` |
+| Host core | `test_world`, `test_asset_pipeline`, `test_config`, `test_spectral_oracle`, `test_wave_optics`, `test_integrator`, `test_mie_phase` |
 | Host scene/material/session | `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io` |
 | Python | `test_pyure_smoke` |
-| **CTest total** | **25 registered tests** in `build_modular_x64` |
+| **CTest total** | **26 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -209,7 +210,7 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 After **EVERY** conversation compaction, context reset, session resume, tool merge, or dream cycle (memory consolidation), the agent **must**:
 
 1. **Read this file (AGENTS.md) in full** — re-establish governance rules
-2. **Read PLAN.md in full** — re-establish phase context and current status
+2. **Read PLAN.md progressively** — locate the authoritative queue/current cursor first, then read only the current phase, its dependencies, and directly relevant status sections; never load the whole file into context
 3. **Check `build_modular_x64/` last build output** — verify project still compiles before making changes
 
 ### 5.2 Session Summary / Dream Cycle Constraint
@@ -229,9 +230,9 @@ When summarizing or compressing the conversation (e.g., via a dream cycle, tool 
    <!-- key facts extracted, cross-referenced with PLAN.md -->
    ```
 
-2. The first action after the summary is injected into the new context **must** be to re-read AGENTS.md and PLAN.md in full.
+2. The first action after the summary is injected into the new context **must** be to re-read AGENTS.md in full and progressively retrieve the authoritative queue/current cursor plus directly relevant PLAN.md sections.
 
-3. **Never** rely on the summary alone — it is a fallback for continuity, not a substitute for the full governance documents.
+3. **Never** rely on the summary alone — it is a fallback for continuity. Reconcile it against the indexed, relevant PLAN.md sections without loading unrelated phases.
 
 ---
 
@@ -243,8 +244,19 @@ Every work session must follow this sequence:
 PLAN → IMPLEMENT → VERIFY → REVIEW → REPORT → COMMIT
 ```
 
+### 6.1 Subagent Budget Governance
+
+When the primary agent is from the GPT or Claude model families, the default execution mode is **single-agent**. Subagents consume limited quota quickly and are not a routine planning, implementation, debugging, review, or verification mechanism.
+
+- Do not spawn or continue a subagent merely because delegation is available, a task is large, or an additional review might be useful.
+- Use the primary agent's own repository inspection, tests, static audits, and self-review as the normal workflow and completion gate.
+- A subagent is allowed only when the user explicitly requests delegation, or when the primary agent has identified a small, independent, bounded task with material parallel benefit that cannot be achieved comparably through local tools.
+- Before starting an allowed subagent, state its exact scope and why the quota cost is justified. Prefer one focused subagent; do not create agent trees or let a subagent spawn further agents.
+- Do not use subagents for reading AGENTS.md/PLAN.md, summarizing project context, routine code search, ordinary test execution, or duplicating the primary agent's review.
+- Stop or avoid follow-up subagent turns once the bounded result is obtained. Subagent review is never mandatory for reporting or committing unless the user explicitly made it a requirement.
+
 ### Step 1: PLAN
-- Read PLAN.md to identify which phase you are in
+- Search PLAN.md for the authoritative queue/current cursor, then read only the active phase, dependencies, and relevant status sections
 - Read AGENTS.md to re-establish governance
 - Break the phase into sub-steps (no step larger than ~50 lines changed)
 - Write each sub-step into a TODO list (use todowrite tool)
@@ -355,10 +367,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 5 | 2026-06-09 Phase I | 配置系统: 下载 CLI11+json.hpp → third_party; 实现 JSON 四段配置(spectral/renderer/output/gpu); CLI11 子命令(render/info/list-devices/validate); 覆盖链(CLI > JSON > defaults); 重构 main.cpp 为 subcommand dispatch | 340 tests all pass; ure_config CMakeLists 链接 third_party; 保留完整 physics demo loop; `ure_cli list-devices` 输出 RTX 5060 Laptop GPU CC 12.0 8150 MB |
 | 6 | 2026-06-10 Batch 2b Cleanup | C11 (GPU test memory leak) + M10 (render silent no-op) + C8 (AABB perf — 8-corner transform) + C10 (RingBuffer memory ordering — derive read from write_index + atomic_thread_fence) | 10 CTest all pass; DeviceMem RAII in test_framework.cuh; `render()` throws on null ctx; AABB O(N*21) → O(N*6+24); RingBuffer SPSC fence-correct |
 | 7 | 2026-07-11 Workspace Hygiene | Removed obsolete build/output/IDE directories, retained reproducible glTF render fixtures, refreshed current documentation and validation scripts, and repaired two exposed GPU regressions | Reused mutually exclusive layered/composite material storage to reduce `shade_kernel` local stack pressure; corrected the instance hot-update fixture material offset and camera; Release build, Phase L/R audits, physics-optics gate, and 25/25 CTest passed |
+| 8 | 2026-07-13 R-P6 | Completed production Mie volume resources and hardened the implementation after independent audit | Canonical phase/CDF normalization, retained-scene deep freeze, strict host validation/import budgets, high-x Csca/g/CDF convergence, direct extinction transport, independent GPU CDF bounds, nonzero comparative E2E and variance gates; sm_120 Release build, Phase L/R and physics-optics audits, and 26/26 CTest passed. Governance now requires progressive PLAN retrieval and single-agent-by-default GPT/Claude execution. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- The current construction cursor is R-P6 Mie / volume phase resources; Phase M is complete.
+- The current construction cursor is Phase Q; R-P6 Mie / volume phase resources and Phase M are complete.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - CUDA compilation must be serialized per heavy target in this development environment to avoid concurrent `ptxas` host-memory allocation failures.

@@ -1967,24 +1967,39 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
     float density = 0.0f;
     float anisotropy = 0.0f;
+    VolumePhaseFunction phase_function = VolumePhaseFunction::HenyeyGreenstein;
+    int phase_resource_index = -1;
     SpectralPacket sigma_s(0.0f);
     SpectralPacket sigma_a(0.0f);
 
     if (current_medium_idx == -1) {
         density = scene.medium_density;
         anisotropy = scene.medium_anisotropy;
+        phase_function = static_cast<VolumePhaseFunction>(scene.medium_phase);
+        phase_resource_index = scene.medium_phase_resource_index;
         sigma_s = scene.medium_scattering;
         sigma_a = scene.medium_absorption;
     } else {
         GpuMaterial med_mat = scene.materials[current_medium_idx];
         density = med_mat.medium_density;
         anisotropy = med_mat.medium_anisotropy;
+        phase_function = static_cast<VolumePhaseFunction>(med_mat.medium_phase);
+        phase_resource_index = med_mat.medium_phase_resource_index;
         GpuMaterialSoA med_soa = load_mat_spectra_6x(scene, current_medium_idx, throughput.wavelengths);
         sigma_s = med_soa.medium_scattering;
         sigma_a = med_soa.medium_absorption;
     }
 
-    SpectralPacket sigma_t = (sigma_s + sigma_a) * density;
+    SpectralPacket sigma_t;
+    if (phase_function == VolumePhaseFunction::Mie) {
+        if (!load_mie_medium_cross_sections(scene, phase_resource_index, throughput.wavelengths,
+                                             scene.num_spectral_channels, &sigma_s, &sigma_t)) {
+            return;
+        }
+        sigma_t = sigma_t * density;
+    } else {
+        sigma_t = (sigma_s + sigma_a) * density;
+    }
     float sigma_t_avg = 0.0f;
     for (int c = 0; c < scene.num_spectral_channels; ++c) {
         sigma_t_avg += sigma_t.values[c];
@@ -1994,7 +2009,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
         ? sigma_t.values[active_channel]
         : sigma_t_avg;
 
-    if (sigma_t_proposal > 1e-4f) {
+    if (sigma_t_proposal > 0.0f) {
         float r_dist = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeDistance);
         float t_medium = -logf(1.0f - r_dist) / sigma_t_proposal;
 
@@ -2021,14 +2036,28 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 SelectedLightSample light_sample;
 
                 if (sample_selected_light(scene, light_idx_idx, p_vol, r1, r2, light_sample)) {
-                    bool phase_supported = false;
-                    float phase_val = eval_volume_phase(
-                        VolumePhaseFunction::HenyeyGreenstein,
-                        current_queue.directions[idx].dot(light_sample.direction),
-                        anisotropy,
-                        &phase_supported);
-                    if (!phase_supported) {
-                        return;
+                    const float phase_cosine =
+                        current_queue.directions[idx].dot(light_sample.direction);
+                    float phase_values[kMaxPacketLanes];
+                    float phase_val = 0.0f;
+                    if (phase_function == VolumePhaseFunction::Mie) {
+                        for (int c = 0; c < scene.num_spectral_channels; ++c) {
+                            if (!lookup_mie_phase(scene, phase_resource_index,
+                                                  throughput.wavelengths[c], phase_cosine,
+                                                  &phase_values[c])) return;
+                        }
+                        if (!eval_mie_packet_phase_pdf(
+                                scene, phase_resource_index, throughput.wavelengths,
+                                scene.num_spectral_channels, spectral_mode, active_channel,
+                                phase_cosine, &phase_val)) return;
+                    } else {
+                        bool phase_supported = false;
+                        phase_val = eval_volume_phase(phase_function, phase_cosine,
+                                                      anisotropy, &phase_supported);
+                        if (!phase_supported) return;
+                        for (int c = 0; c < scene.num_spectral_channels; ++c) {
+                            phase_values[c] = phase_val;
+                        }
                     }
 
                     if (light_sample.max_dist > 1e-4f) {
@@ -2044,9 +2073,9 @@ __global__ __launch_bounds__(256) void shade_kernel(
                          SpectralPacket guiding_product;
                          for (int c = 0; c < scene.num_spectral_channels; ++c) {
                              L_e.wavelengths[c] = throughput.wavelengths[c];
-                             guiding_product.values[c] = L_e.values[c] * phase_val * tr_light_vals[c];
+                             guiding_product.values[c] = L_e.values[c] * phase_values[c] * tr_light_vals[c];
                              guiding_product.wavelengths[c] = throughput.wavelengths[c];
-                             contribution.values[c] = throughput.values[c] * L_e.values[c] * phase_val * tr_light_vals[c] * (1.0f / light_sample.pdf);
+                             contribution.values[c] = throughput.values[c] * L_e.values[c] * phase_values[c] * tr_light_vals[c] * (1.0f / light_sample.pdf);
                              contribution.wavelengths[c] = throughput.wavelengths[c];
                          }
 
@@ -2078,6 +2107,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
                              StokesVector restir_stokes = spectral_mode_is_sampled(spectral_mode)
                                  ? load_stokes(current_queue, idx, active_channel)
                                  : load_packet_average_stokes(current_queue, idx);
+                             restir_stokes = apply_volume_phase_polarization(
+                                 phase_function, restir_stokes);
                              shadow_queue.stokes_i[s_idx] = restir_stokes.I;
                              shadow_queue.stokes_q[s_idx] = restir_stokes.Q;
                              shadow_queue.stokes_u[s_idx] = restir_stokes.U;
@@ -2092,14 +2123,27 @@ __global__ __launch_bounds__(256) void shade_kernel(
             float r_phase_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumePhaseV);
             float phase_pdf = 0.0f;
             GpuVec3 new_dir;
-            if (!sample_volume_phase_lds_pdf(
-                    VolumePhaseFunction::HenyeyGreenstein,
-                    current_queue.directions[idx],
-                    anisotropy,
-                    r_phase_1,
-                    r_phase_2,
-                    &new_dir,
-                    &phase_pdf)) {
+            if (phase_function == VolumePhaseFunction::Mie) {
+                if (!sample_mie_packet_phase_lds_pdf(
+                        scene, phase_resource_index, current_queue.directions[idx],
+                        throughput.wavelengths, scene.num_spectral_channels,
+                        spectral_mode, active_channel, r_phase_1, r_phase_2,
+                        &new_dir, &phase_pdf)) return;
+                const int first_channel = spectral_mode_is_sampled(spectral_mode)
+                    ? active_channel : 0;
+                const int end_channel = spectral_mode_is_sampled(spectral_mode)
+                    ? active_channel + 1 : scene.num_spectral_channels;
+                for (int c = first_channel; c < end_channel; ++c) {
+                    float lane_phase = 0.0f;
+                    if (!lookup_mie_phase(scene, phase_resource_index,
+                                          throughput.wavelengths[c],
+                                          current_queue.directions[idx].dot(new_dir),
+                                          &lane_phase)) return;
+                    throughput.values[c] *= lane_phase / phase_pdf;
+                }
+            } else if (!sample_volume_phase_lds_pdf(
+                           phase_function, current_queue.directions[idx], anisotropy,
+                           r_phase_1, r_phase_2, &new_dir, &phase_pdf)) {
                 return;
             }
             GpuVec3 new_origin = current_queue.origins[idx] + current_queue.directions[idx] * t_medium;
@@ -2110,7 +2154,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 next_queue.directions[out_idx] = new_dir;
                 store_throughput(next_queue, out_idx, throughput);
                 for (int c = 0; c < scene.num_spectral_channels; ++c) {
-                    store_stokes(next_queue, out_idx, c, load_stokes(current_queue, idx, c));
+                    const StokesVector input_stokes = load_stokes(current_queue, idx, c);
+                    const StokesVector output_stokes = apply_volume_phase_polarization(
+                        phase_function, input_stokes);
+                    store_stokes(next_queue, out_idx, c, output_stokes);
                 }
                 next_queue.medium_indices[out_idx] = current_medium_idx;
                 next_queue.seeds[out_idx] = seed;

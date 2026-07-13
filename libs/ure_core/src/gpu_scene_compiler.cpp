@@ -4,10 +4,12 @@
 #include "ure/image_loader.hpp"
 #include "ure/spd_loader.hpp"
 #include "ure/spectral/spectral.hpp"
+#include "ure/mie_phase_validation.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <map>
 #include <stdexcept>
 #include <vector>
@@ -1184,6 +1186,46 @@ void compute_world_aabb(const std::shared_ptr<Mesh>& mesh, ure::gpu::GpuInstance
     inst.max_pt = {w_max_x, w_max_y, w_max_z};
 }
 
+bool equal_mie_physical_content(const scene_ir::MiePhaseResource& a,
+                                const scene_ir::MiePhaseResource& b) {
+    return a.wavelengths_nm == b.wavelengths_nm && a.cos_theta == b.cos_theta &&
+           a.phase == b.phase && a.cdf == b.cdf &&
+           a.scattering_cross_section_m2 == b.scattering_cross_section_m2 &&
+           a.extinction_cross_section_m2 == b.extinction_cross_section_m2 &&
+           a.absorption_cross_section_m2 == b.absorption_cross_section_m2 &&
+           a.asymmetry == b.asymmetry && a.polarization_model == b.polarization_model;
+}
+
+bool is_zero(const core::Vec3f& value) {
+    return value.x == 0.0f && value.y == 0.0f && value.z == 0.0f;
+}
+
+scene_ir::MiePhaseResource validate_compiler_mie_resource(
+    const std::shared_ptr<const scene_ir::MiePhaseResource>& input,
+    float density, float anisotropy, const core::Vec3f& scattering,
+    const core::Vec3f& absorption) {
+    if (!input) {
+        throw std::invalid_argument("Mie medium requires a phase resource");
+    }
+    if (!std::isfinite(density) || density < 0.0f || anisotropy != 0.0f ||
+        !is_zero(scattering) || !is_zero(absorption)) {
+        throw std::invalid_argument("Mie medium has ambiguous or invalid coefficients");
+    }
+    auto resource = *input;
+    scene_ir::validate_mie_phase_resource(resource);
+    if (resource.wavelengths_nm.front() > gpu::kSpectralLambdaMin ||
+        resource.wavelengths_nm.back() < gpu::kSpectralLambdaMax) {
+        throw std::invalid_argument("Mie phase resource does not cover the renderer wavelength domain");
+    }
+    for (float cross_section : resource.extinction_cross_section_m2) {
+        const double coefficient = static_cast<double>(density) * cross_section;
+        if (!std::isfinite(coefficient) || coefficient > std::numeric_limits<float>::max()) {
+            throw std::invalid_argument("Mie medium extinction coefficient exceeds GPU range");
+        }
+    }
+    return resource;
+}
+
 }
 
 CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir) {
@@ -1194,9 +1236,45 @@ CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir, co
     int num_wavelengths = checked_packet_lanes(config);
     std::vector<float> wavelengths = spectral_bin_centers(num_wavelengths);
     CompiledGpuScene compiled;
+    auto cache_mie_resource = [&](scene_ir::VolumePhaseFunction phase,
+                                  const std::shared_ptr<const scene_ir::MiePhaseResource>& input,
+                                  float density, float anisotropy,
+                                   const core::Vec3f& scattering,
+                                   const core::Vec3f& absorption) -> int {
+        if (phase != scene_ir::VolumePhaseFunction::HenyeyGreenstein &&
+            phase != scene_ir::VolumePhaseFunction::Rayleigh &&
+            phase != scene_ir::VolumePhaseFunction::Mie) {
+            throw std::invalid_argument("Invalid volume phase function");
+        }
+        if (phase != scene_ir::VolumePhaseFunction::Mie) {
+            if (input) {
+                throw std::invalid_argument("Analytic volume phase cannot attach a Mie resource");
+            }
+            return -1;
+        }
+        auto resource = validate_compiler_mie_resource(
+            input, density, anisotropy, scattering, absorption);
+        for (std::size_t i = 0; i < compiled.mie_phase_resources.size(); ++i) {
+            const auto& existing = compiled.mie_phase_resources[i];
+            if (existing.content_hash == resource.content_hash &&
+                equal_mie_physical_content(existing, resource)) {
+                return static_cast<int>(i);
+            }
+        }
+        if (compiled.mie_phase_resources.size() >=
+            static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+            throw std::invalid_argument("Too many Mie phase resources");
+        }
+        compiled.mie_phase_resources.push_back(std::move(resource));
+        return static_cast<int>(compiled.mie_phase_resources.size() - 1);
+    };
     compiled.camera = scene_ir.camera;
     compiled.medium_density = scene_ir.medium_density;
     compiled.medium_anisotropy = scene_ir.medium_anisotropy;
+    compiled.medium_phase = scene_ir.medium_phase;
+    compiled.medium_phase_resource_index = cache_mie_resource(
+        scene_ir.medium_phase, scene_ir.medium_mie_resource, scene_ir.medium_density,
+        scene_ir.medium_anisotropy, scene_ir.medium_scattering, scene_ir.medium_absorption);
     assign_rgb_coeff_spectrum(compiled.medium_scattering, scene_ir.medium_scattering, wavelengths);
     assign_rgb_coeff_spectrum(compiled.medium_absorption, scene_ir.medium_absorption, wavelengths);
     compiled.medium_max_distance = scene_ir.medium_max_distance;
@@ -1239,12 +1317,17 @@ CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir, co
             roughness_texture_index = cache_texture(flat.roughness_texture);
             emission_texture_index = cache_texture(flat.emission_texture);
         }
-        compiled.materials.push_back(compile_material(mat,
-                                                      num_wavelengths,
-                                                      cache_texture,
-                                                      texture_index,
-                                                      roughness_texture_index,
-                                                      emission_texture_index));
+        auto material = compile_material(mat,
+                                         num_wavelengths,
+                                         cache_texture,
+                                         texture_index,
+                                         roughness_texture_index,
+                                         emission_texture_index);
+        material.header.medium_phase = static_cast<int>(mat->medium_phase);
+        material.header.medium_phase_resource_index = cache_mie_resource(
+            mat->medium_phase, mat->medium_mie_resource, mat->medium_density,
+            mat->medium_anisotropy, mat->medium_scattering, mat->medium_absorption);
+        compiled.materials.push_back(std::move(material));
         int material_index = material_offset + static_cast<int>(compiled.materials.size()) - 1;
         material_map[mat] = material_index;
         return material_index;

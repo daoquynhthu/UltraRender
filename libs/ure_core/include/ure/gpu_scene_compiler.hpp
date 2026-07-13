@@ -22,6 +22,9 @@ struct CompiledGpuScene {
     Camera camera;
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f;
+    scene_ir::VolumePhaseFunction medium_phase = scene_ir::VolumePhaseFunction::HenyeyGreenstein;
+    int medium_phase_resource_index = -1;
+    std::vector<scene_ir::MiePhaseResource> mie_phase_resources;
     ure::gpu::SpectralPacket medium_scattering = ure::gpu::SpectralPacket(0.0f);
     ure::gpu::SpectralPacket medium_absorption = ure::gpu::SpectralPacket(0.0f);
     float medium_max_distance = 0.0f;

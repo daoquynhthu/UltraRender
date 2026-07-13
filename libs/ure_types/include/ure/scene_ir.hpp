@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ure/mie_phase.hpp"
 #include "ure/ure_api.hpp"
 #include <cstdint>
 #include <functional>
@@ -194,6 +195,8 @@ struct MaterialNode {
     core::Vec3f emission = {0.0f, 0.0f, 0.0f};
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f;
+    VolumePhaseFunction medium_phase = VolumePhaseFunction::HenyeyGreenstein;
+    std::shared_ptr<const MiePhaseResource> medium_mie_resource;
     core::Vec3f medium_scattering = {0.0f, 0.0f, 0.0f};
     core::Vec3f medium_absorption = {0.0f, 0.0f, 0.0f};
     std::shared_ptr<TextureResource> base_color_texture;
@@ -254,6 +257,8 @@ struct SceneIR {
     core::Vec3f background_color = {0, 0, 0};
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f;
+    VolumePhaseFunction medium_phase = VolumePhaseFunction::HenyeyGreenstein;
+    std::shared_ptr<const MiePhaseResource> medium_mie_resource;
     core::Vec3f medium_scattering = {0.0f, 0.0f, 0.0f};
     core::Vec3f medium_absorption = {0.0f, 0.0f, 0.0f};
     float medium_max_distance = 50.0f;

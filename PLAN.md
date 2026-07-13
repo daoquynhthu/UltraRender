@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-06-29 (Phase M closure and R-P6 cursor)
+最后更新: 2026-07-13 (R-P6 closure and Phase Q cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -45,10 +45,10 @@ R-P2 closure [done]
 Phase M complete [done]
    │
    ▼
-当前游标: R-P6 Mie / volume resources
+R-P6 Mie / volume resources [done]
    │
    ▼
-Phase Q complete
+当前游标: Phase Q
    │
    ▼
 R-P3 → R-P4 → R-P5 → R-P7
@@ -73,9 +73,9 @@ Phase X complete
 
 - **R-P2 已闭环**: multi-GPU guide delta merge/broadcast、device-derived 或显式 memory budget，以及 Cornell/multi-light/complex-material/volume 的 variance、MSE、time-to-error 曲线均已进入生产与验证路径。
 - **Phase M 已闭环**: MaterialGraph、BSDF layering、procedural nodes、MaterialX import/export 和 presets 已稳定材质语义；skin 采用 participating dielectric medium preset，不做 Lambert fallback。
-- **当前唯一施工项 — R-P6**: 在 Phase Q 前完成真实 Mie/volume phase resource，使 Q.6 消费已验证资源合同而不是占位 schema。
-- **Phase Q**: 在剩余高级积分器和多后端执行扩散前，完整冻结 URE native schema、serialization、programmatic graph、feature declaration 和 package contract。
-- **Phase R remainder**: 固定顺序为 R-P3、R-P4、R-P5、R-P7；R-P1/R-P2 已完成，R-P6 在 Q 前单独完成。Phase R 未通过 R-P7 不得启动 Phase T 实现。
+- **R-P6 已闭环**: deterministic Lorenz-Mie generator、严格 table adapter、不可变 SceneIR resource、GPU spectral eval/pdf/sample、NEE/continuation、scalar-depolarizing Stokes、Session rebuild 和端到端生命周期均已进入生产与验证路径。
+- **当前唯一施工项 — Phase Q**: 在剩余高级积分器和多后端执行扩散前，完整冻结 URE native schema、serialization、programmatic graph、feature declaration 和 package contract。
+- **Phase R remainder**: 固定顺序为 R-P3、R-P4、R-P5、R-P7；R-P1/R-P2/R-P6 已完成。Phase R 未通过 R-P7 不得启动 Phase T 实现。
 - **Phase T → V → W**: T 先稳定 backend-neutral runtime 并迁移 CUDA/Vulkan/DXR；V 再建设统一 acceleration provider；W 最后把已有 reference/oracle 工作接入稳定执行与加速合同。现有 W 成果保留，新增 W production work 冻结。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
@@ -1851,13 +1851,15 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 
 ### Phase R — 工业级/科研级积分器升级 / Research-Grade Radiometric Integrator
 
-**状态**: 进行中，不能视为 Phase R 完成。R.0-R.12 只闭环 local contract baseline；R-P1 与 R-P2 已完成 production closure，Phase M 已闭环，当前权威执行游标是 R-P6 Mie / volume phase resources。R-P2 已把全局 per-light scalar guide 扩展为 GPU resident `spatial cell × light × direction bin` cache：guide domain 来自完整 scene bounds，surface/volume NEE、emissive-hit MIS 与 environment-miss MIS 的 `*_at(reference_point)` 路径使用同一 reference-conditioned mixture proposal/PDF，cache 无样本时回退 light tree/global guide。训练目标学习局部 `Le × BSDF/phase × cosine × transmittance` 光谱 product；sampled/lane 模式通过显式 wavelength PDF 转换为 photometric Y target，并记录 representative wavelength、spectral mode、wavelength PDF 和 cache epoch。pass-boundary decay、reset、light/material rebuild、instance-domain mutation 和 stale epoch rejection均已闭环。multi-GPU 使用“衰减后的共同基线 + 各设备本轮增量”合并并广播，避免重复累加共同历史；device 0 merge scratch 纳入三份 guide footprint 的预算门禁。`memory_budget_mb=0` 根据 free/total VRAM、保留量和硬上限自动规划，显式预算和自动预算都在分配前做 checked size 与 fail-loud。专用 GPU benchmark 内建 Cornell enclosure、多光源、复杂材质和参与介质四类 workload，并输出 baseline/guided variance、MSE、time-to-error 曲线。
+**状态**: 进行中，不能视为 Phase R 完成。R.0-R.12 只闭环 local contract baseline；R-P1、R-P2 与 R-P6 已完成 production closure，Phase M 已闭环，当前权威执行游标是 Phase Q。R-P2 已把全局 per-light scalar guide 扩展为 GPU resident `spatial cell × light × direction bin` cache：guide domain 来自完整 scene bounds，surface/volume NEE、emissive-hit MIS 与 environment-miss MIS 的 `*_at(reference_point)` 路径使用同一 reference-conditioned mixture proposal/PDF，cache 无样本时回退 light tree/global guide。训练目标学习局部 `Le × BSDF/phase × cosine × transmittance` 光谱 product；sampled/lane 模式通过显式 wavelength PDF 转换为 photometric Y target，并记录 representative wavelength、spectral mode、wavelength PDF 和 cache epoch。pass-boundary decay、reset、light/material rebuild、instance-domain mutation 和 stale epoch rejection均已闭环。multi-GPU 使用“衰减后的共同基线 + 各设备本轮增量”合并并广播，避免重复累加共同历史；device 0 merge scratch 纳入三份 guide footprint 的预算门禁。`memory_budget_mb=0` 根据 free/total VRAM、保留量和硬上限自动规划，显式预算和自动预算都在分配前做 checked size 与 fail-loud。专用 GPU benchmark 内建 Cornell enclosure、多光源、复杂材质和参与介质四类 workload，并输出 baseline/guided variance、MSE、time-to-error 曲线。
 
-**必须显式承认的未生产化能力**: R-P2 spatial-directional product guide、spectral metadata、decay/epoch、multi-GPU merge、memory budget 和四类本地收益曲线已生产化；unbiased ReSTIR DI、spatial ReSTIR DI、ReSTIR PT/path reuse、specular manifold GPU solver、BDPT、VCM、MLT chain integrator、真实 Mie phase resource/parameterization，以及跨 R-P3-R-P6 的完整多场景/farm/Nsight 长跑 dashboard 均未完成。当前代码对其中若干能力是 deliberate fail-loud，而不是实现完成；后续必须按权威执行顺序继续推进。
+**必须显式承认的未生产化能力**: R-P2 spatial-directional product guide、spectral metadata、decay/epoch、multi-GPU merge、memory budget 和四类本地收益曲线已生产化；R-P6 真实 Mie phase resource/parameterization 也已闭环。unbiased ReSTIR DI、spatial ReSTIR DI、ReSTIR PT/path reuse、specular manifold GPU solver、BDPT、VCM、MLT chain integrator，以及跨剩余 R-P3-R-P5/R-P7 的完整多场景/farm/Nsight 长跑 dashboard 均未完成。当前代码对其中若干能力是 deliberate fail-loud，而不是实现完成；后续必须按权威执行顺序继续推进。
 
 **目标**: 将当前 CUDA spectral/polarimetric wavefront path tracer 从“可用的物理路径追踪器”升级为工业级/科研级 radiometric light transport integrator。Phase R 不替代 Phase W：Phase R 处理默认非相干 radiance/Stokes transport 的调度、采样、MIS、路径空间算法和性能/收敛基准；Phase W 处理相干场、衍射、部分相干和局部全波求解。任何高级积分器都必须保持 Phase E/L 的 explicit wavelength PDF、spectral domain/resource contract、Stokes/Mueller 语义和 fail-loud wave feature policy。
 
 **当前审计结论**: 现有有效积分器集中在 `libs/ure_core/src/path_tracer_host_api.cu::render_pass_gpu()` 与 `path_tracer_wavefront.cuh`。R.1 首批修复前，每个 sample 固定执行 `generate_rays -> (extend -> shade -> shadow) * max_trace_depth`，默认 `max_trace_depth = 50`，每个 depth 使用按 `max_rays` 计算的固定 launch blocks，并在 kernel 内以 `idx >= *queue.count` 早退；同时 `queue_capacity > width*height` 会把未初始化 queue slot 当 active ray 处理，`queue_capacity < width*height` 会让 primary ray generation 越界写。R.0-R.9 后，初始化会 fail-loud 拒绝小于 primary ray count 的 queue capacity，primary queue count 使用像素数，wavefront kernels 按 active ray/shadow ray count 发射并在空队列提前终止，surface/volume/RR 共享显式 path-dimension LDS 表，RayQueue/ShadowQueue overflow 汇总进 pass telemetry，sphere lights 已按 surface area × spectral emission power 建立 CDF/alias table，并在材质 emission 热更新后重建 light sampling distribution；`SpectralSamplingMode::Importance` 已不再等同 uniform sampled，raygen 可以消费 CIE-Y task-weighted proposal 或 scene/material spectral-power proposal table；scene proposal 存在时按 scene/CIE 50/50 mixture 抽样并把 balance mixture `p(λ)` 写入 path state；narrowband SPD oracle 用二阶矩证明 scene/CIE mixture proposal 相比 uniform wavelength sampling 降低 estimator 方差和权重尖峰；R.7 新增默认关闭的 progressive direct-light path guiding：可见 shadow contribution 按 spectral estimator 转亮度累积到 light-list guide weights，后续 NEE light selection 使用 base power/solid-angle sampler 与 guide distribution 的 explicit mixture PDF，保持 selection PDF 与实际 sampling 一致；R.8 新增默认关闭的 ReSTIR DI reservoir baseline：每像素保存可见 direct-light candidate 的 spectral radiance、wavelength PDF、light-list index、material/phase lobe PDF、history 和 visibility ray，下一轮 primary surface 可将该 reservoir 作为 temporal candidate 重新走 shadow visibility；当前实现明确是 biased temporal reuse，unbiased 和 spatial reuse 请求会 fail-loud，不会静默降级。R.9 新增 radiometric `SpecularManifoldConfig`、`integrator.specular_manifold` JSON/CLI 入口和 `ure::integrator` specular-interface oracle，锁定 Snell validity、TIR gate、Fresnel transmittance、solid-angle Jacobian 互逆、manifold PDF 与 radiance throughput scale；GPU production solver 在未实现真实 SDS/VCM 连接前会 fail-loud，当前 NEE specular dielectric blocker policy 保持不变，不恢复旧 straight-through transparent shadow。Henyey-Greenstein volume phase 现在有显式 `eval/pdf/sample` 接口，continuation ray 会记录 phase PDF 到 `last_pdf`，避免后续发光体命中 MIS 失去上一跳 sampling PDF；Rayleigh phase 已有 GPU closed-form eval/pdf/sample 与归一化 oracle；Mie phase 已有 unsupported selector gate，防止无参数/resource 时被静默当作 HG/Rayleigh；Lambertian/cloth/metal 已有 GPU white-furnace/reciprocity oracle，rough dielectric 已有 reflection/transmission PDF normalization 与 white-furnace energy bound oracle，thin-film 已有多波长/厚度/角度 s/p energy grid oracle。packet 模式仍存在 packet-average/hero-event 近似，这是 R.10+ reuse 与未来路径空间算法需要继续尊重的 estimator 边界，不是 R.0-R.9 未完成项。
+
+2026-07-13 R-P6 校准：上段关于 Mie 仅有 unsupported selector 的描述是 R-P6 前基线。当前生产路径已由不可变 `MiePhaseResource` 驱动，支持 host Lorenz-Mie 生成、严格 JSON 导入、compiler revalidation/dedup、single/multi-GPU upload、nonuniform table interpolation、piecewise-linear CDF inversion、spectral cross section、volume NEE/continuation、`last_pdf` 和 scalar-depolarizing Stokes；缺资源或非法参数仍 fail-loud。
 
 #### Phase R 边界
 
@@ -1881,7 +1883,7 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 | MLT chain integrator | 未生产化 | 只有 primary-sample mutation oracle 和 config；GPU MLT integrator 请求 fail-loud |
 | Light tree | baseline 已接入，未完整生产化 | GPU resident recursive light tree 已用于 base light sampling，节点携带 bounds，host build 按空间最长轴与能量平衡分群；device traversal/PDF 已 reference-point aware，per-light PMF 保留为全局 fallback/O(1) baseline；SceneDiff resource mutation 通过 retained SceneIR reload 保证 tree/cache 全量 rebuild；仍缺动态增量重建成本控制、生产级 clustering 和 farm long-run 收益曲线 |
 | 非 sphere light 完整高级采样 | 部分完成 | Instance/direct mesh triangle、SceneIR analytic quad light、opt-in environment light、emission texture 和 MaterialGraph/resource-driven emissive mesh 已有 selection/PDF/eval baseline 与 targeted mixed-type PDF tests；本地 light sampling suite 覆盖 spectral emissive quad 与 multi-emissive-quad MSE/variance 曲线；生产级 tree clustering、更多 reference scene pack 和 farm long-run 仍未完成 |
-| Mie resource | 未生产化 | `Mie` selector 有 unsupported gate；没有真实 Mie 参数/resource/table |
+| Mie resource | ✅ R-P6 已生产化 | 生成/导入统一为 validated immutable table；GPU spectral eval/pdf/sample、NEE/continuation、Session rebuild 与端到端生命周期已闭环；polarized Mie matrix scattering 不在本阶段范围 |
 | 多场景 variance/MSE 收益曲线 | 本地 quick gate 已接入，未完整生产化 | `run_phase_r_light_sampling_suite.ps1` 输出两个 R-P1 场景的 HDR MSE-to-reference 与 radiance variance 曲线并接入 Phase R validation suite；Cornell/caustic/volume/dense spectral resource/multi-GPU shard 的完整 reference pack、farm long-run 和 Nsight dashboard 仍未完成 |
 
 #### 子步骤
@@ -1930,7 +1932,7 @@ R.13-R.19 是能力编号，不是线性施工顺序。实际执行按依赖拆�
 | R-P3 | Unbiased/spatial ReSTIR DI + ReSTIR PT | 将现有 biased temporal DI preview 与 production unbiased mode 分离；实现 temporal + spatial reservoir reuse；visibility/reconnection metadata；wavelength PDF、material/phase lobe PDF、Stokes-compatible throughput；ReSTIR PT/path reuse 独立 mode 和 sample-space contract | Unbiased mode 有偏差测试和 reference comparison；spatial/unbiased 不再 fail-loud；biased preview 必须在输出 metadata 中显式标记；multi-light/occlusion/volume 场景有收益曲线 |
 | R-P4 | Specular manifold solver + BDPT/VCM | GPU specular manifold Newton solve；SDS/specular chain connection；light subpath generation；camera/light subpath connection；vertex merging radius schedule；MIS 权重；spectral/polarimetric throughput 和 Jacobian 合同；glass direct-light blocker policy 替换为真实路径空间算法 | Glass caustic、SDS、small emitter、rough/specular mixed path 场景有 correctness oracle 和收益曲线；BDPT/VCM/specular-manifold 各自 mode 不再 fail-loud；Jacobian/PDF/energy gates 必须通过 |
 | R-P5 | MLT chain integrator | Independent chain scheduler；primary-sample-space replay；large/small step proposal；burn-in、acceptance stats、normalization、chain seeding；spectral wavelength/path-state mutation；与 BDPT/VCM 或 default path tracer 的 contribution evaluator 边界 | MLT mode 不再 fail-loud；输出 chain diagnostics；低概率焦散/小光源/高遮挡场景 time-to-error 优于 default baseline；deterministic replay 和 distributed shard seed contract 通过 |
-| R-P6 | Volume phase resources and Mie production | Mie parameter/resource/table；spectral medium resource；phase eval/pdf/sample 三元闭合；anisotropy/resource interpolation；medium mutation/rebuild 语义；volume NEE 与 path continuation PDF 一致 | `VolumePhaseFunction::Mie` 不再只是 unsupported selector；缺资源或非法参数仍 fail-loud；Rayleigh/HG/Mie 能量、归一化、sampling-PDF 和 variance tests 全覆盖 |
+| R-P6 | Volume phase resources and Mie production | ✅ 已完成：deterministic Lorenz-Mie generator、严格 JSON adapter、immutable resource、compiler revalidation/dedup、single/multi-GPU ownership、spectral eval/pdf/sample、NEE/continuation、scalar-depolarizing Stokes、Session rebuild 和 generated/imported global+bounded lifecycle | `VolumePhaseFunction::Mie` 已是 resource-backed production selector；缺资源或非法参数 fail-loud；HG/Rayleigh 回归、Mie energy/normalization/sampling-PDF/offset/lifecycle tests 全覆盖 |
 | R-P7 | Full industrial validation suite | 固定 benchmark scene pack；reference images/metrics；variance、MSE、spectral color error、time-to-error、samples/sec、VRAM、kernel launch、occupancy 指标；local quick gate + farm long-run gate + Nsight dashboard schema；每个 production mode 的适用范围和拒绝边界文档 | 本地 suite 可复现；farm/Nsight 输出稳定 JSON；每个高级 integrator mode 至少有一个正收益场景和一个边界失败场景；Phase R completion 只能在 R-P1..R-P7 全部闭环后声明 |
 
 #### Phase R 执行顺序

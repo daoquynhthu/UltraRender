@@ -51,6 +51,21 @@ struct GpuContext {
     GpuMaterialBsdfLobe* d_material_bsdf_lobes = nullptr;
     int material_bsdf_lobe_count = 0;
     int num_spectral_channels = 0;
+    GpuMiePhaseResource* d_mie_phase_resources = nullptr;
+    int mie_phase_resource_count = 0;
+    float* d_mie_wavelengths = nullptr;
+    float* d_mie_cos_theta = nullptr;
+    float* d_mie_phase_values = nullptr;
+    float* d_mie_cdf_values = nullptr;
+    float* d_mie_scattering_cross_sections = nullptr;
+    float* d_mie_extinction_cross_sections = nullptr;
+    float* d_mie_absorption_cross_sections = nullptr;
+    float* d_mie_asymmetry = nullptr;
+    int mie_wavelength_count = 0;
+    int mie_angle_count = 0;
+    int mie_phase_value_count = 0;
+    int mie_cdf_value_count = 0;
+    int mie_cross_section_count = 0;
     GpuSphere* d_spheres = nullptr;
     GpuMesh* d_meshes = nullptr;
     GpuInstance* d_instances = nullptr;
@@ -118,6 +133,8 @@ struct GpuContext {
 
     float medium_density = 0.0f;
     float medium_anisotropy = 0.0f;
+    int medium_phase = 0;
+    int medium_phase_resource_index = -1;
     SpectralPacket medium_scattering;
     SpectralPacket medium_absorption;
     float medium_max_distance = 0.0f;

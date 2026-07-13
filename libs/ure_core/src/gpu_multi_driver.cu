@@ -123,7 +123,8 @@ MultiGpuContext* init_multi_gpu_renderer(int width, int height,
                                          const std::vector<GpuSphere>& spheres,
                                          const std::vector<GpuMaterialData>& materials,
                                          const std::vector<HostTexture>& textures,
-                                         const ure::RenderConfig& config) {
+                                         const ure::RenderConfig& config,
+                                         const std::vector<scene_ir::MiePhaseResource>& mie_phase_resources) {
     int device_count = 0;
     cudaGetDeviceCount(&device_count);
     int num_gpus = std::min(device_count, config.num_gpus_to_use);
@@ -142,7 +143,8 @@ MultiGpuContext* init_multi_gpu_renderer(int width, int height,
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, i);
         UR_LOG_INFO(GPU, "  GPU[{}]: {}", i, prop.name);
-        ctx->contexts[i] = init_gpu_renderer(width, height, meshes, instances, spheres, materials, textures, config);
+        ctx->contexts[i] = init_gpu_renderer(width, height, meshes, instances, spheres, materials,
+                                             textures, config, mie_phase_resources);
     }
 
     cudaSetDevice(0);

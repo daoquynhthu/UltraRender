@@ -2,6 +2,7 @@
 #include <ure/gpu_scene_compiler.hpp>
 #include <ure/gpu_structs.hpp>
 #include <ure/log.hpp>
+#include <ure/mie_phase_validation.hpp>
 #include <ure/scene_ir.hpp>
 #include <ure/ure_c_api.h>
 
@@ -204,6 +205,25 @@ static ure::scene_ir::SceneIR make_scene_ir_with_instance() {
     instance.position = {0.0f, 0.0f, 0.0f};
     scene_ir.instances.push_back(instance);
     return scene_ir;
+}
+
+static std::shared_ptr<const ure::scene_ir::MiePhaseResource> make_session_mie_resource() {
+    auto resource = std::make_shared<ure::scene_ir::MiePhaseResource>();
+    resource->wavelengths_nm = {360.0f, 830.0f};
+    resource->cos_theta = {-1.0f, 0.0f, 1.0f};
+    resource->phase.assign(6, 1.0f / (4.0f * 3.14159265359f));
+    resource->scattering_cross_section_m2 = {1.0e-12f, 2.0e-12f};
+    resource->extinction_cross_section_m2 = {1.5e-12f, 2.5e-12f};
+    ure::scene_ir::validate_mie_phase_resource(*resource);
+    return resource;
+}
+
+static ure::scene_ir::SceneIR make_scene_ir_with_mie_material() {
+    auto scene = make_scene_ir_with_instance();
+    scene.materials[0]->medium_phase = ure::scene_ir::VolumePhaseFunction::Mie;
+    scene.materials[0]->medium_density = 1.0e12f;
+    scene.materials[0]->medium_mie_resource = make_session_mie_resource();
+    return scene;
 }
 
 static ure::scene_ir::InstanceNode make_scene_ir_instance(const std::shared_ptr<ure::scene_ir::MeshResource>& mesh,
@@ -490,6 +510,73 @@ static int test_scene_diff_material_update_ir() {
     CHECK(raw_engine->last_materials[0].header.ior == 2.0f);
     CHECK(raw_engine->spp == 0);
     CHECK(session.state() == ure::RenderSessionState::Ready);
+    return 0;
+}
+
+static int test_scene_diff_equivalent_mie_resource_uses_material_update() {
+    auto* raw_engine = new FakeRenderEngine();
+    ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
+    auto scene = make_scene_ir_with_mie_material();
+    session.load_scene(scene);
+
+    auto density_only = *scene.materials[0];
+    density_only.medium_density = 2.0e12f;
+    session.mutate_scene(ure::SceneDiff::update_material(0, density_only));
+    CHECK(raw_engine->material_updates == 1);
+    CHECK(raw_engine->scene_ir_reloads == 0);
+
+    auto equal_resource = std::make_shared<ure::scene_ir::MiePhaseResource>(
+        *scene.materials[0]->medium_mie_resource);
+    equal_resource->content_hash = "forged-stale-hash";
+    density_only.medium_mie_resource = equal_resource;
+    session.mutate_scene(ure::SceneDiff::update_material(0, density_only));
+    CHECK(raw_engine->material_updates == 2);
+    CHECK(raw_engine->scene_ir_reloads == 0);
+    CHECK(raw_engine->spp == 0);
+    return 0;
+}
+
+static int test_scene_diff_changed_mie_resource_forces_full_reload() {
+    auto* raw_engine = new FakeRenderEngine();
+    ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
+    auto scene = make_scene_ir_with_mie_material();
+    session.load_scene(scene);
+
+    auto changed = *scene.materials[0];
+    auto changed_resource = std::make_shared<ure::scene_ir::MiePhaseResource>(
+        *changed.medium_mie_resource);
+    const float isotropic = 1.0f / (4.0f * 3.14159265359f);
+    changed_resource->phase = {
+        0.5f * isotropic, isotropic, 1.5f * isotropic,
+        0.5f * isotropic, isotropic, 1.5f * isotropic};
+    ure::scene_ir::validate_mie_phase_resource(*changed_resource);
+    changed_resource->content_hash = scene.materials[0]->medium_mie_resource->content_hash;
+    changed.medium_mie_resource = changed_resource;
+    session.mutate_scene(ure::SceneDiff::update_material(0, changed));
+    CHECK(raw_engine->scene_ir_reloads == 1);
+    CHECK(raw_engine->material_updates == 0);
+    CHECK(raw_engine->spp == 0);
+    return 0;
+}
+
+static int test_scene_diff_mutable_mie_alias_forces_full_reload() {
+    auto* raw_engine = new FakeRenderEngine();
+    ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
+    auto scene = make_scene_ir_with_mie_material();
+    auto mutable_alias = std::make_shared<ure::scene_ir::MiePhaseResource>(
+        *scene.materials[0]->medium_mie_resource);
+    scene.materials[0]->medium_mie_resource = mutable_alias;
+    session.load_scene(scene);
+
+    const float isotropic = 1.0f / (4.0f * 3.14159265359f);
+    mutable_alias->phase = {
+        0.5f * isotropic, isotropic, 1.5f * isotropic,
+        0.5f * isotropic, isotropic, 1.5f * isotropic};
+    ure::scene_ir::validate_mie_phase_resource(*mutable_alias);
+    auto changed = *scene.materials[0];
+    session.mutate_scene(ure::SceneDiff::update_material(0, changed));
+    CHECK(raw_engine->scene_ir_reloads == 1);
+    CHECK(raw_engine->material_updates == 0);
     return 0;
 }
 
@@ -861,6 +948,9 @@ int main() {
     failed += run("test_scene_diff_emissive_instance_transform_ir_full_reload", test_scene_diff_emissive_instance_transform_ir_full_reload);
     failed += run("test_scene_diff_instance_transform_errors", test_scene_diff_instance_transform_errors);
     failed += run("test_scene_diff_material_update_ir", test_scene_diff_material_update_ir);
+    failed += run("test_scene_diff_equivalent_mie_resource_uses_material_update", test_scene_diff_equivalent_mie_resource_uses_material_update);
+    failed += run("test_scene_diff_changed_mie_resource_forces_full_reload", test_scene_diff_changed_mie_resource_forces_full_reload);
+    failed += run("test_scene_diff_mutable_mie_alias_forces_full_reload", test_scene_diff_mutable_mie_alias_forces_full_reload);
     failed += run("test_scene_diff_material_texture_update_ir_full_reload", test_scene_diff_material_texture_update_ir_full_reload);
     failed += run("test_scene_diff_material_graph_update_ir_full_reload", test_scene_diff_material_graph_update_ir_full_reload);
     failed += run("test_scene_diff_material_spd_update_ir_full_reload", test_scene_diff_material_spd_update_ir_full_reload);

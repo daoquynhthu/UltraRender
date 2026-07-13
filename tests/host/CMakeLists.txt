@@ -28,6 +28,13 @@ add_executable(test_integrator test_integrator.cpp)
 target_link_libraries(test_integrator PRIVATE ure_core ure_diag)
 add_test(NAME test_integrator COMMAND test_integrator)
 
+add_executable(test_mie_phase test_mie_phase.cpp)
+target_link_libraries(test_mie_phase PRIVATE ure_sceneio ure_core ure_diag)
+target_compile_definitions(test_mie_phase PRIVATE
+    URE_TEST_ASSET_DIR="${CMAKE_SOURCE_DIR}/tests/assets"
+)
+add_test(NAME test_mie_phase COMMAND test_mie_phase)
+
 add_executable(test_gltf_frontend test_gltf_frontend.cpp)
 target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)
