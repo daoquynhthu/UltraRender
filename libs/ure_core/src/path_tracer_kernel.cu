@@ -15,6 +15,7 @@ namespace ure::gpu {
 #include "path_tracer_bsdf.cuh"
 #include "path_tracer_volume.cuh"
 #include "path_tracer_wavefront.cuh"
+
 #include "path_tracer_material.cu"
 
 } // namespace ure::gpu

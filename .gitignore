@@ -22,8 +22,10 @@ test_output/
 *.wav
 crash_log.txt
 
-# VS
+# IDE
 .vs/
+.idea/
+.vscode/
 out/
 
 # Build directories

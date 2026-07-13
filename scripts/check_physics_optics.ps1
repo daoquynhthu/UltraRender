@@ -1,6 +1,6 @@
 param(
-    [string]$BuildDir = "build_modular",
-    [string]$Config = "RelWithDebInfo",
+    [string]$BuildDir = "build_modular_x64",
+    [string]$Config = "Release",
     [switch]$RenderVisual
 )
 
@@ -33,18 +33,27 @@ if ($RenderVisual) {
 
 foreach ($target in $targets) {
     Run-Step "Build $target" {
-        cmake --build $buildPath --config $Config --target $target -- /m:1
+        $previousParallelLevel = $env:CMAKE_BUILD_PARALLEL_LEVEL
+        $env:CMAKE_BUILD_PARALLEL_LEVEL = "1"
+        try {
+            cmake --build $buildPath --config $Config --target $target
+        } finally {
+            $env:CMAKE_BUILD_PARALLEL_LEVEL = $previousParallelLevel
+        }
     }
 }
 
 $executables = @(
-    "tests\gpu\$Config\gpu_test_math.exe",
-    "tests\gpu\$Config\gpu_test_spectral_soa.exe",
-    "tests\gpu\$Config\gpu_test_render.exe"
+    "gpu_test_math.exe",
+    "gpu_test_spectral_soa.exe",
+    "gpu_test_render.exe"
 )
 
 foreach ($exe in $executables) {
-    $exePath = Join-Path $buildPath $exe
+    $exePath = Join-Path $buildPath "tests\gpu\$exe"
+    if (-not (Test-Path $exePath)) {
+        $exePath = Join-Path $buildPath "tests\gpu\$Config\$exe"
+    }
     Run-Step "Run $exe" {
         & $exePath
     }
@@ -54,8 +63,12 @@ if ($RenderVisual) {
     $scenePath = Join-Path $repo "scenes\textured_quad_validation.gltf"
     $outputPath = Join-Path $repo "output\physics_optics_visual_gltf.hdr"
     New-Item -ItemType Directory -Force -Path (Split-Path $outputPath) | Out-Null
+    $cliPath = Join-Path $buildPath "apps\ure_cli\ure_cli.exe"
+    if (-not (Test-Path $cliPath)) {
+        $cliPath = Join-Path $buildPath "apps\ure_cli\$Config\ure_cli.exe"
+    }
     Run-Step "Render glTF optics visual smoke" {
-        & (Join-Path $buildPath "apps\ure_cli\$Config\ure_cli.exe") render $scenePath --spp 1 --width 8 --height 8 --format hdr --output (Split-Path $outputPath -Leaf)
+        & $cliPath render $scenePath --spp 1 --width 8 --height 8 --format hdr --output (Split-Path $outputPath -Leaf)
     }
     if (-not (Test-Path $outputPath)) {
         throw "glTF visual smoke did not produce $outputPath"

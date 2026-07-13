@@ -140,8 +140,8 @@ $raygen = Get-Content -Raw $raygenPath
 if ($raygen -notmatch "kSpectralLambdaMin\s*\+\s*r_lambda\s*\*\s*domain") {
     throw "sampled raygen must write continuous wavelength samples"
 }
-if ($raygen -notmatch "SpectralRayModeSampled[\s\S]*1\.0f\s*/\s*domain") {
-    throw "sampled raygen must store continuous wavelength pdf density"
+if ($raygen -notmatch "wavelength_pdfs\[ray_index\]\s*=\s*spectral_mode\s*==\s*SpectralRayModeSampled[\s\S]*\?\s*wavelength_pdf") {
+    throw "sampled raygen must store proposal-aware continuous wavelength pdf density"
 }
 
 $wavefrontPath = Join-Path $RepoRoot "libs\ure_core\src\path_tracer_wavefront.cuh"

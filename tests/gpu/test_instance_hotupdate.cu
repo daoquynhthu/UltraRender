@@ -211,7 +211,7 @@ static int test_gpu_transform_readback() {
     
     std::vector<ure::gpu::GpuInstance> instances(1);
     instances[0].mesh_index = 0;
-    instances[0].material_index = 0;
+    instances[0].material_index = ure::gpu::kDefaultMaterialCount;
     instances[0].transform = ure::gpu::GpuMat4::identity();
     instances[0].inverse_transform = ure::gpu::GpuMat4::identity();
     instances[0].min_pt = {-1,-1,-1};
@@ -219,6 +219,9 @@ static int test_gpu_transform_readback() {
     
     ure::gpu::GpuContext* ctx = ure::gpu::init_gpu_renderer(64, 64, meshes, instances, {}, materials, {});
     CHECK(ctx != nullptr);
+    const float camera_position[3] = {0.0f, 0.0f, 10.0f};
+    const float camera_target[3] = {0.0f, 0.0f, 0.0f};
+    ure::gpu::update_camera_gpu(ctx, camera_position, camera_target, 45.0f);
     
     // Allocate host+device memory for transform readback
     ure::gpu::GpuInstanceTransform* d_readback;

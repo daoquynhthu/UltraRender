@@ -16,8 +16,8 @@ This file defines the rules, conventions, and workflow that any AI agent must fo
 ure_types     — Header-only type library (INTERFACE). Vec3, Mat4, Quat, Ray, SceneIR, RenderConfig, World.
 ure_core      — GPU rendering core (STATIC, CUDA 13+). Path tracer kernel, BVH, GPU driver, scene compiler.
 ure_sceneio   — Scene I/O (STATIC, pure C++). glTF 2.0 parser, OBJ/legacy loader, stb_image, SPD loader.
-ure_diag      — Unified logging/diagnostics (INTERFACE, planned Phase Dx).
-ure_config    — Config system (STATIC, pure C++, planned Phase I).
+ure_diag      — Unified logging/diagnostics (INTERFACE, Phase Dx complete).
+ure_config    — Config system (STATIC, pure C++, Phase I complete).
 ure_physics   — Physics/acoustic (STATIC, pure C++, built optionally).
 ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_config.
 ```
@@ -39,7 +39,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | D (Distributed Integration) | Done | File backend for sample-range/framebuffer exchange and merge workflow |
 | E (N-Channel Spectral) | Done | Runtime-N spectral pipeline, SPD input, spectral lane split, Mueller/dispersion closure |
 | S (Session API) | Done | `RenderSession`, `SceneDiff`, AOVs, C ABI, pyure progressive/mutation workflow |
-| M (Material System) | In progress | SceneIR material graph + first GPU expression graph; MaterialX/layering/presets remain planned |
+| M (Material System) | Done | MaterialGraph, GPU expression graph, BSDF mix/layer, MaterialX adapter, presets |
 | L (Large Spectral Domain) | Done | `domain_bins` / `packet_lanes` split, 1M oracle/sampled smoke, resource descriptors, distributed spectral shard metadata, runtime presets, static audit |
 | W (Wave Optics Solver) | In progress | W.0 audit + rough dielectric spectral/UV PDF/MIS fix done; W.1 WaveOpticsConfig gates done; W.2 Airy PSF oracle started |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
@@ -52,11 +52,11 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 - Textures are spectral resource carriers (`HostTexture` → RGB CUDA texture object or explicit source-sample spectral grid), not display RGB
 
 ### Non-Goals (out of scope)
-- CPU integrator improvements (`src/integrators/` is OBSOLETE — do not modify)
+- CPU production integrator development; host code is limited to oracle, compilation, build, scheduling, and validation roles
 - Adding features not in PLAN.md
 - Random refactoring without a plan step
 - OpenGL/Vulkan interactive viewport (CLI offline + Python future)
-- OSL compiler (custom node graph + MaterialX in future Phase M)
+- OSL compiler (URE MaterialGraph is authoritative; MaterialX is an adapter)
 
 ---
 
@@ -173,61 +173,28 @@ E:\Render Engine\
 
 ### Test Commands
 ```powershell
-# Build all (Release)
-cmake --build build_modular --config Release
+# Configure and build all Release targets
+.\scripts\build_x64.ps1 -BuildDir build_modular_x64 -Config Release
 
-# Run host tests
-& "E:\Render Engine\build_modular\tests\host\Release\test_world.exe"
-& "E:\Render Engine\build_modular\tests\host\Release\test_asset_pipeline.exe"
-& "E:\Render Engine\build_modular\tests\host\Release\test_gltf_frontend.exe"
-& "E:\Render Engine\build_modular\tests\host\Release\test_session.exe"
-$env:PYTHONPATH="E:\Render Engine"; $env:PYURE_NATIVE="E:\Render Engine\build_modular\pyure\Release\pyure_native.dll"; python "E:\Render Engine\tests\host\test_pyure_smoke.py"
+# Run the complete registered test gate
+ctest --test-dir build_modular_x64 -C Release --output-on-failure
 
-# Run GPU tests
-& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_device.exe"
-& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_hardware.exe"
-& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_math.exe"
-& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_spectral.exe"
-& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_render.exe"
-& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_instance.exe"
-& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_tangents.exe"
-& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_denoise.exe"
-& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_polarization.exe"
-& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_volume.exe"
-& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_contract.exe"
+# Build selected targets without reconfiguration
+.\scripts\build_x64.ps1 -BuildDir build_modular_x64 -Config Release -SkipConfigure -Targets test_gltf_frontend,gpu_test_tangents
 
-# Build+run a single host test (RelWithDebInfo, faster than Debug)
-cmake --build build_modular --config RelWithDebInfo --target test_gltf_frontend
-& "E:\Render Engine\build_modular\tests\host\RelWithDebInfo\test_gltf_frontend.exe"
-
-# Build+run a single GPU test
-cmake --build build_modular --config RelWithDebInfo --target gpu_test_tangents
-& "E:\Render Engine\build_modular\tests\gpu\RelWithDebInfo\gpu_test_tangents.exe"
+# Run selected tests
+ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangents" --output-on-failure
 ```
 
 ### Current Test Inventory
-| Type | Count | Location | Runner |
-|------|-------|----------|--------|
-| Host (World/ECS) | 39 | `tests/host/test_world.cpp` | Direct EXE |
-| Host (Asset Pipeline) | 48 | `tests/host/test_asset_pipeline.cpp` | Direct EXE |
-| Host (glTF Frontend) | 185 | `tests/host/test_gltf_frontend.cpp` | Direct EXE |
-| Host (Session API) | 188 | `tests/host/test_session.cpp` | Direct EXE |
-| Host (Distributed File I/O) | 71 | `tests/host/test_distributed_file_io.cpp` | Direct EXE |
-| Host (Spectral Oracle) | 20 | `tests/host/test_spectral_oracle.cpp` | Direct EXE |
-| Host (Python API smoke) | 1 CTest | `tests/host/test_pyure_smoke.py` | Python/CTest |
-| GPU (Device) | ~30 | `tests/gpu/test_device.cu` | Direct EXE |
-| GPU (Hardware) | 45 | `tests/gpu/test_hardware.cu` | Direct EXE |
-| GPU (Math) | ~30 | `tests/gpu/test_math_functions.cu` | Direct EXE |
-| GPU (Spectral) | 615 | `tests/gpu/test_spectral_pipeline.cu` | Direct EXE |
-| GPU (Spectral SoA) | 737 | `tests/gpu/test_spectral_pipeline_soa.cu` | Direct EXE |
-| GPU (Render) | 338 | `tests/gpu/test_render_basic.cu` | Direct EXE |
-| GPU (Hot-Update) | 68 | `tests/gpu/test_instance_hotupdate.cu` | Direct EXE |
-| GPU (Tangents) | 27 | `tests/gpu/test_gpu_tangents.cu` | Direct EXE |
-| GPU (Denoise) | CTest target | `tests/gpu/test_gpu_denoise.cu` | Direct EXE |
-| GPU (Polarization) | 126 | `tests/gpu/test_gpu_polarization.cu` | Direct EXE |
-| GPU (Volume) | CTest target | `tests/gpu/test_gpu_volume.cu` | Direct EXE |
-| GPU (Distributed Contract) | 243 | `tests/gpu/test_distributed_contract.cu` | Direct EXE |
-| **CTest total** | **21/21 passing target after Phase L.12** | `build_modular_x64` | `ctest --test-dir build_modular_x64 --output-on-failure` |
+| Group | Registered CTest targets |
+|-------|--------------------------|
+| GPU core | `gpu_device`, `gpu_math`, `gpu_spectral`, `gpu_spectral_soa`, `gpu_hardware`, `gpu_render`, `gpu_instance`, `gpu_tangents`, `gpu_denoise` |
+| GPU physics/contracts | `gpu_polarization`, `gpu_volume`, `gpu_contract`, `gpu_wave_optics` |
+| Host core | `test_world`, `test_asset_pipeline`, `test_config`, `test_spectral_oracle`, `test_wave_optics`, `test_integrator` |
+| Host scene/material/session | `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io` |
+| Python | `test_pyure_smoke` |
+| **CTest total** | **25 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -243,7 +210,7 @@ After **EVERY** conversation compaction, context reset, session resume, tool mer
 
 1. **Read this file (AGENTS.md) in full** — re-establish governance rules
 2. **Read PLAN.md in full** — re-establish phase context and current status
-3. **Check `build_modular/` last build output** — verify project still compiles before making changes
+3. **Check `build_modular_x64/` last build output** — verify project still compiles before making changes
 
 ### 5.2 Session Summary / Dream Cycle Constraint
 
@@ -353,24 +320,24 @@ PLAN → IMPLEMENT → VERIFY → REVIEW → REPORT → COMMIT
 - **Compiler**: VS 2022 BuildTools (`vcvarsall.bat x64`)
 - **CUDA**: 13.0
 - **GPU**: RTX 5060 Laptop (CC 12.0, 8 GB VRAM, 26 SMs)
-- **Generator**: `cmake -G "Visual Studio 17 2022"`
-- **Build directory**: `build_modular/`
+- **Generator**: Ninja through `scripts/build_x64.ps1` with the VS 2022 x64 toolchain
+- **Build directory**: `build_modular_x64/`
 - **Build config**: `Release` (for tests), `Debug` (for development)
 
 ### Build Commands
 ```powershell
 # Configure
-cmake -G "Visual Studio 17 2022" -B build_modular -S .
+.\scripts\build_x64.ps1 -BuildDir build_modular_x64 -Config Release -SkipBuild
 
 # Build specific target
-cmake --build build_modular --config Release --target <target_name>
+.\scripts\build_x64.ps1 -BuildDir build_modular_x64 -Config Release -SkipConfigure -Targets <target_name>
 
 # Build all
-cmake --build build_modular --config Release
+cmake --build build_modular_x64 --config Release
 
 # Build and run a GPU test
-cmake --build build_modular --config Release --target gpu_test_hardware
-& "E:\Render Engine\build_modular\tests\gpu\Release\gpu_test_hardware.exe"
+cmake --build build_modular_x64 --config Release --target gpu_test_hardware
+ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-failure
 ```
 
 ---
@@ -387,3 +354,11 @@ cmake --build build_modular --config Release --target gpu_test_hardware
 | 4 | 2026-06-09 Phase G Tests | 编写全方位 Phase G 测试: host (11 cases, 55 checks) + GPU (3 cases, 21 checks); 修复 JSON 数组未闭合 bug; 全局 CMAKE_CUDA_FLAGS + /wd4819 消除 C4819 警告 | 2 test files + 2 CMakeLists.txt + 1 root CMakeLists.txt; host + GPU 全部通过 |
 | 5 | 2026-06-09 Phase I | 配置系统: 下载 CLI11+json.hpp → third_party; 实现 JSON 四段配置(spectral/renderer/output/gpu); CLI11 子命令(render/info/list-devices/validate); 覆盖链(CLI > JSON > defaults); 重构 main.cpp 为 subcommand dispatch | 340 tests all pass; ure_config CMakeLists 链接 third_party; 保留完整 physics demo loop; `ure_cli list-devices` 输出 RTX 5060 Laptop GPU CC 12.0 8150 MB |
 | 6 | 2026-06-10 Batch 2b Cleanup | C11 (GPU test memory leak) + M10 (render silent no-op) + C8 (AABB perf — 8-corner transform) + C10 (RingBuffer memory ordering — derive read from write_index + atomic_thread_fence) | 10 CTest all pass; DeviceMem RAII in test_framework.cuh; `render()` throws on null ctx; AABB O(N*21) → O(N*6+24); RingBuffer SPSC fence-correct |
+| 7 | 2026-07-11 Workspace Hygiene | Removed obsolete build/output/IDE directories, retained reproducible glTF render fixtures, refreshed current documentation and validation scripts, and repaired two exposed GPU regressions | Reused mutually exclusive layered/composite material storage to reduce `shade_kernel` local stack pressure; corrected the instance hot-update fixture material offset and camera; Release build, Phase L/R audits, physics-optics gate, and 25/25 CTest passed |
+
+### Consolidated Truth
+
+- The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
+- The current construction cursor is R-P6 Mie / volume phase resources; Phase M is complete.
+- The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
+- CUDA compilation must be serialized per heavy target in this development environment to avoid concurrent `ptxas` host-memory allocation failures.

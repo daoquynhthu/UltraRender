@@ -2232,9 +2232,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
         mat_soa.emission = mat_soa.emission * tex_emission;
     }
 
-    ResolvedMaterialBsdfLobe composite_a = {};
-    ResolvedMaterialBsdfLobe composite_b = {};
-    ResolvedLayeredMaterial layered = {};
+    ResolvedLayeredMaterial resolved_material;
     float composite_mix = 0.0f;
     if (is_composite) {
         if (!scene.material_bsdf_lobes ||
@@ -2242,12 +2240,12 @@ __global__ __launch_bounds__(256) void shade_kernel(
             mat.bsdf_lobe_start < 0 ||
             mat.bsdf_lobe_start + mat.bsdf_lobe_count > scene.material_bsdf_lobe_count ||
             mat.bsdf_mix_expression_root < 0) return;
-        composite_a = resolve_material_bsdf_lobe(scene, mat, 0, hit_uv, throughput.wavelengths);
-        composite_b = resolve_material_bsdf_lobe(scene, mat, 1, hit_uv, throughput.wavelengths);
+        resolved_material.coating = resolve_material_bsdf_lobe(scene, mat, 0, hit_uv, throughput.wavelengths);
+        resolved_material.substrate = resolve_material_bsdf_lobe(scene, mat, 1, hit_uv, throughput.wavelengths);
         composite_mix = composite_material_mix_factor(scene, mat, hit_uv, throughput.wavelengths);
         for (int c = 0; c < scene.num_spectral_channels; ++c) {
-            mat_soa.albedo.values[c] = composite_a.spectra.albedo.values[c] * (1.0f - composite_mix) +
-                composite_b.spectra.albedo.values[c] * composite_mix;
+            mat_soa.albedo.values[c] = resolved_material.coating.spectra.albedo.values[c] * (1.0f - composite_mix) +
+                resolved_material.substrate.spectra.albedo.values[c] * composite_mix;
             mat_soa.albedo.wavelengths[c] = throughput.wavelengths[c];
         }
     } else if (is_layered) {
@@ -2257,10 +2255,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
             mat.bsdf_lobe_start + mat.bsdf_lobe_count > scene.material_bsdf_lobe_count ||
             mat.layer_thickness_expression_root < 0 ||
             mat.layer_absorption_expression_root < 0) return;
-        layered = resolve_layered_material(scene, mat, hit_uv, throughput.wavelengths);
-        if (layered.coating.material.type != MaterialType::Dielectric ||
-            layered.substrate.material.type != MaterialType::Lambertian) return;
-        mat_soa.albedo = layered.substrate.spectra.albedo;
+        resolved_material = resolve_layered_material(scene, mat, hit_uv, throughput.wavelengths);
+        if (resolved_material.coating.material.type != MaterialType::Dielectric ||
+            resolved_material.substrate.material.type != MaterialType::Lambertian) return;
+        mat_soa.albedo = resolved_material.substrate.spectra.albedo;
     }
 
     GpuVec3 p = hit_queue.p[idx];
@@ -2402,21 +2400,21 @@ __global__ __launch_bounds__(256) void shade_kernel(
                  SpectralPacket pdf_mat;
                  if (is_composite) {
                      SpectralPacket f_a = eval_bsdf(
-                         composite_a.material, composite_a.spectra.albedo, composite_a.spectra.extinction,
-                         composite_a.spectra.metal_eta, composite_a.dielectric_ior, p, n, hit_uv,
+                         resolved_material.coating.material, resolved_material.coating.spectra.albedo, resolved_material.coating.spectra.extinction,
+                         resolved_material.coating.spectra.metal_eta, resolved_material.coating.dielectric_ior, p, n, hit_uv,
                          -current_queue.directions[idx], light_sample.direction, throughput.wavelengths,
                          scene.num_spectral_channels);
                      SpectralPacket f_b = eval_bsdf(
-                         composite_b.material, composite_b.spectra.albedo, composite_b.spectra.extinction,
-                         composite_b.spectra.metal_eta, composite_b.dielectric_ior, p, n, hit_uv,
+                         resolved_material.substrate.material, resolved_material.substrate.spectra.albedo, resolved_material.substrate.spectra.extinction,
+                         resolved_material.substrate.spectra.metal_eta, resolved_material.substrate.dielectric_ior, p, n, hit_uv,
                          -current_queue.directions[idx], light_sample.direction, throughput.wavelengths,
                          scene.num_spectral_channels);
                      SpectralPacket pdf_a = pdf_bsdf_spectral(
-                         composite_a.material, composite_a.dielectric_ior, n, hit_uv,
+                         resolved_material.coating.material, resolved_material.coating.dielectric_ior, n, hit_uv,
                          -current_queue.directions[idx], light_sample.direction, throughput.wavelengths,
                          scene.num_spectral_channels, dispersion_clamp);
                      SpectralPacket pdf_b = pdf_bsdf_spectral(
-                         composite_b.material, composite_b.dielectric_ior, n, hit_uv,
+                         resolved_material.substrate.material, resolved_material.substrate.dielectric_ior, n, hit_uv,
                          -current_queue.directions[idx], light_sample.direction, throughput.wavelengths,
                          scene.num_spectral_channels, dispersion_clamp);
                      for (int c = 0; c < scene.num_spectral_channels; ++c) {
@@ -2427,10 +2425,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
                      }
                  } else if (is_layered) {
                      f_r = eval_layered_bsdf(
-                         layered, p, n, hit_uv, -current_queue.directions[idx],
+                        resolved_material, p, n, hit_uv, -current_queue.directions[idx],
                          light_sample.direction, throughput.wavelengths, scene.num_spectral_channels);
                      pdf_mat = pdf_layered_bsdf_spectral(
-                         layered, n, hit_uv, -current_queue.directions[idx],
+                        resolved_material, n, hit_uv, -current_queue.directions[idx],
                          light_sample.direction, throughput.wavelengths,
                          scene.num_spectral_channels, dispersion_clamp);
                  } else {
@@ -2523,8 +2521,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 float lobe_sample = sample_path_dimension(
                     sample_index, pixel_index, depth, kPathDimBsdfLobe);
                 const ResolvedMaterialBsdfLobe& selected = lobe_sample < composite_mix
-                    ? composite_b
-                    : composite_a;
+                    ? resolved_material.substrate
+                    : resolved_material.coating;
                 mat = selected.material;
                 mat_soa = selected.spectra;
                 dielectric_ior = selected.dielectric_ior;
@@ -2563,7 +2561,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
             }
             bool scattered_ok = is_layered
                 ? scatter_layered_material(
-                    layered,
+                    resolved_material,
                     r_in,
                     p,
                     n,
@@ -2581,11 +2579,11 @@ __global__ __launch_bounds__(256) void shade_kernel(
             if (scattered_ok) {
                 if (is_composite && pdf_val > 0.0f) {
                     SpectralPacket pdf_a = pdf_bsdf_spectral(
-                        composite_a.material, composite_a.dielectric_ior, n, uv,
+                        resolved_material.coating.material, resolved_material.coating.dielectric_ior, n, uv,
                         -r_in.direction, scattered.direction, throughput.wavelengths,
                         scene.num_spectral_channels, dispersion_clamp);
                     SpectralPacket pdf_b = pdf_bsdf_spectral(
-                        composite_b.material, composite_b.dielectric_ior, n, uv,
+                        resolved_material.substrate.material, resolved_material.substrate.dielectric_ior, n, uv,
                         -r_in.direction, scattered.direction, throughput.wavelengths,
                         scene.num_spectral_channels, dispersion_clamp);
                     pdf_val = 0.0f;

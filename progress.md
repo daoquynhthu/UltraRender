@@ -1,5 +1,7 @@
 # UltraRender Progress Log
 
+> **Historical snapshot:** This chronological log is not a current execution plan. Use `AGENTS.md` and `PLAN.md` for current status, constraints, and the authoritative construction cursor.
+
 ## 2026-06-09 — Phase P 全部完成 + API 工业化 (P.9–P.13)
 
 Phase P 全部 8 个子步骤完成（P.1–P.8），外加 API 工业化改造（P.9–P.13）。
