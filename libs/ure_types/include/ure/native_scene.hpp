@@ -73,6 +73,7 @@ enum class ChunkKind : std::uint32_t {
     Provenance = 14,
     CacheReference = 15,
     ProceduralGraph = 17,
+    ScriptBuild = 18,
     Extension = 0x80000000u
 };
 

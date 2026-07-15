@@ -2200,7 +2200,7 @@ struct MaterialGraph {
 
 ### Phase Q — URE 原生场景系统 / Procedural Industrial Scene Format
 
-**状态**: 进行中。Q.0-Q.4 原生格式、当前 SceneIR serialization 与 deterministic procedural graph 已完成；当前后续游标为 Q.5。
+**状态**: 进行中。Q.0-Q.5 原生格式、当前 SceneIR serialization、deterministic procedural graph 与显式 script build hook 已完成；当前后续游标为 Q.6。
 
 **目标**: 建立 UltraRender 自己的第一等场景格式和程序化 authoring contract。`.ure` / `.urescene` / `.urepkg` 是权威格式；SceneIR 是编译后的内部 IR；glTF、USD、MaterialX、EXR、SPD 等只能作为导入/导出 adapter 或资源交换格式，不能限制 UltraRender 的核心能力。Phase Q 必须覆盖当前和规划中的场景、光谱、材质、介质、体积、光源、积分器、几何加速、波动光学、物理、声学、视频流、分布式和脚本化能力，并为未来物理/声学模型改变保留 schema migration 与开放 extension slot。
 
@@ -2274,7 +2274,7 @@ struct MaterialGraph {
 | Q.2 | ✅ Core schema/versioning：scene/package ID、container/schema version、canonical conventions、required/optional/advisory feature、opaque extension、migration metadata、FlatBuffers 25.12.19 schema/baseline 和 structured diagnostics 已实现 | unknown required fail-loud；unknown optional bytes 保留；major migration gate、minor compatibility、path/hash/dependency/budget/overflow/alignment/overlap validation 已进入 host tests |
 | Q.3 | ✅ Native SceneIR serialization：`URIG` graph + content-addressed `URMS` mesh / `URMI` Mie typed chunks，完整覆盖当前 SceneIR/MaterialGraph/image/texture/medium/light/camera/physics/instance 字段；稳定 source ID、deep freeze、canonical exploded `.ure`、原子文件 I/O、可选 chunk 保留和 fail-loud validation 已实现 | binary/text semantic hash 等价、bit-preserving roundtrip、完整 fixture 经 `GpuSceneCompiler` 验证；28/28 CTest 与 Q/L/R/physics-optics gates 通过，未借用 glTF 字段作为权威语义 |
 | Q.4 | ✅ 程序化 graph：`URPG` typed DAG、显式 parameter domain、SHA-256 counter seed、source/cache/output identity、scatter/instancing、blackbody/Gaussian spectrum、ring/grid/three-point light rig、transactional fragment composition 已实现；保留 core chunk 16，使用 kind 17 | binary/text graph 可生成 validated SceneIR fragment；同 seed/source/evaluator fingerprint 输出稳定；retained fixture 通过 `GpuSceneCompiler`；29/29 CTest 与 Q/L/R/physics-optics gates 通过；非法 graph fail-loud |
-| Q.5 | Script build hook：定义显式启用的脚本 build step、sandbox policy、dependency lock、I/O contract、provenance hash 和 cache invalidation | 默认禁用；启用后脚本只在 build/compile 阶段运行；运行时不解释脚本；输出 hash 可复现 |
+| Q.5 | ✅ Script build hook：`URSB` typed manifest、显式 opt-in host-neutral coordinator、外部 attestable sandbox runner、exact runtime/dependency lock、virtual I/O、硬预算、provenance/output hash 和完整 cache invalidation 已实现；协调器不直接启动解释器/进程并把 runner 输出视为不可信 | 默认禁用且 disabled 路径不调用 runner；启用后只经 build API 执行；ambient filesystem/environment/network/subprocess/time/entropy policy fail-loud；输出重哈希、attestation/声明/大小完整复核；30/30 CTest 与 Q/L/R/physics-optics gates 通过 |
 | Q.6 | 光谱/材质/介质资源：把 Phase L/M/R-P6 所需 spectral resource、MaterialGraph、Mie/phase resource、texture/video stream resource 纳入原生 schema | domain bins、packet lanes、basis/tile/source-sample、Mie table、spectral video stream 均有 typed schema 和 budget metadata |
 | Q.7 | 求解器/积分器 contract：把 Phase R/V/W 的 integrator mode、guiding/ReSTIR/BDPT/VCM/MLT、acceleration backend、wave optics、coherent merge、validation requirement 纳入 feature declaration | 场景请求 unsupported solver/mode/backend 时在 compile/session create 前失败；supported mode 进入 SceneIR/RenderConfig |
 | Q.8 | 物理/声学开放 schema：定义 physics/acoustic extension slot、solver version、coupling channel、time sampling、resource ownership 和 migration policy | 当前 solver 可以只支持 subset；未知 required physics/acoustic extension fail-loud；schema 允许未来替换 solver |

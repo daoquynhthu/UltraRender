@@ -23,6 +23,7 @@ add_library(ure_sceneio STATIC
     src/native_procedural_spectrum.cpp
     src/native_procedural_light.cpp
     src/native_procedural_schema.cpp
+    src/native_script_build.cpp
     src/wav_saver.cpp
     src/scene_ir.cpp
     src/camera.cpp

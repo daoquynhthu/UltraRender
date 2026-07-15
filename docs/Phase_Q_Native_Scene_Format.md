@@ -110,7 +110,9 @@ The classification column distinguishes authoritative source semantics, runtime 
 | framebuffer merge metadata | samples, dimensions, compatible shard identity | `render.distributed.merge` | Farm result | Q.7/Q.11 |
 | coherent merge | complex-field merge mode and compatibility | `render.distributed.coherent_merge` | Farm request/result | Q.7/Q.11 |
 | procedural scatter/instance/spectrum/light rig | planned deterministic graph | `build.procedural` | Build source | Q.4 reserved required domain |
-| script build hook | interpreter, dependency lock, sandbox, inputs/outputs | `build.script` | Explicit opt-in build source | Q.5 reserved domain |
+| script build hook | interpreter identity, dependency lock, sandbox attestation, typed inputs/outputs | `build.script` | Explicit opt-in build source | Q.5 typed `URSB` manifest and host-neutral runner contract |
+
+Q.5 keeps execution outside the native loader and runtime. The URE coordinator defaults to disabled, accepts only a caller-supplied sandbox runner, forbids ambient filesystem/environment/network/subprocess/time/entropy capabilities, and independently verifies every declared output. Cache identity includes the script, exact runtime, dependency lock, runner, policy, and input hashes; provenance excludes host paths and timestamps. A concrete OS or language runner is separately deployable and must not be confused with the coordinator itself.
 | physics coupling | solver version, time step, resources and channels | `scene.physics` | Source extension domain | Q.8 |
 | acoustic coupling | emitters, listeners, materials, geometry coupling | `scene.acoustic` | Source extension domain | Q.8 |
 | animation tracks | transform/camera time samples and shutter contract | `scene.animation` | Source extension domain | Q.3/Q.6 |

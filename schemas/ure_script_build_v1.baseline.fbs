@@ -1,0 +1,12 @@
+namespace ure.script.schema;
+
+struct Version { major:uint; minor:uint; }
+enum ArtifactKind : ubyte { Scene = 0, Resource = 1, Cache = 2 }
+table Input { content_hash:string (id: 0); name:string (id: 1); }
+table Output { kind:ArtifactKind (id: 0); maximum_bytes:ulong (id: 1); name:string (id: 2); schema_identity:string (id: 3); }
+table SandboxPolicy { ambient_filesystem:bool (id: 0); inherited_environment:bool (id: 1); network:bool (id: 2); nondeterministic_entropy:bool (id: 3); policy_hash:string (id: 4); subprocesses:bool (id: 5); wall_clock:bool (id: 6); }
+table Limits { duration_ms:ulong (id: 0); log_bytes:ulong (id: 1); memory_bytes:ulong (id: 2); output_bytes:ulong (id: 3); }
+table ScriptBuildManifest { dependency_lock_hash:string (id: 0); id:string (id: 1); inputs:[Input] (id: 2); limits:Limits (id: 3); outputs:[Output] (id: 4); runner_hash:string (id: 5); runner_identity:string (id: 6); runtime_hash:string (id: 7); runtime_identity:string (id: 8); sandbox:SandboxPolicy (id: 9); schema_version:Version (id: 10); script_hash:string (id: 11); }
+root_type ScriptBuildManifest;
+file_identifier "URSB";
+file_extension "urscript";
