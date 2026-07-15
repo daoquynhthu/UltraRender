@@ -291,7 +291,7 @@ NativeSceneArchive make_native_scene_archive(SceneDocument document,
 }
 
 ValidationReport validate_scene_ir_archive(const NativeSceneArchive& archive,
-                                           const ValidationLimits&) {
+                                           const ValidationLimits& limits) {
     ValidationReport report;
     validate_id_vector(report, archive.source_ids.materials, archive.scene.materials.size(), "source_ids.materials");
     validate_id_vector(report, archive.source_ids.meshes, archive.scene.meshes.size(), "source_ids.meshes");
@@ -417,6 +417,13 @@ ValidationReport validate_scene_ir_archive(const NativeSceneArchive& archive,
     if (archive.scene.medium_mie_resource && !finite_mie(*archive.scene.medium_mie_resource)) {
         add_error(report, "URE-Q3-MIE-003", "scene.medium_mie", "Non-finite Mie resource");
     }
+    if (archive.resource_catalog) {
+        if (std::ranges::none_of(archive.document.features, [](const FeatureDeclaration& feature) { return feature.name == kResourceCatalogFeature && feature.requirement == RequirementLevel::Required; })) {
+            add_error(report, "URE-Q6-FEATURE-001", "resource_catalog", "Resource catalog requires ure.scene.resource feature declaration");
+        }
+        const ValidationReport catalog = validate_resource_catalog(*archive.resource_catalog, limits);
+        report.diagnostics.insert(report.diagnostics.end(), catalog.diagnostics.begin(), catalog.diagnostics.end());
+    }
     return report;
 }
 
@@ -529,6 +536,10 @@ std::string scene_ir_semantic_hash(const NativeSceneArchive& archive) {
         append_bytes(stream, "ure.procedural.graph.v1");
         const auto procedural = detail::encode_procedural_graph(*archive.procedural_graph);
         stream.insert(stream.end(), procedural.begin(), procedural.end());
+    }
+    if (archive.resource_catalog) {
+        append_bytes(stream, "ure.resource.catalog.v1");
+        append_bytes(stream, resource_catalog_semantic_hash(*archive.resource_catalog));
     }
     return sha256_hex(stream);
 }

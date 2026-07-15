@@ -10,7 +10,7 @@
 namespace ure::native_scene {
 
 inline constexpr std::string_view kScriptBuildSchemaIdentity = "ure.script-build/1.0";
-inline constexpr std::string_view kScriptBuildFeature = "build.script";
+inline constexpr std::string_view kScriptBuildFeature = "ure.build.script";
 
 enum class ScriptArtifactKind : std::uint8_t { Scene, Resource, Cache };
 

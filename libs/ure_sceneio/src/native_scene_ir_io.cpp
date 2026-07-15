@@ -87,6 +87,13 @@ std::vector<std::uint8_t> write_scene_ir_binary(const NativeSceneArchive& archiv
         const ValidationReport graph_validation = validate_procedural_graph(*archive.procedural_graph, archive);
         if (!graph_validation.ok()) throw std::invalid_argument(graph_validation.diagnostics.front().message);
     }
+    if (archive.resource_catalog) {
+        if (std::ranges::none_of(archive.document.features, [](const FeatureDeclaration& feature) { return feature.name == kResourceCatalogFeature && feature.requirement == RequirementLevel::Required; })) {
+            throw std::invalid_argument("Resource catalog requires ure.scene.resource feature declaration");
+        }
+        const ValidationReport catalog_validation = validate_resource_catalog(*archive.resource_catalog);
+        if (!catalog_validation.ok()) throw std::invalid_argument(catalog_validation.diagnostics.front().message);
+    }
     detail::EncodedResources resources = detail::encode_resources(archive);
     SceneDocument document = archive.document;
     for (const auto& resource : resources.payloads) {
@@ -110,6 +117,11 @@ std::vector<std::uint8_t> write_scene_ir_binary(const NativeSceneArchive& archiv
         container.chunks.push_back({"procedural_graph", static_cast<std::uint32_t>(ChunkKind::ProceduralGraph), {1, 0},
                                     RequirementLevel::Required, static_cast<std::uint32_t>(CompressionCodec::None),
                                     8, {}, {"scene_graph"}, std::move(procedural_payload)});
+    }
+    if (archive.resource_catalog) {
+        container.chunks.push_back({"resource_catalog", static_cast<std::uint32_t>(ChunkKind::ResourceCatalog), {1, 0},
+                                    RequirementLevel::Required, static_cast<std::uint32_t>(CompressionCodec::None),
+                                    8, {}, {"scene_graph"}, write_resource_catalog_binary(*archive.resource_catalog)});
     }
     for (auto& resource : resources.payloads) {
         const ChunkKind kind = resource.descriptor.kind == ResourceKind::Geometry
@@ -142,6 +154,7 @@ LoadResult<NativeSceneArchive> read_scene_ir_binary(
         const ContainerChunk* metadata = nullptr;
         const ContainerChunk* graph = nullptr;
         const ContainerChunk* procedural_graph = nullptr;
+        const ContainerChunk* resource_catalog = nullptr;
         std::unordered_map<std::string, std::shared_ptr<Mesh>> meshes;
         std::unordered_map<std::string, std::shared_ptr<const scene_ir::MiePhaseResource>> mie;
         std::unordered_map<std::string, std::string> resource_hashes;
@@ -157,6 +170,9 @@ LoadResult<NativeSceneArchive> read_scene_ir_binary(
             } else if (chunk.type == static_cast<std::uint32_t>(ChunkKind::ProceduralGraph)) {
                 if (procedural_graph) return io_failure<NativeSceneArchive>("URE-Q4-CONTAINER-001", "procedural_graph", "Duplicate procedural graph chunk");
                 procedural_graph = &chunk;
+            } else if (chunk.type == static_cast<std::uint32_t>(ChunkKind::ResourceCatalog)) {
+                if (resource_catalog) return io_failure<NativeSceneArchive>("URE-Q6-CONTAINER-001", "resource_catalog", "Duplicate resource catalog chunk");
+                resource_catalog = &chunk;
             } else if (chunk.type == static_cast<std::uint32_t>(ChunkKind::Geometry)) {
                 auto decoded = detail::decode_mesh_payload(chunk.payload, limits);
                 append_diagnostics(diagnostics, decoded.diagnostics);
@@ -215,6 +231,15 @@ LoadResult<NativeSceneArchive> read_scene_ir_binary(
                 LoadResult<NativeSceneArchive> result;
                 result.diagnostics = std::move(diagnostics);
                 return result;
+            }
+        }
+        if (resource_catalog) {
+            auto decoded = read_resource_catalog_binary(resource_catalog->payload, limits);
+            append_diagnostics(diagnostics, decoded.diagnostics);
+            if (!decoded.value) { LoadResult<NativeSceneArchive> result; result.diagnostics = std::move(diagnostics); return result; }
+            archive.value->resource_catalog = std::make_shared<const NativeResourceCatalog>(std::move(*decoded.value));
+            if (std::ranges::none_of(archive.value->document.features, [](const FeatureDeclaration& feature) { return feature.name == kResourceCatalogFeature && feature.requirement == RequirementLevel::Required; })) {
+                return io_failure<NativeSceneArchive>("URE-Q6-FEATURE-001", "resource_catalog", "Resource catalog lacks required ure.scene.resource feature declaration");
             }
         }
         archive.diagnostics = std::move(diagnostics);

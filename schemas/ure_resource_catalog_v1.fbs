@@ -1,0 +1,23 @@
+namespace ure.resource.schema;
+
+struct Version { major:uint; minor:uint; }
+enum ResourceKind:uint { Scene=0, Geometry=1, MaterialGraph=2, Texture=3, SpectralTable=4, MiePhase=5, VolumeField=6, Animation=7, Physics=8, Acoustic=9, Video=10, Validation=11, Provenance=12, Cache=13, Extension=14 }
+enum SpectralSemantic:ubyte { Reflectance=0, Emission=1, Ior=2, Extinction=3, Scattering=4, Absorption=5, Radiometric=6 }
+enum SpectralRepresentation:ubyte { Constant=0, RgbDerived=1, SampledTable=2, Basis=3, Tiled=4, SourceSampleGrid=5 }
+enum SpectralInterpolation:ubyte { Nearest=0, Linear=1, MonotoneCubic=2 }
+enum SpectralExtrapolation:ubyte { Zero=0, Clamp=1, Reject=2 }
+enum TextureInterpretation:ubyte { Spatial=0, Rgb=1, SourceSpectralGrid=2 }
+enum MediumPhaseModel:ubyte { HenyeyGreenstein=0, Rayleigh=1, Mie=2, Extension=3 }
+enum ResourceResidency:ubyte { Resident=0, Streamed=1, Tiled=2 }
+
+table SpectralDomain { wavelength_min_nm:double (id:0); wavelength_max_nm:double (id:1); domain_bins:ulong (id:2); packet_lanes_hint:uint (id:3); }
+table SpectralContract { semantic:SpectralSemantic=Radiometric (id:0); representation:SpectralRepresentation=SampledTable (id:1); domain:SpectralDomain (id:2); interpolation:SpectralInterpolation=Linear (id:3); extrapolation:SpectralExtrapolation=Reject (id:4); sample_count:ulong (id:5); basis_count:uint (id:6); tile_bins:ulong (id:7); value_min:double (id:8); value_max:double (id:9); normalized:bool (id:10); }
+table TextureContract { interpretation:TextureInterpretation=Spatial (id:0); width:ulong (id:1); height:ulong (id:2); spatial_channels:uint (id:3); source_spectral_samples:ulong (id:4); color_encoding:string (id:5); wavelength_axis_resource:string (id:6); }
+table MaterialContract { graph_owner_id:string (id:0); resource_dependencies:[string] (id:1); }
+table MediumContract { domain:SpectralDomain (id:0); scattering_resource:string (id:1); absorption_resource:string (id:2); emission_resource:string (id:3); phase:MediumPhaseModel=HenyeyGreenstein (id:4); phase_resource:string (id:5); extension_owner:string (id:6); }
+table VideoContract { frame_count:ulong (id:0); time_numerator:ulong=1 (id:1); time_denominator:ulong=24 (id:2); width:ulong (id:3); height:ulong (id:4); interpretation:TextureInterpretation=Rgb (id:5); source_spectral_samples:ulong (id:6); frame_index_resource:string (id:7); per_frame_hashes:bool=true (id:8); cache_budget_bytes:ulong (id:9); }
+table ResourceEntry { id:string (id:0); kind:ResourceKind=Extension (id:1); schema_version:Version (id:2); schema_identity:string (id:3); content_hash:string (id:4); payload_uri:string (id:5); payload_bytes:ulong (id:6); resident_bytes:ulong (id:7); residency:ResourceResidency=Resident (id:8); dependencies:[string] (id:9); spectral:SpectralContract (id:10); texture:TextureContract (id:11); material:MaterialContract (id:12); medium:MediumContract (id:13); video:VideoContract (id:14); }
+table ResourceCatalog { id:string (id:0); schema_version:Version (id:1); resources:[ResourceEntry] (id:2); }
+root_type ResourceCatalog;
+file_identifier "URRC";
+file_extension "urresource";

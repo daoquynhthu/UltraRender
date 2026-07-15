@@ -60,6 +60,10 @@ add_executable(test_native_script_build test_native_script_build.cpp)
 target_link_libraries(test_native_script_build PRIVATE ure_sceneio ure_diag)
 add_test(NAME test_native_script_build COMMAND test_native_script_build)
 
+add_executable(test_native_resource_catalog test_native_resource_catalog.cpp)
+target_link_libraries(test_native_resource_catalog PRIVATE ure_sceneio ure_diag)
+add_test(NAME test_native_resource_catalog COMMAND test_native_resource_catalog)
+
 add_executable(test_gltf_frontend test_gltf_frontend.cpp)
 target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)

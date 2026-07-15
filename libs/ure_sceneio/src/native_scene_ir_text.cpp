@@ -100,6 +100,13 @@ ExplodedSceneArchive write_scene_ir_text(const NativeSceneArchive& archive) {
         const ValidationReport graph_validation = validate_procedural_graph(*archive.procedural_graph, archive);
         if (!graph_validation.ok()) throw std::invalid_argument(graph_validation.diagnostics.front().message);
     }
+    if (archive.resource_catalog) {
+        if (std::ranges::none_of(archive.document.features, [](const FeatureDeclaration& feature) { return feature.name == kResourceCatalogFeature && feature.requirement == RequirementLevel::Required; })) {
+            throw std::invalid_argument("Resource catalog requires ure.scene.resource feature declaration");
+        }
+        const ValidationReport catalog_validation = validate_resource_catalog(*archive.resource_catalog);
+        if (!catalog_validation.ok()) throw std::invalid_argument(catalog_validation.diagnostics.front().message);
+    }
     detail::EncodedResources resources = detail::encode_resources(archive);
     SceneDocument document = archive.document;
     for (const auto& resource : resources.payloads) {
@@ -231,6 +238,7 @@ ExplodedSceneArchive write_scene_ir_text(const NativeSceneArchive& archive) {
     if (archive.procedural_graph) {
         root["procedural_graph"] = Json::parse(detail::write_procedural_graph_text(*archive.procedural_graph));
     }
+    if (archive.resource_catalog) root["resource_catalog"] = Json::parse(write_resource_catalog_text(*archive.resource_catalog));
     ExplodedSceneArchive result;
     result.manifest = root.dump(2) + "\n";
     result.resources = std::move(resources.payloads);
@@ -454,6 +462,14 @@ LoadResult<NativeSceneArchive> read_scene_ir_text(
             result.procedural_graph = std::move(*procedural.value);
             const ValidationReport graph_validation = validate_procedural_graph(*result.procedural_graph, result);
             if (!graph_validation.ok()) throw std::invalid_argument(graph_validation.diagnostics.front().message);
+        }
+        if (root.contains("resource_catalog")) {
+            auto catalog = read_resource_catalog_text(root.at("resource_catalog").dump(), limits);
+            if (!catalog.value) throw std::invalid_argument("Invalid resource catalog text projection");
+            result.resource_catalog = std::make_shared<const NativeResourceCatalog>(std::move(*catalog.value));
+            if (std::ranges::none_of(result.document.features, [](const FeatureDeclaration& feature) { return feature.name == kResourceCatalogFeature && feature.requirement == RequirementLevel::Required; })) {
+                throw std::invalid_argument("Resource catalog lacks required ure.scene.resource feature declaration");
+            }
         }
         if (used_resources.size() != archive.resources.size()) {
             throw std::invalid_argument("Unreferenced required exploded resource");

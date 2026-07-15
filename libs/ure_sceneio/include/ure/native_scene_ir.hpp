@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <ure/native_scene_container.hpp>
+#include <ure/native_resource_catalog.hpp>
 #include <ure/scene_ir.hpp>
 
 namespace ure::native_scene {
@@ -35,6 +36,7 @@ struct NativeSceneArchive {
     scene_ir::SceneIR scene;
     NativeSceneSourceIds source_ids;
     std::shared_ptr<const ProceduralGraph> procedural_graph;
+    std::shared_ptr<const NativeResourceCatalog> resource_catalog;
     std::vector<ContainerChunk> preserved_optional_chunks;
 };
 
