@@ -75,6 +75,7 @@ enum class ChunkKind : std::uint32_t {
     ProceduralGraph = 17,
     ScriptBuild = 18,
     ResourceCatalog = 19,
+    SolverContract = 20,
     Extension = 0x80000000u
 };
 

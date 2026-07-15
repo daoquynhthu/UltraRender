@@ -424,6 +424,7 @@ ValidationReport validate_scene_ir_archive(const NativeSceneArchive& archive,
         const ValidationReport catalog = validate_resource_catalog(*archive.resource_catalog, limits);
         report.diagnostics.insert(report.diagnostics.end(), catalog.diagnostics.begin(), catalog.diagnostics.end());
     }
+    if (archive.solver_contract && std::ranges::none_of(archive.document.features, [](const FeatureDeclaration& feature) { return feature.name == kSolverContractFeature && feature.requirement == RequirementLevel::Required; })) add_error(report, "URE-Q7-FEATURE-001", "solver_contract", "Solver contract requires ure.render.solver feature declaration");
     return report;
 }
 
@@ -541,6 +542,7 @@ std::string scene_ir_semantic_hash(const NativeSceneArchive& archive) {
         append_bytes(stream, "ure.resource.catalog.v1");
         append_bytes(stream, resource_catalog_semantic_hash(*archive.resource_catalog));
     }
+    if (archive.solver_contract) { append_bytes(stream, "ure.solver.contract.v1"); append_bytes(stream, solver_contract_semantic_hash(*archive.solver_contract)); }
     return sha256_hex(stream);
 }
 

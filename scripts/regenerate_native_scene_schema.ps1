@@ -19,7 +19,8 @@ try {
         @{ Name = "ure_mie_v1"; ObjectApi = $true }
         @{ Name = "ure_procedural_graph_v1"; ObjectApi = $true },
         @{ Name = "ure_script_build_v1"; ObjectApi = $true },
-        @{ Name = "ure_resource_catalog_v1"; ObjectApi = $true }
+        @{ Name = "ure_resource_catalog_v1"; ObjectApi = $true },
+        @{ Name = "ure_solver_contract_v1"; ObjectApi = $true }
     )
     foreach ($entry in $schemas) {
         $schema = Join-Path $repoRoot ("schemas\" + $entry.Name + ".fbs")

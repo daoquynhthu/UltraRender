@@ -1,0 +1,21 @@
+namespace ure.solver.schema;
+struct Version { major:uint; minor:uint; }
+enum IntegratorMode:ubyte { Wavefront=0, PathGuided=1, RestirDI=2, SpecularManifold=3, MLT=4, BDPT=5, VCM=6 }
+enum IntegratorSampler:ubyte { Default=0, LowDiscrepancy=1, PrimarySampleSpace=2 }
+enum Quality:ubyte { Default=0, Preview=1, Final=2, Research=3 }
+enum SpectralSampling:ubyte { PacketUniform=0, UniformSampled=1, Stratified=2, Importance=3, FarmShard=4 }
+enum WaveMode:ubyte { Radiometric=0, CameraDiffraction=1, CoherentField=2, PartialCoherence=3 }
+enum Backend:ubyte { Cuda=0, Vulkan=1, D3D12=2, CpuOracle=3, Extension=4 }
+enum Acceleration:ubyte { SoftwareBvh=0, Optix=1, VulkanRT=2, DXR=3, Extension=4 }
+enum CoherentMerge:ubyte { None=0, ComplexAmplitude=1, MutualCoherence=2 }
+table PathGuiding { enabled:bool (id:0); light_mixture:float=0.5 (id:1); learning_rate:float=0.25 (id:2); min_weight:float=0.000001 (id:3); decay:float=0.95 (id:4); decay_interval:int=16 (id:5); spatial_cells:int=16 (id:6); directional_bins:int=8 (id:7); memory_budget_mb:int (id:8); }
+table RestirDI { enabled:bool (id:0); temporal_reuse:bool=true (id:1); spatial_reuse:bool (id:2); unbiased:bool (id:3); max_history:int=1 (id:4); min_target:float=0.000001 (id:5); }
+table SpecularManifold { enabled:bool (id:0); max_events:int=2 (id:1); tolerance:float=0.0001 (id:2); max_iterations:int=16 (id:3); }
+table MLT { enabled:bool (id:0); chains:int=1 (id:1); mutations:int=1024 (id:2); large_step_probability:float=0.3 (id:3); small_step_sigma:float=0.01 (id:4); seed:uint=1 (id:5); }
+table WaveOptics { mode:WaveMode=Radiometric (id:0); camera_diffraction:bool (id:1); coherent_field:bool (id:2); partial_coherence:bool (id:3); diffractive_materials:bool (id:4); fluorescence:bool (id:5); specular_manifold:bool (id:6); local_fullwave:bool (id:7); allow_preview_degradation:bool (id:8); }
+table ValidationRequirement { metric:string (id:0); tolerance:double (id:1); }
+table ExecutionHints { workgroup_size:int (id:0); rays_per_block:int (id:1); samples_per_pass:int (id:2); device_count:int (id:3); }
+table SolverContract { id:string (id:0); schema_version:Version (id:1); integrator:IntegratorMode=Wavefront (id:2); sampler:IntegratorSampler=Default (id:3); quality:Quality=Default (id:4); allow_biased_reuse:bool (id:5); spectral_domain_bins:ulong (id:6); spectral_packet_lanes:int (id:7); spectral_resident_mb:int (id:8); spectral_sampling:SpectralSampling=PacketUniform (id:9); max_trace_depth:int=50 (id:10); path_guiding:PathGuiding (id:11); restir_di:RestirDI (id:12); specular_manifold:SpecularManifold (id:13); mlt:MLT (id:14); wave_optics:WaveOptics (id:15); backend:Backend=Cuda (id:16); acceleration:Acceleration=SoftwareBvh (id:17); coherent_merge:CoherentMerge=None (id:18); backend_extension:string (id:19); acceleration_extension:string (id:20); validation:[ValidationRequirement] (id:21); hints:ExecutionHints (id:22); }
+root_type SolverContract;
+file_identifier "URSC";
+file_extension "ursolver";

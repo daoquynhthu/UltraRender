@@ -13,5 +13,5 @@ $schema = Get-Content -Raw (Join-Path $root "schemas/ure_script_build_v1.fbs")
 if ($schema -notmatch 'file_identifier "URSB"') { throw "Q.5 schema identity is not URSB" }
 $native = Get-Content -Raw (Join-Path $root "libs/ure_types/include/ure/native_scene.hpp")
 $container = Get-Content -Raw (Join-Path $root "libs/ure_sceneio/src/native_scene_container.cpp")
-if ($native -notmatch 'ScriptBuild = 18' -or $container -notmatch 'ChunkKind::ResourceCatalog') { throw "Q.5 chunk is not recognized by the native container" }
+if ($native -notmatch 'ScriptBuild = 18' -or $container -notmatch 'known_core_chunk') { throw "Q.5 chunk is not recognized by the native container" }
 Write-Host "Phase Q.5 static audit passed."

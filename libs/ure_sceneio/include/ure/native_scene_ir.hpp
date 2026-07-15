@@ -9,6 +9,7 @@
 
 #include <ure/native_scene_container.hpp>
 #include <ure/native_resource_catalog.hpp>
+#include <ure/native_solver_contract.hpp>
 #include <ure/scene_ir.hpp>
 
 namespace ure::native_scene {
@@ -37,6 +38,7 @@ struct NativeSceneArchive {
     NativeSceneSourceIds source_ids;
     std::shared_ptr<const ProceduralGraph> procedural_graph;
     std::shared_ptr<const NativeResourceCatalog> resource_catalog;
+    std::shared_ptr<const NativeSolverContract> solver_contract;
     std::vector<ContainerChunk> preserved_optional_chunks;
 };
 

@@ -64,6 +64,10 @@ add_executable(test_native_resource_catalog test_native_resource_catalog.cpp)
 target_link_libraries(test_native_resource_catalog PRIVATE ure_sceneio ure_diag)
 add_test(NAME test_native_resource_catalog COMMAND test_native_resource_catalog)
 
+add_executable(test_native_solver_contract test_native_solver_contract.cpp)
+target_link_libraries(test_native_solver_contract PRIVATE ure_sceneio ure_diag)
+add_test(NAME test_native_solver_contract COMMAND test_native_solver_contract)
+
 add_executable(test_gltf_frontend test_gltf_frontend.cpp)
 target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)
