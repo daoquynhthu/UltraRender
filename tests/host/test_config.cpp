@@ -426,6 +426,20 @@ static int test_integrator_runtime_cli_overrides() {
     return 0;
 }
 
+static int test_native_tool_commands() {
+    const char* pack_argv[] = {"ure_cli", "pack", "a.ure", "b.urescene", "--output", "bundle.urepkg"};
+    auto pack = ure::config::parse_cli(static_cast<int>(sizeof(pack_argv) / sizeof(pack_argv[0])), const_cast<char**>(pack_argv));
+    CHECK(pack.command == ure::config::CliCommand::Pack);
+    CHECK(pack.input_paths.size() == 2);
+    CHECK(pack.output_path == "bundle.urepkg");
+    const char* migrate_argv[] = {"ure_cli", "migrate", "old.ure", "--output", "new.ure"};
+    auto migrate = ure::config::parse_cli(static_cast<int>(sizeof(migrate_argv) / sizeof(migrate_argv[0])), const_cast<char**>(migrate_argv));
+    CHECK(migrate.command == ure::config::CliCommand::Migrate);
+    CHECK(migrate.scene_path == "old.ure");
+    CHECK(migrate.output_path == "new.ure");
+    return 0;
+}
+
 int main() {
     std::fprintf(stderr, "[Config Test]\n");
     auto run = [](const char* name, int (*fn)()) {
@@ -452,6 +466,7 @@ int main() {
     failed += run("test_integrator_mlt_cli_overrides", test_integrator_mlt_cli_overrides);
     failed += run("test_integrator_runtime_json_fields", test_integrator_runtime_json_fields);
     failed += run("test_integrator_runtime_cli_overrides", test_integrator_runtime_cli_overrides);
+    failed += run("test_native_tool_commands", test_native_tool_commands);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

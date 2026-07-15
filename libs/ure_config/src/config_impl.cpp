@@ -240,6 +240,31 @@ CliResult parse_cli(int argc, char** argv) {
     std::string scene_validate;
     validate_cmd->add_option("scene", scene_validate, "Path to scene file")->required();
 
+    auto* build_cmd = app.add_subcommand("build", "Build a native scene projection");
+    std::string build_input, build_output;
+    build_cmd->add_option("input", build_input, "Input .ure, .urescene, or .urepkg")->required();
+    build_cmd->add_option("-o,--output", build_output, "Output .ure or .urescene")->required();
+
+    auto* pack_cmd = app.add_subcommand("pack", "Pack native scenes into a .urepkg");
+    std::vector<std::string> pack_inputs;
+    std::string pack_output;
+    pack_cmd->add_option("inputs", pack_inputs, "Input .ure or .urescene files")->required()->expected(1, -1);
+    pack_cmd->add_option("-o,--output", pack_output, "Output .urepkg")->required();
+
+    auto* unpack_cmd = app.add_subcommand("unpack", "Unpack a native package");
+    std::string unpack_input, unpack_output;
+    unpack_cmd->add_option("input", unpack_input, "Input .urepkg")->required();
+    unpack_cmd->add_option("-o,--output", unpack_output, "Output directory")->required();
+
+    auto* inspect_cmd = app.add_subcommand("inspect", "Inspect a native scene or package");
+    std::string inspect_input;
+    inspect_cmd->add_option("input", inspect_input, "Input .ure, .urescene, or .urepkg")->required();
+
+    auto* migrate_cmd = app.add_subcommand("migrate", "Migrate a native scene canonically");
+    std::string migrate_input, migrate_output;
+    migrate_cmd->add_option("input", migrate_input, "Input .ure or .urescene")->required();
+    migrate_cmd->add_option("-o,--output", migrate_output, "Migrated .ure or .urescene")->required();
+
     try {
         app.parse(argc, argv);
     } catch (const CLI::ParseError& e) {
@@ -314,6 +339,25 @@ CliResult parse_cli(int argc, char** argv) {
     } else if (*validate_cmd) {
         result.command = CliCommand::Validate;
         result.scene_path = scene_validate;
+    } else if (*build_cmd) {
+        result.command = CliCommand::Build;
+        result.scene_path = build_input;
+        result.output_path = build_output;
+    } else if (*pack_cmd) {
+        result.command = CliCommand::Pack;
+        result.input_paths = std::move(pack_inputs);
+        result.output_path = pack_output;
+    } else if (*unpack_cmd) {
+        result.command = CliCommand::Unpack;
+        result.scene_path = unpack_input;
+        result.output_path = unpack_output;
+    } else if (*inspect_cmd) {
+        result.command = CliCommand::Inspect;
+        result.scene_path = inspect_input;
+    } else if (*migrate_cmd) {
+        result.command = CliCommand::Migrate;
+        result.scene_path = migrate_input;
+        result.output_path = migrate_output;
     } else {
         result.command = CliCommand::ListDevices;
     }

@@ -4,11 +4,14 @@
 #include "ure/session.hpp"
 #include "ure/scene_frontend.hpp"
 #include "ure/image_saver.hpp"
+#include "ure/native_scene_tooling.hpp"
 #include <cstdint>
+#include <filesystem>
 #include <ure/log.hpp>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include <utility>
 
 using namespace ure;
 
@@ -362,7 +365,16 @@ void ure_engine_destroy(ure_engine_t* engine) {
 int ure_engine_load_scene_file(ure_engine_t* engine, const char* path) {
     if (!engine || !path) return -1;
     try {
-        scene_ir::SceneIR scene = SceneFrontend::parse_file_to_ir(path);
+        const std::filesystem::path scene_path(path);
+        const auto extension = scene_path.extension().string();
+        scene_ir::SceneIR scene;
+        if (extension == ".ure" || extension == ".urescene" || extension == ".urepkg") {
+            auto loaded = native_scene::load_native_asset(scene_path);
+            if (!loaded.ok()) return -1;
+            scene = std::move(loaded.value->scene);
+        } else {
+            scene = SceneFrontend::parse_file_to_ir(path);
+        }
         reinterpret_cast<IRenderEngine*>(engine)->load_scene_ir(scene);
         return 0;
     } catch (...) {
@@ -523,11 +535,23 @@ void ure_session_destroy(ure_session_t* session) {
 int ure_session_load_scene_file(ure_session_t* session, const char* path) {
     if (!session || !path) return -1;
     try {
-        scene_ir::SceneIR scene = SceneFrontend::parse_file_to_ir(path);
+        const std::filesystem::path scene_path(path);
+        const auto extension = scene_path.extension().string();
+        scene_ir::SceneIR scene;
+        if (extension == ".ure" || extension == ".urescene" || extension == ".urepkg") {
+            auto loaded = native_scene::load_native_asset(scene_path);
+            if (!loaded.ok()) return -1;
+            scene = std::move(loaded.value->scene);
+        } else {
+            scene = SceneFrontend::parse_file_to_ir(path);
+        }
         if (scene.width <= 0) scene.width = 8;
         if (scene.height <= 0) scene.height = 8;
         reinterpret_cast<RenderSession*>(session)->load_scene(scene);
         return 0;
+    } catch (const std::exception& error) {
+        UR_LOG_ERROR(Core, "Session scene load failed: {}", error.what());
+        return -1;
     } catch (...) {
         return -1;
     }

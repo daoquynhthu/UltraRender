@@ -11,6 +11,7 @@
 #include <ure/gpu_structs.hpp>
 #include <ure/image_saver.hpp>
 #include <ure/log.hpp>
+#include <ure/native_scene_tooling.hpp>
 #include <ure/render.hpp>
 #include <ure/scene_frontend.hpp>
 
@@ -80,7 +81,7 @@ bool save_frame(ure::IRenderEngine& engine,
 
 bool check_scene_path(const std::string& scene_path) {
     if (scene_path.empty()) {
-        std::cerr << "Error: render requires an explicit glTF/GLB scene path\n";
+        std::cerr << "Error: render requires an explicit URE native or adapter scene path\n";
         return false;
     }
     if (!std::filesystem::exists(scene_path)) {
@@ -303,7 +304,15 @@ int cmd_render(const ure::config::CliResult& cli) {
 
     ure::scene_ir::SceneIR scene_ir;
     try {
-        scene_ir = ure::SceneFrontend::parse_file_to_ir(app_config.scene_path);
+        const std::string extension = lowercase(std::filesystem::path(app_config.scene_path).extension().string());
+        if (extension == ".ure" || extension == ".urescene" || extension == ".urepkg") {
+            auto loaded = ure::native_scene::load_native_asset(app_config.scene_path);
+            if (!loaded.ok()) throw std::runtime_error(loaded.diagnostics.empty()
+                ? "Native scene load failed" : loaded.diagnostics.front().message);
+            scene_ir = std::move(loaded.value->scene);
+        } else {
+            scene_ir = ure::SceneFrontend::parse_file_to_ir(app_config.scene_path);
+        }
     } catch (const std::exception& e) {
         std::cerr << "Error parsing scene: " << e.what() << "\n";
         return 1;
@@ -406,6 +415,23 @@ int cmd_validate(const std::string& scene_path) {
         return 1;
     }
     try {
+        const std::string extension = lowercase(std::filesystem::path(scene_path).extension().string());
+        if (extension == ".ure" || extension == ".urescene" || extension == ".urepkg") {
+            const auto inspection = ure::native_scene::inspect_native_asset(scene_path);
+            std::cout << "Schema: " << inspection.version.major << "." << inspection.version.minor << "\n";
+            std::cout << "Features: validated against native capability registry\n";
+            std::cout << "Resources: " << inspection.resource_count << " declared\n";
+            std::cout << "Budget: " << inspection.stored_bytes << " stored bytes, "
+                      << inspection.resident_bytes << " resident bytes\n";
+            std::cout << "Adapter loss: none (native source)\n";
+            for (const auto& diagnostic : inspection.diagnostics) {
+                std::ostream& stream = diagnostic.severity == ure::native_scene::DiagnosticSeverity::Error
+                    ? std::cerr : std::cout;
+                stream << diagnostic.code << " [" << diagnostic.path << "]: " << diagnostic.message << "\n";
+            }
+            if (inspection.ok()) std::cout << "Valid: " << scene_path << "\n";
+            return inspection.ok() ? 0 : 1;
+        }
         const auto ir = ure::SceneFrontend::parse_file_to_ir(scene_path);
         std::cout << "Valid: " << scene_path << "\n";
         std::cout << "  " << ir.meshes.size() << " meshes, "
@@ -430,6 +456,48 @@ int cmd_validate(const std::string& scene_path) {
     }
 }
 
+int cmd_native_tool(const ure::config::CliResult& cli) {
+    try {
+        switch (cli.command) {
+        case ure::config::CliCommand::Build:
+            ure::native_scene::build_native_scene(cli.scene_path, cli.output_path);
+            break;
+        case ure::config::CliCommand::Pack: {
+            std::vector<std::filesystem::path> inputs;
+            inputs.reserve(cli.input_paths.size());
+            for (const auto& input : cli.input_paths) inputs.emplace_back(input);
+            ure::native_scene::pack_native_scenes(cli.output_path, inputs);
+            break;
+        }
+        case ure::config::CliCommand::Unpack:
+            ure::native_scene::unpack_native_package(cli.scene_path, cli.output_path);
+            break;
+        case ure::config::CliCommand::Migrate:
+            ure::native_scene::migrate_native_scene(cli.scene_path, cli.output_path);
+            break;
+        case ure::config::CliCommand::Inspect: {
+            const auto inspection = ure::native_scene::inspect_native_asset(cli.scene_path);
+            std::cout << "ID: " << inspection.id << "\n"
+                      << "Kind: " << (inspection.kind == ure::native_scene::ContainerKind::Package ? "package" : "scene") << "\n"
+                      << "Version: " << inspection.version.major << "." << inspection.version.minor << "\n"
+                      << "Semantic hash: " << inspection.semantic_hash << "\n"
+                      << "Scenes: " << inspection.scene_count << "\n"
+                      << "Resources: " << inspection.resource_count << "\n"
+                      << "Stored bytes: " << inspection.stored_bytes << "\n"
+                      << "Resident bytes: " << inspection.resident_bytes << "\n";
+            if (!inspection.ok()) return 1;
+            break;
+        }
+        default:
+            return 1;
+        }
+        return 0;
+    } catch (const std::exception& error) {
+        std::cerr << "Native tooling FAILED: " << error.what() << "\n";
+        return 1;
+    }
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -449,6 +517,12 @@ int main(int argc, char* argv[]) {
         return cmd_list_devices();
     case ure::config::CliCommand::Validate:
         return cmd_validate(cli.scene_path);
+    case ure::config::CliCommand::Build:
+    case ure::config::CliCommand::Pack:
+    case ure::config::CliCommand::Unpack:
+    case ure::config::CliCommand::Inspect:
+    case ure::config::CliCommand::Migrate:
+        return cmd_native_tool(cli);
     }
     return 0;
 }

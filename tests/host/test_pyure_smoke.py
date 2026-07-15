@@ -1,4 +1,6 @@
 import pyure
+import os
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -15,6 +17,21 @@ def wait_until(predicate, timeout=2.0):
 
 def main() -> int:
     pyure.set_min_log_level(pyure.LogLevel.WARN)
+
+    with tempfile.TemporaryDirectory() as directory:
+        package = Path(directory) / "pyure_fixture.urepkg"
+        subprocess.run([
+            os.environ["URE_CLI"], "pack", os.environ["URE_NATIVE_TEST_SCENE"],
+            "--output", str(package),
+        ], check=True)
+        previous_directory = Path.cwd()
+        try:
+            os.chdir(Path(os.environ["URE_NATIVE_TEST_SCENE"]).parent)
+            with pyure.create_session(num_wavelengths=8, queue_capacity=1_000_000, max_trace_depth=12) as session:
+                session.load_package(package)
+                assert session.progress().has_scene
+        finally:
+            os.chdir(previous_directory)
 
     assert pyure.aov_channel_count(pyure.AovType.BEAUTY) == 3
     assert pyure.aov_channel_count(pyure.AovType.NORMAL) == 3

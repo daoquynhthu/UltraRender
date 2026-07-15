@@ -42,6 +42,8 @@ Generated spectra are content-addressed canonical SPD build artifacts. They use 
 
 The URE semantic model is authoritative. Encoding is replaceable. SceneIR remains the compiled internal IR. External formats are adapters and may not define native feature limits.
 
+Native tooling is exposed consistently through `ure_cli validate/build/pack/unpack/inspect/migrate`. Validation reports schema compatibility, feature capability, resource inventory, stored/resident budgets, and adapter-loss status. C sessions auto-detect `.ure`, `.urescene`, and `.urepkg`; Python exposes the same path through `RenderSession.load_scene_file()` and the package-specific `load_package()` guard.
+
 Large geometry, spectra, Mie tables, volume fields, animation, audio, and video are typed resource payloads. `.ure` references them by stable ID and SHA-256; it does not Base64-encode them or expand them into large JSON arrays.
 
 ## Q.0 capability ownership audit

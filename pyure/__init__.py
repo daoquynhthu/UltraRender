@@ -477,6 +477,12 @@ class RenderSession:
         if native().ure_session_load_scene_file(self.handle, encoded) != 0:
             raise RuntimeError(f"failed to load scene: {path}")
 
+    def load_package(self, path: str | os.PathLike[str]) -> None:
+        package = Path(path)
+        if package.suffix.lower() != ".urepkg":
+            raise ValueError("native package path must end in .urepkg")
+        self.load_scene_file(package)
+
     def start(self, progressive: bool = True) -> None:
         if native().ure_session_start(self.handle, 1 if progressive else 0) != 0:
             raise RuntimeError("failed to start render")

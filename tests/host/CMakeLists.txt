@@ -72,6 +72,13 @@ add_executable(test_native_simulation_contract test_native_simulation_contract.c
 target_link_libraries(test_native_simulation_contract PRIVATE ure_sceneio ure_diag)
 add_test(NAME test_native_simulation_contract COMMAND test_native_simulation_contract)
 
+add_executable(test_native_tooling test_native_tooling.cpp)
+target_link_libraries(test_native_tooling PRIVATE ure_sceneio ure_diag)
+target_compile_definitions(test_native_tooling PRIVATE
+    URE_TEST_ASSET_DIR="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene"
+)
+add_test(NAME test_native_tooling COMMAND test_native_tooling)
+
 add_executable(test_gltf_frontend test_gltf_frontend.cpp)
 target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)
@@ -98,6 +105,6 @@ if(Python3_Interpreter_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pyure_smoke.py
     )
     set_tests_properties(test_pyure_smoke PROPERTIES
-        ENVIRONMENT "PYTHONPATH=${CMAKE_SOURCE_DIR};PYURE_NATIVE=$<TARGET_FILE:pyure_native>"
+        ENVIRONMENT "PYTHONPATH=${CMAKE_SOURCE_DIR};PYURE_NATIVE=$<TARGET_FILE:pyure_native>;URE_CLI=$<TARGET_FILE:ure_cli>;URE_NATIVE_TEST_SCENE=${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene/full_scene.urescene"
     )
 endif()

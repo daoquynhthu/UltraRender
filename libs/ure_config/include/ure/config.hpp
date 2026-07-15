@@ -123,7 +123,12 @@ enum class CliCommand {
     Render,
     Info,
     ListDevices,
-    Validate
+    Validate,
+    Build,
+    Pack,
+    Unpack,
+    Inspect,
+    Migrate
 };
 
 struct CliResult {
@@ -131,6 +136,8 @@ struct CliResult {
     RenderConfig config;
     std::string scene_path;
     std::string config_path;
+    std::string output_path;
+    std::vector<std::string> input_paths;
     bool verbose = false;
     bool quiet = false;
 };
