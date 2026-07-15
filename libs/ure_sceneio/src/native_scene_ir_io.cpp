@@ -95,6 +95,7 @@ std::vector<std::uint8_t> write_scene_ir_binary(const NativeSceneArchive& archiv
         if (!catalog_validation.ok()) throw std::invalid_argument(catalog_validation.diagnostics.front().message);
     }
     if (archive.solver_contract && std::ranges::none_of(archive.document.features, [](const FeatureDeclaration& feature) { return feature.name == kSolverContractFeature && feature.requirement == RequirementLevel::Required; })) throw std::invalid_argument("Solver contract requires ure.render.solver feature declaration");
+    if (archive.simulation_contract && std::ranges::none_of(archive.document.features, [](const FeatureDeclaration& feature) { return feature.name == kSimulationFeature && feature.requirement == RequirementLevel::Required; })) throw std::invalid_argument("Simulation contract requires ure.scene.simulation feature declaration");
     detail::EncodedResources resources = detail::encode_resources(archive);
     SceneDocument document = archive.document;
     for (const auto& resource : resources.payloads) {
@@ -125,6 +126,7 @@ std::vector<std::uint8_t> write_scene_ir_binary(const NativeSceneArchive& archiv
                                     8, {}, {"scene_graph"}, write_resource_catalog_binary(*archive.resource_catalog)});
     }
     if (archive.solver_contract) container.chunks.push_back({"solver_contract", static_cast<std::uint32_t>(ChunkKind::SolverContract), {1, 0}, RequirementLevel::Required, static_cast<std::uint32_t>(CompressionCodec::None), 8, {}, {"scene_graph"}, write_solver_contract_binary(*archive.solver_contract)});
+    if (archive.simulation_contract) container.chunks.push_back({"simulation_contract", static_cast<std::uint32_t>(ChunkKind::SimulationContract), {1, 0}, RequirementLevel::Required, static_cast<std::uint32_t>(CompressionCodec::None), 8, {}, {"scene_graph"}, write_simulation_contract_binary(*archive.simulation_contract)});
     for (auto& resource : resources.payloads) {
         const ChunkKind kind = resource.descriptor.kind == ResourceKind::Geometry
             ? ChunkKind::Geometry : ChunkKind::MiePhase;
@@ -158,6 +160,7 @@ LoadResult<NativeSceneArchive> read_scene_ir_binary(
         const ContainerChunk* procedural_graph = nullptr;
         const ContainerChunk* resource_catalog = nullptr;
         const ContainerChunk* solver_contract = nullptr;
+        const ContainerChunk* simulation_contract = nullptr;
         std::unordered_map<std::string, std::shared_ptr<Mesh>> meshes;
         std::unordered_map<std::string, std::shared_ptr<const scene_ir::MiePhaseResource>> mie;
         std::unordered_map<std::string, std::string> resource_hashes;
@@ -178,6 +181,8 @@ LoadResult<NativeSceneArchive> read_scene_ir_binary(
                 resource_catalog = &chunk;
             } else if (chunk.type == static_cast<std::uint32_t>(ChunkKind::SolverContract)) {
                 if (solver_contract) return io_failure<NativeSceneArchive>("URE-Q7-CONTAINER-001", "solver_contract", "Duplicate solver contract chunk"); solver_contract = &chunk;
+            } else if (chunk.type == static_cast<std::uint32_t>(ChunkKind::SimulationContract)) {
+                if (simulation_contract) return io_failure<NativeSceneArchive>("URE-Q8-CONTAINER-001", "simulation_contract", "Duplicate simulation contract chunk"); simulation_contract = &chunk;
             } else if (chunk.type == static_cast<std::uint32_t>(ChunkKind::Geometry)) {
                 auto decoded = detail::decode_mesh_payload(chunk.payload, limits);
                 append_diagnostics(diagnostics, decoded.diagnostics);
@@ -248,6 +253,7 @@ LoadResult<NativeSceneArchive> read_scene_ir_binary(
             }
         }
         if (solver_contract) { auto decoded = read_solver_contract_binary(solver_contract->payload); append_diagnostics(diagnostics, decoded.diagnostics); if (!decoded.value) { LoadResult<NativeSceneArchive> result; result.diagnostics = std::move(diagnostics); return result; } archive.value->solver_contract = std::make_shared<const NativeSolverContract>(std::move(*decoded.value)); if (std::ranges::none_of(archive.value->document.features, [](const FeatureDeclaration& feature) { return feature.name == kSolverContractFeature && feature.requirement == RequirementLevel::Required; })) return io_failure<NativeSceneArchive>("URE-Q7-FEATURE-001", "solver_contract", "Solver contract lacks required feature declaration"); }
+        if (simulation_contract) { auto decoded = read_simulation_contract_binary(simulation_contract->payload); append_diagnostics(diagnostics, decoded.diagnostics); if (!decoded.value) { LoadResult<NativeSceneArchive> result; result.diagnostics = std::move(diagnostics); return result; } archive.value->simulation_contract = std::make_shared<const NativeSimulationContract>(std::move(*decoded.value)); if (std::ranges::none_of(archive.value->document.features, [](const FeatureDeclaration& feature) { return feature.name == kSimulationFeature && feature.requirement == RequirementLevel::Required; })) return io_failure<NativeSceneArchive>("URE-Q8-FEATURE-001", "simulation_contract", "Simulation contract lacks required feature declaration"); }
         archive.diagnostics = std::move(diagnostics);
         return archive;
     } catch (const std::exception& error) {

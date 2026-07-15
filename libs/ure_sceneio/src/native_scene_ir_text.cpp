@@ -108,6 +108,7 @@ ExplodedSceneArchive write_scene_ir_text(const NativeSceneArchive& archive) {
         if (!catalog_validation.ok()) throw std::invalid_argument(catalog_validation.diagnostics.front().message);
     }
     if (archive.solver_contract && std::ranges::none_of(archive.document.features, [](const FeatureDeclaration& feature) { return feature.name == kSolverContractFeature && feature.requirement == RequirementLevel::Required; })) throw std::invalid_argument("Solver contract requires ure.render.solver feature declaration");
+    if (archive.simulation_contract && std::ranges::none_of(archive.document.features, [](const FeatureDeclaration& feature) { return feature.name == kSimulationFeature && feature.requirement == RequirementLevel::Required; })) throw std::invalid_argument("Simulation contract requires ure.scene.simulation feature declaration");
     detail::EncodedResources resources = detail::encode_resources(archive);
     SceneDocument document = archive.document;
     for (const auto& resource : resources.payloads) {
@@ -241,6 +242,7 @@ ExplodedSceneArchive write_scene_ir_text(const NativeSceneArchive& archive) {
     }
     if (archive.resource_catalog) root["resource_catalog"] = Json::parse(write_resource_catalog_text(*archive.resource_catalog));
     if (archive.solver_contract) root["solver_contract"] = Json::parse(write_solver_contract_text(*archive.solver_contract));
+    if (archive.simulation_contract) root["simulation_contract"] = Json::parse(write_simulation_contract_text(*archive.simulation_contract));
     ExplodedSceneArchive result;
     result.manifest = root.dump(2) + "\n";
     result.resources = std::move(resources.payloads);
@@ -474,6 +476,7 @@ LoadResult<NativeSceneArchive> read_scene_ir_text(
             }
         }
         if (root.contains("solver_contract")) { auto solver = read_solver_contract_text(root.at("solver_contract").dump()); if (!solver.value) throw std::invalid_argument("Invalid solver contract text projection"); result.solver_contract = std::make_shared<const NativeSolverContract>(std::move(*solver.value)); if (std::ranges::none_of(result.document.features, [](const FeatureDeclaration& feature) { return feature.name == kSolverContractFeature && feature.requirement == RequirementLevel::Required; })) throw std::invalid_argument("Solver contract lacks required feature declaration"); }
+        if (root.contains("simulation_contract")) { auto simulation = read_simulation_contract_text(root.at("simulation_contract").dump()); if (!simulation.value) throw std::invalid_argument("Invalid simulation contract text projection"); result.simulation_contract = std::make_shared<const NativeSimulationContract>(std::move(*simulation.value)); if (std::ranges::none_of(result.document.features, [](const FeatureDeclaration& feature) { return feature.name == kSimulationFeature && feature.requirement == RequirementLevel::Required; })) throw std::invalid_argument("Simulation contract lacks required feature declaration"); }
         if (used_resources.size() != archive.resources.size()) {
             throw std::invalid_argument("Unreferenced required exploded resource");
         }

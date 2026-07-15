@@ -1,0 +1,13 @@
+namespace ure.simulation.schema;
+struct Version { major:uint; minor:uint; }
+enum Requirement:ubyte { Required=0, Optional=1, Advisory=2 }
+enum Domain:ubyte { RigidBody=0, SoftBody=1, Fluid=2, AcousticModal=3, AcousticRay=4, AcousticWave=5, Extension=6 }
+enum CouplingSemantic:ubyte { Transform=0, CollisionImpulse=1, SurfaceVelocity=2, Pressure=3, Force=4, Temperature=5, AudioSignal=6, Extension=7 }
+table TimeSampling { start_tick:long (id:0); end_tick:long (id:1); ticks_per_second:ulong=60 (id:2); step_ticks:ulong=1 (id:3); synchronization_epoch:long (id:4); }
+table DomainRequest { id:string (id:0); domain:Domain=Extension (id:1); requirement:Requirement=Required (id:2); solver_id:string (id:3); solver_version:Version (id:4); resources:[string] (id:5); extension_owner:string (id:6); }
+table CouplingChannel { id:string (id:0); source_domain:string (id:1); target_domain:string (id:2); semantic:CouplingSemantic=Transform (id:3); requirement:Requirement=Required (id:4); rate_numerator:ulong=1 (id:5); rate_denominator:ulong=1 (id:6); latency_ticks:long (id:7); feedback:bool (id:8); resource_id:string (id:9); extension_owner:string (id:10); }
+table MigrationPolicy { domain_id:string (id:0); minimum_source_version:Version (id:1); target_version:Version (id:2); migration_tool:string (id:3); allow_lossy:bool (id:4); }
+table SimulationContract { id:string (id:0); schema_version:Version (id:1); time:TimeSampling (id:2); domains:[DomainRequest] (id:3); coupling:[CouplingChannel] (id:4); migrations:[MigrationPolicy] (id:5); }
+root_type SimulationContract;
+file_identifier "URPC";
+file_extension "ursimulation";
