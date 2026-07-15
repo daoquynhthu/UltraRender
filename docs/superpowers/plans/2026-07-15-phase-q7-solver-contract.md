@@ -1,5 +1,7 @@
 # Phase Q.7 Implementation Plan
 
+> Archive status: completed execution record. Checkboxes, counts and next steps below are not a live plan.
+
 1. Define solver request, capability registry, diagnostics, and compiled result API.
 2. Implement strict semantic and capability validation plus RenderConfig mapping.
 3. Add conformant `URSC` FlatBuffers and canonical text projection.

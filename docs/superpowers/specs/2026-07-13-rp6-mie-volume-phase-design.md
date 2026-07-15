@@ -1,5 +1,7 @@
 # R-P6 Mie and Volume Phase Resources Design
 
+> Archive status: historical design record. R-P6 is complete; use `PLAN.md`, `STATUS.md`, and current source/tests for present state.
+
 ## Status and Scope
 
 R-P6 closes the production gap between the existing Henyey-Greenstein and Rayleigh phase implementations and the currently unsupported `Mie` selector. The production GPU path consumes validated tabulated resources. Tables can be generated deterministically by an in-engine host Lorenz-Mie solver or imported from an external authority through the same validation boundary.

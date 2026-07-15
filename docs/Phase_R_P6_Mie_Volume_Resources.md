@@ -1,5 +1,7 @@
 # Phase R-P6 Mie Volume Resources
 
+Document status: current completed-subphase contract and evidence record
+
 ## Status
 
 R-P6 is complete. UltraRender now treats Mie scattering as a validated spectral resource instead of an unsupported phase selector. The default radiometric renderer remains unchanged for HG and Rayleigh media.

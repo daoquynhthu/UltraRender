@@ -1,6 +1,28 @@
 # UltraRender Progress Log
 
-> **Historical snapshot:** This chronological log is not a current execution plan. Use `AGENTS.md` and `PLAN.md` for current status, constraints, and the authoritative construction cursor.
+Document status: append-only historical log
+
+This file records dated work and may contain API names, paths, test counts and next-step statements that were accurate only at the time. Current construction state is defined by `PLAN.md`; current user-facing capability boundaries are summarized in `STATUS.md`.
+
+## 2026-07-15 — Phase Q native scene system complete
+
+- Completed Q.0-Q.12: native schema, SceneIR serialization, procedural/script build contracts, typed resources, solver/simulation contracts, tooling, adapters, compiled caches, farm metadata and validation fixtures.
+- Added `.ure`, `.urescene`, `.urepkg` and disposable `.urecache` contracts without making external formats authoritative.
+- Added the native CLI toolchain, C/pyure package loading and `scripts/run_phase_q_validation_suite.ps1`.
+- Verified the closure snapshot with a Release build, 37/37 CTest entries, Phase Q/L/R audits, physics-optics checks and FlatBuffers conformance.
+- Advanced the authoritative construction cursor to R-P3.
+
+## 2026-07-13 — R-P6 Mie volume resources complete
+
+- Added deterministic Lorenz-Mie generation, strict table import, immutable SceneIR resources and wavelength-dependent GPU `eval/pdf/sample`.
+- Closed current Mie NEE/continuation, scalar-depolarizing Stokes and retained-session rebuild contracts.
+- This does not imply completion of the remaining Phase R integrators or coherent volume transport.
+
+## 2026-07-11 — Workspace and modular baseline refreshed
+
+- Removed obsolete generated/local state and monolithic source-tree remnants.
+- Retained deterministic glTF fixtures as maintained test assets.
+- Established `build_modular_x64` as the maintained local build tree.
 
 ## 2026-06-09 — Phase P 全部完成 + API 工业化 (P.9–P.13)
 

@@ -1,5 +1,7 @@
 # UltraRender Workspace Hygiene Design
 
+> Archive status: historical design record. Paths, counts and cursor statements below describe the dated snapshot only.
+
 Date: 2026-07-11
 
 ## Objective

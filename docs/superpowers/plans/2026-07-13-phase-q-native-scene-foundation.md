@@ -1,5 +1,7 @@
 # Phase Q Native Scene Foundation Implementation Plan
 
+> Archive status: completed execution record. Checkboxes, counts and next steps below are not a live plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` and `superpowers:test-driven-development` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. UltraRender governance requires single-agent inline execution by default; do not dispatch subagents.
 
 **Goal:** Implement the Q.0-Q.2 native scene foundation: backend-neutral schema types, deterministic text and binary encodings, safe package/resource validation, and a complete capability-ownership audit.

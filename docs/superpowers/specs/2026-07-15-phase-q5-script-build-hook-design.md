@@ -1,5 +1,7 @@
 # Phase Q.5 Script Build Hook Design
 
+> Archive status: historical design record. Phase Q is complete; use `PLAN.md`, `STATUS.md`, and current source/tests for present state.
+
 ## Decision
 
 URE owns a host-neutral, deny-by-default build coordinator. It never embeds or launches Python, Lua, WASM, or a native interpreter. An explicitly supplied `IScriptSandboxRunner` is the isolation boundary and must attest its runtime, policy, and dependency identities. Runtime scene loading, sessions, and GPU code never execute scripts.

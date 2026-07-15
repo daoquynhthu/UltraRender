@@ -1,5 +1,7 @@
 # Fluid Dynamics Assessment
 
+> Archive status: historical assessment of an experimental solver snapshot. Paths and recommendations below are time-scoped and are not current project status. Use `STATUS.md` and the authoritative `PLAN.md` queue.
+
 ## Executive Summary
 
 The current fluid system is not failing because of one missing tweak. It is failing because the solver, the stabilization strategy, the collision model, and the visualization pipeline are all carrying responsibilities they should not carry.

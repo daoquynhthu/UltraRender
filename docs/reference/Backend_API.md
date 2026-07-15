@@ -1,0 +1,72 @@
+# Backend and Session API Status
+
+Document status: current interface summary
+
+Last reviewed: 2026-07-15
+
+This document describes the implemented API boundary. It is not a promise of long-term ABI stability. `PLAN.md` controls future API work.
+
+## Interface layers
+
+| Layer | Primary surface | Role |
+|---|---|---|
+| C++ engine | `ure/render.hpp` | Renderer creation, SceneIR loading, render passes and framebuffer access |
+| C++ session | `ure/session.hpp` | Stateful progressive rendering, pause/resume/cancel, mutations and AOVs |
+| C ABI | `ure/ure_c_api.h` | Opaque engine/session handles for language bindings |
+| Python | `pyure/__init__.py` | ctypes wrapper for session configuration and rendering |
+| CLI | `apps/ure_cli` | Offline render and native scene tooling |
+
+## Current session lifecycle
+
+```text
+create session
+  -> load validated SceneIR/native scene/package or supported adapter input
+  -> start or render_pass
+  -> pause/resume/reset as needed
+  -> apply supported SceneDiff mutations
+  -> read framebuffer/AOVs or save output
+  -> destroy session
+```
+
+The session owns a renderer instance and retained SceneIR state. Scene replacement and mutation paths classify whether a hot update is safe or a full reload is required. Unsupported resource mutation must not be silently approximated.
+
+## Implemented controls
+
+- default, spectral, wave-optics and integrator-aware session creation;
+- progressive and explicit render-pass execution;
+- pause, resume, cancel and accumulation reset;
+- camera, instance transform, material and supported texture mutation;
+- Beauty, Normal, Albedo, Depth, UV and MotionVector AOV access;
+- BMP/HDR output helpers;
+- `.ure`, `.urescene`, `.urepkg`, glTF and GLB loading through native validation/adapter boundaries;
+- pyure package guard through `RenderSession.load_package()`.
+
+## Threading and ownership
+
+- `RenderSession` serializes state and engine access with its internal synchronization.
+- Returned framebuffer and AOV pointers refer to internal storage and must not outlive or race the owning session operation.
+- C handles are opaque and must be destroyed with the matching API.
+- The Python wrapper is a thin ctypes binding; it does not add independent scheduling or memory ownership semantics.
+
+## Error behavior
+
+C functions generally return `0` on success and a negative value or null handle on failure. Unsupported wave/integrator modes, invalid native capability requirements, malformed resources and insufficient queue/budget configurations fail before rendering where possible. The C ABI does not yet expose a complete structured error object; callers should also route `ure_diag` logs.
+
+## Stability boundary
+
+The following are not promised:
+
+- stable binary ABI across arbitrary commits;
+- source compatibility for every configuration structure;
+- concurrent mutation while a render operation is using the same session;
+- non-CUDA backend parity;
+- interactive viewport integration;
+- production support for advanced integrators that currently fail loudly.
+
+## Verification
+
+Relevant registered tests include `test_session`, `test_pyure_smoke`, `gpu_render`, `gpu_instance`, `gpu_denoise`, `test_native_tooling`, `test_native_adapter` and `test_native_validation_suite`. Use the full CTest gate before relying on a changed API:
+
+```powershell
+ctest --test-dir build_modular_x64 -C Release --output-on-failure
+```

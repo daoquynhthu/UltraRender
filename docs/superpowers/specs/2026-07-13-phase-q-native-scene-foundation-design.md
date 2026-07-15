@@ -1,5 +1,7 @@
 # Phase Q Native Scene Foundation Design
 
+> Archive status: historical design record. Phase Q is complete; use `PLAN.md`, `STATUS.md`, and current source/tests for present state.
+
 ## Scope
 
 This specification covers Phase Q.0, Q.1, and Q.2:

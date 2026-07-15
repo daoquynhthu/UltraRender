@@ -1,5 +1,7 @@
 # Phase Q.6 Native Spectral, Material, Texture, and Medium Resource Design
 
+> Archive status: historical design record. Phase Q is complete; use `PLAN.md`, `STATUS.md`, and current source/tests for present state.
+
 ## Decision
 
 Q.6 adds a backend-neutral native resource catalog, identified by FlatBuffers `URRC` and schema identity `ure.resource-catalog/1.0`. It describes the semantic and storage contract of resources while existing typed payloads remain authoritative: `URIG` owns MaterialGraph and scene bindings, `URMI` owns validated Mie tables, image files own encoded pixels, and future typed chunks may own large basis, tile, volume, or video payloads.

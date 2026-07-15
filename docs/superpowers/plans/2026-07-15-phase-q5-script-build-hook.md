@@ -1,5 +1,7 @@
 # Phase Q.5 Implementation Plan
 
+> Archive status: completed execution record. Checkboxes, counts and next steps below are not a live plan.
+
 1. Add typed manifest, policy, runner request/result, provenance, and build result APIs.
 2. Implement canonical validation and source/cache/output hashing.
 3. Implement explicit opt-in coordination with deny-by-default runner behavior and untrusted-result verification.

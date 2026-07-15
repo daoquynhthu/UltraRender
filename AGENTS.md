@@ -8,7 +8,7 @@ This file defines the rules, conventions, and workflow that any AI agent must fo
 
 ## 1. Project Identity
 
-**UltraRender** is a physically-based spectral polarization path tracing renderer targeting CUDA GPU, refactored from a monolithic EXE into a modular industrial pipeline (Phase F complete).
+**UltraRender** is a physically-based spectral polarization path tracing renderer targeting CUDA GPU, refactored from a monolithic executable into a modular library/application layout (Phase F complete).
 
 ### Architecture (Modular — Phase F Target State)
 
@@ -32,7 +32,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | H (Asset Pipeline) | Done | stb_image (BMP→stbi_loadf), SPD loader (`SPDData`/`load_spd_file`/`resample_uniform`), 6 tests |
 | Dx (Diagnostics) | Done | `ure_diag` unified logging, CUDA error abstraction, RAII timer, ~73 站点迁移 |
 | G (glTF) | Done | normalTexture + tangent generation, camera parsing, URE_spectral_material extension, non-glTF fallback; audit fix (5 gaps), comprehensive tests (11 host + 3 GPU) |
-| I (Config) | Done | JSON config, CLI11 subcommands (render/info/list-devices/validate), override chain |
+| I (Config) | Done | JSON config, CLI11 render/info/device/native-tool subcommands, override chain |
 | A (SoA Queue) | Done | Dynamic N wavelengths from RenderConfig, SoA spectral queues/materials |
 | B (Multi-GPU) | Done | `MultiGpuContext`, sample-space partitioning, per-device render contexts, merged framebuffer copy |
 | C (Distributed Contract) | Done | Sample range partitioning, deterministic framebuffer merge, Release-safe validation |
@@ -153,7 +153,7 @@ E:\Render Engine\
 │   ├── CLI11/CLI11.hpp              # CLI11 v2.x (header-only)
 │   └── nlohmann/json.hpp            # nlohmann/json v3.x (header-only)
 │
-├── scenes/                          # Scene files (.gltf, .glb, .scene legacy)
+├── scenes/                          # Maintained glTF fixtures and benchmark inputs
 ├── cmake/                           # CMake modules (UltraRenderConfig.cmake.in)
 ├── docs/                            # Documentation
 ├── scripts/                         # Utility scripts
@@ -194,7 +194,7 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | GPU core | `gpu_device`, `gpu_math`, `gpu_spectral`, `gpu_spectral_soa`, `gpu_hardware`, `gpu_render`, `gpu_instance`, `gpu_tangents`, `gpu_denoise` |
 | GPU physics/contracts | `gpu_polarization`, `gpu_volume`, `gpu_contract`, `gpu_wave_optics` |
 | Host core | `test_world`, `test_asset_pipeline`, `test_config`, `test_spectral_oracle`, `test_wave_optics`, `test_integrator`, `test_mie_phase` |
-| Host scene/material/session | `test_native_scene`, `test_native_scene_ir`, `test_native_procedural_graph`, `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io` |
+| Host scene/material/session | `test_native_scene`, `test_native_scene_ir`, `test_native_procedural_graph`, `test_native_script_build`, `test_native_resource_catalog`, `test_native_solver_contract`, `test_native_simulation_contract`, `test_native_tooling`, `test_native_adapter`, `test_native_compiled_cache`, `test_native_validation_suite`, `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io` |
 | Python | `test_pyure_smoke` |
 | **CTest total** | **37 registered tests** in `build_modular_x64` |
 

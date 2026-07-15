@@ -1,5 +1,7 @@
 # UltraRender Workspace Hygiene Implementation Plan
 
+> Archive status: completed execution record. Paths, counts, checkboxes and next steps below describe the dated snapshot only.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Restore a clean, reproducible UltraRender workspace, promote the existing generated glTF fixtures, and align project documentation with the current repository state.

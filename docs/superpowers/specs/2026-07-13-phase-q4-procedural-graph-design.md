@@ -1,5 +1,7 @@
 # Phase Q.4 Typed Procedural Graph Design
 
+> Archive status: historical design record. Phase Q is complete; use `PLAN.md`, `STATUS.md`, and current source/tests for present state.
+
 ## Scope
 
 This specification covers Phase Q.4 only: a URE-owned typed procedural graph, deterministic evaluation, parameter domains, build cache identity, and the first scatter, instancing, spectrum, and light-rig nodes.

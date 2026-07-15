@@ -1,5 +1,7 @@
 # R-P6 Mie and Volume Phase Resources Implementation Plan
 
+> Archive status: completed execution record. Checkboxes, counts and next steps below are not a live plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver a validated Lorenz-Mie host solver and external table adapter whose common resource drives unbiased wavelength-dependent Mie phase evaluation, PDF, sampling, NEE, and continuation on CUDA.

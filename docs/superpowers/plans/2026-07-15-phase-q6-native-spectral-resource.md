@@ -1,5 +1,7 @@
 # Phase Q.6 Implementation Plan
 
+> Archive status: completed execution record. Checkboxes, counts and next steps below are not a live plan.
+
 1. Define the typed resource catalog and validation/hash API.
 2. Add the conformant `URRC` FlatBuffers schema and canonical JSON projection.
 3. Integrate catalog chunk 19 into native binary/text archives with preservation and dependency checks.

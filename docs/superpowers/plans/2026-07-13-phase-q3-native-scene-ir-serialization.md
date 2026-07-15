@@ -1,5 +1,7 @@
 # Phase Q.3 Native SceneIR Serialization Implementation Plan
 
+> Archive status: completed execution record. Checkboxes, counts and next steps below are not a live plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and superpowers:test-driven-development to implement this plan task-by-task. Execute inline as one agent. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add deterministic, lossless native serialization for the complete current `scene_ir::SceneIR`, with stable source identities, independently typed mesh/Mie payloads, canonical exploded text, safe file I/O, and compatibility with `GpuSceneCompiler`.

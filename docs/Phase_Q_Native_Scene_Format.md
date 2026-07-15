@@ -1,10 +1,12 @@
-# Phase Q Native Scene Format Foundation
+# Phase Q Native Scene System
 
 ## Status and scope
 
-This document is the Q.0 capability-ownership audit and the Q.1-Q.4 native source/build contract. It records what UltraRender owns independently of glTF, USD, MaterialX, CUDA, and future backends.
+Document status: current Phase Q architecture and closure record
 
-Implemented in this foundation:
+Phase Q.0-Q.12 is complete as of 2026-07-15. This document records what UltraRender owns independently of glTF, USD, MaterialX, CUDA, and future backends. `PLAN.md` remains authoritative for later construction work.
+
+Implemented in the completed phase:
 
 - backend-neutral identities, versions, conventions, feature and extension declarations;
 - resource and package manifests;
@@ -20,8 +22,14 @@ Implemented in this foundation:
 - `URPG` typed procedural source graphs in binary and canonical text, using core chunk kind 17 while preserving reserved kind 16;
 - deterministic parameter domains, source/cache/output identities, surface scatter, instancing, blackbody/Gaussian SPD generation, ring/grid/three-point light rigs, and conflict-checked fragment composition;
 - a retained procedural scene whose generated SPD and final SceneIR cross the existing `GpuSceneCompiler` boundary.
+- explicit script-build manifests, opt-in policy, external runner attestation, provenance and cache invalidation;
+- typed spectral/material/medium/video resource catalogs and solver/simulation contracts;
+- native CLI validate/build/pack/unpack/inspect/migrate workflows and C/pyure package loading;
+- standardized adapter loss reports, validated glTF import, accepted MaterialX subset and fail-loud USD boundary;
+- disposable compiled cache identity, GPU upload/resource/acceleration metadata and farm locality scheduling;
+- a retained validation fixture inventory and `scripts/run_phase_q_validation_suite.ps1` closure gate.
 
-Not implemented here: script hooks, native procedural plugins, generalized Q.6 spectral resources, solver lowering, CLI pack/unpack, adapter conversion, production compression, compiled farm caches, signatures, or encryption. Those remain Q.5-Q.12.
+Not implemented by Phase Q: native procedural plugin execution (Phase X), USD/Hydra integration (Phase U), production compression, signatures, encryption, or the advanced solver implementations merely described by native requests. Phase Q defines authoring and validation contracts; it does not make every declared solver executable.
 
 ## Deterministic procedural build
 
@@ -29,7 +37,7 @@ The optional `ProceduralGraph` attached to a `NativeSceneArchive` is authoritati
 
 Random scatter samples use counter-derived SHA-256 lanes keyed by graph seed, canonical source hash, node ID, seed salt, element index, and dimension. Node storage order is non-semantic. The source hash covers base source plus canonical graph; the cache key additionally covers resolved overrides, evaluator version, and deterministic math profile; the output hash covers final SceneIR and generated artifact hashes.
 
-Generated spectra are content-addressed canonical SPD build artifacts. They use the current `SpectralMaterialExtension` URI boundary and do not pull the generalized Q.6 spectral resource model forward. Scripts and runtime/GPU graph interpretation remain forbidden in Q.4.
+Generated spectra are content-addressed canonical SPD build artifacts. The Q.4 implementation initially used the `SpectralMaterialExtension` URI boundary; completed Q.6 adds the generalized typed resource catalog without changing deterministic graph identity. Runtime/GPU interpretation of authoring scripts remains forbidden.
 
 ## Authority and encoding
 
@@ -117,19 +125,20 @@ The classification column distinguishes authoritative source semantics, runtime 
 | distributed sample range | node and sample partition contract | `render.distributed.sample_range` | Farm request | Q.7/Q.11 |
 | framebuffer merge metadata | samples, dimensions, compatible shard identity | `render.distributed.merge` | Farm result | Q.7/Q.11 |
 | coherent merge | complex-field merge mode and compatibility | `render.distributed.coherent_merge` | Farm request/result | Q.7/Q.11 |
-| procedural scatter/instance/spectrum/light rig | planned deterministic graph | `build.procedural` | Build source | Q.4 reserved required domain |
+| procedural scatter/instance/spectrum/light rig | typed deterministic graph | `build.procedural` | Build source | Q.4 `URPG` typed domain |
 | script build hook | interpreter identity, dependency lock, sandbox attestation, typed inputs/outputs | `build.script` | Explicit opt-in build source | Q.5 typed `URSB` manifest and host-neutral runner contract |
 | native resource catalog | spectral domain/representation, texture storage, MaterialGraph ownership, medium phase, video stream | `scene.resource` | Required typed source contract | Q.6 `URRC`; `domain_bins` is source identity while `packet_lanes_hint` is non-semantic runtime guidance |
 | solver/integrator request | integrator, sampling, bias, wave mode, backend, acceleration, merge and validation requirements | `render.integrator` / `render.wave` / `render.backend` | Required typed source contract | Q.7 `URSC`; unsupported requirements fail before runtime mapping and execution hints are non-semantic |
 | physics/acoustic simulation | solver identity/version, rational time, owned resources, directed coupling and migration | `scene.physics` / `scene.acoustic` | Required typed open contract | Q.8 `URPC`; current rigid/fluid subset compiles while future required domains fail and optional domains remain preserved |
 
-Q.5 keeps execution outside the native loader and runtime. The URE coordinator defaults to disabled, accepts only a caller-supplied sandbox runner, forbids ambient filesystem/environment/network/subprocess/time/entropy capabilities, and independently verifies every declared output. Cache identity includes the script, exact runtime, dependency lock, runner, policy, and input hashes; provenance excludes host paths and timestamps. A concrete OS or language runner is separately deployable and must not be confused with the coordinator itself.
 | physics coupling | solver version, time step, resources and channels | `scene.physics` | Source extension domain | Q.8 |
 | acoustic coupling | emitters, listeners, materials, geometry coupling | `scene.acoustic` | Source extension domain | Q.8 |
 | animation tracks | transform/camera time samples and shutter contract | `scene.animation` | Source extension domain | Q.3/Q.6 |
 | spectral/video streams | frame rate, time sampling, spectral texture stream | `scene.video` | Source extension domain | Q.6 |
 | fixture metrics | metric names, tolerances, expected failures and benchmark tags | `validation.contract` | Source validation contract | Q.12 |
 | glTF/USD/MaterialX metadata | external names and adapter loss report | `adapter.metadata` | Adapter-only | Q.10 |
+
+Q.5 keeps execution outside the native loader and runtime. The URE coordinator defaults to disabled, accepts only a caller-supplied sandbox runner, forbids ambient filesystem/environment/network/subprocess/time/entropy capabilities, and independently verifies every declared output. Cache identity includes the script, exact runtime, dependency lock, runner, policy, and input hashes; provenance excludes host paths and timestamps. A concrete OS or language runner is separately deployable and must not be confused with the coordinator itself.
 
 Every audited capability has a native typed owner or a versioned extension domain. No field requires glTF, USD, or MaterialX to define its meaning.
 

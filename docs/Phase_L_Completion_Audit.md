@@ -1,5 +1,9 @@
 # Phase L Completion Audit
 
+Document status: historical completion audit
+
+The evidence and CTest count below describe the 2026-06-15 closure snapshot. Phase L remains complete, but current repository status and live test inventory are maintained in `STATUS.md` and `ctest -N`.
+
 Date: 2026-06-15
 
 Scope: Phase L, "million-scale spectral domain / packet-resolution decoupling".
@@ -17,7 +21,7 @@ Scope: Phase L, "million-scale spectral domain / packet-resolution decoupling".
 | Low-end hardware has explicit budget/preset behavior and can reject impossible resident resources before GPU allocation | `SpectralRuntimePlan` includes sampler/cache/stream presets and resident byte estimates; GPU init calls `validate_explicit_spectral_resident_budget()` before CUDA allocations; render test covers oversized spectral texture rejection | Complete |
 | High-end/farm path has scalable preset and shard vocabulary | Hardware tests cover high-end multi-stream preset and farm-shard preset; distributed contract supports sample, spectral-domain, and frame shard metadata | Complete |
 | Regression guard prevents returning to fixed-channel/resource architecture | `scripts/check_phase_l_static.ps1` rejects old `GpuSpectrum`, old channel caps, domain-to-packet assignment, packet texture upload, and domain-sized GPU init allocation | Complete |
-| Current proof includes runtime verification, not only static search | `build_x64.ps1`, CTest 21/21, Phase L static audit, glTF validate, and 1SPP 1M-domain HDR benchmark smoke have all passed | Complete |
+| Closure proof included runtime verification, not only static search | At the 2026-06-15 snapshot, `build_x64.ps1`, CTest 21/21, Phase L static audit, glTF validate, and 1SPP 1M-domain HDR benchmark smoke passed | Complete |
 
 ## Explicit Non-Blockers
 

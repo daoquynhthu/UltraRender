@@ -1,5 +1,7 @@
 # Phase Q.3 Native SceneIR Serialization Design
 
+> Archive status: historical design record. Phase Q is complete; use `PLAN.md`, `STATUS.md`, and current source/tests for present state.
+
 ## Scope
 
 This specification covers Phase Q.3 only: lossless source serialization of the current `SceneIR`, deterministic reconstruction, and the loader boundary consumed by the existing `GpuSceneCompiler`.

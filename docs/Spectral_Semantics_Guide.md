@@ -1,5 +1,9 @@
 # Spectral Semantics Guide
 
+Document status: current semantic reference
+
+Last reviewed: 2026-07-15. This guide describes semantic intent; current declarations and tests remain authoritative for exact signatures.
+
 ## Purpose
 
 This document defines the semantic meaning of different RGB-to-spectrum conversions used in the GPU renderer.
@@ -30,7 +34,7 @@ Implementation:
 
 Location:
 
-- `include/gpu/gpu_spectrum_utils.cuh`
+- `libs/ure_core/include/ure/gpu_spectrum_utils.cuh`
 
 Why it exists:
 
@@ -61,7 +65,7 @@ Implementation:
 
 Location:
 
-- `include/gpu/gpu_spectrum_utils.cuh`
+- `libs/ure_core/include/ure/gpu_spectrum_utils.cuh`
 
 Why it exists:
 
@@ -99,7 +103,7 @@ Current behavior:
 
 Location:
 
-- `include/gpu/gpu_spectrum_utils.cuh`
+- `libs/ure_core/include/ure/gpu_spectrum_utils.cuh`
 
 Why this separation still matters:
 

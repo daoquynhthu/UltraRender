@@ -1,5 +1,9 @@
 # Phase E — N 通道光谱架构设计
 
+Document status: historical architecture and completion record
+
+本文保留 Phase E 演进过程，因此包含当时的路径、测试数量和“下一步”描述。当前光谱语义以本文件的最终决策、`docs/Spectral_Semantics_Guide.md`、当前源码和 `STATUS.md` 为准；旧快照不应被解释为当前施工游标。
+
 > 目标：物理精确的光谱渲染引擎，运行时 N 通道，消除所有 RGB 简化和两套光谱体系矛盾。
 > 本文档定义 `GpuSpectrum` 重构后的内存布局、管线契约、以及逐条矛盾的解决策略。
 > 状态：Phase E 已完成。剩余条目只记录 post-E 技术债或后续 Phase K/M 的功能边界，不再表示 E.0-E.5 未完成。
@@ -319,7 +323,7 @@ E.5 不再继续拆成开放式小阶段。2026-06-12 起剩余工作固定为 6
 
 2026-06-12 C5 收束：静态审计对代码路径执行 `rg` 搜索，`kNumWavelengths`、`.values.x/y/z/w`、`.wavelengths.x/y/z/w`、`.to_rgb()`、`from_rgb(`、`spd_from_rgb(`、`get_thin_film_interference`、`dielectric_thin_film_reflectance` 和旧 dielectric clamp 均无命中。CPU `SampledSpectrum::from_rgb()` / `to_rgb()` 已删除；legacy scene factory 的演示材质保留 RGB 输入桥接，但名称改为 `rgb_to_approximate_spd()`，明确它是输入近似 SPD 构造，不是核心 RGB roundtrip。针对性验证为 `test_asset_pipeline` 48/0、`test_gltf_frontend` 185/0、`gpu_test_spectral` 569/0，构建日志 warning/error scan 为空。
 
-2026-06-12 C6 收束：完整 Release build 通过，`build_modular/last_batch1_2_full_build.log` warning/error scan 为空；`ctest --test-dir build_modular -C Release --output-on-failure` 为 17/17 通过；`git diff --check` 通过；代码路径搜索门禁对固定 4 通道 API、RGB roundtrip API、旧 thin-film helper 和 dielectric clamp 均无命中。E.5 当前状态为完成。specular manifold / refractive shadow path、rough dielectric microfacet BTDF、RGB/photometry fallback 精度和 volume spectral proposal 方差是后续功能边界，不再作为 E.5 内用 straight-through shadow 或局部公式修补。
+2026-06-12 C6 收束快照：当时的完整 Release build 通过，`build_modular/last_batch1_2_full_build.log` warning/error scan 为空；`ctest --test-dir build_modular -C Release --output-on-failure` 为 17/17 通过；`git diff --check` 通过；代码路径搜索门禁对固定 4 通道 API、RGB roundtrip API、旧 thin-film helper 和 dielectric clamp 均无命中。E.5 在该快照中完成。specular manifold / refractive shadow path、rough dielectric microfacet BTDF、RGB/photometry fallback 精度和 volume spectral proposal 方差是后续功能边界，不再作为 E.5 内用 straight-through shadow 或局部公式修补。
 
 ---
 
@@ -399,7 +403,7 @@ Phase E.5 — 色散 + Mueller 光谱化
 
 `render_frame_gpu()`（旧 API）已在 2026-06-11 删除声明和实现。代码库当前只保留 `init_gpu_renderer()` + `render_pass_gpu()` + `copy_frame_buffer_gpu()` 的 RenderConfig 驱动路径。
 
-验证记录：当前门禁为 Release build + 17/17 CTest；`build_modular/last_batch1_2_full_build.log` warning/error scan 为空。既有 `C4100`、`C4324`、`LNK4098`、`C4819` 构建噪声已清理。
+历史验证记录：Phase E 收束时的门禁为 Release build + 17/17 CTest；`build_modular/last_batch1_2_full_build.log` warning/error scan 为空。该记录不替代当前 `build_modular_x64` 和 live CTest 门禁。
 
 2026-06-11 进展：`generate_rays_kernel` 已移除 `float4 ray_wavelengths`，按 `queue.num_spectral_channels` 直接写入 `RayQueue::throughput_vals` 和 `RayQueue::throughput_wavelengths` SoA 布局。新增 `test_raygen_runtime_wavelength_count` 使用 N=8 验证每个波长落入对应 stratified bin。该测试只证明 ray generation 的运行时 N 写入，不代表 shade/BSDF/texture 路径已支持 N>4。
 

@@ -1,5 +1,7 @@
 # Phase Q.7 Solver and Integrator Contract Design
 
+> Archive status: historical design record. Phase Q is complete; use `PLAN.md`, `STATUS.md`, and current source/tests for present state.
+
 ## Decision
 
 Q.7 adds `URSC`, schema identity `ure.solver-contract/1.0`, and core chunk kind 20. It is a backend-neutral source request compiled into `RenderConfig`; it never serializes CUDA launch state or silently substitutes an unsupported solver.

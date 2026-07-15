@@ -1,5 +1,7 @@
 # Physics-Based Acoustic Synthesis (PBAS) Architecture
 
+> Archive status: historical concept document. It is not an implemented-capability specification. Current physics/acoustic schema ownership is recorded in Phase Q and current runtime limits are summarized in `STATUS.md`.
+
 ## Overview
 This document outlines the architecture for a "First Principles" acoustic rendering engine deeply coupled with the UltraRender physics and fluid systems. The goal is to synthesize sound physically rather than playing pre-recorded samples.
 
