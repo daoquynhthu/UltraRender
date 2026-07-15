@@ -42,7 +42,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | M (Material System) | Done | MaterialGraph, GPU expression graph, BSDF mix/layer, MaterialX adapter, presets |
 | L (Large Spectral Domain) | Done | `domain_bins` / `packet_lanes` split, 1M oracle/sampled smoke, resource descriptors, distributed spectral shard metadata, runtime presets, static audit |
 | R-P6 (Mie Volume Resources) | Done | Deterministic Lorenz-Mie generation, strict table adapter, immutable SceneIR resources, spectral GPU eval/pdf/sample, NEE/continuation, Session rebuild |
-| Q.0-Q.10 (Native Scene) | Done | Native container/schema, SceneIR serialization, procedural/script build, resource/solver/simulation contracts, tooling and adapters |
+| Q.0-Q.11 (Native Scene) | Done | Native container/schema, SceneIR serialization, procedural/script build, resource/solver/simulation, tooling, adapters and cache/farm contracts |
 | W (Wave Optics Solver) | In progress | W.0 audit + rough dielectric spectral/UV PDF/MIS fix done; W.1 WaveOpticsConfig gates done; W.2 Airy PSF oracle started |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
@@ -196,7 +196,7 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | Host core | `test_world`, `test_asset_pipeline`, `test_config`, `test_spectral_oracle`, `test_wave_optics`, `test_integrator`, `test_mie_phase` |
 | Host scene/material/session | `test_native_scene`, `test_native_scene_ir`, `test_native_procedural_graph`, `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io` |
 | Python | `test_pyure_smoke` |
-| **CTest total** | **35 registered tests** in `build_modular_x64` |
+| **CTest total** | **36 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values

@@ -46,6 +46,8 @@ Native tooling is exposed consistently through `ure_cli validate/build/pack/unpa
 
 External interchange uses `NativeAdapterResult` and the versioned `ure.adapter.loss/1.0` report. glTF is imported into a validated native archive before any CLI or Session consumer sees SceneIR. MaterialX maps only its accepted MaterialGraph subset and fails on unknown nodes. USD remains an explicit error boundary until Phase U; no adapter is permitted to silently discard procedural, spectral/resource, solver, simulation, analytic-geometry, or advanced material semantics.
 
+Compiled caches use the separate `UREC` binary identity and remain disposable. Their manifest binds source, compiler, schema, and SceneIR hashes to GPU upload ranges, spectral/resource artifacts, acceleration metadata, and validation metrics. A mismatch either requests an explicit rebuild or is rejected according to caller policy. Farm scheduling consumes package resource hashes and worker inventories, applies capacity gates, and deterministically minimizes resource transfer.
+
 Large geometry, spectra, Mie tables, volume fields, animation, audio, and video are typed resource payloads. `.ure` references them by stable ID and SHA-256; it does not Base64-encode them or expand them into large JSON arrays.
 
 ## Q.0 capability ownership audit

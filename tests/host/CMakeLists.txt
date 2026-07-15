@@ -86,6 +86,10 @@ target_compile_definitions(test_native_adapter PRIVATE
 )
 add_test(NAME test_native_adapter COMMAND test_native_adapter)
 
+add_executable(test_native_compiled_cache test_native_compiled_cache.cpp)
+target_link_libraries(test_native_compiled_cache PRIVATE ure_sceneio ure_diag)
+add_test(NAME test_native_compiled_cache COMMAND test_native_compiled_cache)
+
 add_executable(test_gltf_frontend test_gltf_frontend.cpp)
 target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)

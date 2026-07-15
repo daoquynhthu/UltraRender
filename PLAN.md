@@ -2200,7 +2200,7 @@ struct MaterialGraph {
 
 ### Phase Q — URE 原生场景系统 / Procedural Industrial Scene Format
 
-**状态**: 进行中。Q.0-Q.10 原生格式、SceneIR serialization、procedural/script build、native resources、solver/integrator、physics/acoustic open contract、CLI/API tooling 与 adapter contract 已完成；当前后续游标为 Q.11。
+**状态**: 进行中。Q.0-Q.11 原生格式、SceneIR serialization、procedural/script build、native resources、solver/integrator、physics/acoustic open contract、CLI/API tooling、adapter 与 compiled-cache/farm contract 已完成；当前后续游标为 Q.12。
 
 **目标**: 建立 UltraRender 自己的第一等场景格式和程序化 authoring contract。`.ure` / `.urescene` / `.urepkg` 是权威格式；SceneIR 是编译后的内部 IR；glTF、USD、MaterialX、EXR、SPD 等只能作为导入/导出 adapter 或资源交换格式，不能限制 UltraRender 的核心能力。Phase Q 必须覆盖当前和规划中的场景、光谱、材质、介质、体积、光源、积分器、几何加速、波动光学、物理、声学、视频流、分布式和脚本化能力，并为未来物理/声学模型改变保留 schema migration 与开放 extension slot。
 
@@ -2280,7 +2280,7 @@ struct MaterialGraph {
 | Q.8 | ✅ 物理/声学开放 schema：`URPC` + core chunk 21 覆盖 rigid/soft/fluid、modal/ray/wave acoustic 与 extension domain，solver identity/version、rational time sampling、single-owner resource、directed typed coupling、feedback consent 和 migration policy；required `ure.scene.simulation` feature | 当前 rigid/fluid subset 编译到 `PhysicsConfig`，acoustic/future optional domain 保留；unknown required solver/domain/coupling、无 owner resource、未授权 coupling cycle 和无效 migration fail-loud；binary/text archive roundtrip、33/33 CTest 与 Q/L/R/physics-optics gates 通过 |
 | Q.9 | ✅ CLI/API/tooling：`ure_cli validate/build/pack/unpack/inspect/migrate` 支持 URE native，render/C/Python Session 统一加载 `.ure/.urescene/.urepkg`；package 内嵌 canonical `.urescene` payload 并同时验证 container、manifest、content hash 与 scene semantic hash | CLI validate 输出 schema、feature、resource、stored/resident budget 和 adapter-loss diagnostics；build/migrate canonical 投影、multi-scene pack/unpack、inspect inventory、pyure `load_package()` 已由 host/Python 契约覆盖；34/34 CTest 与 Q/Q3-Q9/L/R/physics-optics/schema gates 通过 |
 | Q.10 | ✅ Adapter contract：glTF import 先生成 validated `NativeSceneArchive`，render/info/validate/C Session 均消费同一 native boundary；MaterialX expressible subset 通过显式 native wrapper roundtrip；USD 在 Phase U 前保留为标准化 fail-loud 边界；`ure.adapter.loss/1.0` 统一 code/severity/native-path/feature/remediation | advanced procedural/resource/solver/simulation/analytic geometry/material graph fixture 生成稳定 loss inventory；外部 adapter 不再绕过 native validation；35/35 CTest 与 Q/Q3-Q10/L/R/physics-optics gates 通过 |
-| Q.11 | Compiled cache/farm package：`.urecache` 存储 SceneIR hash、compiler hash、GPU upload plan、spectral/resource cache、acceleration metadata、validation metrics | source/cache hash mismatch 必须重建或拒绝；farm shard 可按 package resource locality 调度 |
+| Q.11 | ✅ Compiled cache/farm package：`.urecache` 使用独立 `UREC` binary identity、versioned canonical payload 与 payload SHA-256，typed manifest 覆盖 source/compiler/SceneIR hash、GPU upload plan、spectral/resource artifacts、acceleration metadata 和 validation metrics；cache 始终非权威 | source/compiler mismatch 可显式选择 rebuild warning 或 reject error；invalid hash/version/budget/upload overlap/artifact/metric/corruption fail-loud；farm shard 在容量门禁后按 package resource content-hash locality 确定性调度并核算 transfer bytes；36/36 CTest 与 Q/Q3-Q11/L/R/schema gates 通过 |
 | Q.12 | Native scene validation suite：建立原生 scene fixture 集，覆盖基础场景、程序化场景、光谱资源、Mie/volume、wave optics request、integrator request、physics/acoustic placeholder、video stream placeholder、adapter loss | `run_phase_q_validation_suite.ps1` 可本地运行；文档、schema fixture、roundtrip、fail-loud 和 package build 全部通过 |
 
 #### 完成标准
