@@ -49,7 +49,8 @@ typedef enum ure_integrator_mode_t {
     URE_INTEGRATOR_PATH_GUIDED = 1,
     URE_INTEGRATOR_RESTIR_DI = 2,
     URE_INTEGRATOR_SPECULAR_MANIFOLD = 3,
-    URE_INTEGRATOR_MLT = 4
+    URE_INTEGRATOR_MLT = 4,
+    URE_INTEGRATOR_RESTIR_PT = 5
 } ure_integrator_mode_t;
 
 typedef enum ure_integrator_sampler_t {
@@ -96,6 +97,17 @@ typedef struct ure_integrator_config_t {
     float path_guiding_decay;
     int path_guiding_decay_interval;
     int path_guiding_memory_budget_mb;
+    int restir_di_spatial_candidate_count;
+    int restir_di_spatial_radius;
+    float restir_di_min_target;
+    int restir_pt_enabled;
+    int restir_pt_temporal_reuse;
+    int restir_pt_spatial_reuse;
+    int restir_pt_max_reuse_depth;
+    int restir_pt_candidate_count;
+    int restir_pt_max_history;
+    float restir_pt_position_threshold;
+    float restir_pt_normal_threshold;
 } ure_integrator_config_t;
 
 typedef enum ure_aov_type_t {

@@ -1,4 +1,5 @@
 #include "ure/gpu_driver.hpp"
+#include "ure/integrator/restir_reservoir.hpp"
 #include "ure/render.hpp"
 #include "ure/scene_ir.hpp"
 #include "ure/specular_manifold.hpp"
@@ -215,6 +216,61 @@ static int test_integrator_path_guided_mode_requires_enabled_guiding() {
     return 0;
 }
 
+static int test_restir_reservoir_matches_enumerated_mixture_expectation() {
+    constexpr double targets[2] = {1.0, 3.0};
+    constexpr double proposals[2][2] = {{0.8, 0.2}, {0.2, 0.8}};
+    double expectation = 0.0;
+    for (int a = 0; a < 2; ++a) {
+        for (int b = 0; b < 2; ++b) {
+            ure::integrator::RestirReservoir reservoir;
+            const double qa = 0.5 * (proposals[0][a] + proposals[1][a]);
+            const double qb = 0.5 * (proposals[0][b] + proposals[1][b]);
+            CHECK(ure::integrator::stream_restir_candidate(
+                reservoir, {targets[a], qa, 1}, 0.25));
+            CHECK(ure::integrator::stream_restir_candidate(
+                reservoir, {targets[b], qb, 1}, 0.75));
+            const auto result = ure::integrator::finalize_restir_reservoir(reservoir);
+            CHECK(result.valid);
+            expectation += proposals[0][a] * proposals[1][b] * result.estimate;
+        }
+    }
+    CHECK_NEAR(expectation, targets[0] + targets[1], 1e-12);
+    return 0;
+}
+
+static int test_restir_reservoir_clamps_history_without_changing_normalization() {
+    ure::integrator::RestirReservoir reservoir;
+    CHECK(ure::integrator::stream_restir_candidate(reservoir, {2.0, 0.25, 8}, 0.0));
+    ure::integrator::clamp_restir_history(reservoir, 2);
+    CHECK(reservoir.candidate_count == 2);
+    const auto result = ure::integrator::finalize_restir_reservoir(reservoir);
+    CHECK(result.valid);
+    CHECK_NEAR(result.estimate, 8.0, 1e-12);
+    return 0;
+}
+
+static int test_restir_reservoir_rejects_invalid_candidate_density() {
+    ure::integrator::RestirReservoir reservoir;
+    CHECK(!ure::integrator::stream_restir_candidate(reservoir, {1.0, 0.0, 1}, 0.5));
+    CHECK(!ure::integrator::stream_restir_candidate(reservoir, {-1.0, 0.5, 1}, 0.5));
+    CHECK(!ure::integrator::stream_restir_candidate(reservoir, {1.0, 0.5, 0}, 0.5));
+    CHECK(!ure::integrator::finalize_restir_reservoir(reservoir).valid);
+    return 0;
+}
+
+static int test_restir_neighbor_offsets_are_deterministic_and_bounded() {
+    for (std::uint32_t i = 0; i < 32; ++i) {
+        const auto a = ure::integrator::restir_neighbor_offset(17, 9, i, 4);
+        const auto b = ure::integrator::restir_neighbor_offset(17, 9, i, 4);
+        CHECK(a.x == b.x);
+        CHECK(a.y == b.y);
+        CHECK(std::abs(a.x) <= 4);
+        CHECK(std::abs(a.y) <= 4);
+        CHECK(a.x != 0 || a.y != 0);
+    }
+    return 0;
+}
+
 static int run(const char* name, int (*fn)()) {
     std::cout << "  test: " << name << " ... ";
     int rc = fn();
@@ -241,6 +297,10 @@ int main() {
     failed += run("test_integrator_rejects_primary_sample_sampler_without_mlt_mode", test_integrator_rejects_primary_sample_sampler_without_mlt_mode);
     failed += run("test_integrator_rejects_restir_mode_without_biased_ack", test_integrator_rejects_restir_mode_without_biased_ack);
     failed += run("test_integrator_path_guided_mode_requires_enabled_guiding", test_integrator_path_guided_mode_requires_enabled_guiding);
+    failed += run("test_restir_reservoir_matches_enumerated_mixture_expectation", test_restir_reservoir_matches_enumerated_mixture_expectation);
+    failed += run("test_restir_reservoir_clamps_history_without_changing_normalization", test_restir_reservoir_clamps_history_without_changing_normalization);
+    failed += run("test_restir_reservoir_rejects_invalid_candidate_density", test_restir_reservoir_rejects_invalid_candidate_density);
+    failed += run("test_restir_neighbor_offsets_are_deterministic_and_bounded", test_restir_neighbor_offsets_are_deterministic_and_bounded);
     std::cout << "  failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

@@ -116,6 +116,12 @@ struct GpuContext {
     int* d_restir_di_active_channels = nullptr;
     int* d_restir_di_history_lengths = nullptr;
     int* d_restir_di_valid = nullptr;
+    GpuRestirDIReservoir* d_restir_di_reservoirs[2] = {nullptr, nullptr};
+    float* d_restir_di_spectral_values[2] = {nullptr, nullptr};
+    float* d_restir_di_spectral_wavelengths[2] = {nullptr, nullptr};
+    int restir_di_input_index = 0;
+    std::uint32_t restir_di_scene_epoch = 1;
+    size_t restir_di_required_bytes = 0;
     float* d_wavelength_proposal_cdf = nullptr;
     float* d_wavelength_proposal_pdf = nullptr;
     int wavelength_proposal_count = 0;

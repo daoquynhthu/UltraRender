@@ -105,6 +105,17 @@ class _IntegratorConfig(ctypes.Structure):
         ("path_guiding_decay", ctypes.c_float),
         ("path_guiding_decay_interval", ctypes.c_int),
         ("path_guiding_memory_budget_mb", ctypes.c_int),
+        ("restir_di_spatial_candidate_count", ctypes.c_int),
+        ("restir_di_spatial_radius", ctypes.c_int),
+        ("restir_di_min_target", ctypes.c_float),
+        ("restir_pt_enabled", ctypes.c_int),
+        ("restir_pt_temporal_reuse", ctypes.c_int),
+        ("restir_pt_spatial_reuse", ctypes.c_int),
+        ("restir_pt_max_reuse_depth", ctypes.c_int),
+        ("restir_pt_candidate_count", ctypes.c_int),
+        ("restir_pt_max_history", ctypes.c_int),
+        ("restir_pt_position_threshold", ctypes.c_float),
+        ("restir_pt_normal_threshold", ctypes.c_float),
     ]
 
 
@@ -254,6 +265,7 @@ def _integrator_mode_id(mode: str) -> int:
         "restir_di": 2,
         "specular_manifold": 3,
         "mlt": 4,
+        "restir_pt": 5,
     }
     try:
         return modes[mode]
@@ -410,6 +422,17 @@ class RenderSession:
                 float(path_guiding_decay),
                 int(path_guiding_decay_interval),
                 int(path_guiding_memory_budget_mb),
+                4,
+                8,
+                1e-6,
+                int(integrator_mode == "restir_pt"),
+                1,
+                0,
+                4,
+                4,
+                8,
+                0.01,
+                0.9,
             )
             handle = native().ure_session_create_integrator_config(
                 ctypes.byref(cfg),

@@ -92,6 +92,20 @@ RenderConfig load_config(const std::string& path) {
             if (r.contains("spatial_reuse")) cfg.restir_di.spatial_reuse = r["spatial_reuse"].get<bool>();
             if (r.contains("unbiased")) cfg.restir_di.unbiased = r["unbiased"].get<bool>();
             if (r.contains("max_history")) cfg.restir_di.max_history = r["max_history"].get<int>();
+            if (r.contains("spatial_candidate_count")) cfg.restir_di.spatial_candidate_count = r["spatial_candidate_count"].get<int>();
+            if (r.contains("spatial_radius")) cfg.restir_di.spatial_radius = r["spatial_radius"].get<int>();
+            if (r.contains("min_target")) cfg.restir_di.min_target = r["min_target"].get<double>();
+        }
+        if (j.contains("restir_pt")) {
+            auto& r = j["restir_pt"];
+            if (r.contains("enabled")) cfg.restir_pt.enabled = r["enabled"].get<bool>();
+            if (r.contains("temporal_reuse")) cfg.restir_pt.temporal_reuse = r["temporal_reuse"].get<bool>();
+            if (r.contains("spatial_reuse")) cfg.restir_pt.spatial_reuse = r["spatial_reuse"].get<bool>();
+            if (r.contains("max_reuse_depth")) cfg.restir_pt.max_reuse_depth = r["max_reuse_depth"].get<int>();
+            if (r.contains("candidate_count")) cfg.restir_pt.candidate_count = r["candidate_count"].get<int>();
+            if (r.contains("max_history")) cfg.restir_pt.max_history = r["max_history"].get<int>();
+            if (r.contains("position_threshold")) cfg.restir_pt.position_threshold = r["position_threshold"].get<double>();
+            if (r.contains("normal_threshold")) cfg.restir_pt.normal_threshold = r["normal_threshold"].get<double>();
         }
         if (j.contains("integrator")) {
             auto& i = j["integrator"];
@@ -162,6 +176,12 @@ CliResult parse_cli(int argc, char** argv) {
     bool restir_di_spatial_reuse = false;
     bool restir_di_unbiased = false;
     int restir_di_max_history = -1;
+    int restir_di_spatial_candidate_count = -1;
+    int restir_di_spatial_radius = -1;
+    bool restir_pt = false;
+    bool restir_pt_spatial_reuse = false;
+    int restir_pt_max_reuse_depth = -1;
+    int restir_pt_candidate_count = -1;
     bool integrator_specular_manifold = false;
     std::string integrator_mode;
     std::string integrator_sampler;
@@ -213,6 +233,12 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_flag("--restir-di-spatial-reuse", restir_di_spatial_reuse, "Request spatial ReSTIR DI reuse");
     render_cmd->add_flag("--restir-di-unbiased", restir_di_unbiased, "Request unbiased ReSTIR DI mode");
     render_cmd->add_option("--restir-di-max-history", restir_di_max_history, "Maximum temporal history carried by ReSTIR DI");
+    render_cmd->add_option("--restir-di-spatial-candidates", restir_di_spatial_candidate_count, "Spatial ReSTIR DI candidates per shading point");
+    render_cmd->add_option("--restir-di-spatial-radius", restir_di_spatial_radius, "Spatial ReSTIR DI pixel radius");
+    render_cmd->add_flag("--enable-restir-pt", restir_pt, "Enable ReSTIR path-suffix reuse");
+    render_cmd->add_flag("--restir-pt-spatial-reuse", restir_pt_spatial_reuse, "Enable spatial ReSTIR PT suffix reuse");
+    render_cmd->add_option("--restir-pt-max-reuse-depth", restir_pt_max_reuse_depth, "Maximum reconnectable ReSTIR PT suffix depth");
+    render_cmd->add_option("--restir-pt-candidates", restir_pt_candidate_count, "ReSTIR PT suffix candidates per shading point");
     render_cmd->add_flag("--enable-integrator-specular-manifold", integrator_specular_manifold, "Request radiometric specular manifold integration");
     render_cmd->add_option("--integrator-mode", integrator_mode, "Integrator mode: wavefront, path_guided, restir_di, specular_manifold, mlt");
     render_cmd->add_option("--integrator-sampler", integrator_sampler, "Integrator sampler: default, low_discrepancy, primary_sample_space");
@@ -315,6 +341,12 @@ CliResult parse_cli(int argc, char** argv) {
         if (restir_di_spatial_reuse) cfg.restir_di.spatial_reuse = true;
         if (restir_di_unbiased) cfg.restir_di.unbiased = true;
         if (restir_di_max_history > 0) cfg.restir_di.max_history = restir_di_max_history;
+        if (restir_di_spatial_candidate_count > 0) cfg.restir_di.spatial_candidate_count = restir_di_spatial_candidate_count;
+        if (restir_di_spatial_radius > 0) cfg.restir_di.spatial_radius = restir_di_spatial_radius;
+        if (restir_pt) cfg.restir_pt.enabled = true;
+        if (restir_pt_spatial_reuse) cfg.restir_pt.spatial_reuse = true;
+        if (restir_pt_max_reuse_depth > 0) cfg.restir_pt.max_reuse_depth = restir_pt_max_reuse_depth;
+        if (restir_pt_candidate_count > 0) cfg.restir_pt.candidate_count = restir_pt_candidate_count;
         if (integrator_specular_manifold) cfg.integrator.specular_manifold.enabled = true;
         if (!integrator_mode.empty()) cfg.integrator.mode = integrator_mode;
         if (!integrator_sampler.empty()) cfg.integrator.sampler = integrator_sampler;

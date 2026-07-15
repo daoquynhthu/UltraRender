@@ -280,6 +280,75 @@ static int test_restir_di_cli_overrides() {
     return 0;
 }
 
+static int test_restir_production_json_fields() {
+    const char* path = "test_config_restir_production.json";
+    {
+        std::ofstream out(path);
+        out << R"({
+  "restir_di": {
+    "enabled": true,
+    "temporal_reuse": true,
+    "spatial_reuse": true,
+    "unbiased": true,
+    "max_history": 12,
+    "spatial_candidate_count": 6,
+    "spatial_radius": 9,
+    "min_target": 0.00001
+  },
+  "restir_pt": {
+    "enabled": true,
+    "temporal_reuse": true,
+    "spatial_reuse": true,
+    "max_reuse_depth": 5,
+    "candidate_count": 7,
+    "max_history": 10,
+    "position_threshold": 0.02,
+    "normal_threshold": 0.91
+  },
+  "integrator": {"mode": "restir_pt"}
+})";
+    }
+    auto cfg = ure::config::load_config(path);
+    std::remove(path);
+    CHECK(cfg.restir_di.unbiased);
+    CHECK(cfg.restir_di.spatial_reuse);
+    CHECK(cfg.restir_di.spatial_candidate_count == 6);
+    CHECK(cfg.restir_di.spatial_radius == 9);
+    CHECK(std::fabs(cfg.restir_di.min_target - 0.00001) < 1e-12);
+    CHECK(cfg.restir_pt.enabled);
+    CHECK(cfg.restir_pt.spatial_reuse);
+    CHECK(cfg.restir_pt.max_reuse_depth == 5);
+    CHECK(cfg.restir_pt.candidate_count == 7);
+    CHECK(cfg.restir_pt.max_history == 10);
+    CHECK(std::fabs(cfg.restir_pt.position_threshold - 0.02) < 1e-12);
+    CHECK(std::fabs(cfg.restir_pt.normal_threshold - 0.91) < 1e-12);
+    CHECK(cfg.integrator.mode == "restir_pt");
+    return 0;
+}
+
+static int test_restir_production_cli_overrides() {
+    const char* argv[] = {
+        "ure_cli", "render", "scene.gltf",
+        "--enable-restir-di", "--restir-di-unbiased", "--restir-di-spatial-reuse",
+        "--restir-di-spatial-candidates", "5", "--restir-di-spatial-radius", "8",
+        "--enable-restir-pt", "--restir-pt-spatial-reuse",
+        "--restir-pt-max-reuse-depth", "4", "--restir-pt-candidates", "6",
+        "--integrator-mode", "restir_pt"
+    };
+    const auto cfg = ure::config::parse_cli(
+        static_cast<int>(sizeof(argv) / sizeof(argv[0])), const_cast<char**>(argv)).config;
+    CHECK(cfg.restir_di.unbiased);
+    CHECK(cfg.restir_di.spatial_reuse);
+    CHECK(cfg.restir_di.spatial_candidate_count == 5);
+    CHECK(cfg.restir_di.spatial_radius == 8);
+    CHECK(cfg.restir_pt.enabled);
+    CHECK(cfg.restir_pt.spatial_reuse);
+    CHECK(cfg.restir_pt.max_reuse_depth == 4);
+    CHECK(cfg.restir_pt.candidate_count == 6);
+    CHECK(cfg.integrator.mode == "restir_pt");
+    return 0;
+}
+
 static int test_integrator_specular_manifold_json_fields() {
     const char* path = "test_config_integrator_specular.json";
     {
@@ -460,6 +529,8 @@ int main() {
     failed += run("test_environment_light_cli_overrides", test_environment_light_cli_overrides);
     failed += run("test_restir_di_json_fields", test_restir_di_json_fields);
     failed += run("test_restir_di_cli_overrides", test_restir_di_cli_overrides);
+    failed += run("test_restir_production_json_fields", test_restir_production_json_fields);
+    failed += run("test_restir_production_cli_overrides", test_restir_production_cli_overrides);
     failed += run("test_integrator_specular_manifold_json_fields", test_integrator_specular_manifold_json_fields);
     failed += run("test_integrator_specular_manifold_cli_overrides", test_integrator_specular_manifold_cli_overrides);
     failed += run("test_integrator_mlt_json_fields", test_integrator_mlt_json_fields);

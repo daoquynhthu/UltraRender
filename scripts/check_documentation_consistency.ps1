@@ -43,8 +43,8 @@ foreach ($file in $archiveFiles) {
 }
 $executionRecords = @(Get-ChildItem -LiteralPath (Join-Path $root "docs/superpowers") -File -Recurse -Filter "*.md")
 foreach ($file in $executionRecords) {
-    if ((Get-Content -LiteralPath $file.FullName -Raw) -notmatch "Archive status:") {
-        throw "Historical design/plan lacks an archive marker: $($file.FullName)"
+    if ((Get-Content -LiteralPath $file.FullName -Raw) -notmatch "(?i)(Archive status:|Document status: Active)") {
+        throw "Design/plan lacks an active or archive marker: $($file.FullName)"
     }
 }
 

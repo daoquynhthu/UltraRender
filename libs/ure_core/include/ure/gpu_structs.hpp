@@ -383,6 +383,46 @@ struct GpuLightTreeNode {
     GpuVec3 bounds_max = {};
 };
 
+enum class GpuRestirDomain : int {
+    Surface = 0,
+    Volume = 1
+};
+
+struct GpuRestirDISample {
+    GpuVec3 source_position = {};
+    GpuVec3 source_normal = {};
+    GpuVec3 direction = {};
+    float max_distance = 0.0f;
+    float light_u = 0.0f;
+    float light_v = 0.0f;
+    float wavelength_pdf = 0.0f;
+    float lobe_pdf = 0.0f;
+    float stokes_i = 1.0f;
+    float stokes_q = 0.0f;
+    float stokes_u = 0.0f;
+    float stokes_v = 0.0f;
+    int light_list_index = -1;
+    int light_primitive_index = -1;
+    int light_secondary_index = -1;
+    int material_index = -1;
+    int medium_index = -1;
+    int spectral_mode = 0;
+    int active_channel = 0;
+    int source_pixel = -1;
+    int source_depth = 0;
+    GpuRestirDomain domain = GpuRestirDomain::Surface;
+    std::uint32_t scene_epoch = 0;
+};
+
+struct GpuRestirDIReservoir {
+    GpuRestirDISample sample = {};
+    double weight_sum = 0.0;
+    float selected_target = 0.0f;
+    float normalization_weight = 0.0f;
+    std::uint32_t candidate_count = 0;
+    int valid = 0;
+};
+
 // Phase E: Scalar-only material header. Spectral data stored as SoA in GpuScene.
 struct GpuMaterial {
     MaterialType type;
@@ -583,6 +623,17 @@ struct GpuScene {
     int restir_di_unbiased;
     int restir_di_max_history;
     float restir_di_min_target;
+    GpuRestirDIReservoir* restir_di_input_reservoirs;
+    GpuRestirDIReservoir* restir_di_output_reservoirs;
+    float* restir_di_input_spectral_values;
+    float* restir_di_input_spectral_wavelengths;
+    float* restir_di_output_spectral_values;
+    float* restir_di_output_spectral_wavelengths;
+    std::uint32_t restir_di_scene_epoch;
+    int restir_di_spatial_candidate_count;
+    int restir_di_spatial_radius;
+    int restir_di_width;
+    int restir_di_height;
     int light_count;
 
     // Global Homogeneous Medium (Volumetric Fog)

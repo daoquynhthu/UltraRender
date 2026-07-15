@@ -1185,7 +1185,8 @@ PathGuidingMemoryPlan plan_path_guiding_memory(const ure::RenderConfig& config,
 }
 
 static bool restir_di_enabled(const ure::RenderConfig& config) {
-    return config.restir_di.enabled && config.restir_di.temporal_reuse;
+    return config.restir_di.enabled &&
+           (config.restir_di.temporal_reuse || config.restir_di.spatial_reuse);
 }
 
 static void validate_environment_light_config(const ure::RenderConfig& config) {
@@ -1234,15 +1235,34 @@ static void validate_path_guiding_config(const ure::RenderConfig& config) {
 
 static void validate_restir_di_config(const ure::RenderConfig& config) {
     if (!config.restir_di.enabled) return;
-    if (config.restir_di.spatial_reuse) {
-        throw std::runtime_error("ReSTIR DI spatial reuse is not implemented yet");
+    if (!config.restir_di.temporal_reuse && !config.restir_di.spatial_reuse) {
+        throw std::runtime_error("ReSTIR DI requires temporal or spatial reuse");
     }
-    if (config.restir_di.unbiased) {
-        throw std::runtime_error("Unbiased ReSTIR DI is not implemented yet; current baseline is explicitly biased temporal reuse");
+    if (!config.restir_di.unbiased && config.restir_di.spatial_reuse) {
+        throw std::runtime_error("Biased ReSTIR DI preview supports temporal reuse only");
     }
-    if (!config.restir_di.temporal_reuse) {
-        throw std::runtime_error("ReSTIR DI requires temporal_reuse for the current baseline");
+    if (config.restir_di.max_history <= 0 || config.restir_di.spatial_candidate_count <= 0 ||
+        config.restir_di.spatial_radius <= 0 || !std::isfinite(config.restir_di.min_target) ||
+        config.restir_di.min_target <= 0.0f) {
+        throw std::runtime_error("ReSTIR DI history, spatial controls, and target floor must be positive");
     }
+}
+
+static void validate_restir_pt_config(const ure::RenderConfig& config) {
+    if (!config.restir_pt.enabled) return;
+    if (!config.restir_pt.temporal_reuse && !config.restir_pt.spatial_reuse) {
+        throw std::runtime_error("ReSTIR PT requires temporal or spatial reuse");
+    }
+    if (config.restir_pt.max_reuse_depth <= 0 || config.restir_pt.candidate_count <= 0 ||
+        config.restir_pt.max_history <= 0) {
+        throw std::runtime_error("ReSTIR PT depth, candidate count, and history must be positive");
+    }
+    if (!std::isfinite(config.restir_pt.position_threshold) || config.restir_pt.position_threshold <= 0.0f ||
+        !std::isfinite(config.restir_pt.normal_threshold) || config.restir_pt.normal_threshold < 0.0f ||
+        config.restir_pt.normal_threshold > 1.0f) {
+        throw std::runtime_error("ReSTIR PT reconnection thresholds are invalid");
+    }
+    throw std::runtime_error("ReSTIR PT GPU integrator is not implemented yet");
 }
 
 static void validate_specular_manifold_config(const ure::RenderConfig& config) {
@@ -1294,9 +1314,12 @@ static void validate_integrator_runtime_config(const ure::RenderConfig& config) 
         if (!config.restir_di.enabled) {
             throw std::runtime_error("integrator mode restir_di requires restir_di.enabled");
         }
-        if (!config.integrator.allow_biased_reuse) {
+        if (!config.restir_di.unbiased && !config.integrator.allow_biased_reuse) {
             throw std::runtime_error("current ReSTIR DI integrator is biased; set allow_biased_reuse explicitly");
         }
+    }
+    if (config.integrator.mode == ure::IntegratorMode::RestirPT && !config.restir_pt.enabled) {
+        throw std::runtime_error("integrator mode restir_pt requires restir_pt.enabled");
     }
     if (config.integrator.mode == ure::IntegratorMode::SpecularManifold && !config.specular_manifold.enabled) {
         throw std::runtime_error("integrator mode specular_manifold requires specular_manifold.enabled");
@@ -1329,6 +1352,14 @@ static void release_restir_di_reservoirs(GpuContext* ctx) {
     cudaFree(ctx->d_restir_di_active_channels);
     cudaFree(ctx->d_restir_di_history_lengths);
     cudaFree(ctx->d_restir_di_valid);
+    for (int i = 0; i < 2; ++i) {
+        cudaFree(ctx->d_restir_di_reservoirs[i]);
+        cudaFree(ctx->d_restir_di_spectral_values[i]);
+        cudaFree(ctx->d_restir_di_spectral_wavelengths[i]);
+        ctx->d_restir_di_reservoirs[i] = nullptr;
+        ctx->d_restir_di_spectral_values[i] = nullptr;
+        ctx->d_restir_di_spectral_wavelengths[i] = nullptr;
+    }
     ctx->d_restir_di_origins = nullptr;
     ctx->d_restir_di_directions = nullptr;
     ctx->d_restir_di_max_dist = nullptr;
@@ -1346,22 +1377,57 @@ static void release_restir_di_reservoirs(GpuContext* ctx) {
     ctx->d_restir_di_active_channels = nullptr;
     ctx->d_restir_di_history_lengths = nullptr;
     ctx->d_restir_di_valid = nullptr;
+    ctx->restir_di_input_index = 0;
+    ctx->restir_di_required_bytes = 0;
     ctx->last_integrator_restir_reservoir_count = 0;
 }
 
 static void clear_restir_di_reservoirs(GpuContext* ctx) {
-    if (!ctx || !ctx->d_restir_di_valid) return;
+    if (!ctx) return;
     const int pixel_count = ctx->width * ctx->height;
-    UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_valid, 0, pixel_count * sizeof(int)));
-    UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_history_lengths, 0, pixel_count * sizeof(int)));
-    UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_target_luminance, 0, pixel_count * sizeof(float)));
+    if (ctx->d_restir_di_valid) {
+        UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_valid, 0, pixel_count * sizeof(int)));
+        UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_history_lengths, 0, pixel_count * sizeof(int)));
+        UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_target_luminance, 0, pixel_count * sizeof(float)));
+    }
+    for (int i = 0; i < 2; ++i) {
+        if (ctx->d_restir_di_reservoirs[i]) {
+            UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_reservoirs[i], 0,
+                static_cast<size_t>(pixel_count) * sizeof(GpuRestirDIReservoir)));
+        }
+    }
+    ctx->restir_di_input_index = 0;
 }
 
 static void alloc_restir_di_reservoirs(GpuContext* ctx) {
     if (!restir_di_enabled(ctx->render_config)) return;
     const int pixel_count = checked_primary_ray_count(ctx->width, ctx->height);
     const size_t pixel_bytes = static_cast<size_t>(pixel_count);
-    const size_t spectral_bytes = pixel_bytes * static_cast<size_t>(ctx->num_spectral_channels) * sizeof(float);
+    const size_t channels = static_cast<size_t>(ctx->num_spectral_channels);
+    if (channels == 0 || pixel_bytes > std::numeric_limits<size_t>::max() / channels ||
+        pixel_bytes * channels > std::numeric_limits<size_t>::max() / sizeof(float)) {
+        throw std::runtime_error("ReSTIR DI spectral storage size overflow");
+    }
+    const size_t spectral_bytes = pixel_bytes * channels * sizeof(float);
+    if (ctx->render_config.restir_di.unbiased) {
+        if (pixel_bytes > std::numeric_limits<size_t>::max() / sizeof(GpuRestirDIReservoir)) {
+            throw std::runtime_error("ReSTIR DI reservoir storage size overflow");
+        }
+        const size_t reservoir_bytes = pixel_bytes * sizeof(GpuRestirDIReservoir);
+        if (spectral_bytes > std::numeric_limits<size_t>::max() / 4 ||
+            reservoir_bytes > (std::numeric_limits<size_t>::max() - 4 * spectral_bytes) / 2) {
+            throw std::runtime_error("ReSTIR DI total storage size overflow");
+        }
+        ctx->restir_di_required_bytes = 2 * reservoir_bytes + 4 * spectral_bytes;
+        for (int i = 0; i < 2; ++i) {
+            UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_reservoirs[i], reservoir_bytes));
+            UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_spectral_values[i], spectral_bytes));
+            UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_spectral_wavelengths[i], spectral_bytes));
+        }
+        clear_restir_di_reservoirs(ctx);
+        ctx->last_integrator_restir_reservoir_count = pixel_count;
+        return;
+    }
     UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_origins, pixel_bytes * sizeof(GpuVec3)));
     UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_directions, pixel_bytes * sizeof(GpuVec3)));
     UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_max_dist, pixel_bytes * sizeof(float)));
@@ -1754,6 +1820,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     validate_environment_light_config(config);
     validate_path_guiding_config(config);
     validate_restir_di_config(config);
+    validate_restir_pt_config(config);
     validate_specular_manifold_config(config);
     validate_mlt_config(config);
     for (const auto& resource : mie_phase_resources) {
@@ -2295,6 +2362,9 @@ void free_gpu_renderer(GpuContext* ctx) {
 }
 
 int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
+    if (ctx->render_config.restir_di.enabled && ctx->render_config.restir_di.unbiased) {
+        throw std::runtime_error("Unbiased ReSTIR DI scheduler is not connected yet");
+    }
     if (ctx->d_path_guiding_light_weights && ctx->light_count > 0) {
         ++ctx->path_guiding_passes_since_decay;
         if (ctx->path_guiding_passes_since_decay >= ctx->render_config.path_guiding.decay_interval) {
@@ -2410,6 +2480,19 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.restir_di_unbiased = ctx->render_config.restir_di.unbiased ? 1 : 0;
     scene.restir_di_max_history = std::max(1, ctx->render_config.restir_di.max_history);
     scene.restir_di_min_target = std::max(ctx->render_config.restir_di.min_target, 0.0f);
+    const int restir_input_index = ctx->restir_di_input_index;
+    const int restir_output_index = 1 - restir_input_index;
+    scene.restir_di_input_reservoirs = ctx->d_restir_di_reservoirs[restir_input_index];
+    scene.restir_di_output_reservoirs = ctx->d_restir_di_reservoirs[restir_output_index];
+    scene.restir_di_input_spectral_values = ctx->d_restir_di_spectral_values[restir_input_index];
+    scene.restir_di_input_spectral_wavelengths = ctx->d_restir_di_spectral_wavelengths[restir_input_index];
+    scene.restir_di_output_spectral_values = ctx->d_restir_di_spectral_values[restir_output_index];
+    scene.restir_di_output_spectral_wavelengths = ctx->d_restir_di_spectral_wavelengths[restir_output_index];
+    scene.restir_di_scene_epoch = ctx->restir_di_scene_epoch;
+    scene.restir_di_spatial_candidate_count = std::max(1, ctx->render_config.restir_di.spatial_candidate_count);
+    scene.restir_di_spatial_radius = std::max(1, ctx->render_config.restir_di.spatial_radius);
+    scene.restir_di_width = ctx->width;
+    scene.restir_di_height = ctx->height;
     scene.light_count = ctx->light_count;
 
     scene.medium_density = ctx->medium_density;
@@ -2443,6 +2526,18 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
 
     for (int s = 0; s < samples_per_pass; ++s) {
         int current_global_sample = ctx->current_spp + s;
+        if (ctx->render_config.restir_di.unbiased) {
+            const int input_index = ctx->restir_di_input_index;
+            const int output_index = 1 - input_index;
+            scene.restir_di_input_reservoirs = ctx->d_restir_di_reservoirs[input_index];
+            scene.restir_di_output_reservoirs = ctx->d_restir_di_reservoirs[output_index];
+            scene.restir_di_input_spectral_values = ctx->d_restir_di_spectral_values[input_index];
+            scene.restir_di_input_spectral_wavelengths = ctx->d_restir_di_spectral_wavelengths[input_index];
+            scene.restir_di_output_spectral_values = ctx->d_restir_di_spectral_values[output_index];
+            scene.restir_di_output_spectral_wavelengths = ctx->d_restir_di_spectral_wavelengths[output_index];
+            UR_CUDA_CHECK(cudaMemset(scene.restir_di_output_reservoirs, 0,
+                static_cast<size_t>(primary_ray_count) * sizeof(GpuRestirDIReservoir)));
+        }
 
         int initial_count = primary_ray_count;
         UR_CUDA_CHECK(cudaMemcpy(ctx->queueA.count, &initial_count, sizeof(int), cudaMemcpyHostToDevice));
@@ -2499,6 +2594,9 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             RayQueue* temp = current_q;
             current_q = next_q;
             next_q = temp;
+        }
+        if (ctx->render_config.restir_di.unbiased) {
+            ctx->restir_di_input_index = 1 - ctx->restir_di_input_index;
         }
     }
 

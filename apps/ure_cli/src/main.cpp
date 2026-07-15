@@ -136,6 +136,10 @@ bool parse_integrator_mode(const std::string& mode, ure::IntegratorMode& out) {
         out = ure::IntegratorMode::RestirDI;
         return true;
     }
+    if (value == "restir_pt") {
+        out = ure::IntegratorMode::RestirPT;
+        return true;
+    }
     if (value == "specular_manifold") {
         out = ure::IntegratorMode::SpecularManifold;
         return true;
@@ -220,6 +224,8 @@ bool make_integrator_config(const ure::config::IntegratorConfig& app_config, ure
     } else if (cfg.integrator.mode == ure::IntegratorMode::RestirDI) {
         cfg.restir_di.enabled = true;
         cfg.restir_di.temporal_reuse = true;
+    } else if (cfg.integrator.mode == ure::IntegratorMode::RestirPT) {
+        cfg.restir_pt.enabled = true;
     } else if (cfg.integrator.mode == ure::IntegratorMode::SpecularManifold) {
         cfg.specular_manifold.enabled = true;
     } else if (cfg.integrator.mode == ure::IntegratorMode::MLT) {
@@ -267,6 +273,17 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.restir_di.spatial_reuse = app_config.restir_di.spatial_reuse;
     gpu_config.restir_di.unbiased = app_config.restir_di.unbiased;
     gpu_config.restir_di.max_history = app_config.restir_di.max_history;
+    gpu_config.restir_di.spatial_candidate_count = app_config.restir_di.spatial_candidate_count;
+    gpu_config.restir_di.spatial_radius = app_config.restir_di.spatial_radius;
+    gpu_config.restir_di.min_target = static_cast<float>(app_config.restir_di.min_target);
+    gpu_config.restir_pt.enabled = app_config.restir_pt.enabled;
+    gpu_config.restir_pt.temporal_reuse = app_config.restir_pt.temporal_reuse;
+    gpu_config.restir_pt.spatial_reuse = app_config.restir_pt.spatial_reuse;
+    gpu_config.restir_pt.max_reuse_depth = app_config.restir_pt.max_reuse_depth;
+    gpu_config.restir_pt.candidate_count = app_config.restir_pt.candidate_count;
+    gpu_config.restir_pt.max_history = app_config.restir_pt.max_history;
+    gpu_config.restir_pt.position_threshold = static_cast<float>(app_config.restir_pt.position_threshold);
+    gpu_config.restir_pt.normal_threshold = static_cast<float>(app_config.restir_pt.normal_threshold);
     gpu_config.specular_manifold.enabled = app_config.integrator.specular_manifold.enabled;
     gpu_config.specular_manifold.max_specular_events = app_config.integrator.specular_manifold.max_specular_events;
     gpu_config.specular_manifold.solver_tolerance = static_cast<float>(app_config.integrator.specular_manifold.solver_tolerance);

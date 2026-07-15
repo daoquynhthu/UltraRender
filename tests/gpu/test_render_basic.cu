@@ -7,6 +7,7 @@
 
 #include "test_framework.cuh"
 #include "ure/gpu_context.hpp"
+#include "ure/integrator/restir_di.cuh"
 #include "ure/gpu_driver.hpp"
 #include "ure/gpu_structs.hpp"
 #include "ure/log.hpp"
@@ -2210,16 +2211,177 @@ static int test_restir_di_allocates_and_resets_temporal_reservoirs() {
     CHECK(valid == 0);
     free_gpu_renderer(ctx);
 
-    bool threw_unbiased = false;
+    bool threw_invalid = false;
     try {
         ure::RenderConfig bad = config;
         bad.restir_di.unbiased = true;
+        bad.restir_di.spatial_candidate_count = 0;
         GpuContext* bad_ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, bad);
         free_gpu_renderer(bad_ctx);
     } catch (const std::runtime_error&) {
-        threw_unbiased = true;
+        threw_invalid = true;
     }
-    CHECK(threw_unbiased);
+    CHECK(threw_invalid);
+    return 0;
+}
+
+__global__ void evaluate_restir_reservoir_contract_kernel(
+    GpuRestirDIReservoir* output,
+    int* compatibility) {
+    GpuRestirDISample fresh = {};
+    fresh.source_position = GpuVec3(1.0f, 2.0f, 3.0f);
+    fresh.source_normal = GpuVec3(0.0f, 1.0f, 0.0f);
+    fresh.material_index = 4;
+    fresh.medium_index = 2;
+    fresh.scene_epoch = 7;
+    fresh.domain = GpuRestirDomain::Surface;
+    GpuRestirDIReservoir reservoir = {};
+    stream_restir_di_candidate(reservoir, fresh, 2.0f, 0.25f, 1, 0.0f);
+
+    GpuRestirDIReservoir history = {};
+    history.sample = fresh;
+    history.selected_target = 1.0f;
+    history.weight_sum = 6.0;
+    history.candidate_count = 3;
+    history.valid = 1;
+    merge_restir_di_reservoir(reservoir, history, 2.0f, 0.99f);
+    finalize_restir_di_reservoir(reservoir, 2);
+    output[0] = reservoir;
+    compatibility[0] = compatible_restir_di_sample(
+        fresh, GpuRestirDomain::Surface, GpuVec3(1.001f, 2.0f, 3.0f),
+        GpuVec3(0.0f, 1.0f, 0.0f), 4, 2, 7, 0.01f, 0.9f) ? 1 : 0;
+    compatibility[1] = compatible_restir_di_sample(
+        fresh, GpuRestirDomain::Volume, fresh.source_position,
+        fresh.source_normal, 4, 2, 7, 0.01f, 0.9f) ? 1 : 0;
+    compatibility[2] = compatible_restir_di_sample(
+        fresh, GpuRestirDomain::Surface, fresh.source_position,
+        GpuVec3(0.0f, -1.0f, 0.0f), 4, 2, 7, 0.01f, 0.9f) ? 1 : 0;
+}
+
+__global__ void reconstruct_restir_light_kernel(GpuScene scene, float* output) {
+    GpuRestirDISample stored = {};
+    stored.light_list_index = 0;
+    stored.light_primitive_index = 0;
+    stored.light_secondary_index = -1;
+    stored.material_index = 3;
+    stored.light_u = 0.3f;
+    stored.light_v = 0.7f;
+    SelectedLightSample near_sample;
+    SelectedLightSample far_sample;
+    output[0] = reconstruct_restir_di_light_sample(
+        scene, stored, GpuVec3(0.0f, 0.0f, 0.0f), near_sample) ? 1.0f : 0.0f;
+    output[1] = reconstruct_restir_di_light_sample(
+        scene, stored, GpuVec3(0.0f, 0.0f, -4.0f), far_sample) ? 1.0f : 0.0f;
+    output[2] = near_sample.pdf;
+    output[3] = far_sample.pdf;
+    output[4] = near_sample.max_dist;
+    output[5] = far_sample.max_dist;
+    stored.light_primitive_index = 1;
+    output[6] = reconstruct_restir_di_light_sample(
+        scene, stored, GpuVec3(0.0f, 0.0f, 0.0f), near_sample) ? 1.0f : 0.0f;
+}
+
+static int test_restir_di_device_reservoir_merge_and_compatibility() {
+    REQUIRE_GPU();
+    GpuRestirDIReservoir* d_reservoir = nullptr;
+    int* d_compatibility = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_reservoir, sizeof(GpuRestirDIReservoir)));
+    CHECK_CUDA(cudaMalloc(&d_compatibility, 3 * sizeof(int)));
+    evaluate_restir_reservoir_contract_kernel<<<1, 1>>>(d_reservoir, d_compatibility);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    GpuRestirDIReservoir reservoir = {};
+    int compatibility[3] = {};
+    CHECK_CUDA(cudaMemcpy(&reservoir, d_reservoir, sizeof(reservoir), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(compatibility, d_compatibility, sizeof(compatibility), cudaMemcpyDeviceToHost));
+    cudaFree(d_reservoir);
+    cudaFree(d_compatibility);
+    CHECK(reservoir.valid == 1);
+    CHECK(reservoir.candidate_count == 2);
+    CHECK_FLOAT_EQ(static_cast<float>(reservoir.weight_sum), 10.0f, 1e-5f);
+    CHECK_FLOAT_EQ(reservoir.normalization_weight, 2.5f, 1e-5f);
+    CHECK(compatibility[0] == 1);
+    CHECK(compatibility[1] == 0);
+    CHECK(compatibility[2] == 0);
+    return 0;
+}
+
+static int test_restir_di_reconstructs_light_at_current_reference_point() {
+    REQUIRE_GPU();
+    GpuSphere sphere = {GpuVec3(0.0f, 0.0f, 5.0f), 1.0f, 3};
+    GpuLightRecord light = {};
+    light.kind = GpuLightKind::Sphere;
+    light.primitive_index = 0;
+    light.secondary_index = -1;
+    light.material_index = 3;
+    float pmf = 1.0f;
+    GpuSphere* d_sphere = nullptr;
+    GpuLightRecord* d_light = nullptr;
+    float* d_pmf = nullptr;
+    float* d_output = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_sphere, sizeof(sphere)));
+    CHECK_CUDA(cudaMalloc(&d_light, sizeof(light)));
+    CHECK_CUDA(cudaMalloc(&d_pmf, sizeof(pmf)));
+    CHECK_CUDA(cudaMalloc(&d_output, 7 * sizeof(float)));
+    DeviceMem _sphere(d_sphere), _light(d_light), _pmf(d_pmf), _output(d_output);
+    CHECK_CUDA(cudaMemcpy(d_sphere, &sphere, sizeof(sphere), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_light, &light, sizeof(light), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_pmf, &pmf, sizeof(pmf), cudaMemcpyHostToDevice));
+    GpuScene scene = {};
+    scene.spheres = d_sphere;
+    scene.sphere_count = 1;
+    scene.lights = d_light;
+    scene.light_selection_pmf = d_pmf;
+    scene.light_count = 1;
+    reconstruct_restir_light_kernel<<<1, 1>>>(scene, d_output);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaDeviceSynchronize());
+    float output[7] = {};
+    CHECK_CUDA(cudaMemcpy(output, d_output, sizeof(output), cudaMemcpyDeviceToHost));
+    CHECK(output[0] == 1.0f);
+    CHECK(output[1] == 1.0f);
+    CHECK(output[2] != output[3]);
+    CHECK(output[4] != output[5]);
+    CHECK(output[6] == 0.0f);
+    return 0;
+}
+
+static int test_restir_di_production_uses_ping_pong_reservoirs() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.integrator.mode = ure::IntegratorMode::RestirDI;
+    config.restir_di.enabled = true;
+    config.restir_di.temporal_reuse = true;
+    config.restir_di.spatial_reuse = true;
+    config.restir_di.unbiased = true;
+    config.restir_di.max_history = 4;
+    config.restir_di.spatial_candidate_count = 3;
+    config.restir_di.spatial_radius = 2;
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->d_restir_di_reservoirs[0] != nullptr);
+    CHECK(ctx->d_restir_di_reservoirs[1] != nullptr);
+    CHECK(ctx->d_restir_di_reservoirs[0] != ctx->d_restir_di_reservoirs[1]);
+    CHECK(ctx->d_restir_di_spectral_values[0] != nullptr);
+    CHECK(ctx->d_restir_di_spectral_values[1] != nullptr);
+    CHECK(ctx->restir_di_required_bytes > 0);
+    CHECK(ctx->restir_di_input_index == 0);
+    CHECK(ctx->d_restir_di_valid == nullptr);
+
+    GpuRestirDIReservoir dirty = {};
+    dirty.valid = 1;
+    dirty.candidate_count = 9;
+    CHECK_CUDA(cudaMemcpy(ctx->d_restir_di_reservoirs[0], &dirty, sizeof(dirty), cudaMemcpyHostToDevice));
+    reset_accumulation_gpu(ctx);
+    GpuRestirDIReservoir cleared = {};
+    CHECK_CUDA(cudaMemcpy(&cleared, ctx->d_restir_di_reservoirs[0], sizeof(cleared), cudaMemcpyDeviceToHost));
+    CHECK(cleared.valid == 0);
+    CHECK(cleared.candidate_count == 0);
+    CHECK(ctx->restir_di_input_index == 0);
+    free_gpu_renderer(ctx);
     return 0;
 }
 
@@ -2735,6 +2897,9 @@ int main() {
     RUN_TEST(test_path_guiding_decay_kernel_applies_epoch_factor);
     RUN_TEST(test_path_guiding_shadow_visibility_updates_light_weight);
     RUN_TEST(test_restir_di_allocates_and_resets_temporal_reservoirs);
+    RUN_TEST(test_restir_di_device_reservoir_merge_and_compatibility);
+    RUN_TEST(test_restir_di_reconstructs_light_at_current_reference_point);
+    RUN_TEST(test_restir_di_production_uses_ping_pong_reservoirs);
     RUN_TEST(test_restir_di_visible_shadow_updates_reservoir_metadata);
     RUN_TEST(test_importance_spectral_config_selects_nonuniform_wavelength_sampler);
     RUN_TEST(test_importance_spectral_config_uses_scene_spectral_power_proposal);

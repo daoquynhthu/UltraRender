@@ -1362,6 +1362,22 @@ __device__ inline bool sample_selected_light(
     return sample.valid;
 }
 
+__device__ inline bool reconstruct_restir_di_light_sample(
+    const GpuScene& scene,
+    const GpuRestirDISample& stored,
+    const GpuVec3& reference_point,
+    SelectedLightSample& sample) {
+    if (stored.light_list_index < 0 || stored.light_list_index >= scene.light_count) return false;
+    const GpuLightRecord record = get_light_record(scene, stored.light_list_index);
+    if (record.primitive_index != stored.light_primitive_index ||
+        record.secondary_index != stored.light_secondary_index ||
+        record.material_index != stored.material_index) {
+        return false;
+    }
+    return sample_selected_light(
+        scene, stored.light_list_index, reference_point, stored.light_u, stored.light_v, sample);
+}
+
 __device__ inline float selected_environment_light_pdf(const GpuScene& scene, const GpuVec3& reference_point) {
     if (!scene.environment_light_direct_sampling) return 0.0f;
     float selection_pdf = 0.0f;

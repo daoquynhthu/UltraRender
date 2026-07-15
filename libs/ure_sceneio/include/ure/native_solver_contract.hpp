@@ -15,7 +15,7 @@ namespace ure::native_scene {
 inline constexpr const char* kSolverContractSchemaIdentity = "ure.solver-contract/1.0";
 inline constexpr const char* kSolverContractFeature = "ure.render.solver";
 
-enum class NativeIntegratorMode : std::uint8_t { Wavefront, PathGuided, RestirDI, SpecularManifold, MLT, BDPT, VCM };
+enum class NativeIntegratorMode : std::uint8_t { Wavefront, PathGuided, RestirDI, SpecularManifold, MLT, BDPT, VCM, RestirPT };
 enum class ExecutionBackend : std::uint8_t { Cuda, Vulkan, D3D12, CpuOracle, Extension };
 enum class AccelerationProvider : std::uint8_t { SoftwareBvh, Optix, VulkanRT, DXR, Extension };
 enum class CoherentMergeMode : std::uint8_t { None, ComplexAmplitude, MutualCoherence };
@@ -46,6 +46,7 @@ struct NativeSolverContract {
     int max_trace_depth = 50;
     PathGuidingConfig path_guiding;
     RestirDirectConfig restir_di;
+    RestirPathConfig restir_pt;
     SpecularManifoldConfig specular_manifold;
     MltIntegratorConfig mlt;
     WaveOpticsConfig wave_optics;

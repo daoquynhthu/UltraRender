@@ -27,6 +27,10 @@ struct RestirDI;
 struct RestirDIBuilder;
 struct RestirDIT;
 
+struct RestirPT;
+struct RestirPTBuilder;
+struct RestirPTT;
+
 struct SpecularManifold;
 struct SpecularManifoldBuilder;
 struct SpecularManifoldT;
@@ -59,11 +63,12 @@ enum class IntegratorMode : uint8_t {
   MLT = 4,
   BDPT = 5,
   VCM = 6,
+  RestirPT = 7,
   MIN = Wavefront,
-  MAX = VCM
+  MAX = RestirPT
 };
 
-inline const IntegratorMode (&EnumValuesIntegratorMode())[7] {
+inline const IntegratorMode (&EnumValuesIntegratorMode())[8] {
   static const IntegratorMode values[] = {
     IntegratorMode::Wavefront,
     IntegratorMode::PathGuided,
@@ -71,13 +76,14 @@ inline const IntegratorMode (&EnumValuesIntegratorMode())[7] {
     IntegratorMode::SpecularManifold,
     IntegratorMode::MLT,
     IntegratorMode::BDPT,
-    IntegratorMode::VCM
+    IntegratorMode::VCM,
+    IntegratorMode::RestirPT
   };
   return values;
 }
 
 inline const char * const *EnumNamesIntegratorMode() {
-  static const char * const names[8] = {
+  static const char * const names[9] = {
     "Wavefront",
     "PathGuided",
     "RestirDI",
@@ -85,13 +91,14 @@ inline const char * const *EnumNamesIntegratorMode() {
     "MLT",
     "BDPT",
     "VCM",
+    "RestirPT",
     nullptr
   };
   return names;
 }
 
 inline const char *EnumNameIntegratorMode(IntegratorMode e) {
-  if (::flatbuffers::IsOutRange(e, IntegratorMode::Wavefront, IntegratorMode::VCM)) return "";
+  if (::flatbuffers::IsOutRange(e, IntegratorMode::Wavefront, IntegratorMode::RestirPT)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesIntegratorMode()[index];
 }
@@ -534,6 +541,8 @@ struct RestirDIT : public ::flatbuffers::NativeTable {
   bool unbiased = false;
   int32_t max_history = 1;
   float min_target = 0.000001f;
+  int32_t spatial_candidate_count = 4;
+  int32_t spatial_radius = 8;
 };
 
 struct RestirDI FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -546,7 +555,9 @@ struct RestirDI FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_SPATIAL_REUSE = 8,
     VT_UNBIASED = 10,
     VT_MAX_HISTORY = 12,
-    VT_MIN_TARGET = 14
+    VT_MIN_TARGET = 14,
+    VT_SPATIAL_CANDIDATE_COUNT = 16,
+    VT_SPATIAL_RADIUS = 18
   };
   bool enabled() const {
     return GetField<uint8_t>(VT_ENABLED, 0) != 0;
@@ -566,6 +577,12 @@ struct RestirDI FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   float min_target() const {
     return GetField<float>(VT_MIN_TARGET, 0.000001f);
   }
+  int32_t spatial_candidate_count() const {
+    return GetField<int32_t>(VT_SPATIAL_CANDIDATE_COUNT, 4);
+  }
+  int32_t spatial_radius() const {
+    return GetField<int32_t>(VT_SPATIAL_RADIUS, 8);
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -575,6 +592,8 @@ struct RestirDI FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<uint8_t>(verifier, VT_UNBIASED, 1) &&
            VerifyField<int32_t>(verifier, VT_MAX_HISTORY, 4) &&
            VerifyField<float>(verifier, VT_MIN_TARGET, 4) &&
+           VerifyField<int32_t>(verifier, VT_SPATIAL_CANDIDATE_COUNT, 4) &&
+           VerifyField<int32_t>(verifier, VT_SPATIAL_RADIUS, 4) &&
            verifier.EndTable();
   }
   RestirDIT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -604,6 +623,12 @@ struct RestirDIBuilder {
   void add_min_target(float min_target) {
     fbb_.AddElement<float>(RestirDI::VT_MIN_TARGET, min_target, 0.000001f);
   }
+  void add_spatial_candidate_count(int32_t spatial_candidate_count) {
+    fbb_.AddElement<int32_t>(RestirDI::VT_SPATIAL_CANDIDATE_COUNT, spatial_candidate_count, 4);
+  }
+  void add_spatial_radius(int32_t spatial_radius) {
+    fbb_.AddElement<int32_t>(RestirDI::VT_SPATIAL_RADIUS, spatial_radius, 8);
+  }
   explicit RestirDIBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -622,8 +647,12 @@ inline ::flatbuffers::Offset<RestirDI> CreateRestirDI(
     bool spatial_reuse = false,
     bool unbiased = false,
     int32_t max_history = 1,
-    float min_target = 0.000001f) {
+    float min_target = 0.000001f,
+    int32_t spatial_candidate_count = 4,
+    int32_t spatial_radius = 8) {
   RestirDIBuilder builder_(_fbb);
+  builder_.add_spatial_radius(spatial_radius);
+  builder_.add_spatial_candidate_count(spatial_candidate_count);
   builder_.add_min_target(min_target);
   builder_.add_max_history(max_history);
   builder_.add_unbiased(unbiased);
@@ -639,6 +668,142 @@ struct RestirDI::Traits {
 };
 
 ::flatbuffers::Offset<RestirDI> CreateRestirDI(::flatbuffers::FlatBufferBuilder &_fbb, const RestirDIT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct RestirPTT : public ::flatbuffers::NativeTable {
+  typedef RestirPT TableType;
+  bool enabled = false;
+  bool temporal_reuse = true;
+  bool spatial_reuse = false;
+  int32_t max_reuse_depth = 4;
+  int32_t candidate_count = 4;
+  int32_t max_history = 8;
+  float position_threshold = 0.01f;
+  float normal_threshold = 0.9f;
+};
+
+struct RestirPT FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef RestirPTT NativeTableType;
+  typedef RestirPTBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ENABLED = 4,
+    VT_TEMPORAL_REUSE = 6,
+    VT_SPATIAL_REUSE = 8,
+    VT_MAX_REUSE_DEPTH = 10,
+    VT_CANDIDATE_COUNT = 12,
+    VT_MAX_HISTORY = 14,
+    VT_POSITION_THRESHOLD = 16,
+    VT_NORMAL_THRESHOLD = 18
+  };
+  bool enabled() const {
+    return GetField<uint8_t>(VT_ENABLED, 0) != 0;
+  }
+  bool temporal_reuse() const {
+    return GetField<uint8_t>(VT_TEMPORAL_REUSE, 1) != 0;
+  }
+  bool spatial_reuse() const {
+    return GetField<uint8_t>(VT_SPATIAL_REUSE, 0) != 0;
+  }
+  int32_t max_reuse_depth() const {
+    return GetField<int32_t>(VT_MAX_REUSE_DEPTH, 4);
+  }
+  int32_t candidate_count() const {
+    return GetField<int32_t>(VT_CANDIDATE_COUNT, 4);
+  }
+  int32_t max_history() const {
+    return GetField<int32_t>(VT_MAX_HISTORY, 8);
+  }
+  float position_threshold() const {
+    return GetField<float>(VT_POSITION_THRESHOLD, 0.01f);
+  }
+  float normal_threshold() const {
+    return GetField<float>(VT_NORMAL_THRESHOLD, 0.9f);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint8_t>(verifier, VT_ENABLED, 1) &&
+           VerifyField<uint8_t>(verifier, VT_TEMPORAL_REUSE, 1) &&
+           VerifyField<uint8_t>(verifier, VT_SPATIAL_REUSE, 1) &&
+           VerifyField<int32_t>(verifier, VT_MAX_REUSE_DEPTH, 4) &&
+           VerifyField<int32_t>(verifier, VT_CANDIDATE_COUNT, 4) &&
+           VerifyField<int32_t>(verifier, VT_MAX_HISTORY, 4) &&
+           VerifyField<float>(verifier, VT_POSITION_THRESHOLD, 4) &&
+           VerifyField<float>(verifier, VT_NORMAL_THRESHOLD, 4) &&
+           verifier.EndTable();
+  }
+  RestirPTT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(RestirPTT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<RestirPT> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const RestirPTT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct RestirPTBuilder {
+  typedef RestirPT Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_enabled(bool enabled) {
+    fbb_.AddElement<uint8_t>(RestirPT::VT_ENABLED, static_cast<uint8_t>(enabled), 0);
+  }
+  void add_temporal_reuse(bool temporal_reuse) {
+    fbb_.AddElement<uint8_t>(RestirPT::VT_TEMPORAL_REUSE, static_cast<uint8_t>(temporal_reuse), 1);
+  }
+  void add_spatial_reuse(bool spatial_reuse) {
+    fbb_.AddElement<uint8_t>(RestirPT::VT_SPATIAL_REUSE, static_cast<uint8_t>(spatial_reuse), 0);
+  }
+  void add_max_reuse_depth(int32_t max_reuse_depth) {
+    fbb_.AddElement<int32_t>(RestirPT::VT_MAX_REUSE_DEPTH, max_reuse_depth, 4);
+  }
+  void add_candidate_count(int32_t candidate_count) {
+    fbb_.AddElement<int32_t>(RestirPT::VT_CANDIDATE_COUNT, candidate_count, 4);
+  }
+  void add_max_history(int32_t max_history) {
+    fbb_.AddElement<int32_t>(RestirPT::VT_MAX_HISTORY, max_history, 8);
+  }
+  void add_position_threshold(float position_threshold) {
+    fbb_.AddElement<float>(RestirPT::VT_POSITION_THRESHOLD, position_threshold, 0.01f);
+  }
+  void add_normal_threshold(float normal_threshold) {
+    fbb_.AddElement<float>(RestirPT::VT_NORMAL_THRESHOLD, normal_threshold, 0.9f);
+  }
+  explicit RestirPTBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<RestirPT> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<RestirPT>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<RestirPT> CreateRestirPT(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    bool enabled = false,
+    bool temporal_reuse = true,
+    bool spatial_reuse = false,
+    int32_t max_reuse_depth = 4,
+    int32_t candidate_count = 4,
+    int32_t max_history = 8,
+    float position_threshold = 0.01f,
+    float normal_threshold = 0.9f) {
+  RestirPTBuilder builder_(_fbb);
+  builder_.add_normal_threshold(normal_threshold);
+  builder_.add_position_threshold(position_threshold);
+  builder_.add_max_history(max_history);
+  builder_.add_candidate_count(candidate_count);
+  builder_.add_max_reuse_depth(max_reuse_depth);
+  builder_.add_spatial_reuse(spatial_reuse);
+  builder_.add_temporal_reuse(temporal_reuse);
+  builder_.add_enabled(enabled);
+  return builder_.Finish();
+}
+
+struct RestirPT::Traits {
+  using type = RestirPT;
+  static auto constexpr Create = CreateRestirPT;
+};
+
+::flatbuffers::Offset<RestirPT> CreateRestirPT(::flatbuffers::FlatBufferBuilder &_fbb, const RestirPTT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 struct SpecularManifoldT : public ::flatbuffers::NativeTable {
   typedef SpecularManifold TableType;
@@ -1192,6 +1357,7 @@ struct SolverContractT : public ::flatbuffers::NativeTable {
   std::string acceleration_extension{};
   std::vector<std::unique_ptr<ure::solver::schema::ValidationRequirementT>> validation{};
   std::unique_ptr<ure::solver::schema::ExecutionHintsT> hints{};
+  std::unique_ptr<ure::solver::schema::RestirPTT> restir_pt{};
   SolverContractT() = default;
   SolverContractT(const SolverContractT &o);
   SolverContractT(SolverContractT&&) FLATBUFFERS_NOEXCEPT = default;
@@ -1225,7 +1391,8 @@ struct SolverContract FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_BACKEND_EXTENSION = 42,
     VT_ACCELERATION_EXTENSION = 44,
     VT_VALIDATION = 46,
-    VT_HINTS = 48
+    VT_HINTS = 48,
+    VT_RESTIR_PT = 50
   };
   const ::flatbuffers::String *id() const {
     return GetPointer<const ::flatbuffers::String *>(VT_ID);
@@ -1296,6 +1463,9 @@ struct SolverContract FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const ure::solver::schema::ExecutionHints *hints() const {
     return GetPointer<const ure::solver::schema::ExecutionHints *>(VT_HINTS);
   }
+  const ure::solver::schema::RestirPT *restir_pt() const {
+    return GetPointer<const ure::solver::schema::RestirPT *>(VT_RESTIR_PT);
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -1333,6 +1503,8 @@ struct SolverContract FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            verifier.VerifyVectorOfTables(validation()) &&
            VerifyOffset(verifier, VT_HINTS) &&
            verifier.VerifyTable(hints()) &&
+           VerifyOffset(verifier, VT_RESTIR_PT) &&
+           verifier.VerifyTable(restir_pt()) &&
            verifier.EndTable();
   }
   SolverContractT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -1413,6 +1585,9 @@ struct SolverContractBuilder {
   void add_hints(::flatbuffers::Offset<ure::solver::schema::ExecutionHints> hints) {
     fbb_.AddOffset(SolverContract::VT_HINTS, hints);
   }
+  void add_restir_pt(::flatbuffers::Offset<ure::solver::schema::RestirPT> restir_pt) {
+    fbb_.AddOffset(SolverContract::VT_RESTIR_PT, restir_pt);
+  }
   explicit SolverContractBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -1448,9 +1623,11 @@ inline ::flatbuffers::Offset<SolverContract> CreateSolverContract(
     ::flatbuffers::Offset<::flatbuffers::String> backend_extension = 0,
     ::flatbuffers::Offset<::flatbuffers::String> acceleration_extension = 0,
     ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<ure::solver::schema::ValidationRequirement>>> validation = 0,
-    ::flatbuffers::Offset<ure::solver::schema::ExecutionHints> hints = 0) {
+    ::flatbuffers::Offset<ure::solver::schema::ExecutionHints> hints = 0,
+    ::flatbuffers::Offset<ure::solver::schema::RestirPT> restir_pt = 0) {
   SolverContractBuilder builder_(_fbb);
   builder_.add_spectral_domain_bins(spectral_domain_bins);
+  builder_.add_restir_pt(restir_pt);
   builder_.add_hints(hints);
   builder_.add_validation(validation);
   builder_.add_acceleration_extension(acceleration_extension);
@@ -1505,7 +1682,8 @@ inline ::flatbuffers::Offset<SolverContract> CreateSolverContractDirect(
     const char *backend_extension = nullptr,
     const char *acceleration_extension = nullptr,
     const std::vector<::flatbuffers::Offset<ure::solver::schema::ValidationRequirement>> *validation = nullptr,
-    ::flatbuffers::Offset<ure::solver::schema::ExecutionHints> hints = 0) {
+    ::flatbuffers::Offset<ure::solver::schema::ExecutionHints> hints = 0,
+    ::flatbuffers::Offset<ure::solver::schema::RestirPT> restir_pt = 0) {
   auto id__ = id ? _fbb.CreateString(id) : 0;
   auto backend_extension__ = backend_extension ? _fbb.CreateString(backend_extension) : 0;
   auto acceleration_extension__ = acceleration_extension ? _fbb.CreateString(acceleration_extension) : 0;
@@ -1534,7 +1712,8 @@ inline ::flatbuffers::Offset<SolverContract> CreateSolverContractDirect(
       backend_extension__,
       acceleration_extension__,
       validation__,
-      hints);
+      hints,
+      restir_pt);
 }
 
 ::flatbuffers::Offset<SolverContract> CreateSolverContract(::flatbuffers::FlatBufferBuilder &_fbb, const SolverContractT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
@@ -1604,6 +1783,8 @@ inline void RestirDI::UnPackTo(RestirDIT *_o, const ::flatbuffers::resolver_func
   { auto _e = unbiased(); _o->unbiased = _e; }
   { auto _e = max_history(); _o->max_history = _e; }
   { auto _e = min_target(); _o->min_target = _e; }
+  { auto _e = spatial_candidate_count(); _o->spatial_candidate_count = _e; }
+  { auto _e = spatial_radius(); _o->spatial_radius = _e; }
 }
 
 inline ::flatbuffers::Offset<RestirDI> CreateRestirDI(::flatbuffers::FlatBufferBuilder &_fbb, const RestirDIT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -1620,6 +1801,8 @@ inline ::flatbuffers::Offset<RestirDI> RestirDI::Pack(::flatbuffers::FlatBufferB
   auto _unbiased = _o->unbiased;
   auto _max_history = _o->max_history;
   auto _min_target = _o->min_target;
+  auto _spatial_candidate_count = _o->spatial_candidate_count;
+  auto _spatial_radius = _o->spatial_radius;
   return ure::solver::schema::CreateRestirDI(
       _fbb,
       _enabled,
@@ -1627,7 +1810,56 @@ inline ::flatbuffers::Offset<RestirDI> RestirDI::Pack(::flatbuffers::FlatBufferB
       _spatial_reuse,
       _unbiased,
       _max_history,
-      _min_target);
+      _min_target,
+      _spatial_candidate_count,
+      _spatial_radius);
+}
+
+inline RestirPTT *RestirPT::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<RestirPTT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void RestirPT::UnPackTo(RestirPTT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = enabled(); _o->enabled = _e; }
+  { auto _e = temporal_reuse(); _o->temporal_reuse = _e; }
+  { auto _e = spatial_reuse(); _o->spatial_reuse = _e; }
+  { auto _e = max_reuse_depth(); _o->max_reuse_depth = _e; }
+  { auto _e = candidate_count(); _o->candidate_count = _e; }
+  { auto _e = max_history(); _o->max_history = _e; }
+  { auto _e = position_threshold(); _o->position_threshold = _e; }
+  { auto _e = normal_threshold(); _o->normal_threshold = _e; }
+}
+
+inline ::flatbuffers::Offset<RestirPT> CreateRestirPT(::flatbuffers::FlatBufferBuilder &_fbb, const RestirPTT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return RestirPT::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<RestirPT> RestirPT::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const RestirPTT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const RestirPTT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _enabled = _o->enabled;
+  auto _temporal_reuse = _o->temporal_reuse;
+  auto _spatial_reuse = _o->spatial_reuse;
+  auto _max_reuse_depth = _o->max_reuse_depth;
+  auto _candidate_count = _o->candidate_count;
+  auto _max_history = _o->max_history;
+  auto _position_threshold = _o->position_threshold;
+  auto _normal_threshold = _o->normal_threshold;
+  return ure::solver::schema::CreateRestirPT(
+      _fbb,
+      _enabled,
+      _temporal_reuse,
+      _spatial_reuse,
+      _max_reuse_depth,
+      _candidate_count,
+      _max_history,
+      _position_threshold,
+      _normal_threshold);
 }
 
 inline SpecularManifoldT *SpecularManifold::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
@@ -1842,7 +2074,8 @@ inline SolverContractT::SolverContractT(const SolverContractT &o)
         coherent_merge(o.coherent_merge),
         backend_extension(o.backend_extension),
         acceleration_extension(o.acceleration_extension),
-        hints((o.hints) ? new ure::solver::schema::ExecutionHintsT(*o.hints) : nullptr) {
+        hints((o.hints) ? new ure::solver::schema::ExecutionHintsT(*o.hints) : nullptr),
+        restir_pt((o.restir_pt) ? new ure::solver::schema::RestirPTT(*o.restir_pt) : nullptr) {
   validation.reserve(o.validation.size());
   for (const auto &validation_ : o.validation) { validation.emplace_back((validation_) ? new ure::solver::schema::ValidationRequirementT(*validation_) : nullptr); }
 }
@@ -1871,6 +2104,7 @@ inline SolverContractT &SolverContractT::operator=(SolverContractT o) FLATBUFFER
   std::swap(acceleration_extension, o.acceleration_extension);
   std::swap(validation, o.validation);
   std::swap(hints, o.hints);
+  std::swap(restir_pt, o.restir_pt);
   return *this;
 }
 
@@ -1906,6 +2140,7 @@ inline void SolverContract::UnPackTo(SolverContractT *_o, const ::flatbuffers::r
   { auto _e = acceleration_extension(); if (_e) _o->acceleration_extension = _e->str(); }
   { auto _e = validation(); if (_e) { _o->validation.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->validation[_i]) { _e->Get(_i)->UnPackTo(_o->validation[_i].get(), _resolver); } else { _o->validation[_i] = std::unique_ptr<ure::solver::schema::ValidationRequirementT>(_e->Get(_i)->UnPack(_resolver)); } } } else { _o->validation.resize(0); } }
   { auto _e = hints(); if (_e) { if(_o->hints) { _e->UnPackTo(_o->hints.get(), _resolver); } else { _o->hints = std::unique_ptr<ure::solver::schema::ExecutionHintsT>(_e->UnPack(_resolver)); } } else if (_o->hints) { _o->hints.reset(); } }
+  { auto _e = restir_pt(); if (_e) { if(_o->restir_pt) { _e->UnPackTo(_o->restir_pt.get(), _resolver); } else { _o->restir_pt = std::unique_ptr<ure::solver::schema::RestirPTT>(_e->UnPack(_resolver)); } } else if (_o->restir_pt) { _o->restir_pt.reset(); } }
 }
 
 inline ::flatbuffers::Offset<SolverContract> CreateSolverContract(::flatbuffers::FlatBufferBuilder &_fbb, const SolverContractT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -1939,6 +2174,7 @@ inline ::flatbuffers::Offset<SolverContract> SolverContract::Pack(::flatbuffers:
   auto _acceleration_extension = _o->acceleration_extension.empty() ? 0 : _fbb.CreateString(_o->acceleration_extension);
   auto _validation = _o->validation.size() ? _fbb.CreateVector<::flatbuffers::Offset<ure::solver::schema::ValidationRequirement>> (_o->validation.size(), [](size_t i, _VectorArgs *__va) { return CreateValidationRequirement(*__va->__fbb, __va->__o->validation[i].get(), __va->__rehasher); }, &_va ) : 0;
   auto _hints = _o->hints ? CreateExecutionHints(_fbb, _o->hints.get(), _rehasher) : 0;
+  auto _restir_pt = _o->restir_pt ? CreateRestirPT(_fbb, _o->restir_pt.get(), _rehasher) : 0;
   return ure::solver::schema::CreateSolverContract(
       _fbb,
       _id,
@@ -1963,7 +2199,8 @@ inline ::flatbuffers::Offset<SolverContract> SolverContract::Pack(::flatbuffers:
       _backend_extension,
       _acceleration_extension,
       _validation,
-      _hints);
+      _hints,
+      _restir_pt);
 }
 
 inline const ure::solver::schema::SolverContract *GetSolverContract(const void *buf) {

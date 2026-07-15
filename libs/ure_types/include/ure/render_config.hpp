@@ -25,7 +25,8 @@ enum class IntegratorMode {
     PathGuided,
     RestirDI,
     SpecularManifold,
-    MLT
+    MLT,
+    RestirPT
 };
 
 enum class IntegratorSampler {
@@ -76,7 +77,20 @@ struct RestirDirectConfig {
     bool spatial_reuse = false;
     bool unbiased = false;
     int max_history = 1;
+    int spatial_candidate_count = 4;
+    int spatial_radius = 8;
     float min_target = 1e-6f;
+};
+
+struct RestirPathConfig {
+    bool enabled = false;
+    bool temporal_reuse = true;
+    bool spatial_reuse = false;
+    int max_reuse_depth = 4;
+    int candidate_count = 4;
+    int max_history = 8;
+    float position_threshold = 0.01f;
+    float normal_threshold = 0.9f;
 };
 
 struct SpecularManifoldConfig {
@@ -115,6 +129,7 @@ struct RenderConfig {
     PathGuidingConfig path_guiding;
     EnvironmentLightConfig environment_light;
     RestirDirectConfig restir_di;
+    RestirPathConfig restir_pt;
     SpecularManifoldConfig specular_manifold;
     MltIntegratorConfig mlt;
     int wg_size = 32;

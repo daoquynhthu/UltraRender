@@ -12,7 +12,7 @@ ure::native_scene::SolverCapabilityRegistry capabilities() {
     using namespace ure;
     using namespace ure::native_scene;
     SolverCapabilityRegistry result;
-    result.integrators = {NativeIntegratorMode::Wavefront, NativeIntegratorMode::PathGuided, NativeIntegratorMode::RestirDI, NativeIntegratorMode::SpecularManifold, NativeIntegratorMode::MLT};
+    result.integrators = {NativeIntegratorMode::Wavefront, NativeIntegratorMode::PathGuided, NativeIntegratorMode::RestirDI, NativeIntegratorMode::SpecularManifold, NativeIntegratorMode::MLT, NativeIntegratorMode::RestirPT};
     result.samplers = {IntegratorSampler::Default, IntegratorSampler::LowDiscrepancy, IntegratorSampler::PrimarySampleSpace};
     result.wave_modes = {WaveOpticsMode::Radiometric, WaveOpticsMode::CameraDiffraction};
     result.backends = {ExecutionBackend::Cuda}; result.acceleration_providers = {AccelerationProvider::SoftwareBvh};
@@ -54,6 +54,18 @@ int main() {
     auto restir = value; restir.integrator = NativeIntegratorMode::RestirDI; restir.restir_di.enabled = true;
     check(!compile_solver_contract(restir, registry).ok(), "biased ReSTIR lacked explicit consent"); restir.allow_biased_reuse = true;
     check(compile_solver_contract(restir, registry).ok(), "explicit biased ReSTIR was rejected");
+    auto restir_pt = value; restir_pt.integrator = NativeIntegratorMode::RestirPT; restir_pt.restir_pt.enabled = true;
+    restir_pt.restir_pt.spatial_reuse = true; restir_pt.restir_pt.candidate_count = 7; restir_pt.restir_pt.max_reuse_depth = 5;
+    const auto restir_pt_compiled = compile_solver_contract(restir_pt, registry);
+    check(restir_pt_compiled.ok() && restir_pt_compiled.config &&
+          restir_pt_compiled.config->integrator.mode == IntegratorMode::RestirPT &&
+          restir_pt_compiled.config->restir_pt.candidate_count == 7,
+          "ReSTIR PT runtime mapping failed");
+    const auto restir_pt_binary = read_solver_contract_binary(write_solver_contract_binary(restir_pt));
+    check(restir_pt_binary.ok() && restir_pt_binary.value->restir_pt.enabled &&
+          restir_pt_binary.value->restir_pt.spatial_reuse &&
+          restir_pt_binary.value->restir_pt.max_reuse_depth == 5,
+          "ReSTIR PT binary roundtrip failed");
     auto mlt = value; mlt.integrator = NativeIntegratorMode::MLT; mlt.mlt.enabled = true; mlt.sampler = IntegratorSampler::PrimarySampleSpace;
     check(compile_solver_contract(mlt, registry).ok(), "MLT mapping failed");
     auto bdpt = value; bdpt.integrator = NativeIntegratorMode::BDPT;

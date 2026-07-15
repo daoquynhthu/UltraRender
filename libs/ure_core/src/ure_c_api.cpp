@@ -87,6 +87,9 @@ bool c_integrator_mode(int mode, IntegratorMode& out) {
     case URE_INTEGRATOR_MLT:
         out = IntegratorMode::MLT;
         return true;
+    case URE_INTEGRATOR_RESTIR_PT:
+        out = IntegratorMode::RestirPT;
+        return true;
     default:
         return false;
     }
@@ -166,6 +169,17 @@ bool make_integrator_config(const ure_integrator_config_t* integrator_config, Re
     cfg.restir_di.spatial_reuse = integrator_config->restir_di_spatial_reuse != 0;
     cfg.restir_di.unbiased = integrator_config->restir_di_unbiased != 0;
     if (integrator_config->restir_di_max_history > 0) cfg.restir_di.max_history = integrator_config->restir_di_max_history;
+    if (integrator_config->restir_di_spatial_candidate_count > 0) cfg.restir_di.spatial_candidate_count = integrator_config->restir_di_spatial_candidate_count;
+    if (integrator_config->restir_di_spatial_radius > 0) cfg.restir_di.spatial_radius = integrator_config->restir_di_spatial_radius;
+    if (integrator_config->restir_di_min_target > 0.0f) cfg.restir_di.min_target = integrator_config->restir_di_min_target;
+    cfg.restir_pt.enabled = integrator_config->restir_pt_enabled != 0;
+    cfg.restir_pt.temporal_reuse = integrator_config->restir_pt_temporal_reuse != 0;
+    cfg.restir_pt.spatial_reuse = integrator_config->restir_pt_spatial_reuse != 0;
+    if (integrator_config->restir_pt_max_reuse_depth > 0) cfg.restir_pt.max_reuse_depth = integrator_config->restir_pt_max_reuse_depth;
+    if (integrator_config->restir_pt_candidate_count > 0) cfg.restir_pt.candidate_count = integrator_config->restir_pt_candidate_count;
+    if (integrator_config->restir_pt_max_history > 0) cfg.restir_pt.max_history = integrator_config->restir_pt_max_history;
+    if (integrator_config->restir_pt_position_threshold > 0.0f) cfg.restir_pt.position_threshold = integrator_config->restir_pt_position_threshold;
+    if (integrator_config->restir_pt_normal_threshold > 0.0f) cfg.restir_pt.normal_threshold = integrator_config->restir_pt_normal_threshold;
     cfg.specular_manifold.enabled = integrator_config->specular_manifold_enabled != 0;
     if (integrator_config->specular_manifold_max_events > 0) cfg.specular_manifold.max_specular_events = integrator_config->specular_manifold_max_events;
     if (integrator_config->specular_manifold_tolerance > 0.0f) cfg.specular_manifold.solver_tolerance = integrator_config->specular_manifold_tolerance;
@@ -183,6 +197,7 @@ bool make_integrator_config(const ure_integrator_config_t* integrator_config, Re
         cfg.restir_di.enabled = true;
         cfg.restir_di.temporal_reuse = true;
     }
+    if (cfg.integrator.mode == IntegratorMode::RestirPT) cfg.restir_pt.enabled = true;
     if (cfg.integrator.mode == IntegratorMode::SpecularManifold) cfg.specular_manifold.enabled = true;
     if (cfg.integrator.mode == IntegratorMode::MLT) {
         cfg.mlt.enabled = true;
