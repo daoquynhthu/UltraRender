@@ -222,7 +222,7 @@ Q.4 computes cache identity only and does not serialize an expected cache key or
 
 ## Serialization
 
-Binary `.urescene` stores the authoritative graph in one required `procedural_graph` chunk with core chunk kind 16 and `URPG` payload. The chunk depends on `scene_graph` and on every declared external typed resource chunk. Q.3 `URIG`, `URMS`, and `URMI` schemas remain unchanged.
+Binary `.urescene` stores the authoritative graph in one required `procedural_graph` chunk with core chunk kind 17 and `URPG` payload. Core value 16 remains reserved by the frozen Q.2 container contract. The chunk depends on `scene_graph` and on every declared external typed resource chunk. Q.3 `URIG`, `URMS`, and `URMI` schemas remain unchanged.
 
 Canonical `.ure` adds a `procedural_graph` object alongside `scene_ir`. It contains no generated fragment or generated SPD bytes. Generated artifacts exist only in build results until later tooling explicitly materializes them.
 

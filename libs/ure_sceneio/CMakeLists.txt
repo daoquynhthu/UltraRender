@@ -17,6 +17,12 @@ add_library(ure_sceneio STATIC
     src/native_scene_ir_graph.cpp
     src/native_scene_ir_io.cpp
     src/native_scene_ir_text.cpp
+    src/native_procedural_model.cpp
+    src/native_procedural_build.cpp
+    src/native_procedural_scatter.cpp
+    src/native_procedural_spectrum.cpp
+    src/native_procedural_light.cpp
+    src/native_procedural_schema.cpp
     src/wav_saver.cpp
     src/scene_ir.cpp
     src/camera.cpp

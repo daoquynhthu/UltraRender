@@ -3,10 +3,12 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
 #include <ure/native_scene_ir.hpp>
+#include <ure/native_procedural_graph.hpp>
 
 namespace ure::native_scene::detail {
 
@@ -36,6 +38,15 @@ LoadResult<NativeSceneArchive> decode_scene_graph(
     const std::unordered_map<std::string, std::shared_ptr<Mesh>>& meshes,
     const std::unordered_map<std::string, std::shared_ptr<const scene_ir::MiePhaseResource>>& mie,
     const std::unordered_map<std::string, std::string>& resource_hashes,
+    const ValidationLimits& limits);
+
+std::vector<std::uint8_t> encode_procedural_graph(const ProceduralGraph& graph);
+LoadResult<std::shared_ptr<const ProceduralGraph>> decode_procedural_graph(
+    std::span<const std::uint8_t> bytes,
+    const ValidationLimits& limits);
+std::string write_procedural_graph_text(const ProceduralGraph& graph);
+LoadResult<std::shared_ptr<const ProceduralGraph>> read_procedural_graph_text(
+    std::string_view text,
     const ValidationLimits& limits);
 
 }

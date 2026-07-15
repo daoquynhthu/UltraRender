@@ -96,6 +96,10 @@ LoadResult<T> text_failure(std::string message) {
 ExplodedSceneArchive write_scene_ir_text(const NativeSceneArchive& archive) {
     const ValidationReport validation = validate_scene_ir_archive(archive);
     if (!validation.ok()) throw std::invalid_argument(validation.diagnostics.front().message);
+    if (archive.procedural_graph) {
+        const ValidationReport graph_validation = validate_procedural_graph(*archive.procedural_graph, archive);
+        if (!graph_validation.ok()) throw std::invalid_argument(graph_validation.diagnostics.front().message);
+    }
     detail::EncodedResources resources = detail::encode_resources(archive);
     SceneDocument document = archive.document;
     for (const auto& resource : resources.payloads) {
@@ -224,6 +228,9 @@ ExplodedSceneArchive write_scene_ir_text(const NativeSceneArchive& archive) {
     graph["spp"] = archive.scene.spp;
     graph["width"] = archive.scene.width;
     root["scene_ir"] = std::move(graph);
+    if (archive.procedural_graph) {
+        root["procedural_graph"] = Json::parse(detail::write_procedural_graph_text(*archive.procedural_graph));
+    }
     ExplodedSceneArchive result;
     result.manifest = root.dump(2) + "\n";
     result.resources = std::move(resources.payloads);
@@ -441,6 +448,13 @@ LoadResult<NativeSceneArchive> read_scene_ir_text(
         result.scene.width = graph.at("width").get<int>();
         result.scene.height = graph.at("height").get<int>();
         result.scene.spp = graph.at("spp").get<int>();
+        if (root.contains("procedural_graph")) {
+            auto procedural = detail::read_procedural_graph_text(root.at("procedural_graph").dump(), limits);
+            if (!procedural.value) throw std::invalid_argument("Invalid procedural graph text projection");
+            result.procedural_graph = std::move(*procedural.value);
+            const ValidationReport graph_validation = validate_procedural_graph(*result.procedural_graph, result);
+            if (!graph_validation.ok()) throw std::invalid_argument(graph_validation.diagnostics.front().message);
+        }
         if (used_resources.size() != archive.resources.size()) {
             throw std::invalid_argument("Unreferenced required exploded resource");
         }

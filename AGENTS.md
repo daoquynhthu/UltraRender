@@ -42,6 +42,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | M (Material System) | Done | MaterialGraph, GPU expression graph, BSDF mix/layer, MaterialX adapter, presets |
 | L (Large Spectral Domain) | Done | `domain_bins` / `packet_lanes` split, 1M oracle/sampled smoke, resource descriptors, distributed spectral shard metadata, runtime presets, static audit |
 | R-P6 (Mie Volume Resources) | Done | Deterministic Lorenz-Mie generation, strict table adapter, immutable SceneIR resources, spectral GPU eval/pdf/sample, NEE/continuation, Session rebuild |
+| Q.0-Q.4 (Native Scene) | Done | Native container/schema, SceneIR serialization, typed deterministic procedural graph, retained compiler-boundary fixtures |
 | W (Wave Optics Solver) | In progress | W.0 audit + rough dielectric spectral/UV PDF/MIS fix done; W.1 WaveOpticsConfig gates done; W.2 Airy PSF oracle started |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
@@ -193,9 +194,9 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | GPU core | `gpu_device`, `gpu_math`, `gpu_spectral`, `gpu_spectral_soa`, `gpu_hardware`, `gpu_render`, `gpu_instance`, `gpu_tangents`, `gpu_denoise` |
 | GPU physics/contracts | `gpu_polarization`, `gpu_volume`, `gpu_contract`, `gpu_wave_optics` |
 | Host core | `test_world`, `test_asset_pipeline`, `test_config`, `test_spectral_oracle`, `test_wave_optics`, `test_integrator`, `test_mie_phase` |
-| Host scene/material/session | `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io` |
+| Host scene/material/session | `test_native_scene`, `test_native_scene_ir`, `test_native_procedural_graph`, `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io` |
 | Python | `test_pyure_smoke` |
-| **CTest total** | **26 registered tests** in `build_modular_x64` |
+| **CTest total** | **29 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -254,6 +255,16 @@ When the primary agent is from the GPT or Claude model families, the default exe
 - Before starting an allowed subagent, state its exact scope and why the quota cost is justified. Prefer one focused subagent; do not create agent trees or let a subagent spawn further agents.
 - Do not use subagents for reading AGENTS.md/PLAN.md, summarizing project context, routine code search, ordinary test execution, or duplicating the primary agent's review.
 - Stop or avoid follow-up subagent turns once the bounded result is obtained. Subagent review is never mandatory for reporting or committing unless the user explicitly made it a requirement.
+
+### 6.2 General Skill Template Proportionality
+
+General-purpose skill templates are guardrails for weak or unfamiliar agents, not a mandatory ceremonial workflow for capable GPT or Claude primary agents. The primary agent may selectively skip or compress template steps that add no material safety, correctness, architectural, or verification value.
+
+- Do not repeat approvals, execution-mode choices, handoff prompts, generic checkpoints, or intermediate commits when project context and user authorization already resolve them.
+- Do not run ceremonial red tests whose only expected result is that a deliberately not-yet-created file, symbol, target, or scaffold is missing. A red test is valuable only when it can expose incorrect behavior, a regression, or a nontrivial contract boundary; otherwise implement the smallest coherent slice and verify its behavior directly.
+- Prefer direct single-agent progress when the authoritative PLAN cursor, approved design, and verification contract are clear.
+- Project governance remains binding: do not skip the authoritative PLAN scope, architecture boundaries, test evidence, self-review, REPORT approval, commit authorization, or explicit safety constraints.
+- When a skill template conflicts with this project workflow, preserve the skill's substantive engineering intent while using the shortest project-compliant process.
 
 ### Step 1: PLAN
 - Search PLAN.md for the authoritative queue/current cursor, then read only the active phase, dependencies, and relevant status sections

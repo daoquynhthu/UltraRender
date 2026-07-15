@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document is the Q.0 capability-ownership audit and the Q.1-Q.3 encoding contract. It records what UltraRender owns independently of glTF, USD, MaterialX, CUDA, and future backends.
+This document is the Q.0 capability-ownership audit and the Q.1-Q.4 native source/build contract. It records what UltraRender owns independently of glTF, USD, MaterialX, CUDA, and future backends.
 
 Implemented in this foundation:
 
@@ -17,8 +17,19 @@ Implemented in this foundation:
 - `URIG` typed source graphs plus independently content-addressed `URMS` mesh and `URMI` Mie resources;
 - bit-preserving binary and canonical exploded text roundtrips, deep-freeze ownership, safe atomic file I/O, and a retained full-scene fixture;
 - a loader boundary verified by the existing `GpuSceneCompiler` without linking `ure_sceneio` to `ure_core` or CUDA.
+- `URPG` typed procedural source graphs in binary and canonical text, using core chunk kind 17 while preserving reserved kind 16;
+- deterministic parameter domains, source/cache/output identities, surface scatter, instancing, blackbody/Gaussian SPD generation, ring/grid/three-point light rigs, and conflict-checked fragment composition;
+- a retained procedural scene whose generated SPD and final SceneIR cross the existing `GpuSceneCompiler` boundary.
 
-Not implemented here: procedural execution, script hooks, generalized Q.6 spectral resources, solver lowering, CLI pack/unpack, adapter conversion, production compression, compiled farm caches, signatures, or encryption. Those remain Q.4-Q.12.
+Not implemented here: script hooks, native procedural plugins, generalized Q.6 spectral resources, solver lowering, CLI pack/unpack, adapter conversion, production compression, compiled farm caches, signatures, or encryption. Those remain Q.5-Q.12.
+
+## Deterministic procedural build
+
+The optional `ProceduralGraph` attached to a `NativeSceneArchive` is authoritative build source. Loading preserves it without executing it. `build_procedural_scene` explicitly deep-freezes the base archive, validates the complete typed DAG, evaluates immutable node outputs, composes a generated fragment transactionally, and validates the final SceneIR before it can reach the renderer.
+
+Random scatter samples use counter-derived SHA-256 lanes keyed by graph seed, canonical source hash, node ID, seed salt, element index, and dimension. Node storage order is non-semantic. The source hash covers base source plus canonical graph; the cache key additionally covers resolved overrides, evaluator version, and deterministic math profile; the output hash covers final SceneIR and generated artifact hashes.
+
+Generated spectra are content-addressed canonical SPD build artifacts. They use the current `SpectralMaterialExtension` URI boundary and do not pull the generalized Q.6 spectral resource model forward. Scripts and runtime/GPU graph interpretation remain forbidden in Q.4.
 
 ## Authority and encoding
 

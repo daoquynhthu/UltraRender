@@ -83,6 +83,10 @@ void atomic_write(const std::filesystem::path& path, std::span<const std::uint8_
 std::vector<std::uint8_t> write_scene_ir_binary(const NativeSceneArchive& archive) {
     const ValidationReport validation = validate_scene_ir_archive(archive);
     if (!validation.ok()) throw std::invalid_argument(validation.diagnostics.front().message);
+    if (archive.procedural_graph) {
+        const ValidationReport graph_validation = validate_procedural_graph(*archive.procedural_graph, archive);
+        if (!graph_validation.ok()) throw std::invalid_argument(graph_validation.diagnostics.front().message);
+    }
     detail::EncodedResources resources = detail::encode_resources(archive);
     SceneDocument document = archive.document;
     for (const auto& resource : resources.payloads) {
@@ -101,6 +105,12 @@ std::vector<std::uint8_t> write_scene_ir_binary(const NativeSceneArchive& archiv
     container.chunks.push_back({"scene_graph", static_cast<std::uint32_t>(ChunkKind::SceneGraph), {1, 0},
                                 RequirementLevel::Required, static_cast<std::uint32_t>(CompressionCodec::None),
                                 8, {}, std::move(resource_dependencies), detail::encode_scene_graph(archive, resources)});
+    if (archive.procedural_graph) {
+        auto procedural_payload = detail::encode_procedural_graph(*archive.procedural_graph);
+        container.chunks.push_back({"procedural_graph", static_cast<std::uint32_t>(ChunkKind::ProceduralGraph), {1, 0},
+                                    RequirementLevel::Required, static_cast<std::uint32_t>(CompressionCodec::None),
+                                    8, {}, {"scene_graph"}, std::move(procedural_payload)});
+    }
     for (auto& resource : resources.payloads) {
         const ChunkKind kind = resource.descriptor.kind == ResourceKind::Geometry
             ? ChunkKind::Geometry : ChunkKind::MiePhase;
@@ -114,7 +124,8 @@ std::vector<std::uint8_t> write_scene_ir_binary(const NativeSceneArchive& archiv
         }
         container.chunks.push_back(chunk);
     }
-    return write_container(container);
+    auto bytes = write_container(container);
+    return bytes;
 }
 
 LoadResult<NativeSceneArchive> read_scene_ir_binary(
@@ -130,6 +141,7 @@ LoadResult<NativeSceneArchive> read_scene_ir_binary(
     try {
         const ContainerChunk* metadata = nullptr;
         const ContainerChunk* graph = nullptr;
+        const ContainerChunk* procedural_graph = nullptr;
         std::unordered_map<std::string, std::shared_ptr<Mesh>> meshes;
         std::unordered_map<std::string, std::shared_ptr<const scene_ir::MiePhaseResource>> mie;
         std::unordered_map<std::string, std::string> resource_hashes;
@@ -142,6 +154,9 @@ LoadResult<NativeSceneArchive> read_scene_ir_binary(
             } else if (chunk.type == static_cast<std::uint32_t>(ChunkKind::SceneGraph)) {
                 if (graph) return io_failure<NativeSceneArchive>("URE-Q3-CONTAINER-002", "scene_graph", "Duplicate scene graph chunk");
                 graph = &chunk;
+            } else if (chunk.type == static_cast<std::uint32_t>(ChunkKind::ProceduralGraph)) {
+                if (procedural_graph) return io_failure<NativeSceneArchive>("URE-Q4-CONTAINER-001", "procedural_graph", "Duplicate procedural graph chunk");
+                procedural_graph = &chunk;
             } else if (chunk.type == static_cast<std::uint32_t>(ChunkKind::Geometry)) {
                 auto decoded = detail::decode_mesh_payload(chunk.payload, limits);
                 append_diagnostics(diagnostics, decoded.diagnostics);
@@ -185,6 +200,23 @@ LoadResult<NativeSceneArchive> read_scene_ir_binary(
             return result;
         }
         archive.value->preserved_optional_chunks = std::move(preserved);
+        if (procedural_graph) {
+            auto decoded = detail::decode_procedural_graph(procedural_graph->payload, limits);
+            append_diagnostics(diagnostics, decoded.diagnostics);
+            if (!decoded.value) {
+                LoadResult<NativeSceneArchive> result;
+                result.diagnostics = std::move(diagnostics);
+                return result;
+            }
+            archive.value->procedural_graph = std::move(*decoded.value);
+            const ValidationReport graph_validation = validate_procedural_graph(*archive.value->procedural_graph, *archive.value);
+            append_diagnostics(diagnostics, graph_validation.diagnostics);
+            if (!graph_validation.ok()) {
+                LoadResult<NativeSceneArchive> result;
+                result.diagnostics = std::move(diagnostics);
+                return result;
+            }
+        }
         archive.diagnostics = std::move(diagnostics);
         return archive;
     } catch (const std::exception& error) {

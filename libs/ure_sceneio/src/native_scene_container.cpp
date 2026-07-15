@@ -169,7 +169,7 @@ void add_warning(std::vector<ValidationDiagnostic>& diagnostics, std::string cod
 
 bool known_core_chunk(std::uint32_t type) {
     return type >= static_cast<std::uint32_t>(ChunkKind::Metadata) &&
-           type <= static_cast<std::uint32_t>(ChunkKind::CacheReference);
+           type <= static_cast<std::uint32_t>(ChunkKind::ProceduralGraph);
 }
 
 bool valid_chunk_id(const std::string& id) {

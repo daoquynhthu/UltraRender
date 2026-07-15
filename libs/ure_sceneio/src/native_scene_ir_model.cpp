@@ -525,6 +525,11 @@ std::string scene_ir_semantic_hash(const NativeSceneArchive& archive) {
         append_bytes(stream, resource.id);
         append_bytes(stream, resource.descriptor.content_hash);
     }
+    if (archive.procedural_graph) {
+        append_bytes(stream, "ure.procedural.graph.v1");
+        const auto procedural = detail::encode_procedural_graph(*archive.procedural_graph);
+        stream.insert(stream.end(), procedural.begin(), procedural.end());
+    }
     return sha256_hex(stream);
 }
 

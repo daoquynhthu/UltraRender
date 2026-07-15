@@ -1,0 +1,630 @@
+{
+  "document": {
+    "conventions": {
+      "angle_unit": "radian",
+      "camera_forward": "-Z",
+      "color_encoding": "linear_radiometric",
+      "handedness": "right",
+      "length_unit": "metre",
+      "mass_unit": "kilogram",
+      "time_unit": "second",
+      "up_axis": "+Y",
+      "wavelength_unit": "vacuum_nanometre"
+    },
+    "extensions": [],
+    "features": [],
+    "format": "ure.scene/1.0",
+    "id": "scene/q4",
+    "kind": "scene",
+    "migrations": [],
+    "resources": [
+      {
+        "byte_length": 212,
+        "content_hash": "890ecd29105dbec78013bbdca3c7b38f404f6d3d1db94dd7058f85f5a1fe1e06",
+        "dependencies": [],
+        "id": "mesh/890ecd29105dbec78013bbdca3c7b38f404f6d3d1db94dd7058f85f5a1fe1e06",
+        "kind": "geometry",
+        "resident_bytes": 212,
+        "schema_version": {
+          "major": 1,
+          "minor": 0
+        },
+        "uri": "resources/mesh/890ecd29105dbec78013bbdca3c7b38f404f6d3d1db94dd7058f85f5a1fe1e06.urmesh"
+      }
+    ],
+    "schema_version": {
+      "major": 1,
+      "minor": 0
+    }
+  },
+  "kind": "ure_scene_ir",
+  "version": 1,
+  "scene_ir": {
+    "images": [],
+    "textures": [],
+    "materials": [
+      {
+        "base_color": [
+          0.800000011920929,
+          0.800000011920929,
+          0.800000011920929
+        ],
+        "base_color_texture_id": "",
+        "dispersion": 0.0,
+        "emission": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "emission_texture_id": "",
+        "id": "material/00000000",
+        "ior": 1.4500000476837158,
+        "medium_absorption": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "medium_anisotropy": 0.0,
+        "medium_density": 0.0,
+        "medium_mie": null,
+        "medium_phase": 0,
+        "medium_scattering": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "metal_eta": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "metal_k": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "model": 0,
+        "name": "base",
+        "normal_scale": 1.0,
+        "normal_texture_id": "",
+        "roughness": 0.5,
+        "roughness_texture_id": "",
+        "thin_film_ior": 1.0,
+        "thin_film_thickness": 0.0,
+        "spectral_extension": null,
+        "graph": null
+      }
+    ],
+    "meshes": [
+      {
+        "id": "mesh/00000000",
+        "name": "surface",
+        "payload": {
+          "content_hash": "890ecd29105dbec78013bbdca3c7b38f404f6d3d1db94dd7058f85f5a1fe1e06",
+          "id": "mesh/890ecd29105dbec78013bbdca3c7b38f404f6d3d1db94dd7058f85f5a1fe1e06"
+        }
+      }
+    ],
+    "instances": [],
+    "spheres": [],
+    "quad_lights": [],
+    "camera": {
+      "aperture": 0.0,
+      "aspect_ratio": 1.7777777910232544,
+      "focus_dist": 10.0,
+      "fov": 45.0,
+      "look_at": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": [
+        0.0,
+        0.0,
+        10.0
+      ],
+      "up": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    "physics": {
+      "dt": 0.01666666753590107,
+      "enabled": false,
+      "fluid": {
+        "bounds_max": [
+          5.0,
+          5.0,
+          5.0
+        ],
+        "bounds_min": [
+          -5.0,
+          -5.0,
+          -5.0
+        ],
+        "enabled": false,
+        "fill_max": [
+          1.0,
+          0.0,
+          1.0
+        ],
+        "fill_min": [
+          -1.0,
+          -1.0,
+          -1.0
+        ],
+        "particle_spacing": 0.10000000149011612
+      },
+      "spp_per_frame": 32,
+      "total_frames": 180
+    },
+    "background_color": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "height": 0,
+    "medium_absorption": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "medium_anisotropy": 0.0,
+    "medium_density": 0.0,
+    "medium_max_distance": 50.0,
+    "medium_mie": null,
+    "medium_phase": 0,
+    "medium_scattering": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "spp": 0,
+    "width": 0
+  },
+  "procedural_graph": {
+    "external_inputs": [],
+    "id": "procedural/full",
+    "nodes": [
+      {
+        "id": "node/compose",
+        "inputs": [
+          {
+            "input": "fragments",
+            "node_id": "node/instantiate",
+            "output": "out"
+          },
+          {
+            "input": "fragments",
+            "node_id": "node/rig",
+            "output": "out"
+          }
+        ],
+        "version": [
+          1,
+          0
+        ],
+        "kind": "compose_fragments",
+        "payload": {}
+      },
+      {
+        "id": "node/instantiate",
+        "inputs": [
+          {
+            "input": "material",
+            "node_id": "node/material",
+            "output": "out"
+          },
+          {
+            "input": "mesh",
+            "node_id": "node/mesh",
+            "output": "out"
+          },
+          {
+            "input": "transforms",
+            "node_id": "node/scatter",
+            "output": "out"
+          }
+        ],
+        "version": [
+          1,
+          0
+        ],
+        "kind": "instantiate",
+        "payload": {
+          "angular_damping": 0.009999999776482582,
+          "collider_radius": 0.5,
+          "collider_size": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "collider_type": "none",
+          "enabled": false,
+          "friction": 0.5,
+          "linear_damping": 0.009999999776482582,
+          "mass": 0.0,
+          "material_id": 0,
+          "restitution": 0.5,
+          "velocity": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "id": "node/material",
+        "inputs": [],
+        "version": [
+          1,
+          0
+        ],
+        "kind": "source_material",
+        "payload": {
+          "source_id": "material/00000000"
+        }
+      },
+      {
+        "id": "node/mesh",
+        "inputs": [],
+        "version": [
+          1,
+          0
+        ],
+        "kind": "source_mesh",
+        "payload": {
+          "source_id": "mesh/00000000"
+        }
+      },
+      {
+        "id": "node/rig",
+        "inputs": [
+          {
+            "input": "spectrum",
+            "node_id": "node/spectrum",
+            "output": "out"
+          }
+        ],
+        "version": [
+          1,
+          0
+        ],
+        "kind": "light_rig",
+        "payload": {
+          "center": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 3,
+              "scalar": 0.0,
+              "vec3": [
+                0.0,
+                2.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "count_x": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 3,
+              "kind": 1,
+              "scalar": 0.0,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "count_y": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 1,
+              "kind": 1,
+              "scalar": 0.0,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "emission": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 3,
+              "scalar": 0.0,
+              "vec3": [
+                10.0,
+                10.0,
+                10.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "extent": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 3,
+              "scalar": 0.0,
+              "vec3": [
+                0.5,
+                0.5,
+                0.5
+              ]
+            },
+            "parameter_id": ""
+          },
+          "fill_ratio": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 2,
+              "scalar": 0.5,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "layout": 0,
+          "rim_ratio": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 2,
+              "scalar": 0.75,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "target": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 3,
+              "scalar": 0.0,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "up": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 3,
+              "scalar": 0.0,
+              "vec3": [
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "parameter_id": ""
+          }
+        }
+      },
+      {
+        "id": "node/scatter",
+        "inputs": [
+          {
+            "input": "mesh",
+            "node_id": "node/mesh",
+            "output": "out"
+          }
+        ],
+        "version": [
+          1,
+          0
+        ],
+        "kind": "scatter_surface",
+        "payload": {
+          "alignment": 0,
+          "count": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 3,
+              "kind": 1,
+              "scalar": 0.0,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "offset": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 3,
+              "scalar": 0.0,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "scale_max": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 3,
+              "scalar": 0.0,
+              "vec3": [
+                1.5,
+                1.5,
+                1.5
+              ]
+            },
+            "parameter_id": ""
+          },
+          "scale_min": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 3,
+              "scalar": 0.0,
+              "vec3": [
+                0.5,
+                0.5,
+                0.5
+              ]
+            },
+            "parameter_id": ""
+          },
+          "seed_salt": 0,
+          "yaw_max": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 2,
+              "scalar": 6.283185307179586,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "yaw_min": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 2,
+              "scalar": 0.0,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          }
+        }
+      },
+      {
+        "id": "node/spectrum",
+        "inputs": [],
+        "version": [
+          1,
+          0
+        ],
+        "kind": "spectrum_generator",
+        "payload": {
+          "lines": [],
+          "mode": 0,
+          "normalization": 1,
+          "sample_count": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 8,
+              "kind": 1,
+              "scalar": 0.0,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "temperature_kelvin": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 2,
+              "scalar": 6500.0,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "wavelength_max_nm": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 2,
+              "scalar": 830.0,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          },
+          "wavelength_min_nm": {
+            "literal": {
+              "boolean": false,
+              "enumeration": "",
+              "integer": 0,
+              "kind": 2,
+              "scalar": 360.0,
+              "vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "parameter_id": ""
+          }
+        }
+      }
+    ],
+    "parameters": [],
+    "root": {
+      "node_id": "node/compose",
+      "output": "out"
+    },
+    "schema_version": [
+      1,
+      0
+    ],
+    "seed_high": 17,
+    "seed_low": 41
+  }
+}

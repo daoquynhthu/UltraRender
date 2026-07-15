@@ -1,0 +1,156 @@
+namespace ure.procedural.schema;
+
+struct Version { major:uint; minor:uint; }
+struct Vec3 { x:float; y:float; z:float; }
+
+enum ParameterValueKind : ubyte { Boolean = 0, Integer = 1, Scalar = 2, Vec3Value = 3, Enumeration = 4 }
+enum ProceduralPortType : ubyte { MeshReference = 0, MaterialReference = 1, TransformSet = 2, SpectrumArtifact = 3, SceneFragment = 4 }
+enum ScatterAlignment : ubyte { WorldUp = 0, SurfaceNormal = 1 }
+enum SpectrumGeneratorMode : ubyte { Blackbody = 0, GaussianLines = 1 }
+enum SpectrumNormalization : ubyte { None = 0, Peak = 1 }
+enum LightRigLayout : ubyte { Ring = 0, Grid = 1, ThreePoint = 2 }
+
+table ParameterValue {
+  boolean:bool (id: 0);
+  enumeration:string (id: 1);
+  integer:long (id: 2);
+  kind:ParameterValueKind (id: 3);
+  scalar:double (id: 4);
+  vec3:Vec3 (id: 5);
+}
+
+table ParameterDomain {
+  enumeration_values:[string] (id: 0);
+  has_integer_max:bool (id: 1);
+  has_integer_min:bool (id: 2);
+  has_scalar_max:bool (id: 3);
+  has_scalar_min:bool (id: 4);
+  has_vec3_max:bool (id: 5);
+  has_vec3_min:bool (id: 6);
+  integer_max:long (id: 7);
+  integer_min:long (id: 8);
+  scalar_max:double (id: 9);
+  scalar_min:double (id: 10);
+  vec3_max:Vec3 (id: 11);
+  vec3_min:Vec3 (id: 12);
+}
+
+table GraphParameter {
+  default_value:ParameterValue (id: 0);
+  domain:ParameterDomain (id: 1);
+  id:string (id: 2);
+  kind:ParameterValueKind (id: 3);
+}
+
+table ParameterBinding {
+  literal:ParameterValue (id: 0);
+  parameter_id:string (id: 1);
+}
+
+table OutputReference {
+  node_id:string (id: 0);
+  output:string (id: 1);
+}
+
+table Connection {
+  input:string (id: 0);
+  source:OutputReference (id: 1);
+}
+
+table ExternalInput {
+  content_hash:string (id: 0);
+  source_id:string (id: 1);
+}
+
+table SourceMeshNode { source_id:string (id: 0); }
+table SourceMaterialNode { source_id:string (id: 0); }
+
+table ScatterSurfaceNode {
+  alignment:ScatterAlignment (id: 0);
+  count:ParameterBinding (id: 1);
+  offset:ParameterBinding (id: 2);
+  scale_max:ParameterBinding (id: 3);
+  scale_min:ParameterBinding (id: 4);
+  seed_salt:ulong (id: 5);
+  yaw_max:ParameterBinding (id: 6);
+  yaw_min:ParameterBinding (id: 7);
+}
+
+table RigidBody {
+  angular_damping:float (id: 0);
+  collider_radius:float (id: 1);
+  collider_size:Vec3 (id: 2);
+  collider_type:string (id: 3);
+  enabled:bool (id: 4);
+  friction:float (id: 5);
+  linear_damping:float (id: 6);
+  mass:float (id: 7);
+  material_id:int (id: 8);
+  restitution:float (id: 9);
+  velocity:Vec3 (id: 10);
+}
+
+table InstantiateNode { rigid_body:RigidBody (id: 0); }
+
+table GaussianSpectralLine {
+  amplitude:double (id: 0);
+  center_nm:double (id: 1);
+  width_nm:double (id: 2);
+}
+
+table SpectrumGeneratorNode {
+  lines:[GaussianSpectralLine] (id: 0);
+  mode:SpectrumGeneratorMode (id: 1);
+  normalization:SpectrumNormalization (id: 2);
+  sample_count:ParameterBinding (id: 3);
+  temperature_kelvin:ParameterBinding (id: 4);
+  wavelength_max_nm:ParameterBinding (id: 5);
+  wavelength_min_nm:ParameterBinding (id: 6);
+}
+
+table LightRigNode {
+  center:ParameterBinding (id: 0);
+  count_x:ParameterBinding (id: 1);
+  count_y:ParameterBinding (id: 2);
+  emission:ParameterBinding (id: 3);
+  extent:ParameterBinding (id: 4);
+  fill_ratio:ParameterBinding (id: 5);
+  layout:LightRigLayout (id: 6);
+  rim_ratio:ParameterBinding (id: 7);
+  target:ParameterBinding (id: 8);
+  up:ParameterBinding (id: 9);
+}
+
+table ComposeFragmentsNode {}
+
+union NodePayload {
+  SourceMeshNode,
+  SourceMaterialNode,
+  ScatterSurfaceNode,
+  InstantiateNode,
+  SpectrumGeneratorNode,
+  LightRigNode,
+  ComposeFragmentsNode
+}
+
+table GraphNode {
+  id:string (id: 0);
+  inputs:[Connection] (id: 1);
+  payload:NodePayload (id: 3);
+  version:Version (id: 4);
+}
+
+table ProceduralGraph {
+  external_inputs:[ExternalInput] (id: 0);
+  id:string (id: 1);
+  nodes:[GraphNode] (id: 2);
+  parameters:[GraphParameter] (id: 3);
+  root:OutputReference (id: 4);
+  schema_version:Version (id: 5);
+  seed_high:ulong (id: 6);
+  seed_low:ulong (id: 7);
+}
+
+root_type ProceduralGraph;
+file_identifier "URPG";
+file_extension "urpg";
