@@ -48,6 +48,8 @@ External interchange uses `NativeAdapterResult` and the versioned `ure.adapter.l
 
 Compiled caches use the separate `UREC` binary identity and remain disposable. Their manifest binds source, compiler, schema, and SceneIR hashes to GPU upload ranges, spectral/resource artifacts, acceleration metadata, and validation metrics. A mismatch either requests an explicit rebuild or is rejected according to caller policy. Farm scheduling consumes package resource hashes and worker inventories, applies capacity gates, and deterministically minimizes resource transfer.
 
+The closure gate is `scripts/run_phase_q_validation_suite.ps1`. Its `ure.validation.fixture-set/1.0` inventory covers retained full and procedural scenes plus generated solver, simulation, video/resource, adapter-loss, package, cache, and farm cases. The suite rebuilds selected targets and then exercises native validation, canonical text/binary migration, package pack/inspect/unpack, schema regeneration, fail-loud tests, and every Phase Q static contract.
+
 Large geometry, spectra, Mie tables, volume fields, animation, audio, and video are typed resource payloads. `.ure` references them by stable ID and SHA-256; it does not Base64-encode them or expand them into large JSON arrays.
 
 ## Q.0 capability ownership audit

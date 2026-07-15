@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-13 (R-P6 closure and Phase Q cursor)
+最后更新: 2026-07-15 (Phase Q closure and R-P3 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -48,10 +48,10 @@ Phase M complete [done]
 R-P6 Mie / volume resources [done]
    │
    ▼
-当前游标: Phase Q
+Phase Q complete [done]
    │
    ▼
-R-P3 → R-P4 → R-P5 → R-P7
+当前游标: R-P3 → R-P4 → R-P5 → R-P7
    │
    ▼
 Phase T complete
@@ -74,8 +74,8 @@ Phase X complete
 - **R-P2 已闭环**: multi-GPU guide delta merge/broadcast、device-derived 或显式 memory budget，以及 Cornell/multi-light/complex-material/volume 的 variance、MSE、time-to-error 曲线均已进入生产与验证路径。
 - **Phase M 已闭环**: MaterialGraph、BSDF layering、procedural nodes、MaterialX import/export 和 presets 已稳定材质语义；skin 采用 participating dielectric medium preset，不做 Lambert fallback。
 - **R-P6 已闭环**: deterministic Lorenz-Mie generator、严格 table adapter、不可变 SceneIR resource、GPU spectral eval/pdf/sample、NEE/continuation、scalar-depolarizing Stokes、Session rebuild 和端到端生命周期均已进入生产与验证路径。
-- **当前唯一施工项 — Phase Q**: 在剩余高级积分器和多后端执行扩散前，完整冻结 URE native schema、serialization、programmatic graph、feature declaration 和 package contract。
-- **Phase R remainder**: 固定顺序为 R-P3、R-P4、R-P5、R-P7；R-P1/R-P2/R-P6 已完成。Phase R 未通过 R-P7 不得启动 Phase T 实现。
+- **Phase Q 已闭环**: URE native schema、serialization、programmatic graph、feature declaration、tooling/adapter、compiled cache/farm 与 validation suite 已冻结为后续阶段的权威 authoring contract。
+- **当前唯一施工项 — Phase R remainder**: 固定顺序为 R-P3、R-P4、R-P5、R-P7；R-P1/R-P2/R-P6 已完成。当前游标为 R-P3，Phase R 未通过 R-P7 不得启动 Phase T 实现。
 - **Phase T → V → W**: T 先稳定 backend-neutral runtime 并迁移 CUDA/Vulkan/DXR；V 再建设统一 acceleration provider；W 最后把已有 reference/oracle 工作接入稳定执行与加速合同。现有 W 成果保留，新增 W production work 冻结。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
@@ -2200,7 +2200,7 @@ struct MaterialGraph {
 
 ### Phase Q — URE 原生场景系统 / Procedural Industrial Scene Format
 
-**状态**: 进行中。Q.0-Q.11 原生格式、SceneIR serialization、procedural/script build、native resources、solver/integrator、physics/acoustic open contract、CLI/API tooling、adapter 与 compiled-cache/farm contract 已完成；当前后续游标为 Q.12。
+**状态**: ✅ 完成。Q.0-Q.12 已闭环；权威施工游标已推进到 R-P3。
 
 **目标**: 建立 UltraRender 自己的第一等场景格式和程序化 authoring contract。`.ure` / `.urescene` / `.urepkg` 是权威格式；SceneIR 是编译后的内部 IR；glTF、USD、MaterialX、EXR、SPD 等只能作为导入/导出 adapter 或资源交换格式，不能限制 UltraRender 的核心能力。Phase Q 必须覆盖当前和规划中的场景、光谱、材质、介质、体积、光源、积分器、几何加速、波动光学、物理、声学、视频流、分布式和脚本化能力，并为未来物理/声学模型改变保留 schema migration 与开放 extension slot。
 
@@ -2281,7 +2281,7 @@ struct MaterialGraph {
 | Q.9 | ✅ CLI/API/tooling：`ure_cli validate/build/pack/unpack/inspect/migrate` 支持 URE native，render/C/Python Session 统一加载 `.ure/.urescene/.urepkg`；package 内嵌 canonical `.urescene` payload 并同时验证 container、manifest、content hash 与 scene semantic hash | CLI validate 输出 schema、feature、resource、stored/resident budget 和 adapter-loss diagnostics；build/migrate canonical 投影、multi-scene pack/unpack、inspect inventory、pyure `load_package()` 已由 host/Python 契约覆盖；34/34 CTest 与 Q/Q3-Q9/L/R/physics-optics/schema gates 通过 |
 | Q.10 | ✅ Adapter contract：glTF import 先生成 validated `NativeSceneArchive`，render/info/validate/C Session 均消费同一 native boundary；MaterialX expressible subset 通过显式 native wrapper roundtrip；USD 在 Phase U 前保留为标准化 fail-loud 边界；`ure.adapter.loss/1.0` 统一 code/severity/native-path/feature/remediation | advanced procedural/resource/solver/simulation/analytic geometry/material graph fixture 生成稳定 loss inventory；外部 adapter 不再绕过 native validation；35/35 CTest 与 Q/Q3-Q10/L/R/physics-optics gates 通过 |
 | Q.11 | ✅ Compiled cache/farm package：`.urecache` 使用独立 `UREC` binary identity、versioned canonical payload 与 payload SHA-256，typed manifest 覆盖 source/compiler/SceneIR hash、GPU upload plan、spectral/resource artifacts、acceleration metadata 和 validation metrics；cache 始终非权威 | source/compiler mismatch 可显式选择 rebuild warning 或 reject error；invalid hash/version/budget/upload overlap/artifact/metric/corruption fail-loud；farm shard 在容量门禁后按 package resource content-hash locality 确定性调度并核算 transfer bytes；36/36 CTest 与 Q/Q3-Q11/L/R/schema gates 通过 |
-| Q.12 | Native scene validation suite：建立原生 scene fixture 集，覆盖基础场景、程序化场景、光谱资源、Mie/volume、wave optics request、integrator request、physics/acoustic placeholder、video stream placeholder、adapter loss | `run_phase_q_validation_suite.ps1` 可本地运行；文档、schema fixture、roundtrip、fail-loud 和 package build 全部通过 |
+| Q.12 | ✅ Native scene validation suite：`ure.validation.fixture-set/1.0` 索引 retained full/procedural scenes 与 solver/simulation/resource/adapter/cache fixtures，覆盖基础/程序化、spectral、Mie/volume、wave/integrator、physics/acoustic、video、adapter loss、package/cache/farm contract | `run_phase_q_validation_suite.ps1` 独立完成 selected build/CTest、binary validate、text build、migration、pack/validate/inspect/unpack、FlatBuffers conformance、Q.0-Q.11 static 与 diff gate；全量 Release build、37/37 CTest、Q.0-Q.12/L/R/physics-optics/schema gates 全绿 |
 
 #### 完成标准
 

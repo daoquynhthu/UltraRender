@@ -1,0 +1,40 @@
+{
+  "schema": "ure.validation.fixture-set/1.0",
+  "fixtures": [
+    {
+      "id": "full-native-scene",
+      "path": "../q3_full_scene/full_scene.urescene",
+      "coverage": ["basic_scene", "spectral_resource", "mie_volume", "roundtrip"]
+    },
+    {
+      "id": "procedural-native-scene",
+      "path": "../q4_procedural_scene/procedural_scene.urescene",
+      "coverage": ["procedural_scene", "deterministic_build"]
+    },
+    {
+      "id": "solver-contract",
+      "test": "test_native_solver_contract",
+      "coverage": ["wave_optics_request", "integrator_request", "fail_loud"]
+    },
+    {
+      "id": "simulation-contract",
+      "test": "test_native_simulation_contract",
+      "coverage": ["physics_placeholder", "acoustic_placeholder", "migration"]
+    },
+    {
+      "id": "resource-catalog",
+      "test": "test_native_resource_catalog",
+      "coverage": ["video_stream_placeholder", "resource_budget"]
+    },
+    {
+      "id": "adapter-loss",
+      "test": "test_native_adapter",
+      "coverage": ["adapter_loss", "external_validation"]
+    },
+    {
+      "id": "package-cache-farm",
+      "test": "test_native_compiled_cache",
+      "coverage": ["package_build", "cache_identity", "farm_locality"]
+    }
+  ]
+}

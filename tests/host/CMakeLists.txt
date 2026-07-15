@@ -90,6 +90,14 @@ add_executable(test_native_compiled_cache test_native_compiled_cache.cpp)
 target_link_libraries(test_native_compiled_cache PRIVATE ure_sceneio ure_diag)
 add_test(NAME test_native_compiled_cache COMMAND test_native_compiled_cache)
 
+add_executable(test_native_validation_suite test_native_validation_suite.cpp)
+target_include_directories(test_native_validation_suite PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+target_link_libraries(test_native_validation_suite PRIVATE ure_sceneio ure_diag)
+target_compile_definitions(test_native_validation_suite PRIVATE
+    URE_Q12_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q12_validation"
+)
+add_test(NAME test_native_validation_suite COMMAND test_native_validation_suite)
+
 add_executable(test_gltf_frontend test_gltf_frontend.cpp)
 target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
 add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)
