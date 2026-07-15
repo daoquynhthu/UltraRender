@@ -11,6 +11,7 @@
 #include <ure/gpu_structs.hpp>
 #include <ure/image_saver.hpp>
 #include <ure/log.hpp>
+#include <ure/native_adapter.hpp>
 #include <ure/native_scene_tooling.hpp>
 #include <ure/render.hpp>
 #include <ure/scene_frontend.hpp>
@@ -311,7 +312,10 @@ int cmd_render(const ure::config::CliResult& cli) {
                 ? "Native scene load failed" : loaded.diagnostics.front().message);
             scene_ir = std::move(loaded.value->scene);
         } else {
-            scene_ir = ure::SceneFrontend::parse_file_to_ir(app_config.scene_path);
+            auto imported = ure::native_scene::import_gltf_native(app_config.scene_path);
+            if (!imported.ok()) throw std::runtime_error(imported.diagnostics.empty()
+                ? "Adapter import failed" : imported.diagnostics.front().message);
+            scene_ir = std::move(imported.archive.scene);
         }
     } catch (const std::exception& e) {
         std::cerr << "Error parsing scene: " << e.what() << "\n";
@@ -367,7 +371,10 @@ int cmd_info(const std::string& scene_path) {
         return 1;
     }
     try {
-        const auto ir = ure::SceneFrontend::parse_file_to_ir(scene_path);
+        const auto imported = ure::native_scene::import_gltf_native(scene_path);
+        if (!imported.ok()) throw std::runtime_error(imported.diagnostics.empty()
+            ? "Adapter import failed" : imported.diagnostics.front().message);
+        const auto& ir = imported.archive.scene;
         std::cout << "Scene: " << scene_path << "\n";
         std::cout << "  Meshes:     " << ir.meshes.size() << "\n";
         std::cout << "  Materials:  " << ir.materials.size() << "\n";
@@ -432,7 +439,10 @@ int cmd_validate(const std::string& scene_path) {
             if (inspection.ok()) std::cout << "Valid: " << scene_path << "\n";
             return inspection.ok() ? 0 : 1;
         }
-        const auto ir = ure::SceneFrontend::parse_file_to_ir(scene_path);
+        const auto imported = ure::native_scene::import_gltf_native(scene_path);
+        if (!imported.ok()) throw std::runtime_error(imported.diagnostics.empty()
+            ? "Adapter import failed" : imported.diagnostics.front().message);
+        const auto& ir = imported.archive.scene;
         std::cout << "Valid: " << scene_path << "\n";
         std::cout << "  " << ir.meshes.size() << " meshes, "
                   << ir.materials.size() << " materials, "
@@ -449,6 +459,7 @@ int cmd_validate(const std::string& scene_path) {
         if (ok) {
             std::cout << "  No issues found.\n";
         }
+        std::cout << ure::native_scene::write_adapter_loss_report(imported.loss_report);
         return ok ? 0 : 1;
     } catch (const std::exception& e) {
         std::cerr << "Validation FAILED: " << e.what() << "\n";

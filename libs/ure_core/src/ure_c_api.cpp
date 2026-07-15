@@ -5,6 +5,7 @@
 #include "ure/scene_frontend.hpp"
 #include "ure/image_saver.hpp"
 #include "ure/native_scene_tooling.hpp"
+#include "ure/native_adapter.hpp"
 #include <cstdint>
 #include <filesystem>
 #include <ure/log.hpp>
@@ -373,7 +374,9 @@ int ure_engine_load_scene_file(ure_engine_t* engine, const char* path) {
             if (!loaded.ok()) return -1;
             scene = std::move(loaded.value->scene);
         } else {
-            scene = SceneFrontend::parse_file_to_ir(path);
+            auto imported = native_scene::import_gltf_native(scene_path);
+            if (!imported.ok()) return -1;
+            scene = std::move(imported.archive.scene);
         }
         reinterpret_cast<IRenderEngine*>(engine)->load_scene_ir(scene);
         return 0;
@@ -543,7 +546,9 @@ int ure_session_load_scene_file(ure_session_t* session, const char* path) {
             if (!loaded.ok()) return -1;
             scene = std::move(loaded.value->scene);
         } else {
-            scene = SceneFrontend::parse_file_to_ir(path);
+            auto imported = native_scene::import_gltf_native(scene_path);
+            if (!imported.ok()) return -1;
+            scene = std::move(imported.archive.scene);
         }
         if (scene.width <= 0) scene.width = 8;
         if (scene.height <= 0) scene.height = 8;
