@@ -45,13 +45,19 @@ Candidate streaming uses deterministic path dimensions. Invalid, non-finite, zer
 
 ## Unbiased temporal and spatial reuse
 
-At the current shading point, every reused candidate is reconstructed and its unshadowed target density is evaluated using the current BSDF or phase function, cosine/geometric term, light selection/conditional PDF, wavelength PDF, and Stokes throughput. Visibility is evaluated only for the selected output sample.
+At the current shading point, every reused candidate is reconstructed and its target density is evaluated using the current BSDF or phase function, cosine/geometric term, light selection/conditional PDF, wavelength PDF, Stokes throughput, and visibility. Production mode includes visibility in both directions of the shift. The cheaper selected-sample-only visibility policy remains preview-only because incomplete proposal support is insufficient for the convergence claim required here.
 
 Temporal candidates use previous-frame geometry identity, position, normal, depth, material/medium identity, motion-vector reprojection, and scene epochs. Spatial candidates come from a deterministic bounded neighbor pattern and pass the same compatibility checks. Surface and volume candidates never cross domains.
 
-Combination uses generalized resampled importance sampling with pairwise MIS over the proposals that could have produced the candidate. The reservoir carries source candidate multiplicity and normalization; history clamping adjusts `M` and weight sum together. No visibility result is reused across a changed connection.
+Combination uses the defensive generalized pairwise MIS from GRIS over the proposals that could have produced the candidate. Each pair evaluates both the current target of the reused sample and the source-domain target of the canonical sample; substituting the stored selected target for either cross-evaluation is forbidden. The reservoir carries reciprocal marginal contribution weight and bounded confidence. No visibility result is reused across a changed connection.
 
 Ping-pong reservoirs make reads immutable during a pass and writes race-free. Spatial reuse reads only the completed input reservoir set. Single- and multi-GPU execution partition sample space deterministically; no device reads another device's mutable reservoir memory.
+
+## GPU scheduling boundary
+
+Production reuse is a separate GPU pass, not additional control flow inside the monolithic wavefront shade kernel. The pass consumes immutable fresh-candidate and shading-domain buffers, performs bidirectional target reconstruction, writes the opposite reservoir set, and emits selected shadow work. Shared light reconstruction and BSDF/phase target evaluation live in focused device modules used by both the ordinary NEE path and the reuse pass.
+
+This boundary is also a build and occupancy invariant. An attempted inline implementation made the CUDA translation unit fail to finish compilation within ten minutes and materially enlarged the shade kernel. R-P3 therefore forbids embedding the spatial/temporal reuse loop in `shade_kernel`; static audit and target-level build evidence must preserve the separate-pass structure.
 
 ## ReSTIR PT
 

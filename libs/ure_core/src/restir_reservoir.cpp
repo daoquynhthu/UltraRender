@@ -98,4 +98,34 @@ RestirNeighborOffset restir_neighbor_offset(
     };
 }
 
+RestirDefensivePairwiseWeights restir_defensive_pairwise_weights(
+    double canonical_target,
+    double reused_source_target,
+    std::uint64_t total_candidates,
+    std::uint64_t canonical_candidates) {
+    RestirDefensivePairwiseWeights result;
+    if (!std::isfinite(canonical_target) || canonical_target < 0.0 ||
+        !std::isfinite(reused_source_target) || reused_source_target < 0.0 ||
+        total_candidates == 0 || canonical_candidates == 0 ||
+        canonical_candidates > total_candidates) {
+        return result;
+    }
+    if (canonical_candidates == total_candidates) {
+        result.canonical = 1.0 / static_cast<double>(total_candidates);
+        result.valid = true;
+        return result;
+    }
+    const double reused_candidates = static_cast<double>(total_candidates - canonical_candidates);
+    const double denominator = static_cast<double>(canonical_candidates) * canonical_target +
+                               reused_candidates * reused_source_target;
+    if (!std::isfinite(denominator) || denominator <= 0.0) return result;
+    const double total = static_cast<double>(total_candidates);
+    result.canonical = 1.0 / total +
+                       reused_candidates * canonical_target / (total * denominator);
+    result.reused = reused_candidates * reused_source_target / (total * denominator);
+    result.valid = std::isfinite(result.canonical) && std::isfinite(result.reused) &&
+                   result.canonical >= 0.0 && result.reused >= 0.0;
+    return result;
+}
+
 }

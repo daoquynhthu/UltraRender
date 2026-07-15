@@ -30,6 +30,12 @@ struct RestirNeighborOffset {
     int y = 0;
 };
 
+struct RestirDefensivePairwiseWeights {
+    double canonical = 0.0;
+    double reused = 0.0;
+    bool valid = false;
+};
+
 bool stream_restir_candidate(
     RestirReservoir& reservoir,
     const RestirCandidate& candidate,
@@ -44,5 +50,11 @@ RestirNeighborOffset restir_neighbor_offset(
     std::uint32_t pixel_y,
     std::uint32_t candidate_index,
     int radius);
+
+RestirDefensivePairwiseWeights restir_defensive_pairwise_weights(
+    double canonical_target,
+    double reused_source_target,
+    std::uint64_t total_candidates,
+    std::uint64_t canonical_candidates);
 
 }

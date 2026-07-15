@@ -1371,7 +1371,7 @@ __device__ inline bool reconstruct_restir_di_light_sample(
     const GpuLightRecord record = get_light_record(scene, stored.light_list_index);
     if (record.primitive_index != stored.light_primitive_index ||
         record.secondary_index != stored.light_secondary_index ||
-        record.material_index != stored.material_index) {
+        record.material_index != stored.light_material_index) {
         return false;
     }
     return sample_selected_light(

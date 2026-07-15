@@ -52,8 +52,13 @@ int main() {
     auto guided = value; guided.integrator = NativeIntegratorMode::PathGuided; guided.path_guiding.enabled = true;
     check(compile_solver_contract(guided, registry).ok(), "path-guided mapping failed");
     auto restir = value; restir.integrator = NativeIntegratorMode::RestirDI; restir.restir_di.enabled = true;
+    restir.restir_di.position_threshold = 0.025f; restir.restir_di.normal_threshold = 0.94f;
     check(!compile_solver_contract(restir, registry).ok(), "biased ReSTIR lacked explicit consent"); restir.allow_biased_reuse = true;
     check(compile_solver_contract(restir, registry).ok(), "explicit biased ReSTIR was rejected");
+    const auto restir_binary = read_solver_contract_binary(write_solver_contract_binary(restir));
+    check(restir_binary.ok() && restir_binary.value->restir_di.position_threshold == 0.025f &&
+          restir_binary.value->restir_di.normal_threshold == 0.94f,
+          "ReSTIR DI reconnection thresholds did not roundtrip");
     auto restir_pt = value; restir_pt.integrator = NativeIntegratorMode::RestirPT; restir_pt.restir_pt.enabled = true;
     restir_pt.restir_pt.spatial_reuse = true; restir_pt.restir_pt.candidate_count = 7; restir_pt.restir_pt.max_reuse_depth = 5;
     const auto restir_pt_compiled = compile_solver_contract(restir_pt, registry);

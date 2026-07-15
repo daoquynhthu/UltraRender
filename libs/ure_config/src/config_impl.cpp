@@ -95,6 +95,8 @@ RenderConfig load_config(const std::string& path) {
             if (r.contains("spatial_candidate_count")) cfg.restir_di.spatial_candidate_count = r["spatial_candidate_count"].get<int>();
             if (r.contains("spatial_radius")) cfg.restir_di.spatial_radius = r["spatial_radius"].get<int>();
             if (r.contains("min_target")) cfg.restir_di.min_target = r["min_target"].get<double>();
+            if (r.contains("position_threshold")) cfg.restir_di.position_threshold = r["position_threshold"].get<double>();
+            if (r.contains("normal_threshold")) cfg.restir_di.normal_threshold = r["normal_threshold"].get<double>();
         }
         if (j.contains("restir_pt")) {
             auto& r = j["restir_pt"];
@@ -178,6 +180,8 @@ CliResult parse_cli(int argc, char** argv) {
     int restir_di_max_history = -1;
     int restir_di_spatial_candidate_count = -1;
     int restir_di_spatial_radius = -1;
+    double restir_di_position_threshold = -1.0;
+    double restir_di_normal_threshold = -1.0;
     bool restir_pt = false;
     bool restir_pt_spatial_reuse = false;
     int restir_pt_max_reuse_depth = -1;
@@ -235,6 +239,8 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_option("--restir-di-max-history", restir_di_max_history, "Maximum temporal history carried by ReSTIR DI");
     render_cmd->add_option("--restir-di-spatial-candidates", restir_di_spatial_candidate_count, "Spatial ReSTIR DI candidates per shading point");
     render_cmd->add_option("--restir-di-spatial-radius", restir_di_spatial_radius, "Spatial ReSTIR DI pixel radius");
+    render_cmd->add_option("--restir-di-position-threshold", restir_di_position_threshold, "World-space ReSTIR DI reconnection threshold");
+    render_cmd->add_option("--restir-di-normal-threshold", restir_di_normal_threshold, "Minimum ReSTIR DI reconnection normal cosine");
     render_cmd->add_flag("--enable-restir-pt", restir_pt, "Enable ReSTIR path-suffix reuse");
     render_cmd->add_flag("--restir-pt-spatial-reuse", restir_pt_spatial_reuse, "Enable spatial ReSTIR PT suffix reuse");
     render_cmd->add_option("--restir-pt-max-reuse-depth", restir_pt_max_reuse_depth, "Maximum reconnectable ReSTIR PT suffix depth");
@@ -343,6 +349,8 @@ CliResult parse_cli(int argc, char** argv) {
         if (restir_di_max_history > 0) cfg.restir_di.max_history = restir_di_max_history;
         if (restir_di_spatial_candidate_count > 0) cfg.restir_di.spatial_candidate_count = restir_di_spatial_candidate_count;
         if (restir_di_spatial_radius > 0) cfg.restir_di.spatial_radius = restir_di_spatial_radius;
+        if (restir_di_position_threshold > 0.0) cfg.restir_di.position_threshold = restir_di_position_threshold;
+        if (restir_di_normal_threshold >= 0.0) cfg.restir_di.normal_threshold = restir_di_normal_threshold;
         if (restir_pt) cfg.restir_pt.enabled = true;
         if (restir_pt_spatial_reuse) cfg.restir_pt.spatial_reuse = true;
         if (restir_pt_max_reuse_depth > 0) cfg.restir_pt.max_reuse_depth = restir_pt_max_reuse_depth;

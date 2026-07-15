@@ -72,6 +72,8 @@ struct RestirDirectConfig {
     int spatial_candidate_count = 4;
     int spatial_radius = 8;
     double min_target = 1e-6;
+    double position_threshold = 0.01;
+    double normal_threshold = 0.9;
 };
 
 struct RestirPathConfig {

@@ -172,6 +172,8 @@ bool make_integrator_config(const ure_integrator_config_t* integrator_config, Re
     if (integrator_config->restir_di_spatial_candidate_count > 0) cfg.restir_di.spatial_candidate_count = integrator_config->restir_di_spatial_candidate_count;
     if (integrator_config->restir_di_spatial_radius > 0) cfg.restir_di.spatial_radius = integrator_config->restir_di_spatial_radius;
     if (integrator_config->restir_di_min_target > 0.0f) cfg.restir_di.min_target = integrator_config->restir_di_min_target;
+    if (integrator_config->restir_di_position_threshold > 0.0f) cfg.restir_di.position_threshold = integrator_config->restir_di_position_threshold;
+    if (integrator_config->restir_di_normal_threshold >= 0.0f && integrator_config->restir_di_normal_threshold <= 1.0f) cfg.restir_di.normal_threshold = integrator_config->restir_di_normal_threshold;
     cfg.restir_pt.enabled = integrator_config->restir_pt_enabled != 0;
     cfg.restir_pt.temporal_reuse = integrator_config->restir_pt_temporal_reuse != 0;
     cfg.restir_pt.spatial_reuse = integrator_config->restir_pt_spatial_reuse != 0;

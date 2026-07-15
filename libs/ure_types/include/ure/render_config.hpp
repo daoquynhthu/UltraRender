@@ -80,6 +80,8 @@ struct RestirDirectConfig {
     int spatial_candidate_count = 4;
     int spatial_radius = 8;
     float min_target = 1e-6f;
+    float position_threshold = 0.01f;
+    float normal_threshold = 0.9f;
 };
 
 struct RestirPathConfig {

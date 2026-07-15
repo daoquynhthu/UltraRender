@@ -116,6 +116,8 @@ class _IntegratorConfig(ctypes.Structure):
         ("restir_pt_max_history", ctypes.c_int),
         ("restir_pt_position_threshold", ctypes.c_float),
         ("restir_pt_normal_threshold", ctypes.c_float),
+        ("restir_di_position_threshold", ctypes.c_float),
+        ("restir_di_normal_threshold", ctypes.c_float),
     ]
 
 
@@ -431,6 +433,8 @@ class RenderSession:
                 4,
                 4,
                 8,
+                0.01,
+                0.9,
                 0.01,
                 0.9,
             )

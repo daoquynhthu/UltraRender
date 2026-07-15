@@ -271,6 +271,27 @@ static int test_restir_neighbor_offsets_are_deterministic_and_bounded() {
     return 0;
 }
 
+static int test_restir_defensive_pairwise_mis_partitions_unmatched_support() {
+    const auto weights = ure::integrator::restir_defensive_pairwise_weights(2.0, 0.5, 2, 1);
+    CHECK(weights.valid);
+    CHECK_NEAR(weights.canonical + weights.reused, 1.0, 1e-12);
+
+    const auto canonical_only = ure::integrator::restir_defensive_pairwise_weights(2.0, 0.0, 2, 1);
+    CHECK(canonical_only.valid);
+    CHECK_NEAR(canonical_only.canonical, 1.0, 1e-12);
+    CHECK_NEAR(canonical_only.reused, 0.0, 1e-12);
+
+    const auto reused_only = ure::integrator::restir_defensive_pairwise_weights(0.0, 2.0, 2, 1);
+    CHECK(reused_only.valid);
+    CHECK_NEAR(reused_only.canonical, 0.5, 1e-12);
+    CHECK_NEAR(reused_only.reused, 0.5, 1e-12);
+
+    const auto many = ure::integrator::restir_defensive_pairwise_weights(3.0, 0.25, 5, 2);
+    CHECK(many.valid);
+    CHECK_NEAR(2.0 * many.canonical + 3.0 * many.reused, 1.0, 1e-12);
+    return 0;
+}
+
 static int run(const char* name, int (*fn)()) {
     std::cout << "  test: " << name << " ... ";
     int rc = fn();
@@ -301,6 +322,7 @@ int main() {
     failed += run("test_restir_reservoir_clamps_history_without_changing_normalization", test_restir_reservoir_clamps_history_without_changing_normalization);
     failed += run("test_restir_reservoir_rejects_invalid_candidate_density", test_restir_reservoir_rejects_invalid_candidate_density);
     failed += run("test_restir_neighbor_offsets_are_deterministic_and_bounded", test_restir_neighbor_offsets_are_deterministic_and_bounded);
+    failed += run("test_restir_defensive_pairwise_mis_partitions_unmatched_support", test_restir_defensive_pairwise_mis_partitions_unmatched_support);
     std::cout << "  failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

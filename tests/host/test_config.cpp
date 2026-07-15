@@ -293,7 +293,9 @@ static int test_restir_production_json_fields() {
     "max_history": 12,
     "spatial_candidate_count": 6,
     "spatial_radius": 9,
-    "min_target": 0.00001
+    "min_target": 0.00001,
+    "position_threshold": 0.03,
+    "normal_threshold": 0.92
   },
   "restir_pt": {
     "enabled": true,
@@ -315,6 +317,8 @@ static int test_restir_production_json_fields() {
     CHECK(cfg.restir_di.spatial_candidate_count == 6);
     CHECK(cfg.restir_di.spatial_radius == 9);
     CHECK(std::fabs(cfg.restir_di.min_target - 0.00001) < 1e-12);
+    CHECK(std::fabs(cfg.restir_di.position_threshold - 0.03) < 1e-12);
+    CHECK(std::fabs(cfg.restir_di.normal_threshold - 0.92) < 1e-12);
     CHECK(cfg.restir_pt.enabled);
     CHECK(cfg.restir_pt.spatial_reuse);
     CHECK(cfg.restir_pt.max_reuse_depth == 5);
@@ -331,6 +335,7 @@ static int test_restir_production_cli_overrides() {
         "ure_cli", "render", "scene.gltf",
         "--enable-restir-di", "--restir-di-unbiased", "--restir-di-spatial-reuse",
         "--restir-di-spatial-candidates", "5", "--restir-di-spatial-radius", "8",
+        "--restir-di-position-threshold", "0.04", "--restir-di-normal-threshold", "0.93",
         "--enable-restir-pt", "--restir-pt-spatial-reuse",
         "--restir-pt-max-reuse-depth", "4", "--restir-pt-candidates", "6",
         "--integrator-mode", "restir_pt"
@@ -341,6 +346,8 @@ static int test_restir_production_cli_overrides() {
     CHECK(cfg.restir_di.spatial_reuse);
     CHECK(cfg.restir_di.spatial_candidate_count == 5);
     CHECK(cfg.restir_di.spatial_radius == 8);
+    CHECK(std::fabs(cfg.restir_di.position_threshold - 0.04) < 1e-12);
+    CHECK(std::fabs(cfg.restir_di.normal_threshold - 0.93) < 1e-12);
     CHECK(cfg.restir_pt.enabled);
     CHECK(cfg.restir_pt.spatial_reuse);
     CHECK(cfg.restir_pt.max_reuse_depth == 4);

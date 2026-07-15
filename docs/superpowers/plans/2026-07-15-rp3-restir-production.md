@@ -36,12 +36,12 @@
 - Produce `RestirReservoirState`, `RestirCandidate`, `stream_restir_candidate`, `finalize_restir_reservoir`, `restir_pairwise_mis_weight`, and `restir_neighbor_offset` as host/device-neutral oracle contracts.
 - Add `IntegratorMode::RestirPT`, bounded DI spatial controls, and `RestirPathConfig`.
 
-- [ ] Add host tests that enumerate two discrete proposals and assert reservoir expectation equals the exact integral, history clamping preserves normalization, invalid densities are rejected, and neighbor offsets are deterministic.
-- [ ] Build and run `test_integrator`; verify failures are behavioral missing-contract failures.
-- [ ] Implement the reservoir oracle with double-precision host accumulation, finite checks, checked candidate multiplicity, and deterministic replacement variates.
-- [ ] Add config JSON/CLI/native/C ABI parity tests for `RestirPT`, DI neighbor controls, and PT configuration; verify their failure before mapping fields.
-- [ ] Implement all configuration mappings and validation, preserving the old biased-consent gate only for preview policy.
-- [ ] Build and run `test_integrator`, `test_config`, `test_native_solver_contract`, and `test_pyure_smoke`.
+- [x] Add host tests that enumerate two discrete proposals and assert reservoir expectation equals the exact integral, history clamping preserves normalization, invalid densities are rejected, and neighbor offsets are deterministic.
+- [x] Build and run `test_integrator`; verify failures are behavioral missing-contract failures.
+- [x] Implement the reservoir oracle with double-precision host accumulation, finite checks, checked candidate multiplicity, deterministic replacement variates, and defensive generalized pairwise MIS.
+- [x] Add config JSON/CLI/native/C ABI parity tests for `RestirPT`, DI neighbor/reconnection controls, and PT configuration; verify their failure before mapping fields.
+- [x] Implement all configuration mappings and validation, preserving the old biased-consent gate only for preview policy.
+- [x] Build and run `test_integrator`, `test_config`, `test_native_solver_contract`, and `test_pyure_smoke`.
 
 ### Task 2: Reconstructable DI sample and ping-pong ownership
 
@@ -56,16 +56,18 @@
 - Produce `GpuRestirDISample`, `GpuRestirDIReservoir`, `RestirDISurfaceKey`, and context-owned input/output arrays.
 - Produce `clear_restir_di_history`, `swap_restir_di_history`, and checked allocation planning.
 
-- [ ] Add GPU tests for allocation/reset/swap, overflow-safe memory planning, independent preview/production layouts, and scene/session invalidation.
-- [ ] Build `gpu_test_render` and run `gpu_render`; verify the new ownership tests fail for missing buffers or policies.
-- [ ] Implement RAII-style release paths and checked ping-pong allocation; wire resolution, scene, spectral, light, material, instance, volume, and integrator invalidation.
-- [ ] Re-run `gpu_render` and `test_session`.
+- [x] Add GPU tests for allocation/reset/swap, overflow-safe memory planning, independent preview/production layouts, and scene/session invalidation.
+- [x] Build `gpu_test_render` and run `gpu_render`; verify the new ownership tests fail for missing buffers or policies.
+- [x] Implement RAII-style release paths and checked ping-pong allocation; wire resolution, scene, spectral, light, material, instance, volume, and integrator invalidation.
+- [x] Re-run `gpu_render` and `test_session`.
 
 ### Task 3: Current-point DI target reconstruction
 
 **Files:**
 - Modify: `libs/ure_core/include/ure/integrator/restir_di.cuh`
-- Modify: `libs/ure_core/src/path_tracer_wavefront.cuh`
+- Create: `libs/ure_core/src/restir_di_runtime.cu`
+- Create: `libs/ure_core/src/restir_di_runtime.cuh`
+- Modify: `libs/ure_core/src/path_tracer_wavefront.cuh` only to share focused light/target helpers
 - Test: `tests/gpu/test_render_basic.cu`
 
 **Interfaces:**
@@ -94,7 +96,7 @@
 - [ ] Add an enumerated host expectation test for temporal plus spatial proposal combination using pairwise MIS.
 - [ ] Add GPU tests for motion-reprojected temporal reuse, deterministic bounded spatial reuse, disocclusion rejection, history clamping, and a visibility change between passes.
 - [ ] Run host/GPU tests and verify the existing fail-loud unbiased/spatial gates are exposed by the tests.
-- [ ] Implement candidate generation, temporal merge, spatial merge, selected-sample visibility, and final spectral/Stokes accumulation.
+- [ ] Implement candidate generation, bidirectional visibility/target evaluation, temporal merge, spatial merge, and final spectral/Stokes accumulation in separate GPU passes.
 - [ ] Remove only the production fail-loud gates; keep legacy preview consent and metadata.
 - [ ] Run `test_integrator`, `gpu_render`, `test_session`, Phase E/L audits, and Phase R static audit.
 

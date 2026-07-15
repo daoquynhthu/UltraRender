@@ -543,6 +543,8 @@ struct RestirDIT : public ::flatbuffers::NativeTable {
   float min_target = 0.000001f;
   int32_t spatial_candidate_count = 4;
   int32_t spatial_radius = 8;
+  float position_threshold = 0.01f;
+  float normal_threshold = 0.9f;
 };
 
 struct RestirDI FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -557,7 +559,9 @@ struct RestirDI FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_MAX_HISTORY = 12,
     VT_MIN_TARGET = 14,
     VT_SPATIAL_CANDIDATE_COUNT = 16,
-    VT_SPATIAL_RADIUS = 18
+    VT_SPATIAL_RADIUS = 18,
+    VT_POSITION_THRESHOLD = 20,
+    VT_NORMAL_THRESHOLD = 22
   };
   bool enabled() const {
     return GetField<uint8_t>(VT_ENABLED, 0) != 0;
@@ -583,6 +587,12 @@ struct RestirDI FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   int32_t spatial_radius() const {
     return GetField<int32_t>(VT_SPATIAL_RADIUS, 8);
   }
+  float position_threshold() const {
+    return GetField<float>(VT_POSITION_THRESHOLD, 0.01f);
+  }
+  float normal_threshold() const {
+    return GetField<float>(VT_NORMAL_THRESHOLD, 0.9f);
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -594,6 +604,8 @@ struct RestirDI FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<float>(verifier, VT_MIN_TARGET, 4) &&
            VerifyField<int32_t>(verifier, VT_SPATIAL_CANDIDATE_COUNT, 4) &&
            VerifyField<int32_t>(verifier, VT_SPATIAL_RADIUS, 4) &&
+           VerifyField<float>(verifier, VT_POSITION_THRESHOLD, 4) &&
+           VerifyField<float>(verifier, VT_NORMAL_THRESHOLD, 4) &&
            verifier.EndTable();
   }
   RestirDIT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -629,6 +641,12 @@ struct RestirDIBuilder {
   void add_spatial_radius(int32_t spatial_radius) {
     fbb_.AddElement<int32_t>(RestirDI::VT_SPATIAL_RADIUS, spatial_radius, 8);
   }
+  void add_position_threshold(float position_threshold) {
+    fbb_.AddElement<float>(RestirDI::VT_POSITION_THRESHOLD, position_threshold, 0.01f);
+  }
+  void add_normal_threshold(float normal_threshold) {
+    fbb_.AddElement<float>(RestirDI::VT_NORMAL_THRESHOLD, normal_threshold, 0.9f);
+  }
   explicit RestirDIBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -649,8 +667,12 @@ inline ::flatbuffers::Offset<RestirDI> CreateRestirDI(
     int32_t max_history = 1,
     float min_target = 0.000001f,
     int32_t spatial_candidate_count = 4,
-    int32_t spatial_radius = 8) {
+    int32_t spatial_radius = 8,
+    float position_threshold = 0.01f,
+    float normal_threshold = 0.9f) {
   RestirDIBuilder builder_(_fbb);
+  builder_.add_normal_threshold(normal_threshold);
+  builder_.add_position_threshold(position_threshold);
   builder_.add_spatial_radius(spatial_radius);
   builder_.add_spatial_candidate_count(spatial_candidate_count);
   builder_.add_min_target(min_target);
@@ -1785,6 +1807,8 @@ inline void RestirDI::UnPackTo(RestirDIT *_o, const ::flatbuffers::resolver_func
   { auto _e = min_target(); _o->min_target = _e; }
   { auto _e = spatial_candidate_count(); _o->spatial_candidate_count = _e; }
   { auto _e = spatial_radius(); _o->spatial_radius = _e; }
+  { auto _e = position_threshold(); _o->position_threshold = _e; }
+  { auto _e = normal_threshold(); _o->normal_threshold = _e; }
 }
 
 inline ::flatbuffers::Offset<RestirDI> CreateRestirDI(::flatbuffers::FlatBufferBuilder &_fbb, const RestirDIT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -1803,6 +1827,8 @@ inline ::flatbuffers::Offset<RestirDI> RestirDI::Pack(::flatbuffers::FlatBufferB
   auto _min_target = _o->min_target;
   auto _spatial_candidate_count = _o->spatial_candidate_count;
   auto _spatial_radius = _o->spatial_radius;
+  auto _position_threshold = _o->position_threshold;
+  auto _normal_threshold = _o->normal_threshold;
   return ure::solver::schema::CreateRestirDI(
       _fbb,
       _enabled,
@@ -1812,7 +1838,9 @@ inline ::flatbuffers::Offset<RestirDI> RestirDI::Pack(::flatbuffers::FlatBufferB
       _max_history,
       _min_target,
       _spatial_candidate_count,
-      _spatial_radius);
+      _spatial_radius,
+      _position_threshold,
+      _normal_threshold);
 }
 
 inline RestirPTT *RestirPT::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {

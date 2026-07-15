@@ -1243,8 +1243,12 @@ static void validate_restir_di_config(const ure::RenderConfig& config) {
     }
     if (config.restir_di.max_history <= 0 || config.restir_di.spatial_candidate_count <= 0 ||
         config.restir_di.spatial_radius <= 0 || !std::isfinite(config.restir_di.min_target) ||
-        config.restir_di.min_target <= 0.0f) {
-        throw std::runtime_error("ReSTIR DI history, spatial controls, and target floor must be positive");
+        config.restir_di.min_target <= 0.0f ||
+        !std::isfinite(config.restir_di.position_threshold) ||
+        config.restir_di.position_threshold <= 0.0f ||
+        !std::isfinite(config.restir_di.normal_threshold) ||
+        config.restir_di.normal_threshold < 0.0f || config.restir_di.normal_threshold > 1.0f) {
+        throw std::runtime_error("ReSTIR DI history, spatial controls, target floor, and reconnection thresholds are invalid");
     }
 }
 
@@ -2303,6 +2307,8 @@ void reset_accumulation_gpu(GpuContext* ctx) {
     cudaMemset(ctx->d_uv_buffer, 0, ctx->width * ctx->height * sizeof(GpuVec2));
     cudaMemset(ctx->d_motion_vector_buffer, 0, ctx->width * ctx->height * sizeof(GpuVec2));
     clear_restir_di_reservoirs(ctx);
+    ++ctx->restir_di_scene_epoch;
+    if (ctx->restir_di_scene_epoch == 0) ctx->restir_di_scene_epoch = 1;
     if (ctx->d_path_guiding_light_weights && ctx->light_count > 0) {
         UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_light_weights, 0, ctx->light_count * sizeof(float)));
     }
@@ -2477,6 +2483,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.restir_di_pixel_count = ctx->width * ctx->height;
     scene.restir_di_enabled = restir_di_enabled(ctx->render_config) ? 1 : 0;
     scene.restir_di_temporal_reuse = ctx->render_config.restir_di.temporal_reuse ? 1 : 0;
+    scene.restir_di_spatial_reuse = ctx->render_config.restir_di.spatial_reuse ? 1 : 0;
     scene.restir_di_unbiased = ctx->render_config.restir_di.unbiased ? 1 : 0;
     scene.restir_di_max_history = std::max(1, ctx->render_config.restir_di.max_history);
     scene.restir_di_min_target = std::max(ctx->render_config.restir_di.min_target, 0.0f);
@@ -2491,6 +2498,8 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.restir_di_scene_epoch = ctx->restir_di_scene_epoch;
     scene.restir_di_spatial_candidate_count = std::max(1, ctx->render_config.restir_di.spatial_candidate_count);
     scene.restir_di_spatial_radius = std::max(1, ctx->render_config.restir_di.spatial_radius);
+    scene.restir_di_position_threshold = std::max(ctx->render_config.restir_di.position_threshold, 1e-6f);
+    scene.restir_di_normal_threshold = std::clamp(ctx->render_config.restir_di.normal_threshold, 0.0f, 1.0f);
     scene.restir_di_width = ctx->width;
     scene.restir_di_height = ctx->height;
     scene.light_count = ctx->light_count;

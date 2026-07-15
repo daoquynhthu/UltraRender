@@ -9,7 +9,7 @@ enum Backend:ubyte { Cuda=0, Vulkan=1, D3D12=2, CpuOracle=3, Extension=4 }
 enum Acceleration:ubyte { SoftwareBvh=0, Optix=1, VulkanRT=2, DXR=3, Extension=4 }
 enum CoherentMerge:ubyte { None=0, ComplexAmplitude=1, MutualCoherence=2 }
 table PathGuiding { enabled:bool (id:0); light_mixture:float=0.5 (id:1); learning_rate:float=0.25 (id:2); min_weight:float=0.000001 (id:3); decay:float=0.95 (id:4); decay_interval:int=16 (id:5); spatial_cells:int=16 (id:6); directional_bins:int=8 (id:7); memory_budget_mb:int (id:8); }
-table RestirDI { enabled:bool (id:0); temporal_reuse:bool=true (id:1); spatial_reuse:bool (id:2); unbiased:bool (id:3); max_history:int=1 (id:4); min_target:float=0.000001 (id:5); spatial_candidate_count:int=4 (id:6); spatial_radius:int=8 (id:7); }
+table RestirDI { enabled:bool (id:0); temporal_reuse:bool=true (id:1); spatial_reuse:bool (id:2); unbiased:bool (id:3); max_history:int=1 (id:4); min_target:float=0.000001 (id:5); spatial_candidate_count:int=4 (id:6); spatial_radius:int=8 (id:7); position_threshold:float=0.01 (id:8); normal_threshold:float=0.9 (id:9); }
 table RestirPT { enabled:bool (id:0); temporal_reuse:bool=true (id:1); spatial_reuse:bool (id:2); max_reuse_depth:int=4 (id:3); candidate_count:int=4 (id:4); max_history:int=8 (id:5); position_threshold:float=0.01 (id:6); normal_threshold:float=0.9 (id:7); }
 table SpecularManifold { enabled:bool (id:0); max_events:int=2 (id:1); tolerance:float=0.0001 (id:2); max_iterations:int=16 (id:3); }
 table MLT { enabled:bool (id:0); chains:int=1 (id:1); mutations:int=1024 (id:2); large_step_probability:float=0.3 (id:3); small_step_sigma:float=0.01 (id:4); seed:uint=1 (id:5); }

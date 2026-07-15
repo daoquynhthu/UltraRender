@@ -391,6 +391,9 @@ enum class GpuRestirDomain : int {
 struct GpuRestirDISample {
     GpuVec3 source_position = {};
     GpuVec3 source_normal = {};
+    GpuVec3 source_geometric_normal = {};
+    GpuVec3 source_outgoing = {};
+    GpuVec2 source_uv = {};
     GpuVec3 direction = {};
     float max_distance = 0.0f;
     float light_u = 0.0f;
@@ -404,6 +407,7 @@ struct GpuRestirDISample {
     int light_list_index = -1;
     int light_primitive_index = -1;
     int light_secondary_index = -1;
+    int light_material_index = -1;
     int material_index = -1;
     int medium_index = -1;
     int spectral_mode = 0;
@@ -620,6 +624,7 @@ struct GpuScene {
     int restir_di_pixel_count;
     int restir_di_enabled;
     int restir_di_temporal_reuse;
+    int restir_di_spatial_reuse;
     int restir_di_unbiased;
     int restir_di_max_history;
     float restir_di_min_target;
@@ -632,6 +637,8 @@ struct GpuScene {
     std::uint32_t restir_di_scene_epoch;
     int restir_di_spatial_candidate_count;
     int restir_di_spatial_radius;
+    float restir_di_position_threshold;
+    float restir_di_normal_threshold;
     int restir_di_width;
     int restir_di_height;
     int light_count;

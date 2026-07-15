@@ -2227,7 +2227,8 @@ static int test_restir_di_allocates_and_resets_temporal_reservoirs() {
 
 __global__ void evaluate_restir_reservoir_contract_kernel(
     GpuRestirDIReservoir* output,
-    int* compatibility) {
+    int* compatibility,
+    float* mis_weights) {
     GpuRestirDISample fresh = {};
     fresh.source_position = GpuVec3(1.0f, 2.0f, 3.0f);
     fresh.source_normal = GpuVec3(0.0f, 1.0f, 0.0f);
@@ -2256,6 +2257,16 @@ __global__ void evaluate_restir_reservoir_contract_kernel(
     compatibility[2] = compatible_restir_di_sample(
         fresh, GpuRestirDomain::Surface, fresh.source_position,
         GpuVec3(0.0f, -1.0f, 0.0f), 4, 2, 7, 0.01f, 0.9f) ? 1 : 0;
+    const GpuRestirDefensivePairwiseWeights weights =
+        restir_defensive_pairwise_weights(3.0f, 0.25f, 5, 2);
+    mis_weights[0] = weights.canonical;
+    mis_weights[1] = weights.reused;
+    mis_weights[2] = weights.valid ? 1.0f : 0.0f;
+    GpuRestirDIReservoir gris = {};
+    stream_restir_di_gris_candidate(gris, fresh, 2.0f, 0.25, 0.0f);
+    stream_restir_di_gris_candidate(gris, fresh, 4.0f, 0.75, 0.5f);
+    finalize_restir_di_gris_reservoir(gris);
+    output[1] = gris;
 }
 
 __global__ void reconstruct_restir_light_kernel(GpuScene scene, float* output) {
@@ -2263,7 +2274,7 @@ __global__ void reconstruct_restir_light_kernel(GpuScene scene, float* output) {
     stored.light_list_index = 0;
     stored.light_primitive_index = 0;
     stored.light_secondary_index = -1;
-    stored.material_index = 3;
+    stored.light_material_index = 3;
     stored.light_u = 0.3f;
     stored.light_v = 0.7f;
     SelectedLightSample near_sample;
@@ -2285,24 +2296,35 @@ static int test_restir_di_device_reservoir_merge_and_compatibility() {
     REQUIRE_GPU();
     GpuRestirDIReservoir* d_reservoir = nullptr;
     int* d_compatibility = nullptr;
-    CHECK_CUDA(cudaMalloc(&d_reservoir, sizeof(GpuRestirDIReservoir)));
+    float* d_mis_weights = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_reservoir, 2 * sizeof(GpuRestirDIReservoir)));
     CHECK_CUDA(cudaMalloc(&d_compatibility, 3 * sizeof(int)));
-    evaluate_restir_reservoir_contract_kernel<<<1, 1>>>(d_reservoir, d_compatibility);
+    CHECK_CUDA(cudaMalloc(&d_mis_weights, 3 * sizeof(float)));
+    evaluate_restir_reservoir_contract_kernel<<<1, 1>>>(d_reservoir, d_compatibility, d_mis_weights);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
-    GpuRestirDIReservoir reservoir = {};
+    GpuRestirDIReservoir reservoirs[2] = {};
     int compatibility[3] = {};
-    CHECK_CUDA(cudaMemcpy(&reservoir, d_reservoir, sizeof(reservoir), cudaMemcpyDeviceToHost));
+    float mis_weights[3] = {};
+    CHECK_CUDA(cudaMemcpy(reservoirs, d_reservoir, sizeof(reservoirs), cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaMemcpy(compatibility, d_compatibility, sizeof(compatibility), cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(mis_weights, d_mis_weights, sizeof(mis_weights), cudaMemcpyDeviceToHost));
     cudaFree(d_reservoir);
     cudaFree(d_compatibility);
-    CHECK(reservoir.valid == 1);
-    CHECK(reservoir.candidate_count == 2);
-    CHECK_FLOAT_EQ(static_cast<float>(reservoir.weight_sum), 10.0f, 1e-5f);
-    CHECK_FLOAT_EQ(reservoir.normalization_weight, 2.5f, 1e-5f);
+    cudaFree(d_mis_weights);
+    CHECK(reservoirs[0].valid == 1);
+    CHECK(reservoirs[0].candidate_count == 2);
+    CHECK_FLOAT_EQ(static_cast<float>(reservoirs[0].weight_sum), 10.0f, 1e-5f);
+    CHECK_FLOAT_EQ(reservoirs[0].normalization_weight, 2.5f, 1e-5f);
+    CHECK(reservoirs[1].valid == 1);
+    CHECK(reservoirs[1].candidate_count == 2);
+    CHECK_FLOAT_EQ(static_cast<float>(reservoirs[1].weight_sum), 1.0f, 1e-5f);
+    CHECK_FLOAT_EQ(reservoirs[1].normalization_weight, 0.25f, 1e-5f);
     CHECK(compatibility[0] == 1);
     CHECK(compatibility[1] == 0);
     CHECK(compatibility[2] == 0);
+    CHECK(mis_weights[2] == 1.0f);
+    CHECK_FLOAT_EQ(2.0f * mis_weights[0] + 3.0f * mis_weights[1], 1.0f, 1e-5f);
     return 0;
 }
 

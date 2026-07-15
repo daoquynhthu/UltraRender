@@ -108,6 +108,8 @@ typedef struct ure_integrator_config_t {
     int restir_pt_max_history;
     float restir_pt_position_threshold;
     float restir_pt_normal_threshold;
+    float restir_di_position_threshold;
+    float restir_di_normal_threshold;
 } ure_integrator_config_t;
 
 typedef enum ure_aov_type_t {

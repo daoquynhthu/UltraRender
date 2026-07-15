@@ -276,6 +276,8 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.restir_di.spatial_candidate_count = app_config.restir_di.spatial_candidate_count;
     gpu_config.restir_di.spatial_radius = app_config.restir_di.spatial_radius;
     gpu_config.restir_di.min_target = static_cast<float>(app_config.restir_di.min_target);
+    gpu_config.restir_di.position_threshold = static_cast<float>(app_config.restir_di.position_threshold);
+    gpu_config.restir_di.normal_threshold = static_cast<float>(app_config.restir_di.normal_threshold);
     gpu_config.restir_pt.enabled = app_config.restir_pt.enabled;
     gpu_config.restir_pt.temporal_reuse = app_config.restir_pt.temporal_reuse;
     gpu_config.restir_pt.spatial_reuse = app_config.restir_pt.spatial_reuse;
