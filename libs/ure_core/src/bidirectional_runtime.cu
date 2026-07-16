@@ -1554,6 +1554,53 @@ __global__ void solve_specular_manifold_paths_kernel(
         }
         return;
     }
+    GpuVec3 segment_start = anchor.position;
+    for (int segment = 0; segment <= event_count; ++segment) {
+        const GpuVec3 segment_end = segment < event_count
+            ? solved.surfaces[segment].position : light.position;
+        const GpuVec3 edge = segment_end - segment_start;
+        const float distance = edge.length();
+        if (!(distance > 3e-4f)) {
+            solution.reject_reason = GpuManifoldRejectReason::Occluded;
+            solutions[path_index] = solution;
+            if (telemetry) atomicAdd(&telemetry->rejected_occluded, 1u);
+            return;
+        }
+        GpuRay visibility = {};
+        visibility.direction = edge * (1.0f / distance);
+        visibility.origin = segment_start + visibility.direction * 1e-4f;
+        visibility.t_min = 1e-4f;
+        visibility.t_max = distance - 2e-4f;
+        float hit_t = 0.0f;
+        GpuVec3 hit_position, hit_normal, hit_geometric_normal;
+        GpuVec2 hit_uv;
+        int hit_material = -1;
+        int hit_type = -1;
+        int hit_index = -1;
+        int hit_primitive = -1;
+        if (world_hit(
+                scene, visibility, visibility.t_min, visibility.t_max,
+                hit_t, hit_position, hit_normal, hit_geometric_normal,
+                hit_uv, hit_material, hit_type, hit_index, hit_primitive)) {
+            bool expected_endpoint = false;
+            const GpuBidirectionalPathVertex expected = segment < event_count
+                ? camera_path[chain_start + segment] : light;
+            if (expected.geometry_type >= 0) {
+                expected_endpoint = hit_type == expected.geometry_type &&
+                    hit_index == expected.geometry_index &&
+                    hit_primitive == expected.primitive_index &&
+                    (hit_position - segment_end).length_sq() <=
+                        fmaxf(1e-8f, tolerance * tolerance * 16.0f);
+            }
+            if (!expected_endpoint) {
+                solution.reject_reason = GpuManifoldRejectReason::Occluded;
+                solutions[path_index] = solution;
+                if (telemetry) atomicAdd(&telemetry->rejected_occluded, 1u);
+                return;
+            }
+        }
+        segment_start = segment_end;
+    }
     solution.reject_reason = GpuManifoldRejectReason::None;
     solution.valid = 1;
     solutions[path_index] = solution;

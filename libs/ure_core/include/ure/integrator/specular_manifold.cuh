@@ -73,7 +73,8 @@ enum class GpuManifoldRejectReason : int {
     Singular = 5,
     TotalInternalReflection = 6,
     Residual = 7,
-    Stale = 8
+    Stale = 8,
+    Occluded = 9
 };
 
 struct GpuManifoldPathSolution {
@@ -101,6 +102,7 @@ struct GpuManifoldTelemetry {
     std::uint32_t rejected_tir = 0;
     std::uint32_t rejected_residual = 0;
     std::uint32_t rejected_stale = 0;
+    std::uint32_t rejected_occluded = 0;
     std::uint64_t total_iterations = 0;
 };
 

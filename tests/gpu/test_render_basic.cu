@@ -3087,9 +3087,11 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
     emitter.header.type = MaterialType::Light;
     emitter.emission = SpectralPacket(4.0f);
     GpuSphere mirror_sphere = {GpuVec3(), 1.0f, 7};
-    GpuSphere light_sphere = {GpuVec3(2.0f, -1.0f, 0.0f), 0.1f, 8};
+    GpuSphere light_sphere = {
+        GpuVec3(2.0707107f, -1.0707107f, 0.0f), 0.1f, 8};
+    GpuSphere blocker = {GpuVec3(1.5f, -0.5f, 0.0f), 0.2f, 7};
     GpuContext* ctx = init_gpu_renderer(
-        4, 4, {}, {}, {mirror_sphere, light_sphere},
+        4, 4, {}, {}, {mirror_sphere, light_sphere, blocker},
         {mirror, emitter}, {}, config);
     CHECK(ctx != nullptr);
     CHECK(ctx->d_manifold_solutions != nullptr);
@@ -3111,12 +3113,16 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
     camera_vertices[1].incoming = GpuVec3(1.0f, 1.0f, 0.0f).normalize();
     camera_vertices[1].outgoing = GpuVec3(1.0f, -1.0f, 0.0f).normalize();
     camera_vertices[1].geometry_type = 0;
+    camera_vertices[1].geometry_index = 0;
     camera_vertices[1].primitive_index = 0;
     camera_vertices[1].material_index = 7;
     camera_vertices[1].delta = 1;
     camera_vertices[1].valid = 1;
     camera_vertices[1].scene_epoch = ctx->bidirectional_scene_epoch;
     light_vertices[0].position = GpuVec3(2.0f, -1.0f, 0.0f);
+    light_vertices[0].geometry_type = 0;
+    light_vertices[0].geometry_index = 1;
+    light_vertices[0].primitive_index = 0;
     light_vertices[0].valid = 1;
     light_vertices[0].scene_epoch = ctx->bidirectional_scene_epoch;
     std::vector<int> camera_lengths(16, 0);
@@ -3141,7 +3147,7 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
         ctx->d_manifold_telemetry, 0, sizeof(GpuManifoldTelemetry)));
     GpuScene scene = {};
     scene.spheres = ctx->d_spheres;
-    scene.sphere_count = ctx->sphere_count;
+    scene.sphere_count = 2;
     scene.materials = ctx->d_materials;
     scene.material_count = ctx->material_count;
     solve_specular_manifold_paths_kernel<<<1, 32>>>(
@@ -3168,6 +3174,26 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
     CHECK(std::fabs(solution.determinant) > 1e-8f);
     CHECK(telemetry.attempted == 1);
     CHECK(telemetry.converged == 1);
+    scene.sphere_count = 3;
+    CHECK_CUDA(cudaMemset(
+        ctx->d_manifold_telemetry, 0, sizeof(GpuManifoldTelemetry)));
+    solve_specular_manifold_paths_kernel<<<1, 32>>>(
+        scene, ctx->d_camera_path_vertices, ctx->d_camera_path_lengths,
+        config.bidirectional.max_camera_vertices,
+        ctx->d_light_path_vertices, ctx->d_light_path_lengths,
+        config.bidirectional.max_light_vertices,
+        ctx->d_manifold_solutions, 16, 2, 1e-5f, 32,
+        ctx->bidirectional_scene_epoch, ctx->d_manifold_telemetry);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaMemcpy(
+        &solution, ctx->d_manifold_solutions, sizeof(solution),
+        cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(
+        &telemetry, ctx->d_manifold_telemetry, sizeof(telemetry),
+        cudaMemcpyDeviceToHost));
+    CHECK(solution.valid == 0);
+    CHECK(solution.reject_reason == GpuManifoldRejectReason::Occluded);
+    CHECK(telemetry.rejected_occluded == 1);
     free_gpu_renderer(ctx);
     return 0;
 }

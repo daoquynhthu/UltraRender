@@ -1935,6 +1935,8 @@ R.13-R.19 是能力编号，不是线性施工顺序。实际执行按依赖拆�
 | R-P6 | Volume phase resources and Mie production | ✅ 已完成：deterministic Lorenz-Mie generator、严格 JSON adapter、immutable resource、compiler revalidation/dedup、single/multi-GPU ownership、spectral eval/pdf/sample、NEE/continuation、scalar-depolarizing Stokes、Session rebuild 和 generated/imported global+bounded lifecycle | `VolumePhaseFunction::Mie` 已是 resource-backed production selector；缺资源或非法参数 fail-loud；HG/Rayleigh 回归、Mie energy/normalization/sampling-PDF/offset/lifecycle tests 全覆盖 |
 | R-P7 | Full industrial validation suite | 固定 benchmark scene pack；reference images/metrics；variance、MSE、spectral color error、time-to-error、samples/sec、VRAM、kernel launch、occupancy 指标；local quick gate + farm long-run gate + Nsight dashboard schema；每个 production mode 的适用范围和拒绝边界文档 | 本地 suite 可复现；farm/Nsight 输出稳定 JSON；每个高级 integrator mode 至少有一个正收益场景和一个边界失败场景；Phase R completion 只能在 R-P1..R-P7 全部闭环后声明 |
 
+R-P4 visibility closure：production manifold solve 对 anchor→specular chain→light 的每条 edge 使用正式 traversal 验证 visibility；预期 manifold/light endpoint 仅按 geometry identity 与端点容差豁免，其他提前命中统一以 typed `Occluded` reason 和 telemetry 拒绝。GPU E2E 同时覆盖无 blocker 收敛和真实 blocker 拒绝。SDS contribution evaluator 与最终 benchmark 仍未完成。
+
 #### Phase R 执行顺序
 
 ```
