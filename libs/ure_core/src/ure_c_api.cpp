@@ -90,6 +90,12 @@ bool c_integrator_mode(int mode, IntegratorMode& out) {
     case URE_INTEGRATOR_RESTIR_PT:
         out = IntegratorMode::RestirPT;
         return true;
+    case URE_INTEGRATOR_BDPT:
+        out = IntegratorMode::BDPT;
+        return true;
+    case URE_INTEGRATOR_VCM:
+        out = IntegratorMode::VCM;
+        return true;
     default:
         return false;
     }
@@ -186,6 +192,18 @@ bool make_integrator_config(const ure_integrator_config_t* integrator_config, Re
     if (integrator_config->specular_manifold_max_events > 0) cfg.specular_manifold.max_specular_events = integrator_config->specular_manifold_max_events;
     if (integrator_config->specular_manifold_tolerance > 0.0f) cfg.specular_manifold.solver_tolerance = integrator_config->specular_manifold_tolerance;
     if (integrator_config->specular_manifold_newton_iterations > 0) cfg.specular_manifold.max_newton_iterations = integrator_config->specular_manifold_newton_iterations;
+    cfg.bidirectional.enabled = integrator_config->bidirectional_enabled != 0;
+    if (integrator_config->bidirectional_max_camera_vertices > 0) cfg.bidirectional.max_camera_vertices = integrator_config->bidirectional_max_camera_vertices;
+    if (integrator_config->bidirectional_max_light_vertices > 0) cfg.bidirectional.max_light_vertices = integrator_config->bidirectional_max_light_vertices;
+    if (integrator_config->bidirectional_connections_per_pixel > 0) cfg.bidirectional.connections_per_pixel = integrator_config->bidirectional_connections_per_pixel;
+    if (integrator_config->bidirectional_memory_budget_mb >= 0) cfg.bidirectional.memory_budget_mb = integrator_config->bidirectional_memory_budget_mb;
+    cfg.bidirectional.light_tracing = integrator_config->bidirectional_light_tracing != 0;
+    cfg.vcm.enabled = integrator_config->vcm_enabled != 0;
+    if (integrator_config->vcm_initial_radius > 0.0f) cfg.vcm.initial_radius = integrator_config->vcm_initial_radius;
+    if (integrator_config->vcm_alpha > 0.0f) cfg.vcm.alpha = integrator_config->vcm_alpha;
+    if (integrator_config->vcm_grid_capacity > 0) cfg.vcm.grid_capacity = integrator_config->vcm_grid_capacity;
+    cfg.vcm.merge_surfaces = integrator_config->vcm_merge_surfaces != 0;
+    cfg.vcm.merge_volumes = integrator_config->vcm_merge_volumes != 0;
     cfg.mlt.enabled = integrator_config->mlt_enabled != 0;
     if (integrator_config->mlt_chain_count > 0) cfg.mlt.chain_count = integrator_config->mlt_chain_count;
     if (integrator_config->mlt_mutations_per_chain > 0) cfg.mlt.mutations_per_chain = integrator_config->mlt_mutations_per_chain;
@@ -201,6 +219,11 @@ bool make_integrator_config(const ure_integrator_config_t* integrator_config, Re
     }
     if (cfg.integrator.mode == IntegratorMode::RestirPT) cfg.restir_pt.enabled = true;
     if (cfg.integrator.mode == IntegratorMode::SpecularManifold) cfg.specular_manifold.enabled = true;
+    if (cfg.integrator.mode == IntegratorMode::BDPT) cfg.bidirectional.enabled = true;
+    if (cfg.integrator.mode == IntegratorMode::VCM) {
+        cfg.bidirectional.enabled = true;
+        cfg.vcm.enabled = true;
+    }
     if (cfg.integrator.mode == IntegratorMode::MLT) {
         cfg.mlt.enabled = true;
         cfg.integrator.sampler = IntegratorSampler::PrimarySampleSpace;

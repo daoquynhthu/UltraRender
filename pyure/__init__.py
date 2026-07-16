@@ -137,6 +137,18 @@ class _IntegratorConfig(ctypes.Structure):
         ("restir_pt_normal_threshold", ctypes.c_float),
         ("restir_di_position_threshold", ctypes.c_float),
         ("restir_di_normal_threshold", ctypes.c_float),
+        ("bidirectional_enabled", ctypes.c_int),
+        ("bidirectional_max_camera_vertices", ctypes.c_int),
+        ("bidirectional_max_light_vertices", ctypes.c_int),
+        ("bidirectional_connections_per_pixel", ctypes.c_int),
+        ("bidirectional_memory_budget_mb", ctypes.c_int),
+        ("bidirectional_light_tracing", ctypes.c_int),
+        ("vcm_enabled", ctypes.c_int),
+        ("vcm_initial_radius", ctypes.c_float),
+        ("vcm_alpha", ctypes.c_float),
+        ("vcm_grid_capacity", ctypes.c_int),
+        ("vcm_merge_surfaces", ctypes.c_int),
+        ("vcm_merge_volumes", ctypes.c_int),
     ]
 
 
@@ -300,6 +312,8 @@ def _integrator_mode_id(mode: str) -> int:
         "specular_manifold": 3,
         "mlt": 4,
         "restir_pt": 5,
+        "bdpt": 6,
+        "vcm": 7,
     }
     try:
         return modes[mode]

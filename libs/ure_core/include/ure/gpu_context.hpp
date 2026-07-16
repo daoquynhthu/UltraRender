@@ -5,6 +5,7 @@
 #include "ure/gpu_structs.hpp"
 #include "ure/host_texture.hpp"
 #include "ure/integrator/restir_pt.cuh"
+#include "ure/integrator/bidirectional.cuh"
 #include "ure/render_config.hpp"
 
 #if defined(_MSC_VER)
@@ -131,6 +132,17 @@ struct GpuContext {
     std::uint32_t restir_pt_scene_epoch = 1;
     size_t restir_pt_required_bytes = 0;
     size_t restir_pt_budget_bytes = 0;
+    GpuBidirectionalPathVertex* d_camera_path_vertices = nullptr;
+    GpuBidirectionalPathVertex* d_light_path_vertices = nullptr;
+    int* d_camera_path_lengths = nullptr;
+    int* d_light_path_lengths = nullptr;
+    std::uint32_t* d_bidirectional_next_path_index = nullptr;
+    GpuBidirectionalTelemetry* d_bidirectional_telemetry = nullptr;
+    int bidirectional_camera_path_capacity = 0;
+    int bidirectional_light_path_capacity = 0;
+    size_t bidirectional_required_bytes = 0;
+    size_t bidirectional_budget_bytes = 0;
+    std::uint32_t bidirectional_scene_epoch = 1;
     float* d_wavelength_proposal_cdf = nullptr;
     float* d_wavelength_proposal_pdf = nullptr;
     int wavelength_proposal_count = 0;
@@ -170,6 +182,7 @@ struct GpuContext {
     GpuRestirDITelemetry* d_restir_di_telemetry = nullptr;
     GpuRestirDITelemetry last_restir_di_telemetry = {};
     GpuRestirPTTelemetry last_restir_pt_telemetry = {};
+    GpuBidirectionalTelemetry last_bidirectional_telemetry = {};
 
     std::vector<GpuSphere> host_spheres_for_light_distribution;
     std::vector<GpuLightRecord> host_light_records_for_distribution;

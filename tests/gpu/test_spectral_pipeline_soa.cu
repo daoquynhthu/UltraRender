@@ -22,6 +22,8 @@ static int alloc_test_ray_queue(RayQueue& q, int cap, int num_spec) {
     if (cudaMalloc(&q.seeds, cap * sizeof(unsigned int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.sample_indices, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
     if (cudaMemset(q.sample_indices, 0, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.path_indices, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
+    if (cudaMemset(q.path_indices, 0, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.pixel_indices, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.depths, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.flags, cap * sizeof(int)) != cudaSuccess) return 1;
@@ -49,6 +51,7 @@ static void free_test_ray_queue(const RayQueue& q) {
     cudaFree(q.medium_indices);
     cudaFree(q.seeds);
     cudaFree(q.sample_indices);
+    cudaFree(q.path_indices);
     cudaFree(q.pixel_indices);
     cudaFree(q.depths);
     cudaFree(q.flags);

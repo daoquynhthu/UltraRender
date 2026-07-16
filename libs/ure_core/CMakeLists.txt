@@ -4,6 +4,7 @@ add_library(ure_core STATIC
     src/restir_pt.cpp
     src/restir_pt_runtime.cu
     src/restir_di_runtime.cu
+    src/bidirectional_runtime.cu
     src/ure_c_api.cpp
     src/path_tracer_kernel.cu
     src/path_tracer_host_api.cu

@@ -94,6 +94,24 @@ struct SpecularManifoldConfig {
     int max_newton_iterations = 16;
 };
 
+struct BidirectionalConfig {
+    bool enabled = false;
+    int max_camera_vertices = 8;
+    int max_light_vertices = 8;
+    int connections_per_pixel = 4;
+    int memory_budget_mb = 0;
+    bool light_tracing = false;
+};
+
+struct VcmConfig {
+    bool enabled = false;
+    double initial_radius = 0.1;
+    double alpha = 0.75;
+    int grid_capacity = 0;
+    bool merge_surfaces = true;
+    bool merge_volumes = true;
+};
+
 struct MltIntegratorConfig {
     bool enabled = false;
     int chain_count = 1;
@@ -109,6 +127,8 @@ struct IntegratorConfig {
     std::string quality_preset = "default";
     bool allow_biased_reuse = false;
     SpecularManifoldConfig specular_manifold;
+    BidirectionalConfig bidirectional;
+    VcmConfig vcm;
     MltIntegratorConfig mlt;
 };
 

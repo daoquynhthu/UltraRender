@@ -26,7 +26,9 @@ enum class IntegratorMode {
     RestirDI,
     SpecularManifold,
     MLT,
-    RestirPT
+    RestirPT,
+    BDPT,
+    VCM
 };
 
 enum class IntegratorSampler {
@@ -102,6 +104,24 @@ struct SpecularManifoldConfig {
     int max_newton_iterations = 16;
 };
 
+struct BidirectionalConfig {
+    bool enabled = false;
+    int max_camera_vertices = 8;
+    int max_light_vertices = 8;
+    int connections_per_pixel = 4;
+    int memory_budget_mb = 0;
+    bool light_tracing = false;
+};
+
+struct VcmConfig {
+    bool enabled = false;
+    float initial_radius = 0.1f;
+    float alpha = 0.75f;
+    int grid_capacity = 0;
+    bool merge_surfaces = true;
+    bool merge_volumes = true;
+};
+
 struct MltIntegratorConfig {
     bool enabled = false;
     int chain_count = 1;
@@ -133,6 +153,8 @@ struct RenderConfig {
     RestirDirectConfig restir_di;
     RestirPathConfig restir_pt;
     SpecularManifoldConfig specular_manifold;
+    BidirectionalConfig bidirectional;
+    VcmConfig vcm;
     MltIntegratorConfig mlt;
     int wg_size = 32;
     int rays_per_block = 256;

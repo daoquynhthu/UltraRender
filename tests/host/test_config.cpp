@@ -402,6 +402,57 @@ static int test_integrator_specular_manifold_cli_overrides() {
     return 0;
 }
 
+static int test_bidirectional_and_vcm_json_fields() {
+    const char* path = "test_config_bidirectional.json";
+    {
+        std::ofstream out(path);
+        out << R"({"integrator":{"mode":"vcm","bidirectional":{"enabled":true,"max_camera_vertices":12,"max_light_vertices":10,"connections_per_pixel":6,"memory_budget_mb":384,"light_tracing":true},"vcm":{"enabled":true,"initial_radius":0.25,"alpha":0.7,"grid_capacity":65536,"merge_surfaces":true,"merge_volumes":false}}})";
+    }
+    const auto cfg = ure::config::load_config(path);
+    std::remove(path);
+    CHECK(cfg.integrator.mode == "vcm");
+    CHECK(cfg.integrator.bidirectional.enabled);
+    CHECK(cfg.integrator.bidirectional.max_camera_vertices == 12);
+    CHECK(cfg.integrator.bidirectional.max_light_vertices == 10);
+    CHECK(cfg.integrator.bidirectional.connections_per_pixel == 6);
+    CHECK(cfg.integrator.bidirectional.memory_budget_mb == 384);
+    CHECK(cfg.integrator.bidirectional.light_tracing);
+    CHECK(cfg.integrator.vcm.enabled);
+    CHECK(std::fabs(cfg.integrator.vcm.initial_radius - 0.25) < 1e-12);
+    CHECK(std::fabs(cfg.integrator.vcm.alpha - 0.7) < 1e-12);
+    CHECK(cfg.integrator.vcm.grid_capacity == 65536);
+    CHECK(!cfg.integrator.vcm.merge_volumes);
+    return 0;
+}
+
+static int test_bidirectional_and_vcm_cli_overrides() {
+    const char* argv[] = {
+        "ure_cli", "render", "scene.gltf", "--integrator-mode", "vcm",
+        "--enable-bidirectional", "--bidirectional-max-camera-vertices", "11",
+        "--bidirectional-max-light-vertices", "9",
+        "--bidirectional-connections-per-pixel", "5",
+        "--bidirectional-memory-budget-mb", "256",
+        "--bidirectional-light-tracing", "--enable-vcm",
+        "--vcm-initial-radius", "0.2", "--vcm-alpha", "0.8",
+        "--vcm-grid-capacity", "32768"
+    };
+    const auto cfg = ure::config::parse_cli(
+        static_cast<int>(sizeof(argv) / sizeof(argv[0])),
+        const_cast<char**>(argv)).config;
+    CHECK(cfg.integrator.mode == "vcm");
+    CHECK(cfg.integrator.bidirectional.enabled);
+    CHECK(cfg.integrator.bidirectional.max_camera_vertices == 11);
+    CHECK(cfg.integrator.bidirectional.max_light_vertices == 9);
+    CHECK(cfg.integrator.bidirectional.connections_per_pixel == 5);
+    CHECK(cfg.integrator.bidirectional.memory_budget_mb == 256);
+    CHECK(cfg.integrator.bidirectional.light_tracing);
+    CHECK(cfg.integrator.vcm.enabled);
+    CHECK(std::fabs(cfg.integrator.vcm.initial_radius - 0.2) < 1e-12);
+    CHECK(std::fabs(cfg.integrator.vcm.alpha - 0.8) < 1e-12);
+    CHECK(cfg.integrator.vcm.grid_capacity == 32768);
+    return 0;
+}
+
 static int test_integrator_mlt_json_fields() {
     const char* path = "test_config_integrator_mlt.json";
     {
@@ -540,6 +591,8 @@ int main() {
     failed += run("test_restir_production_cli_overrides", test_restir_production_cli_overrides);
     failed += run("test_integrator_specular_manifold_json_fields", test_integrator_specular_manifold_json_fields);
     failed += run("test_integrator_specular_manifold_cli_overrides", test_integrator_specular_manifold_cli_overrides);
+    failed += run("test_bidirectional_and_vcm_json_fields", test_bidirectional_and_vcm_json_fields);
+    failed += run("test_bidirectional_and_vcm_cli_overrides", test_bidirectional_and_vcm_cli_overrides);
     failed += run("test_integrator_mlt_json_fields", test_integrator_mlt_json_fields);
     failed += run("test_integrator_mlt_cli_overrides", test_integrator_mlt_cli_overrides);
     failed += run("test_integrator_runtime_json_fields", test_integrator_runtime_json_fields);

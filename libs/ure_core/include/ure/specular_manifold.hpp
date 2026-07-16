@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace ure::integrator {
 
 enum class SpecularManifoldStatus {
@@ -51,5 +53,48 @@ PrimarySampleMutation mutate_primary_sample(double current,
                                             int mutation_index,
                                             const PrimarySampleMutationConfig& config);
 double metropolis_acceptance(double current_contribution, double proposed_contribution);
+
+enum class PathVertexMeasure {
+    Discrete,
+    Area,
+    Volume
+};
+
+struct BidirectionalPdfVertex {
+    double forward_directional_pdf = 0.0;
+    double reverse_directional_pdf = 0.0;
+    double forward_measure_pdf = 0.0;
+    double reverse_measure_pdf = 0.0;
+    PathVertexMeasure measure = PathVertexMeasure::Area;
+    bool delta = false;
+};
+
+struct BidirectionalTechnique {
+    int light_vertices = 0;
+    int camera_vertices = 0;
+    double probability = 0.0;
+    bool valid = false;
+};
+
+double solid_angle_to_area_pdf(double directional_pdf,
+                               double distance_squared,
+                               double target_abs_cosine);
+double solid_angle_to_volume_pdf(double directional_pdf,
+                                 double distance_squared);
+double bidirectional_power_heuristic(const double* technique_probabilities,
+                                     int count,
+                                     int selected);
+int enumerate_bidirectional_techniques(int light_vertex_count,
+                                       int camera_vertex_count,
+                                       BidirectionalTechnique* output,
+                                       int capacity);
+double progressive_surface_merge_radius(double initial_radius,
+                                        double alpha,
+                                        std::uint64_t iteration);
+double progressive_volume_merge_radius(double initial_radius,
+                                       double alpha,
+                                       std::uint64_t iteration);
+double surface_merge_kernel_normalization(double radius);
+double volume_merge_kernel_normalization(double radius);
 
 } // namespace ure::integrator

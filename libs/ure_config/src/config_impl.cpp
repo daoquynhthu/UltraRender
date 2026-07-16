@@ -122,6 +122,24 @@ RenderConfig load_config(const std::string& path) {
                 if (s.contains("solver_tolerance")) cfg.integrator.specular_manifold.solver_tolerance = s["solver_tolerance"].get<double>();
                 if (s.contains("max_newton_iterations")) cfg.integrator.specular_manifold.max_newton_iterations = s["max_newton_iterations"].get<int>();
             }
+            if (i.contains("bidirectional")) {
+                auto& b = i["bidirectional"];
+                if (b.contains("enabled")) cfg.integrator.bidirectional.enabled = b["enabled"].get<bool>();
+                if (b.contains("max_camera_vertices")) cfg.integrator.bidirectional.max_camera_vertices = b["max_camera_vertices"].get<int>();
+                if (b.contains("max_light_vertices")) cfg.integrator.bidirectional.max_light_vertices = b["max_light_vertices"].get<int>();
+                if (b.contains("connections_per_pixel")) cfg.integrator.bidirectional.connections_per_pixel = b["connections_per_pixel"].get<int>();
+                if (b.contains("memory_budget_mb")) cfg.integrator.bidirectional.memory_budget_mb = b["memory_budget_mb"].get<int>();
+                if (b.contains("light_tracing")) cfg.integrator.bidirectional.light_tracing = b["light_tracing"].get<bool>();
+            }
+            if (i.contains("vcm")) {
+                auto& v = i["vcm"];
+                if (v.contains("enabled")) cfg.integrator.vcm.enabled = v["enabled"].get<bool>();
+                if (v.contains("initial_radius")) cfg.integrator.vcm.initial_radius = v["initial_radius"].get<double>();
+                if (v.contains("alpha")) cfg.integrator.vcm.alpha = v["alpha"].get<double>();
+                if (v.contains("grid_capacity")) cfg.integrator.vcm.grid_capacity = v["grid_capacity"].get<int>();
+                if (v.contains("merge_surfaces")) cfg.integrator.vcm.merge_surfaces = v["merge_surfaces"].get<bool>();
+                if (v.contains("merge_volumes")) cfg.integrator.vcm.merge_volumes = v["merge_volumes"].get<bool>();
+            }
             if (i.contains("mlt")) {
                 auto& m = i["mlt"];
                 if (m.contains("enabled")) cfg.integrator.mlt.enabled = m["enabled"].get<bool>();
@@ -194,6 +212,16 @@ CliResult parse_cli(int argc, char** argv) {
     int integrator_specular_max_events = -1;
     double integrator_specular_tolerance = -1.0;
     int integrator_specular_newton_iterations = -1;
+    bool integrator_bidirectional = false;
+    int bidirectional_max_camera_vertices = -1;
+    int bidirectional_max_light_vertices = -1;
+    int bidirectional_connections_per_pixel = -1;
+    int bidirectional_memory_budget_mb = -1;
+    bool bidirectional_light_tracing = false;
+    bool integrator_vcm = false;
+    double vcm_initial_radius = -1.0;
+    double vcm_alpha = -1.0;
+    int vcm_grid_capacity = -1;
     bool integrator_mlt = false;
     int integrator_mlt_chain_count = -1;
     int integrator_mlt_mutations_per_chain = -1;
@@ -246,13 +274,23 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_option("--restir-pt-max-reuse-depth", restir_pt_max_reuse_depth, "Maximum reconnectable ReSTIR PT suffix depth");
     render_cmd->add_option("--restir-pt-candidates", restir_pt_candidate_count, "ReSTIR PT suffix candidates per shading point");
     render_cmd->add_flag("--enable-integrator-specular-manifold", integrator_specular_manifold, "Request radiometric specular manifold integration");
-    render_cmd->add_option("--integrator-mode", integrator_mode, "Integrator mode: wavefront, path_guided, restir_di, specular_manifold, mlt");
+    render_cmd->add_option("--integrator-mode", integrator_mode, "Integrator mode: wavefront, path_guided, restir_di, restir_pt, specular_manifold, bdpt, vcm, mlt");
     render_cmd->add_option("--integrator-sampler", integrator_sampler, "Integrator sampler: default, low_discrepancy, primary_sample_space");
     render_cmd->add_option("--integrator-quality-preset", integrator_quality_preset, "Integrator quality preset: default, preview, final, research");
     render_cmd->add_flag("--allow-biased-integrator-reuse", integrator_allow_biased_reuse, "Allow explicitly biased reuse integrators such as current ReSTIR DI baseline");
     render_cmd->add_option("--specular-manifold-max-events", integrator_specular_max_events, "Maximum specular events in a manifold connection");
     render_cmd->add_option("--specular-manifold-tolerance", integrator_specular_tolerance, "Specular manifold solver tolerance");
     render_cmd->add_option("--specular-manifold-newton-iterations", integrator_specular_newton_iterations, "Specular manifold Newton iteration cap");
+    render_cmd->add_flag("--enable-bidirectional", integrator_bidirectional, "Enable shared bidirectional path-space runtime");
+    render_cmd->add_option("--bidirectional-max-camera-vertices", bidirectional_max_camera_vertices, "Maximum camera subpath vertices");
+    render_cmd->add_option("--bidirectional-max-light-vertices", bidirectional_max_light_vertices, "Maximum light subpath vertices");
+    render_cmd->add_option("--bidirectional-connections-per-pixel", bidirectional_connections_per_pixel, "Bounded path connections per pixel");
+    render_cmd->add_option("--bidirectional-memory-budget-mb", bidirectional_memory_budget_mb, "Bidirectional runtime memory budget in MiB; zero derives a device budget");
+    render_cmd->add_flag("--bidirectional-light-tracing", bidirectional_light_tracing, "Enable light-subpath splats to supported cameras");
+    render_cmd->add_flag("--enable-vcm", integrator_vcm, "Enable vertex connection and merging");
+    render_cmd->add_option("--vcm-initial-radius", vcm_initial_radius, "Initial VCM merge radius");
+    render_cmd->add_option("--vcm-alpha", vcm_alpha, "Progressive VCM radius alpha");
+    render_cmd->add_option("--vcm-grid-capacity", vcm_grid_capacity, "VCM spatial hash capacity; zero derives a bounded capacity");
     render_cmd->add_flag("--enable-mlt", integrator_mlt, "Request primary-sample-space MLT integration");
     render_cmd->add_option("--mlt-chain-count", integrator_mlt_chain_count, "Number of independent MLT chains");
     render_cmd->add_option("--mlt-mutations-per-chain", integrator_mlt_mutations_per_chain, "Mutations per MLT chain");
@@ -363,6 +401,16 @@ CliResult parse_cli(int argc, char** argv) {
         if (integrator_specular_max_events > 0) cfg.integrator.specular_manifold.max_specular_events = integrator_specular_max_events;
         if (integrator_specular_tolerance > 0.0) cfg.integrator.specular_manifold.solver_tolerance = integrator_specular_tolerance;
         if (integrator_specular_newton_iterations > 0) cfg.integrator.specular_manifold.max_newton_iterations = integrator_specular_newton_iterations;
+        if (integrator_bidirectional) cfg.integrator.bidirectional.enabled = true;
+        if (bidirectional_max_camera_vertices > 0) cfg.integrator.bidirectional.max_camera_vertices = bidirectional_max_camera_vertices;
+        if (bidirectional_max_light_vertices > 0) cfg.integrator.bidirectional.max_light_vertices = bidirectional_max_light_vertices;
+        if (bidirectional_connections_per_pixel > 0) cfg.integrator.bidirectional.connections_per_pixel = bidirectional_connections_per_pixel;
+        if (bidirectional_memory_budget_mb >= 0) cfg.integrator.bidirectional.memory_budget_mb = bidirectional_memory_budget_mb;
+        if (bidirectional_light_tracing) cfg.integrator.bidirectional.light_tracing = true;
+        if (integrator_vcm) cfg.integrator.vcm.enabled = true;
+        if (vcm_initial_radius > 0.0) cfg.integrator.vcm.initial_radius = vcm_initial_radius;
+        if (vcm_alpha > 0.0) cfg.integrator.vcm.alpha = vcm_alpha;
+        if (vcm_grid_capacity >= 0) cfg.integrator.vcm.grid_capacity = vcm_grid_capacity;
         if (integrator_mlt) cfg.integrator.mlt.enabled = true;
         if (integrator_mlt_chain_count > 0) cfg.integrator.mlt.chain_count = integrator_mlt_chain_count;
         if (integrator_mlt_mutations_per_chain > 0) cfg.integrator.mlt.mutations_per_chain = integrator_mlt_mutations_per_chain;

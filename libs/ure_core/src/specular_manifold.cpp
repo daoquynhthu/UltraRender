@@ -135,4 +135,109 @@ double metropolis_acceptance(double current_contribution, double proposed_contri
     return std::min(1.0, proposed_contribution / current_contribution);
 }
 
+double solid_angle_to_area_pdf(double directional_pdf,
+                               double distance_squared,
+                               double target_abs_cosine) {
+    if (!std::isfinite(directional_pdf) ||
+        !std::isfinite(distance_squared) ||
+        !std::isfinite(target_abs_cosine) ||
+        directional_pdf < 0.0 || distance_squared <= 0.0 ||
+        target_abs_cosine <= 0.0) {
+        return 0.0;
+    }
+    return directional_pdf * target_abs_cosine / distance_squared;
+}
+
+double solid_angle_to_volume_pdf(double directional_pdf,
+                                 double distance_squared) {
+    if (!std::isfinite(directional_pdf) ||
+        !std::isfinite(distance_squared) ||
+        directional_pdf < 0.0 || distance_squared <= 0.0) {
+        return 0.0;
+    }
+    return directional_pdf / distance_squared;
+}
+
+double bidirectional_power_heuristic(const double* technique_probabilities,
+                                     int count,
+                                     int selected) {
+    if (!technique_probabilities || count <= 0 || selected < 0 ||
+        selected >= count) {
+        return 0.0;
+    }
+    double denominator = 0.0;
+    for (int i = 0; i < count; ++i) {
+        const double probability = technique_probabilities[i];
+        if (!std::isfinite(probability) || probability < 0.0) return 0.0;
+        denominator += probability * probability;
+    }
+    const double selected_probability = technique_probabilities[selected];
+    return denominator > 0.0
+        ? selected_probability * selected_probability / denominator : 0.0;
+}
+
+int enumerate_bidirectional_techniques(int light_vertex_count,
+                                       int camera_vertex_count,
+                                       BidirectionalTechnique* output,
+                                       int capacity) {
+    if (light_vertex_count < 0 || camera_vertex_count <= 0 ||
+        !output || capacity <= 0) {
+        return 0;
+    }
+    int count = 0;
+    for (int s = 0; s <= light_vertex_count && count < capacity; ++s) {
+        for (int t = 1; t <= camera_vertex_count && count < capacity; ++t) {
+            if (s + t < 2) continue;
+            output[count].light_vertices = s;
+            output[count].camera_vertices = t;
+            output[count].probability = 0.0;
+            output[count].valid = true;
+            ++count;
+        }
+    }
+    return count;
+}
+
+namespace {
+
+double progressive_merge_radius(double initial_radius,
+                                double alpha,
+                                std::uint64_t iteration,
+                                double dimension) {
+    if (!std::isfinite(initial_radius) || !std::isfinite(alpha) ||
+        initial_radius <= 0.0 || alpha <= 0.0 || alpha > 1.0 ||
+        dimension <= 0.0) {
+        return 0.0;
+    }
+    const double n = static_cast<double>(iteration + 1);
+    const double log_product = std::lgamma(n + alpha) - std::lgamma(alpha) -
+                               std::lgamma(n + 1.0);
+    return initial_radius * std::exp(log_product / dimension);
+}
+
+}
+
+double progressive_surface_merge_radius(double initial_radius,
+                                        double alpha,
+                                        std::uint64_t iteration) {
+    return progressive_merge_radius(initial_radius, alpha, iteration, 2.0);
+}
+
+double progressive_volume_merge_radius(double initial_radius,
+                                       double alpha,
+                                       std::uint64_t iteration) {
+    return progressive_merge_radius(initial_radius, alpha, iteration, 3.0);
+}
+
+double surface_merge_kernel_normalization(double radius) {
+    return std::isfinite(radius) && radius > 0.0
+        ? 1.0 / (3.14159265358979323846 * radius * radius) : 0.0;
+}
+
+double volume_merge_kernel_normalization(double radius) {
+    return std::isfinite(radius) && radius > 0.0
+        ? 3.0 / (4.0 * 3.14159265358979323846 * radius * radius * radius)
+        : 0.0;
+}
+
 } // namespace ure::integrator

@@ -12,6 +12,9 @@
 
 namespace ure::gpu {
 
+struct GpuBidirectionalPathVertex;
+struct GpuBidirectionalTelemetry;
+
 struct GpuRestirPathSuffix;
 struct GpuRestirPTTelemetry;
 
@@ -660,6 +663,13 @@ struct GpuScene {
     GpuRestirPTTelemetry* restir_pt_telemetry;
     std::uint32_t restir_pt_scene_epoch;
     int restir_pt_max_reuse_depth;
+    GpuBidirectionalPathVertex* bidirectional_camera_vertices;
+    int* bidirectional_camera_path_lengths;
+    std::uint32_t* bidirectional_next_path_index;
+    int bidirectional_camera_path_capacity;
+    int bidirectional_max_camera_vertices;
+    std::uint32_t bidirectional_scene_epoch;
+    GpuBidirectionalTelemetry* bidirectional_telemetry;
     int light_count;
 
     // Global Homogeneous Medium (Volumetric Fog)
@@ -702,6 +712,7 @@ struct RayQueue {
     int* medium_indices = nullptr;
     unsigned int* seeds = nullptr;
     std::uint32_t* sample_indices = nullptr;
+    std::uint32_t* path_indices = nullptr;
     int* pixel_indices = nullptr;
     int* depths = nullptr;
     int* flags = nullptr;

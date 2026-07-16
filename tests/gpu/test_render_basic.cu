@@ -47,6 +47,8 @@ static int test_alloc_ray_queue(RayQueue& q, int cap, int num_spec = 4) {
     if (cudaMalloc(&q.seeds, cap * sizeof(unsigned int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.sample_indices, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
     if (cudaMemset(q.sample_indices, 0, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.path_indices, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
+    if (cudaMemset(q.path_indices, 0, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.pixel_indices, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.depths, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.flags, cap * sizeof(int)) != cudaSuccess) return 1;
@@ -74,6 +76,7 @@ static void test_free_ray_queue(const RayQueue& q) {
     cudaFree(q.medium_indices);
     cudaFree(q.seeds);
     cudaFree(q.sample_indices);
+    cudaFree(q.path_indices);
     cudaFree(q.pixel_indices);
     cudaFree(q.depths);
     cudaFree(q.flags);
@@ -2469,6 +2472,81 @@ static int test_restir_pt_owns_bounded_ping_pong_suffix_history() {
     return 0;
 }
 
+static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.integrator.mode = ure::IntegratorMode::BDPT;
+    config.bidirectional.enabled = false;
+    config.bidirectional.max_camera_vertices = 6;
+    config.bidirectional.max_light_vertices = 5;
+    config.bidirectional.connections_per_pixel = 4;
+    config.bidirectional.memory_budget_mb = 64;
+
+    GpuMaterialData diffuse = {};
+    diffuse.header.type = MaterialType::Lambertian;
+    diffuse.albedo = SpectralPacket(0.8f);
+    GpuMaterialData emitter = {};
+    emitter.header.type = MaterialType::Light;
+    emitter.emission = SpectralPacket(6.0f);
+    GpuSphere surface = {GpuVec3(0.0f, 0.0f, -1.0f), 0.75f, 7};
+    GpuSphere light = {GpuVec3(0.0f, 2.0f, 0.0f), 0.5f, 8};
+    GpuContext* ctx = init_gpu_renderer(
+        4, 4, {}, {}, {surface, light}, {diffuse, emitter}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->render_config.bidirectional.enabled);
+    CHECK(ctx->d_camera_path_vertices != nullptr);
+    CHECK(ctx->d_light_path_vertices != nullptr);
+    CHECK(ctx->d_camera_path_lengths != nullptr);
+    CHECK(ctx->d_light_path_lengths != nullptr);
+    CHECK(ctx->d_bidirectional_telemetry != nullptr);
+    CHECK(ctx->bidirectional_camera_path_capacity == 16);
+    CHECK(ctx->bidirectional_light_path_capacity == 16);
+    CHECK(ctx->bidirectional_required_bytes > 0);
+    CHECK(ctx->bidirectional_required_bytes <= ctx->bidirectional_budget_bytes);
+    const float camera_position[] = {0.0f, 0.0f, 2.0f};
+    const float camera_target[] = {0.0f, 0.0f, -1.0f};
+    update_camera_gpu(ctx, camera_position, camera_target, 18.0f);
+    bool rejected = false;
+    try {
+        render_pass_gpu(ctx, 1);
+    } catch (const std::runtime_error& error) {
+        rejected = std::string(error.what()).find("R-P4 implementation") !=
+                   std::string::npos;
+    }
+    CHECK(rejected);
+    CHECK(ctx->last_bidirectional_telemetry.light_vertices == 16);
+    CHECK(ctx->last_bidirectional_telemetry.camera_vertices > 0);
+    GpuBidirectionalPathVertex endpoint = {};
+    CHECK_CUDA(cudaMemcpy(
+        &endpoint, ctx->d_light_path_vertices, sizeof(endpoint),
+        cudaMemcpyDeviceToHost));
+    CHECK(endpoint.valid == 1);
+    CHECK(endpoint.transport_mode == GpuPathTransportMode::Importance);
+    CHECK(endpoint.measure == GpuPathVertexMeasure::Area);
+    CHECK(endpoint.forward_directional_pdf > 0.0f);
+    CHECK(endpoint.forward_measure_pdf > 0.0f);
+    CHECK(endpoint.throughput.values[0] > 0.0f);
+    CHECK(endpoint.stokes.I == 1.0f);
+    GpuBidirectionalPathVertex camera_vertex = {};
+    bool found_camera_vertex = false;
+    for (int path = 0; path < 16 && !found_camera_vertex; ++path) {
+        CHECK_CUDA(cudaMemcpy(
+            &camera_vertex,
+            ctx->d_camera_path_vertices +
+                path * config.bidirectional.max_camera_vertices,
+            sizeof(camera_vertex), cudaMemcpyDeviceToHost));
+        found_camera_vertex = camera_vertex.valid != 0;
+    }
+    CHECK(found_camera_vertex);
+    CHECK(camera_vertex.transport_mode == GpuPathTransportMode::Radiance);
+    CHECK(camera_vertex.forward_directional_pdf > 0.0f);
+    CHECK(camera_vertex.scene_epoch == ctx->bidirectional_scene_epoch);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
 static int test_restir_di_production_surface_scheduler_renders_and_reuses() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -3304,6 +3382,7 @@ int main() {
     RUN_TEST(test_restir_di_reconstructs_light_at_current_reference_point);
     RUN_TEST(test_restir_di_production_uses_ping_pong_reservoirs);
     RUN_TEST(test_restir_pt_owns_bounded_ping_pong_suffix_history);
+    RUN_TEST(test_bidirectional_runtime_owns_bounded_vertex_storage);
     RUN_TEST(test_restir_di_production_surface_scheduler_renders_and_reuses);
     RUN_TEST(test_restir_pt_replays_diffuse_surface_suffixes);
     RUN_TEST(test_restir_pt_replays_scalar_depolarizing_volume_suffixes);

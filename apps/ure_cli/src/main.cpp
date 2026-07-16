@@ -140,6 +140,14 @@ bool parse_integrator_mode(const std::string& mode, ure::IntegratorMode& out) {
         out = ure::IntegratorMode::RestirPT;
         return true;
     }
+    if (value == "bdpt") {
+        out = ure::IntegratorMode::BDPT;
+        return true;
+    }
+    if (value == "vcm") {
+        out = ure::IntegratorMode::VCM;
+        return true;
+    }
     if (value == "specular_manifold") {
         out = ure::IntegratorMode::SpecularManifold;
         return true;
@@ -228,6 +236,11 @@ bool make_integrator_config(const ure::config::IntegratorConfig& app_config, ure
         cfg.restir_pt.enabled = true;
     } else if (cfg.integrator.mode == ure::IntegratorMode::SpecularManifold) {
         cfg.specular_manifold.enabled = true;
+    } else if (cfg.integrator.mode == ure::IntegratorMode::BDPT) {
+        cfg.bidirectional.enabled = true;
+    } else if (cfg.integrator.mode == ure::IntegratorMode::VCM) {
+        cfg.bidirectional.enabled = true;
+        cfg.vcm.enabled = true;
     } else if (cfg.integrator.mode == ure::IntegratorMode::MLT) {
         cfg.mlt.enabled = true;
         cfg.integrator.sampler = ure::IntegratorSampler::PrimarySampleSpace;
@@ -290,6 +303,18 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.specular_manifold.max_specular_events = app_config.integrator.specular_manifold.max_specular_events;
     gpu_config.specular_manifold.solver_tolerance = static_cast<float>(app_config.integrator.specular_manifold.solver_tolerance);
     gpu_config.specular_manifold.max_newton_iterations = app_config.integrator.specular_manifold.max_newton_iterations;
+    gpu_config.bidirectional.enabled = app_config.integrator.bidirectional.enabled;
+    gpu_config.bidirectional.max_camera_vertices = app_config.integrator.bidirectional.max_camera_vertices;
+    gpu_config.bidirectional.max_light_vertices = app_config.integrator.bidirectional.max_light_vertices;
+    gpu_config.bidirectional.connections_per_pixel = app_config.integrator.bidirectional.connections_per_pixel;
+    gpu_config.bidirectional.memory_budget_mb = app_config.integrator.bidirectional.memory_budget_mb;
+    gpu_config.bidirectional.light_tracing = app_config.integrator.bidirectional.light_tracing;
+    gpu_config.vcm.enabled = app_config.integrator.vcm.enabled;
+    gpu_config.vcm.initial_radius = static_cast<float>(app_config.integrator.vcm.initial_radius);
+    gpu_config.vcm.alpha = static_cast<float>(app_config.integrator.vcm.alpha);
+    gpu_config.vcm.grid_capacity = app_config.integrator.vcm.grid_capacity;
+    gpu_config.vcm.merge_surfaces = app_config.integrator.vcm.merge_surfaces;
+    gpu_config.vcm.merge_volumes = app_config.integrator.vcm.merge_volumes;
     gpu_config.mlt.enabled = app_config.integrator.mlt.enabled;
     gpu_config.mlt.chain_count = app_config.integrator.mlt.chain_count;
     gpu_config.mlt.mutations_per_chain = app_config.integrator.mlt.mutations_per_chain;

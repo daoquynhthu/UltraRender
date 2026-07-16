@@ -564,7 +564,10 @@ __device__ inline bool split_dispersive_dielectric_lanes(
     int depth,
     unsigned int seed,
     float dispersion_clamp,
-    float ior_outside
+    float ior_outside,
+    std::uint32_t* next_path_index,
+    int path_capacity,
+    GpuBidirectionalTelemetry* bidirectional_telemetry
 ) {
     if (mat.type != MaterialType::Dielectric) return false;
     if (is_rough_dielectric_bsdf(mat)) return false;
@@ -622,6 +625,15 @@ __device__ inline bool split_dispersive_dielectric_lanes(
                 next_queue.medium_indices[out_idx] = current_medium_idx;
                 next_queue.seeds[out_idx] = seed + 1664525u * unsigned(c + 1);
                 next_queue.sample_indices[out_idx] = current_queue.sample_indices[idx];
+                const std::uint32_t path_index = next_path_index
+                    ? atomicAdd(next_path_index, 1u)
+                    : current_queue.path_indices[idx];
+                next_queue.path_indices[out_idx] =
+                    path_index < static_cast<std::uint32_t>(path_capacity)
+                        ? path_index : UINT32_MAX;
+                if (next_path_index && path_index >= static_cast<std::uint32_t>(path_capacity) && bidirectional_telemetry) {
+                    atomicAdd(&bidirectional_telemetry->buffer_overflow, 1u);
+                }
                 next_queue.pixel_indices[out_idx] = pixel_index;
                 next_queue.depths[out_idx] = depth + 1;
                 next_queue.flags[out_idx] = 1;
@@ -660,6 +672,15 @@ __device__ inline bool split_dispersive_dielectric_lanes(
                     current_medium_idx, mat_idx, r_in.direction, out_direction, ng);
                 next_queue.seeds[out_idx] = seed + 22695477u * unsigned(c + 1);
                 next_queue.sample_indices[out_idx] = current_queue.sample_indices[idx];
+                const std::uint32_t path_index = next_path_index
+                    ? atomicAdd(next_path_index, 1u)
+                    : current_queue.path_indices[idx];
+                next_queue.path_indices[out_idx] =
+                    path_index < static_cast<std::uint32_t>(path_capacity)
+                        ? path_index : UINT32_MAX;
+                if (next_path_index && path_index >= static_cast<std::uint32_t>(path_capacity) && bidirectional_telemetry) {
+                    atomicAdd(&bidirectional_telemetry->buffer_overflow, 1u);
+                }
                 next_queue.pixel_indices[out_idx] = pixel_index;
                 next_queue.depths[out_idx] = depth + 1;
                 next_queue.flags[out_idx] = 1;
@@ -710,7 +731,10 @@ __device__ inline bool split_dispersive_dielectric_lanes(
         depth,
         seed,
         dispersion_clamp,
-        ior_outside);
+        ior_outside,
+        nullptr,
+        0,
+        nullptr);
 }
 
 __global__ __launch_bounds__(256) void extend_shadow_kernel(
@@ -1049,6 +1073,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 next_queue.medium_indices[out_idx] = current_medium_idx;
                 next_queue.seeds[out_idx] = seed;
                 next_queue.sample_indices[out_idx] = current_queue.sample_indices[idx];
+                next_queue.path_indices[out_idx] = current_queue.path_indices[idx];
                 next_queue.pixel_indices[out_idx] = pixel_index;
                 next_queue.depths[out_idx] = depth + 1;
                 next_queue.flags[out_idx] = 0;
@@ -1503,7 +1528,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     depth,
                     seed,
                     dispersion_clamp,
-                    ior_outside)) {
+                    ior_outside,
+                    scene.bidirectional_next_path_index,
+                    scene.bidirectional_camera_path_capacity,
+                    scene.bidirectional_telemetry)) {
                 return;
             }
             bool scattered_ok = is_layered
@@ -1576,6 +1604,18 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     hit_queue.hit_types[idx], hit_queue.hit_indices[idx],
                     hit_queue.hit_primitive_indices
                         ? hit_queue.hit_primitive_indices[idx] : -1);
+                const StokesVector bidirectional_stokes =
+                    spectral_mode_is_sampled(spectral_mode)
+                        ? load_stokes(current_queue, idx, active_channel)
+                        : load_packet_average_stokes(current_queue, idx);
+                capture_bidirectional_surface_vertex(
+                    scene, current_queue, idx, depth, p, ng, n,
+                    -r_in.direction, scattered.direction, throughput,
+                    bidirectional_stokes, pdf_val, reverse_pdf, mat_idx,
+                    hit_queue.hit_types[idx], hit_queue.hit_indices[idx],
+                    hit_queue.hit_primitive_indices
+                        ? hit_queue.hit_primitive_indices[idx] : -1,
+                    is_delta);
 
         int out_idx = reserve_ray_slot(next_queue);
         if (out_idx >= 0) {
@@ -1620,6 +1660,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
             next_queue.seeds[out_idx] = seed;
             next_queue.sample_indices[out_idx] = current_queue.sample_indices[idx];
+            next_queue.path_indices[out_idx] = current_queue.path_indices[idx];
             next_queue.pixel_indices[out_idx] = pixel_index;
             next_queue.depths[out_idx] = depth + 1;
             next_queue.flags[out_idx] = next_flag;

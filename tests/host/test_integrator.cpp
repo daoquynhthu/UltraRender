@@ -93,6 +93,59 @@ static int test_gpu_renderer_rejects_unimplemented_specular_manifold() {
     return 0;
 }
 
+static int test_bidirectional_measure_conversion_contract() {
+    CHECK_NEAR(ure::integrator::solid_angle_to_area_pdf(0.25, 4.0, 0.5),
+               0.03125, 1e-15);
+    CHECK_NEAR(ure::integrator::solid_angle_to_volume_pdf(0.25, 4.0),
+               0.0625, 1e-15);
+    CHECK_NEAR(ure::integrator::solid_angle_to_area_pdf(0.25, 0.0, 0.5),
+               0.0, 0.0);
+    CHECK_NEAR(ure::integrator::solid_angle_to_area_pdf(0.25, 4.0, 0.0),
+               0.0, 0.0);
+    return 0;
+}
+
+static int test_bidirectional_technique_enumeration_and_mis_partition() {
+    ure::integrator::BidirectionalTechnique techniques[16] = {};
+    const int count = ure::integrator::enumerate_bidirectional_techniques(
+        2, 3, techniques, 16);
+    CHECK(count == 8);
+    CHECK(techniques[0].light_vertices == 0);
+    CHECK(techniques[0].camera_vertices == 2);
+    CHECK(techniques[count - 1].light_vertices == 2);
+    CHECK(techniques[count - 1].camera_vertices == 3);
+
+    const double probabilities[] = {0.25, 0.5, 1.0, 0.0};
+    double sum = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        sum += ure::integrator::bidirectional_power_heuristic(
+            probabilities, 4, i);
+    }
+    CHECK_NEAR(sum, 1.0, 1e-15);
+    CHECK_NEAR(ure::integrator::bidirectional_power_heuristic(
+                   probabilities, 4, 3), 0.0, 0.0);
+    return 0;
+}
+
+static int test_vcm_progressive_radius_and_kernel_normalization() {
+    const double surface0 =
+        ure::integrator::progressive_surface_merge_radius(0.5, 0.75, 0);
+    const double surface8 =
+        ure::integrator::progressive_surface_merge_radius(0.5, 0.75, 8);
+    const double volume8 =
+        ure::integrator::progressive_volume_merge_radius(0.5, 0.75, 8);
+    CHECK(surface0 < 0.5);
+    CHECK(surface8 < surface0);
+    CHECK(volume8 > surface8);
+    CHECK_NEAR(ure::integrator::surface_merge_kernel_normalization(0.5) *
+                   3.14159265358979323846 * 0.25,
+               1.0, 1e-15);
+    CHECK_NEAR(ure::integrator::volume_merge_kernel_normalization(0.5) *
+                   (4.0 / 3.0) * 3.14159265358979323846 * 0.125,
+               1.0, 1e-15);
+    return 0;
+}
+
 static int test_mlt_primary_sample_mutation_replays_deterministically() {
     ure::integrator::PrimarySampleMutationConfig cfg;
     cfg.seed = 99;
@@ -356,6 +409,9 @@ int main() {
     failed += run("test_specular_interface_oblique_jacobian_reciprocity", test_specular_interface_oblique_jacobian_reciprocity);
     failed += run("test_specular_interface_total_internal_reflection_gate", test_specular_interface_total_internal_reflection_gate);
     failed += run("test_gpu_renderer_rejects_unimplemented_specular_manifold", test_gpu_renderer_rejects_unimplemented_specular_manifold);
+    failed += run("test_bidirectional_measure_conversion_contract", test_bidirectional_measure_conversion_contract);
+    failed += run("test_bidirectional_technique_enumeration_and_mis_partition", test_bidirectional_technique_enumeration_and_mis_partition);
+    failed += run("test_vcm_progressive_radius_and_kernel_normalization", test_vcm_progressive_radius_and_kernel_normalization);
     failed += run("test_mlt_primary_sample_mutation_replays_deterministically", test_mlt_primary_sample_mutation_replays_deterministically);
     failed += run("test_mlt_small_step_is_symmetric_and_wrapped", test_mlt_small_step_is_symmetric_and_wrapped);
     failed += run("test_mlt_large_step_is_uniform_proposal", test_mlt_large_step_is_uniform_proposal);

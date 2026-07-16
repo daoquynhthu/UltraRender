@@ -6,6 +6,7 @@
 #include "ure/gpu_material_helpers.cuh"
 #include "ure/path_tracer_sampling.cuh"
 #include "ure/integrator/restir_pt.cuh"
+#include "ure/integrator/bidirectional.cuh"
 
 namespace ure::gpu {
 
@@ -16,6 +17,7 @@ namespace ure::gpu {
 #include "path_tracer_bsdf.cuh"
 #include "path_tracer_volume.cuh"
 #include "restir_pt_capture.cuh"
+#include "bidirectional_capture.cuh"
 #include "path_tracer_wavefront.cuh"
 
 #include "path_tracer_material.cu"

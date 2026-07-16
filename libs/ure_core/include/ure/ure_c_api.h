@@ -67,7 +67,9 @@ typedef enum ure_integrator_mode_t {
     URE_INTEGRATOR_RESTIR_DI = 2,
     URE_INTEGRATOR_SPECULAR_MANIFOLD = 3,
     URE_INTEGRATOR_MLT = 4,
-    URE_INTEGRATOR_RESTIR_PT = 5
+    URE_INTEGRATOR_RESTIR_PT = 5,
+    URE_INTEGRATOR_BDPT = 6,
+    URE_INTEGRATOR_VCM = 7
 } ure_integrator_mode_t;
 
 typedef enum ure_integrator_sampler_t {
@@ -127,6 +129,18 @@ typedef struct ure_integrator_config_t {
     float restir_pt_normal_threshold;
     float restir_di_position_threshold;
     float restir_di_normal_threshold;
+    int bidirectional_enabled;
+    int bidirectional_max_camera_vertices;
+    int bidirectional_max_light_vertices;
+    int bidirectional_connections_per_pixel;
+    int bidirectional_memory_budget_mb;
+    int bidirectional_light_tracing;
+    int vcm_enabled;
+    float vcm_initial_radius;
+    float vcm_alpha;
+    int vcm_grid_capacity;
+    int vcm_merge_surfaces;
+    int vcm_merge_volumes;
 } ure_integrator_config_t;
 
 typedef enum ure_aov_type_t {

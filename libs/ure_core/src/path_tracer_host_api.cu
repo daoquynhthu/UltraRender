@@ -97,6 +97,7 @@ namespace ure::gpu {
 
 #include "restir_di_runtime.cuh"
 #include "restir_pt_runtime.cuh"
+#include "bidirectional_runtime.cuh"
 
 // ===== Queue alloc/free helpers =====
 
@@ -115,6 +116,7 @@ void alloc_ray_queue(RayQueue& q, int capacity, int num_spec_channels) {
     UR_CUDA_CHECK(cudaMalloc(&q.medium_indices, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.seeds, capacity * sizeof(unsigned int)));
     UR_CUDA_CHECK(cudaMalloc(&q.sample_indices, capacity * sizeof(std::uint32_t)));
+    UR_CUDA_CHECK(cudaMalloc(&q.path_indices, capacity * sizeof(std::uint32_t)));
     UR_CUDA_CHECK(cudaMalloc(&q.pixel_indices, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.depths, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.flags, capacity * sizeof(int)));
@@ -139,6 +141,7 @@ void free_ray_queue(RayQueue& q) {
     cudaFree(q.medium_indices);
     cudaFree(q.seeds);
     cudaFree(q.sample_indices);
+    cudaFree(q.path_indices);
     cudaFree(q.pixel_indices);
     cudaFree(q.depths);
     cudaFree(q.flags);
@@ -1298,6 +1301,31 @@ static void validate_specular_manifold_config(const ure::RenderConfig& config) {
     throw std::runtime_error("Specular manifold GPU solver is not implemented yet; specular dielectric NEE remains blocked");
 }
 
+static void validate_bidirectional_config(const ure::RenderConfig& config) {
+    const bool requested = config.bidirectional.enabled || config.vcm.enabled ||
+        config.integrator.mode == ure::IntegratorMode::BDPT ||
+        config.integrator.mode == ure::IntegratorMode::VCM;
+    if (!requested) return;
+    if (config.bidirectional.max_camera_vertices < 2 ||
+        config.bidirectional.max_camera_vertices > 32 ||
+        config.bidirectional.max_light_vertices < 1 ||
+        config.bidirectional.max_light_vertices > 32 ||
+        config.bidirectional.connections_per_pixel < 1 ||
+        config.bidirectional.connections_per_pixel > 1024 ||
+        config.bidirectional.memory_budget_mb < 0) {
+        throw std::runtime_error("Bidirectional path bounds or memory budget are invalid");
+    }
+    if (config.integrator.mode == ure::IntegratorMode::VCM || config.vcm.enabled) {
+        if (!std::isfinite(config.vcm.initial_radius) ||
+            !std::isfinite(config.vcm.alpha) ||
+            config.vcm.initial_radius <= 0.0f || config.vcm.alpha <= 0.0f ||
+            config.vcm.alpha > 1.0f || config.vcm.grid_capacity < 0 ||
+            (!config.vcm.merge_surfaces && !config.vcm.merge_volumes)) {
+            throw std::runtime_error("VCM radius, alpha, grid, or merge policy is invalid");
+        }
+    }
+}
+
 static void validate_mlt_config(const ure::RenderConfig& config) {
     if (!config.mlt.enabled) return;
     if (config.mlt.chain_count <= 0) {
@@ -1571,6 +1599,105 @@ static void alloc_restir_pt_reservoirs(GpuContext* ctx) {
     UR_CUDA_CHECK(cudaMalloc(
         &ctx->d_restir_pt_telemetry, sizeof(GpuRestirPTTelemetry)));
     clear_restir_pt_reservoirs(ctx);
+}
+
+static void release_bidirectional_runtime(GpuContext* ctx) {
+    cudaFree(ctx->d_camera_path_vertices);
+    cudaFree(ctx->d_light_path_vertices);
+    cudaFree(ctx->d_camera_path_lengths);
+    cudaFree(ctx->d_light_path_lengths);
+    cudaFree(ctx->d_bidirectional_next_path_index);
+    cudaFree(ctx->d_bidirectional_telemetry);
+    ctx->d_camera_path_vertices = nullptr;
+    ctx->d_light_path_vertices = nullptr;
+    ctx->d_camera_path_lengths = nullptr;
+    ctx->d_light_path_lengths = nullptr;
+    ctx->d_bidirectional_next_path_index = nullptr;
+    ctx->d_bidirectional_telemetry = nullptr;
+    ctx->bidirectional_camera_path_capacity = 0;
+    ctx->bidirectional_light_path_capacity = 0;
+    ctx->bidirectional_required_bytes = 0;
+    ctx->bidirectional_budget_bytes = 0;
+    ctx->last_bidirectional_telemetry = {};
+}
+
+static void alloc_bidirectional_runtime(GpuContext* ctx) {
+    if (!ctx->render_config.bidirectional.enabled &&
+        !ctx->render_config.vcm.enabled) return;
+    const size_t pixel_count = static_cast<size_t>(
+        checked_primary_ray_count(ctx->width, ctx->height));
+    const size_t camera_path_count = static_cast<size_t>(ctx->queueA.capacity);
+    const size_t camera_vertices = static_cast<size_t>(
+        ctx->render_config.bidirectional.max_camera_vertices);
+    const size_t light_vertices = static_cast<size_t>(
+        ctx->render_config.bidirectional.max_light_vertices);
+    const size_t max_size = std::numeric_limits<size_t>::max();
+    if (camera_path_count > max_size / camera_vertices ||
+        pixel_count > max_size / light_vertices) {
+        throw std::runtime_error("Bidirectional path count overflow");
+    }
+    const size_t camera_count = camera_path_count * camera_vertices;
+    const size_t light_count = pixel_count * light_vertices;
+    if (camera_count > max_size / sizeof(GpuBidirectionalPathVertex) ||
+        light_count > max_size / sizeof(GpuBidirectionalPathVertex)) {
+        throw std::runtime_error("Bidirectional vertex storage overflow");
+    }
+    const size_t camera_bytes = camera_count * sizeof(GpuBidirectionalPathVertex);
+    const size_t light_bytes = light_count * sizeof(GpuBidirectionalPathVertex);
+    const size_t camera_lengths_bytes = camera_path_count * sizeof(int);
+    const size_t light_lengths_bytes = pixel_count * sizeof(int);
+    size_t required_bytes = 0;
+    const auto add_bytes = [&](size_t bytes) {
+        if (bytes > max_size - required_bytes) {
+            throw std::runtime_error("Bidirectional runtime storage overflow");
+        }
+        required_bytes += bytes;
+    };
+    add_bytes(camera_bytes);
+    add_bytes(light_bytes);
+    add_bytes(camera_lengths_bytes);
+    add_bytes(light_lengths_bytes);
+    add_bytes(sizeof(std::uint32_t));
+    add_bytes(sizeof(GpuBidirectionalTelemetry));
+    ctx->bidirectional_required_bytes = required_bytes;
+    size_t free_bytes = 0;
+    size_t total_bytes = 0;
+    UR_CUDA_CHECK(cudaMemGetInfo(&free_bytes, &total_bytes));
+    constexpr size_t kMiB = 1024ull * 1024ull;
+    if (ctx->render_config.bidirectional.memory_budget_mb > 0) {
+        ctx->bidirectional_budget_bytes =
+            static_cast<size_t>(ctx->render_config.bidirectional.memory_budget_mb) * kMiB;
+    } else {
+        const size_t reserve = std::max<size_t>(256ull * kMiB, total_bytes / 10);
+        const size_t allocatable = free_bytes > reserve ? free_bytes - reserve : 0;
+        ctx->bidirectional_budget_bytes =
+            std::min({allocatable, total_bytes / 10, 1024ull * kMiB});
+    }
+    if (ctx->bidirectional_required_bytes > ctx->bidirectional_budget_bytes) {
+        throw std::runtime_error(
+            "Bidirectional runtime requires " +
+            std::to_string(ctx->bidirectional_required_bytes) +
+            " bytes but device budget permits " +
+            std::to_string(ctx->bidirectional_budget_bytes));
+    }
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_camera_path_vertices, camera_bytes));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_light_path_vertices, light_bytes));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_camera_path_lengths, camera_lengths_bytes));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_light_path_lengths, light_lengths_bytes));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_bidirectional_next_path_index, sizeof(std::uint32_t)));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_bidirectional_telemetry, sizeof(GpuBidirectionalTelemetry)));
+    UR_CUDA_CHECK(cudaMemset(ctx->d_camera_path_vertices, 0, camera_bytes));
+    UR_CUDA_CHECK(cudaMemset(ctx->d_light_path_vertices, 0, light_bytes));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_camera_path_lengths, 0, camera_lengths_bytes));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_light_path_lengths, 0, light_lengths_bytes));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_bidirectional_telemetry, 0, sizeof(GpuBidirectionalTelemetry)));
+    ctx->bidirectional_camera_path_capacity = ctx->queueA.capacity;
+    ctx->bidirectional_light_path_capacity = static_cast<int>(pixel_count);
 }
 
 struct HostLightMeshData {
@@ -1946,6 +2073,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     validate_restir_di_config(config);
     validate_restir_pt_config(config);
     validate_specular_manifold_config(config);
+    validate_bidirectional_config(config);
     validate_mlt_config(config);
     for (const auto& resource : mie_phase_resources) {
         auto canonical = resource;
@@ -1959,6 +2087,12 @@ GpuContext* init_gpu_renderer(int width, int height,
     ctx->height = height;
     ctx->current_spp = 0;
     ctx->render_config = config;
+    if (ctx->render_config.integrator.mode == ure::IntegratorMode::BDPT) {
+        ctx->render_config.bidirectional.enabled = true;
+    } else if (ctx->render_config.integrator.mode == ure::IntegratorMode::VCM) {
+        ctx->render_config.bidirectional.enabled = true;
+        ctx->render_config.vcm.enabled = true;
+    }
     ctx->has_previous_camera = false;
 
     ctx->medium_density = 0.0f;
@@ -2056,6 +2190,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     ctx->num_spectral_channels = num_channels;
     alloc_restir_di_reservoirs(ctx);
     alloc_restir_pt_reservoirs(ctx);
+    alloc_bidirectional_runtime(ctx);
 
     auto alloc_resources = [mat_count](SpectralResource*& d_ptr, std::vector<void*>& free_list) {
         if (mat_count > 0) {
@@ -2476,6 +2611,7 @@ void free_gpu_renderer(GpuContext* ctx) {
     release_light_distribution(ctx);
     release_restir_di_reservoirs(ctx);
     release_restir_pt_reservoirs(ctx);
+    release_bidirectional_runtime(ctx);
     release_wavelength_proposal(ctx);
 
     free_ray_queue(ctx->queueA);
@@ -2631,6 +2767,15 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.restir_pt_max_reuse_depth =
         ctx->render_config.restir_pt.enabled
             ? ctx->render_config.restir_pt.max_reuse_depth : 0;
+    scene.bidirectional_camera_vertices = ctx->d_camera_path_vertices;
+    scene.bidirectional_camera_path_lengths = ctx->d_camera_path_lengths;
+    scene.bidirectional_next_path_index = ctx->d_bidirectional_next_path_index;
+    scene.bidirectional_camera_path_capacity =
+        ctx->bidirectional_camera_path_capacity;
+    scene.bidirectional_max_camera_vertices =
+        ctx->render_config.bidirectional.max_camera_vertices;
+    scene.bidirectional_scene_epoch = ctx->bidirectional_scene_epoch;
+    scene.bidirectional_telemetry = ctx->d_bidirectional_telemetry;
     scene.light_count = ctx->light_count;
 
     scene.medium_density = ctx->medium_density;
@@ -2651,6 +2796,32 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     const int num_threads_wf = cfg.rays_per_block;
     if (num_threads_wf <= 0) {
         throw std::runtime_error("RenderConfig rays_per_block must be positive");
+    }
+    if (ctx->render_config.bidirectional.enabled || ctx->render_config.vcm.enabled) {
+        const int blocks = launch_blocks_for_active_count(
+            primary_ray_count, num_threads_wf);
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_light_path_lengths, 0,
+            static_cast<size_t>(primary_ray_count) * sizeof(int)));
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_camera_path_lengths, 0,
+            static_cast<size_t>(ctx->bidirectional_camera_path_capacity) *
+                sizeof(int)));
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_bidirectional_telemetry, 0,
+            sizeof(GpuBidirectionalTelemetry)));
+        const std::uint32_t next_path_index =
+            static_cast<std::uint32_t>(primary_ray_count);
+        UR_CUDA_CHECK(cudaMemcpy(
+            ctx->d_bidirectional_next_path_index, &next_path_index,
+            sizeof(next_path_index), cudaMemcpyHostToDevice));
+        generate_light_subpath_endpoints_kernel<<<blocks, num_threads_wf>>>(
+            scene, ctx->d_light_path_vertices, ctx->d_light_path_lengths,
+            primary_ray_count,
+            ctx->render_config.bidirectional.max_light_vertices,
+            ctx->current_spp, ctx->bidirectional_scene_epoch,
+            ctx->d_bidirectional_telemetry);
+        UR_CUDA_CHECK(cudaGetLastError());
     }
 
     ctx->last_integrator_initial_ray_count = primary_ray_count;
@@ -2837,6 +3008,14 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             throw std::runtime_error(
                 "ReSTIR PT could not reconstruct the requested volume resource");
         }
+    }
+    if (ctx->d_bidirectional_telemetry) {
+        UR_CUDA_CHECK(cudaMemcpy(
+            &ctx->last_bidirectional_telemetry,
+            ctx->d_bidirectional_telemetry,
+            sizeof(GpuBidirectionalTelemetry), cudaMemcpyDeviceToHost));
+        throw std::runtime_error(
+            "BDPT/VCM camera-light connection is under R-P4 implementation");
     }
     return ctx->current_spp;
 }
