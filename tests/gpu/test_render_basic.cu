@@ -2518,6 +2518,8 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
     CHECK(rejected);
     CHECK(ctx->last_bidirectional_telemetry.light_vertices == 16);
     CHECK(ctx->last_bidirectional_telemetry.camera_vertices > 0);
+    CHECK(ctx->last_bidirectional_telemetry.attempted_connections > 0);
+    CHECK(ctx->last_bidirectional_telemetry.accepted_connections > 0);
     GpuBidirectionalPathVertex endpoint = {};
     CHECK_CUDA(cudaMemcpy(
         &endpoint, ctx->d_light_path_vertices, sizeof(endpoint),
@@ -2528,7 +2530,7 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
     CHECK(endpoint.forward_directional_pdf > 0.0f);
     CHECK(endpoint.forward_measure_pdf > 0.0f);
     CHECK(endpoint.throughput.values[0] > 0.0f);
-    CHECK(endpoint.stokes.I == 1.0f);
+    CHECK(endpoint.stokes_i.values[0] == 1.0f);
     GpuBidirectionalPathVertex camera_vertex = {};
     bool found_camera_vertex = false;
     for (int path = 0; path < 16 && !found_camera_vertex; ++path) {
@@ -2543,6 +2545,15 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
     CHECK(camera_vertex.transport_mode == GpuPathTransportMode::Radiance);
     CHECK(camera_vertex.forward_directional_pdf > 0.0f);
     CHECK(camera_vertex.scene_epoch == ctx->bidirectional_scene_epoch);
+    std::vector<GpuVec3> connections(16);
+    CHECK_CUDA(cudaMemcpy(
+        connections.data(), ctx->d_bidirectional_connection_accum,
+        connections.size() * sizeof(GpuVec3), cudaMemcpyDeviceToHost));
+    bool nonzero_connection = false;
+    for (const auto& value : connections) {
+        nonzero_connection = nonzero_connection || value.length_sq() > 0.0f;
+    }
+    CHECK(nonzero_connection);
     free_gpu_renderer(ctx);
     return 0;
 }

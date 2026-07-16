@@ -138,6 +138,7 @@ struct GpuContext {
     int* d_light_path_lengths = nullptr;
     std::uint32_t* d_bidirectional_next_path_index = nullptr;
     GpuBidirectionalTelemetry* d_bidirectional_telemetry = nullptr;
+    GpuVec3* d_bidirectional_connection_accum = nullptr;
     int bidirectional_camera_path_capacity = 0;
     int bidirectional_light_path_capacity = 0;
     size_t bidirectional_required_bytes = 0;

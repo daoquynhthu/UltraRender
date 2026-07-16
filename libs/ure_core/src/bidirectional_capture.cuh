@@ -10,8 +10,8 @@ static __device__ void capture_bidirectional_surface_vertex(
     const GpuVec3& shading_normal,
     const GpuVec3& incoming,
     const GpuVec3& outgoing,
+    const GpuVec2& uv,
     const SpectralPacket& throughput,
-    const StokesVector& stokes,
     float forward_pdf,
     float reverse_pdf,
     int material_index,
@@ -47,8 +47,19 @@ static __device__ void capture_bidirectional_surface_vertex(
     vertex.shading_normal = shading_normal;
     vertex.incoming = incoming;
     vertex.outgoing = outgoing;
+    vertex.uv = uv;
     vertex.throughput = throughput;
-    vertex.stokes = stokes;
+    for (int channel = 0; channel < queue.num_spectral_channels; ++channel) {
+        const StokesVector stokes = load_stokes(queue, queue_index, channel);
+        vertex.stokes_i.values[channel] = stokes.I;
+        vertex.stokes_q.values[channel] = stokes.Q;
+        vertex.stokes_u.values[channel] = stokes.U;
+        vertex.stokes_v.values[channel] = stokes.V;
+        vertex.stokes_i.wavelengths[channel] = throughput.wavelengths[channel];
+        vertex.stokes_q.wavelengths[channel] = throughput.wavelengths[channel];
+        vertex.stokes_u.wavelengths[channel] = throughput.wavelengths[channel];
+        vertex.stokes_v.wavelengths[channel] = throughput.wavelengths[channel];
+    }
     vertex.wavelength_pdf = queue.wavelength_pdfs[queue_index];
     vertex.forward_directional_pdf = forward_pdf;
     vertex.reverse_directional_pdf = reverse_pdf;

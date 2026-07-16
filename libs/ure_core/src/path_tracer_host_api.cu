@@ -1608,12 +1608,14 @@ static void release_bidirectional_runtime(GpuContext* ctx) {
     cudaFree(ctx->d_light_path_lengths);
     cudaFree(ctx->d_bidirectional_next_path_index);
     cudaFree(ctx->d_bidirectional_telemetry);
+    cudaFree(ctx->d_bidirectional_connection_accum);
     ctx->d_camera_path_vertices = nullptr;
     ctx->d_light_path_vertices = nullptr;
     ctx->d_camera_path_lengths = nullptr;
     ctx->d_light_path_lengths = nullptr;
     ctx->d_bidirectional_next_path_index = nullptr;
     ctx->d_bidirectional_telemetry = nullptr;
+    ctx->d_bidirectional_connection_accum = nullptr;
     ctx->bidirectional_camera_path_capacity = 0;
     ctx->bidirectional_light_path_capacity = 0;
     ctx->bidirectional_required_bytes = 0;
@@ -1646,6 +1648,7 @@ static void alloc_bidirectional_runtime(GpuContext* ctx) {
     const size_t light_bytes = light_count * sizeof(GpuBidirectionalPathVertex);
     const size_t camera_lengths_bytes = camera_path_count * sizeof(int);
     const size_t light_lengths_bytes = pixel_count * sizeof(int);
+    const size_t connection_bytes = pixel_count * sizeof(GpuVec3);
     size_t required_bytes = 0;
     const auto add_bytes = [&](size_t bytes) {
         if (bytes > max_size - required_bytes) {
@@ -1658,6 +1661,7 @@ static void alloc_bidirectional_runtime(GpuContext* ctx) {
     add_bytes(camera_lengths_bytes);
     add_bytes(light_lengths_bytes);
     add_bytes(sizeof(std::uint32_t));
+    add_bytes(connection_bytes);
     add_bytes(sizeof(GpuBidirectionalTelemetry));
     ctx->bidirectional_required_bytes = required_bytes;
     size_t free_bytes = 0;
@@ -1688,6 +1692,8 @@ static void alloc_bidirectional_runtime(GpuContext* ctx) {
         &ctx->d_bidirectional_next_path_index, sizeof(std::uint32_t)));
     UR_CUDA_CHECK(cudaMalloc(
         &ctx->d_bidirectional_telemetry, sizeof(GpuBidirectionalTelemetry)));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_bidirectional_connection_accum, connection_bytes));
     UR_CUDA_CHECK(cudaMemset(ctx->d_camera_path_vertices, 0, camera_bytes));
     UR_CUDA_CHECK(cudaMemset(ctx->d_light_path_vertices, 0, light_bytes));
     UR_CUDA_CHECK(cudaMemset(
@@ -1696,6 +1702,8 @@ static void alloc_bidirectional_runtime(GpuContext* ctx) {
         ctx->d_light_path_lengths, 0, light_lengths_bytes));
     UR_CUDA_CHECK(cudaMemset(
         ctx->d_bidirectional_telemetry, 0, sizeof(GpuBidirectionalTelemetry)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_bidirectional_connection_accum, 0, connection_bytes));
     ctx->bidirectional_camera_path_capacity = ctx->queueA.capacity;
     ctx->bidirectional_light_path_capacity = static_cast<int>(pixel_count);
 }
@@ -2990,6 +2998,21 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     }
 
     ctx->current_spp += samples_per_pass;
+    if (ctx->d_bidirectional_telemetry) {
+        const int blocks = launch_blocks_for_active_count(
+            primary_ray_count, num_threads_wf);
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_bidirectional_connection_accum, 0,
+            static_cast<size_t>(primary_ray_count) * sizeof(GpuVec3)));
+        connect_bidirectional_subpaths_kernel<<<blocks, num_threads_wf>>>(
+            scene, ctx->d_camera_path_vertices, ctx->d_camera_path_lengths,
+            ctx->render_config.bidirectional.max_camera_vertices,
+            ctx->d_light_path_vertices, ctx->d_light_path_lengths,
+            ctx->render_config.bidirectional.max_light_vertices,
+            ctx->d_bidirectional_connection_accum, primary_ray_count,
+            ctx->bidirectional_scene_epoch, ctx->d_bidirectional_telemetry);
+        UR_CUDA_CHECK(cudaGetLastError());
+    }
     if (ctx->d_restir_di_telemetry) {
         UR_CUDA_CHECK(cudaMemcpy(
             &ctx->last_restir_di_telemetry, ctx->d_restir_di_telemetry,

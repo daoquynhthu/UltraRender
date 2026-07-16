@@ -1604,14 +1604,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     hit_queue.hit_types[idx], hit_queue.hit_indices[idx],
                     hit_queue.hit_primitive_indices
                         ? hit_queue.hit_primitive_indices[idx] : -1);
-                const StokesVector bidirectional_stokes =
-                    spectral_mode_is_sampled(spectral_mode)
-                        ? load_stokes(current_queue, idx, active_channel)
-                        : load_packet_average_stokes(current_queue, idx);
                 capture_bidirectional_surface_vertex(
                     scene, current_queue, idx, depth, p, ng, n,
-                    -r_in.direction, scattered.direction, throughput,
-                    bidirectional_stokes, pdf_val, reverse_pdf, mat_idx,
+                    -r_in.direction, scattered.direction, uv, throughput,
+                    pdf_val, reverse_pdf, mat_idx,
                     hit_queue.hit_types[idx], hit_queue.hit_indices[idx],
                     hit_queue.hit_primitive_indices
                         ? hit_queue.hit_primitive_indices[idx] : -1,

@@ -28,8 +28,12 @@ struct GpuBidirectionalPathVertex {
     GpuVec3 shading_normal = {};
     GpuVec3 incoming = {};
     GpuVec3 outgoing = {};
+    GpuVec2 uv = {};
     SpectralPacket throughput = {};
-    StokesVector stokes = {};
+    SpectralPacket stokes_i = {};
+    SpectralPacket stokes_q = {};
+    SpectralPacket stokes_u = {};
+    SpectralPacket stokes_v = {};
     float wavelength_pdf = 0.0f;
     float forward_directional_pdf = 0.0f;
     float reverse_directional_pdf = 0.0f;

@@ -3,12 +3,21 @@
 #include <cuda_runtime.h>
 
 #include "ure/gpu_material_helpers.cuh"
+#include "ure/gpu_spectrum_utils.cuh"
 #include "ure/gpu_structs.hpp"
 #include "ure/integrator/bidirectional.cuh"
 #include "ure/path_tracer_sampling.cuh"
 
 namespace ure::gpu {
 
+#include "path_tracer_decl.cuh"
+#include "path_tracer_intersect.cuh"
+#include "path_tracer_polarization.cuh"
+#include "path_tracer_boundary.cuh"
+#include "path_tracer_bsdf.cuh"
+#define URE_MATERIAL_TARGET_ONLY 1
+#include "path_tracer_material_runtime.cuh"
+#undef URE_MATERIAL_TARGET_ONLY
 #include "path_tracer_light_sampling.cuh"
 
 namespace {
@@ -127,12 +136,140 @@ __global__ void generate_light_subpath_endpoints_kernel(
         scene, vertex.material_index, vertex.throughput.wavelengths);
     const float joint_pdf = position_pdf * vertex.forward_directional_pdf;
     if (joint_pdf <= 0.0f || cosine <= 0.0f) return;
-    vertex.throughput = emission * (cosine / joint_pdf);
-    vertex.stokes = StokesVector(1.0f, 0.0f, 0.0f, 0.0f);
+    vertex.throughput = emission * (1.0f / position_pdf);
+    for (int channel = 0; channel < scene.num_spectral_channels; ++channel) {
+        vertex.stokes_i.values[channel] = 1.0f;
+        vertex.stokes_i.wavelengths[channel] = vertex.throughput.wavelengths[channel];
+        vertex.stokes_q.wavelengths[channel] = vertex.throughput.wavelengths[channel];
+        vertex.stokes_u.wavelengths[channel] = vertex.throughput.wavelengths[channel];
+        vertex.stokes_v.wavelengths[channel] = vertex.throughput.wavelengths[channel];
+    }
     vertex.valid = 1;
     vertices[path_index * max_light_vertices] = vertex;
     path_lengths[path_index] = 1;
     if (telemetry) atomicAdd(&telemetry->light_vertices, 1u);
+}
+
+__global__ void connect_bidirectional_subpaths_kernel(
+    GpuScene scene,
+    const GpuBidirectionalPathVertex* camera_vertices,
+    const int* camera_path_lengths,
+    int max_camera_vertices,
+    const GpuBidirectionalPathVertex* light_vertices,
+    const int* light_path_lengths,
+    int max_light_vertices,
+    GpuVec3* connection_accumulation,
+    int path_count,
+    std::uint32_t scene_epoch,
+    GpuBidirectionalTelemetry* telemetry) {
+    const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (path_index >= path_count || !camera_vertices ||
+        !camera_path_lengths || !light_vertices || !light_path_lengths ||
+        !connection_accumulation) return;
+    const int camera_length = camera_path_lengths[path_index];
+    const int light_length = light_path_lengths[path_index];
+    if (camera_length <= 0 || camera_length > max_camera_vertices ||
+        light_length <= 0 || light_length > max_light_vertices) return;
+    const GpuBidirectionalPathVertex camera =
+        camera_vertices[path_index * max_camera_vertices + camera_length - 1];
+    const GpuBidirectionalPathVertex light =
+        light_vertices[path_index * max_light_vertices];
+    if (!camera.valid || !light.valid || camera.scene_epoch != scene_epoch ||
+        light.scene_epoch != scene_epoch) {
+        if (telemetry) atomicAdd(&telemetry->rejected_stale, 1u);
+        return;
+    }
+    if (camera.delta || camera.material_index < 0 ||
+        camera.material_index >= scene.material_count ||
+        scene.materials[camera.material_index].type != MaterialType::Lambertian) {
+        if (telemetry) atomicAdd(&telemetry->rejected_delta, 1u);
+        return;
+    }
+    if (telemetry) atomicAdd(&telemetry->attempted_connections, 1u);
+    const GpuVec3 edge = light.position - camera.position;
+    const float distance_squared = edge.length_sq();
+    if (!(distance_squared > 1e-10f)) return;
+    const float distance = sqrtf(distance_squared);
+    const GpuVec3 direction = edge * (1.0f / distance);
+    const float camera_cosine = fmaxf(0.0f, camera.shading_normal.dot(direction));
+    const float raw_light_cosine = light.geometric_normal.dot(-direction);
+    const float light_cosine = light.geometry_type == 0
+        ? fmaxf(0.0f, raw_light_cosine) : fabsf(raw_light_cosine);
+    if (camera_cosine <= 0.0f || light_cosine <= 0.0f) return;
+
+    GpuRay visibility_ray = {};
+    visibility_ray.origin = camera.position + camera.geometric_normal * 1e-4f;
+    visibility_ray.direction = direction;
+    visibility_ray.t_min = 1e-4f;
+    visibility_ray.t_max = distance - 2e-4f;
+    float hit_t = 0.0f;
+    GpuVec3 hit_p, hit_n, hit_ng;
+    GpuVec2 hit_uv;
+    int hit_material = -1;
+    int hit_type = -1;
+    int hit_index = -1;
+    int hit_primitive = -1;
+    if (world_hit(scene, visibility_ray, visibility_ray.t_min,
+                  visibility_ray.t_max, hit_t, hit_p, hit_n, hit_ng,
+                  hit_uv, hit_material, hit_type, hit_index,
+                  hit_primitive)) {
+        if (telemetry) atomicAdd(&telemetry->rejected_visibility, 1u);
+        return;
+    }
+
+    int light_list_index = -1;
+    for (int index = 0; index < scene.light_count; ++index) {
+        const GpuLightRecord record = get_light_record(scene, index);
+        const bool match =
+            (light.geometry_type == 0 && record.kind == GpuLightKind::Sphere &&
+             record.primitive_index == light.primitive_index) ||
+            (light.geometry_type == 1 && record.kind == GpuLightKind::MeshTriangle &&
+             record.primitive_index == light.geometry_index &&
+             record.secondary_index == light.primitive_index) ||
+            (light.geometry_type == 2 && record.kind == GpuLightKind::InstanceTriangle &&
+             record.primitive_index == light.geometry_index &&
+             record.secondary_index == light.primitive_index);
+        if (match) {
+            light_list_index = index;
+            break;
+        }
+    }
+    if (light_list_index < 0) return;
+    const float nee_solid_angle_pdf = selected_light_hit_pdf(
+        scene, light_list_index, camera.position, light.position);
+    const float nee_area_pdf = path_solid_angle_to_area_pdf(
+        nee_solid_angle_pdf, distance_squared, light_cosine);
+    const float connection_area_pdf = light.forward_measure_pdf;
+    const float connection_square = connection_area_pdf * connection_area_pdf;
+    const float nee_square = nee_area_pdf * nee_area_pdf;
+    const float mis_weight = connection_square + nee_square > 0.0f
+        ? connection_square / (connection_square + nee_square) : 0.0f;
+    if (mis_weight <= 0.0f) return;
+
+    const GpuMaterial camera_material = scene.materials[camera.material_index];
+    GpuMaterialSoA material = load_mat_spectra_6x(
+        scene, camera.material_index, camera.throughput.wavelengths);
+    if (camera_material.albedo_expression_root != -1) {
+        material.albedo = eval_material_expression(
+            scene, camera_material, camera_material.albedo_expression_root,
+            camera.uv.u, camera.uv.v, camera.throughput.wavelengths,
+            scene.num_spectral_channels);
+    }
+    if (camera_material.texture_index != -1) {
+        material.albedo = material.albedo * sample_texture(
+            scene, camera_material.texture_index,
+            camera.uv.u, camera.uv.v, camera.throughput.wavelengths,
+            scene.num_spectral_channels);
+    }
+    SpectralPacket contribution = camera.throughput * material.albedo *
+        light.throughput *
+        (camera_cosine * light_cosine * 0.31830988618379067154f /
+         distance_squared * mis_weight);
+    const GpuVec3 xyz = spectral_sample_to_xyz(
+        contribution, scene.num_spectral_channels, camera.active_channel,
+        camera.wavelength_pdf, camera.spectral_mode);
+    connection_accumulation[path_index] = xyz_to_rgb(xyz);
+    if (telemetry) atomicAdd(&telemetry->accepted_connections, 1u);
 }
 
 }
