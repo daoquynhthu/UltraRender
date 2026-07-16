@@ -35,6 +35,7 @@ struct GpuBidirectionalPathVertex {
     SpectralPacket stokes_u = {};
     SpectralPacket stokes_v = {};
     float wavelength_pdf = 0.0f;
+    float endpoint_pdf = 0.0f;
     float forward_directional_pdf = 0.0f;
     float reverse_directional_pdf = 0.0f;
     float forward_measure_pdf = 0.0f;
@@ -140,6 +141,58 @@ static __device__ inline float bidirectional_strategy_mis_weight(
         camera_endpoint_pdf);
     if (!(selected > 0.0f)) return 0.0f;
     double denominator = 0.0;
+    for (int split = 0; split <= vertex_count; ++split) {
+        const double probability = bidirectional_strategy_probability(
+            edges, edge_count, split, light_endpoint_pdf,
+            camera_endpoint_pdf);
+        denominator += probability * probability;
+    }
+    return denominator > 0.0
+        ? static_cast<float>(double(selected) * double(selected) / denominator)
+        : 0.0f;
+}
+
+static __device__ inline float bidirectional_merge_strategy_probability(
+    const GpuBidirectionalPdfEdge* edges,
+    int edge_count,
+    int merge_split,
+    float light_endpoint_pdf,
+    float camera_endpoint_pdf,
+    float kernel_density,
+    int light_path_count) {
+    const int vertex_count = edge_count + 1;
+    if (!edges || edge_count < 1 || merge_split <= 0 ||
+        merge_split >= vertex_count || !(light_endpoint_pdf > 0.0f) ||
+        !(camera_endpoint_pdf > 0.0f) || !(kernel_density > 0.0f) ||
+        light_path_count <= 0 ||
+        edges[merge_split - 1].from_delta ||
+        edges[merge_split - 1].to_delta) return 0.0f;
+    double probability = double(light_endpoint_pdf) *
+        double(camera_endpoint_pdf) * double(kernel_density) /
+        double(light_path_count);
+    for (int edge = 0; edge < merge_split - 1; ++edge) {
+        probability *= fmaxf(0.0f, edges[edge].forward_measure_pdf);
+    }
+    for (int edge = merge_split; edge < edge_count; ++edge) {
+        probability *= fmaxf(0.0f, edges[edge].reverse_measure_pdf);
+    }
+    return isfinite(probability) ? static_cast<float>(probability) : 0.0f;
+}
+
+static __device__ inline float bidirectional_merge_strategy_mis_weight(
+    const GpuBidirectionalPdfEdge* edges,
+    int edge_count,
+    int merge_split,
+    float light_endpoint_pdf,
+    float camera_endpoint_pdf,
+    float kernel_density,
+    int light_path_count) {
+    const float selected = bidirectional_merge_strategy_probability(
+        edges, edge_count, merge_split, light_endpoint_pdf,
+        camera_endpoint_pdf, kernel_density, light_path_count);
+    if (!(selected > 0.0f)) return 0.0f;
+    double denominator = double(selected) * double(selected);
+    const int vertex_count = edge_count + 1;
     for (int split = 0; split <= vertex_count; ++split) {
         const double probability = bidirectional_strategy_probability(
             edges, edge_count, split, light_endpoint_pdf,

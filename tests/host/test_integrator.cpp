@@ -143,14 +143,31 @@ static int test_vcm_progressive_radius_and_kernel_normalization() {
     CHECK_NEAR(ure::integrator::volume_merge_kernel_normalization(0.5) *
                    (4.0 / 3.0) * 3.14159265358979323846 * 0.125,
                1.0, 1e-15);
+    const ure::integrator::BidirectionalPdfEdge edges[] = {
+        {0.4, 0.25, false, false},
+        {0.5, 0.2, false, false},
+        {0.6, 0.1, false, false}
+    };
+    const double merge_probability =
+        ure::integrator::bidirectional_merge_strategy_probability(
+            edges, 3, 2, 0.3, 0.8, 4.0, 16);
+    CHECK_NEAR(merge_probability, 0.3 * 0.4 * 0.8 * 0.1 * 4.0 / 16.0,
+               1e-15);
+    double probabilities[5] = {};
+    CHECK(ure::integrator::reconstruct_bidirectional_strategy_probabilities(
+              edges, 3, 0.3, 0.8, probabilities, 5) == 5);
     const double merge_weight =
-        ure::integrator::vcm_merge_power_heuristic(4.0, 2.0);
-    const double connection_weight =
-        ure::integrator::vcm_merge_power_heuristic(2.0, 4.0);
-    CHECK_NEAR(merge_weight, 0.8, 1e-15);
-    CHECK_NEAR(merge_weight + connection_weight, 1.0, 1e-15);
-    CHECK_NEAR(ure::integrator::vcm_merge_power_heuristic(0.0, 0.0),
-               0.0, 0.0);
+        ure::integrator::bidirectional_merge_strategy_mis_weight(
+            edges, 3, 2, 0.3, 0.8, 4.0, 16);
+    double weight_sum = merge_weight;
+    double denominator = merge_probability * merge_probability;
+    for (double probability : probabilities) {
+        denominator += probability * probability;
+    }
+    for (double probability : probabilities) {
+        weight_sum += probability * probability / denominator;
+    }
+    CHECK_NEAR(weight_sum, 1.0, 1e-15);
     return 0;
 }
 

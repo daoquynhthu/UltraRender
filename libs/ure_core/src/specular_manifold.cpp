@@ -281,15 +281,56 @@ double volume_merge_kernel_normalization(double radius) {
         : 0.0;
 }
 
-double vcm_merge_power_heuristic(double merge_density,
-                                 double connection_density) {
-    if (!std::isfinite(merge_density) ||
-        !std::isfinite(connection_density) || merge_density < 0.0 ||
-        connection_density < 0.0) return 0.0;
-    const double merge_squared = merge_density * merge_density;
-    const double connection_squared = connection_density * connection_density;
-    const double denominator = merge_squared + connection_squared;
-    return denominator > 0.0 ? merge_squared / denominator : 0.0;
+double bidirectional_merge_strategy_probability(
+    const BidirectionalPdfEdge* edges,
+    int edge_count,
+    int merge_split,
+    double light_endpoint_pdf,
+    double camera_endpoint_pdf,
+    double kernel_density,
+    int light_path_count) {
+    const int vertex_count = edge_count + 1;
+    if (!edges || edge_count < 1 || edge_count > 64 || merge_split <= 0 ||
+        merge_split >= vertex_count || !std::isfinite(light_endpoint_pdf) ||
+        !std::isfinite(camera_endpoint_pdf) ||
+        !std::isfinite(kernel_density) || light_endpoint_pdf <= 0.0 ||
+        camera_endpoint_pdf <= 0.0 || kernel_density <= 0.0 ||
+        light_path_count <= 0 || edges[merge_split - 1].from_delta ||
+        edges[merge_split - 1].to_delta) return 0.0;
+    double probability = light_endpoint_pdf * camera_endpoint_pdf *
+        kernel_density / static_cast<double>(light_path_count);
+    for (int edge = 0; edge < merge_split - 1; ++edge) {
+        probability *= std::max(0.0, edges[edge].forward_measure_pdf);
+    }
+    for (int edge = merge_split; edge < edge_count; ++edge) {
+        probability *= std::max(0.0, edges[edge].reverse_measure_pdf);
+    }
+    return std::isfinite(probability) ? probability : 0.0;
+}
+
+double bidirectional_merge_strategy_mis_weight(
+    const BidirectionalPdfEdge* edges,
+    int edge_count,
+    int merge_split,
+    double light_endpoint_pdf,
+    double camera_endpoint_pdf,
+    double kernel_density,
+    int light_path_count) {
+    if (edge_count > 64) return 0.0;
+    const double selected = bidirectional_merge_strategy_probability(
+        edges, edge_count, merge_split, light_endpoint_pdf,
+        camera_endpoint_pdf, kernel_density, light_path_count);
+    if (!(selected > 0.0)) return 0.0;
+    double denominator = selected * selected;
+    double probabilities[66] = {};
+    const int count = reconstruct_bidirectional_strategy_probabilities(
+        edges, edge_count, light_endpoint_pdf, camera_endpoint_pdf,
+        probabilities, 66);
+    if (count == 0) return 0.0;
+    for (int index = 0; index < count; ++index) {
+        denominator += probabilities[index] * probabilities[index];
+    }
+    return selected * selected / denominator;
 }
 
 } // namespace ure::integrator

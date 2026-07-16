@@ -42,6 +42,8 @@ The surface-grid implementation stores exact signed cell coordinates beside each
 
 Surface and volume grids are independently allocated according to merge policy because their progressive radii and measures differ. Camera and importance light paths both capture homogeneous-medium scattering vertices, including resource-backed Mie phase transport. Mixed surface-volume edges convert the directional PDF into the target vertex measure in each direction. Volume merging requires matching medium identity and uses the normalized sphere kernel `3 / (4 pi r^3)`.
 
+The immutable light-endpoint position density is stored separately from the first path-edge density. For each accepted merge pair, MIS reconstructs the complete light prefix, evaluates the actual spectral BSDF or phase density in both directions across the virtual connection bridge, appends the reversed camera suffix, and normalizes the merge technique together with every valid BDPT split of that same full path. Local pairwise merge-versus-connection weighting is not used.
+
 ## Specular-manifold solver
 
 The manifold solver consumes stable primitive identity and differentiable local coordinates. Analytic spheres use angular coordinates; triangles use barycentric coordinates with transform-aware tangent derivatives. A bounded chain stores each specular vertex and solves the half-vector/Snell constraint with damped Newton iterations, pivoted small-matrix elimination, line search, domain projection, residual and determinant gates.

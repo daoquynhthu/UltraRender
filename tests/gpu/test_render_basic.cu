@@ -222,6 +222,29 @@ __global__ void bidirectional_strategy_density_kernel(float* output) {
     edges[1].from_delta = 1;
     output[2] = bidirectional_strategy_probability(
         edges, 3, 2, 0.3f, 0.8f);
+    edges[1].from_delta = 0;
+    output[3] = bidirectional_merge_strategy_probability(
+        edges, 3, 2, 0.3f, 0.8f, 4.0f, 16);
+    float partition = bidirectional_merge_strategy_mis_weight(
+        edges, 3, 2, 0.3f, 0.8f, 4.0f, 16);
+    const int vertex_count = 4;
+    for (int split = 0; split <= vertex_count; ++split) {
+        const float probability = bidirectional_strategy_probability(
+            edges, 3, split, 0.3f, 0.8f);
+        const float merge_probability = output[3];
+        double denominator = double(merge_probability) * merge_probability;
+        for (int candidate = 0; candidate <= vertex_count; ++candidate) {
+            const double candidate_probability =
+                bidirectional_strategy_probability(
+                    edges, 3, candidate, 0.3f, 0.8f);
+            denominator += candidate_probability * candidate_probability;
+        }
+        if (denominator > 0.0) {
+            partition += static_cast<float>(
+                double(probability) * probability / denominator);
+        }
+    }
+    output[4] = partition;
 }
 
 __global__ void path_guided_light_selection_kernel(float* cdf, float* guide_weights, float* out) {
@@ -2553,6 +2576,7 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
     CHECK(endpoint.measure == GpuPathVertexMeasure::Area);
     CHECK(endpoint.forward_directional_pdf > 0.0f);
     CHECK(endpoint.forward_measure_pdf > 0.0f);
+    CHECK(endpoint.endpoint_pdf > 0.0f);
     CHECK(endpoint.throughput.values[0] > 0.0f);
     CHECK(endpoint.stokes_i.values[0] == 1.0f);
     GpuBidirectionalPathVertex camera_vertex = {};
@@ -2585,16 +2609,20 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
 static int test_bidirectional_strategy_density_partitions_on_device() {
     REQUIRE_GPU();
     float* output = nullptr;
-    CHECK_CUDA(cudaMalloc(&output, 3 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&output, 5 * sizeof(float)));
     DeviceMem cleanup(output);
     bidirectional_strategy_density_kernel<<<1, 1>>>(output);
     CHECK_CUDA(cudaGetLastError());
-    float values[3] = {};
+    float values[5] = {};
     CHECK_CUDA(cudaMemcpy(
         values, output, sizeof(values), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(values[0], 1.0f, 1e-5f);
     CHECK_FLOAT_EQ(values[1], 0.3f * 0.4f * 0.8f * 0.1f, 1e-7f);
     CHECK_FLOAT_EQ(values[2], 0.0f, 0.0f);
+    CHECK_FLOAT_EQ(
+        values[3], 0.3f * 0.4f * 0.8f * 0.1f * 4.0f / 16.0f,
+        1e-7f);
+    CHECK_FLOAT_EQ(values[4], 1.0f, 1e-5f);
     return 0;
 }
 

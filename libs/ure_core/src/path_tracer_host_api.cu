@@ -3225,7 +3225,9 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
                 std::min<std::uint32_t>(
                     entry_count,
                     static_cast<std::uint32_t>(ctx->vcm_grid_entry_capacity)),
-                ctx->vcm_current_surface_radius, primary_ray_count,
+                ctx->vcm_current_surface_radius,
+                ctx->current_spp < 100 ? 5.0f : 20.0f,
+                primary_ray_count,
                 ctx->d_vcm_merge_accum, primary_ray_count,
                 ctx->bidirectional_scene_epoch,
                 ctx->d_bidirectional_telemetry);
@@ -3251,7 +3253,9 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
                 std::min<std::uint32_t>(
                     entry_count,
                     static_cast<std::uint32_t>(ctx->vcm_grid_entry_capacity)),
-                ctx->vcm_current_volume_radius, primary_ray_count,
+                ctx->vcm_current_volume_radius,
+                ctx->current_spp < 100 ? 5.0f : 20.0f,
+                primary_ray_count,
                 ctx->d_vcm_volume_merge_accum, primary_ray_count,
                 ctx->bidirectional_scene_epoch,
                 ctx->d_bidirectional_telemetry);
