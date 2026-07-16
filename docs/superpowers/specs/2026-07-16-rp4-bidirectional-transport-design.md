@@ -58,6 +58,8 @@ The bounded numerical core supports at most four two-parameter specular events. 
 
 GPU primitive evaluation uses analytic sphere angular coordinates and triangle barycentric coordinates with explicit position and tangent derivatives. The single-event solver enforces reflection or generalized Snell tangent constraints, physical hemisphere topology, parameter-domain projection, central-difference Jacobians, damped line search, residual and determinant thresholds, and an explicit total-internal-reflection gate.
 
+Multi-event chains assemble one coupled `2N` residual and Jacobian because every constraint depends on its neighboring manifold points. Each Newton iteration solves all variables together, projects every primitive domain, and accepts a line-search step only when the complete chain residual decreases. The two-interface refraction oracle converges both perturbed barycentric points to the analytic slab path.
+
 ## Configuration and modes
 
 `IntegratorMode` gains `BDPT` and `VCM`. A bidirectional configuration owns maximum camera/light vertices, connections per pixel, memory budget, and light-tracing policy. A VCM configuration owns initial radius, alpha, grid capacity, and surface/volume merge policy. Existing `SpecularManifoldConfig` remains the bounded Newton policy.

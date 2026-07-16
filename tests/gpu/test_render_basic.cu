@@ -292,6 +292,35 @@ __global__ void manifold_primitive_newton_kernel(float* output) {
             1, 1.5f, 1.0f, 1e-5f, 32);
     output[10] = float(tir_result.valid);
     output[11] = float(tir_result.total_internal_reflection);
+    GpuManifoldChainEvent chain[2] = {};
+    chain[0].primitive.kind = GpuManifoldPrimitiveKind::Triangle;
+    chain[0].primitive.p0 = GpuVec3(0.0f, -2.0f, -2.0f);
+    chain[0].primitive.p1 = GpuVec3(0.0f, 0.0f, 2.0f);
+    chain[0].primitive.p2 = GpuVec3(0.0f, 2.0f, -2.0f);
+    chain[0].u = 0.4f;
+    chain[0].v = 0.2f;
+    chain[0].eta_i = 1.0f;
+    chain[0].eta_t = 1.5f;
+    chain[0].transmission = 1;
+    chain[1].primitive.kind = GpuManifoldPrimitiveKind::Triangle;
+    chain[1].primitive.p0 = GpuVec3(1.0f, -2.0f, -2.0f);
+    chain[1].primitive.p1 = GpuVec3(1.0f, 2.0f, -2.0f);
+    chain[1].primitive.p2 = GpuVec3(1.0f, 0.0f, 2.0f);
+    chain[1].u = 0.2f;
+    chain[1].v = 0.4f;
+    chain[1].eta_i = 1.5f;
+    chain[1].eta_t = 1.0f;
+    chain[1].transmission = 1;
+    const GpuManifoldChainSolveResult chain_result =
+        solve_gpu_manifold_chain(
+            chain, 2, GpuVec3(-1.0f, 0.0f, 0.0f),
+            GpuVec3(2.0f, 0.0f, 0.0f), 1e-5f, 32);
+    output[12] = float(chain_result.valid);
+    output[13] = chain_result.surfaces[0].position.y;
+    output[14] = chain_result.surfaces[0].position.z;
+    output[15] = chain_result.surfaces[1].position.y;
+    output[16] = chain_result.surfaces[1].position.z;
+    output[17] = chain_result.residual;
 }
 
 __global__ void path_guided_light_selection_kernel(float* cdf, float* guide_weights, float* out) {
@@ -2710,11 +2739,11 @@ static int test_manifold_pivoted_newton_step_on_device() {
 static int test_manifold_sphere_and_triangle_newton_on_device() {
     REQUIRE_GPU();
     float* output = nullptr;
-    CHECK_CUDA(cudaMalloc(&output, 12 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&output, 18 * sizeof(float)));
     DeviceMem cleanup(output);
     manifold_primitive_newton_kernel<<<1, 1>>>(output);
     CHECK_CUDA(cudaGetLastError());
-    float values[12] = {};
+    float values[18] = {};
     CHECK_CUDA(cudaMemcpy(
         values, output, sizeof(values), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(values[0], 1.0f, 0.0f);
@@ -2729,6 +2758,12 @@ static int test_manifold_sphere_and_triangle_newton_on_device() {
     CHECK(std::fabs(values[9]) > 1e-8f);
     CHECK_FLOAT_EQ(values[10], 0.0f, 0.0f);
     CHECK_FLOAT_EQ(values[11], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[12], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[13], 0.0f, 1e-4f);
+    CHECK_FLOAT_EQ(values[14], 0.0f, 1e-4f);
+    CHECK_FLOAT_EQ(values[15], 0.0f, 1e-4f);
+    CHECK_FLOAT_EQ(values[16], 0.0f, 1e-4f);
+    CHECK(values[17] <= 1e-5f);
     return 0;
 }
 
