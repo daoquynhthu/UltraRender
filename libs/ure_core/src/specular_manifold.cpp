@@ -281,4 +281,15 @@ double volume_merge_kernel_normalization(double radius) {
         : 0.0;
 }
 
+double vcm_merge_power_heuristic(double merge_density,
+                                 double connection_density) {
+    if (!std::isfinite(merge_density) ||
+        !std::isfinite(connection_density) || merge_density < 0.0 ||
+        connection_density < 0.0) return 0.0;
+    const double merge_squared = merge_density * merge_density;
+    const double connection_squared = connection_density * connection_density;
+    const double denominator = merge_squared + connection_squared;
+    return denominator > 0.0 ? merge_squared / denominator : 0.0;
+}
+
 } // namespace ure::integrator

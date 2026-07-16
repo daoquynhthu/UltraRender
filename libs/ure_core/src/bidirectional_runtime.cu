@@ -24,6 +24,27 @@ namespace ure::gpu {
 
 namespace {
 
+__device__ int vcm_cell_hash(int x, int y, int z, int capacity) {
+    const unsigned int hash =
+        static_cast<unsigned int>(x) * 73856093u ^
+        static_cast<unsigned int>(y) * 19349663u ^
+        static_cast<unsigned int>(z) * 83492791u;
+    return static_cast<int>(hash % static_cast<unsigned int>(capacity));
+}
+
+__device__ int vcm_cell_coordinate(float value, float inverse_radius) {
+    return static_cast<int>(floorf(value * inverse_radius));
+}
+
+__device__ float vcm_power_weight(float selected_density,
+                                  float competing_density) {
+    const double selected = static_cast<double>(selected_density);
+    const double competing = static_cast<double>(competing_density);
+    const double denominator = selected * selected + competing * competing;
+    return denominator > 0.0
+        ? static_cast<float>(selected * selected / denominator) : 0.0f;
+}
+
 __device__ GpuVec3 cosine_hemisphere(float u1, float u2) {
     const float radius = sqrtf(fmaxf(0.0f, u1));
     const float phi = 6.2831853071795864769f * u2;
@@ -306,6 +327,184 @@ __global__ void extend_light_subpaths_kernel(
         throughput = throughput * attenuation;
         ray = scattered;
     }
+}
+
+__global__ void build_vcm_surface_grid_kernel(
+    const GpuBidirectionalPathVertex* light_vertices,
+    int light_path_count,
+    int max_light_vertices,
+    float radius,
+    int* grid_heads,
+    int grid_capacity,
+    GpuVcmGridEntry* grid_entries,
+    std::uint32_t* entry_count,
+    int entry_capacity,
+    std::uint32_t scene_epoch,
+    GpuBidirectionalTelemetry* telemetry) {
+    const int flat_index = blockIdx.x * blockDim.x + threadIdx.x;
+    const int vertex_count = light_path_count * max_light_vertices;
+    if (flat_index >= vertex_count || !light_vertices || !grid_heads ||
+        !grid_entries || !entry_count || grid_capacity <= 0 ||
+        entry_capacity <= 0 || !(radius > 0.0f)) return;
+    const GpuBidirectionalPathVertex vertex = light_vertices[flat_index];
+    if (flat_index % max_light_vertices == 0 || !vertex.valid || vertex.delta ||
+        vertex.measure != GpuPathVertexMeasure::Area ||
+        vertex.scene_epoch != scene_epoch) return;
+    const std::uint32_t entry_index = atomicAdd(entry_count, 1u);
+    if (entry_index >= static_cast<std::uint32_t>(entry_capacity)) {
+        if (telemetry) atomicAdd(&telemetry->buffer_overflow, 1u);
+        return;
+    }
+    const float inverse_radius = 1.0f / radius;
+    GpuVcmGridEntry entry = {};
+    entry.vertex_index = flat_index;
+    entry.cell_x = vcm_cell_coordinate(vertex.position.x, inverse_radius);
+    entry.cell_y = vcm_cell_coordinate(vertex.position.y, inverse_radius);
+    entry.cell_z = vcm_cell_coordinate(vertex.position.z, inverse_radius);
+    const int bucket = vcm_cell_hash(
+        entry.cell_x, entry.cell_y, entry.cell_z, grid_capacity);
+    entry.next = atomicExch(&grid_heads[bucket],
+                            static_cast<int>(entry_index));
+    grid_entries[entry_index] = entry;
+}
+
+__global__ void merge_vcm_surface_vertices_kernel(
+    GpuScene scene,
+    const GpuBidirectionalPathVertex* camera_vertices,
+    const int* camera_path_lengths,
+    int max_camera_vertices,
+    const GpuBidirectionalPathVertex* light_vertices,
+    int max_light_vertices,
+    const int* grid_heads,
+    int grid_capacity,
+    const GpuVcmGridEntry* grid_entries,
+    std::uint32_t entry_count,
+    float radius,
+    int light_path_count,
+    GpuVec3* merge_accumulation,
+    int path_count,
+    std::uint32_t scene_epoch,
+    GpuBidirectionalTelemetry* telemetry) {
+    const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (path_index >= path_count || !camera_vertices ||
+        !camera_path_lengths || !light_vertices || !grid_heads ||
+        !grid_entries || !merge_accumulation || grid_capacity <= 0 ||
+        !(radius > 0.0f) || light_path_count <= 0) return;
+    const int camera_length = camera_path_lengths[path_index];
+    if (camera_length <= 0 || camera_length > max_camera_vertices) return;
+    const float radius_squared = radius * radius;
+    const float kernel_normalization =
+        1.0f / (3.14159265358979323846f * radius_squared);
+    const float inverse_radius = 1.0f / radius;
+    SpectralPacket total = {};
+    bool accepted = false;
+    for (int camera_index = 0; camera_index < camera_length; ++camera_index) {
+        const GpuBidirectionalPathVertex camera =
+            camera_vertices[path_index * max_camera_vertices + camera_index];
+        if (!camera.valid || camera.delta ||
+            camera.measure != GpuPathVertexMeasure::Area ||
+            camera.scene_epoch != scene_epoch || camera.material_index < 0 ||
+            camera.material_index >= scene.material_count) continue;
+        const GpuMaterial material = scene.materials[camera.material_index];
+        if (material.type == MaterialType::Light ||
+            material.type == MaterialType::Composite ||
+            material.type == MaterialType::Layered) continue;
+        GpuMaterialSoA spectra = load_mat_spectra_6x(
+            scene, camera.material_index, camera.throughput.wavelengths);
+        if (material.albedo_expression_root != -1) {
+            spectra.albedo = eval_material_expression(
+                scene, material, material.albedo_expression_root,
+                camera.uv.u, camera.uv.v, camera.throughput.wavelengths,
+                scene.num_spectral_channels);
+        }
+        if (material.texture_index != -1) {
+            spectra.albedo = spectra.albedo * sample_texture(
+                scene, material.texture_index, camera.uv.u, camera.uv.v,
+                camera.throughput.wavelengths, scene.num_spectral_channels);
+        }
+        const int center_x = vcm_cell_coordinate(
+            camera.position.x, inverse_radius);
+        const int center_y = vcm_cell_coordinate(
+            camera.position.y, inverse_radius);
+        const int center_z = vcm_cell_coordinate(
+            camera.position.z, inverse_radius);
+        for (int dz = -1; dz <= 1; ++dz) {
+            for (int dy = -1; dy <= 1; ++dy) {
+                for (int dx = -1; dx <= 1; ++dx) {
+                    const int cell_x = center_x + dx;
+                    const int cell_y = center_y + dy;
+                    const int cell_z = center_z + dz;
+                    const int bucket = vcm_cell_hash(
+                        cell_x, cell_y, cell_z, grid_capacity);
+                    int entry_index = grid_heads[bucket];
+                    int traversed = 0;
+                    while (entry_index >= 0 &&
+                           entry_index < static_cast<int>(entry_count) &&
+                           traversed++ < static_cast<int>(entry_count)) {
+                        const GpuVcmGridEntry entry = grid_entries[entry_index];
+                        entry_index = entry.next;
+                        if (entry.cell_x != cell_x || entry.cell_y != cell_y ||
+                            entry.cell_z != cell_z || entry.vertex_index < 0 ||
+                            entry.vertex_index >=
+                                light_path_count * max_light_vertices) continue;
+                        const GpuBidirectionalPathVertex light =
+                            light_vertices[entry.vertex_index];
+                        const GpuVec3 separation =
+                            camera.position - light.position;
+                        const float normal_alignment =
+                            camera.geometric_normal.dot(light.geometric_normal);
+                        if (!light.valid || light.delta ||
+                            light.scene_epoch != scene_epoch ||
+                            light.measure != GpuPathVertexMeasure::Area ||
+                            normal_alignment < 0.9f ||
+                            separation.length_sq() > radius_squared ||
+                            fabsf(separation.dot(camera.geometric_normal)) >
+                                radius * 0.1f) continue;
+                        const GpuVec3 photon_direction = light.incoming;
+                        SpectralPacket dielectric_ior(material.ior);
+                        for (int channel = 0;
+                             channel < scene.num_spectral_channels; ++channel) {
+                            dielectric_ior.wavelengths[channel] =
+                                camera.throughput.wavelengths[channel];
+                        }
+                        if (material.ior_expression_root != -1) {
+                            dielectric_ior = eval_material_expression(
+                                scene, material, material.ior_expression_root,
+                                camera.uv.u, camera.uv.v,
+                                camera.throughput.wavelengths,
+                                scene.num_spectral_channels);
+                        }
+                        const SpectralPacket bsdf = eval_bsdf(
+                            material, spectra.albedo, spectra.extinction,
+                            spectra.metal_eta, dielectric_ior,
+                            camera.position, camera.shading_normal, camera.uv,
+                            camera.incoming, photon_direction,
+                            camera.throughput.wavelengths,
+                            scene.num_spectral_channels);
+                        const float merge_density = kernel_normalization;
+                        const float connection_density = fmaxf(
+                            camera.reverse_measure_pdf,
+                            light.forward_measure_pdf);
+                        const float mis_weight = vcm_power_weight(
+                            merge_density, connection_density);
+                        total = total + camera.throughput * light.throughput *
+                            bsdf * (kernel_normalization * mis_weight /
+                                    float(light_path_count));
+                        accepted = true;
+                        if (telemetry) atomicAdd(
+                            &telemetry->merged_vertices, 1u);
+                    }
+                }
+            }
+        }
+    }
+    if (!accepted) return;
+    const GpuBidirectionalPathVertex camera =
+        camera_vertices[path_index * max_camera_vertices];
+    const GpuVec3 xyz = spectral_sample_to_xyz(
+        total, scene.num_spectral_channels, camera.active_channel,
+        camera.wavelength_pdf, camera.spectral_mode);
+    merge_accumulation[path_index] = xyz_to_rgb(xyz);
 }
 
 __global__ void connect_bidirectional_subpaths_kernel(

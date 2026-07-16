@@ -13,6 +13,7 @@
 #include "ure/gpu_structs.hpp"
 #include "ure/log.hpp"
 #include "ure/render_config.hpp"
+#include "ure/specular_manifold.hpp"
 
 #include "../../libs/ure_core/src/path_tracer_kernel.cu"
 
@@ -2682,6 +2683,78 @@ static int test_bidirectional_light_subpath_transports_rough_metal_stokes() {
     return 0;
 }
 
+static int test_vcm_builds_bounded_grid_and_merges_surface_vertices() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 64;
+    config.integrator.mode = ure::IntegratorMode::VCM;
+    config.bidirectional.max_camera_vertices = 5;
+    config.bidirectional.max_light_vertices = 5;
+    config.bidirectional.memory_budget_mb = 64;
+    config.vcm.initial_radius = 4.0f;
+    config.vcm.alpha = 0.75f;
+    config.vcm.grid_capacity = 1;
+    GpuMaterialData diffuse = {};
+    diffuse.header.type = MaterialType::Lambertian;
+    diffuse.albedo = SpectralPacket(0.8f);
+    GpuMaterialData emitter = {};
+    emitter.header.type = MaterialType::Light;
+    emitter.emission = SpectralPacket(8.0f);
+    GpuSphere surface = {GpuVec3(0.0f, 0.0f, -1.0f), 0.75f, 7};
+    GpuSphere ground = {GpuVec3(0.0f, -1001.0f, 0.0f), 1000.0f, 7};
+    GpuSphere light = {GpuVec3(0.0f, 2.0f, 0.0f), 0.5f, 8};
+    GpuContext* ctx = init_gpu_renderer(
+        8, 8, {}, {}, {surface, ground, light},
+        {diffuse, emitter}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->d_vcm_grid_heads != nullptr);
+    CHECK(ctx->d_vcm_grid_entries != nullptr);
+    CHECK(ctx->d_vcm_grid_entry_count != nullptr);
+    CHECK(ctx->d_vcm_merge_accum != nullptr);
+    CHECK(ctx->vcm_grid_capacity == 1);
+    CHECK(ctx->vcm_grid_entry_capacity ==
+          64 * config.bidirectional.max_light_vertices);
+    const float camera_position[] = {0.0f, 0.0f, 2.0f};
+    const float camera_target[] = {0.0f, 0.0f, -1.0f};
+    update_camera_gpu(ctx, camera_position, camera_target, 18.0f);
+    bool rejected = false;
+    try {
+        render_pass_gpu(ctx, 1);
+    } catch (const std::runtime_error& error) {
+        rejected = std::string(error.what()).find("R-P4 implementation") !=
+                   std::string::npos;
+    }
+    CHECK(rejected);
+    CHECK(ctx->vcm_radius_iteration == 1);
+    CHECK_FLOAT_EQ(
+        ctx->vcm_current_surface_radius,
+        static_cast<float>(ure::integrator::progressive_surface_merge_radius(
+            config.vcm.initial_radius, config.vcm.alpha, 0)), 1e-6f);
+    std::uint32_t entry_count = 0;
+    CHECK_CUDA(cudaMemcpy(
+        &entry_count, ctx->d_vcm_grid_entry_count, sizeof(entry_count),
+        cudaMemcpyDeviceToHost));
+    CHECK(entry_count > 0);
+    CHECK(entry_count <= static_cast<std::uint32_t>(
+        ctx->vcm_grid_entry_capacity));
+    CHECK(ctx->last_bidirectional_telemetry.buffer_overflow == 0);
+    CHECK(ctx->last_bidirectional_telemetry.merged_vertices > 0);
+    std::vector<GpuVec3> merged(64);
+    CHECK_CUDA(cudaMemcpy(
+        merged.data(), ctx->d_vcm_merge_accum,
+        merged.size() * sizeof(GpuVec3), cudaMemcpyDeviceToHost));
+    bool nonzero = false;
+    for (const auto& value : merged) {
+        nonzero = nonzero || value.length_sq() > 0.0f;
+    }
+    CHECK(nonzero);
+    reset_accumulation_gpu(ctx);
+    CHECK(ctx->vcm_radius_iteration == 0);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
 static int test_restir_di_production_surface_scheduler_renders_and_reuses() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -3520,6 +3593,7 @@ int main() {
     RUN_TEST(test_bidirectional_runtime_owns_bounded_vertex_storage);
     RUN_TEST(test_bidirectional_strategy_density_partitions_on_device);
     RUN_TEST(test_bidirectional_light_subpath_transports_rough_metal_stokes);
+    RUN_TEST(test_vcm_builds_bounded_grid_and_merges_surface_vertices);
     RUN_TEST(test_restir_di_production_surface_scheduler_renders_and_reuses);
     RUN_TEST(test_restir_pt_replays_diffuse_surface_suffixes);
     RUN_TEST(test_restir_pt_replays_scalar_depolarizing_volume_suffixes);

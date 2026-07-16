@@ -38,6 +38,8 @@ VCM reuses the same subpaths and connection estimator. Non-delta light vertices 
 
 The radius schedule is explicit in configuration and metadata. Each iteration applies `r_(n+1) = r_n * ((n + alpha) / (n + 1))^(1/d)`, with `d=2` for surfaces and `d=3` for volumes. Resolution, scene epoch, or estimator-policy changes reset the iteration count. Grid overflow and budget exhaustion fail loudly.
 
+The surface-grid implementation stores exact signed cell coordinates beside each chained hash entry, so hash collisions affect traversal cost but never merge eligibility. Surface compatibility additionally requires bounded Euclidean distance, aligned geometric normals, and bounded normal-plane separation to prevent thin-wall light leaks. Light endpoints and delta vertices never enter the merge grid. The grid heads, entries, counter, and merge accumulation are context-owned and included in the same checked bidirectional VRAM budget.
+
 ## Specular-manifold solver
 
 The manifold solver consumes stable primitive identity and differentiable local coordinates. Analytic spheres use angular coordinates; triangles use barycentric coordinates with transform-aware tangent derivatives. A bounded chain stores each specular vertex and solves the half-vector/Snell constraint with damped Newton iterations, pivoted small-matrix elimination, line search, domain projection, residual and determinant gates.

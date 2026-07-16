@@ -143,6 +143,14 @@ static int test_vcm_progressive_radius_and_kernel_normalization() {
     CHECK_NEAR(ure::integrator::volume_merge_kernel_normalization(0.5) *
                    (4.0 / 3.0) * 3.14159265358979323846 * 0.125,
                1.0, 1e-15);
+    const double merge_weight =
+        ure::integrator::vcm_merge_power_heuristic(4.0, 2.0);
+    const double connection_weight =
+        ure::integrator::vcm_merge_power_heuristic(2.0, 4.0);
+    CHECK_NEAR(merge_weight, 0.8, 1e-15);
+    CHECK_NEAR(merge_weight + connection_weight, 1.0, 1e-15);
+    CHECK_NEAR(ure::integrator::vcm_merge_power_heuristic(0.0, 0.0),
+               0.0, 0.0);
     return 0;
 }
 

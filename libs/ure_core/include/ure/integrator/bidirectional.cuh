@@ -67,6 +67,14 @@ struct GpuBidirectionalTelemetry {
     std::uint32_t buffer_overflow = 0;
 };
 
+struct GpuVcmGridEntry {
+    int vertex_index = -1;
+    int next = -1;
+    int cell_x = 0;
+    int cell_y = 0;
+    int cell_z = 0;
+};
+
 struct GpuBidirectionalPdfEdge {
     float forward_measure_pdf = 0.0f;
     float reverse_measure_pdf = 0.0f;

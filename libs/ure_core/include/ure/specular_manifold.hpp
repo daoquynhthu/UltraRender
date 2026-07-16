@@ -110,5 +110,7 @@ double progressive_volume_merge_radius(double initial_radius,
                                        std::uint64_t iteration);
 double surface_merge_kernel_normalization(double radius);
 double volume_merge_kernel_normalization(double radius);
+double vcm_merge_power_heuristic(double merge_density,
+                                 double connection_density);
 
 } // namespace ure::integrator
