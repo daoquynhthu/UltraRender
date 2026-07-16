@@ -2491,9 +2491,10 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
     emitter.header.type = MaterialType::Light;
     emitter.emission = SpectralPacket(6.0f);
     GpuSphere surface = {GpuVec3(0.0f, 0.0f, -1.0f), 0.75f, 7};
+    GpuSphere ground = {GpuVec3(0.0f, -1001.0f, 0.0f), 1000.0f, 7};
     GpuSphere light = {GpuVec3(0.0f, 2.0f, 0.0f), 0.5f, 8};
     GpuContext* ctx = init_gpu_renderer(
-        4, 4, {}, {}, {surface, light}, {diffuse, emitter}, {}, config);
+        4, 4, {}, {}, {surface, ground, light}, {diffuse, emitter}, {}, config);
     CHECK(ctx != nullptr);
     CHECK(ctx->render_config.bidirectional.enabled);
     CHECK(ctx->d_camera_path_vertices != nullptr);
@@ -2516,7 +2517,7 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
                    std::string::npos;
     }
     CHECK(rejected);
-    CHECK(ctx->last_bidirectional_telemetry.light_vertices == 16);
+    CHECK(ctx->last_bidirectional_telemetry.light_vertices > 16);
     CHECK(ctx->last_bidirectional_telemetry.camera_vertices > 0);
     CHECK(ctx->last_bidirectional_telemetry.attempted_connections > 0);
     CHECK(ctx->last_bidirectional_telemetry.accepted_connections > 0);

@@ -2830,6 +2830,13 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             ctx->current_spp, ctx->bidirectional_scene_epoch,
             ctx->d_bidirectional_telemetry);
         UR_CUDA_CHECK(cudaGetLastError());
+        extend_light_subpaths_kernel<<<blocks, num_threads_wf>>>(
+            scene, ctx->d_light_path_vertices, ctx->d_light_path_lengths,
+            primary_ray_count,
+            ctx->render_config.bidirectional.max_light_vertices,
+            ctx->current_spp, ctx->bidirectional_scene_epoch,
+            ctx->d_bidirectional_telemetry);
+        UR_CUDA_CHECK(cudaGetLastError());
     }
 
     ctx->last_integrator_initial_ray_count = primary_ray_count;

@@ -29,6 +29,7 @@ __device__ inline bool scatter(
     int num_spec,
     float ior_outside,
     float ior_inside,
+    BoundaryTransportMode transport_mode,
     int spectral_mode,
     int active_channel
 ) {
@@ -351,7 +352,7 @@ __device__ inline bool scatter(
             float radiance_scale = select_boundary_transport_scale(
                 surface.radiance_scale,
                 surface.importance_scale,
-                BoundaryTransportMode::Radiance);
+                transport_mode);
             stokes = stokes * radiance_scale * (1.0f / transmit_prob);
             for (int c = 0; c < num_spec; ++c) {
                 float material_ior = resolved_dielectric_ior(
@@ -364,7 +365,7 @@ __device__ inline bool scatter(
                 float scale_c = select_boundary_transport_scale(
                     surface_c.radiance_scale,
                     surface_c.importance_scale,
-                    BoundaryTransportMode::Radiance);
+                    transport_mode);
                 attenuation.values[c] = fminf(1.0f, fmaxf(0.0f, T_c)) * scale_c * G1_L * (1.0f / transmit_prob);
             }
 
@@ -463,7 +464,7 @@ __device__ inline bool scatter(
             float radiance_scale = select_boundary_transport_scale(
                 hero_surface.radiance_scale,
                 hero_surface.importance_scale,
-                BoundaryTransportMode::Radiance);
+                transport_mode);
             stokes = stokes * radiance_scale;
             attenuation = attenuation * radiance_scale;
 
@@ -536,6 +537,7 @@ __device__ inline bool scatter(
     int num_spec,
     float ior_outside,
     float ior_inside,
+    BoundaryTransportMode transport_mode,
     int spectral_mode,
     int active_channel
 ) {
@@ -543,5 +545,6 @@ __device__ inline bool scatter(
     return scatter(r_in, mat, albedo, extinction, metal_eta, dielectric_ior,
                    p, n, uv, current_throughput, attenuation, scattered, stokes, seed,
                    out_pdf, dispersion_clamp, sample_index, pixel_index, depth, num_spec,
-                   ior_outside, ior_inside, spectral_mode, active_channel);
+                   ior_outside, ior_inside, transport_mode, spectral_mode,
+                   active_channel);
 }

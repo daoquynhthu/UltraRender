@@ -1550,7 +1550,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     pixel_index,
                     depth,
                     scene.num_spectral_channels)
-                : scatter(r_in, mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, dielectric_ior, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, pdf_val, dispersion_clamp, sample_index, pixel_index, depth, scene.num_spectral_channels, ior_outside, scene.materials[mat_idx].ior, spectral_mode, active_channel);
+                : scatter(r_in, mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, dielectric_ior, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, pdf_val, dispersion_clamp, sample_index, pixel_index, depth, scene.num_spectral_channels, ior_outside, scene.materials[mat_idx].ior, BoundaryTransportMode::Radiance, spectral_mode, active_channel);
             if (scattered_ok) {
                 if (is_composite && pdf_val > 0.0f) {
                     SpectralPacket pdf_a = pdf_bsdf_spectral(

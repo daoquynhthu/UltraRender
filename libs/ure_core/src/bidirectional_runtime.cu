@@ -19,6 +19,7 @@ namespace ure::gpu {
 #include "path_tracer_material_runtime.cuh"
 #undef URE_MATERIAL_TARGET_ONLY
 #include "path_tracer_light_sampling.cuh"
+#include "path_tracer_material.cu"
 
 namespace {
 
@@ -148,6 +149,122 @@ __global__ void generate_light_subpath_endpoints_kernel(
     vertices[path_index * max_light_vertices] = vertex;
     path_lengths[path_index] = 1;
     if (telemetry) atomicAdd(&telemetry->light_vertices, 1u);
+}
+
+__global__ void extend_light_subpaths_kernel(
+    GpuScene scene,
+    GpuBidirectionalPathVertex* vertices,
+    int* path_lengths,
+    int path_count,
+    int max_light_vertices,
+    int sample_index,
+    std::uint32_t scene_epoch,
+    GpuBidirectionalTelemetry* telemetry) {
+    const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (path_index >= path_count || !vertices || !path_lengths ||
+        max_light_vertices <= 1) return;
+    GpuBidirectionalPathVertex* path =
+        vertices + path_index * max_light_vertices;
+    if (!path[0].valid || path[0].scene_epoch != scene_epoch) return;
+    GpuRay ray = {};
+    ray.origin = path[0].position + path[0].geometric_normal * 1e-4f;
+    ray.direction = path[0].outgoing;
+    ray.t_min = 1e-4f;
+    ray.t_max = FLT_MAX;
+    SpectralPacket throughput = path[0].throughput *
+        (fmaxf(0.0f, path[0].geometric_normal.dot(ray.direction)) /
+         fmaxf(path[0].forward_directional_pdf, 1e-12f));
+    unsigned int seed = wang_hash(
+        static_cast<unsigned int>(sample_index) ^
+        static_cast<unsigned int>(path_index * 0x9e3779b9u));
+    for (int depth = 1; depth < max_light_vertices; ++depth) {
+        float hit_t = 0.0f;
+        GpuVec3 hit_p, hit_n, hit_ng;
+        GpuVec2 hit_uv;
+        int material_index = -1;
+        int geometry_type = -1;
+        int geometry_index = -1;
+        int primitive_index = -1;
+        if (!world_hit(scene, ray, ray.t_min, ray.t_max, hit_t, hit_p,
+                       hit_n, hit_ng, hit_uv, material_index,
+                       geometry_type, geometry_index, primitive_index)) break;
+        if (material_index < 0 || material_index >= scene.material_count) break;
+        const GpuMaterial material = scene.materials[material_index];
+        if (material.type == MaterialType::Light) break;
+        if (material.type != MaterialType::Lambertian) {
+            if (telemetry) atomicAdd(&telemetry->rejected_delta, 1u);
+            break;
+        }
+        GpuMaterialSoA spectra = load_mat_spectra_6x(
+            scene, material_index, throughput.wavelengths);
+        if (material.albedo_expression_root != -1) {
+            spectra.albedo = eval_material_expression(
+                scene, material, material.albedo_expression_root,
+                hit_uv.u, hit_uv.v, throughput.wavelengths,
+                scene.num_spectral_channels);
+        }
+        if (material.texture_index != -1) {
+            spectra.albedo = spectra.albedo * sample_texture(
+                scene, material.texture_index, hit_uv.u, hit_uv.v,
+                throughput.wavelengths, scene.num_spectral_channels);
+        }
+        const float u1 = sample_dimension(
+            sample_index, path_index, 80 + depth * 2);
+        const float u2 = sample_dimension(
+            sample_index, path_index, 81 + depth * 2);
+        const GpuVec3 local = cosine_hemisphere(u1, u2);
+        const GpuVec3 outgoing = local_to_world(local, hit_n);
+        const float forward_pdf =
+            fmaxf(0.0f, hit_n.dot(outgoing)) * 0.31830988618379067154f;
+        const float reverse_pdf =
+            fmaxf(0.0f, hit_n.dot(-ray.direction)) * 0.31830988618379067154f;
+        if (forward_pdf <= 0.0f) break;
+        const GpuVec3 edge = hit_p - path[depth - 1].position;
+        const float distance_squared = edge.length_sq();
+        if (!(distance_squared > 1e-12f)) break;
+        const GpuVec3 edge_direction = edge * rsqrtf(distance_squared);
+        path[depth - 1].forward_measure_pdf =
+            path_solid_angle_to_area_pdf(
+                path[depth - 1].forward_directional_pdf,
+                distance_squared, fabsf(hit_ng.dot(-edge_direction)));
+        GpuBidirectionalPathVertex vertex = {};
+        vertex.position = hit_p;
+        vertex.geometric_normal = hit_ng;
+        vertex.shading_normal = hit_n;
+        vertex.incoming = -ray.direction;
+        vertex.outgoing = outgoing;
+        vertex.uv = hit_uv;
+        vertex.throughput = throughput;
+        vertex.wavelength_pdf = path[0].wavelength_pdf;
+        vertex.forward_directional_pdf = forward_pdf;
+        vertex.reverse_directional_pdf = reverse_pdf;
+        vertex.spectral_mode = path[0].spectral_mode;
+        vertex.active_channel = path[0].active_channel;
+        vertex.geometry_type = geometry_type;
+        vertex.geometry_index = geometry_index;
+        vertex.primitive_index = primitive_index;
+        vertex.material_index = material_index;
+        vertex.medium_index = -1;
+        vertex.measure = GpuPathVertexMeasure::Area;
+        vertex.transport_mode = GpuPathTransportMode::Importance;
+        vertex.sample_index = static_cast<std::uint32_t>(sample_index);
+        vertex.scene_epoch = scene_epoch;
+        vertex.valid = 1;
+        for (int channel = 0; channel < scene.num_spectral_channels; ++channel) {
+            vertex.stokes_i.values[channel] = 1.0f;
+            vertex.stokes_i.wavelengths[channel] = throughput.wavelengths[channel];
+            vertex.stokes_q.wavelengths[channel] = throughput.wavelengths[channel];
+            vertex.stokes_u.wavelengths[channel] = throughput.wavelengths[channel];
+            vertex.stokes_v.wavelengths[channel] = throughput.wavelengths[channel];
+        }
+        path[depth] = vertex;
+        path_lengths[path_index] = depth + 1;
+        if (telemetry) atomicAdd(&telemetry->light_vertices, 1u);
+        throughput = throughput * spectra.albedo;
+        ray.origin = hit_p + hit_ng *
+            (outgoing.dot(hit_ng) > 0.0f ? 1e-4f : -1e-4f);
+        ray.direction = outgoing;
+    }
 }
 
 __global__ void connect_bidirectional_subpaths_kernel(

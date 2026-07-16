@@ -91,6 +91,8 @@ static __device__ inline void store_stokes_packet(RayQueue& q, int idx, const St
     }
 }
 
+enum class BoundaryTransportMode;
+
 // scatter() forward declaration (defined in path_tracer_material.cu, included at end of device TU)
 static __device__ inline bool scatter(
     const GpuRay& r_in, const GpuMaterial& mat, const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta, const SpectralPacket& dielectric_ior,
@@ -103,8 +105,9 @@ static __device__ inline bool scatter(
     int pixel_index,
     int depth,
     int num_spec,
-    float ior_outside = 1.0f,
-    float ior_inside = 1.0f,
+    float ior_outside,
+    float ior_inside,
+    BoundaryTransportMode transport_mode,
     int spectral_mode = SpectralRayModePacket,
     int active_channel = 0
 );
@@ -120,8 +123,9 @@ static __device__ inline bool scatter(
     int pixel_index,
     int depth,
     int num_spec,
-    float ior_outside = 1.0f,
-    float ior_inside = 1.0f,
+    float ior_outside,
+    float ior_inside,
+    BoundaryTransportMode transport_mode,
     int spectral_mode = SpectralRayModePacket,
     int active_channel = 0
 );
