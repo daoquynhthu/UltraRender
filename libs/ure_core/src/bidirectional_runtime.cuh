@@ -98,3 +98,19 @@ __global__ void commit_bidirectional_contributions_kernel(
     const GpuVec3* volume_merge_accumulation,
     GpuVec3* film_accumulation,
     int path_count);
+
+__global__ void solve_specular_manifold_paths_kernel(
+    GpuScene scene,
+    const GpuBidirectionalPathVertex* camera_vertices,
+    const int* camera_path_lengths,
+    int max_camera_vertices,
+    const GpuBidirectionalPathVertex* light_vertices,
+    const int* light_path_lengths,
+    int max_light_vertices,
+    GpuManifoldPathSolution* solutions,
+    int path_count,
+    int max_specular_events,
+    float tolerance,
+    int max_iterations,
+    std::uint32_t scene_epoch,
+    GpuManifoldTelemetry* telemetry);

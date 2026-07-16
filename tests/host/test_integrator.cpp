@@ -95,10 +95,10 @@ static int test_manifold_pivoted_newton_linearization() {
     return 0;
 }
 
-static int test_gpu_renderer_rejects_unimplemented_specular_manifold() {
+static int test_gpu_renderer_rejects_unbounded_specular_manifold() {
     ure::RenderConfig config;
     config.specular_manifold.enabled = true;
-    config.specular_manifold.max_specular_events = 2;
+    config.specular_manifold.max_specular_events = 5;
     config.specular_manifold.solver_tolerance = 1e-4f;
     config.specular_manifold.max_newton_iterations = 16;
 
@@ -108,7 +108,7 @@ static int test_gpu_renderer_rejects_unimplemented_specular_manifold() {
         ure::scene_ir::SceneIR scene;
         engine->load_scene_ir(scene);
     } catch (const std::runtime_error& e) {
-        rejected = std::string(e.what()).find("Specular manifold GPU solver is not implemented yet") != std::string::npos;
+        rejected = std::string(e.what()).find("must be in [1, 4]") != std::string::npos;
     }
     CHECK(rejected);
     return 0;
@@ -485,7 +485,7 @@ int main() {
     failed += run("test_specular_interface_oblique_jacobian_reciprocity", test_specular_interface_oblique_jacobian_reciprocity);
     failed += run("test_specular_interface_total_internal_reflection_gate", test_specular_interface_total_internal_reflection_gate);
     failed += run("test_manifold_pivoted_newton_linearization", test_manifold_pivoted_newton_linearization);
-    failed += run("test_gpu_renderer_rejects_unimplemented_specular_manifold", test_gpu_renderer_rejects_unimplemented_specular_manifold);
+    failed += run("test_gpu_renderer_rejects_unbounded_specular_manifold", test_gpu_renderer_rejects_unbounded_specular_manifold);
     failed += run("test_bidirectional_measure_conversion_contract", test_bidirectional_measure_conversion_contract);
     failed += run("test_bidirectional_technique_enumeration_and_mis_partition", test_bidirectional_technique_enumeration_and_mis_partition);
     failed += run("test_vcm_progressive_radius_and_kernel_normalization", test_vcm_progressive_radius_and_kernel_normalization);

@@ -6,6 +6,7 @@
 #include "ure/host_texture.hpp"
 #include "ure/integrator/restir_pt.cuh"
 #include "ure/integrator/bidirectional.cuh"
+#include "ure/integrator/specular_manifold.cuh"
 #include "ure/render_config.hpp"
 
 #if defined(_MSC_VER)
@@ -152,6 +153,9 @@ struct GpuContext {
     std::uint64_t vcm_radius_iteration = 0;
     float vcm_current_surface_radius = 0.0f;
     float vcm_current_volume_radius = 0.0f;
+    GpuManifoldPathSolution* d_manifold_solutions = nullptr;
+    GpuManifoldTelemetry* d_manifold_telemetry = nullptr;
+    GpuManifoldTelemetry last_manifold_telemetry = {};
     int bidirectional_camera_path_capacity = 0;
     int bidirectional_light_path_capacity = 0;
     size_t bidirectional_required_bytes = 0;

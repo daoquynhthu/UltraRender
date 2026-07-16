@@ -64,6 +64,46 @@ struct GpuManifoldChainSolveResult {
     int valid = 0;
 };
 
+enum class GpuManifoldRejectReason : int {
+    None = 0,
+    NoTrailingChain = 1,
+    UnsupportedMaterial = 2,
+    InvalidPrimitive = 3,
+    InvalidInitialState = 4,
+    Singular = 5,
+    TotalInternalReflection = 6,
+    Residual = 7,
+    Stale = 8
+};
+
+struct GpuManifoldPathSolution {
+    GpuManifoldSurfacePoint surfaces[4] = {};
+    float parameters[kMaxGpuManifoldVariables] = {};
+    float determinant = 0.0f;
+    float residual = 0.0f;
+    std::uint32_t scene_epoch = 0;
+    int anchor_camera_vertex = -1;
+    int light_vertex = -1;
+    int event_count = 0;
+    int iterations = 0;
+    GpuManifoldRejectReason reject_reason =
+        GpuManifoldRejectReason::NoTrailingChain;
+    int valid = 0;
+};
+
+struct GpuManifoldTelemetry {
+    std::uint32_t attempted = 0;
+    std::uint32_t converged = 0;
+    std::uint32_t rejected_no_chain = 0;
+    std::uint32_t rejected_material = 0;
+    std::uint32_t rejected_primitive = 0;
+    std::uint32_t rejected_singular = 0;
+    std::uint32_t rejected_tir = 0;
+    std::uint32_t rejected_residual = 0;
+    std::uint32_t rejected_stale = 0;
+    std::uint64_t total_iterations = 0;
+};
+
 static __device__ inline void project_gpu_manifold_parameters(
     GpuManifoldPrimitiveKind kind,
     float& u,

@@ -6,6 +6,7 @@
 #include "ure/gpu_spectrum_utils.cuh"
 #include "ure/gpu_structs.hpp"
 #include "ure/integrator/bidirectional.cuh"
+#include "ure/integrator/specular_manifold.cuh"
 #include "ure/path_tracer_sampling.cuh"
 
 namespace ure::gpu {
@@ -1411,6 +1412,156 @@ __global__ void commit_bidirectional_contributions_kernel(
         isfinite(contribution.z)) {
         film_accumulation[path_index] =
             film_accumulation[path_index] + contribution;
+    }
+}
+
+__global__ void solve_specular_manifold_paths_kernel(
+    GpuScene scene,
+    const GpuBidirectionalPathVertex* camera_vertices,
+    const int* camera_path_lengths,
+    int max_camera_vertices,
+    const GpuBidirectionalPathVertex* light_vertices,
+    const int* light_path_lengths,
+    int max_light_vertices,
+    GpuManifoldPathSolution* solutions,
+    int path_count,
+    int max_specular_events,
+    float tolerance,
+    int max_iterations,
+    std::uint32_t scene_epoch,
+    GpuManifoldTelemetry* telemetry) {
+    const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (path_index >= path_count || !camera_vertices ||
+        !camera_path_lengths || !light_vertices || !light_path_lengths ||
+        !solutions || max_specular_events <= 0 || max_specular_events > 4) {
+        return;
+    }
+    GpuManifoldPathSolution solution = {};
+    solution.scene_epoch = scene_epoch;
+    const int camera_length = camera_path_lengths[path_index];
+    const int light_length = light_path_lengths[path_index];
+    if (camera_length < 2 || camera_length > max_camera_vertices ||
+        light_length <= 0 || light_length > max_light_vertices) {
+        solution.reject_reason = GpuManifoldRejectReason::NoTrailingChain;
+        solutions[path_index] = solution;
+        if (telemetry) atomicAdd(&telemetry->rejected_no_chain, 1u);
+        return;
+    }
+    const GpuBidirectionalPathVertex* camera_path =
+        camera_vertices + path_index * max_camera_vertices;
+    const GpuBidirectionalPathVertex* light_path =
+        light_vertices + path_index * max_light_vertices;
+    int chain_start = camera_length;
+    while (chain_start > 0 && camera_path[chain_start - 1].delta) {
+        --chain_start;
+    }
+    const int event_count = camera_length - chain_start;
+    if (chain_start <= 0 || event_count <= 0 ||
+        event_count > max_specular_events) {
+        solution.reject_reason = GpuManifoldRejectReason::NoTrailingChain;
+        solutions[path_index] = solution;
+        if (telemetry) atomicAdd(&telemetry->rejected_no_chain, 1u);
+        return;
+    }
+    if (telemetry) atomicAdd(&telemetry->attempted, 1u);
+    GpuManifoldChainEvent events[4] = {};
+    for (int event = 0; event < event_count; ++event) {
+        const GpuBidirectionalPathVertex vertex =
+            camera_path[chain_start + event];
+        if (!vertex.valid || vertex.scene_epoch != scene_epoch) {
+            solution.reject_reason = GpuManifoldRejectReason::Stale;
+            solutions[path_index] = solution;
+            if (telemetry) atomicAdd(&telemetry->rejected_stale, 1u);
+            return;
+        }
+        if (vertex.material_index < 0 ||
+            vertex.material_index >= scene.material_count) {
+            solution.reject_reason = GpuManifoldRejectReason::UnsupportedMaterial;
+            solutions[path_index] = solution;
+            if (telemetry) atomicAdd(&telemetry->rejected_material, 1u);
+            return;
+        }
+        const GpuMaterial material = scene.materials[vertex.material_index];
+        if (material.type != MaterialType::Dielectric &&
+            material.type != MaterialType::Metal) {
+            solution.reject_reason = GpuManifoldRejectReason::UnsupportedMaterial;
+            solutions[path_index] = solution;
+            if (telemetry) atomicAdd(&telemetry->rejected_material, 1u);
+            return;
+        }
+        if (!extract_gpu_manifold_primitive(
+                scene, vertex.geometry_type, vertex.geometry_index,
+                vertex.primitive_index, events[event].primitive) ||
+            !initialize_gpu_manifold_parameters(
+                events[event].primitive, vertex.position,
+                events[event].u, events[event].v)) {
+            solution.reject_reason = GpuManifoldRejectReason::InvalidPrimitive;
+            solutions[path_index] = solution;
+            if (telemetry) atomicAdd(&telemetry->rejected_primitive, 1u);
+            return;
+        }
+        events[event].transmission =
+            vertex.incoming.dot(vertex.geometric_normal) *
+                vertex.outgoing.dot(vertex.geometric_normal) < 0.0f ? 1 : 0;
+        const bool outside =
+            vertex.incoming.dot(vertex.geometric_normal) > 0.0f;
+        events[event].eta_i = outside ? 1.0f : material.ior;
+        events[event].eta_t = outside ? material.ior : 1.0f;
+        if (!events[event].transmission) {
+            events[event].eta_i = 1.0f;
+            events[event].eta_t = 1.0f;
+        }
+    }
+    const GpuBidirectionalPathVertex anchor = camera_path[chain_start - 1];
+    const GpuBidirectionalPathVertex light = light_path[0];
+    if (!anchor.valid || !light.valid || anchor.scene_epoch != scene_epoch ||
+        light.scene_epoch != scene_epoch) {
+        solution.reject_reason = GpuManifoldRejectReason::Stale;
+        solutions[path_index] = solution;
+        if (telemetry) atomicAdd(&telemetry->rejected_stale, 1u);
+        return;
+    }
+    const GpuManifoldChainSolveResult solved = solve_gpu_manifold_chain(
+        events, event_count, anchor.position, light.position,
+        tolerance, max_iterations);
+    solution.anchor_camera_vertex = chain_start - 1;
+    solution.light_vertex = 0;
+    solution.event_count = event_count;
+    solution.iterations = solved.iterations;
+    solution.determinant = solved.determinant;
+    solution.residual = solved.residual;
+    for (int event = 0; event < event_count; ++event) {
+        solution.surfaces[event] = solved.surfaces[event];
+        solution.parameters[event * 2] = solved.parameters[event * 2];
+        solution.parameters[event * 2 + 1] = solved.parameters[event * 2 + 1];
+    }
+    if (!solved.valid) {
+        solution.reject_reason = solved.total_internal_reflection
+            ? GpuManifoldRejectReason::TotalInternalReflection
+            : (fabsf(solved.determinant) <= 1e-8f
+                ? GpuManifoldRejectReason::Singular
+                : GpuManifoldRejectReason::Residual);
+        solutions[path_index] = solution;
+        if (telemetry) {
+            if (solved.total_internal_reflection) {
+                atomicAdd(&telemetry->rejected_tir, 1u);
+            } else if (solution.reject_reason ==
+                       GpuManifoldRejectReason::Singular) {
+                atomicAdd(&telemetry->rejected_singular, 1u);
+            } else {
+                atomicAdd(&telemetry->rejected_residual, 1u);
+            }
+        }
+        return;
+    }
+    solution.reject_reason = GpuManifoldRejectReason::None;
+    solution.valid = 1;
+    solutions[path_index] = solution;
+    if (telemetry) {
+        atomicAdd(&telemetry->converged, 1u);
+        atomicAdd(
+            reinterpret_cast<unsigned long long*>(&telemetry->total_iterations),
+            static_cast<unsigned long long>(solved.iterations));
     }
 }
 

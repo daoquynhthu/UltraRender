@@ -17,6 +17,9 @@
 #include "ure/specular_manifold.hpp"
 
 #include "../../libs/ure_core/src/path_tracer_kernel.cu"
+namespace ure::gpu {
+#include "../../libs/ure_core/src/bidirectional_runtime.cuh"
+}
 
 using namespace ure::gpu;
 
@@ -3065,6 +3068,110 @@ static int test_vcm_builds_bounded_grid_and_merges_surface_vertices() {
     return 0;
 }
 
+static int test_manifold_runtime_writes_converged_scene_solution() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.integrator.mode = ure::IntegratorMode::BDPT;
+    config.bidirectional.max_camera_vertices = 4;
+    config.bidirectional.max_light_vertices = 2;
+    config.bidirectional.memory_budget_mb = 64;
+    config.specular_manifold.enabled = true;
+    config.specular_manifold.max_specular_events = 2;
+    GpuMaterialData mirror = {};
+    mirror.header.type = MaterialType::Metal;
+    mirror.header.roughness = 0.0f;
+    mirror.albedo = SpectralPacket(0.9f);
+    GpuMaterialData emitter = {};
+    emitter.header.type = MaterialType::Light;
+    emitter.emission = SpectralPacket(4.0f);
+    GpuSphere mirror_sphere = {GpuVec3(), 1.0f, 7};
+    GpuSphere light_sphere = {GpuVec3(2.0f, -1.0f, 0.0f), 0.1f, 8};
+    GpuContext* ctx = init_gpu_renderer(
+        4, 4, {}, {}, {mirror_sphere, light_sphere},
+        {mirror, emitter}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->d_manifold_solutions != nullptr);
+    CHECK(ctx->d_manifold_telemetry != nullptr);
+    std::vector<GpuBidirectionalPathVertex> camera_vertices(
+        16 * config.bidirectional.max_camera_vertices);
+    std::vector<GpuBidirectionalPathVertex> light_vertices(
+        16 * config.bidirectional.max_light_vertices);
+    const float theta = 3.14159265358979323846f * 0.42f;
+    const float phi = 6.2831853071795864769f * 0.12f;
+    const GpuVec3 initial_normal(
+        std::sin(theta) * std::cos(phi), std::cos(theta),
+        std::sin(theta) * std::sin(phi));
+    camera_vertices[0].position = GpuVec3(2.0f, 1.0f, 0.0f);
+    camera_vertices[0].valid = 1;
+    camera_vertices[0].scene_epoch = ctx->bidirectional_scene_epoch;
+    camera_vertices[1].position = initial_normal;
+    camera_vertices[1].geometric_normal = initial_normal;
+    camera_vertices[1].incoming = GpuVec3(1.0f, 1.0f, 0.0f).normalize();
+    camera_vertices[1].outgoing = GpuVec3(1.0f, -1.0f, 0.0f).normalize();
+    camera_vertices[1].geometry_type = 0;
+    camera_vertices[1].primitive_index = 0;
+    camera_vertices[1].material_index = 7;
+    camera_vertices[1].delta = 1;
+    camera_vertices[1].valid = 1;
+    camera_vertices[1].scene_epoch = ctx->bidirectional_scene_epoch;
+    light_vertices[0].position = GpuVec3(2.0f, -1.0f, 0.0f);
+    light_vertices[0].valid = 1;
+    light_vertices[0].scene_epoch = ctx->bidirectional_scene_epoch;
+    std::vector<int> camera_lengths(16, 0);
+    std::vector<int> light_lengths(16, 0);
+    camera_lengths[0] = 2;
+    light_lengths[0] = 1;
+    CHECK_CUDA(cudaMemcpy(
+        ctx->d_camera_path_vertices, camera_vertices.data(),
+        camera_vertices.size() * sizeof(GpuBidirectionalPathVertex),
+        cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(
+        ctx->d_light_path_vertices, light_vertices.data(),
+        light_vertices.size() * sizeof(GpuBidirectionalPathVertex),
+        cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(
+        ctx->d_camera_path_lengths, camera_lengths.data(),
+        camera_lengths.size() * sizeof(int), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(
+        ctx->d_light_path_lengths, light_lengths.data(),
+        light_lengths.size() * sizeof(int), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemset(
+        ctx->d_manifold_telemetry, 0, sizeof(GpuManifoldTelemetry)));
+    GpuScene scene = {};
+    scene.spheres = ctx->d_spheres;
+    scene.sphere_count = ctx->sphere_count;
+    scene.materials = ctx->d_materials;
+    scene.material_count = ctx->material_count;
+    solve_specular_manifold_paths_kernel<<<1, 32>>>(
+        scene, ctx->d_camera_path_vertices, ctx->d_camera_path_lengths,
+        config.bidirectional.max_camera_vertices,
+        ctx->d_light_path_vertices, ctx->d_light_path_lengths,
+        config.bidirectional.max_light_vertices,
+        ctx->d_manifold_solutions, 16, 2, 1e-5f, 32,
+        ctx->bidirectional_scene_epoch, ctx->d_manifold_telemetry);
+    CHECK_CUDA(cudaGetLastError());
+    GpuManifoldPathSolution solution = {};
+    GpuManifoldTelemetry telemetry = {};
+    CHECK_CUDA(cudaMemcpy(
+        &solution, ctx->d_manifold_solutions, sizeof(solution),
+        cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(
+        &telemetry, ctx->d_manifold_telemetry, sizeof(telemetry),
+        cudaMemcpyDeviceToHost));
+    CHECK(solution.valid == 1);
+    CHECK(solution.event_count == 1);
+    CHECK(solution.anchor_camera_vertex == 0);
+    CHECK_FLOAT_EQ(solution.surfaces[0].position.x, 1.0f, 1e-4f);
+    CHECK(solution.residual <= 1e-5f);
+    CHECK(std::fabs(solution.determinant) > 1e-8f);
+    CHECK(telemetry.attempted == 1);
+    CHECK(telemetry.converged == 1);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
 static int test_restir_di_production_surface_scheduler_renders_and_reuses() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -3907,6 +4014,7 @@ int main() {
     RUN_TEST(test_manifold_extracts_scene_primitives_on_device);
     RUN_TEST(test_bidirectional_light_subpath_transports_rough_metal_stokes);
     RUN_TEST(test_vcm_builds_bounded_grid_and_merges_surface_vertices);
+    RUN_TEST(test_manifold_runtime_writes_converged_scene_solution);
     RUN_TEST(test_restir_di_production_surface_scheduler_renders_and_reuses);
     RUN_TEST(test_restir_pt_replays_diffuse_surface_suffixes);
     RUN_TEST(test_restir_pt_replays_scalar_depolarizing_volume_suffixes);

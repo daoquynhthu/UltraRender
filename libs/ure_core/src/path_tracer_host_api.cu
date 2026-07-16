@@ -1304,7 +1304,6 @@ static void validate_specular_manifold_config(const ure::RenderConfig& config) {
         throw std::runtime_error(
             "Specular manifold max_newton_iterations must be in [1, 64]");
     }
-    throw std::runtime_error("Specular manifold GPU solver is not implemented yet; specular dielectric NEE remains blocked");
 }
 
 static void validate_bidirectional_config(const ure::RenderConfig& config) {
@@ -1623,6 +1622,8 @@ static void release_bidirectional_runtime(GpuContext* ctx) {
     cudaFree(ctx->d_vcm_volume_grid_entries);
     cudaFree(ctx->d_vcm_volume_grid_entry_count);
     cudaFree(ctx->d_vcm_volume_merge_accum);
+    cudaFree(ctx->d_manifold_solutions);
+    cudaFree(ctx->d_manifold_telemetry);
     ctx->d_camera_path_vertices = nullptr;
     ctx->d_light_path_vertices = nullptr;
     ctx->d_camera_path_lengths = nullptr;
@@ -1638,6 +1639,9 @@ static void release_bidirectional_runtime(GpuContext* ctx) {
     ctx->d_vcm_volume_grid_entries = nullptr;
     ctx->d_vcm_volume_grid_entry_count = nullptr;
     ctx->d_vcm_volume_merge_accum = nullptr;
+    ctx->d_manifold_solutions = nullptr;
+    ctx->d_manifold_telemetry = nullptr;
+    ctx->last_manifold_telemetry = {};
     ctx->vcm_grid_capacity = 0;
     ctx->vcm_grid_entry_capacity = 0;
     ctx->vcm_radius_iteration = 0;
@@ -1652,7 +1656,8 @@ static void release_bidirectional_runtime(GpuContext* ctx) {
 
 static void alloc_bidirectional_runtime(GpuContext* ctx) {
     if (!ctx->render_config.bidirectional.enabled &&
-        !ctx->render_config.vcm.enabled) return;
+        !ctx->render_config.vcm.enabled &&
+        !ctx->render_config.specular_manifold.enabled) return;
     const size_t pixel_count = static_cast<size_t>(
         checked_primary_ray_count(ctx->width, ctx->height));
     const size_t camera_path_count = static_cast<size_t>(ctx->queueA.capacity);
@@ -1722,6 +1727,12 @@ static void alloc_bidirectional_runtime(GpuContext* ctx) {
     const size_t vcm_volume_accum_bytes =
         ctx->render_config.vcm.enabled && ctx->render_config.vcm.merge_volumes
         ? connection_bytes : 0;
+    const size_t manifold_solutions_bytes =
+        ctx->render_config.specular_manifold.enabled
+        ? pixel_count * sizeof(GpuManifoldPathSolution) : 0;
+    const size_t manifold_telemetry_bytes =
+        ctx->render_config.specular_manifold.enabled
+        ? sizeof(GpuManifoldTelemetry) : 0;
     size_t required_bytes = 0;
     const auto add_bytes = [&](size_t bytes) {
         if (bytes > max_size - required_bytes) {
@@ -1744,6 +1755,8 @@ static void alloc_bidirectional_runtime(GpuContext* ctx) {
     add_bytes(vcm_volume_entries_bytes);
     add_bytes(vcm_volume_counter_bytes);
     add_bytes(vcm_volume_accum_bytes);
+    add_bytes(manifold_solutions_bytes);
+    add_bytes(manifold_telemetry_bytes);
     ctx->bidirectional_required_bytes = required_bytes;
     size_t free_bytes = 0;
     size_t total_bytes = 0;
@@ -1783,6 +1796,12 @@ static void alloc_bidirectional_runtime(GpuContext* ctx) {
             &ctx->d_vcm_grid_entry_count, vcm_counter_bytes));
         UR_CUDA_CHECK(cudaMalloc(&ctx->d_vcm_merge_accum, vcm_accum_bytes));
     }
+    if (ctx->render_config.specular_manifold.enabled) {
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_manifold_solutions, manifold_solutions_bytes));
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_manifold_telemetry, manifold_telemetry_bytes));
+    }
     if (ctx->render_config.vcm.enabled &&
         ctx->render_config.vcm.merge_volumes) {
         UR_CUDA_CHECK(cudaMalloc(
@@ -1794,6 +1813,12 @@ static void alloc_bidirectional_runtime(GpuContext* ctx) {
             vcm_volume_counter_bytes));
         UR_CUDA_CHECK(cudaMalloc(
             &ctx->d_vcm_volume_merge_accum, vcm_volume_accum_bytes));
+    }
+    if (ctx->render_config.specular_manifold.enabled) {
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_manifold_solutions, 0, manifold_solutions_bytes));
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_manifold_telemetry, 0, manifold_telemetry_bytes));
     }
     UR_CUDA_CHECK(cudaMemset(ctx->d_camera_path_vertices, 0, camera_bytes));
     UR_CUDA_CHECK(cudaMemset(ctx->d_light_path_vertices, 0, light_bytes));
@@ -2228,6 +2253,10 @@ GpuContext* init_gpu_renderer(int width, int height,
     } else if (ctx->render_config.integrator.mode == ure::IntegratorMode::VCM) {
         ctx->render_config.bidirectional.enabled = true;
         ctx->render_config.vcm.enabled = true;
+    } else if (ctx->render_config.integrator.mode ==
+               ure::IntegratorMode::SpecularManifold) {
+        ctx->render_config.bidirectional.enabled = true;
+        ctx->render_config.specular_manifold.enabled = true;
     }
     ctx->has_previous_camera = false;
 
@@ -2954,6 +2983,15 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         UR_CUDA_CHECK(cudaMemset(
             ctx->d_bidirectional_connection_accum, 0,
             static_cast<size_t>(primary_ray_count) * sizeof(GpuVec3)));
+        if (ctx->d_manifold_telemetry) {
+            UR_CUDA_CHECK(cudaMemset(
+                ctx->d_manifold_telemetry, 0,
+                sizeof(GpuManifoldTelemetry)));
+            UR_CUDA_CHECK(cudaMemset(
+                ctx->d_manifold_solutions, 0,
+                static_cast<size_t>(primary_ray_count) *
+                    sizeof(GpuManifoldPathSolution)));
+        }
         const std::uint32_t next_path_index =
             static_cast<std::uint32_t>(primary_ray_count);
         UR_CUDA_CHECK(cudaMemcpy(
@@ -3284,6 +3322,21 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         if (ctx->render_config.vcm.enabled) {
             ++ctx->vcm_radius_iteration;
         }
+        if (ctx->render_config.specular_manifold.enabled) {
+            solve_specular_manifold_paths_kernel<<<blocks, num_threads_wf>>>(
+                scene, ctx->d_camera_path_vertices,
+                ctx->d_camera_path_lengths,
+                ctx->render_config.bidirectional.max_camera_vertices,
+                ctx->d_light_path_vertices, ctx->d_light_path_lengths,
+                ctx->render_config.bidirectional.max_light_vertices,
+                ctx->d_manifold_solutions, primary_ray_count,
+                ctx->render_config.specular_manifold.max_specular_events,
+                ctx->render_config.specular_manifold.solver_tolerance,
+                ctx->render_config.specular_manifold.max_newton_iterations,
+                ctx->bidirectional_scene_epoch,
+                ctx->d_manifold_telemetry);
+            UR_CUDA_CHECK(cudaGetLastError());
+        }
         commit_bidirectional_contributions_kernel<<<blocks, num_threads_wf>>>(
             ctx->d_bidirectional_connection_accum,
             ctx->render_config.vcm.enabled &&
@@ -3319,6 +3372,12 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             &ctx->last_bidirectional_telemetry,
             ctx->d_bidirectional_telemetry,
             sizeof(GpuBidirectionalTelemetry), cudaMemcpyDeviceToHost));
+        if (ctx->d_manifold_telemetry) {
+            UR_CUDA_CHECK(cudaMemcpy(
+                &ctx->last_manifold_telemetry,
+                ctx->d_manifold_telemetry,
+                sizeof(GpuManifoldTelemetry), cudaMemcpyDeviceToHost));
+        }
         if (ctx->last_bidirectional_telemetry.buffer_overflow > 0) {
             throw std::runtime_error("VCM spatial hash entry capacity overflow");
         }

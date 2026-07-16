@@ -62,6 +62,8 @@ Multi-event chains assemble one coupled `2N` residual and Jacobian because every
 
 Production chain initialization extracts analytic spheres, direct mesh triangles, and transformed instance triangles from stable scene geometry and primitive identities. Instance vertices are transformed into world space before solving. Initial sphere angles or triangle barycentrics are reconstructed from the captured hit position and projected into their valid parameter domains.
 
+The production solve pass scans each camera path for a bounded trailing delta chain, validates material and scene epoch, solves against the sampled light endpoint, and writes a context-owned immutable solution artifact. The artifact contains anchor/light identities, world-space surface points, parameters, determinant, residual, iterations, epoch, and a typed rejection reason. Telemetry distinguishes missing chains, unsupported materials, invalid primitives, stale data, singular systems, total internal reflection, and residual failure.
+
 ## Configuration and modes
 
 `IntegratorMode` gains `BDPT` and `VCM`. A bidirectional configuration owns maximum camera/light vertices, connections per pixel, memory budget, and light-tracing policy. A VCM configuration owns initial radius, alpha, grid capacity, and surface/volume merge policy. Existing `SpecularManifoldConfig` remains the bounded Newton policy.
