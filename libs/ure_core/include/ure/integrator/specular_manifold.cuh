@@ -12,6 +12,137 @@ struct GpuManifoldLinearSolveResult {
     int valid = 0;
 };
 
+enum class GpuManifoldPrimitiveKind : int {
+    Sphere = 0,
+    Triangle = 1
+};
+
+struct GpuManifoldPrimitive {
+    GpuManifoldPrimitiveKind kind = GpuManifoldPrimitiveKind::Sphere;
+    GpuVec3 p0 = {};
+    GpuVec3 p1 = {};
+    GpuVec3 p2 = {};
+    float radius = 0.0f;
+};
+
+struct GpuManifoldSurfacePoint {
+    GpuVec3 position = {};
+    GpuVec3 normal = {};
+    GpuVec3 dp_du = {};
+    GpuVec3 dp_dv = {};
+    int valid = 0;
+};
+
+struct GpuSingleManifoldSolveResult {
+    GpuManifoldSurfacePoint surface = {};
+    float u = 0.0f;
+    float v = 0.0f;
+    float residual = 0.0f;
+    float determinant = 0.0f;
+    int iterations = 0;
+    int total_internal_reflection = 0;
+    int valid = 0;
+};
+
+static __device__ inline GpuManifoldSurfacePoint
+evaluate_gpu_manifold_surface(
+    const GpuManifoldPrimitive& primitive,
+    float u,
+    float v) {
+    GpuManifoldSurfacePoint surface = {};
+    if (!isfinite(u) || !isfinite(v)) return surface;
+    if (primitive.kind == GpuManifoldPrimitiveKind::Sphere) {
+        if (!(primitive.radius > 0.0f) || u <= 0.0f || u >= 1.0f ||
+            v < 0.0f || v >= 1.0f) return surface;
+        const float theta = 3.14159265358979323846f * u;
+        const float phi = 6.2831853071795864769f * v;
+        const float sin_theta = sinf(theta);
+        const float cos_theta = cosf(theta);
+        const float sin_phi = sinf(phi);
+        const float cos_phi = cosf(phi);
+        surface.normal = GpuVec3(
+            sin_theta * cos_phi, cos_theta, sin_theta * sin_phi);
+        surface.position = primitive.p0 + surface.normal * primitive.radius;
+        surface.dp_du = GpuVec3(
+            cos_theta * cos_phi, -sin_theta, cos_theta * sin_phi) *
+            (primitive.radius * 3.14159265358979323846f);
+        surface.dp_dv = GpuVec3(
+            -sin_theta * sin_phi, 0.0f, sin_theta * cos_phi) *
+            (primitive.radius * 6.2831853071795864769f);
+    } else {
+        if (u < 0.0f || v < 0.0f || u + v > 1.0f) return surface;
+        surface.dp_du = primitive.p1 - primitive.p0;
+        surface.dp_dv = primitive.p2 - primitive.p0;
+        const GpuVec3 raw_normal = surface.dp_du.cross(surface.dp_dv);
+        if (raw_normal.length_sq() <= 1e-16f) return surface;
+        surface.normal = raw_normal.normalize();
+        surface.position = primitive.p0 + surface.dp_du * u +
+            surface.dp_dv * v;
+    }
+    if (surface.dp_du.length_sq() <= 1e-16f ||
+        surface.dp_dv.length_sq() <= 1e-16f) return {};
+    surface.valid = 1;
+    return surface;
+}
+
+static __device__ inline bool gpu_manifold_constraint(
+    const GpuManifoldPrimitive& primitive,
+    const GpuVec3& previous,
+    const GpuVec3& next,
+    float u,
+    float v,
+    int transmission,
+    float eta_i,
+    float eta_t,
+    float* residual) {
+    if (!residual || !(eta_i > 0.0f) || !(eta_t > 0.0f)) return false;
+    const GpuManifoldSurfacePoint surface =
+        evaluate_gpu_manifold_surface(primitive, u, v);
+    if (!surface.valid) return false;
+    const GpuVec3 to_previous = previous - surface.position;
+    const GpuVec3 to_next = next - surface.position;
+    if (to_previous.length_sq() <= 1e-16f ||
+        to_next.length_sq() <= 1e-16f) return false;
+    const GpuVec3 previous_direction = to_previous.normalize();
+    const GpuVec3 next_direction = to_next.normalize();
+    const float previous_side = previous_direction.dot(surface.normal);
+    const float next_side = next_direction.dot(surface.normal);
+    if ((!transmission &&
+         (!(previous_side > 0.0f) || !(next_side > 0.0f))) ||
+        (transmission && previous_side * next_side >= 0.0f)) return false;
+    GpuVec3 generalized_half = transmission
+        ? previous_direction * eta_i + next_direction * eta_t
+        : previous_direction + next_direction;
+    if (generalized_half.length_sq() <= 1e-16f) return false;
+    generalized_half = generalized_half.normalize();
+    const GpuVec3 tangent_u = surface.dp_du.normalize();
+    GpuVec3 tangent_v = surface.normal.cross(tangent_u);
+    if (tangent_v.length_sq() <= 1e-16f) return false;
+    tangent_v = tangent_v.normalize();
+    residual[0] = generalized_half.dot(tangent_u);
+    residual[1] = generalized_half.dot(tangent_v);
+    return isfinite(residual[0]) && isfinite(residual[1]);
+}
+
+static __device__ inline void project_gpu_manifold_parameters(
+    GpuManifoldPrimitiveKind kind,
+    float& u,
+    float& v) {
+    if (kind == GpuManifoldPrimitiveKind::Sphere) {
+        u = fminf(1.0f - 1e-5f, fmaxf(1e-5f, u));
+        v = v - floorf(v);
+        if (v < 0.0f) v += 1.0f;
+    } else {
+        u = fmaxf(0.0f, u);
+        v = fmaxf(0.0f, v);
+        const float sum = u + v;
+        if (sum > 1.0f) {
+            u /= sum;
+            v /= sum;
+        }
+    }
+}
+
 static __device__ inline GpuManifoldLinearSolveResult
 solve_gpu_manifold_linear_system(
     const float* matrix,
@@ -92,6 +223,146 @@ solve_gpu_manifold_newton_step(
     }
     return solve_gpu_manifold_linear_system(
         jacobian, right_hand_side, dimension, pivot_tolerance);
+}
+
+static __device__ inline GpuSingleManifoldSolveResult
+solve_gpu_single_manifold_vertex(
+    const GpuManifoldPrimitive& primitive,
+    const GpuVec3& previous,
+    const GpuVec3& next,
+    float initial_u,
+    float initial_v,
+    int transmission,
+    float eta_i,
+    float eta_t,
+    float tolerance,
+    int max_iterations) {
+    GpuSingleManifoldSolveResult result = {};
+    if (!(tolerance > 0.0f) || max_iterations <= 0 ||
+        max_iterations > 64) return result;
+    float u = initial_u;
+    float v = initial_v;
+    project_gpu_manifold_parameters(primitive.kind, u, v);
+    constexpr float kDifferenceStep = 1e-4f;
+    constexpr float kPivotTolerance = 1e-8f;
+    for (int iteration = 0; iteration < max_iterations; ++iteration) {
+        if (transmission) {
+            const GpuManifoldSurfacePoint candidate_surface =
+                evaluate_gpu_manifold_surface(primitive, u, v);
+            const GpuVec3 to_previous = previous - candidate_surface.position;
+            if (!candidate_surface.valid ||
+                to_previous.length_sq() <= 1e-16f) return result;
+            const float cosine = fabsf(
+                to_previous.normalize().dot(candidate_surface.normal));
+            const float sine_squared = fmaxf(
+                0.0f, 1.0f - cosine * cosine);
+            const float eta = eta_i / eta_t;
+            if (eta * eta * sine_squared >= 1.0f) {
+                result.total_internal_reflection = 1;
+                return result;
+            }
+        }
+        float residual[2] = {};
+        if (!gpu_manifold_constraint(
+                primitive, previous, next, u, v, transmission,
+                eta_i, eta_t, residual)) return result;
+        const float norm = sqrtf(
+            residual[0] * residual[0] + residual[1] * residual[1]);
+        result.iterations = iteration;
+        if (norm <= tolerance) {
+            result.surface = evaluate_gpu_manifold_surface(primitive, u, v);
+            result.u = u;
+            result.v = v;
+            result.residual = norm;
+            if (transmission) {
+                GpuVec3 incident = previous - result.surface.position;
+                if (incident.length_sq() <= 1e-16f) return {};
+                incident = incident.normalize();
+                const float cosine = fabsf(incident.dot(result.surface.normal));
+                const float sine_squared = fmaxf(0.0f, 1.0f - cosine * cosine);
+                const float eta = eta_i / eta_t;
+                if (eta * eta * sine_squared >= 1.0f) {
+                    result.total_internal_reflection = 1;
+                    result.valid = 0;
+                    return result;
+                }
+            }
+            result.valid = result.surface.valid;
+            return result;
+        }
+        float jacobian[4] = {};
+        for (int variable = 0; variable < 2; ++variable) {
+            float plus_u = u;
+            float plus_v = v;
+            float minus_u = u;
+            float minus_v = v;
+            if (variable == 0) {
+                plus_u += kDifferenceStep;
+                minus_u -= kDifferenceStep;
+            } else {
+                plus_v += kDifferenceStep;
+                minus_v -= kDifferenceStep;
+            }
+            project_gpu_manifold_parameters(primitive.kind, plus_u, plus_v);
+            project_gpu_manifold_parameters(primitive.kind, minus_u, minus_v);
+            float plus_residual[2] = {};
+            float minus_residual[2] = {};
+            if (!gpu_manifold_constraint(
+                    primitive, previous, next, plus_u, plus_v, transmission,
+                    eta_i, eta_t, plus_residual) ||
+                !gpu_manifold_constraint(
+                    primitive, previous, next, minus_u, minus_v, transmission,
+                    eta_i, eta_t, minus_residual)) return result;
+            const float parameter_delta = variable == 0
+                ? plus_u - minus_u : plus_v - minus_v;
+            if (fabsf(parameter_delta) <= 1e-8f) return result;
+            jacobian[variable] =
+                (plus_residual[0] - minus_residual[0]) / parameter_delta;
+            jacobian[2 + variable] =
+                (plus_residual[1] - minus_residual[1]) / parameter_delta;
+        }
+        const GpuManifoldLinearSolveResult step =
+            solve_gpu_manifold_newton_step(
+                jacobian, residual, 2, kPivotTolerance);
+        if (!step.valid) return result;
+        result.determinant = step.determinant;
+        bool accepted = false;
+        float damping = 1.0f;
+        for (int line_search = 0; line_search < 10; ++line_search) {
+            float candidate_u = u + damping * step.solution[0];
+            float candidate_v = v + damping * step.solution[1];
+            project_gpu_manifold_parameters(
+                primitive.kind, candidate_u, candidate_v);
+            float candidate_residual[2] = {};
+            if (gpu_manifold_constraint(
+                    primitive, previous, next, candidate_u, candidate_v,
+                    transmission, eta_i, eta_t, candidate_residual)) {
+                const float candidate_norm = sqrtf(
+                    candidate_residual[0] * candidate_residual[0] +
+                    candidate_residual[1] * candidate_residual[1]);
+                if (candidate_norm < norm) {
+                    u = candidate_u;
+                    v = candidate_v;
+                    accepted = true;
+                    break;
+                }
+            }
+            damping *= 0.5f;
+        }
+        if (!accepted) return result;
+    }
+    float residual[2] = {};
+    if (!gpu_manifold_constraint(
+            primitive, previous, next, u, v, transmission,
+            eta_i, eta_t, residual)) return result;
+    result.surface = evaluate_gpu_manifold_surface(primitive, u, v);
+    result.u = u;
+    result.v = v;
+    result.residual = sqrtf(
+        residual[0] * residual[0] + residual[1] * residual[1]);
+    result.iterations = max_iterations;
+    result.valid = result.surface.valid && result.residual <= tolerance;
+    return result;
 }
 
 }

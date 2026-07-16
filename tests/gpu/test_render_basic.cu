@@ -256,6 +256,44 @@ __global__ void manifold_pivoted_solve_kernel(float* output) {
         singular, rhs, 2, 1e-8f).valid);
 }
 
+__global__ void manifold_primitive_newton_kernel(float* output) {
+    GpuManifoldPrimitive sphere = {};
+    sphere.kind = GpuManifoldPrimitiveKind::Sphere;
+    sphere.radius = 1.0f;
+    const GpuSingleManifoldSolveResult sphere_result =
+        solve_gpu_single_manifold_vertex(
+            sphere, GpuVec3(2.0f, 1.0f, 0.0f),
+            GpuVec3(2.0f, -1.0f, 0.0f), 0.42f, 0.12f,
+            0, 1.0f, 1.0f, 1e-5f, 32);
+    output[0] = float(sphere_result.valid);
+    output[1] = sphere_result.surface.position.x;
+    output[2] = sphere_result.surface.position.y;
+    output[3] = sphere_result.residual;
+    output[4] = sphere_result.determinant;
+    GpuManifoldPrimitive triangle = {};
+    triangle.kind = GpuManifoldPrimitiveKind::Triangle;
+    triangle.p0 = GpuVec3(0.0f, -2.0f, -2.0f);
+    triangle.p1 = GpuVec3(0.0f, 2.0f, -2.0f);
+    triangle.p2 = GpuVec3(0.0f, 0.0f, 2.0f);
+    const GpuSingleManifoldSolveResult triangle_result =
+        solve_gpu_single_manifold_vertex(
+            triangle, GpuVec3(1.0f, 1.0f, 0.0f),
+            GpuVec3(1.0f, -1.0f, 0.0f), 0.2f, 0.2f,
+            0, 1.0f, 1.0f, 1e-5f, 32);
+    output[5] = float(triangle_result.valid);
+    output[6] = triangle_result.surface.position.y;
+    output[7] = triangle_result.surface.position.z;
+    output[8] = triangle_result.residual;
+    output[9] = triangle_result.determinant;
+    const GpuSingleManifoldSolveResult tir_result =
+        solve_gpu_single_manifold_vertex(
+            triangle, GpuVec3(1.0f, 1.7320508f, 0.0f),
+            GpuVec3(-1.0f, 0.0f, 0.0f), 0.25f, 0.5f,
+            1, 1.5f, 1.0f, 1e-5f, 32);
+    output[10] = float(tir_result.valid);
+    output[11] = float(tir_result.total_internal_reflection);
+}
+
 __global__ void path_guided_light_selection_kernel(float* cdf, float* guide_weights, float* out) {
     GpuScene scene = {};
     scene.light_count = 2;
@@ -2669,6 +2707,31 @@ static int test_manifold_pivoted_newton_step_on_device() {
     return 0;
 }
 
+static int test_manifold_sphere_and_triangle_newton_on_device() {
+    REQUIRE_GPU();
+    float* output = nullptr;
+    CHECK_CUDA(cudaMalloc(&output, 12 * sizeof(float)));
+    DeviceMem cleanup(output);
+    manifold_primitive_newton_kernel<<<1, 1>>>(output);
+    CHECK_CUDA(cudaGetLastError());
+    float values[12] = {};
+    CHECK_CUDA(cudaMemcpy(
+        values, output, sizeof(values), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(values[0], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[1], 1.0f, 1e-4f);
+    CHECK_FLOAT_EQ(values[2], 0.0f, 1e-4f);
+    CHECK(values[3] <= 1e-5f);
+    CHECK(std::fabs(values[4]) > 1e-8f);
+    CHECK_FLOAT_EQ(values[5], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[6], 0.0f, 1e-4f);
+    CHECK_FLOAT_EQ(values[7], 0.0f, 1e-4f);
+    CHECK(values[8] <= 1e-5f);
+    CHECK(std::fabs(values[9]) > 1e-8f);
+    CHECK_FLOAT_EQ(values[10], 0.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[11], 1.0f, 0.0f);
+    return 0;
+}
+
 static int test_bidirectional_light_subpath_transports_rough_metal_stokes() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -3708,6 +3771,7 @@ int main() {
     RUN_TEST(test_bidirectional_runtime_owns_bounded_vertex_storage);
     RUN_TEST(test_bidirectional_strategy_density_partitions_on_device);
     RUN_TEST(test_manifold_pivoted_newton_step_on_device);
+    RUN_TEST(test_manifold_sphere_and_triangle_newton_on_device);
     RUN_TEST(test_bidirectional_light_subpath_transports_rough_metal_stokes);
     RUN_TEST(test_vcm_builds_bounded_grid_and_merges_surface_vertices);
     RUN_TEST(test_restir_di_production_surface_scheduler_renders_and_reuses);

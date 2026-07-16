@@ -56,6 +56,8 @@ The solver evaluates reflection or transmission per vertex from the actual spect
 
 The bounded numerical core supports at most four two-parameter specular events. Host and GPU implementations use partial-pivot elimination, expose the signed determinant, reject non-finite or singular systems, and solve the Newton linearization `J delta = -F`. Runtime validation caps the chain at eight variables and 64 iterations before any GPU allocation.
 
+GPU primitive evaluation uses analytic sphere angular coordinates and triangle barycentric coordinates with explicit position and tangent derivatives. The single-event solver enforces reflection or generalized Snell tangent constraints, physical hemisphere topology, parameter-domain projection, central-difference Jacobians, damped line search, residual and determinant thresholds, and an explicit total-internal-reflection gate.
+
 ## Configuration and modes
 
 `IntegratorMode` gains `BDPT` and `VCM`. A bidirectional configuration owns maximum camera/light vertices, connections per pixel, memory budget, and light-tracing policy. A VCM configuration owns initial radius, alpha, grid capacity, and surface/volume merge policy. Existing `SpecularManifoldConfig` remains the bounded Newton policy.
