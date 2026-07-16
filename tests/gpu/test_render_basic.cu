@@ -2407,6 +2407,52 @@ static int test_restir_di_production_uses_ping_pong_reservoirs() {
     return 0;
 }
 
+static int test_restir_pt_owns_bounded_ping_pong_suffix_history() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.integrator.mode = ure::IntegratorMode::RestirPT;
+    config.restir_pt.enabled = true;
+    config.restir_pt.temporal_reuse = true;
+
+    GpuContext* ctx = init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->d_restir_pt_reservoirs[0] != nullptr);
+    CHECK(ctx->d_restir_pt_reservoirs[1] != nullptr);
+    CHECK(ctx->d_restir_pt_reservoirs[0] != ctx->d_restir_pt_reservoirs[1]);
+    CHECK(ctx->d_restir_pt_telemetry != nullptr);
+    CHECK(ctx->restir_pt_required_bytes > 0);
+    CHECK(ctx->restir_pt_required_bytes <= ctx->restir_pt_budget_bytes);
+    CHECK(ctx->restir_pt_input_index == 0);
+
+    GpuRestirPTReservoir dirty = {};
+    dirty.valid = 1;
+    dirty.candidate_count = 7;
+    CHECK_CUDA(cudaMemcpy(
+        ctx->d_restir_pt_reservoirs[0], &dirty, sizeof(dirty),
+        cudaMemcpyHostToDevice));
+    const std::uint32_t previous_epoch = ctx->restir_pt_scene_epoch;
+    reset_accumulation_gpu(ctx);
+    GpuRestirPTReservoir cleared = {};
+    CHECK_CUDA(cudaMemcpy(
+        &cleared, ctx->d_restir_pt_reservoirs[0], sizeof(cleared),
+        cudaMemcpyDeviceToHost));
+    CHECK(cleared.valid == 0);
+    CHECK(cleared.candidate_count == 0);
+    CHECK(ctx->restir_pt_scene_epoch != previous_epoch);
+
+    bool rejected = false;
+    try {
+        (void)render_pass_gpu(ctx, 1);
+    } catch (const std::runtime_error& error) {
+        rejected = std::string(error.what()).find("suffix scheduler") != std::string::npos;
+    }
+    CHECK(rejected);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
 static int test_restir_di_production_surface_scheduler_renders_and_reuses() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -3059,6 +3105,7 @@ int main() {
     RUN_TEST(test_restir_di_device_reservoir_merge_and_compatibility);
     RUN_TEST(test_restir_di_reconstructs_light_at_current_reference_point);
     RUN_TEST(test_restir_di_production_uses_ping_pong_reservoirs);
+    RUN_TEST(test_restir_pt_owns_bounded_ping_pong_suffix_history);
     RUN_TEST(test_restir_di_production_surface_scheduler_renders_and_reuses);
     RUN_TEST(test_restir_di_production_volume_scheduler_renders_and_reuses);
     RUN_TEST(test_restir_di_visible_shadow_updates_reservoir_metadata);

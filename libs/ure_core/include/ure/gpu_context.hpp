@@ -4,6 +4,7 @@
 #include <cuda_runtime.h>
 #include "ure/gpu_structs.hpp"
 #include "ure/host_texture.hpp"
+#include "ure/integrator/restir_pt.cuh"
 #include "ure/render_config.hpp"
 
 #if defined(_MSC_VER)
@@ -122,6 +123,12 @@ struct GpuContext {
     int restir_di_input_index = 0;
     std::uint32_t restir_di_scene_epoch = 1;
     size_t restir_di_required_bytes = 0;
+    GpuRestirPTReservoir* d_restir_pt_reservoirs[2] = {nullptr, nullptr};
+    GpuRestirPTTelemetry* d_restir_pt_telemetry = nullptr;
+    int restir_pt_input_index = 0;
+    std::uint32_t restir_pt_scene_epoch = 1;
+    size_t restir_pt_required_bytes = 0;
+    size_t restir_pt_budget_bytes = 0;
     float* d_wavelength_proposal_cdf = nullptr;
     float* d_wavelength_proposal_pdf = nullptr;
     int wavelength_proposal_count = 0;
@@ -160,6 +167,7 @@ struct GpuContext {
     int last_integrator_restir_reservoir_count = 0;
     GpuRestirDITelemetry* d_restir_di_telemetry = nullptr;
     GpuRestirDITelemetry last_restir_di_telemetry = {};
+    GpuRestirPTTelemetry last_restir_pt_telemetry = {};
 
     std::vector<GpuSphere> host_spheres_for_light_distribution;
     std::vector<GpuLightRecord> host_light_records_for_distribution;

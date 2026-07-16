@@ -1274,7 +1274,6 @@ static void validate_restir_pt_config(const ure::RenderConfig& config) {
         config.restir_pt.normal_threshold > 1.0f) {
         throw std::runtime_error("ReSTIR PT reconnection thresholds are invalid");
     }
-    throw std::runtime_error("ReSTIR PT GPU integrator is not implemented yet");
 }
 
 static void validate_specular_manifold_config(const ure::RenderConfig& config) {
@@ -1470,6 +1469,74 @@ static void alloc_restir_di_reservoirs(GpuContext* ctx) {
     UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_valid, pixel_bytes * sizeof(int)));
     clear_restir_di_reservoirs(ctx);
     ctx->last_integrator_restir_reservoir_count = pixel_count;
+}
+
+static void release_restir_pt_reservoirs(GpuContext* ctx) {
+    cudaFree(ctx->d_restir_pt_telemetry);
+    for (auto& reservoir : ctx->d_restir_pt_reservoirs) {
+        cudaFree(reservoir);
+        reservoir = nullptr;
+    }
+    ctx->d_restir_pt_telemetry = nullptr;
+    ctx->restir_pt_input_index = 0;
+    ctx->restir_pt_required_bytes = 0;
+    ctx->restir_pt_budget_bytes = 0;
+    ctx->last_restir_pt_telemetry = {};
+}
+
+static void clear_restir_pt_reservoirs(GpuContext* ctx) {
+    if (!ctx) return;
+    const size_t pixel_count = static_cast<size_t>(ctx->width) * ctx->height;
+    for (auto* reservoir : ctx->d_restir_pt_reservoirs) {
+        if (reservoir) {
+            UR_CUDA_CHECK(cudaMemset(
+                reservoir, 0, pixel_count * sizeof(GpuRestirPTReservoir)));
+        }
+    }
+    if (ctx->d_restir_pt_telemetry) {
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_restir_pt_telemetry, 0, sizeof(GpuRestirPTTelemetry)));
+    }
+    ctx->restir_pt_input_index = 0;
+    ctx->last_restir_pt_telemetry = {};
+}
+
+static void alloc_restir_pt_reservoirs(GpuContext* ctx) {
+    if (!ctx->render_config.restir_pt.enabled) return;
+    const size_t pixel_count = static_cast<size_t>(
+        checked_primary_ray_count(ctx->width, ctx->height));
+    if (pixel_count > std::numeric_limits<size_t>::max() /
+                          sizeof(GpuRestirPTReservoir)) {
+        throw std::runtime_error("ReSTIR PT reservoir storage size overflow");
+    }
+    const size_t reservoir_bytes = pixel_count * sizeof(GpuRestirPTReservoir);
+    if (reservoir_bytes > (std::numeric_limits<size_t>::max() -
+                           sizeof(GpuRestirPTTelemetry)) / 2) {
+        throw std::runtime_error("ReSTIR PT total storage size overflow");
+    }
+    ctx->restir_pt_required_bytes =
+        2 * reservoir_bytes + sizeof(GpuRestirPTTelemetry);
+    size_t free_bytes = 0;
+    size_t total_bytes = 0;
+    UR_CUDA_CHECK(cudaMemGetInfo(&free_bytes, &total_bytes));
+    constexpr size_t kMiB = 1024ull * 1024ull;
+    const size_t reserve = std::max<size_t>(256ull * kMiB, total_bytes / 10);
+    const size_t allocatable = free_bytes > reserve ? free_bytes - reserve : 0;
+    ctx->restir_pt_budget_bytes =
+        std::min({allocatable, total_bytes / 20, 512ull * kMiB});
+    if (ctx->restir_pt_required_bytes > ctx->restir_pt_budget_bytes) {
+        throw std::runtime_error(
+            "ReSTIR PT reservoirs require " +
+            std::to_string(ctx->restir_pt_required_bytes) +
+            " bytes but device budget permits " +
+            std::to_string(ctx->restir_pt_budget_bytes));
+    }
+    for (auto& reservoir : ctx->d_restir_pt_reservoirs) {
+        UR_CUDA_CHECK(cudaMalloc(&reservoir, reservoir_bytes));
+    }
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_restir_pt_telemetry, sizeof(GpuRestirPTTelemetry)));
+    clear_restir_pt_reservoirs(ctx);
 }
 
 struct HostLightMeshData {
@@ -1954,6 +2021,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     alloc_soa(ctx->d_mat_emission, ctx->pointers_to_free);
     ctx->num_spectral_channels = num_channels;
     alloc_restir_di_reservoirs(ctx);
+    alloc_restir_pt_reservoirs(ctx);
 
     auto alloc_resources = [mat_count](SpectralResource*& d_ptr, std::vector<void*>& free_list) {
         if (mat_count > 0) {
@@ -2328,6 +2396,9 @@ void reset_accumulation_gpu(GpuContext* ctx) {
     clear_restir_di_reservoirs(ctx);
     ++ctx->restir_di_scene_epoch;
     if (ctx->restir_di_scene_epoch == 0) ctx->restir_di_scene_epoch = 1;
+    clear_restir_pt_reservoirs(ctx);
+    ++ctx->restir_pt_scene_epoch;
+    if (ctx->restir_pt_scene_epoch == 0) ctx->restir_pt_scene_epoch = 1;
     if (ctx->d_path_guiding_light_weights && ctx->light_count > 0) {
         UR_CUDA_CHECK(cudaMemset(ctx->d_path_guiding_light_weights, 0, ctx->light_count * sizeof(float)));
     }
@@ -2370,6 +2441,7 @@ void free_gpu_renderer(GpuContext* ctx) {
     cudaFree(ctx->d_instances);
     release_light_distribution(ctx);
     release_restir_di_reservoirs(ctx);
+    release_restir_pt_reservoirs(ctx);
     release_wavelength_proposal(ctx);
 
     free_ray_queue(ctx->queueA);
@@ -2387,6 +2459,10 @@ void free_gpu_renderer(GpuContext* ctx) {
 }
 
 int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
+    if (ctx->render_config.restir_pt.enabled) {
+        throw std::runtime_error(
+            "ReSTIR PT suffix scheduler is not implemented yet");
+    }
     if (ctx->d_path_guiding_light_weights && ctx->light_count > 0) {
         ++ctx->path_guiding_passes_since_decay;
         if (ctx->path_guiding_passes_since_decay >= ctx->render_config.path_guiding.decay_interval) {

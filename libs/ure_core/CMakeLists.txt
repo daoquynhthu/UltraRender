@@ -1,6 +1,7 @@
 add_library(ure_core STATIC
     src/mie_solver.cpp
     src/restir_reservoir.cpp
+    src/restir_pt.cpp
     src/restir_di_runtime.cu
     src/ure_c_api.cpp
     src/path_tracer_kernel.cu

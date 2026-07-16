@@ -1,5 +1,6 @@
 #include "ure/gpu_driver.hpp"
 #include "ure/integrator/restir_reservoir.hpp"
+#include "ure/integrator/restir_pt.hpp"
 #include "ure/render.hpp"
 #include "ure/scene_ir.hpp"
 #include "ure/specular_manifold.hpp"
@@ -292,6 +293,33 @@ static int test_restir_defensive_pairwise_mis_partitions_unmatched_support() {
     return 0;
 }
 
+static int test_restir_pt_dimension_intervals_are_versioned_and_bounded() {
+    const ure::integrator::RestirPTDimensionInterval valid{1, 12, 8};
+    CHECK(ure::integrator::validate_restir_pt_dimension_interval(valid, 32));
+    CHECK(!ure::integrator::validate_restir_pt_dimension_interval({2, 12, 8}, 32));
+    CHECK(!ure::integrator::validate_restir_pt_dimension_interval({1, 28, 8}, 32));
+    CHECK(!ure::integrator::validate_restir_pt_dimension_interval({1, 12, 0}, 32));
+    return 0;
+}
+
+static int test_restir_pt_pdf_conversion_uses_one_shared_measure() {
+    CHECK_NEAR(ure::integrator::restir_pt_convert_pdf_to_shared_measure(0.25, 4.0), 1.0, 1e-12);
+    CHECK_NEAR(ure::integrator::restir_pt_convert_pdf_to_shared_measure(0.0, 4.0), 0.0, 1e-12);
+    CHECK_NEAR(ure::integrator::restir_pt_convert_pdf_to_shared_measure(0.25, -1.0), 0.0, 1e-12);
+    return 0;
+}
+
+static int test_restir_pt_replay_is_deterministic_and_dimension_separated() {
+    const ure::integrator::RestirPTDimensionInterval interval{1, 20, 4};
+    const double first = ure::integrator::restir_pt_replay_sample(91, interval, 0);
+    CHECK_NEAR(first, ure::integrator::restir_pt_replay_sample(91, interval, 0), 0.0);
+    CHECK(first >= 0.0 && first < 1.0);
+    CHECK(first != ure::integrator::restir_pt_replay_sample(91, interval, 1));
+    CHECK(ure::integrator::restir_pt_replay_bits(91, interval, 4) == 0);
+    CHECK(ure::integrator::restir_pt_replay_bits(91, {2, 20, 4}, 0) == 0);
+    return 0;
+}
+
 static int run(const char* name, int (*fn)()) {
     std::cout << "  test: " << name << " ... ";
     int rc = fn();
@@ -323,6 +351,9 @@ int main() {
     failed += run("test_restir_reservoir_rejects_invalid_candidate_density", test_restir_reservoir_rejects_invalid_candidate_density);
     failed += run("test_restir_neighbor_offsets_are_deterministic_and_bounded", test_restir_neighbor_offsets_are_deterministic_and_bounded);
     failed += run("test_restir_defensive_pairwise_mis_partitions_unmatched_support", test_restir_defensive_pairwise_mis_partitions_unmatched_support);
+    failed += run("test_restir_pt_dimension_intervals_are_versioned_and_bounded", test_restir_pt_dimension_intervals_are_versioned_and_bounded);
+    failed += run("test_restir_pt_pdf_conversion_uses_one_shared_measure", test_restir_pt_pdf_conversion_uses_one_shared_measure);
+    failed += run("test_restir_pt_replay_is_deterministic_and_dimension_separated", test_restir_pt_replay_is_deterministic_and_dimension_separated);
     std::cout << "  failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
