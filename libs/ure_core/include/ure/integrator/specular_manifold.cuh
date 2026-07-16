@@ -64,6 +64,92 @@ struct GpuManifoldChainSolveResult {
     int valid = 0;
 };
 
+static __device__ inline void project_gpu_manifold_parameters(
+    GpuManifoldPrimitiveKind kind,
+    float& u,
+    float& v);
+
+static __device__ inline bool extract_gpu_manifold_primitive(
+    const GpuScene& scene,
+    int geometry_type,
+    int geometry_index,
+    int primitive_index,
+    GpuManifoldPrimitive& primitive) {
+    primitive = {};
+    if (geometry_type == 0) {
+        if (primitive_index < 0 || primitive_index >= scene.sphere_count ||
+            !scene.spheres) return false;
+        const GpuSphere sphere = scene.spheres[primitive_index];
+        if (!(sphere.radius > 0.0f)) return false;
+        primitive.kind = GpuManifoldPrimitiveKind::Sphere;
+        primitive.p0 = sphere.center;
+        primitive.radius = sphere.radius;
+        return true;
+    }
+    int mesh_index = geometry_index;
+    const GpuInstance* instance = nullptr;
+    if (geometry_type == 2) {
+        if (geometry_index < 0 || geometry_index >= scene.instance_count ||
+            !scene.instances) return false;
+        instance = &scene.instances[geometry_index];
+        mesh_index = instance->mesh_index;
+    } else if (geometry_type != 1) {
+        return false;
+    }
+    if (mesh_index < 0 || mesh_index >= scene.mesh_count || !scene.meshes) {
+        return false;
+    }
+    const GpuMesh mesh = scene.meshes[mesh_index];
+    if (primitive_index < 0 || primitive_index >= mesh.triangle_count ||
+        !mesh.vertices || !mesh.indices) return false;
+    const int i0 = mesh.indices[primitive_index * 3];
+    const int i1 = mesh.indices[primitive_index * 3 + 1];
+    const int i2 = mesh.indices[primitive_index * 3 + 2];
+    if (i0 < 0 || i1 < 0 || i2 < 0) return false;
+    primitive.kind = GpuManifoldPrimitiveKind::Triangle;
+    primitive.p0 = mesh.vertices[i0];
+    primitive.p1 = mesh.vertices[i1];
+    primitive.p2 = mesh.vertices[i2];
+    if (instance) {
+        primitive.p0 = instance->transform.transform_point(primitive.p0);
+        primitive.p1 = instance->transform.transform_point(primitive.p1);
+        primitive.p2 = instance->transform.transform_point(primitive.p2);
+    }
+    return (primitive.p1 - primitive.p0).cross(
+               primitive.p2 - primitive.p0).length_sq() > 1e-16f;
+}
+
+static __device__ inline bool initialize_gpu_manifold_parameters(
+    const GpuManifoldPrimitive& primitive,
+    const GpuVec3& position,
+    float& u,
+    float& v) {
+    if (primitive.kind == GpuManifoldPrimitiveKind::Sphere) {
+        const GpuVec3 offset = position - primitive.p0;
+        if (offset.length_sq() <= 1e-16f) return false;
+        const GpuVec3 normal = offset.normalize();
+        u = acosf(fminf(1.0f, fmaxf(-1.0f, normal.y))) /
+            3.14159265358979323846f;
+        v = atan2f(normal.z, normal.x) / 6.2831853071795864769f;
+        if (v < 0.0f) v += 1.0f;
+        return true;
+    }
+    const GpuVec3 edge_u = primitive.p1 - primitive.p0;
+    const GpuVec3 edge_v = primitive.p2 - primitive.p0;
+    const GpuVec3 offset = position - primitive.p0;
+    const float uu = edge_u.dot(edge_u);
+    const float uv = edge_u.dot(edge_v);
+    const float vv = edge_v.dot(edge_v);
+    const float wu = offset.dot(edge_u);
+    const float wv = offset.dot(edge_v);
+    const float determinant = uu * vv - uv * uv;
+    if (fabsf(determinant) <= 1e-16f) return false;
+    u = (wu * vv - wv * uv) / determinant;
+    v = (wv * uu - wu * uv) / determinant;
+    project_gpu_manifold_parameters(primitive.kind, u, v);
+    return true;
+}
+
 static __device__ inline GpuManifoldSurfacePoint
 evaluate_gpu_manifold_surface(
     const GpuManifoldPrimitive& primitive,

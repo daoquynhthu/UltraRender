@@ -323,6 +323,40 @@ __global__ void manifold_primitive_newton_kernel(float* output) {
     output[17] = chain_result.residual;
 }
 
+__global__ void manifold_scene_primitive_extraction_kernel(
+    GpuSphere* spheres,
+    GpuMesh* meshes,
+    GpuInstance* instances,
+    float* output) {
+    GpuScene scene = {};
+    scene.spheres = spheres;
+    scene.sphere_count = 1;
+    scene.meshes = meshes;
+    scene.mesh_count = 1;
+    scene.instances = instances;
+    scene.instance_count = 1;
+    GpuManifoldPrimitive sphere = {};
+    GpuManifoldPrimitive mesh = {};
+    GpuManifoldPrimitive instance = {};
+    output[0] = float(extract_gpu_manifold_primitive(
+        scene, 0, 0, 0, sphere));
+    output[1] = sphere.p0.x;
+    output[2] = sphere.radius;
+    output[3] = float(extract_gpu_manifold_primitive(
+        scene, 1, 0, 0, mesh));
+    output[4] = mesh.p1.y;
+    output[5] = float(extract_gpu_manifold_primitive(
+        scene, 2, 0, 0, instance));
+    output[6] = instance.p0.x;
+    float u = 0.0f;
+    float v = 0.0f;
+    output[7] = float(initialize_gpu_manifold_parameters(
+        instance, instance.p0 * 0.5f + instance.p1 * 0.25f +
+            instance.p2 * 0.25f, u, v));
+    output[8] = u;
+    output[9] = v;
+}
+
 __global__ void path_guided_light_selection_kernel(float* cdf, float* guide_weights, float* out) {
     GpuScene scene = {};
     scene.light_count = 2;
@@ -2767,6 +2801,69 @@ static int test_manifold_sphere_and_triangle_newton_on_device() {
     return 0;
 }
 
+static int test_manifold_extracts_scene_primitives_on_device() {
+    REQUIRE_GPU();
+    GpuSphere sphere = {GpuVec3(3.0f, 0.0f, 0.0f), 2.0f, 7};
+    GpuVec3 vertices[] = {
+        GpuVec3(0.0f, 0.0f, 0.0f),
+        GpuVec3(0.0f, 2.0f, 0.0f),
+        GpuVec3(0.0f, 0.0f, 2.0f)};
+    int indices[] = {0, 1, 2};
+    GpuMesh mesh = {};
+    GpuInstance instance = {};
+    instance.mesh_index = 0;
+    instance.transform = GpuMat4::identity();
+    instance.transform.m[0][3] = 4.0f;
+    GpuSphere* d_sphere = nullptr;
+    GpuVec3* d_vertices = nullptr;
+    int* d_indices = nullptr;
+    GpuMesh* d_mesh = nullptr;
+    GpuInstance* d_instance = nullptr;
+    float* output = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_sphere, sizeof(sphere)));
+    DeviceMem sphere_cleanup(d_sphere);
+    CHECK_CUDA(cudaMalloc(&d_vertices, sizeof(vertices)));
+    DeviceMem vertices_cleanup(d_vertices);
+    CHECK_CUDA(cudaMalloc(&d_indices, sizeof(indices)));
+    DeviceMem indices_cleanup(d_indices);
+    CHECK_CUDA(cudaMalloc(&d_mesh, sizeof(mesh)));
+    DeviceMem mesh_cleanup(d_mesh);
+    CHECK_CUDA(cudaMalloc(&d_instance, sizeof(instance)));
+    DeviceMem instance_cleanup(d_instance);
+    CHECK_CUDA(cudaMalloc(&output, 10 * sizeof(float)));
+    DeviceMem output_cleanup(output);
+    CHECK_CUDA(cudaMemcpy(
+        d_sphere, &sphere, sizeof(sphere), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(
+        d_vertices, vertices, sizeof(vertices), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(
+        d_indices, indices, sizeof(indices), cudaMemcpyHostToDevice));
+    mesh.vertices = d_vertices;
+    mesh.indices = d_indices;
+    mesh.triangle_count = 1;
+    CHECK_CUDA(cudaMemcpy(
+        d_mesh, &mesh, sizeof(mesh), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(
+        d_instance, &instance, sizeof(instance), cudaMemcpyHostToDevice));
+    manifold_scene_primitive_extraction_kernel<<<1, 1>>>(
+        d_sphere, d_mesh, d_instance, output);
+    CHECK_CUDA(cudaGetLastError());
+    float values[10] = {};
+    CHECK_CUDA(cudaMemcpy(
+        values, output, sizeof(values), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(values[0], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[1], 3.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[2], 2.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[3], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[4], 2.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[5], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[6], 4.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[7], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[8], 0.25f, 1e-5f);
+    CHECK_FLOAT_EQ(values[9], 0.25f, 1e-5f);
+    return 0;
+}
+
 static int test_bidirectional_light_subpath_transports_rough_metal_stokes() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -3807,6 +3904,7 @@ int main() {
     RUN_TEST(test_bidirectional_strategy_density_partitions_on_device);
     RUN_TEST(test_manifold_pivoted_newton_step_on_device);
     RUN_TEST(test_manifold_sphere_and_triangle_newton_on_device);
+    RUN_TEST(test_manifold_extracts_scene_primitives_on_device);
     RUN_TEST(test_bidirectional_light_subpath_transports_rough_metal_stokes);
     RUN_TEST(test_vcm_builds_bounded_grid_and_merges_surface_vertices);
     RUN_TEST(test_restir_di_production_surface_scheduler_renders_and_reuses);
