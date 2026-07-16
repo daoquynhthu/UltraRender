@@ -46,6 +46,8 @@ The immutable light-endpoint position density is stored separately from the firs
 
 Connection scheduling enumerates bounded actual light/camera vertex pairs rather than connecting only the light endpoint to the deepest camera vertex. Each pair reevaluates both endpoint scattering factors, geometry, visibility, and its full-path strategy density. When the pair lies inside an enabled merge kernel, connection and merge weights include the same single merge strategy in the same denominator. The legacy wavefront radiance estimator is isolated while these modes run; only the weighted connection and merge buffers are committed once to film.
 
+Material evaluation uses the Phase M runtime rather than a bidirectional-only approximation. Composite materials resolve and sample the authoritative pair of lobes and reconstruct the mixture PDF; layered materials reuse the finite-thickness dielectric coating, absorption, substrate scatter, evaluation, and PDF contracts. Their delta coating events remain excluded from ordinary connection and merging densities.
+
 ## Specular-manifold solver
 
 The manifold solver consumes stable primitive identity and differentiable local coordinates. Analytic spheres use angular coordinates; triangles use barycentric coordinates with transform-aware tangent derivatives. A bounded chain stores each specular vertex and solves the half-vector/Snell constraint with damped Newton iterations, pivoted small-matrix elimination, line search, domain projection, residual and determinant gates.

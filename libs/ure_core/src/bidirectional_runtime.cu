@@ -17,9 +17,7 @@ namespace ure::gpu {
 #include "path_tracer_bsdf.cuh"
 #include "path_tracer_volume.cuh"
 #include "path_tracer_scattered_stokes.cuh"
-#define URE_MATERIAL_TARGET_ONLY 1
 #include "path_tracer_material_runtime.cuh"
-#undef URE_MATERIAL_TARGET_ONLY
 #include "path_tracer_light_sampling.cuh"
 #include "path_tracer_material.cu"
 
@@ -86,6 +84,48 @@ __device__ float vcm_vertex_directional_pdf(
     if (vertex.material_index < 0 ||
         vertex.material_index >= scene.material_count) return 0.0f;
     const GpuMaterial material = scene.materials[vertex.material_index];
+    if (material.type == MaterialType::Composite) {
+        if (!scene.material_bsdf_lobes || material.bsdf_lobe_count != 2 ||
+            material.bsdf_lobe_start < 0 ||
+            material.bsdf_lobe_start + 2 > scene.material_bsdf_lobe_count ||
+            material.bsdf_mix_expression_root < 0) return 0.0f;
+        const ResolvedMaterialBsdfLobe first = resolve_material_bsdf_lobe(
+            scene, material, 0, vertex.uv, vertex.throughput.wavelengths);
+        const ResolvedMaterialBsdfLobe second = resolve_material_bsdf_lobe(
+            scene, material, 1, vertex.uv, vertex.throughput.wavelengths);
+        const float mix = composite_material_mix_factor(
+            scene, material, vertex.uv, vertex.throughput.wavelengths);
+        const SpectralPacket first_pdf = pdf_bsdf_spectral(
+            first.material, first.dielectric_ior, vertex.shading_normal,
+            vertex.uv, wo, wi, vertex.throughput.wavelengths,
+            scene.num_spectral_channels, dispersion_clamp);
+        const SpectralPacket second_pdf = pdf_bsdf_spectral(
+            second.material, second.dielectric_ior, vertex.shading_normal,
+            vertex.uv, wo, wi, vertex.throughput.wavelengths,
+            scene.num_spectral_channels, dispersion_clamp);
+        const int channel = spectral_mode_is_sampled(vertex.spectral_mode)
+            ? min(max(vertex.active_channel, 0), scene.num_spectral_channels - 1)
+            : 0;
+        return first_pdf.values[channel] * (1.0f - mix) +
+            second_pdf.values[channel] * mix;
+    }
+    if (material.type == MaterialType::Layered) {
+        if (!scene.material_bsdf_lobes || material.bsdf_lobe_count != 2 ||
+            material.bsdf_lobe_start < 0 ||
+            material.bsdf_lobe_start + 2 > scene.material_bsdf_lobe_count ||
+            material.layer_thickness_expression_root < 0 ||
+            material.layer_absorption_expression_root < 0) return 0.0f;
+        const ResolvedLayeredMaterial layer = resolve_layered_material(
+            scene, material, vertex.uv, vertex.throughput.wavelengths);
+        const SpectralPacket pdf = pdf_layered_bsdf_spectral(
+            layer, vertex.shading_normal, vertex.uv, wo, wi,
+            vertex.throughput.wavelengths, scene.num_spectral_channels,
+            dispersion_clamp);
+        const int channel = spectral_mode_is_sampled(vertex.spectral_mode)
+            ? min(max(vertex.active_channel, 0), scene.num_spectral_channels - 1)
+            : 0;
+        return pdf.values[channel];
+    }
     SpectralPacket dielectric_ior(material.ior);
     for (int channel = 0; channel < scene.num_spectral_channels; ++channel) {
         dielectric_ior.wavelengths[channel] =
@@ -264,9 +304,52 @@ __device__ bool evaluate_bidirectional_vertex_scattering(
     if (vertex.material_index < 0 ||
         vertex.material_index >= scene.material_count) return false;
     const GpuMaterial material = scene.materials[vertex.material_index];
-    if (material.type == MaterialType::Light ||
-        material.type == MaterialType::Composite ||
-        material.type == MaterialType::Layered) return false;
+    if (material.type == MaterialType::Light) return false;
+    if (material.type == MaterialType::Composite) {
+        if (!scene.material_bsdf_lobes || material.bsdf_lobe_count != 2 ||
+            material.bsdf_lobe_start < 0 ||
+            material.bsdf_lobe_start + 2 > scene.material_bsdf_lobe_count ||
+            material.bsdf_mix_expression_root < 0) return false;
+        const ResolvedMaterialBsdfLobe first = resolve_material_bsdf_lobe(
+            scene, material, 0, vertex.uv, vertex.throughput.wavelengths);
+        const ResolvedMaterialBsdfLobe second = resolve_material_bsdf_lobe(
+            scene, material, 1, vertex.uv, vertex.throughput.wavelengths);
+        const float mix = composite_material_mix_factor(
+            scene, material, vertex.uv, vertex.throughput.wavelengths);
+        const SpectralPacket first_value = eval_bsdf(
+            first.material, first.spectra.albedo, first.spectra.extinction,
+            first.spectra.metal_eta, first.dielectric_ior, vertex.position,
+            vertex.shading_normal, vertex.uv, wo, wi,
+            vertex.throughput.wavelengths, scene.num_spectral_channels);
+        const SpectralPacket second_value = eval_bsdf(
+            second.material, second.spectra.albedo,
+            second.spectra.extinction, second.spectra.metal_eta,
+            second.dielectric_ior, vertex.position, vertex.shading_normal,
+            vertex.uv, wo, wi, vertex.throughput.wavelengths,
+            scene.num_spectral_channels);
+        for (int channel = 0; channel < scene.num_spectral_channels;
+             ++channel) {
+            value.values[channel] = first_value.values[channel] *
+                (1.0f - mix) + second_value.values[channel] * mix;
+            value.wavelengths[channel] =
+                vertex.throughput.wavelengths[channel];
+        }
+        return true;
+    }
+    if (material.type == MaterialType::Layered) {
+        if (!scene.material_bsdf_lobes || material.bsdf_lobe_count != 2 ||
+            material.bsdf_lobe_start < 0 ||
+            material.bsdf_lobe_start + 2 > scene.material_bsdf_lobe_count ||
+            material.layer_thickness_expression_root < 0 ||
+            material.layer_absorption_expression_root < 0) return false;
+        const ResolvedLayeredMaterial layer = resolve_layered_material(
+            scene, material, vertex.uv, vertex.throughput.wavelengths);
+        value = eval_layered_bsdf(
+            layer, vertex.position, vertex.shading_normal, vertex.uv,
+            wo, wi, vertex.throughput.wavelengths,
+            scene.num_spectral_channels);
+        return true;
+    }
     GpuMaterialSoA spectra = load_mat_spectra_6x(
         scene, vertex.material_index, vertex.throughput.wavelengths);
     if (material.albedo_expression_root != -1) {
@@ -643,12 +726,16 @@ __global__ void extend_light_subpaths_kernel(
         }
         if (!surface_hit) break;
         if (material_index < 0 || material_index >= scene.material_count) break;
-        const GpuMaterial material = scene.materials[material_index];
-        if (material.type == MaterialType::Light) break;
+        const GpuMaterial source_material = scene.materials[material_index];
+        if (source_material.type == MaterialType::Light) break;
+        GpuMaterial material = source_material;
+        const bool composite = material.type == MaterialType::Composite;
+        const bool layered = material.type == MaterialType::Layered;
         if (material.type != MaterialType::Lambertian &&
             material.type != MaterialType::Cloth &&
             material.type != MaterialType::Metal &&
-            material.type != MaterialType::Dielectric) {
+            material.type != MaterialType::Dielectric && !composite &&
+            !layered) {
             if (telemetry) atomicAdd(&telemetry->rejected_delta, 1u);
             break;
         }
@@ -671,6 +758,37 @@ __global__ void extend_light_subpaths_kernel(
                 scene, material.texture_index, hit_uv.u, hit_uv.v,
                 throughput.wavelengths, scene.num_spectral_channels);
         }
+        ResolvedLayeredMaterial resolved = {};
+        float composite_mix = 0.0f;
+        SpectralPacket composite_ior = {};
+        if (composite) {
+            if (!scene.material_bsdf_lobes || material.bsdf_lobe_count != 2 ||
+                material.bsdf_lobe_start < 0 ||
+                material.bsdf_lobe_start + 2 > scene.material_bsdf_lobe_count ||
+                material.bsdf_mix_expression_root < 0) break;
+            resolved.coating = resolve_material_bsdf_lobe(
+                scene, material, 0, hit_uv, throughput.wavelengths);
+            resolved.substrate = resolve_material_bsdf_lobe(
+                scene, material, 1, hit_uv, throughput.wavelengths);
+            composite_mix = composite_material_mix_factor(
+                scene, material, hit_uv, throughput.wavelengths);
+            const float lobe_sample = sample_path_dimension(
+                sample_index, path_index, depth, kPathDimBsdfLobe);
+            const ResolvedMaterialBsdfLobe& selected =
+                lobe_sample < composite_mix
+                ? resolved.substrate : resolved.coating;
+            material = selected.material;
+            spectra = selected.spectra;
+            composite_ior = selected.dielectric_ior;
+        } else if (layered) {
+            if (!scene.material_bsdf_lobes || material.bsdf_lobe_count != 2 ||
+                material.bsdf_lobe_start < 0 ||
+                material.bsdf_lobe_start + 2 > scene.material_bsdf_lobe_count ||
+                material.layer_thickness_expression_root < 0 ||
+                material.layer_absorption_expression_root < 0) break;
+            resolved = resolve_layered_material(
+                scene, material, hit_uv, throughput.wavelengths);
+        }
         SpectralPacket dielectric_ior(material.ior);
         for (int channel = 0; channel < scene.num_spectral_channels; ++channel) {
             dielectric_ior.wavelengths[channel] = throughput.wavelengths[channel];
@@ -681,6 +799,9 @@ __global__ void extend_light_subpaths_kernel(
                 hit_uv.u, hit_uv.v, throughput.wavelengths,
                 scene.num_spectral_channels);
         }
+        if (composite) {
+            dielectric_ior = composite_ior;
+        }
         GpuRay scattered = {};
         SpectralPacket attenuation = {};
         StokesVector representative_stokes(
@@ -689,23 +810,65 @@ __global__ void extend_light_subpaths_kernel(
             path[depth - 1].stokes_u.values[0],
             path[depth - 1].stokes_v.values[0]);
         float forward_pdf = 0.0f;
-        if (!scatter(
+        const bool scattered_ok = layered
+            ? scatter_layered_material(
+                resolved, ray, hit_p, hit_n, hit_uv, throughput,
+                attenuation, scattered, representative_stokes, forward_pdf,
+                sample_index, path_index, depth,
+                scene.num_spectral_channels)
+            : scatter(
                 ray, material, spectra.albedo, spectra.extinction,
                 spectra.metal_eta, dielectric_ior,
                 hit_p, hit_n, hit_uv, throughput, attenuation, scattered,
                 representative_stokes, seed, forward_pdf,
                 dispersion_clamp, sample_index, path_index, depth,
                 scene.num_spectral_channels, 1.0f, material.ior,
-                BoundaryTransportMode::Importance, SpectralRayModePacket, -1)) {
+                BoundaryTransportMode::Importance, SpectralRayModePacket, -1);
+        if (!scattered_ok) {
             break;
+        }
+        if (composite && forward_pdf > 0.0f) {
+            const SpectralPacket first_pdf = pdf_bsdf_spectral(
+                resolved.coating.material, resolved.coating.dielectric_ior,
+                hit_n, hit_uv, -ray.direction, scattered.direction,
+                throughput.wavelengths, scene.num_spectral_channels,
+                dispersion_clamp);
+            const SpectralPacket second_pdf = pdf_bsdf_spectral(
+                resolved.substrate.material, resolved.substrate.dielectric_ior,
+                hit_n, hit_uv, -ray.direction, scattered.direction,
+                throughput.wavelengths, scene.num_spectral_channels,
+                dispersion_clamp);
+            forward_pdf = first_pdf.values[0] * (1.0f - composite_mix) +
+                second_pdf.values[0] * composite_mix;
         }
         const GpuVec3 outgoing = scattered.direction;
         const bool delta =
             (material.type == MaterialType::Metal && material.roughness <= 0.02f) ||
             (material.type == MaterialType::Dielectric &&
-             !is_rough_dielectric_bsdf(material));
-        const float reverse_pdf = delta ? 0.0f :
+             !is_rough_dielectric_bsdf(material)) ||
+            (layered && forward_pdf <= 0.0f);
+        float reverse_pdf = delta ? 0.0f :
             pdf_bsdf(material, hit_n, outgoing, -ray.direction);
+        if (composite && !delta) {
+            const SpectralPacket first_pdf = pdf_bsdf_spectral(
+                resolved.coating.material, resolved.coating.dielectric_ior,
+                hit_n, hit_uv, outgoing, -ray.direction,
+                throughput.wavelengths, scene.num_spectral_channels,
+                dispersion_clamp);
+            const SpectralPacket second_pdf = pdf_bsdf_spectral(
+                resolved.substrate.material, resolved.substrate.dielectric_ior,
+                hit_n, hit_uv, outgoing, -ray.direction,
+                throughput.wavelengths, scene.num_spectral_channels,
+                dispersion_clamp);
+            reverse_pdf = first_pdf.values[0] * (1.0f - composite_mix) +
+                second_pdf.values[0] * composite_mix;
+        } else if (layered && !delta) {
+            const SpectralPacket pdf = pdf_layered_bsdf_spectral(
+                resolved, hit_n, hit_uv, outgoing, -ray.direction,
+                throughput.wavelengths, scene.num_spectral_channels,
+                dispersion_clamp);
+            reverse_pdf = pdf.values[0];
+        }
         if (!delta && forward_pdf <= 0.0f) break;
         const GpuVec3 edge = hit_p - path[depth - 1].position;
         const float distance_squared = edge.length_sq();
@@ -745,14 +908,24 @@ __global__ void extend_light_subpaths_kernel(
         vertex.sample_index = static_cast<std::uint32_t>(sample_index);
         vertex.scene_epoch = scene_epoch;
         vertex.valid = 1;
-        transform_scattered_stokes_packets(
-            material, spectra, dielectric_ior, ray, scattered,
-            hit_n, hit_uv, throughput, 1.0f, dispersion_clamp,
-            sample_index, path_index, depth, scene.num_spectral_channels,
-            BoundaryTransportMode::Importance,
-            stokes_i, stokes_q, stokes_u, stokes_v,
-            vertex.stokes_i, vertex.stokes_q,
-            vertex.stokes_u, vertex.stokes_v);
+        if (layered) {
+            for (int channel = 0; channel < scene.num_spectral_channels;
+                 ++channel) {
+                store_packet_stokes_at(
+                    vertex.stokes_i, vertex.stokes_q, vertex.stokes_u,
+                    vertex.stokes_v, channel, representative_stokes,
+                    throughput.wavelengths[channel]);
+            }
+        } else {
+            transform_scattered_stokes_packets(
+                material, spectra, dielectric_ior, ray, scattered,
+                hit_n, hit_uv, throughput, 1.0f, dispersion_clamp,
+                sample_index, path_index, depth, scene.num_spectral_channels,
+                BoundaryTransportMode::Importance,
+                stokes_i, stokes_q, stokes_u, stokes_v,
+                vertex.stokes_i, vertex.stokes_q,
+                vertex.stokes_u, vertex.stokes_v);
+        }
         path[depth] = vertex;
         path_lengths[path_index] = depth + 1;
         if (telemetry) atomicAdd(&telemetry->light_vertices, 1u);
@@ -848,23 +1021,6 @@ __global__ void merge_vcm_surface_vertices_kernel(
             camera.measure != GpuPathVertexMeasure::Area ||
             camera.scene_epoch != scene_epoch || camera.material_index < 0 ||
             camera.material_index >= scene.material_count) continue;
-        const GpuMaterial material = scene.materials[camera.material_index];
-        if (material.type == MaterialType::Light ||
-            material.type == MaterialType::Composite ||
-            material.type == MaterialType::Layered) continue;
-        GpuMaterialSoA spectra = load_mat_spectra_6x(
-            scene, camera.material_index, camera.throughput.wavelengths);
-        if (material.albedo_expression_root != -1) {
-            spectra.albedo = eval_material_expression(
-                scene, material, material.albedo_expression_root,
-                camera.uv.u, camera.uv.v, camera.throughput.wavelengths,
-                scene.num_spectral_channels);
-        }
-        if (material.texture_index != -1) {
-            spectra.albedo = spectra.albedo * sample_texture(
-                scene, material.texture_index, camera.uv.u, camera.uv.v,
-                camera.throughput.wavelengths, scene.num_spectral_channels);
-        }
         const int center_x = vcm_cell_coordinate(
             camera.position.x, inverse_radius);
         const int center_y = vcm_cell_coordinate(
@@ -904,26 +1060,11 @@ __global__ void merge_vcm_surface_vertices_kernel(
                             fabsf(separation.dot(camera.geometric_normal)) >
                                 radius * 0.1f) continue;
                         const GpuVec3 photon_direction = light.incoming;
-                        SpectralPacket dielectric_ior(material.ior);
-                        for (int channel = 0;
-                             channel < scene.num_spectral_channels; ++channel) {
-                            dielectric_ior.wavelengths[channel] =
-                                camera.throughput.wavelengths[channel];
-                        }
-                        if (material.ior_expression_root != -1) {
-                            dielectric_ior = eval_material_expression(
-                                scene, material, material.ior_expression_root,
-                                camera.uv.u, camera.uv.v,
-                                camera.throughput.wavelengths,
-                                scene.num_spectral_channels);
-                        }
-                        const SpectralPacket bsdf = eval_bsdf(
-                            material, spectra.albedo, spectra.extinction,
-                            spectra.metal_eta, dielectric_ior,
-                            camera.position, camera.shading_normal, camera.uv,
-                            camera.incoming, photon_direction,
-                            camera.throughput.wavelengths,
-                            scene.num_spectral_channels);
+                        SpectralPacket bsdf = {};
+                        if (!evaluate_bidirectional_vertex_scattering(
+                                scene, camera, camera.incoming,
+                                photon_direction, dispersion_clamp,
+                                bsdf)) continue;
                         const int light_vertex_index =
                             entry.vertex_index % max_light_vertices;
                         const GpuBidirectionalPathVertex* light_path =
