@@ -158,6 +158,8 @@ struct GpuContext {
     int last_integrator_path_guiding_spatial_cell_count = 0;
     int last_integrator_path_guiding_directional_bin_count = 0;
     int last_integrator_restir_reservoir_count = 0;
+    GpuRestirDITelemetry* d_restir_di_telemetry = nullptr;
+    GpuRestirDITelemetry last_restir_di_telemetry = {};
 
     std::vector<GpuSphere> host_spheres_for_light_distribution;
     std::vector<GpuLightRecord> host_light_records_for_distribution;

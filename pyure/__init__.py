@@ -25,6 +25,13 @@ class SessionState(IntEnum):
     CANCELED = 4
 
 
+class EstimatorPolicy(IntEnum):
+    STANDARD = 0
+    RESTIR_DI_BIASED_PREVIEW = 1
+    RESTIR_DI_UNBIASED_PRODUCTION = 2
+    RESTIR_PT_PATH_REUSE = 3
+
+
 class LogLevel(IntEnum):
     TRACE = 0
     DEBUG = 1
@@ -46,6 +53,18 @@ class _Progress(ctypes.Structure):
         ("spp", ctypes.c_int),
         ("state", ctypes.c_int),
         ("has_scene", ctypes.c_int),
+    ]
+
+
+class _EstimatorMetadata(ctypes.Structure):
+    _fields_ = [
+        ("mode", ctypes.c_int),
+        ("policy", ctypes.c_int),
+        ("biased", ctypes.c_int),
+        ("temporal_reuse", ctypes.c_int),
+        ("spatial_reuse", ctypes.c_int),
+        ("sample_space_version", ctypes.c_uint32),
+        ("scene_epoch", ctypes.c_uint32),
     ]
 
 
@@ -126,6 +145,17 @@ class Progress:
     spp: int
     state: SessionState
     has_scene: bool
+
+
+@dataclass(frozen=True)
+class EstimatorMetadata:
+    mode: int
+    policy: EstimatorPolicy
+    biased: bool
+    temporal_reuse: bool
+    spatial_reuse: bool
+    sample_space_version: int
+    scene_epoch: int
 
 
 def _candidate_library_paths() -> list[Path]:
@@ -216,6 +246,8 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
     lib.ure_session_update_material_texture.restype = ctypes.c_int
     lib.ure_session_get_progress.argtypes = [ctypes.c_void_p]
     lib.ure_session_get_progress.restype = _Progress
+    lib.ure_session_get_estimator_metadata.argtypes = [ctypes.c_void_p]
+    lib.ure_session_get_estimator_metadata.restype = _EstimatorMetadata
     lib.ure_session_get_framebuffer_size.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_int),
@@ -341,6 +373,9 @@ class RenderSession:
         environment_light_direct_sampling: bool = False,
         environment_light_intensity: float = 1.0,
         restir_di: bool = False,
+        restir_di_temporal_reuse: bool = True,
+        restir_di_spatial_reuse: bool = False,
+        restir_di_unbiased: bool = False,
         restir_di_max_history: int = 1,
         mlt_chain_count: int = 1,
         mlt_mutations_per_chain: int = 1024,
@@ -403,9 +438,9 @@ class RenderSession:
                 float(path_guiding_learning_rate),
                 float(path_guiding_min_weight),
                 int(restir_di),
-                1,
-                0,
-                0,
+                int(restir_di_temporal_reuse),
+                int(restir_di_spatial_reuse),
+                int(restir_di_unbiased),
                 int(restir_di_max_history),
                 int(specular_manifold),
                 2,
@@ -606,6 +641,18 @@ class RenderSession:
         raw = native().ure_session_get_progress(self.handle)
         return Progress(raw.spp, SessionState(raw.state), bool(raw.has_scene))
 
+    def estimator_metadata(self) -> EstimatorMetadata:
+        raw = native().ure_session_get_estimator_metadata(self.handle)
+        return EstimatorMetadata(
+            raw.mode,
+            EstimatorPolicy(raw.policy),
+            bool(raw.biased),
+            bool(raw.temporal_reuse),
+            bool(raw.spatial_reuse),
+            raw.sample_space_version,
+            raw.scene_epoch,
+        )
+
     def framebuffer_size(self) -> tuple[int, int]:
         width = ctypes.c_int()
         height = ctypes.c_int()
@@ -683,6 +730,9 @@ def create_session(
     environment_light_direct_sampling: bool = False,
     environment_light_intensity: float = 1.0,
     restir_di: bool = False,
+    restir_di_temporal_reuse: bool = True,
+    restir_di_spatial_reuse: bool = False,
+    restir_di_unbiased: bool = False,
     restir_di_max_history: int = 1,
     mlt_chain_count: int = 1,
     mlt_mutations_per_chain: int = 1024,
@@ -722,6 +772,9 @@ def create_session(
         environment_light_direct_sampling=environment_light_direct_sampling,
         environment_light_intensity=environment_light_intensity,
         restir_di=restir_di,
+        restir_di_temporal_reuse=restir_di_temporal_reuse,
+        restir_di_spatial_reuse=restir_di_spatial_reuse,
+        restir_di_unbiased=restir_di_unbiased,
         restir_di_max_history=restir_di_max_history,
         mlt_chain_count=mlt_chain_count,
         mlt_mutations_per_chain=mlt_mutations_per_chain,

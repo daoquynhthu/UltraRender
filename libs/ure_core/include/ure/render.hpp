@@ -2,6 +2,7 @@
 
 #include "ure/render_config.hpp"
 #include "ure/ure_api.hpp"
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -11,6 +12,37 @@ struct GpuMaterialData;
 }
 
 namespace ure {
+
+enum class IntegratorEstimatorPolicy : std::uint32_t {
+    Standard = 0,
+    RestirDIBiasedPreview = 1,
+    RestirDIUnbiasedProduction = 2,
+    RestirPTPathReuse = 3
+};
+
+struct IntegratorEstimatorMetadata {
+    IntegratorMode mode = IntegratorMode::Wavefront;
+    IntegratorEstimatorPolicy policy = IntegratorEstimatorPolicy::Standard;
+    bool biased = false;
+    bool temporal_reuse = false;
+    bool spatial_reuse = false;
+    std::uint32_t sample_space_version = 0;
+    std::uint32_t scene_epoch = 0;
+};
+
+constexpr std::uint32_t kRestirDISampleSpaceVersion = 1;
+constexpr std::uint32_t kRestirPTSampleSpaceVersion = 1;
+
+IntegratorEstimatorMetadata make_integrator_estimator_metadata(
+    const RenderConfig& config,
+    std::uint32_t scene_epoch);
+
+bool compatible_integrator_estimator_metadata(
+    const IntegratorEstimatorMetadata& left,
+    const IntegratorEstimatorMetadata& right);
+
+bool validate_integrator_estimator_metadata(
+    const IntegratorEstimatorMetadata& metadata);
 
 enum class AovType {
     Beauty = 0,
@@ -74,6 +106,8 @@ public:
     // first-hit texture coordinate buffer. MotionVector is a 2-channel
     // current-minus-previous screen-space delta for camera motion.
     virtual const std::vector<float>& get_aov(AovType type) const = 0;
+
+    virtual IntegratorEstimatorMetadata get_estimator_metadata() const = 0;
 
     // Backward compatibility alias
     const std::vector<float>& get_frame_buffer() const { return get_framebuffer(); }

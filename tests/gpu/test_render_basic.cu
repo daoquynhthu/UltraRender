@@ -2407,6 +2407,143 @@ static int test_restir_di_production_uses_ping_pong_reservoirs() {
     return 0;
 }
 
+static int test_restir_di_production_surface_scheduler_renders_and_reuses() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.max_trace_depth = 3;
+    config.integrator.mode = ure::IntegratorMode::RestirDI;
+    config.restir_di.enabled = true;
+    config.restir_di.temporal_reuse = true;
+    config.restir_di.spatial_reuse = true;
+    config.restir_di.unbiased = true;
+    config.restir_di.max_history = 4;
+    config.restir_di.spatial_candidate_count = 3;
+    config.restir_di.spatial_radius = 1;
+    config.restir_di.position_threshold = 0.25f;
+
+    GpuMaterialData diffuse = {};
+    diffuse.header.type = MaterialType::Lambertian;
+    diffuse.albedo = SpectralPacket(0.8f);
+    GpuMaterialData emitter = {};
+    emitter.header.type = MaterialType::Light;
+    emitter.emission = SpectralPacket(8.0f);
+    GpuSphere surface = {GpuVec3(0.0f, 0.0f, -1.0f), 0.6f, 7};
+    GpuSphere light = {GpuVec3(0.0f, 1.25f, 0.75f), 0.35f, 8};
+
+    GpuContext* ctx = init_gpu_renderer(
+        4, 4, {}, {}, {surface, light}, {diffuse, emitter}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->light_count == 1);
+    const float camera_position[] = {0.0f, 0.0f, 2.0f};
+    const float camera_target[] = {0.0f, 0.0f, -1.0f};
+    update_camera_gpu(ctx, camera_position, camera_target, 15.0f);
+    CHECK(render_pass_gpu(ctx, 2) == 2);
+    CHECK(ctx->last_restir_di_telemetry.surface_events > 0);
+    CHECK(ctx->last_restir_di_telemetry.fresh_light_samples > 0);
+    CHECK(ctx->last_restir_di_telemetry.fresh_targets > 0);
+    CHECK(ctx->last_restir_di_telemetry.reused_candidates > 0);
+    CHECK(ctx->last_restir_di_telemetry.output_reservoirs > 0);
+    CHECK(ctx->last_restir_di_telemetry.shadow_rays > 0);
+    CHECK(ctx->restir_di_input_index == 0);
+    std::vector<GpuRestirDIReservoir> reservoirs(16);
+    CHECK_CUDA(cudaMemcpy(
+        reservoirs.data(), ctx->d_restir_di_reservoirs[ctx->restir_di_input_index],
+        reservoirs.size() * sizeof(GpuRestirDIReservoir), cudaMemcpyDeviceToHost));
+    int valid = 0;
+    int reused = 0;
+    for (const auto& reservoir : reservoirs) {
+        if (reservoir.valid) {
+            ++valid;
+            CHECK(reservoir.sample.domain == GpuRestirDomain::Surface);
+            CHECK(reservoir.normalization_weight > 0.0f);
+            CHECK(reservoir.candidate_count >= 1);
+            CHECK(reservoir.candidate_count <= 5);
+            CHECK(reservoir.history_length >= 1);
+            CHECK(reservoir.history_length <= 4);
+            if (reservoir.history_length > 1) ++reused;
+        }
+    }
+    CHECK(valid > 0);
+    CHECK(reused > 0);
+    float pixels[4 * 4 * 3] = {};
+    copy_frame_buffer_gpu(ctx, pixels);
+    float energy = 0.0f;
+    for (float value : pixels) {
+        CHECK(std::isfinite(value));
+        energy += value;
+    }
+    CHECK(energy > 0.0f);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_restir_di_production_volume_scheduler_renders_and_reuses() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.max_trace_depth = 3;
+    config.integrator.mode = ure::IntegratorMode::RestirDI;
+    config.restir_di.enabled = true;
+    config.restir_di.temporal_reuse = true;
+    config.restir_di.spatial_reuse = true;
+    config.restir_di.unbiased = true;
+    config.restir_di.max_history = 4;
+    config.restir_di.spatial_candidate_count = 3;
+    config.restir_di.spatial_radius = 1;
+    config.restir_di.position_threshold = 4.0f;
+
+    GpuMaterialData emitter = {};
+    emitter.header.type = MaterialType::Light;
+    emitter.emission = SpectralPacket(12.0f);
+    GpuSphere light = {GpuVec3(0.0f, 1.25f, 0.5f), 0.3f, 7};
+    GpuContext* ctx = init_gpu_renderer(
+        4, 4, {}, {}, {light}, {emitter}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->light_count == 1);
+    const float camera_position[] = {0.0f, 0.0f, 2.0f};
+    const float camera_target[] = {0.0f, 0.0f, -1.0f};
+    update_camera_gpu(ctx, camera_position, camera_target, 20.0f);
+    update_medium_gpu(
+        ctx, 1.0f, 0.0f, SpectralPacket(2.0f), SpectralPacket(0.0f),
+        4.0f, static_cast<int>(VolumePhaseFunction::HenyeyGreenstein));
+    CHECK(render_pass_gpu(ctx, 2) == 2);
+    CHECK(ctx->last_restir_di_telemetry.volume_events > 0);
+    CHECK(ctx->last_restir_di_telemetry.fresh_targets > 0);
+    CHECK(ctx->last_restir_di_telemetry.reused_candidates > 0);
+    CHECK(ctx->last_restir_di_telemetry.output_reservoirs > 0);
+    std::vector<GpuRestirDIReservoir> reservoirs(16);
+    CHECK_CUDA(cudaMemcpy(
+        reservoirs.data(), ctx->d_restir_di_reservoirs[ctx->restir_di_input_index],
+        reservoirs.size() * sizeof(GpuRestirDIReservoir), cudaMemcpyDeviceToHost));
+    int valid = 0;
+    for (const auto& reservoir : reservoirs) {
+        if (!reservoir.valid) continue;
+        ++valid;
+        CHECK(reservoir.sample.domain == GpuRestirDomain::Volume);
+        CHECK(reservoir.sample.stokes_i > 0.0f);
+        CHECK_FLOAT_EQ(reservoir.sample.stokes_q, 0.0f, 1e-7f);
+        CHECK_FLOAT_EQ(reservoir.sample.stokes_u, 0.0f, 1e-7f);
+        CHECK_FLOAT_EQ(reservoir.sample.stokes_v, 0.0f, 1e-7f);
+        CHECK(reservoir.normalization_weight > 0.0f);
+        CHECK(reservoir.history_length >= 1);
+        CHECK(reservoir.history_length <= 4);
+    }
+    CHECK(valid > 0);
+    float pixels[4 * 4 * 3] = {};
+    copy_frame_buffer_gpu(ctx, pixels);
+    float energy = 0.0f;
+    for (float value : pixels) {
+        CHECK(std::isfinite(value));
+        energy += value;
+    }
+    CHECK(energy > 0.0f);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
 static int test_restir_di_visible_shadow_updates_reservoir_metadata() {
     REQUIRE_GPU();
     ShadowQueue q = {};
@@ -2922,6 +3059,8 @@ int main() {
     RUN_TEST(test_restir_di_device_reservoir_merge_and_compatibility);
     RUN_TEST(test_restir_di_reconstructs_light_at_current_reference_point);
     RUN_TEST(test_restir_di_production_uses_ping_pong_reservoirs);
+    RUN_TEST(test_restir_di_production_surface_scheduler_renders_and_reuses);
+    RUN_TEST(test_restir_di_production_volume_scheduler_renders_and_reuses);
     RUN_TEST(test_restir_di_visible_shadow_updates_reservoir_metadata);
     RUN_TEST(test_importance_spectral_config_selects_nonuniform_wavelength_sampler);
     RUN_TEST(test_importance_spectral_config_uses_scene_spectral_power_proposal);

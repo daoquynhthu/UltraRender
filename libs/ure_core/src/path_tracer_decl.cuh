@@ -27,8 +27,8 @@ struct DebugEntry {
     float fval;
 };
 
-__device__ DebugEntry* g_debug_log = nullptr;
-__device__ int* g_debug_count = nullptr;
+static __device__ DebugEntry* g_debug_log = nullptr;
+static __device__ int* g_debug_count = nullptr;
 
 #define DEVICE_LOG(code_, ival_, p1_, p2_, fv_) do { \
     if (g_debug_count) { \
@@ -49,7 +49,7 @@ __device__ int* g_debug_count = nullptr;
 #define DEVICE_LOG(code, ival, p1, p2, fv) do {} while(0)
 #endif
 
-__device__ GpuVec3 reflect(const GpuVec3& v, const GpuVec3& n) {
+static __device__ GpuVec3 reflect(const GpuVec3& v, const GpuVec3& n) {
     return v - 2.0f * v.dot(n) * n;
 }
 
@@ -57,7 +57,7 @@ __device__ GpuVec3 reflect(const GpuVec3& v, const GpuVec3& n) {
 
 // SoA queue throughput load/store helpers
 // Each channel occupies a contiguous block: vals[ch * capacity + idx]
-__device__ inline SpectralPacket load_throughput(const RayQueue& q, int idx) {
+static __device__ inline SpectralPacket load_throughput(const RayQueue& q, int idx) {
     SpectralPacket t;
     for (int c = 0; c < q.num_spectral_channels; ++c) {
         t.set_sample(c, q.throughput_vals[c * q.capacity + idx]);
@@ -65,19 +65,19 @@ __device__ inline SpectralPacket load_throughput(const RayQueue& q, int idx) {
     }
     return t;
 }
-__device__ inline void store_throughput(RayQueue& q, int idx, const SpectralPacket& t) {
+static __device__ inline void store_throughput(RayQueue& q, int idx, const SpectralPacket& t) {
     for (int c = 0; c < q.num_spectral_channels; ++c) {
         q.throughput_vals[c * q.capacity + idx] = t.sample(c);
         q.throughput_wavelengths[c * q.capacity + idx] = t.wavelength(c);
     }
 }
 
-__device__ inline StokesVector load_stokes(const RayQueue& q, int idx, int channel) {
+static __device__ inline StokesVector load_stokes(const RayQueue& q, int idx, int channel) {
     int offset = channel * q.capacity + idx;
     return StokesVector(q.stokes_i[offset], q.stokes_q[offset], q.stokes_u[offset], q.stokes_v[offset]);
 }
 
-__device__ inline void store_stokes(RayQueue& q, int idx, int channel, const StokesVector& s) {
+static __device__ inline void store_stokes(RayQueue& q, int idx, int channel, const StokesVector& s) {
     int offset = channel * q.capacity + idx;
     q.stokes_i[offset] = s.I;
     q.stokes_q[offset] = s.Q;
@@ -85,14 +85,14 @@ __device__ inline void store_stokes(RayQueue& q, int idx, int channel, const Sto
     q.stokes_v[offset] = s.V;
 }
 
-__device__ inline void store_stokes_packet(RayQueue& q, int idx, const StokesVector& s) {
+static __device__ inline void store_stokes_packet(RayQueue& q, int idx, const StokesVector& s) {
     for (int c = 0; c < q.num_spectral_channels; ++c) {
         store_stokes(q, idx, c, s);
     }
 }
 
 // scatter() forward declaration (defined in path_tracer_material.cu, included at end of device TU)
-__device__ inline bool scatter(
+static __device__ inline bool scatter(
     const GpuRay& r_in, const GpuMaterial& mat, const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta, const SpectralPacket& dielectric_ior,
     const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
     const SpectralPacket& current_throughput,
@@ -109,7 +109,7 @@ __device__ inline bool scatter(
     int active_channel = 0
 );
 
-__device__ inline bool scatter(
+static __device__ inline bool scatter(
     const GpuRay& r_in, const GpuMaterial& mat, const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta,
     const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv,
     const SpectralPacket& current_throughput,

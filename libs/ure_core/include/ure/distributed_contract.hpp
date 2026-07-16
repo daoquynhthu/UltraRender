@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "ure/render.hpp"
+
 namespace ure::gpu {
 
 constexpr int kDistributedAggregateShardId = -1;
@@ -38,6 +40,7 @@ struct DistributedSampleRange {
     int width;          // image width (pixels)
     int height;         // image height (pixels)
     DistributedShardMetadata shard;
+    IntegratorEstimatorMetadata estimator;
 };
 
 // Partial framebuffer produced by one node.
@@ -48,6 +51,7 @@ struct DistributedFrameBuffer {
     int total_samples;  // number of samples accumulated in this buffer
     float* data;        // owned externally, length = width * height * 3
     DistributedShardMetadata shard;
+    IntegratorEstimatorMetadata estimator;
 };
 
 DistributedSampleRange make_sample_range(int node_id,

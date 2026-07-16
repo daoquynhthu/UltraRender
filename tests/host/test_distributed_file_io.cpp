@@ -274,6 +274,56 @@ static int test_framebuffer_file_merge_rejects_bad_shard_metadata() {
     return 0;
 }
 
+static int test_estimator_metadata_roundtrip_and_merge_rejection() {
+    const auto frame_path = temp_path("ure_estimator_roundtrip.urf");
+    const auto range_path = temp_path("ure_estimator_roundtrip.urd");
+    remove_if_exists(frame_path);
+    remove_if_exists(range_path);
+    ure::RenderConfig config;
+    config.integrator.mode = ure::IntegratorMode::RestirDI;
+    config.restir_di.enabled = true;
+    config.restir_di.unbiased = true;
+    config.restir_di.temporal_reuse = true;
+    config.restir_di.spatial_reuse = true;
+    const auto production =
+        ure::make_integrator_estimator_metadata(config, 11);
+
+    ure::gpu::DistributedSampleRange range = {3, 4, 8, 12, 20, 8, 8};
+    range.estimator = production;
+    ure::gpu::write_sample_range_file(range_path, range);
+    const auto loaded_range = ure::gpu::read_sample_range_file(range_path);
+    CHECK(ure::compatible_integrator_estimator_metadata(
+        loaded_range.estimator, production));
+
+    std::vector<float> first_data;
+    auto first = make_view(2, 1, 1, first_data);
+    first.estimator = production;
+    ure::gpu::write_framebuffer_file(frame_path, first);
+    const auto loaded = ure::gpu::read_framebuffer_file(frame_path);
+    CHECK(ure::compatible_integrator_estimator_metadata(
+        loaded.estimator, production));
+
+    std::vector<float> second_data;
+    auto second = make_view(2, 1, 1, second_data);
+    second.estimator = production;
+    second.estimator.scene_epoch = 12;
+    CHECK(throws_exception([&] {
+        ure::gpu::merge_partial_framebuffer(first, second);
+    }));
+
+    second.estimator = production;
+    second.estimator.policy =
+        ure::IntegratorEstimatorPolicy::RestirDIBiasedPreview;
+    second.estimator.biased = true;
+    second.estimator.spatial_reuse = false;
+    CHECK(throws_exception([&] {
+        ure::gpu::merge_partial_framebuffer(first, second);
+    }));
+    remove_if_exists(frame_path);
+    remove_if_exists(range_path);
+    return 0;
+}
+
 static int test_invalid_range_file_inputs() {
     const auto path = temp_path("ure_invalid_range.urd");
     remove_if_exists(path);
@@ -331,6 +381,7 @@ int main() {
     failed += run("test_shard_metadata_file_roundtrip", test_shard_metadata_file_roundtrip);
     failed += run("test_framebuffer_file_merge", test_framebuffer_file_merge);
     failed += run("test_framebuffer_file_merge_rejects_bad_shard_metadata", test_framebuffer_file_merge_rejects_bad_shard_metadata);
+    failed += run("test_estimator_metadata_roundtrip_and_merge_rejection", test_estimator_metadata_roundtrip_and_merge_rejection);
     failed += run("test_invalid_range_file_inputs", test_invalid_range_file_inputs);
     failed += run("test_invalid_framebuffer_file_inputs", test_invalid_framebuffer_file_inputs);
 

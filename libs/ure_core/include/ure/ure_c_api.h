@@ -17,6 +17,23 @@ typedef struct ure_session_progress_t {
     int has_scene;
 } ure_session_progress_t;
 
+typedef enum ure_integrator_estimator_policy_t {
+    URE_ESTIMATOR_STANDARD = 0,
+    URE_ESTIMATOR_RESTIR_DI_BIASED_PREVIEW = 1,
+    URE_ESTIMATOR_RESTIR_DI_UNBIASED_PRODUCTION = 2,
+    URE_ESTIMATOR_RESTIR_PT_PATH_REUSE = 3
+} ure_integrator_estimator_policy_t;
+
+typedef struct ure_integrator_estimator_metadata_t {
+    int mode;
+    int policy;
+    int biased;
+    int temporal_reuse;
+    int spatial_reuse;
+    uint32_t sample_space_version;
+    uint32_t scene_epoch;
+} ure_integrator_estimator_metadata_t;
+
 typedef struct ure_spectral_config_t {
     uint64_t domain_bins;
     int packet_lanes;
@@ -221,6 +238,8 @@ int ure_session_update_material_texture(ure_session_t* session,
                                         int channels,
                                         const float* data);
 ure_session_progress_t ure_session_get_progress(const ure_session_t* session);
+ure_integrator_estimator_metadata_t ure_session_get_estimator_metadata(
+    const ure_session_t* session);
 void ure_session_get_framebuffer_size(const ure_session_t* session,
                                       int* out_width,
                                       int* out_height);

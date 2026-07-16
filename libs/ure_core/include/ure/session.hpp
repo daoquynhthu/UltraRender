@@ -51,6 +51,7 @@ public:
     void get_framebuffer_size(int& out_width, int& out_height) const;
     const std::vector<float>& get_framebuffer() const;
     const std::vector<float>& get_aov(AovType type) const;
+    IntegratorEstimatorMetadata get_estimator_metadata() const;
     RenderSessionState state() const;
     bool has_scene() const;
 

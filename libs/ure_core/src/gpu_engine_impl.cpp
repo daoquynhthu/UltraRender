@@ -15,6 +15,74 @@
 
 namespace ure {
 
+IntegratorEstimatorMetadata make_integrator_estimator_metadata(
+    const RenderConfig& config,
+    std::uint32_t scene_epoch) {
+    IntegratorEstimatorMetadata metadata;
+    metadata.scene_epoch = scene_epoch;
+    const bool restir_di = config.integrator.mode == IntegratorMode::RestirDI ||
+                           config.restir_di.enabled;
+    const bool restir_pt = config.integrator.mode == IntegratorMode::RestirPT ||
+                           config.restir_pt.enabled;
+    if (restir_di && restir_pt) {
+        throw std::invalid_argument("ReSTIR DI and ReSTIR PT estimator modes are mutually exclusive");
+    }
+    metadata.mode = config.integrator.mode;
+    if (restir_di) {
+        metadata.mode = IntegratorMode::RestirDI;
+        metadata.policy = config.restir_di.unbiased
+            ? IntegratorEstimatorPolicy::RestirDIUnbiasedProduction
+            : IntegratorEstimatorPolicy::RestirDIBiasedPreview;
+        metadata.biased = !config.restir_di.unbiased;
+        metadata.temporal_reuse = config.restir_di.temporal_reuse;
+        metadata.spatial_reuse = config.restir_di.spatial_reuse;
+        metadata.sample_space_version = kRestirDISampleSpaceVersion;
+    } else if (restir_pt) {
+        metadata.mode = IntegratorMode::RestirPT;
+        metadata.policy = IntegratorEstimatorPolicy::RestirPTPathReuse;
+        metadata.temporal_reuse = config.restir_pt.temporal_reuse;
+        metadata.spatial_reuse = config.restir_pt.spatial_reuse;
+        metadata.sample_space_version = kRestirPTSampleSpaceVersion;
+    }
+    return metadata;
+}
+
+bool compatible_integrator_estimator_metadata(
+    const IntegratorEstimatorMetadata& left,
+    const IntegratorEstimatorMetadata& right) {
+    return left.mode == right.mode &&
+           left.policy == right.policy &&
+           left.biased == right.biased &&
+           left.temporal_reuse == right.temporal_reuse &&
+           left.spatial_reuse == right.spatial_reuse &&
+           left.sample_space_version == right.sample_space_version &&
+           left.scene_epoch == right.scene_epoch;
+}
+
+bool validate_integrator_estimator_metadata(
+    const IntegratorEstimatorMetadata& metadata) {
+    switch (metadata.policy) {
+    case IntegratorEstimatorPolicy::Standard:
+        return metadata.mode != IntegratorMode::RestirDI &&
+               metadata.mode != IntegratorMode::RestirPT &&
+               !metadata.biased && !metadata.temporal_reuse &&
+               !metadata.spatial_reuse && metadata.sample_space_version == 0;
+    case IntegratorEstimatorPolicy::RestirDIBiasedPreview:
+        return metadata.mode == IntegratorMode::RestirDI && metadata.biased &&
+               metadata.temporal_reuse && !metadata.spatial_reuse &&
+               metadata.sample_space_version == kRestirDISampleSpaceVersion;
+    case IntegratorEstimatorPolicy::RestirDIUnbiasedProduction:
+        return metadata.mode == IntegratorMode::RestirDI && !metadata.biased &&
+               (metadata.temporal_reuse || metadata.spatial_reuse) &&
+               metadata.sample_space_version == kRestirDISampleSpaceVersion;
+    case IntegratorEstimatorPolicy::RestirPTPathReuse:
+        return metadata.mode == IntegratorMode::RestirPT && !metadata.biased &&
+               (metadata.temporal_reuse || metadata.spatial_reuse) &&
+               metadata.sample_space_version == kRestirPTSampleSpaceVersion;
+    }
+    return false;
+}
+
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable: 4324)
@@ -189,6 +257,11 @@ public:
             break;
         }
         return buffer;
+    }
+
+    IntegratorEstimatorMetadata get_estimator_metadata() const override {
+        return make_integrator_estimator_metadata(
+            config_, gpu_context_ ? gpu_context_->restir_di_scene_epoch : 0);
     }
 
 private:

@@ -424,7 +424,18 @@ struct GpuRestirDIReservoir {
     float selected_target = 0.0f;
     float normalization_weight = 0.0f;
     std::uint32_t candidate_count = 0;
+    std::uint32_t history_length = 0;
     int valid = 0;
+};
+
+struct GpuRestirDITelemetry {
+    std::uint32_t surface_events = 0;
+    std::uint32_t volume_events = 0;
+    std::uint32_t fresh_light_samples = 0;
+    std::uint32_t fresh_targets = 0;
+    std::uint32_t reused_candidates = 0;
+    std::uint32_t output_reservoirs = 0;
+    std::uint32_t shadow_rays = 0;
 };
 
 // Phase E: Scalar-only material header. Spectral data stored as SoA in GpuScene.
@@ -639,6 +650,7 @@ struct GpuScene {
     int restir_di_spatial_radius;
     float restir_di_position_threshold;
     float restir_di_normal_threshold;
+    GpuRestirDITelemetry* restir_di_telemetry;
     int restir_di_width;
     int restir_di_height;
     int light_count;

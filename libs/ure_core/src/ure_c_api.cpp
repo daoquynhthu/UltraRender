@@ -711,6 +711,25 @@ ure_session_progress_t ure_session_get_progress(const ure_session_t* session) {
     return out;
 }
 
+ure_integrator_estimator_metadata_t ure_session_get_estimator_metadata(
+    const ure_session_t* session) {
+    ure_integrator_estimator_metadata_t out = {};
+    if (!session) return out;
+    try {
+        const IntegratorEstimatorMetadata metadata =
+            reinterpret_cast<const RenderSession*>(session)->get_estimator_metadata();
+        out.mode = static_cast<int>(metadata.mode);
+        out.policy = static_cast<int>(metadata.policy);
+        out.biased = metadata.biased ? 1 : 0;
+        out.temporal_reuse = metadata.temporal_reuse ? 1 : 0;
+        out.spatial_reuse = metadata.spatial_reuse ? 1 : 0;
+        out.sample_space_version = metadata.sample_space_version;
+        out.scene_epoch = metadata.scene_epoch;
+    } catch (...) {
+    }
+    return out;
+}
+
 void ure_session_get_framebuffer_size(const ure_session_t* session,
                                       int* out_width,
                                       int* out_height) {

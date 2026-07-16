@@ -6,7 +6,7 @@
 
 #include "ure/gpu_material_helpers.cuh"
 
-__device__ float pdf_bsdf(const GpuMaterial& mat, const GpuVec3& n, const GpuVec3& wo, const GpuVec3& wi) {
+static __device__ float pdf_bsdf(const GpuMaterial& mat, const GpuVec3& n, const GpuVec3& wo, const GpuVec3& wi) {
     if (mat.type == MaterialType::Lambertian || mat.type == MaterialType::Cloth) {
         float cosine = n.dot(wi);
         return (cosine > 0.0f) ? cosine * 0.318309886f : 0.0f;
@@ -51,7 +51,7 @@ __device__ float pdf_bsdf(const GpuMaterial& mat, const GpuVec3& n, const GpuVec
     return 0.0f;
 }
 
-__device__ SpectralPacket pdf_bsdf_spectral(
+static __device__ SpectralPacket pdf_bsdf_spectral(
     const GpuMaterial& mat,
     const SpectralPacket& dielectric_ior,
     const GpuVec3& n,
@@ -101,7 +101,7 @@ __device__ SpectralPacket pdf_bsdf_spectral(
     return result;
 }
 
-__device__ SpectralPacket pdf_bsdf_spectral(
+static __device__ SpectralPacket pdf_bsdf_spectral(
     const GpuMaterial& mat,
     const GpuVec3& n,
     const GpuVec2& uv,
@@ -116,7 +116,7 @@ __device__ SpectralPacket pdf_bsdf_spectral(
 }
 
 // Phase E: eval_bsdf receives pre-loaded SoA spectra (albedo may be texture-modulated)
-__device__ SpectralPacket eval_bsdf(
+static __device__ SpectralPacket eval_bsdf(
     const GpuMaterial& mat,
     const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta, const SpectralPacket& dielectric_ior,
     const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv, const GpuVec3& wo, const GpuVec3& wi,
@@ -228,7 +228,7 @@ __device__ SpectralPacket eval_bsdf(
     return SpectralPacket(0.0f);
 }
 
-__device__ SpectralPacket eval_bsdf(
+static __device__ SpectralPacket eval_bsdf(
     const GpuMaterial& mat,
     const SpectralPacket& albedo, const SpectralPacket& extinction, const SpectralPacket& metal_eta,
     const GpuVec3& p, const GpuVec3& n, const GpuVec2& uv, const GpuVec3& wo, const GpuVec3& wi,

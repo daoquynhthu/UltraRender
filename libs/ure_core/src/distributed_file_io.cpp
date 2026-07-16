@@ -11,7 +11,7 @@ namespace {
 
 constexpr std::array<char, 8> kRangeMagic = {'U', 'R', 'D', 'R', 'A', 'N', 'G', 'E'};
 constexpr std::array<char, 8> kFrameMagic = {'U', 'R', 'D', 'F', 'R', 'A', 'M', 'E'};
-constexpr int kVersion = 2;
+constexpr int kVersion = 3;
 
 int pixel_value_count(int width, int height) {
     if (width <= 0 || height <= 0) {
@@ -110,10 +110,40 @@ DistributedShardMetadata read_shard_metadata(std::ifstream& in) {
     return metadata;
 }
 
+void write_estimator_metadata(
+    std::ofstream& out,
+    const IntegratorEstimatorMetadata& metadata) {
+    if (!validate_integrator_estimator_metadata(metadata)) {
+        throw std::invalid_argument("invalid integrator estimator metadata");
+    }
+    write_value(out, static_cast<std::uint32_t>(metadata.mode));
+    write_value(out, static_cast<std::uint32_t>(metadata.policy));
+    write_value(out, static_cast<std::uint8_t>(metadata.biased));
+    write_value(out, static_cast<std::uint8_t>(metadata.temporal_reuse));
+    write_value(out, static_cast<std::uint8_t>(metadata.spatial_reuse));
+    write_value(out, metadata.sample_space_version);
+    write_value(out, metadata.scene_epoch);
+}
+
+IntegratorEstimatorMetadata read_estimator_metadata(std::ifstream& in) {
+    IntegratorEstimatorMetadata metadata;
+    metadata.mode = static_cast<IntegratorMode>(read_value<std::uint32_t>(in));
+    metadata.policy = static_cast<IntegratorEstimatorPolicy>(read_value<std::uint32_t>(in));
+    metadata.biased = read_value<std::uint8_t>(in) != 0;
+    metadata.temporal_reuse = read_value<std::uint8_t>(in) != 0;
+    metadata.spatial_reuse = read_value<std::uint8_t>(in) != 0;
+    metadata.sample_space_version = read_value<std::uint32_t>(in);
+    metadata.scene_epoch = read_value<std::uint32_t>(in);
+    if (!validate_integrator_estimator_metadata(metadata)) {
+        throw std::runtime_error("invalid integrator estimator metadata payload");
+    }
+    return metadata;
+}
+
 } // namespace
 
 DistributedFrameBuffer DistributedFrameBufferStorage::view() {
-    return {width, height, total_samples, data.data(), shard};
+    return {width, height, total_samples, data.data(), shard, estimator};
 }
 
 void write_sample_range_file(const std::filesystem::path& path,
@@ -132,6 +162,7 @@ void write_sample_range_file(const std::filesystem::path& path,
     write_value(out, range.width);
     write_value(out, range.height);
     write_shard_metadata(out, range.shard);
+    write_estimator_metadata(out, range.estimator);
 }
 
 DistributedSampleRange read_sample_range_file(const std::filesystem::path& path) {
@@ -150,6 +181,7 @@ DistributedSampleRange read_sample_range_file(const std::filesystem::path& path)
     range.width = read_value<int>(in);
     range.height = read_value<int>(in);
     range.shard = read_shard_metadata(in);
+    range.estimator = read_estimator_metadata(in);
     if (!validate_sample_range(range)) {
         throw std::runtime_error("invalid distributed range file payload");
     }
@@ -172,6 +204,7 @@ void write_framebuffer_file(const std::filesystem::path& path,
     write_value(out, framebuffer.height);
     write_value(out, framebuffer.total_samples);
     write_shard_metadata(out, framebuffer.shard);
+    write_estimator_metadata(out, framebuffer.estimator);
     out.write(reinterpret_cast<const char*>(framebuffer.data),
               static_cast<std::streamsize>(count * sizeof(float)));
     if (!out) {
@@ -191,6 +224,7 @@ DistributedFrameBufferStorage read_framebuffer_file(const std::filesystem::path&
     storage.height = read_value<int>(in);
     storage.total_samples = read_value<int>(in);
     storage.shard = read_shard_metadata(in);
+    storage.estimator = read_estimator_metadata(in);
     if (storage.total_samples < 0) {
         throw std::runtime_error("invalid distributed framebuffer sample count");
     }

@@ -45,6 +45,9 @@ def main() -> int:
         assert progress.spp == 0
         assert progress.state == pyure.SessionState.EMPTY
         assert not progress.has_scene
+        metadata = session.estimator_metadata()
+        assert metadata.policy == pyure.EstimatorPolicy.STANDARD
+        assert not metadata.biased
         try:
             session.render_pass()
         except RuntimeError:
@@ -69,6 +72,23 @@ def main() -> int:
         assert progress.spp == 0
         assert progress.state == pyure.SessionState.EMPTY
         assert not progress.has_scene
+
+    with pyure.create_session(
+        num_wavelengths=8,
+        queue_capacity=64,
+        max_trace_depth=12,
+        integrator_mode="restir_di",
+        restir_di=True,
+        restir_di_unbiased=True,
+        restir_di_temporal_reuse=True,
+        restir_di_spatial_reuse=True,
+    ) as session:
+        metadata = session.estimator_metadata()
+        assert metadata.policy == pyure.EstimatorPolicy.RESTIR_DI_UNBIASED_PRODUCTION
+        assert not metadata.biased
+        assert metadata.temporal_reuse
+        assert metadata.spatial_reuse
+        assert metadata.sample_space_version == 1
 
     with pyure.create_session(
         num_wavelengths=8,

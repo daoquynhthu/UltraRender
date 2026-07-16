@@ -309,7 +309,7 @@ __host__ __device__ inline bool is_supported_analytic_volume_phase_function(Volu
            phase == VolumePhaseFunction::Rayleigh;
 }
 
-__device__ GpuVec3 sample_henyey_greenstein_lds(const GpuVec3& w_in, float g, float r1, float r2) {
+static __device__ GpuVec3 sample_henyey_greenstein_lds(const GpuVec3& w_in, float g, float r1, float r2) {
     if (fabsf(g) < 1e-3f) {
         return sample_unit_vector_lds(r1, r2);
     }
@@ -338,28 +338,28 @@ __device__ GpuVec3 sample_henyey_greenstein_lds(const GpuVec3& w_in, float g, fl
             forward * cos_theta).normalize();
 }
 
-__device__ GpuVec3 sample_henyey_greenstein(const GpuVec3& w_in, float g, unsigned int& seed) {
+static __device__ GpuVec3 sample_henyey_greenstein(const GpuVec3& w_in, float g, unsigned int& seed) {
     float r1 = rand_float(seed);
     float r2 = rand_float(seed);
     return sample_henyey_greenstein_lds(w_in, g, r1, r2);
 }
 
-__device__ float eval_henyey_greenstein(float cos_theta, float g) {
+static __device__ float eval_henyey_greenstein(float cos_theta, float g) {
     if (fabsf(g) < 1e-3f) return 1.0f / (4.0f * 3.14159265359f);
 
     float denom = 1.0f + g * g - 2.0f * g * cos_theta;
     return (1.0f - g * g) / (4.0f * 3.14159265359f * denom * sqrtf(fmaxf(0.0f, denom)));
 }
 
-__device__ float pdf_henyey_greenstein(float cos_theta, float g) {
+static __device__ float pdf_henyey_greenstein(float cos_theta, float g) {
     return eval_henyey_greenstein(cos_theta, g);
 }
 
-__device__ float pdf_henyey_greenstein(const GpuVec3& w_in, const GpuVec3& w_out, float g) {
+static __device__ float pdf_henyey_greenstein(const GpuVec3& w_in, const GpuVec3& w_out, float g) {
     return pdf_henyey_greenstein(w_in.normalize().dot(w_out.normalize()), g);
 }
 
-__device__ GpuVec3 sample_henyey_greenstein_lds_pdf(
+static __device__ GpuVec3 sample_henyey_greenstein_lds_pdf(
     const GpuVec3& w_in,
     float g,
     float r1,
@@ -373,20 +373,20 @@ __device__ GpuVec3 sample_henyey_greenstein_lds_pdf(
     return out;
 }
 
-__device__ float eval_rayleigh_phase(float cos_theta) {
+static __device__ float eval_rayleigh_phase(float cos_theta) {
     float mu = fminf(1.0f, fmaxf(-1.0f, cos_theta));
     return (3.0f / (16.0f * 3.14159265359f)) * (1.0f + mu * mu);
 }
 
-__device__ float pdf_rayleigh_phase(float cos_theta) {
+static __device__ float pdf_rayleigh_phase(float cos_theta) {
     return eval_rayleigh_phase(cos_theta);
 }
 
-__device__ float pdf_rayleigh_phase(const GpuVec3& w_in, const GpuVec3& w_out) {
+static __device__ float pdf_rayleigh_phase(const GpuVec3& w_in, const GpuVec3& w_out) {
     return pdf_rayleigh_phase(w_in.normalize().dot(w_out.normalize()));
 }
 
-__device__ GpuVec3 sample_rayleigh_phase_lds(const GpuVec3& w_in, float r1, float r2) {
+static __device__ GpuVec3 sample_rayleigh_phase_lds(const GpuVec3& w_in, float r1, float r2) {
     float mu = 2.0f * r1 - 1.0f;
     for (int i = 0; i < 8; ++i) {
         float f = 0.5f + 0.375f * mu + 0.125f * mu * mu * mu - r1;
@@ -409,7 +409,7 @@ __device__ GpuVec3 sample_rayleigh_phase_lds(const GpuVec3& w_in, float r1, floa
             forward * mu).normalize();
 }
 
-__device__ GpuVec3 sample_rayleigh_phase_lds_pdf(
+static __device__ GpuVec3 sample_rayleigh_phase_lds_pdf(
     const GpuVec3& w_in,
     float r1,
     float r2,
@@ -422,7 +422,7 @@ __device__ GpuVec3 sample_rayleigh_phase_lds_pdf(
     return out;
 }
 
-__device__ float eval_volume_phase(
+static __device__ float eval_volume_phase(
     VolumePhaseFunction phase,
     float cos_theta,
     float anisotropy,
@@ -441,7 +441,7 @@ __device__ float eval_volume_phase(
     return eval_henyey_greenstein(cos_theta, anisotropy);
 }
 
-__device__ bool sample_volume_phase_lds_pdf(
+static __device__ bool sample_volume_phase_lds_pdf(
     VolumePhaseFunction phase,
     const GpuVec3& w_in,
     float anisotropy,

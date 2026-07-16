@@ -339,6 +339,12 @@ const std::vector<float>& RenderSession::get_framebuffer() const {
     return engine_->get_framebuffer();
 }
 
+IntegratorEstimatorMetadata RenderSession::get_estimator_metadata() const {
+    std::scoped_lock lock(state_mutex_, engine_mutex_);
+    require_engine();
+    return engine_->get_estimator_metadata();
+}
+
 const std::vector<float>& RenderSession::get_aov(AovType type) const {
     std::scoped_lock lock(state_mutex_, engine_mutex_);
     require_scene();

@@ -95,6 +95,8 @@ void free_debug_log() {
 
 namespace ure::gpu {
 
+#include "restir_di_runtime.cuh"
+
 // ===== Queue alloc/free helpers =====
 
 void alloc_ray_queue(RayQueue& q, int capacity, int num_spec_channels) {
@@ -1241,13 +1243,19 @@ static void validate_restir_di_config(const ure::RenderConfig& config) {
     if (!config.restir_di.unbiased && config.restir_di.spatial_reuse) {
         throw std::runtime_error("Biased ReSTIR DI preview supports temporal reuse only");
     }
+    if (config.restir_di.spatial_radius <= 0 || config.restir_di.spatial_radius > 32767) {
+        throw std::runtime_error("ReSTIR DI spatial radius must be in [1, 32767]");
+    }
+    const std::int64_t diameter = std::int64_t(config.restir_di.spatial_radius) * 2 + 1;
+    const std::int64_t spatial_domain = diameter > 0 ? diameter * diameter - 1 : 0;
     if (config.restir_di.max_history <= 0 || config.restir_di.spatial_candidate_count <= 0 ||
         config.restir_di.spatial_radius <= 0 || !std::isfinite(config.restir_di.min_target) ||
         config.restir_di.min_target <= 0.0f ||
         !std::isfinite(config.restir_di.position_threshold) ||
         config.restir_di.position_threshold <= 0.0f ||
         !std::isfinite(config.restir_di.normal_threshold) ||
-        config.restir_di.normal_threshold < 0.0f || config.restir_di.normal_threshold > 1.0f) {
+        config.restir_di.normal_threshold < 0.0f || config.restir_di.normal_threshold > 1.0f ||
+        spatial_domain <= 0 || config.restir_di.spatial_candidate_count > spatial_domain) {
         throw std::runtime_error("ReSTIR DI history, spatial controls, target floor, and reconnection thresholds are invalid");
     }
 }
@@ -1339,6 +1347,7 @@ static void validate_integrator_runtime_config(const ure::RenderConfig& config) 
 }
 
 static void release_restir_di_reservoirs(GpuContext* ctx) {
+    cudaFree(ctx->d_restir_di_telemetry);
     cudaFree(ctx->d_restir_di_origins);
     cudaFree(ctx->d_restir_di_directions);
     cudaFree(ctx->d_restir_di_max_dist);
@@ -1381,6 +1390,8 @@ static void release_restir_di_reservoirs(GpuContext* ctx) {
     ctx->d_restir_di_active_channels = nullptr;
     ctx->d_restir_di_history_lengths = nullptr;
     ctx->d_restir_di_valid = nullptr;
+    ctx->d_restir_di_telemetry = nullptr;
+    ctx->last_restir_di_telemetry = {};
     ctx->restir_di_input_index = 0;
     ctx->restir_di_required_bytes = 0;
     ctx->last_integrator_restir_reservoir_count = 0;
@@ -1393,6 +1404,10 @@ static void clear_restir_di_reservoirs(GpuContext* ctx) {
         UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_valid, 0, pixel_count * sizeof(int)));
         UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_history_lengths, 0, pixel_count * sizeof(int)));
         UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_target_luminance, 0, pixel_count * sizeof(float)));
+    }
+    if (ctx->d_restir_di_telemetry) {
+        UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_telemetry, 0, sizeof(GpuRestirDITelemetry)));
+        ctx->last_restir_di_telemetry = {};
     }
     for (int i = 0; i < 2; ++i) {
         if (ctx->d_restir_di_reservoirs[i]) {
@@ -1418,16 +1433,20 @@ static void alloc_restir_di_reservoirs(GpuContext* ctx) {
             throw std::runtime_error("ReSTIR DI reservoir storage size overflow");
         }
         const size_t reservoir_bytes = pixel_bytes * sizeof(GpuRestirDIReservoir);
-        if (spectral_bytes > std::numeric_limits<size_t>::max() / 4 ||
-            reservoir_bytes > (std::numeric_limits<size_t>::max() - 4 * spectral_bytes) / 2) {
+        constexpr size_t telemetry_bytes = sizeof(GpuRestirDITelemetry);
+        const size_t max_payload = std::numeric_limits<size_t>::max() - telemetry_bytes;
+        if (spectral_bytes > max_payload / 4 ||
+            reservoir_bytes > (max_payload - 4 * spectral_bytes) / 2) {
             throw std::runtime_error("ReSTIR DI total storage size overflow");
         }
-        ctx->restir_di_required_bytes = 2 * reservoir_bytes + 4 * spectral_bytes;
+        ctx->restir_di_required_bytes = 2 * reservoir_bytes + 4 * spectral_bytes +
+                                        telemetry_bytes;
         for (int i = 0; i < 2; ++i) {
             UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_reservoirs[i], reservoir_bytes));
             UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_spectral_values[i], spectral_bytes));
             UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_spectral_wavelengths[i], spectral_bytes));
         }
+        UR_CUDA_CHECK(cudaMalloc(&ctx->d_restir_di_telemetry, sizeof(GpuRestirDITelemetry)));
         clear_restir_di_reservoirs(ctx);
         ctx->last_integrator_restir_reservoir_count = pixel_count;
         return;
@@ -2368,9 +2387,6 @@ void free_gpu_renderer(GpuContext* ctx) {
 }
 
 int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
-    if (ctx->render_config.restir_di.enabled && ctx->render_config.restir_di.unbiased) {
-        throw std::runtime_error("Unbiased ReSTIR DI scheduler is not connected yet");
-    }
     if (ctx->d_path_guiding_light_weights && ctx->light_count > 0) {
         ++ctx->path_guiding_passes_since_decay;
         if (ctx->path_guiding_passes_since_decay >= ctx->render_config.path_guiding.decay_interval) {
@@ -2500,6 +2516,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.restir_di_spatial_radius = std::max(1, ctx->render_config.restir_di.spatial_radius);
     scene.restir_di_position_threshold = std::max(ctx->render_config.restir_di.position_threshold, 1e-6f);
     scene.restir_di_normal_threshold = std::clamp(ctx->render_config.restir_di.normal_threshold, 0.0f, 1.0f);
+    scene.restir_di_telemetry = ctx->d_restir_di_telemetry;
     scene.restir_di_width = ctx->width;
     scene.restir_di_height = ctx->height;
     scene.light_count = ctx->light_count;
@@ -2532,6 +2549,10 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     ctx->last_integrator_early_terminated_samples = 0;
     ctx->last_integrator_ray_queue_overflow_count = 0;
     ctx->last_integrator_shadow_queue_overflow_count = 0;
+    if (ctx->d_restir_di_telemetry) {
+        UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_telemetry, 0, sizeof(GpuRestirDITelemetry)));
+        ctx->last_restir_di_telemetry = {};
+    }
 
     for (int s = 0; s < samples_per_pass; ++s) {
         int current_global_sample = ctx->current_spp + s;
@@ -2578,6 +2599,13 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             float current_dispersion_clamp = (current_global_sample < 100) ? 5.0f : 20.0f;
             float current_rr_min_prob = (current_global_sample < 100) ? 0.1f : 0.05f;
 
+            if (scene.restir_di_unbiased && depth == 0) {
+                resample_restir_di_kernel<<<active_blocks, num_threads_wf>>>(
+                    *current_q, ctx->hitQueue, ctx->shadowQueue, scene,
+                    current_global_sample, current_dispersion_clamp);
+                UR_CUDA_CHECK(cudaGetLastError());
+            }
+
             shade_kernel<<<active_blocks, num_threads_wf>>>(*current_q, ctx->hitQueue, *next_q, ctx->shadowQueue, ctx->d_accum_buffer, ctx->d_normal_buffer, ctx->d_albedo_buffer, ctx->d_depth_buffer, ctx->d_uv_buffer, ctx->d_motion_vector_buffer, ctx->camera, ctx->previous_camera, scene, current_global_sample, current_dispersion_clamp, current_rr_min_prob);
             UR_CUDA_CHECK(cudaGetLastError());
 
@@ -2610,6 +2638,11 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     }
 
     ctx->current_spp += samples_per_pass;
+    if (ctx->d_restir_di_telemetry) {
+        UR_CUDA_CHECK(cudaMemcpy(
+            &ctx->last_restir_di_telemetry, ctx->d_restir_di_telemetry,
+            sizeof(GpuRestirDITelemetry), cudaMemcpyDeviceToHost));
+    }
     return ctx->current_spp;
 }
 

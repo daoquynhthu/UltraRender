@@ -2,7 +2,7 @@
 
 #include "path_tracer_decl.cuh"
 
-__device__ bool hit_sphere(const GpuSphere& sphere, const GpuRay& r, float t_min, float t_max, float& t, GpuVec3& p, GpuVec3& n, int& mat_idx) {
+static __device__ bool hit_sphere(const GpuSphere& sphere, const GpuRay& r, float t_min, float t_max, float& t, GpuVec3& p, GpuVec3& n, int& mat_idx) {
     GpuVec3 oc = r.origin - sphere.center;
     float a = r.direction.dot(r.direction);
     float b = oc.dot(r.direction);
@@ -32,7 +32,7 @@ __device__ bool hit_sphere(const GpuSphere& sphere, const GpuRay& r, float t_min
     return false;
 }
 
-__device__ bool hit_triangle(const GpuRay& r, const GpuVec3& v0, const GpuVec3& v1, const GpuVec3& v2, const GpuVec3* n0, const GpuVec3* n1, const GpuVec3* n2, float t_min, float t_max, float& t, GpuVec3& ng, GpuVec3& ns, float& u_out, float& v_out) {
+static __device__ bool hit_triangle(const GpuRay& r, const GpuVec3& v0, const GpuVec3& v1, const GpuVec3& v2, const GpuVec3* n0, const GpuVec3* n1, const GpuVec3* n2, float t_min, float t_max, float& t, GpuVec3& ng, GpuVec3& ns, float& u_out, float& v_out) {
     GpuVec3 v0v1 = v1 - v0;
     GpuVec3 v0v2 = v2 - v0;
     GpuVec3 pvec = r.direction.cross(v0v2);
@@ -71,7 +71,7 @@ __device__ bool hit_triangle(const GpuRay& r, const GpuVec3& v0, const GpuVec3& 
     return false;
 }
 
-__device__ bool hit_aabb(const GpuRay& r, const GpuVec3& min_pt, const GpuVec3& max_pt, float t_min, float t_max) {
+static __device__ bool hit_aabb(const GpuRay& r, const GpuVec3& min_pt, const GpuVec3& max_pt, float t_min, float t_max) {
     float3 invD = make_float3(1.0f / r.direction.x, 1.0f / r.direction.y, 1.0f / r.direction.z);
     float3 t0 = make_float3((min_pt.x - r.origin.x) * invD.x, (min_pt.y - r.origin.y) * invD.y, (min_pt.z - r.origin.z) * invD.z);
     float3 t1 = make_float3((max_pt.x - r.origin.x) * invD.x, (max_pt.y - r.origin.y) * invD.y, (max_pt.z - r.origin.z) * invD.z);
@@ -82,7 +82,7 @@ __device__ bool hit_aabb(const GpuRay& r, const GpuVec3& min_pt, const GpuVec3& 
     return tmin <= tmax;
 }
 
-__device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& ng_out, GpuVec3& ns_out, GpuVec2& uv_out, int& primitive_index_out) {
+static __device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& ng_out, GpuVec3& ns_out, GpuVec2& uv_out, int& primitive_index_out) {
     bool hit_anything = false;
     float t_closest = t_max;
 
@@ -158,7 +158,7 @@ __device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float
     return hit_anything;
 }
 
-__device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& p_out, GpuVec3& n_out, GpuVec3& ng_out, GpuVec2& uv_out, int& mat_idx_out, int& type_out, int& index_out, int& primitive_index_out, bool ignore_lights = false) {
+static __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& p_out, GpuVec3& n_out, GpuVec3& ng_out, GpuVec2& uv_out, int& mat_idx_out, int& type_out, int& index_out, int& primitive_index_out, bool ignore_lights = false) {
     float t_closest = t_max;
     bool hit_anything = false;
     float t_temp;

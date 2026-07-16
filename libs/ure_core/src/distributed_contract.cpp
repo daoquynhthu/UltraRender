@@ -197,7 +197,8 @@ bool validate_sample_range(const DistributedSampleRange& range) {
     } catch (...) {
         return false;
     }
-    return validate_shard_metadata(range.shard);
+    return validate_shard_metadata(range.shard) &&
+           validate_integrator_estimator_metadata(range.estimator);
 }
 
 void merge_partial_framebuffer(DistributedFrameBuffer& accum,
@@ -216,6 +217,11 @@ void merge_partial_framebuffer(DistributedFrameBuffer& accum,
     }
     if (!compatible_shard_metadata_for_merge(accum.shard, incoming.shard)) {
         throw std::invalid_argument("distributed framebuffer shard metadata must be compatible");
+    }
+    if (!validate_integrator_estimator_metadata(accum.estimator) ||
+        !validate_integrator_estimator_metadata(incoming.estimator) ||
+        !compatible_integrator_estimator_metadata(accum.estimator, incoming.estimator)) {
+        throw std::invalid_argument("distributed framebuffer estimator metadata must be compatible");
     }
 
     int count = checked_pixel_value_count(accum.width, accum.height);

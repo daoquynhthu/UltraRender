@@ -120,6 +120,10 @@ public:
         return framebuffer;
     }
 
+    ure::IntegratorEstimatorMetadata get_estimator_metadata() const override {
+        return estimator_metadata;
+    }
+
     bool loaded = false;
     int spp = 0;
     int scene_ir_loads = 0;
@@ -140,6 +144,7 @@ public:
     std::vector<float> depth_aov = {4.0f};
     std::vector<float> uv_aov = {0.25f, 0.75f};
     std::vector<float> motion_aov = {0.1f, 0.0f};
+    ure::IntegratorEstimatorMetadata estimator_metadata = {};
 };
 
 template <typename Fn>
@@ -917,6 +922,12 @@ static int test_c_session_lifecycle() {
     ure_session_t* integrator_session =
         ure_session_create_integrator_config(&spectral_config, &radiometric_wave_config, &wavefront_integrator);
     CHECK(integrator_session != nullptr);
+    const ure_integrator_estimator_metadata_t c_metadata =
+        ure_session_get_estimator_metadata(integrator_session);
+    CHECK(c_metadata.mode == URE_INTEGRATOR_WAVEFRONT);
+    CHECK(c_metadata.policy == URE_ESTIMATOR_STANDARD);
+    CHECK(c_metadata.biased == 0);
+    CHECK(c_metadata.sample_space_version == 0);
     ure_session_destroy(integrator_session);
 
     ure_integrator_config_t invalid_integrator{};
@@ -924,6 +935,45 @@ static int test_c_session_lifecycle() {
     invalid_integrator.sampler = URE_INTEGRATOR_SAMPLER_DEFAULT;
     invalid_integrator.quality_preset = URE_INTEGRATOR_QUALITY_DEFAULT;
     CHECK(ure_session_create_integrator_config(&spectral_config, &radiometric_wave_config, &invalid_integrator) == nullptr);
+    return 0;
+}
+
+static int test_restir_estimator_metadata_contract() {
+    ure::RenderConfig preview;
+    preview.integrator.mode = ure::IntegratorMode::RestirDI;
+    preview.integrator.allow_biased_reuse = true;
+    preview.restir_di.enabled = true;
+    preview.restir_di.temporal_reuse = true;
+    const auto preview_metadata =
+        ure::make_integrator_estimator_metadata(preview, 7);
+    CHECK(preview_metadata.policy ==
+          ure::IntegratorEstimatorPolicy::RestirDIBiasedPreview);
+    CHECK(preview_metadata.biased);
+    CHECK(preview_metadata.temporal_reuse);
+    CHECK(!preview_metadata.spatial_reuse);
+    CHECK(preview_metadata.sample_space_version == ure::kRestirDISampleSpaceVersion);
+    CHECK(ure::validate_integrator_estimator_metadata(preview_metadata));
+
+    ure::RenderConfig production = preview;
+    production.integrator.allow_biased_reuse = false;
+    production.restir_di.unbiased = true;
+    production.restir_di.spatial_reuse = true;
+    const auto production_metadata =
+        ure::make_integrator_estimator_metadata(production, 7);
+    CHECK(production_metadata.policy ==
+          ure::IntegratorEstimatorPolicy::RestirDIUnbiasedProduction);
+    CHECK(!production_metadata.biased);
+    CHECK(production_metadata.spatial_reuse);
+    CHECK(ure::validate_integrator_estimator_metadata(production_metadata));
+    CHECK(!ure::compatible_integrator_estimator_metadata(
+        preview_metadata, production_metadata));
+
+    auto engine = std::make_unique<FakeRenderEngine>();
+    engine->estimator_metadata = production_metadata;
+    ure::RenderSession session(std::move(engine), production);
+    const auto session_metadata = session.get_estimator_metadata();
+    CHECK(ure::compatible_integrator_estimator_metadata(
+        session_metadata, production_metadata));
     return 0;
 }
 
@@ -960,6 +1010,7 @@ int main() {
     failed += run("test_scene_diff_topology_real_gpu_reload_smoke", test_scene_diff_topology_real_gpu_reload_smoke);
     failed += run("test_scene_diff_texture_material_real_gpu_reload_smoke", test_scene_diff_texture_material_real_gpu_reload_smoke);
     failed += run("test_c_session_lifecycle", test_c_session_lifecycle);
+    failed += run("test_restir_estimator_metadata_contract", test_restir_estimator_metadata_contract);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, g_failed);
     return failed || g_failed ? 1 : 0;
