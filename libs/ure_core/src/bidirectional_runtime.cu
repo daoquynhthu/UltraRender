@@ -227,6 +227,10 @@ __global__ void extend_light_subpaths_kernel(
             path_solid_angle_to_area_pdf(
                 path[depth - 1].forward_directional_pdf,
                 distance_squared, fabsf(hit_ng.dot(-edge_direction)));
+        path[depth - 1].reverse_measure_pdf =
+            path_solid_angle_to_area_pdf(
+                reverse_pdf, distance_squared,
+                fabsf(path[depth - 1].geometric_normal.dot(edge_direction)));
         GpuBidirectionalPathVertex vertex = {};
         vertex.position = hit_p;
         vertex.geometric_normal = hit_ng;
@@ -352,15 +356,34 @@ __global__ void connect_bidirectional_subpaths_kernel(
         }
     }
     if (light_list_index < 0) return;
-    const float nee_solid_angle_pdf = selected_light_hit_pdf(
-        scene, light_list_index, camera.position, light.position);
-    const float nee_area_pdf = path_solid_angle_to_area_pdf(
-        nee_solid_angle_pdf, distance_squared, light_cosine);
-    const float connection_area_pdf = light.forward_measure_pdf;
-    const float connection_square = connection_area_pdf * connection_area_pdf;
-    const float nee_square = nee_area_pdf * nee_area_pdf;
-    const float mis_weight = connection_square + nee_square > 0.0f
-        ? connection_square / (connection_square + nee_square) : 0.0f;
+    constexpr int kMaxStrategyEdges = 32;
+    if (camera_length > kMaxStrategyEdges) return;
+    GpuBidirectionalPdfEdge strategy_edges[kMaxStrategyEdges] = {};
+    strategy_edges[0].forward_measure_pdf =
+        path_solid_angle_to_area_pdf(
+            light_cosine * 0.31830988618379067154f,
+            distance_squared, camera_cosine);
+    strategy_edges[0].reverse_measure_pdf =
+        path_solid_angle_to_area_pdf(
+            camera_cosine * 0.31830988618379067154f,
+            distance_squared, light_cosine);
+    strategy_edges[0].from_delta = light.delta;
+    strategy_edges[0].to_delta = camera.delta;
+    for (int edge = 1; edge < camera_length; ++edge) {
+        const int camera_edge = camera_length - 1 - edge;
+        const GpuBidirectionalPathVertex stored =
+            camera_vertices[path_index * max_camera_vertices + camera_edge];
+        const GpuBidirectionalPathVertex next =
+            camera_vertices[path_index * max_camera_vertices + camera_edge + 1];
+        strategy_edges[edge].forward_measure_pdf =
+            stored.reverse_measure_pdf;
+        strategy_edges[edge].reverse_measure_pdf =
+            stored.forward_measure_pdf;
+        strategy_edges[edge].from_delta = next.delta;
+        strategy_edges[edge].to_delta = stored.delta;
+    }
+    const float mis_weight = bidirectional_strategy_mis_weight(
+        strategy_edges, camera_length, 1, light.forward_measure_pdf, 1.0f);
     if (mis_weight <= 0.0f) return;
 
     const GpuMaterial camera_material = scene.materials[camera.material_index];

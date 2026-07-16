@@ -39,6 +39,10 @@ static __device__ void capture_bidirectional_surface_vertex(
                     path[depth - 1].forward_directional_pdf,
                     distance_squared,
                     fabsf(geometric_normal.dot(-direction)));
+            path[depth - 1].reverse_measure_pdf =
+                path_solid_angle_to_area_pdf(
+                    reverse_pdf, distance_squared,
+                    fabsf(path[depth - 1].geometric_normal.dot(direction)));
         }
     }
     GpuBidirectionalPathVertex& vertex = path[depth];

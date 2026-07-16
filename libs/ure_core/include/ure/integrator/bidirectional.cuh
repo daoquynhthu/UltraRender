@@ -67,6 +67,13 @@ struct GpuBidirectionalTelemetry {
     std::uint32_t buffer_overflow = 0;
 };
 
+struct GpuBidirectionalPdfEdge {
+    float forward_measure_pdf = 0.0f;
+    float reverse_measure_pdf = 0.0f;
+    int from_delta = 0;
+    int to_delta = 0;
+};
+
 static_assert(alignof(GpuBidirectionalPathVertex) >= alignof(SpectralPacket));
 static_assert(sizeof(GpuBidirectionalPathVertex) %
                   alignof(GpuBidirectionalPathVertex) == 0);
@@ -84,6 +91,56 @@ static __device__ inline float path_solid_angle_to_volume_pdf(
     return isfinite(directional_pdf) && isfinite(distance_squared) &&
            directional_pdf >= 0.0f && distance_squared > 0.0f
         ? directional_pdf / distance_squared : 0.0f;
+}
+
+static __device__ inline float bidirectional_strategy_probability(
+    const GpuBidirectionalPdfEdge* edges,
+    int edge_count,
+    int split,
+    float light_endpoint_pdf,
+    float camera_endpoint_pdf) {
+    const int vertex_count = edge_count + 1;
+    if (!edges || edge_count < 1 || split < 0 || split > vertex_count ||
+        !(light_endpoint_pdf > 0.0f) || !(camera_endpoint_pdf > 0.0f)) {
+        return 0.0f;
+    }
+    float probability = 1.0f;
+    if (split > 0) probability *= light_endpoint_pdf;
+    if (split < vertex_count) probability *= camera_endpoint_pdf;
+    for (int edge = 0; edge < split - 1; ++edge) {
+        probability *= fmaxf(0.0f, edges[edge].forward_measure_pdf);
+    }
+    for (int edge = split; edge < edge_count; ++edge) {
+        probability *= fmaxf(0.0f, edges[edge].reverse_measure_pdf);
+    }
+    if (split > 0 && split < vertex_count &&
+        (edges[split - 1].from_delta || edges[split - 1].to_delta)) {
+        return 0.0f;
+    }
+    return isfinite(probability) ? probability : 0.0f;
+}
+
+static __device__ inline float bidirectional_strategy_mis_weight(
+    const GpuBidirectionalPdfEdge* edges,
+    int edge_count,
+    int selected_split,
+    float light_endpoint_pdf,
+    float camera_endpoint_pdf) {
+    const int vertex_count = edge_count + 1;
+    const float selected = bidirectional_strategy_probability(
+        edges, edge_count, selected_split, light_endpoint_pdf,
+        camera_endpoint_pdf);
+    if (!(selected > 0.0f)) return 0.0f;
+    double denominator = 0.0;
+    for (int split = 0; split <= vertex_count; ++split) {
+        const double probability = bidirectional_strategy_probability(
+            edges, edge_count, split, light_endpoint_pdf,
+            camera_endpoint_pdf);
+        denominator += probability * probability;
+    }
+    return denominator > 0.0
+        ? static_cast<float>(double(selected) * double(selected) / denominator)
+        : 0.0f;
 }
 
 #if defined(_MSC_VER)

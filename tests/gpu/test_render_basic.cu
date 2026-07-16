@@ -201,6 +201,27 @@ __global__ void reserve_three_shadow_slots_kernel(ShadowQueue q) {
     reserve_shadow_slot(q);
 }
 
+__global__ void bidirectional_strategy_density_kernel(float* output) {
+    GpuBidirectionalPdfEdge edges[3] = {};
+    edges[0].forward_measure_pdf = 0.4f;
+    edges[0].reverse_measure_pdf = 0.25f;
+    edges[1].forward_measure_pdf = 0.5f;
+    edges[1].reverse_measure_pdf = 0.2f;
+    edges[2].forward_measure_pdf = 0.6f;
+    edges[2].reverse_measure_pdf = 0.1f;
+    float sum = 0.0f;
+    for (int split = 0; split <= 4; ++split) {
+        sum += bidirectional_strategy_mis_weight(
+            edges, 3, split, 0.3f, 0.8f);
+    }
+    output[0] = sum;
+    output[1] = bidirectional_strategy_probability(
+        edges, 3, 2, 0.3f, 0.8f);
+    edges[1].from_delta = 1;
+    output[2] = bidirectional_strategy_probability(
+        edges, 3, 2, 0.3f, 0.8f);
+}
+
 __global__ void path_guided_light_selection_kernel(float* cdf, float* guide_weights, float* out) {
     GpuScene scene = {};
     scene.light_count = 2;
@@ -2559,6 +2580,22 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
     return 0;
 }
 
+static int test_bidirectional_strategy_density_partitions_on_device() {
+    REQUIRE_GPU();
+    float* output = nullptr;
+    CHECK_CUDA(cudaMalloc(&output, 3 * sizeof(float)));
+    DeviceMem cleanup(output);
+    bidirectional_strategy_density_kernel<<<1, 1>>>(output);
+    CHECK_CUDA(cudaGetLastError());
+    float values[3] = {};
+    CHECK_CUDA(cudaMemcpy(
+        values, output, sizeof(values), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(values[0], 1.0f, 1e-5f);
+    CHECK_FLOAT_EQ(values[1], 0.3f * 0.4f * 0.8f * 0.1f, 1e-7f);
+    CHECK_FLOAT_EQ(values[2], 0.0f, 0.0f);
+    return 0;
+}
+
 static int test_restir_di_production_surface_scheduler_renders_and_reuses() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -3395,6 +3432,7 @@ int main() {
     RUN_TEST(test_restir_di_production_uses_ping_pong_reservoirs);
     RUN_TEST(test_restir_pt_owns_bounded_ping_pong_suffix_history);
     RUN_TEST(test_bidirectional_runtime_owns_bounded_vertex_storage);
+    RUN_TEST(test_bidirectional_strategy_density_partitions_on_device);
     RUN_TEST(test_restir_di_production_surface_scheduler_renders_and_reuses);
     RUN_TEST(test_restir_pt_replays_diffuse_surface_suffixes);
     RUN_TEST(test_restir_pt_replays_scalar_depolarizing_volume_suffixes);

@@ -146,6 +146,41 @@ static int test_vcm_progressive_radius_and_kernel_normalization() {
     return 0;
 }
 
+static int test_bidirectional_strategy_density_reconstructs_same_path() {
+    const ure::integrator::BidirectionalPdfEdge edges[] = {
+        {0.4, 0.25, false, false},
+        {0.5, 0.2, false, false},
+        {0.6, 0.1, false, false}
+    };
+    double probabilities[5] = {};
+    const int count =
+        ure::integrator::reconstruct_bidirectional_strategy_probabilities(
+            edges, 3, 0.3, 0.8, probabilities, 5);
+    CHECK(count == 5);
+    CHECK_NEAR(probabilities[0], 0.8 * 0.25 * 0.2 * 0.1, 1e-15);
+    CHECK_NEAR(probabilities[1], 0.3 * 0.8 * 0.2 * 0.1, 1e-15);
+    CHECK_NEAR(probabilities[2], 0.3 * 0.4 * 0.8 * 0.1, 1e-15);
+    CHECK_NEAR(probabilities[3], 0.3 * 0.4 * 0.5 * 0.8, 1e-15);
+    CHECK_NEAR(probabilities[4], 0.3 * 0.4 * 0.5 * 0.6, 1e-15);
+    double weight_sum = 0.0;
+    for (int technique = 0; technique < count; ++technique) {
+        weight_sum += ure::integrator::bidirectional_power_heuristic(
+            probabilities, count, technique);
+    }
+    CHECK_NEAR(weight_sum, 1.0, 1e-15);
+
+    const ure::integrator::BidirectionalPdfEdge delta_edges[] = {
+        edges[0],
+        {edges[1].forward_measure_pdf, edges[1].reverse_measure_pdf,
+         true, false},
+        edges[2]
+    };
+    CHECK(ure::integrator::reconstruct_bidirectional_strategy_probabilities(
+              delta_edges, 3, 0.3, 0.8, probabilities, 5) == 5);
+    CHECK_NEAR(probabilities[2], 0.0, 0.0);
+    return 0;
+}
+
 static int test_mlt_primary_sample_mutation_replays_deterministically() {
     ure::integrator::PrimarySampleMutationConfig cfg;
     cfg.seed = 99;
@@ -412,6 +447,7 @@ int main() {
     failed += run("test_bidirectional_measure_conversion_contract", test_bidirectional_measure_conversion_contract);
     failed += run("test_bidirectional_technique_enumeration_and_mis_partition", test_bidirectional_technique_enumeration_and_mis_partition);
     failed += run("test_vcm_progressive_radius_and_kernel_normalization", test_vcm_progressive_radius_and_kernel_normalization);
+    failed += run("test_bidirectional_strategy_density_reconstructs_same_path", test_bidirectional_strategy_density_reconstructs_same_path);
     failed += run("test_mlt_primary_sample_mutation_replays_deterministically", test_mlt_primary_sample_mutation_replays_deterministically);
     failed += run("test_mlt_small_step_is_symmetric_and_wrapped", test_mlt_small_step_is_symmetric_and_wrapped);
     failed += run("test_mlt_large_step_is_uniform_proposal", test_mlt_large_step_is_uniform_proposal);

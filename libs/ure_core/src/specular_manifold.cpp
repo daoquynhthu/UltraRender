@@ -198,6 +198,47 @@ int enumerate_bidirectional_techniques(int light_vertex_count,
     return count;
 }
 
+int reconstruct_bidirectional_strategy_probabilities(
+    const BidirectionalPdfEdge* edges,
+    int edge_count,
+    double light_endpoint_pdf,
+    double camera_endpoint_pdf,
+    double* probabilities,
+    int capacity) {
+    if (!edges || edge_count < 1 || !probabilities ||
+        capacity < edge_count + 2 || !std::isfinite(light_endpoint_pdf) ||
+        !std::isfinite(camera_endpoint_pdf) || light_endpoint_pdf <= 0.0 ||
+        camera_endpoint_pdf <= 0.0) {
+        return 0;
+    }
+    for (int edge = 0; edge < edge_count; ++edge) {
+        if (!std::isfinite(edges[edge].forward_measure_pdf) ||
+            !std::isfinite(edges[edge].reverse_measure_pdf) ||
+            edges[edge].forward_measure_pdf < 0.0 ||
+            edges[edge].reverse_measure_pdf < 0.0) {
+            return 0;
+        }
+    }
+    const int vertex_count = edge_count + 1;
+    for (int split = 0; split <= vertex_count; ++split) {
+        double probability = 1.0;
+        if (split > 0) probability *= light_endpoint_pdf;
+        if (split < vertex_count) probability *= camera_endpoint_pdf;
+        for (int edge = 0; edge < split - 1; ++edge) {
+            probability *= edges[edge].forward_measure_pdf;
+        }
+        for (int edge = split; edge < edge_count; ++edge) {
+            probability *= edges[edge].reverse_measure_pdf;
+        }
+        if (split > 0 && split < vertex_count &&
+            (edges[split - 1].from_delta || edges[split - 1].to_delta)) {
+            probability = 0.0;
+        }
+        probabilities[split] = probability;
+    }
+    return vertex_count + 1;
+}
+
 namespace {
 
 double progressive_merge_radius(double initial_radius,

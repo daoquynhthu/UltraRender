@@ -76,6 +76,13 @@ struct BidirectionalTechnique {
     bool valid = false;
 };
 
+struct BidirectionalPdfEdge {
+    double forward_measure_pdf = 0.0;
+    double reverse_measure_pdf = 0.0;
+    bool from_delta = false;
+    bool to_delta = false;
+};
+
 double solid_angle_to_area_pdf(double directional_pdf,
                                double distance_squared,
                                double target_abs_cosine);
@@ -88,6 +95,13 @@ int enumerate_bidirectional_techniques(int light_vertex_count,
                                        int camera_vertex_count,
                                        BidirectionalTechnique* output,
                                        int capacity);
+int reconstruct_bidirectional_strategy_probabilities(
+    const BidirectionalPdfEdge* edges,
+    int edge_count,
+    double light_endpoint_pdf,
+    double camera_endpoint_pdf,
+    double* probabilities,
+    int capacity);
 double progressive_surface_merge_radius(double initial_radius,
                                         double alpha,
                                         std::uint64_t iteration);
