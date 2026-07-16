@@ -9,6 +9,7 @@
 #include "test_framework.cuh"
 #include "ure/gpu_context.hpp"
 #include "ure/integrator/restir_di.cuh"
+#include "ure/integrator/specular_manifold.cuh"
 #include "ure/gpu_driver.hpp"
 #include "ure/gpu_structs.hpp"
 #include "ure/log.hpp"
@@ -233,6 +234,26 @@ __global__ void bidirectional_strategy_density_kernel(float* output) {
             edges, 3, split, 2, 0.3f, 0.8f, 4.0f, 16);
     }
     output[4] = partition;
+}
+
+__global__ void manifold_pivoted_solve_kernel(float* output) {
+    const float matrix[] = {
+        0.0f, 2.0f, 1.0f,
+        1.0f, -2.0f, -3.0f,
+        2.0f, 3.0f, 1.0f
+    };
+    const float residual[] = {-3.0f, 4.0f, -7.0f};
+    const GpuManifoldLinearSolveResult result =
+        solve_gpu_manifold_newton_step(matrix, residual, 3, 1e-8f);
+    output[0] = float(result.valid);
+    output[1] = result.solution[0];
+    output[2] = result.solution[1];
+    output[3] = result.solution[2];
+    output[4] = result.determinant;
+    const float singular[] = {1.0f, 2.0f, 2.0f, 4.0f};
+    const float rhs[] = {1.0f, 2.0f};
+    output[5] = float(solve_gpu_manifold_linear_system(
+        singular, rhs, 2, 1e-8f).valid);
 }
 
 __global__ void path_guided_light_selection_kernel(float* cdf, float* guide_weights, float* out) {
@@ -2629,6 +2650,25 @@ static int test_bidirectional_strategy_density_partitions_on_device() {
     return 0;
 }
 
+static int test_manifold_pivoted_newton_step_on_device() {
+    REQUIRE_GPU();
+    float* output = nullptr;
+    CHECK_CUDA(cudaMalloc(&output, 6 * sizeof(float)));
+    DeviceMem cleanup(output);
+    manifold_pivoted_solve_kernel<<<1, 1>>>(output);
+    CHECK_CUDA(cudaGetLastError());
+    float values[6] = {};
+    CHECK_CUDA(cudaMemcpy(
+        values, output, sizeof(values), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(values[0], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[1], 11.0f / 7.0f, 1e-5f);
+    CHECK_FLOAT_EQ(values[2], 6.0f / 7.0f, 1e-5f);
+    CHECK_FLOAT_EQ(values[3], 9.0f / 7.0f, 1e-5f);
+    CHECK(std::fabs(values[4]) > 1e-5f);
+    CHECK_FLOAT_EQ(values[5], 0.0f, 0.0f);
+    return 0;
+}
+
 static int test_bidirectional_light_subpath_transports_rough_metal_stokes() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -3667,6 +3707,7 @@ int main() {
     RUN_TEST(test_restir_pt_owns_bounded_ping_pong_suffix_history);
     RUN_TEST(test_bidirectional_runtime_owns_bounded_vertex_storage);
     RUN_TEST(test_bidirectional_strategy_density_partitions_on_device);
+    RUN_TEST(test_manifold_pivoted_newton_step_on_device);
     RUN_TEST(test_bidirectional_light_subpath_transports_rough_metal_stokes);
     RUN_TEST(test_vcm_builds_bounded_grid_and_merges_surface_vertices);
     RUN_TEST(test_restir_di_production_surface_scheduler_renders_and_reuses);

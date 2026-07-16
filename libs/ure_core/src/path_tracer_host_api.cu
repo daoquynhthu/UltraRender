@@ -1290,14 +1290,19 @@ static void validate_restir_pt_config(const ure::RenderConfig& config) {
 
 static void validate_specular_manifold_config(const ure::RenderConfig& config) {
     if (!config.specular_manifold.enabled) return;
-    if (config.specular_manifold.max_specular_events <= 0) {
-        throw std::runtime_error("Specular manifold max_specular_events must be positive");
+    if (config.specular_manifold.max_specular_events <= 0 ||
+        config.specular_manifold.max_specular_events > 4) {
+        throw std::runtime_error(
+            "Specular manifold max_specular_events must be in [1, 4]");
     }
-    if (config.specular_manifold.solver_tolerance <= 0.0f) {
+    if (!std::isfinite(config.specular_manifold.solver_tolerance) ||
+        config.specular_manifold.solver_tolerance <= 0.0f) {
         throw std::runtime_error("Specular manifold solver_tolerance must be positive");
     }
-    if (config.specular_manifold.max_newton_iterations <= 0) {
-        throw std::runtime_error("Specular manifold max_newton_iterations must be positive");
+    if (config.specular_manifold.max_newton_iterations <= 0 ||
+        config.specular_manifold.max_newton_iterations > 64) {
+        throw std::runtime_error(
+            "Specular manifold max_newton_iterations must be in [1, 64]");
     }
     throw std::runtime_error("Specular manifold GPU solver is not implemented yet; specular dielectric NEE remains blocked");
 }

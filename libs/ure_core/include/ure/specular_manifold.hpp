@@ -31,6 +31,25 @@ struct SpecularInterfaceConnection {
     double throughput_scale = 0.0;
 };
 
+inline constexpr int kMaxManifoldVariables = 8;
+
+struct ManifoldLinearSolveResult {
+    double solution[kMaxManifoldVariables] = {};
+    double determinant = 0.0;
+    bool valid = false;
+};
+
+ManifoldLinearSolveResult solve_manifold_linear_system(
+    const double* matrix,
+    const double* right_hand_side,
+    int dimension,
+    double pivot_tolerance);
+ManifoldLinearSolveResult solve_manifold_newton_step(
+    const double* jacobian,
+    const double* residual,
+    int dimension,
+    double pivot_tolerance);
+
 bool is_ready(SpecularManifoldStatus status);
 SpecularInterfaceConnection make_specular_interface_connection(const SpecularInterfaceConfig& config);
 

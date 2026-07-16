@@ -9,6 +9,87 @@ bool is_ready(SpecularManifoldStatus status) {
     return status == SpecularManifoldStatus::Ready;
 }
 
+ManifoldLinearSolveResult solve_manifold_linear_system(
+    const double* matrix,
+    const double* right_hand_side,
+    int dimension,
+    double pivot_tolerance) {
+    ManifoldLinearSolveResult result;
+    if (!matrix || !right_hand_side || dimension <= 0 ||
+        dimension > kMaxManifoldVariables ||
+        !std::isfinite(pivot_tolerance) || pivot_tolerance <= 0.0) {
+        return result;
+    }
+    double augmented[kMaxManifoldVariables]
+                    [kMaxManifoldVariables + 1] = {};
+    for (int row = 0; row < dimension; ++row) {
+        for (int column = 0; column < dimension; ++column) {
+            const double value = matrix[row * dimension + column];
+            if (!std::isfinite(value)) return result;
+            augmented[row][column] = value;
+        }
+        if (!std::isfinite(right_hand_side[row])) return result;
+        augmented[row][dimension] = right_hand_side[row];
+    }
+    double determinant = 1.0;
+    int determinant_sign = 1;
+    for (int column = 0; column < dimension; ++column) {
+        int pivot_row = column;
+        double pivot_magnitude = std::abs(augmented[column][column]);
+        for (int row = column + 1; row < dimension; ++row) {
+            const double magnitude = std::abs(augmented[row][column]);
+            if (magnitude > pivot_magnitude) {
+                pivot_magnitude = magnitude;
+                pivot_row = row;
+            }
+        }
+        if (!(pivot_magnitude > pivot_tolerance)) return result;
+        if (pivot_row != column) {
+            for (int entry = column; entry <= dimension; ++entry) {
+                std::swap(augmented[column][entry],
+                          augmented[pivot_row][entry]);
+            }
+            determinant_sign = -determinant_sign;
+        }
+        const double pivot = augmented[column][column];
+        determinant *= pivot;
+        for (int row = column + 1; row < dimension; ++row) {
+            const double factor = augmented[row][column] / pivot;
+            augmented[row][column] = 0.0;
+            for (int entry = column + 1; entry <= dimension; ++entry) {
+                augmented[row][entry] -= factor * augmented[column][entry];
+            }
+        }
+    }
+    for (int row = dimension - 1; row >= 0; --row) {
+        double value = augmented[row][dimension];
+        for (int column = row + 1; column < dimension; ++column) {
+            value -= augmented[row][column] * result.solution[column];
+        }
+        result.solution[row] = value / augmented[row][row];
+        if (!std::isfinite(result.solution[row])) return ManifoldLinearSolveResult{};
+    }
+    result.determinant = determinant * static_cast<double>(determinant_sign);
+    result.valid = std::isfinite(result.determinant);
+    return result;
+}
+
+ManifoldLinearSolveResult solve_manifold_newton_step(
+    const double* jacobian,
+    const double* residual,
+    int dimension,
+    double pivot_tolerance) {
+    if (!residual || dimension <= 0 || dimension > kMaxManifoldVariables) {
+        return {};
+    }
+    double right_hand_side[kMaxManifoldVariables] = {};
+    for (int index = 0; index < dimension; ++index) {
+        right_hand_side[index] = -residual[index];
+    }
+    return solve_manifold_linear_system(
+        jacobian, right_hand_side, dimension, pivot_tolerance);
+}
+
 namespace {
 
 double sqr(double x) {

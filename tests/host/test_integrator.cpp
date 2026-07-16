@@ -74,6 +74,27 @@ static int test_specular_interface_total_internal_reflection_gate() {
     return 0;
 }
 
+static int test_manifold_pivoted_newton_linearization() {
+    const double jacobian[] = {
+        0.0, 2.0, 1.0,
+        1.0, -2.0, -3.0,
+        2.0, 3.0, 1.0
+    };
+    const double residual[] = {-3.0, 4.0, -7.0};
+    const auto step = ure::integrator::solve_manifold_newton_step(
+        jacobian, residual, 3, 1e-12);
+    CHECK(step.valid);
+    CHECK_NEAR(step.solution[0], 11.0 / 7.0, 1e-15);
+    CHECK_NEAR(step.solution[1], 6.0 / 7.0, 1e-15);
+    CHECK_NEAR(step.solution[2], 9.0 / 7.0, 1e-15);
+    CHECK(std::abs(step.determinant) > 1e-12);
+    const double singular[] = {1.0, 2.0, 2.0, 4.0};
+    const double rhs[] = {1.0, 2.0};
+    CHECK(!ure::integrator::solve_manifold_linear_system(
+               singular, rhs, 2, 1e-12).valid);
+    return 0;
+}
+
 static int test_gpu_renderer_rejects_unimplemented_specular_manifold() {
     ure::RenderConfig config;
     config.specular_manifold.enabled = true;
@@ -463,6 +484,7 @@ int main() {
     failed += run("test_specular_interface_normal_incidence_oracle", test_specular_interface_normal_incidence_oracle);
     failed += run("test_specular_interface_oblique_jacobian_reciprocity", test_specular_interface_oblique_jacobian_reciprocity);
     failed += run("test_specular_interface_total_internal_reflection_gate", test_specular_interface_total_internal_reflection_gate);
+    failed += run("test_manifold_pivoted_newton_linearization", test_manifold_pivoted_newton_linearization);
     failed += run("test_gpu_renderer_rejects_unimplemented_specular_manifold", test_gpu_renderer_rejects_unimplemented_specular_manifold);
     failed += run("test_bidirectional_measure_conversion_contract", test_bidirectional_measure_conversion_contract);
     failed += run("test_bidirectional_technique_enumeration_and_mis_partition", test_bidirectional_technique_enumeration_and_mis_partition);
