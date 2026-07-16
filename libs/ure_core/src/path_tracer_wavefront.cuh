@@ -954,6 +954,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 scene, pixel_index, depth, new_origin,
                 -current_queue.directions[idx], new_dir, phase_pdf,
                 current_medium_idx);
+            capture_bidirectional_volume_vertex(
+                scene, current_queue, idx, depth, new_origin,
+                -current_queue.directions[idx], new_dir, throughput,
+                phase_pdf, current_medium_idx);
 
              int out_idx = reserve_ray_slot(next_queue);
              if (out_idx >= 0) {

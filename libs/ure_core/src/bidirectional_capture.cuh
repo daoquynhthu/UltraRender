@@ -40,7 +40,10 @@ static __device__ void capture_bidirectional_surface_vertex(
                     distance_squared,
                     fabsf(geometric_normal.dot(-direction)));
             path[depth - 1].reverse_measure_pdf =
-                path_solid_angle_to_area_pdf(
+                path[depth - 1].measure == GpuPathVertexMeasure::Volume
+                ? path_solid_angle_to_volume_pdf(
+                    reverse_pdf, distance_squared)
+                : path_solid_angle_to_area_pdf(
                     reverse_pdf, distance_squared,
                     fabsf(path[depth - 1].geometric_normal.dot(direction)));
         }
@@ -79,6 +82,80 @@ static __device__ void capture_bidirectional_surface_vertex(
     vertex.sample_index = queue.sample_indices[queue_index];
     vertex.scene_epoch = scene.bidirectional_scene_epoch;
     vertex.delta = delta ? 1 : 0;
+    vertex.valid = 1;
+    scene.bidirectional_camera_path_lengths[path_index] =
+        max(scene.bidirectional_camera_path_lengths[path_index], depth + 1);
+    if (scene.bidirectional_telemetry) {
+        atomicAdd(&scene.bidirectional_telemetry->camera_vertices, 1u);
+    }
+}
+
+static __device__ void capture_bidirectional_volume_vertex(
+    const GpuScene& scene,
+    const RayQueue& queue,
+    int queue_index,
+    int depth,
+    const GpuVec3& position,
+    const GpuVec3& incoming,
+    const GpuVec3& outgoing,
+    const SpectralPacket& throughput,
+    float phase_pdf,
+    int medium_index) {
+    if (!scene.bidirectional_camera_vertices ||
+        !scene.bidirectional_camera_path_lengths || depth < 0 ||
+        depth >= scene.bidirectional_max_camera_vertices) return;
+    const std::uint32_t path_index = queue.path_indices[queue_index];
+    if (path_index >= static_cast<std::uint32_t>(
+            scene.bidirectional_camera_path_capacity)) return;
+    GpuBidirectionalPathVertex* path =
+        scene.bidirectional_camera_vertices +
+        static_cast<size_t>(path_index) *
+            scene.bidirectional_max_camera_vertices;
+    if (depth > 0 && path[depth - 1].valid) {
+        const GpuVec3 edge = position - path[depth - 1].position;
+        const float distance_squared = edge.length_sq();
+        if (distance_squared > 1e-12f) {
+            const GpuVec3 direction = edge * rsqrtf(distance_squared);
+            path[depth - 1].forward_measure_pdf =
+                path_solid_angle_to_volume_pdf(
+                    path[depth - 1].forward_directional_pdf,
+                    distance_squared);
+            const float previous_target =
+                path[depth - 1].measure == GpuPathVertexMeasure::Area
+                ? fabsf(path[depth - 1].geometric_normal.dot(direction))
+                : 1.0f;
+            path[depth - 1].reverse_measure_pdf =
+                path_solid_angle_to_area_pdf(
+                    phase_pdf, distance_squared, previous_target);
+        }
+    }
+    GpuBidirectionalPathVertex& vertex = path[depth];
+    vertex.position = position;
+    vertex.incoming = incoming;
+    vertex.outgoing = outgoing;
+    vertex.throughput = throughput;
+    for (int channel = 0; channel < queue.num_spectral_channels; ++channel) {
+        const StokesVector stokes = load_stokes(queue, queue_index, channel);
+        vertex.stokes_i.values[channel] = stokes.I;
+        vertex.stokes_q.values[channel] = stokes.Q;
+        vertex.stokes_u.values[channel] = stokes.U;
+        vertex.stokes_v.values[channel] = stokes.V;
+        vertex.stokes_i.wavelengths[channel] = throughput.wavelengths[channel];
+        vertex.stokes_q.wavelengths[channel] = throughput.wavelengths[channel];
+        vertex.stokes_u.wavelengths[channel] = throughput.wavelengths[channel];
+        vertex.stokes_v.wavelengths[channel] = throughput.wavelengths[channel];
+    }
+    vertex.wavelength_pdf = queue.wavelength_pdfs[queue_index];
+    vertex.forward_directional_pdf = phase_pdf;
+    vertex.reverse_directional_pdf = phase_pdf;
+    vertex.spectral_mode = queue.spectral_modes[queue_index];
+    vertex.active_channel = queue.active_channels[queue_index];
+    vertex.material_index = -1;
+    vertex.medium_index = medium_index;
+    vertex.measure = GpuPathVertexMeasure::Volume;
+    vertex.transport_mode = GpuPathTransportMode::Radiance;
+    vertex.sample_index = queue.sample_indices[queue_index];
+    vertex.scene_epoch = scene.bidirectional_scene_epoch;
     vertex.valid = 1;
     scene.bidirectional_camera_path_lengths[path_index] =
         max(scene.bidirectional_camera_path_lengths[path_index], depth + 1);

@@ -143,10 +143,15 @@ struct GpuContext {
     GpuVcmGridEntry* d_vcm_grid_entries = nullptr;
     std::uint32_t* d_vcm_grid_entry_count = nullptr;
     GpuVec3* d_vcm_merge_accum = nullptr;
+    int* d_vcm_volume_grid_heads = nullptr;
+    GpuVcmGridEntry* d_vcm_volume_grid_entries = nullptr;
+    std::uint32_t* d_vcm_volume_grid_entry_count = nullptr;
+    GpuVec3* d_vcm_volume_merge_accum = nullptr;
     int vcm_grid_capacity = 0;
     int vcm_grid_entry_capacity = 0;
     std::uint64_t vcm_radius_iteration = 0;
     float vcm_current_surface_radius = 0.0f;
+    float vcm_current_volume_radius = 0.0f;
     int bidirectional_camera_path_capacity = 0;
     int bidirectional_light_path_capacity = 0;
     size_t bidirectional_required_bytes = 0;

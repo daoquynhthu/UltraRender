@@ -40,6 +40,8 @@ The radius schedule is explicit in configuration and metadata. Each iteration ap
 
 The surface-grid implementation stores exact signed cell coordinates beside each chained hash entry, so hash collisions affect traversal cost but never merge eligibility. Surface compatibility additionally requires bounded Euclidean distance, aligned geometric normals, and bounded normal-plane separation to prevent thin-wall light leaks. Light endpoints and delta vertices never enter the merge grid. The grid heads, entries, counter, and merge accumulation are context-owned and included in the same checked bidirectional VRAM budget.
 
+Surface and volume grids are independently allocated according to merge policy because their progressive radii and measures differ. Camera and importance light paths both capture homogeneous-medium scattering vertices, including resource-backed Mie phase transport. Mixed surface-volume edges convert the directional PDF into the target vertex measure in each direction. Volume merging requires matching medium identity and uses the normalized sphere kernel `3 / (4 pi r^3)`.
+
 ## Specular-manifold solver
 
 The manifold solver consumes stable primitive identity and differentiable local coordinates. Analytic spheres use angular coordinates; triangles use barycentric coordinates with transform-aware tangent derivatives. A bounded chain stores each specular vertex and solves the half-vector/Snell constraint with damped Newton iterations, pivoted small-matrix elimination, line search, domain projection, residual and determinant gates.

@@ -2752,6 +2752,50 @@ static int test_vcm_builds_bounded_grid_and_merges_surface_vertices() {
     reset_accumulation_gpu(ctx);
     CHECK(ctx->vcm_radius_iteration == 0);
     free_gpu_renderer(ctx);
+
+    config.vcm.merge_surfaces = false;
+    config.vcm.merge_volumes = true;
+    ctx = init_gpu_renderer(
+        8, 8, {}, {}, {surface, ground, light},
+        {diffuse, emitter}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->d_vcm_grid_heads == nullptr);
+    CHECK(ctx->d_vcm_volume_grid_heads != nullptr);
+    CHECK(ctx->d_vcm_volume_grid_entries != nullptr);
+    CHECK(ctx->d_vcm_volume_grid_entry_count != nullptr);
+    CHECK(ctx->d_vcm_volume_merge_accum != nullptr);
+    update_camera_gpu(ctx, camera_position, camera_target, 18.0f);
+    update_medium_gpu(
+        ctx, 2.0f, 0.0f, SpectralPacket(1.0f), SpectralPacket(0.0f),
+        10.0f, static_cast<int>(VolumePhaseFunction::HenyeyGreenstein));
+    rejected = false;
+    try {
+        render_pass_gpu(ctx, 1);
+    } catch (const std::runtime_error& error) {
+        rejected = std::string(error.what()).find("R-P4 implementation") !=
+                   std::string::npos;
+    }
+    CHECK(rejected);
+    entry_count = 0;
+    CHECK_CUDA(cudaMemcpy(
+        &entry_count, ctx->d_vcm_volume_grid_entry_count,
+        sizeof(entry_count), cudaMemcpyDeviceToHost));
+    CHECK(entry_count > 0);
+    CHECK_FLOAT_EQ(
+        ctx->vcm_current_volume_radius,
+        static_cast<float>(ure::integrator::progressive_volume_merge_radius(
+            config.vcm.initial_radius, config.vcm.alpha, 0)), 1e-6f);
+    CHECK(ctx->last_bidirectional_telemetry.buffer_overflow == 0);
+    CHECK(ctx->last_bidirectional_telemetry.merged_vertices > 0);
+    CHECK_CUDA(cudaMemcpy(
+        merged.data(), ctx->d_vcm_volume_merge_accum,
+        merged.size() * sizeof(GpuVec3), cudaMemcpyDeviceToHost));
+    nonzero = false;
+    for (const auto& value : merged) {
+        nonzero = nonzero || value.length_sq() > 0.0f;
+    }
+    CHECK(nonzero);
+    free_gpu_renderer(ctx);
     return 0;
 }
 
