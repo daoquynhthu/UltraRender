@@ -1,4 +1,5 @@
 #include <cuda_runtime.h>
+#include <cmath>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdexcept>
@@ -2596,6 +2597,91 @@ static int test_bidirectional_strategy_density_partitions_on_device() {
     return 0;
 }
 
+static int test_bidirectional_light_subpath_transports_rough_metal_stokes() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 64;
+    config.integrator.mode = ure::IntegratorMode::BDPT;
+    config.bidirectional.max_camera_vertices = 4;
+    config.bidirectional.max_light_vertices = 4;
+    config.bidirectional.memory_budget_mb = 64;
+    GpuMaterialData metal = {};
+    metal.header.type = MaterialType::Metal;
+    metal.header.roughness = 0.28f;
+    metal.albedo = SpectralPacket(0.75f);
+    GpuMaterialData emitter = {};
+    emitter.header.type = MaterialType::Light;
+    emitter.emission = SpectralPacket(6.0f);
+    GpuSphere ground = {GpuVec3(0.0f, -1001.0f, 0.0f), 1000.0f, 7};
+    GpuSphere light = {GpuVec3(0.0f, 2.0f, 0.0f), 0.5f, 8};
+    GpuContext* ctx = init_gpu_renderer(
+        8, 8, {}, {}, {ground, light}, {metal, emitter}, {}, config);
+    CHECK(ctx != nullptr);
+    bool rejected = false;
+    try {
+        render_pass_gpu(ctx, 1);
+    } catch (const std::runtime_error& error) {
+        rejected = std::string(error.what()).find("R-P4 implementation") !=
+                   std::string::npos;
+    }
+    CHECK(rejected);
+    std::vector<GpuBidirectionalPathVertex> vertices(
+        config.queue_capacity * config.bidirectional.max_light_vertices);
+    CHECK_CUDA(cudaMemcpy(
+        vertices.data(), ctx->d_light_path_vertices,
+        vertices.size() * sizeof(GpuBidirectionalPathVertex),
+        cudaMemcpyDeviceToHost));
+    bool found = false;
+    for (const auto& vertex : vertices) {
+        if (!vertex.valid || vertex.material_index != 7) continue;
+        found = true;
+        CHECK(vertex.transport_mode == GpuPathTransportMode::Importance);
+        CHECK(vertex.forward_directional_pdf > 0.0f);
+        CHECK(std::isfinite(vertex.stokes_i.values[0]));
+        CHECK(std::isfinite(vertex.stokes_q.values[0]));
+        CHECK(std::isfinite(vertex.stokes_u.values[0]));
+        CHECK(std::isfinite(vertex.stokes_v.values[0]));
+    }
+    CHECK(found);
+    free_gpu_renderer(ctx);
+
+    GpuMaterialData dielectric = {};
+    dielectric.header.type = MaterialType::Dielectric;
+    dielectric.header.roughness = 0.24f;
+    dielectric.header.ior = 1.52f;
+    dielectric.header.dispersion = 0.01f;
+    ctx = init_gpu_renderer(
+        8, 8, {}, {}, {ground, light}, {dielectric, emitter}, {}, config);
+    CHECK(ctx != nullptr);
+    rejected = false;
+    try {
+        render_pass_gpu(ctx, 1);
+    } catch (const std::runtime_error& error) {
+        rejected = std::string(error.what()).find("R-P4 implementation") !=
+                   std::string::npos;
+    }
+    CHECK(rejected);
+    CHECK_CUDA(cudaMemcpy(
+        vertices.data(), ctx->d_light_path_vertices,
+        vertices.size() * sizeof(GpuBidirectionalPathVertex),
+        cudaMemcpyDeviceToHost));
+    found = false;
+    for (const auto& vertex : vertices) {
+        if (!vertex.valid || vertex.material_index != 7) continue;
+        found = true;
+        CHECK(vertex.transport_mode == GpuPathTransportMode::Importance);
+        CHECK(vertex.forward_directional_pdf > 0.0f);
+        CHECK(std::isfinite(vertex.stokes_i.values[0]));
+        CHECK(std::isfinite(vertex.stokes_q.values[0]));
+        CHECK(std::isfinite(vertex.stokes_u.values[0]));
+        CHECK(std::isfinite(vertex.stokes_v.values[0]));
+    }
+    CHECK(found);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
 static int test_restir_di_production_surface_scheduler_renders_and_reuses() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -3433,6 +3519,7 @@ int main() {
     RUN_TEST(test_restir_pt_owns_bounded_ping_pong_suffix_history);
     RUN_TEST(test_bidirectional_runtime_owns_bounded_vertex_storage);
     RUN_TEST(test_bidirectional_strategy_density_partitions_on_device);
+    RUN_TEST(test_bidirectional_light_subpath_transports_rough_metal_stokes);
     RUN_TEST(test_restir_di_production_surface_scheduler_renders_and_reuses);
     RUN_TEST(test_restir_pt_replays_diffuse_surface_suffixes);
     RUN_TEST(test_restir_pt_replays_scalar_depolarizing_volume_suffixes);

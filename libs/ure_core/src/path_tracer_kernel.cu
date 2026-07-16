@@ -15,6 +15,7 @@ namespace ure::gpu {
 #include "path_tracer_polarization.cuh"
 #include "path_tracer_boundary.cuh"
 #include "path_tracer_bsdf.cuh"
+#include "path_tracer_scattered_stokes.cuh"
 #include "path_tracer_volume.cuh"
 #include "restir_pt_capture.cuh"
 #include "bidirectional_capture.cuh"

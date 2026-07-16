@@ -30,5 +30,6 @@ __global__ void extend_light_subpaths_kernel(
     int path_count,
     int max_light_vertices,
     int sample_index,
+    float dispersion_clamp,
     std::uint32_t scene_epoch,
     GpuBidirectionalTelemetry* telemetry);

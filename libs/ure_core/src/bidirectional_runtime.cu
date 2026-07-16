@@ -15,6 +15,7 @@ namespace ure::gpu {
 #include "path_tracer_polarization.cuh"
 #include "path_tracer_boundary.cuh"
 #include "path_tracer_bsdf.cuh"
+#include "path_tracer_scattered_stokes.cuh"
 #define URE_MATERIAL_TARGET_ONLY 1
 #include "path_tracer_material_runtime.cuh"
 #undef URE_MATERIAL_TARGET_ONLY
@@ -158,6 +159,7 @@ __global__ void extend_light_subpaths_kernel(
     int path_count,
     int max_light_vertices,
     int sample_index,
+    float dispersion_clamp,
     std::uint32_t scene_epoch,
     GpuBidirectionalTelemetry* telemetry) {
     const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -191,7 +193,16 @@ __global__ void extend_light_subpaths_kernel(
         if (material_index < 0 || material_index >= scene.material_count) break;
         const GpuMaterial material = scene.materials[material_index];
         if (material.type == MaterialType::Light) break;
-        if (material.type != MaterialType::Lambertian) {
+        if (material.type != MaterialType::Lambertian &&
+            material.type != MaterialType::Cloth &&
+            material.type != MaterialType::Metal &&
+            material.type != MaterialType::Dielectric) {
+            if (telemetry) atomicAdd(&telemetry->rejected_delta, 1u);
+            break;
+        }
+        if (material.type == MaterialType::Dielectric &&
+            !is_rough_dielectric_bsdf(material) &&
+            fabsf(material.dispersion) > 0.0f) {
             if (telemetry) atomicAdd(&telemetry->rejected_delta, 1u);
             break;
         }
@@ -208,17 +219,42 @@ __global__ void extend_light_subpaths_kernel(
                 scene, material.texture_index, hit_uv.u, hit_uv.v,
                 throughput.wavelengths, scene.num_spectral_channels);
         }
-        const float u1 = sample_dimension(
-            sample_index, path_index, 80 + depth * 2);
-        const float u2 = sample_dimension(
-            sample_index, path_index, 81 + depth * 2);
-        const GpuVec3 local = cosine_hemisphere(u1, u2);
-        const GpuVec3 outgoing = local_to_world(local, hit_n);
-        const float forward_pdf =
-            fmaxf(0.0f, hit_n.dot(outgoing)) * 0.31830988618379067154f;
-        const float reverse_pdf =
-            fmaxf(0.0f, hit_n.dot(-ray.direction)) * 0.31830988618379067154f;
-        if (forward_pdf <= 0.0f) break;
+        SpectralPacket dielectric_ior(material.ior);
+        for (int channel = 0; channel < scene.num_spectral_channels; ++channel) {
+            dielectric_ior.wavelengths[channel] = throughput.wavelengths[channel];
+        }
+        if (material.ior_expression_root != -1) {
+            dielectric_ior = eval_material_expression(
+                scene, material, material.ior_expression_root,
+                hit_uv.u, hit_uv.v, throughput.wavelengths,
+                scene.num_spectral_channels);
+        }
+        GpuRay scattered = {};
+        SpectralPacket attenuation = {};
+        StokesVector representative_stokes(
+            path[depth - 1].stokes_i.values[0],
+            path[depth - 1].stokes_q.values[0],
+            path[depth - 1].stokes_u.values[0],
+            path[depth - 1].stokes_v.values[0]);
+        float forward_pdf = 0.0f;
+        if (!scatter(
+                ray, material, spectra.albedo, spectra.extinction,
+                spectra.metal_eta, dielectric_ior,
+                hit_p, hit_n, hit_uv, throughput, attenuation, scattered,
+                representative_stokes, seed, forward_pdf,
+                dispersion_clamp, sample_index, path_index, depth,
+                scene.num_spectral_channels, 1.0f, material.ior,
+                BoundaryTransportMode::Importance, SpectralRayModePacket, -1)) {
+            break;
+        }
+        const GpuVec3 outgoing = scattered.direction;
+        const bool delta =
+            (material.type == MaterialType::Metal && material.roughness <= 0.02f) ||
+            (material.type == MaterialType::Dielectric &&
+             !is_rough_dielectric_bsdf(material));
+        const float reverse_pdf = delta ? 0.0f :
+            pdf_bsdf(material, hit_n, outgoing, -ray.direction);
+        if (!delta && forward_pdf <= 0.0f) break;
         const GpuVec3 edge = hit_p - path[depth - 1].position;
         const float distance_squared = edge.length_sq();
         if (!(distance_squared > 1e-12f)) break;
@@ -242,6 +278,7 @@ __global__ void extend_light_subpaths_kernel(
         vertex.wavelength_pdf = path[0].wavelength_pdf;
         vertex.forward_directional_pdf = forward_pdf;
         vertex.reverse_directional_pdf = reverse_pdf;
+        vertex.delta = delta ? 1 : 0;
         vertex.spectral_mode = path[0].spectral_mode;
         vertex.active_channel = path[0].active_channel;
         vertex.geometry_type = geometry_type;
@@ -254,20 +291,20 @@ __global__ void extend_light_subpaths_kernel(
         vertex.sample_index = static_cast<std::uint32_t>(sample_index);
         vertex.scene_epoch = scene_epoch;
         vertex.valid = 1;
-        for (int channel = 0; channel < scene.num_spectral_channels; ++channel) {
-            vertex.stokes_i.values[channel] = 1.0f;
-            vertex.stokes_i.wavelengths[channel] = throughput.wavelengths[channel];
-            vertex.stokes_q.wavelengths[channel] = throughput.wavelengths[channel];
-            vertex.stokes_u.wavelengths[channel] = throughput.wavelengths[channel];
-            vertex.stokes_v.wavelengths[channel] = throughput.wavelengths[channel];
-        }
+        transform_scattered_stokes_packets(
+            material, spectra, dielectric_ior, ray, scattered,
+            hit_n, hit_uv, throughput, 1.0f, dispersion_clamp,
+            sample_index, path_index, depth, scene.num_spectral_channels,
+            BoundaryTransportMode::Importance,
+            path[depth - 1].stokes_i, path[depth - 1].stokes_q,
+            path[depth - 1].stokes_u, path[depth - 1].stokes_v,
+            vertex.stokes_i, vertex.stokes_q,
+            vertex.stokes_u, vertex.stokes_v);
         path[depth] = vertex;
         path_lengths[path_index] = depth + 1;
         if (telemetry) atomicAdd(&telemetry->light_vertices, 1u);
-        throughput = throughput * spectra.albedo;
-        ray.origin = hit_p + hit_ng *
-            (outgoing.dot(hit_ng) > 0.0f ? 1e-4f : -1e-4f);
-        ray.direction = outgoing;
+        throughput = throughput * attenuation;
+        ray = scattered;
     }
 }
 

@@ -396,30 +396,6 @@ __device__ inline StokesVector load_packet_average_stokes(const RayQueue& q, int
     return s * inv_n;
 }
 
-__device__ inline void rotate_stokes_into_boundary_frame(StokesVector& s, const GpuVec3& ray_dir, const GpuVec3& boundary_normal) {
-    GpuVec3 ref_in = get_reference_frame(ray_dir);
-    GpuVec3 raw_s = ray_dir.cross(boundary_normal);
-    float raw_len_sq = raw_s.length_sq();
-    GpuVec3 s_axis = raw_len_sq < 1e-12f
-        ? get_reference_frame(boundary_normal)
-        : raw_s * (1.0f / sqrtf(raw_len_sq));
-    float cos_phi = ref_in.dot(s_axis);
-    float sin_phi = ref_in.cross(s_axis).dot(ray_dir);
-    rotate_stokes(s, 2.0f * atan2f(sin_phi, cos_phi));
-}
-
-__device__ inline void rotate_stokes_from_boundary_frame(StokesVector& s, const GpuVec3& ray_dir, const GpuVec3& boundary_normal) {
-    GpuVec3 ref_out = get_reference_frame(ray_dir);
-    GpuVec3 raw_s = ray_dir.cross(boundary_normal);
-    float raw_len_sq = raw_s.length_sq();
-    GpuVec3 s_axis = raw_len_sq < 1e-12f
-        ? get_reference_frame(boundary_normal)
-        : raw_s * (1.0f / sqrtf(raw_len_sq));
-    float cos_phi = s_axis.dot(ref_out);
-    float sin_phi = s_axis.cross(ref_out).dot(ray_dir);
-    rotate_stokes(s, 2.0f * atan2f(sin_phi, cos_phi));
-}
-
 __device__ inline void store_packet_scattered_stokes(
     const RayQueue& current_queue,
     RayQueue& next_queue,
@@ -439,110 +415,30 @@ __device__ inline void store_packet_scattered_stokes(
     int pixel_index,
     int depth
 ) {
-    if (mat.type == MaterialType::Lambertian || mat.type == MaterialType::Cloth) {
-        for (int c = 0; c < current_queue.num_spectral_channels; ++c) {
-            StokesVector s = load_stokes(current_queue, in_idx, c);
-            s.Q = 0.0f;
-            s.U = 0.0f;
-            s.V = 0.0f;
-            store_stokes(next_queue, out_idx, c, s);
-        }
-        return;
+    SpectralPacket input_i{};
+    SpectralPacket input_q{};
+    SpectralPacket input_u{};
+    SpectralPacket input_v{};
+    SpectralPacket output_i{};
+    SpectralPacket output_q{};
+    SpectralPacket output_u{};
+    SpectralPacket output_v{};
+    for (int channel = 0; channel < current_queue.num_spectral_channels; ++channel) {
+        const StokesVector stokes = load_stokes(current_queue, in_idx, channel);
+        store_packet_stokes_at(
+            input_i, input_q, input_u, input_v, channel, stokes,
+            throughput.wavelengths[channel]);
     }
-
-    if (mat.type == MaterialType::Metal) {
-        GpuVec3 V = (-r_in.direction).normalize();
-        GpuVec3 L = scattered.direction.normalize();
-        GpuVec3 N = n;
-        if (V.dot(N) < 0.0f) N = -N;
-        GpuVec3 H = (V + L);
-        if (H.length_sq() < 1e-12f) {
-            for (int c = 0; c < current_queue.num_spectral_channels; ++c) {
-                store_stokes(next_queue, out_idx, c, load_stokes(current_queue, in_idx, c));
-            }
-            return;
-        }
-        H = H.normalize();
-        float cos_theta_h = fmaxf(0.0f, V.dot(H));
-        ConductorMaterialSemantics conductor = eval_conductor_material_semantics(
-            mat_soa.metal_eta, mat_soa.extinction, current_queue.num_spectral_channels);
-        float effective_thickness = mat.thin_film_thickness;
-        if (effective_thickness > 0.0f) {
-            effective_thickness = effective_thickness * (1.5f - uv.v);
-        }
-
-        for (int c = 0; c < current_queue.num_spectral_channels; ++c) {
-            StokesVector s = load_stokes(current_queue, in_idx, c);
-            rotate_stokes_into_boundary_frame(s, r_in.direction, H);
-            if (!conductor.measured_conductor) {
-                float eta_equiv = conductor_f0_eta_from_albedo(mat_soa.albedo.values[c]);
-                if (effective_thickness > 0.0f) {
-                    DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
-                        throughput.wavelengths[c], effective_thickness, 1.0f, mat.thin_film_ior, eta_equiv, cos_theta_h);
-                    apply_mueller_reflection_boundary(s, surface.rs, surface.rp, surface.Rs, surface.Rp);
-                } else {
-                    float r = (1.0f - eta_equiv) / (1.0f + eta_equiv);
-                    apply_mueller_reflection_boundary(s, c_make(r, 0.0f), c_make(-r, 0.0f), r * r, r * r);
-                }
-            } else {
-                float eta_c = conductor_eta_for_channel(conductor, mat_soa.metal_eta, mat.ior, c);
-                if (effective_thickness > 0.0f) {
-                    ThinFilmBoundary film = eval_thin_film_conductor_boundary(
-                        throughput.wavelengths[c], effective_thickness, 1.0f, mat.thin_film_ior, eta_c, mat_soa.extinction.values[c], cos_theta_h);
-                    apply_mueller_reflection_boundary(s, film.rs, film.rp, film.Rs, film.Rp);
-                } else {
-                    ConductorBoundary boundary = eval_conductor_boundary(eta_c, mat_soa.extinction.values[c], cos_theta_h);
-                    apply_mueller_reflection_boundary(s, boundary.rs, boundary.rp, boundary.Rs, boundary.Rp);
-                }
-            }
-            rotate_stokes_from_boundary_frame(s, scattered.direction, H);
-            store_stokes(next_queue, out_idx, c, s);
-        }
-        return;
-    }
-
-    if (mat.type == MaterialType::Dielectric) {
-        float r_bsdf_1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf0);
-        float r_bsdf_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf1);
-        GpuVec3 normal = r_in.direction.dot(n) < 0.0f ? n : -n;
-        float jitter_scale = mat.roughness * 0.002f;
-        if (jitter_scale > 0.0f) {
-            normal = (normal + sample_unit_vector_lds(r_bsdf_1, r_bsdf_2) * jitter_scale).normalize();
-        }
-        GpuVec3 unit_direction = r_in.direction.normalize();
-        GpuVec3 out_direction = scattered.direction.normalize();
-        float cos_theta_i = fminf((-unit_direction).dot(normal), 1.0f);
-        bool front_face = r_in.direction.dot(n) < 0.0f;
-        bool is_reflection = unit_direction.dot(normal) * out_direction.dot(normal) < 0.0f;
-        float effective_thickness = mat.thin_film_thickness;
-        if (effective_thickness > 0.0f) {
-            effective_thickness = effective_thickness * (1.5f - uv.v);
-        }
-
-        for (int c = 0; c < current_queue.num_spectral_channels; ++c) {
-            float material_ior = mat.ior_expression_root != -1
-                ? dielectric_ior.values[c]
-                : dispersed_dielectric_ior(mat.ior, mat.dispersion, throughput.wavelengths[c], dispersion_clamp);
-            float eta_i = front_face ? ior_outside : material_ior;
-            float eta_t = front_face ? material_ior : ior_outside;
-            DielectricSurfaceBoundary surface = eval_dielectric_surface_boundary(
-                throughput.wavelengths[c], effective_thickness, eta_i, mat.thin_film_ior, eta_t, cos_theta_i);
-            StokesVector s = load_stokes(current_queue, in_idx, c);
-            rotate_stokes_into_boundary_frame(s, r_in.direction, normal);
-            if (is_reflection || surface.tir) {
-                apply_mueller_reflection_boundary(s, surface.rs, surface.rp, surface.Rs, surface.Rp);
-            } else {
-                apply_mueller_transmission_boundary(s, surface.ts, surface.tp, surface.Ts, surface.Tp, surface.eta_jacobian);
-                s = s * surface.radiance_scale;
-            }
-            rotate_stokes_from_boundary_frame(s, scattered.direction, normal);
-            store_stokes(next_queue, out_idx, c, s);
-        }
-        return;
-    }
-
-    for (int c = 0; c < current_queue.num_spectral_channels; ++c) {
-        store_stokes(next_queue, out_idx, c, load_stokes(current_queue, in_idx, c));
+    transform_scattered_stokes_packets(
+        mat, mat_soa, dielectric_ior, r_in, scattered, n, uv, throughput,
+        ior_outside, dispersion_clamp, sample_index, pixel_index, depth,
+        current_queue.num_spectral_channels, BoundaryTransportMode::Radiance,
+        input_i, input_q, input_u, input_v,
+        output_i, output_q, output_u, output_v);
+    for (int channel = 0; channel < current_queue.num_spectral_channels; ++channel) {
+        store_stokes(
+            next_queue, out_idx, channel,
+            packet_stokes_at(output_i, output_q, output_u, output_v, channel));
     }
 }
 

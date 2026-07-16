@@ -2834,7 +2834,8 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             scene, ctx->d_light_path_vertices, ctx->d_light_path_lengths,
             primary_ray_count,
             ctx->render_config.bidirectional.max_light_vertices,
-            ctx->current_spp, ctx->bidirectional_scene_epoch,
+            ctx->current_spp, ctx->current_spp < 100 ? 5.0f : 20.0f,
+            ctx->bidirectional_scene_epoch,
             ctx->d_bidirectional_telemetry);
         UR_CUDA_CHECK(cudaGetLastError());
     }
