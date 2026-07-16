@@ -6,11 +6,11 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- 已完成 Phase Q 原生场景系统；当前施工游标是 `R-P3`。
+- 已完成 Phase Q 原生场景系统和 R-P3 production ReSTIR；当前施工游标是 `R-P4`。
 - 默认生产执行后端是 CUDA。Vulkan、D3D12/DXR 和 OptiX 路径尚未完成。
 - 默认积分器是 spectral/polarimetric radiometric wavefront path tracer。
 - coherent field、partial coherence、完整衍射相机和局部全波耦合仍属于 Phase W 后续工作；当前主渲染路径不会静默模拟这些能力。
-- unbiased/spatial ReSTIR DI、ReSTIR PT、GPU specular-manifold、BDPT、VCM 和 MLT chain integrator 尚未完成。部分相关配置或数据结构已存在，但不应据此视为可用功能。
+- production unbiased/spatial ReSTIR DI 已实现；独立 ReSTIR PT runtime 已支持受限的 diffuse surface、environment/emitter 和已支持 volume suffix reuse，R-P3 的完整验证仍在进行。GPU specular-manifold、BDPT、VCM 和 MLT chain integrator 尚未完成。
 - 当前验证基线为 Windows 11、Visual Studio 2022 Build Tools、CUDA 13.0 和 NVIDIA compute capability 12.0。其他平台与工具链尚未形成同等验证证据。
 
 ## 已验证的能力
@@ -26,6 +26,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 - URE 原生 `.ure`、`.urescene`、`.urepkg` 和可重建 `.urecache` 契约，包含校验、迁移、打包和检查工具。
 - `RenderSession`、C ABI、pyure、AOV、场景 mutation，以及 sample-range/file-backend 分布式契约。
 - 多 GPU sample-space 分区与 framebuffer 合并。完整渲染农场调度和跨机器运行时仍不属于已完成范围。
+- production ReSTIR DI 的 temporal/spatial reuse，以及 ReSTIR PT 的有界、版本化 path-suffix replay；当前 PT 遇到需要 specular manifold reconnection 的路径会明确失败，不会静默近似。
 
 ## 明确未完成或受限的能力
 

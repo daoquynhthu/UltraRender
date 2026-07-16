@@ -67,6 +67,8 @@ The independent `RestirPT` scheduler generates ordinary paths, proposes temporal
 
 R-P3 PT covers radiometric surface and supported volume suffixes. Specular manifold connections remain fail-loud until R-P4.
 
+The implemented scheduler replays each bounded candidate through an isolated accumulation buffer, streams its current-scene target into a PT reservoir, and commits exactly one normalized selected contribution to the formal film. Per-ray global sample indices are carried through surface, volume, and spectral-lane continuations. The reusable authority is the versioned sample identity plus captured suffix; cached RGB is never treated as a reusable path sample.
+
 ## Ownership and invalidation
 
 Reservoir buffers are context-owned RAII allocations with checked size arithmetic and a configurable memory budget. Resolution, camera discontinuity, integrator policy, spectral layout, light distribution, material/resource, instance topology, or volume-resource changes invalidate affected history. Transform changes may retain history only when previous transforms and stable primitive identity permit reprojection.
@@ -80,5 +82,7 @@ Host oracle tests cover reservoir streaming, normalization, pairwise MIS, histor
 GPU tests cover surface and volume target reevaluation, temporal reprojection, spatial reuse, occlusion changes, wavelength PDF propagation, Stokes state, stale epochs, buffer reset, and deterministic replay. A regression test proves the previous history-divisor replay cannot satisfy the production policy.
 
 Reference comparisons use fixed multi-light, occlusion, and volume scenes. For each scene the suite records mean bias with confidence bounds, MSE, variance, time-to-error, samples/second, and reservoir rejection counters. Production unbiased mode must agree with the wavefront reference within the predeclared statistical bound. A claimed benefit requires a lower time-to-error on at least one fixed workload without regression beyond tolerance on the others.
+
+The local executable gate is `tools/benchmarks/run_phase_r_restir_pt_suite.ps1`. Its default workload uses a 32-spp wavefront reference and 1/4/8-spp curves; reduced developer runs may override those values but do not replace the default closure evidence.
 
 The phase closes only after Release build, the complete CTest gate, Phase R static audit, the R-P3 benchmark suite, documentation consistency audit, and source self-review pass.

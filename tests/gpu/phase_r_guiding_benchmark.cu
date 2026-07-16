@@ -65,6 +65,12 @@ static void build_scene(const std::string& name,
             add_light(spheres, materials, GpuVec3(x, 2.0f + 0.3f * (i % 3), -1.0f), 0.22f,
                       i == 6 ? 24.0f : 1.5f + static_cast<float>(i));
         }
+    } else if (name == "occlusion") {
+        add_sphere(spheres, GpuVec3(0.0f, 0.0f, 0.0f), 1.0f, 7);
+        add_sphere(spheres, GpuVec3(-1.25f, 0.35f, 1.2f), 0.7f, 7);
+        add_sphere(spheres, GpuVec3(1.25f, 0.15f, -0.9f), 0.9f, 7);
+        add_light(spheres, materials, GpuVec3(-2.8f, 3.8f, 1.5f), 0.3f, 18.0f);
+        add_light(spheres, materials, GpuVec3(2.8f, 3.4f, -1.5f), 0.4f, 9.0f);
     } else if (name == "complex_material") {
         materials.push_back(make_material(MaterialType::Metal, 0.9f, 0.08f));
         materials.push_back(make_material(MaterialType::Dielectric, 1.0f, 0.03f));
@@ -89,7 +95,7 @@ static void build_scene(const std::string& name,
 int main(int argc, char** argv) {
     if (argc != 7) return 2;
     const std::string scene_name = argv[1];
-    const bool guided = std::stoi(argv[2]) != 0;
+    const int mode = std::stoi(argv[2]);
     const int width = std::stoi(argv[3]);
     const int height = std::stoi(argv[4]);
     const int spp = std::stoi(argv[5]);
@@ -101,10 +107,21 @@ int main(int argc, char** argv) {
     config.spectral_packet_lanes = 8;
     config.queue_capacity = std::max(width * height, 64);
     config.max_trace_depth = 8;
-    config.path_guiding.enabled = guided;
+    config.path_guiding.enabled = mode == 1;
     config.path_guiding.spatial_cell_count = 32;
     config.path_guiding.directional_bin_count = 16;
     config.path_guiding.memory_budget_mb = 64;
+    if (mode == 2) {
+        config.integrator.mode = ure::IntegratorMode::RestirPT;
+        config.restir_pt.enabled = true;
+        config.restir_pt.temporal_reuse = true;
+        config.restir_pt.spatial_reuse = true;
+        config.restir_pt.max_reuse_depth = 3;
+        config.restir_pt.candidate_count = 3;
+        config.restir_pt.max_history = 8;
+        config.restir_pt.position_threshold = 2.0f;
+        config.restir_pt.normal_threshold = 0.25f;
+    }
 
     std::vector<GpuSphere> spheres;
     std::vector<GpuMaterialData> materials;
@@ -127,6 +144,17 @@ int main(int argc, char** argv) {
         output.write(reinterpret_cast<const char*>(framebuffer.data()),
                      static_cast<std::streamsize>(framebuffer.size() * sizeof(float)));
         if (!output) throw std::runtime_error("failed to write benchmark output");
+        std::ofstream telemetry(output_path + ".telemetry");
+        telemetry << "surface_suffixes=" << context->last_restir_pt_telemetry.surface_suffixes << '\n'
+                  << "volume_suffixes=" << context->last_restir_pt_telemetry.volume_suffixes << '\n'
+                  << "temporal_candidates=" << context->last_restir_pt_telemetry.temporal_candidates << '\n'
+                  << "spatial_candidates=" << context->last_restir_pt_telemetry.spatial_candidates << '\n'
+                  << "accepted_reconnections=" << context->last_restir_pt_telemetry.accepted_reconnections << '\n'
+                  << "rejected_stale=" << context->last_restir_pt_telemetry.rejected_stale << '\n'
+                  << "rejected_geometry=" << context->last_restir_pt_telemetry.rejected_geometry << '\n'
+                  << "rejected_specular=" << context->last_restir_pt_telemetry.rejected_specular << '\n'
+                  << "rejected_volume=" << context->last_restir_pt_telemetry.rejected_volume << '\n';
+        if (!telemetry) throw std::runtime_error("failed to write benchmark telemetry");
     } catch (...) {
         free_gpu_renderer(context);
         throw;

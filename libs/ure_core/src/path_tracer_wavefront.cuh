@@ -621,6 +621,7 @@ __device__ inline bool split_dispersive_dielectric_lanes(
                 store_stokes(next_queue, out_idx, c, reflected_stokes);
                 next_queue.medium_indices[out_idx] = current_medium_idx;
                 next_queue.seeds[out_idx] = seed + 1664525u * unsigned(c + 1);
+                next_queue.sample_indices[out_idx] = current_queue.sample_indices[idx];
                 next_queue.pixel_indices[out_idx] = pixel_index;
                 next_queue.depths[out_idx] = depth + 1;
                 next_queue.flags[out_idx] = 1;
@@ -658,6 +659,7 @@ __device__ inline bool split_dispersive_dielectric_lanes(
                 next_queue.medium_indices[out_idx] = next_dielectric_medium_index(
                     current_medium_idx, mat_idx, r_in.direction, out_direction, ng);
                 next_queue.seeds[out_idx] = seed + 22695477u * unsigned(c + 1);
+                next_queue.sample_indices[out_idx] = current_queue.sample_indices[idx];
                 next_queue.pixel_indices[out_idx] = pixel_index;
                 next_queue.depths[out_idx] = depth + 1;
                 next_queue.flags[out_idx] = 1;
@@ -831,6 +833,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
     int mat_idx = hit_queue.mat_ids[idx];
     SpectralPacket throughput = load_throughput(current_queue, idx);
     int depth = current_queue.depths[idx];
+    sample_index = static_cast<int>(current_queue.sample_indices[idx]);
     unsigned int seed = current_queue.seeds[idx];
     int flag = current_queue.flags[idx];
 
@@ -1027,6 +1030,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 return;
             }
             GpuVec3 new_origin = current_queue.origins[idx] + current_queue.directions[idx] * t_medium;
+            capture_restir_pt_volume_vertex(
+                scene, pixel_index, depth, new_origin,
+                -current_queue.directions[idx], new_dir, phase_pdf,
+                current_medium_idx);
 
              int out_idx = reserve_ray_slot(next_queue);
              if (out_idx >= 0) {
@@ -1041,6 +1048,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 }
                 next_queue.medium_indices[out_idx] = current_medium_idx;
                 next_queue.seeds[out_idx] = seed;
+                next_queue.sample_indices[out_idx] = current_queue.sample_indices[idx];
                 next_queue.pixel_indices[out_idx] = pixel_index;
                 next_queue.depths[out_idx] = depth + 1;
                 next_queue.flags[out_idx] = 0;
@@ -1068,6 +1076,9 @@ __global__ __launch_bounds__(256) void shade_kernel(
     }
 
     if (mat_idx == -1) {
+        capture_restir_pt_terminal_vertex(
+            scene, pixel_index, depth, GpuVec3(), GpuVec3(),
+            GpuRestirPathVertexKind::Environment, -1, -1, -1, -1);
         float mis_weight = 1.0f;
         if (depth > 0 && !(flag & 1) && scene.environment_light_direct_sampling) {
             const float pdf_nee = selected_environment_light_pdf(scene, current_queue.origins[idx]);
@@ -1221,6 +1232,14 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
     GpuVec3 emission_rgb = xyz_to_rgb(spectrum_to_xyz(mat_soa.emission, scene.num_spectral_channels));
     if (emission_rgb.length_sq() > 0) {
+        if (mat.type == MaterialType::Light) {
+            capture_restir_pt_terminal_vertex(
+                scene, pixel_index, depth, p, ng,
+                GpuRestirPathVertexKind::Emitter, mat_idx,
+                hit_queue.hit_types[idx], hit_queue.hit_indices[idx],
+                hit_queue.hit_primitive_indices
+                    ? hit_queue.hit_primitive_indices[idx] : -1);
+        }
         float mis_weight = 1.0f;
 
         if (depth > 0 && !(flag & 1) && scene.light_count > 0) {
@@ -1548,6 +1567,16 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     next_flag = 1;
                 }
 
+                const float reverse_pdf = mat.type == MaterialType::Lambertian
+                    ? fmaxf(0.0f, n.dot(-r_in.direction)) * 0.31830988618f
+                    : 0.0f;
+                capture_restir_pt_surface_vertex(
+                    scene, pixel_index, depth, p, ng, -r_in.direction,
+                    scattered.direction, pdf_val, reverse_pdf, mat_idx,
+                    hit_queue.hit_types[idx], hit_queue.hit_indices[idx],
+                    hit_queue.hit_primitive_indices
+                        ? hit_queue.hit_primitive_indices[idx] : -1);
+
         int out_idx = reserve_ray_slot(next_queue);
         if (out_idx >= 0) {
             next_queue.origins[out_idx] = scattered.origin;
@@ -1590,6 +1619,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
             next_queue.medium_indices[out_idx] = next_medium;
 
             next_queue.seeds[out_idx] = seed;
+            next_queue.sample_indices[out_idx] = current_queue.sample_indices[idx];
             next_queue.pixel_indices[out_idx] = pixel_index;
             next_queue.depths[out_idx] = depth + 1;
             next_queue.flags[out_idx] = next_flag;

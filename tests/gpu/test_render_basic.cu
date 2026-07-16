@@ -45,6 +45,8 @@ static int test_alloc_ray_queue(RayQueue& q, int cap, int num_spec = 4) {
     if (cudaMalloc(&q.stokes_v, num_spec * cap * sizeof(float)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.medium_indices, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.seeds, cap * sizeof(unsigned int)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.sample_indices, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
+    if (cudaMemset(q.sample_indices, 0, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.pixel_indices, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.depths, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.flags, cap * sizeof(int)) != cudaSuccess) return 1;
@@ -71,6 +73,7 @@ static void test_free_ray_queue(const RayQueue& q) {
     cudaFree(q.stokes_v);
     cudaFree(q.medium_indices);
     cudaFree(q.seeds);
+    cudaFree(q.sample_indices);
     cudaFree(q.pixel_indices);
     cudaFree(q.depths);
     cudaFree(q.flags);
@@ -505,7 +508,6 @@ static int test_ray_sphere_intersection() {
 
     setup_single_ray_kernel<<<1, 1>>>(qA, GpuVec3(0,0,3), GpuVec3(0,0,-1).normalize(), 0);
     CHECK_CUDA(cudaGetLastError());
-
     extend_kernel<<<1, 1>>>(qA, hQ, scene);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
@@ -614,6 +616,10 @@ static int test_shade_kernel_emissive() {
 
     setup_single_ray_kernel<<<1, 1>>>(qA, GpuVec3(0,0,3), GpuVec3(0,0,-1).normalize(), 0);
     CHECK_CUDA(cudaGetLastError());
+    const std::uint32_t sample_identity = 37;
+    CHECK_CUDA(cudaMemcpy(
+        qA.sample_indices, &sample_identity, sizeof(sample_identity),
+        cudaMemcpyHostToDevice));
 
     extend_kernel<<<1, 1>>>(qA, hQ, scene);
     CHECK_CUDA(cudaGetLastError());
@@ -633,6 +639,11 @@ static int test_shade_kernel_emissive() {
     CHECK_CUDA(cudaMemcpy(&bounce_count, qB.count, sizeof(int), cudaMemcpyDeviceToHost));
     CHECK(shadow_count > 0);
     CHECK(bounce_count > 0);
+    std::uint32_t propagated_sample_identity = 0;
+    CHECK_CUDA(cudaMemcpy(
+        &propagated_sample_identity, qB.sample_indices,
+        sizeof(propagated_sample_identity), cudaMemcpyDeviceToHost));
+    CHECK(propagated_sample_identity == sample_identity);
 
     extend_shadow_kernel<<<1, 1>>>(sQ, d_accum, scene, 20.0f);
     CHECK_CUDA(cudaGetLastError());
@@ -2442,13 +2453,18 @@ static int test_restir_pt_owns_bounded_ping_pong_suffix_history() {
     CHECK(cleared.candidate_count == 0);
     CHECK(ctx->restir_pt_scene_epoch != previous_epoch);
 
-    bool rejected = false;
-    try {
-        (void)render_pass_gpu(ctx, 1);
-    } catch (const std::runtime_error& error) {
-        rejected = std::string(error.what()).find("suffix scheduler") != std::string::npos;
-    }
-    CHECK(rejected);
+    CHECK(render_pass_gpu(ctx, 1) == 1);
+    CHECK(ctx->last_restir_pt_telemetry.accepted_reconnections > 0);
+    CHECK(ctx->restir_pt_input_index == 1);
+    CHECK(render_pass_gpu(ctx, 1) == 2);
+    CHECK(ctx->restir_pt_input_index == 0);
+    GpuRestirPTReservoir reused = {};
+    CHECK_CUDA(cudaMemcpy(
+        &reused, ctx->d_restir_pt_reservoirs[ctx->restir_pt_input_index],
+        sizeof(reused), cudaMemcpyDeviceToHost));
+    CHECK(reused.valid == 1);
+    CHECK(reused.candidate_count >= 1);
+    CHECK(reused.suffix.sample_space_version == 1);
     free_gpu_renderer(ctx);
     return 0;
 }
@@ -2521,6 +2537,188 @@ static int test_restir_di_production_surface_scheduler_renders_and_reuses() {
         energy += value;
     }
     CHECK(energy > 0.0f);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_restir_pt_replays_diffuse_surface_suffixes() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.max_trace_depth = 4;
+    config.integrator.mode = ure::IntegratorMode::RestirPT;
+    config.restir_pt.enabled = true;
+    config.restir_pt.temporal_reuse = true;
+    config.restir_pt.spatial_reuse = true;
+    config.restir_pt.max_reuse_depth = 3;
+    config.restir_pt.candidate_count = 3;
+    config.restir_pt.max_history = 4;
+    config.restir_pt.position_threshold = 1.0f;
+    config.restir_pt.normal_threshold = 0.5f;
+
+    GpuMaterialData diffuse = {};
+    diffuse.header.type = MaterialType::Lambertian;
+    diffuse.albedo = SpectralPacket(0.8f);
+    GpuMaterialData emitter = {};
+    emitter.header.type = MaterialType::Light;
+    emitter.emission = SpectralPacket(8.0f);
+    GpuSphere surface = {GpuVec3(0.0f, 0.0f, -1.0f), 0.75f, 7};
+    GpuSphere light = {GpuVec3(0.0f, 1.25f, 0.5f), 0.35f, 8};
+    GpuContext* ctx = init_gpu_renderer(
+        4, 4, {}, {}, {surface, light}, {diffuse, emitter}, {}, config);
+    CHECK(ctx != nullptr);
+    const float camera_position[] = {0.0f, 0.0f, 2.0f};
+    const float camera_target[] = {0.0f, 0.0f, -1.0f};
+    update_camera_gpu(ctx, camera_position, camera_target, 18.0f);
+    CHECK(render_pass_gpu(ctx, 2) == 2);
+    CHECK(ctx->last_restir_pt_telemetry.accepted_reconnections > 0);
+    CHECK(ctx->last_restir_pt_telemetry.rejected_specular == 0);
+    CHECK(ctx->last_restir_pt_telemetry.rejected_volume == 0);
+    CHECK(ctx->last_restir_pt_telemetry.temporal_candidates > 0);
+    std::vector<GpuRestirPTReservoir> reservoirs(16);
+    CHECK_CUDA(cudaMemcpy(
+        reservoirs.data(),
+        ctx->d_restir_pt_reservoirs[ctx->restir_pt_input_index],
+        reservoirs.size() * sizeof(GpuRestirPTReservoir),
+        cudaMemcpyDeviceToHost));
+    int valid = 0;
+    int reused = 0;
+    int bounded_paths = 0;
+    for (const auto& reservoir : reservoirs) {
+        if (!reservoir.valid) continue;
+        ++valid;
+        CHECK(reservoir.normalization_weight > 0.0f);
+        CHECK(reservoir.candidate_count >= 1);
+        CHECK(reservoir.history_length >= 1);
+        CHECK(reservoir.history_length <= 4);
+        CHECK(reservoir.suffix.sample_space_version == 1);
+        CHECK(reservoir.suffix.dimension_begin == 8);
+        CHECK(reservoir.suffix.dimension_count == 48);
+        CHECK(reservoir.suffix.wavelength_pdf > 0.0f);
+        CHECK(reservoir.suffix.stokes.I > 0.0f);
+        if (reservoir.suffix.vertex_count > 1) ++bounded_paths;
+        for (int vertex_index = 0;
+             vertex_index < reservoir.suffix.vertex_count;
+             ++vertex_index) {
+            const auto& vertex = reservoir.suffix.vertices[vertex_index];
+            if (vertex.kind == GpuRestirPathVertexKind::Surface) {
+                CHECK(vertex.forward_pdf > 0.0f);
+                CHECK(vertex.reverse_pdf > 0.0f);
+                CHECK(vertex.geometry_type >= 0);
+                CHECK(vertex.geometry_index >= 0);
+            }
+        }
+        if (reservoir.suffix.source_candidate_count > 1) ++reused;
+    }
+    CHECK(valid > 0);
+    CHECK(reused > 0);
+    CHECK(bounded_paths > 0);
+    float pixels[4 * 4 * 3] = {};
+    copy_frame_buffer_gpu(ctx, pixels);
+    float energy = 0.0f;
+    for (float value : pixels) {
+        CHECK(std::isfinite(value));
+        energy += value;
+    }
+    CHECK(energy > 0.0f);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_restir_pt_replays_scalar_depolarizing_volume_suffixes() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.max_trace_depth = 4;
+    config.integrator.mode = ure::IntegratorMode::RestirPT;
+    config.restir_pt.enabled = true;
+    config.restir_pt.temporal_reuse = true;
+    config.restir_pt.spatial_reuse = true;
+    config.restir_pt.max_reuse_depth = 3;
+    config.restir_pt.candidate_count = 3;
+    config.restir_pt.max_history = 4;
+    config.restir_pt.position_threshold = 4.0f;
+
+    GpuMaterialData emitter = {};
+    emitter.header.type = MaterialType::Light;
+    emitter.emission = SpectralPacket(12.0f);
+    GpuSphere light = {GpuVec3(0.0f, 1.25f, 0.5f), 0.3f, 7};
+    GpuContext* ctx = init_gpu_renderer(
+        4, 4, {}, {}, {light}, {emitter}, {}, config);
+    CHECK(ctx != nullptr);
+    const float camera_position[] = {0.0f, 0.0f, 2.0f};
+    const float camera_target[] = {0.0f, 0.0f, -1.0f};
+    update_camera_gpu(ctx, camera_position, camera_target, 20.0f);
+    update_medium_gpu(
+        ctx, 1.0f, 0.0f, SpectralPacket(2.0f), SpectralPacket(0.0f),
+        4.0f, static_cast<int>(VolumePhaseFunction::HenyeyGreenstein));
+    CHECK(render_pass_gpu(ctx, 2) == 2);
+    CHECK(ctx->last_restir_pt_telemetry.volume_suffixes > 0);
+    CHECK(ctx->last_restir_pt_telemetry.rejected_volume == 0);
+    CHECK(ctx->last_restir_pt_telemetry.temporal_candidates > 0);
+    std::vector<GpuRestirPTReservoir> reservoirs(16);
+    CHECK_CUDA(cudaMemcpy(
+        reservoirs.data(),
+        ctx->d_restir_pt_reservoirs[ctx->restir_pt_input_index],
+        reservoirs.size() * sizeof(GpuRestirPTReservoir),
+        cudaMemcpyDeviceToHost));
+    int volume = 0;
+    for (const auto& reservoir : reservoirs) {
+        if (!reservoir.valid || reservoir.suffix.vertex_count <= 0 ||
+            reservoir.suffix.vertices[0].kind !=
+                GpuRestirPathVertexKind::Volume) continue;
+        ++volume;
+        CHECK(reservoir.suffix.stokes.I > 0.0f);
+        CHECK_FLOAT_EQ(reservoir.suffix.stokes.Q, 0.0f, 1e-7f);
+        CHECK_FLOAT_EQ(reservoir.suffix.stokes.U, 0.0f, 1e-7f);
+        CHECK_FLOAT_EQ(reservoir.suffix.stokes.V, 0.0f, 1e-7f);
+        CHECK(reservoir.normalization_weight > 0.0f);
+        CHECK(reservoir.suffix.vertices[0].forward_pdf > 0.0f);
+        CHECK(reservoir.suffix.vertices[0].reverse_pdf > 0.0f);
+    }
+    CHECK(volume > 0);
+    float pixels[4 * 4 * 3] = {};
+    copy_frame_buffer_gpu(ctx, pixels);
+    float energy = 0.0f;
+    for (float value : pixels) {
+        CHECK(std::isfinite(value));
+        energy += value;
+    }
+    CHECK(energy > 0.0f);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_restir_pt_rejects_specular_suffix_without_manifold_shift() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.max_trace_depth = 3;
+    config.integrator.mode = ure::IntegratorMode::RestirPT;
+    config.restir_pt.enabled = true;
+    GpuMaterialData metal = {};
+    metal.header.type = MaterialType::Metal;
+    metal.header.roughness = 0.2f;
+    metal.albedo = SpectralPacket(0.8f);
+    GpuSphere sphere = {GpuVec3(0.0f, 0.0f, -1.0f), 0.75f, 7};
+    GpuContext* ctx = init_gpu_renderer(
+        4, 4, {}, {}, {sphere}, {metal}, {}, config);
+    CHECK(ctx != nullptr);
+    const float camera_position[] = {0.0f, 0.0f, 2.0f};
+    const float camera_target[] = {0.0f, 0.0f, -1.0f};
+    update_camera_gpu(ctx, camera_position, camera_target, 18.0f);
+    bool rejected = false;
+    try {
+        (void)render_pass_gpu(ctx, 1);
+    } catch (const std::runtime_error& error) {
+        rejected = std::string(error.what()).find("Phase R-P4") !=
+                   std::string::npos;
+    }
+    CHECK(rejected);
+    CHECK(ctx->last_restir_pt_telemetry.rejected_specular > 0);
     free_gpu_renderer(ctx);
     return 0;
 }
@@ -3107,6 +3305,9 @@ int main() {
     RUN_TEST(test_restir_di_production_uses_ping_pong_reservoirs);
     RUN_TEST(test_restir_pt_owns_bounded_ping_pong_suffix_history);
     RUN_TEST(test_restir_di_production_surface_scheduler_renders_and_reuses);
+    RUN_TEST(test_restir_pt_replays_diffuse_surface_suffixes);
+    RUN_TEST(test_restir_pt_replays_scalar_depolarizing_volume_suffixes);
+    RUN_TEST(test_restir_pt_rejects_specular_suffix_without_manifold_shift);
     RUN_TEST(test_restir_di_production_volume_scheduler_renders_and_reuses);
     RUN_TEST(test_restir_di_visible_shadow_updates_reservoir_metadata);
     RUN_TEST(test_importance_spectral_config_selects_nonuniform_wavelength_sampler);

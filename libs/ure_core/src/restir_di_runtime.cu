@@ -470,6 +470,7 @@ __global__ void resample_restir_di_kernel(
     float dispersion_clamp) {
     const int index = int(blockIdx.x * blockDim.x + threadIdx.x);
     if (index >= *current_queue.count || !scene.restir_di_unbiased) return;
+    sample_index = static_cast<int>(current_queue.sample_indices[index]);
     const int depth = current_queue.depths[index];
     const int material_index = hit_queue.mat_ids[index];
     if (depth != 0 || scene.light_count <= 0) return;

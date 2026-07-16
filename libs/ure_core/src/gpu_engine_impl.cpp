@@ -260,8 +260,14 @@ public:
     }
 
     IntegratorEstimatorMetadata get_estimator_metadata() const override {
+        std::uint32_t scene_epoch = 0;
+        if (gpu_context_) {
+            scene_epoch = config_.integrator.mode == IntegratorMode::RestirPT
+                ? gpu_context_->restir_pt_scene_epoch
+                : gpu_context_->restir_di_scene_epoch;
+        }
         return make_integrator_estimator_metadata(
-            config_, gpu_context_ ? gpu_context_->restir_di_scene_epoch : 0);
+            config_, scene_epoch);
     }
 
 private:

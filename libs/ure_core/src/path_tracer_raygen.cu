@@ -130,6 +130,7 @@ __global__ __launch_bounds__(512) void generate_rays_kernel(
     }
     queue.medium_indices[ray_index] = -1;
     queue.seeds[ray_index] = seed;
+    queue.sample_indices[ray_index] = static_cast<std::uint32_t>(sample_index);
     queue.pixel_indices[ray_index] = pixel_index;
     queue.depths[ray_index] = 0;
     queue.flags[ray_index] = 1;

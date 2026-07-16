@@ -12,6 +12,9 @@
 
 namespace ure::gpu {
 
+struct GpuRestirPathSuffix;
+struct GpuRestirPTTelemetry;
+
 // Use 16-byte alignment for float3 to match CUDA float4 alignment if needed,
 // but for now we'll stick to simple structs.
 
@@ -653,6 +656,10 @@ struct GpuScene {
     GpuRestirDITelemetry* restir_di_telemetry;
     int restir_di_width;
     int restir_di_height;
+    GpuRestirPathSuffix* restir_pt_candidates;
+    GpuRestirPTTelemetry* restir_pt_telemetry;
+    std::uint32_t restir_pt_scene_epoch;
+    int restir_pt_max_reuse_depth;
     int light_count;
 
     // Global Homogeneous Medium (Volumetric Fog)
@@ -694,6 +701,7 @@ struct RayQueue {
     float* stokes_v = nullptr;
     int* medium_indices = nullptr;
     unsigned int* seeds = nullptr;
+    std::uint32_t* sample_indices = nullptr;
     int* pixel_indices = nullptr;
     int* depths = nullptr;
     int* flags = nullptr;

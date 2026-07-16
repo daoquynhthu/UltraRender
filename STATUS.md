@@ -1,6 +1,6 @@
 # UltraRender Current Status
 
-Last reviewed: 2026-07-15
+Last reviewed: 2026-07-16
 
 This document summarizes the current repository state for users and integrators. `PLAN.md` remains authoritative for construction order and phase completion criteria. Source, CMake registration, and fresh test output take precedence over prose when they disagree.
 
@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `R-P3`. Phase Q native scene work is complete. The remaining Phase R sequence is `R-P3 -> R-P4 -> R-P5 -> R-P7`; Phase T and later backend work must not be treated as implemented.
+The authoritative construction cursor is `R-P4`. Phase Q native scene work and R-P3 production ReSTIR are complete. The remaining Phase R sequence is `R-P4 -> R-P5 -> R-P7`; Phase T and later backend work must not be treated as implemented.
 
 ## Supported execution baseline
 
@@ -50,6 +50,8 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | MaterialGraph and finite dielectric layer | Implemented for supported node/model set | Unsupported combinations fail loudly |
 | HG/Rayleigh/Mie volume scattering | Implemented for current resource and transport contract | Mie uses precomputed/imported resources at runtime |
 | NEE, light tree and path guiding | Implemented for current Phase R-P1/R-P2 scope | Does not imply all advanced integrators are complete |
+| Production ReSTIR DI | Implemented and tested | Unbiased temporal/spatial GRIS policy is separate from biased preview metadata |
+| ReSTIR PT path reuse | Implemented for bounded diffuse surface and supported volume suffixes; R-P3 verification in progress | Specular-manifold reconnection remains fail-loud until R-P4 |
 | Multi-GPU sample partition/merge | Implemented | Not a complete distributed render-farm runtime |
 | Denoising | A tested GPU target exists | No general quality or production guarantee is claimed |
 | Wave-optics host/CUDA references | Partially implemented | Main production path remains radiometric |
@@ -75,8 +77,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 
 The following must not be described as production capabilities merely because enums, configuration fields, schemas, tests for rejection, or host references exist:
 
-- unbiased and spatial ReSTIR DI;
-- ReSTIR PT/path reuse;
+- ReSTIR PT suffix classes requiring specular-manifold reconnection or more than four stored vertices;
 - GPU specular-manifold solver;
 - BDPT and VCM;
 - MLT chain integrator;

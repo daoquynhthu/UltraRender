@@ -124,6 +124,8 @@ struct GpuContext {
     std::uint32_t restir_di_scene_epoch = 1;
     size_t restir_di_required_bytes = 0;
     GpuRestirPTReservoir* d_restir_pt_reservoirs[2] = {nullptr, nullptr};
+    GpuRestirPathSuffix* d_restir_pt_candidates = nullptr;
+    GpuVec3* d_restir_pt_candidate_accum = nullptr;
     GpuRestirPTTelemetry* d_restir_pt_telemetry = nullptr;
     int restir_pt_input_index = 0;
     std::uint32_t restir_pt_scene_epoch = 1;

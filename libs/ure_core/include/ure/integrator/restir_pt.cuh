@@ -22,6 +22,8 @@ struct GpuRestirPathVertex {
     float reverse_pdf = 0.0f;
     float measure_jacobian = 0.0f;
     int primitive_index = -1;
+    int geometry_type = -1;
+    int geometry_index = -1;
     int material_index = -1;
     int medium_index = -1;
     GpuRestirPathVertexKind kind = GpuRestirPathVertexKind::Surface;
@@ -34,11 +36,15 @@ struct GpuRestirPathSuffix {
     SpectralPacket throughput = {};
     StokesVector stokes = {};
     float wavelength_pdf = 0.0f;
-    float terminal_radiance = 0.0f;
+    int spectral_mode = 0;
+    int active_channel = 0;
     std::uint64_t path_seed = 0;
     std::uint32_t dimension_begin = 0;
     std::uint32_t dimension_count = 0;
     std::uint32_t sample_space_version = 1;
+    float source_normalization_weight = 1.0f;
+    float source_target = 0.0f;
+    std::uint32_t source_candidate_count = 1;
     int vertex_count = 0;
     int source_pixel = -1;
     int valid = 0;
@@ -46,6 +52,7 @@ struct GpuRestirPathSuffix {
 
 struct GpuRestirPTReservoir {
     GpuRestirPathSuffix suffix = {};
+    GpuVec3 selected_contribution = {};
     double weight_sum = 0.0;
     float selected_target = 0.0f;
     float normalization_weight = 0.0f;
@@ -63,6 +70,7 @@ struct GpuRestirPTTelemetry {
     std::uint32_t rejected_stale = 0;
     std::uint32_t rejected_geometry = 0;
     std::uint32_t rejected_specular = 0;
+    std::uint32_t rejected_volume = 0;
 };
 
 }

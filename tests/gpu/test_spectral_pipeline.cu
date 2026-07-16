@@ -57,6 +57,8 @@ static int alloc_ray_queue_min(RayQueue& q, int cap, int num_spec) {
     if (cudaMalloc(&q.medium_indices, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.seeds, cap * sizeof(unsigned int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.pixel_indices, cap * sizeof(int)) != cudaSuccess) return 1;
+    if (cudaMalloc(&q.sample_indices, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
+    if (cudaMemset(q.sample_indices, 0, cap * sizeof(std::uint32_t)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.depths, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.flags, cap * sizeof(int)) != cudaSuccess) return 1;
     if (cudaMalloc(&q.last_pdf, cap * sizeof(float)) != cudaSuccess) return 1;
@@ -74,7 +76,7 @@ static void free_ray_queue_min(RayQueue& q) {
     cudaFree(q.throughput_vals); cudaFree(q.throughput_wavelengths);
     cudaFree(q.stokes_i); cudaFree(q.stokes_q); cudaFree(q.stokes_u); cudaFree(q.stokes_v);
     cudaFree(q.medium_indices);
-    cudaFree(q.seeds); cudaFree(q.pixel_indices);
+    cudaFree(q.seeds); cudaFree(q.pixel_indices); cudaFree(q.sample_indices);
     cudaFree(q.depths); cudaFree(q.flags); cudaFree(q.last_pdf);
     cudaFree(q.spectral_modes); cudaFree(q.active_channels); cudaFree(q.wavelength_pdfs);
     cudaFree(q.count);

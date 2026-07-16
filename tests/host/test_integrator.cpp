@@ -320,6 +320,24 @@ static int test_restir_pt_replay_is_deterministic_and_dimension_separated() {
     return 0;
 }
 
+static int test_restir_pt_rejects_unbounded_runtime_controls() {
+    ure::RenderConfig config;
+    config.integrator.mode = ure::IntegratorMode::RestirPT;
+    config.restir_pt.enabled = true;
+    config.restir_pt.max_reuse_depth = 5;
+    bool rejected = false;
+    try {
+        auto engine = ure::RenderEngineFactory::create_gpu_renderer(config);
+        ure::scene_ir::SceneIR scene;
+        engine->load_scene_ir(scene);
+    } catch (const std::runtime_error& error) {
+        rejected = std::string(error.what()).find("bounded suffix storage") !=
+                   std::string::npos;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
 static int run(const char* name, int (*fn)()) {
     std::cout << "  test: " << name << " ... ";
     int rc = fn();
@@ -354,6 +372,7 @@ int main() {
     failed += run("test_restir_pt_dimension_intervals_are_versioned_and_bounded", test_restir_pt_dimension_intervals_are_versioned_and_bounded);
     failed += run("test_restir_pt_pdf_conversion_uses_one_shared_measure", test_restir_pt_pdf_conversion_uses_one_shared_measure);
     failed += run("test_restir_pt_replay_is_deterministic_and_dimension_separated", test_restir_pt_replay_is_deterministic_and_dimension_separated);
+    failed += run("test_restir_pt_rejects_unbounded_runtime_controls", test_restir_pt_rejects_unbounded_runtime_controls);
     std::cout << "  failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
