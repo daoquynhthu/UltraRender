@@ -153,19 +153,14 @@ static int test_vcm_progressive_radius_and_kernel_normalization() {
             edges, 3, 2, 0.3, 0.8, 4.0, 16);
     CHECK_NEAR(merge_probability, 0.3 * 0.4 * 0.8 * 0.1 * 4.0 / 16.0,
                1e-15);
-    double probabilities[5] = {};
-    CHECK(ure::integrator::reconstruct_bidirectional_strategy_probabilities(
-              edges, 3, 0.3, 0.8, probabilities, 5) == 5);
     const double merge_weight =
         ure::integrator::bidirectional_merge_strategy_mis_weight(
             edges, 3, 2, 0.3, 0.8, 4.0, 16);
     double weight_sum = merge_weight;
-    double denominator = merge_probability * merge_probability;
-    for (double probability : probabilities) {
-        denominator += probability * probability;
-    }
-    for (double probability : probabilities) {
-        weight_sum += probability * probability / denominator;
+    for (int split = 0; split < 5; ++split) {
+        weight_sum +=
+            ure::integrator::bidirectional_connection_vcm_mis_weight(
+                edges, 3, split, 2, 0.3, 0.8, 4.0, 16);
     }
     CHECK_NEAR(weight_sum, 1.0, 1e-15);
     return 0;

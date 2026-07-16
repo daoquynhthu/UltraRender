@@ -126,5 +126,14 @@ double bidirectional_merge_strategy_mis_weight(
     double camera_endpoint_pdf,
     double kernel_density,
     int light_path_count);
+double bidirectional_connection_vcm_mis_weight(
+    const BidirectionalPdfEdge* edges,
+    int edge_count,
+    int selected_split,
+    int merge_split,
+    double light_endpoint_pdf,
+    double camera_endpoint_pdf,
+    double merge_kernel_density,
+    int light_path_count);
 
 } // namespace ure::integrator

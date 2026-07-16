@@ -20,6 +20,12 @@ __global__ void connect_bidirectional_subpaths_kernel(
     int max_light_vertices,
     GpuVec3* connection_accumulation,
     int path_count,
+    int connections_per_path,
+    float dispersion_clamp,
+    float surface_merge_radius,
+    float volume_merge_radius,
+    int merge_surfaces,
+    int merge_volumes,
     std::uint32_t scene_epoch,
     GpuBidirectionalTelemetry* telemetry);
 
@@ -85,3 +91,10 @@ __global__ void merge_vcm_surface_vertices_kernel(
     int path_count,
     std::uint32_t scene_epoch,
     GpuBidirectionalTelemetry* telemetry);
+
+__global__ void commit_bidirectional_contributions_kernel(
+    const GpuVec3* connection_accumulation,
+    const GpuVec3* surface_merge_accumulation,
+    const GpuVec3* volume_merge_accumulation,
+    GpuVec3* film_accumulation,
+    int path_count);

@@ -229,20 +229,8 @@ __global__ void bidirectional_strategy_density_kernel(float* output) {
         edges, 3, 2, 0.3f, 0.8f, 4.0f, 16);
     const int vertex_count = 4;
     for (int split = 0; split <= vertex_count; ++split) {
-        const float probability = bidirectional_strategy_probability(
-            edges, 3, split, 0.3f, 0.8f);
-        const float merge_probability = output[3];
-        double denominator = double(merge_probability) * merge_probability;
-        for (int candidate = 0; candidate <= vertex_count; ++candidate) {
-            const double candidate_probability =
-                bidirectional_strategy_probability(
-                    edges, 3, candidate, 0.3f, 0.8f);
-            denominator += candidate_probability * candidate_probability;
-        }
-        if (denominator > 0.0) {
-            partition += static_cast<float>(
-                double(probability) * probability / denominator);
-        }
+        partition += bidirectional_connection_vcm_mis_weight(
+            edges, 3, split, 2, 0.3f, 0.8f, 4.0f, 16);
     }
     output[4] = partition;
 }
@@ -2566,6 +2554,9 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
     CHECK(ctx->last_bidirectional_telemetry.light_vertices > 16);
     CHECK(ctx->last_bidirectional_telemetry.camera_vertices > 0);
     CHECK(ctx->last_bidirectional_telemetry.attempted_connections > 0);
+    CHECK(ctx->last_bidirectional_telemetry.attempted_connections <=
+          16u * static_cast<std::uint32_t>(
+              config.bidirectional.connections_per_pixel));
     CHECK(ctx->last_bidirectional_telemetry.accepted_connections > 0);
     GpuBidirectionalPathVertex endpoint = {};
     CHECK_CUDA(cudaMemcpy(
@@ -2602,6 +2593,18 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
         nonzero_connection = nonzero_connection || value.length_sq() > 0.0f;
     }
     CHECK(nonzero_connection);
+    std::vector<GpuVec3> film(16);
+    CHECK_CUDA(cudaMemcpy(
+        film.data(), ctx->d_accum_buffer,
+        film.size() * sizeof(GpuVec3), cudaMemcpyDeviceToHost));
+    bool nonzero_film = false;
+    for (size_t index = 0; index < film.size(); ++index) {
+        nonzero_film = nonzero_film || film[index].length_sq() > 0.0f;
+        CHECK_FLOAT_EQ(film[index].x, connections[index].x, 1e-6f);
+        CHECK_FLOAT_EQ(film[index].y, connections[index].y, 1e-6f);
+        CHECK_FLOAT_EQ(film[index].z, connections[index].z, 1e-6f);
+    }
+    CHECK(nonzero_film);
     free_gpu_renderer(ctx);
     return 0;
 }

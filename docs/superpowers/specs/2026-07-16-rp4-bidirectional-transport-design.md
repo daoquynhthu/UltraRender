@@ -44,6 +44,8 @@ Surface and volume grids are independently allocated according to merge policy b
 
 The immutable light-endpoint position density is stored separately from the first path-edge density. For each accepted merge pair, MIS reconstructs the complete light prefix, evaluates the actual spectral BSDF or phase density in both directions across the virtual connection bridge, appends the reversed camera suffix, and normalizes the merge technique together with every valid BDPT split of that same full path. Local pairwise merge-versus-connection weighting is not used.
 
+Connection scheduling enumerates bounded actual light/camera vertex pairs rather than connecting only the light endpoint to the deepest camera vertex. Each pair reevaluates both endpoint scattering factors, geometry, visibility, and its full-path strategy density. When the pair lies inside an enabled merge kernel, connection and merge weights include the same single merge strategy in the same denominator. The legacy wavefront radiance estimator is isolated while these modes run; only the weighted connection and merge buffers are committed once to film.
+
 ## Specular-manifold solver
 
 The manifold solver consumes stable primitive identity and differentiable local coordinates. Analytic spheres use angular coordinates; triangles use barycentric coordinates with transform-aware tangent derivatives. A bounded chain stores each specular vertex and solves the half-vector/Snell constraint with damped Newton iterations, pivoted small-matrix elimination, line search, domain projection, residual and determinant gates.

@@ -2946,6 +2946,9 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         UR_CUDA_CHECK(cudaMemset(
             ctx->d_bidirectional_telemetry, 0,
             sizeof(GpuBidirectionalTelemetry)));
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_bidirectional_connection_accum, 0,
+            static_cast<size_t>(primary_ray_count) * sizeof(GpuVec3)));
         const std::uint32_t next_path_index =
             static_cast<std::uint32_t>(primary_ray_count);
         UR_CUDA_CHECK(cudaMemcpy(
@@ -3076,7 +3079,11 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         UR_CUDA_CHECK(cudaMemcpy(ctx->queueA.count, &initial_count, sizeof(int), cudaMemcpyHostToDevice));
 
         GpuVec3* candidate_accumulation = restir_pt
-            ? ctx->d_restir_pt_candidate_accum : ctx->d_accum_buffer;
+            ? ctx->d_restir_pt_candidate_accum
+            : (ctx->render_config.bidirectional.enabled ||
+               ctx->render_config.vcm.enabled)
+                ? ctx->d_bidirectional_connection_accum
+                : ctx->d_accum_buffer;
         if (restir_pt) {
             UR_CUDA_CHECK(cudaMemset(
                 candidate_accumulation, 0,
@@ -3203,6 +3210,14 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             ctx->d_light_path_vertices, ctx->d_light_path_lengths,
             ctx->render_config.bidirectional.max_light_vertices,
             ctx->d_bidirectional_connection_accum, primary_ray_count,
+            ctx->render_config.bidirectional.connections_per_pixel,
+            ctx->current_spp < 100 ? 5.0f : 20.0f,
+            ctx->vcm_current_surface_radius,
+            ctx->vcm_current_volume_radius,
+            ctx->render_config.vcm.enabled &&
+                ctx->render_config.vcm.merge_surfaces ? 1 : 0,
+            ctx->render_config.vcm.enabled &&
+                ctx->render_config.vcm.merge_volumes ? 1 : 0,
             ctx->bidirectional_scene_epoch, ctx->d_bidirectional_telemetry);
         UR_CUDA_CHECK(cudaGetLastError());
         if (ctx->render_config.vcm.enabled &&
@@ -3264,6 +3279,16 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         if (ctx->render_config.vcm.enabled) {
             ++ctx->vcm_radius_iteration;
         }
+        commit_bidirectional_contributions_kernel<<<blocks, num_threads_wf>>>(
+            ctx->d_bidirectional_connection_accum,
+            ctx->render_config.vcm.enabled &&
+                    ctx->render_config.vcm.merge_surfaces
+                ? ctx->d_vcm_merge_accum : nullptr,
+            ctx->render_config.vcm.enabled &&
+                    ctx->render_config.vcm.merge_volumes
+                ? ctx->d_vcm_volume_merge_accum : nullptr,
+            ctx->d_accum_buffer, primary_ray_count);
+        UR_CUDA_CHECK(cudaGetLastError());
     }
     if (ctx->d_restir_di_telemetry) {
         UR_CUDA_CHECK(cudaMemcpy(

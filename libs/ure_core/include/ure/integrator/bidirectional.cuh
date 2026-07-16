@@ -204,6 +204,38 @@ static __device__ inline float bidirectional_merge_strategy_mis_weight(
         : 0.0f;
 }
 
+static __device__ inline float bidirectional_connection_vcm_mis_weight(
+    const GpuBidirectionalPdfEdge* edges,
+    int edge_count,
+    int selected_split,
+    int merge_split,
+    float light_endpoint_pdf,
+    float camera_endpoint_pdf,
+    float merge_kernel_density,
+    int light_path_count) {
+    const float selected = bidirectional_strategy_probability(
+        edges, edge_count, selected_split, light_endpoint_pdf,
+        camera_endpoint_pdf);
+    if (!(selected > 0.0f)) return 0.0f;
+    double denominator = 0.0;
+    const int vertex_count = edge_count + 1;
+    for (int split = 0; split <= vertex_count; ++split) {
+        const double probability = bidirectional_strategy_probability(
+            edges, edge_count, split, light_endpoint_pdf,
+            camera_endpoint_pdf);
+        denominator += probability * probability;
+    }
+    if (merge_kernel_density > 0.0f) {
+        const double merge = bidirectional_merge_strategy_probability(
+            edges, edge_count, merge_split, light_endpoint_pdf,
+            camera_endpoint_pdf, merge_kernel_density, light_path_count);
+        denominator += merge * merge;
+    }
+    return denominator > 0.0
+        ? static_cast<float>(double(selected) * double(selected) / denominator)
+        : 0.0f;
+}
+
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif

@@ -333,4 +333,34 @@ double bidirectional_merge_strategy_mis_weight(
     return selected * selected / denominator;
 }
 
+double bidirectional_connection_vcm_mis_weight(
+    const BidirectionalPdfEdge* edges,
+    int edge_count,
+    int selected_split,
+    int merge_split,
+    double light_endpoint_pdf,
+    double camera_endpoint_pdf,
+    double merge_kernel_density,
+    int light_path_count) {
+    if (edge_count > 64) return 0.0;
+    double probabilities[66] = {};
+    const int count = reconstruct_bidirectional_strategy_probabilities(
+        edges, edge_count, light_endpoint_pdf, camera_endpoint_pdf,
+        probabilities, 66);
+    if (count == 0 || selected_split < 0 || selected_split >= count ||
+        !(probabilities[selected_split] > 0.0)) return 0.0;
+    double denominator = 0.0;
+    for (int index = 0; index < count; ++index) {
+        denominator += probabilities[index] * probabilities[index];
+    }
+    if (merge_kernel_density > 0.0) {
+        const double merge = bidirectional_merge_strategy_probability(
+            edges, edge_count, merge_split, light_endpoint_pdf,
+            camera_endpoint_pdf, merge_kernel_density, light_path_count);
+        denominator += merge * merge;
+    }
+    const double selected = probabilities[selected_split];
+    return denominator > 0.0 ? selected * selected / denominator : 0.0;
+}
+
 } // namespace ure::integrator
