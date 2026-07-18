@@ -105,6 +105,12 @@ enum class GpuManifoldRejectReason : int {
 struct GpuManifoldPathSolution {
     GpuManifoldSurfacePoint surfaces[4] = {};
     float parameters[kMaxGpuManifoldVariables] = {};
+    int catalog_indices[4] = {-1, -1, -1, -1};
+    int geometry_types[4] = {-1, -1, -1, -1};
+    int geometry_indices[4] = {-1, -1, -1, -1};
+    int primitive_indices[4] = {-1, -1, -1, -1};
+    int material_indices[4] = {-1, -1, -1, -1};
+    int transmissions[4] = {};
     float determinant = 0.0f;
     float endpoint_area_jacobian = 0.0f;
     float ordinary_geometry = 0.0f;

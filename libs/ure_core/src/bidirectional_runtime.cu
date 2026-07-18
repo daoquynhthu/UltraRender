@@ -1697,6 +1697,13 @@ __global__ void solve_specular_manifold_paths_kernel(
         solution.surfaces[event] = solved.surfaces[event];
         solution.parameters[event * 2] = solved.parameters[event * 2];
         solution.parameters[event * 2 + 1] = solved.parameters[event * 2 + 1];
+        const GpuBidirectionalPathVertex seed =
+            camera_path[chain_start + event];
+        solution.geometry_types[event] = seed.geometry_type;
+        solution.geometry_indices[event] = seed.geometry_index;
+        solution.primitive_indices[event] = seed.primitive_index;
+        solution.material_indices[event] = seed.material_index;
+        solution.transmissions[event] = events[event].transmission;
     }
     if (!solved.valid) {
         solution.reject_reason = solved.total_internal_reflection
@@ -1843,8 +1850,6 @@ __global__ void evaluate_specular_manifold_contributions_kernel(
     if (!solution.valid || solution.scene_epoch != scene_epoch ||
         solution.anchor_camera_vertex < 0 ||
         solution.anchor_camera_vertex >= max_camera_vertices ||
-        solution.anchor_camera_vertex + solution.event_count >=
-            max_camera_vertices ||
         solution.light_vertex < 0 ||
         solution.light_vertex >= max_light_vertices ||
         solution.event_count <= 0 || solution.event_count > 4 ||
@@ -1885,11 +1890,9 @@ __global__ void evaluate_specular_manifold_contributions_kernel(
     GpuVec3 next_position = light.position;
     for (int event = solution.event_count - 1; event >= 0; --event) {
         const GpuManifoldSurfacePoint surface = solution.surfaces[event];
-        const GpuBidirectionalPathVertex seed =
-            camera_path[solution.anchor_camera_vertex + 1 + event];
         const GpuManifoldOpticalState optical =
             resolve_manifold_optical_state(
-                scene, seed.material_index, surface.uv,
+                scene, solution.material_indices[event], surface.uv,
                 anchor.throughput.wavelengths, dispersion_clamp);
         if (!surface.valid || !optical.valid) {
             contributions[path_index] = contribution;
@@ -1911,7 +1914,7 @@ __global__ void evaluate_specular_manifold_contributions_kernel(
             optical.material, optical.spectra, optical.dielectric_ior,
             incoming, scattered, surface.normal, surface.uv,
             anchor.throughput, 1.0f, dispersion_clamp,
-            int(seed.sample_index), path_index, event,
+            int(anchor.sample_index), path_index, event,
             scene.num_spectral_channels, BoundaryTransportMode::Radiance,
             stokes_i, stokes_q, stokes_u, stokes_v,
             output_i, output_q, output_u, output_v);

@@ -3377,6 +3377,12 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
     CHECK(solution.valid == 1);
     CHECK(solution.event_count == 1);
     CHECK(solution.anchor_camera_vertex == 0);
+    CHECK(solution.catalog_indices[0] == -1);
+    CHECK(solution.geometry_types[0] == 0);
+    CHECK(solution.geometry_indices[0] == 0);
+    CHECK(solution.primitive_indices[0] == 0);
+    CHECK(solution.material_indices[0] == 8);
+    CHECK(solution.transmissions[0] == 0);
     CHECK_FLOAT_EQ(solution.surfaces[0].position.x, 1.0f, 1e-4f);
     CHECK(solution.residual <= 1e-5f);
     CHECK(std::fabs(solution.determinant) > 1e-8f);
