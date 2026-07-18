@@ -38,6 +38,23 @@ struct GpuManifoldSurfacePoint {
     int valid = 0;
 };
 
+struct GpuManifoldSeedPrimitive {
+    GpuManifoldPrimitive primitive = {};
+    int geometry_type = -1;
+    int geometry_index = -1;
+    int primitive_index = -1;
+    int material_index = -1;
+};
+
+struct GpuManifoldSeedSample {
+    GpuManifoldSeedPrimitive seed = {};
+    GpuManifoldSurfacePoint surface = {};
+    float u = 0.0f;
+    float v = 0.0f;
+    int catalog_index = -1;
+    int valid = 0;
+};
+
 struct GpuSingleManifoldSolveResult {
     GpuManifoldSurfacePoint surface = {};
     float u = 0.0f;
@@ -152,6 +169,46 @@ static __device__ inline void project_gpu_manifold_parameters(
     GpuManifoldPrimitiveKind kind,
     float& u,
     float& v);
+
+static __device__ inline GpuManifoldSurfacePoint
+evaluate_gpu_manifold_surface(
+    const GpuManifoldPrimitive& primitive,
+    float u,
+    float v);
+
+static __device__ inline GpuManifoldSeedSample sample_gpu_manifold_seed(
+    const GpuManifoldSeedPrimitive* catalog,
+    int catalog_count,
+    float primitive_sample,
+    float parameter_u,
+    float parameter_v) {
+    GpuManifoldSeedSample sample = {};
+    if (!catalog || catalog_count <= 0) return sample;
+    sample.catalog_index =
+        int(fmaxf(0.0f, primitive_sample) * float(catalog_count));
+    if (sample.catalog_index >= catalog_count) {
+        sample.catalog_index = catalog_count - 1;
+    }
+    sample.seed = catalog[sample.catalog_index];
+    const float first = fminf(0.99999994f, fmaxf(0.0f, parameter_u));
+    const float second = fminf(0.99999994f, fmaxf(0.0f, parameter_v));
+    if (sample.seed.primitive.kind == GpuManifoldPrimitiveKind::Sphere) {
+        sample.u = acosf(1.0f - 2.0f * first) /
+            3.14159265358979323846f;
+        sample.v = second;
+    } else if (sample.seed.primitive.kind ==
+               GpuManifoldPrimitiveKind::Triangle) {
+        const float root = sqrtf(first);
+        sample.u = root * (1.0f - second);
+        sample.v = root * second;
+    } else {
+        return sample;
+    }
+    sample.surface = evaluate_gpu_manifold_surface(
+        sample.seed.primitive, sample.u, sample.v);
+    sample.valid = sample.surface.valid;
+    return sample;
+}
 
 static __device__ inline bool extract_gpu_manifold_primitive(
     const GpuScene& scene,

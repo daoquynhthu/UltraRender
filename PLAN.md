@@ -1941,6 +1941,8 @@ R-P4 differential geometry closure：最终解不再误用 Newton constraint det
 
 R-P4 spectral response progress：sphere/triangle/instance manifold surface 与 light endpoint 已携带真实 UV；smooth-delta eligibility 会拒绝粗糙 metal/dielectric，色散 packet 必须先拆为 wavelength lane，material expression/texture 与 Cauchy IOR 均按实际 UV/wavelength 求值。独立 GPU SDS response artifact 已重算 light emission、anchor BSDF、逐事件 Mueller/Stokes radiance transport，并显式消费 generalized geometry、endpoint PDF、reciprocal-root 与 MIS 权重；GPU oracle 覆盖正 radiance、Stokes physical bound、rough rejection 和 spectral-split rejection。贡献尚不提交 film；必须先完成跨 pass 有界但期望无偏的 reciprocal-root SMS 状态与最终 MIS/scheduling gate。
 
+R-P4 reciprocal-root proposal progress：host 端已构建并按 bidirectional VRAM budget 持有 GPU geometry seed catalog，覆盖全部非退化 sphere、direct mesh triangle 和 world-transformed instance triangle，并保留稳定 identity/UV/material binding。catalog 不按当前材质过滤，避免 `update_materials_gpu()` 后 proposal 陈旧；非 smooth-specular seed 在 device trial 中作为 Bernoulli miss。共享 device sampler 使用离散 catalog proposal 加 sphere/triangle uniform-area parameterization，target 与 trial 后续必须复用同一 event-count/topology/branch/parameter proposal。跨 pass geometric-count 状态、target-root matching、pending drain 和 film commit 仍在实施。
+
 #### Phase R 执行顺序
 
 ```

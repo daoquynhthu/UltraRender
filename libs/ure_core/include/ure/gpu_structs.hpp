@@ -14,6 +14,7 @@ namespace ure::gpu {
 
 struct GpuBidirectionalPathVertex;
 struct GpuBidirectionalTelemetry;
+struct GpuManifoldSeedPrimitive;
 
 struct GpuRestirPathSuffix;
 struct GpuRestirPTTelemetry;
@@ -670,6 +671,8 @@ struct GpuScene {
     int bidirectional_max_camera_vertices;
     std::uint32_t bidirectional_scene_epoch;
     GpuBidirectionalTelemetry* bidirectional_telemetry;
+    GpuManifoldSeedPrimitive* manifold_seed_primitives;
+    int manifold_seed_primitive_count;
     int light_count;
 
     // Global Homogeneous Medium (Volumetric Fog)

@@ -1623,6 +1623,7 @@ static void release_bidirectional_runtime(GpuContext* ctx) {
     cudaFree(ctx->d_vcm_volume_grid_entry_count);
     cudaFree(ctx->d_vcm_volume_merge_accum);
     cudaFree(ctx->d_manifold_solutions);
+    cudaFree(ctx->d_manifold_seed_primitives);
     cudaFree(ctx->d_manifold_telemetry);
     ctx->d_camera_path_vertices = nullptr;
     ctx->d_light_path_vertices = nullptr;
@@ -1640,6 +1641,8 @@ static void release_bidirectional_runtime(GpuContext* ctx) {
     ctx->d_vcm_volume_grid_entry_count = nullptr;
     ctx->d_vcm_volume_merge_accum = nullptr;
     ctx->d_manifold_solutions = nullptr;
+    ctx->d_manifold_seed_primitives = nullptr;
+    ctx->manifold_seed_primitive_count = 0;
     ctx->d_manifold_telemetry = nullptr;
     ctx->last_manifold_telemetry = {};
     ctx->vcm_grid_capacity = 0;
@@ -1654,10 +1657,22 @@ static void release_bidirectional_runtime(GpuContext* ctx) {
     ctx->last_bidirectional_telemetry = {};
 }
 
-static void alloc_bidirectional_runtime(GpuContext* ctx) {
+static void alloc_bidirectional_runtime(
+    GpuContext* ctx,
+    size_t manifold_seed_primitive_count) {
     if (!ctx->render_config.bidirectional.enabled &&
         !ctx->render_config.vcm.enabled &&
         !ctx->render_config.specular_manifold.enabled) return;
+    if (ctx->render_config.specular_manifold.enabled &&
+        manifold_seed_primitive_count == 0) {
+        throw std::runtime_error(
+            "Specular manifold sampling requires at least one non-degenerate "
+            "scene primitive");
+    }
+    if (manifold_seed_primitive_count > static_cast<size_t>(
+            std::numeric_limits<int>::max())) {
+        throw std::runtime_error("Manifold seed primitive count overflow");
+    }
     const size_t pixel_count = static_cast<size_t>(
         checked_primary_ray_count(ctx->width, ctx->height));
     const size_t camera_path_count = static_cast<size_t>(ctx->queueA.capacity);
@@ -1733,6 +1748,13 @@ static void alloc_bidirectional_runtime(GpuContext* ctx) {
     const size_t manifold_telemetry_bytes =
         ctx->render_config.specular_manifold.enabled
         ? sizeof(GpuManifoldTelemetry) : 0;
+    if (manifold_seed_primitive_count > max_size /
+        sizeof(GpuManifoldSeedPrimitive)) {
+        throw std::runtime_error("Manifold seed primitive storage overflow");
+    }
+    const size_t manifold_seed_primitive_bytes =
+        ctx->render_config.specular_manifold.enabled
+        ? manifold_seed_primitive_count * sizeof(GpuManifoldSeedPrimitive) : 0;
     size_t required_bytes = 0;
     const auto add_bytes = [&](size_t bytes) {
         if (bytes > max_size - required_bytes) {
@@ -1757,6 +1779,7 @@ static void alloc_bidirectional_runtime(GpuContext* ctx) {
     add_bytes(vcm_volume_accum_bytes);
     add_bytes(manifold_solutions_bytes);
     add_bytes(manifold_telemetry_bytes);
+    add_bytes(manifold_seed_primitive_bytes);
     ctx->bidirectional_required_bytes = required_bytes;
     size_t free_bytes = 0;
     size_t total_bytes = 0;
@@ -1801,6 +1824,11 @@ static void alloc_bidirectional_runtime(GpuContext* ctx) {
             &ctx->d_manifold_solutions, manifold_solutions_bytes));
         UR_CUDA_CHECK(cudaMalloc(
             &ctx->d_manifold_telemetry, manifold_telemetry_bytes));
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_manifold_seed_primitives,
+            manifold_seed_primitive_bytes));
+        ctx->manifold_seed_primitive_count =
+            static_cast<int>(manifold_seed_primitive_count);
     }
     if (ctx->render_config.vcm.enabled &&
         ctx->render_config.vcm.merge_volumes) {
@@ -1863,9 +1891,104 @@ static void alloc_bidirectional_runtime(GpuContext* ctx) {
 
 struct HostLightMeshData {
     std::vector<float> vertices;
+    std::vector<float> uvs;
     std::vector<int> indices;
     int material_index = -1;
 };
+
+static GpuVec3 host_mesh_vertex(
+    const HostLightMeshData& mesh,
+    int vertex_index) {
+    const size_t offset = static_cast<size_t>(vertex_index) * 3;
+    return GpuVec3(
+        mesh.vertices[offset], mesh.vertices[offset + 1],
+        mesh.vertices[offset + 2]);
+}
+
+static GpuVec2 host_mesh_uv(
+    const HostLightMeshData& mesh,
+    int vertex_index) {
+    const size_t offset = static_cast<size_t>(vertex_index) * 2;
+    return GpuVec2(mesh.uvs[offset], mesh.uvs[offset + 1]);
+}
+
+static std::vector<GpuManifoldSeedPrimitive> build_manifold_seed_catalog(
+    const std::vector<GpuSphere>& spheres,
+    const std::vector<HostLightMeshData>& meshes,
+    const std::vector<GpuInstance>& instances) {
+    std::vector<GpuManifoldSeedPrimitive> catalog;
+    for (size_t sphere_index = 0; sphere_index < spheres.size();
+         ++sphere_index) {
+        const GpuSphere& sphere = spheres[sphere_index];
+        if (!(sphere.radius > 0.0f)) continue;
+        GpuManifoldSeedPrimitive seed = {};
+        seed.primitive.kind = GpuManifoldPrimitiveKind::Sphere;
+        seed.primitive.p0 = sphere.center;
+        seed.primitive.radius = sphere.radius;
+        seed.primitive.has_uv = 1;
+        seed.geometry_type = 0;
+        seed.geometry_index = static_cast<int>(sphere_index);
+        seed.primitive_index = 0;
+        seed.material_index = sphere.material_index;
+        catalog.push_back(seed);
+    }
+    const auto append_mesh = [&](const HostLightMeshData& mesh,
+                                 int geometry_type,
+                                 int geometry_index,
+                                 int material_index,
+                                 const GpuMat4* transform) {
+        const bool has_uv = mesh.uvs.size() / 2 >= mesh.vertices.size() / 3;
+        const int triangle_count = static_cast<int>(mesh.indices.size() / 3);
+        for (int triangle = 0; triangle < triangle_count; ++triangle) {
+            const int i0 = mesh.indices[triangle * 3];
+            const int i1 = mesh.indices[triangle * 3 + 1];
+            const int i2 = mesh.indices[triangle * 3 + 2];
+            GpuManifoldSeedPrimitive seed = {};
+            seed.primitive.kind = GpuManifoldPrimitiveKind::Triangle;
+            seed.primitive.p0 = host_mesh_vertex(mesh, i0);
+            seed.primitive.p1 = host_mesh_vertex(mesh, i1);
+            seed.primitive.p2 = host_mesh_vertex(mesh, i2);
+            if (transform) {
+                seed.primitive.p0 = transform->transform_point(seed.primitive.p0);
+                seed.primitive.p1 = transform->transform_point(seed.primitive.p1);
+                seed.primitive.p2 = transform->transform_point(seed.primitive.p2);
+            }
+            if ((seed.primitive.p1 - seed.primitive.p0).cross(
+                    seed.primitive.p2 - seed.primitive.p0).length_sq() <=
+                1e-16f) continue;
+            if (has_uv) {
+                seed.primitive.uv0 = host_mesh_uv(mesh, i0);
+                seed.primitive.uv1 = host_mesh_uv(mesh, i1);
+                seed.primitive.uv2 = host_mesh_uv(mesh, i2);
+                seed.primitive.has_uv = 1;
+            }
+            seed.geometry_type = geometry_type;
+            seed.geometry_index = geometry_index;
+            seed.primitive_index = triangle;
+            seed.material_index = material_index;
+            catalog.push_back(seed);
+        }
+    };
+    for (size_t mesh_index = 0; mesh_index < meshes.size(); ++mesh_index) {
+        append_mesh(
+            meshes[mesh_index], 1,
+            static_cast<int>(mesh_index), meshes[mesh_index].material_index,
+            nullptr);
+    }
+    for (size_t instance_index = 0; instance_index < instances.size();
+         ++instance_index) {
+        const GpuInstance& instance = instances[instance_index];
+        if (instance.mesh_index < 0 ||
+            instance.mesh_index >= static_cast<int>(meshes.size())) continue;
+        const HostLightMeshData& mesh = meshes[instance.mesh_index];
+        const int material_index = instance.material_index >= 0
+            ? instance.material_index : mesh.material_index;
+        append_mesh(
+            mesh, 2, static_cast<int>(instance_index),
+            material_index, &instance.transform);
+    }
+    return catalog;
+}
 
 static float host_triangle_area(const std::vector<float>& vertices, const std::vector<int>& indices, int tri) {
     const int i0 = indices[tri * 3 + 0];
@@ -2355,7 +2478,6 @@ GpuContext* init_gpu_renderer(int width, int height,
     ctx->num_spectral_channels = num_channels;
     alloc_restir_di_reservoirs(ctx);
     alloc_restir_pt_reservoirs(ctx);
-    alloc_bidirectional_runtime(ctx);
 
     auto alloc_resources = [mat_count](SpectralResource*& d_ptr, std::vector<void*>& free_list) {
         if (mat_count > 0) {
@@ -2474,7 +2596,9 @@ GpuContext* init_gpu_renderer(int width, int height,
         ctx->pointers_to_free.push_back(d_i);
 
         host_gpu_meshes.push_back(mesh);
-        host_light_meshes.push_back(HostLightMeshData{input_mesh.vertices, temp_indices, input_mesh.material_index});
+        host_light_meshes.push_back(HostLightMeshData{
+            input_mesh.vertices, input_mesh.uvs, temp_indices,
+            input_mesh.material_index});
     }
 
     for (auto& hm : host_scene.meshes) {
@@ -2530,7 +2654,8 @@ GpuContext* init_gpu_renderer(int width, int height,
         mesh.indices = d_i;
         ctx->pointers_to_free.push_back(d_i);
         host_gpu_meshes.push_back(mesh);
-        host_light_meshes.push_back(HostLightMeshData{hm.vertices, hm.indices, hm.material_index});
+        host_light_meshes.push_back(HostLightMeshData{
+            hm.vertices, hm.uvs, hm.indices, hm.material_index});
     }
 
     {
@@ -2585,6 +2710,19 @@ GpuContext* init_gpu_renderer(int width, int height,
         ctx->pointers_to_free.push_back(ctx->d_previous_instance_transforms);
     }
     ctx->instance_count = (int)host_instances.size();
+
+    const std::vector<GpuManifoldSeedPrimitive> manifold_seed_catalog =
+        build_manifold_seed_catalog(
+            host_spheres, host_light_meshes, host_instances);
+    alloc_bidirectional_runtime(ctx, manifold_seed_catalog.size());
+    if (ctx->d_manifold_seed_primitives &&
+        !manifold_seed_catalog.empty()) {
+        UR_CUDA_CHECK(cudaMemcpy(
+            ctx->d_manifold_seed_primitives,
+            manifold_seed_catalog.data(),
+            manifold_seed_catalog.size() * sizeof(GpuManifoldSeedPrimitive),
+            cudaMemcpyHostToDevice));
+    }
 
     std::vector<GpuTexture> host_gpu_textures;
     for (const auto& h_tex : host_scene.textures) {
@@ -2946,6 +3084,9 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         ctx->render_config.bidirectional.max_camera_vertices;
     scene.bidirectional_scene_epoch = ctx->bidirectional_scene_epoch;
     scene.bidirectional_telemetry = ctx->d_bidirectional_telemetry;
+    scene.manifold_seed_primitives = ctx->d_manifold_seed_primitives;
+    scene.manifold_seed_primitive_count =
+        ctx->manifold_seed_primitive_count;
     scene.light_count = ctx->light_count;
 
     scene.medium_density = ctx->medium_density;

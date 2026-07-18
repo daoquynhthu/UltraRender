@@ -415,6 +415,25 @@ __global__ void manifold_scene_primitive_extraction_kernel(
     output[14] = sphere_surface.uv.v;
 }
 
+__global__ void manifold_seed_catalog_sampling_kernel(
+    const GpuManifoldSeedPrimitive* catalog,
+    int catalog_count,
+    float* output) {
+    const GpuManifoldSeedSample first = sample_gpu_manifold_seed(
+        catalog, catalog_count, 0.25f, 0.25f, 0.5f);
+    const GpuManifoldSeedSample second = sample_gpu_manifold_seed(
+        catalog, catalog_count, 0.75f, 0.25f, 0.5f);
+    output[0] = float(first.valid);
+    output[1] = float(first.catalog_index);
+    output[2] = first.u;
+    output[3] = first.v;
+    output[4] = first.surface.uv.u;
+    output[5] = first.surface.uv.v;
+    output[6] = float(second.valid);
+    output[7] = float(second.catalog_index);
+    output[8] = second.surface.position.x;
+}
+
 __global__ void path_guided_light_selection_kernel(float* cdf, float* guide_weights, float* out) {
     GpuScene scene = {};
     scene.light_count = 2;
@@ -2945,6 +2964,74 @@ static int test_manifold_extracts_scene_primitives_on_device() {
     return 0;
 }
 
+static int test_manifold_runtime_builds_complete_seed_catalog() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.queue_capacity = 16;
+    config.integrator.mode = ure::IntegratorMode::SpecularManifold;
+    config.bidirectional.max_camera_vertices = 4;
+    config.bidirectional.max_light_vertices = 2;
+    config.bidirectional.memory_budget_mb = 64;
+    config.specular_manifold.enabled = true;
+    RenderMesh mesh = {};
+    mesh.vertices = {
+        0.0f, 0.0f, 0.0f,
+        0.0f, 2.0f, 0.0f,
+        0.0f, 0.0f, 2.0f};
+    mesh.uvs = {0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f};
+    mesh.indices = {0, 1, 2};
+    mesh.material_index = 7;
+    GpuInstance instance = {};
+    instance.mesh_index = 0;
+    instance.material_index = -1;
+    instance.transform = GpuMat4::identity();
+    instance.transform.m[0][3] = 4.0f;
+    instance.inverse_transform = GpuMat4::identity();
+    instance.inverse_transform.m[0][3] = -4.0f;
+    GpuMaterialData mirror = {};
+    mirror.header.type = MaterialType::Metal;
+    mirror.header.roughness = 0.0f;
+    mirror.albedo = SpectralPacket(0.9f);
+    GpuContext* ctx = init_gpu_renderer(
+        4, 4, {mesh}, {instance}, {}, {mirror}, {}, config);
+    CHECK(ctx != nullptr);
+    CHECK(ctx->d_manifold_seed_primitives != nullptr);
+    CHECK(ctx->manifold_seed_primitive_count == 2);
+    GpuManifoldSeedPrimitive catalog[2] = {};
+    CHECK_CUDA(cudaMemcpy(
+        catalog, ctx->d_manifold_seed_primitives, sizeof(catalog),
+        cudaMemcpyDeviceToHost));
+    CHECK(catalog[0].geometry_type == 1);
+    CHECK(catalog[0].geometry_index == 0);
+    CHECK(catalog[0].material_index == 7);
+    CHECK(catalog[0].primitive.has_uv == 1);
+    CHECK_FLOAT_EQ(catalog[0].primitive.uv2.u, 1.0f, 0.0f);
+    CHECK(catalog[1].geometry_type == 2);
+    CHECK(catalog[1].geometry_index == 0);
+    CHECK_FLOAT_EQ(catalog[1].primitive.p0.x, 4.0f, 0.0f);
+    float* d_output = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_output, 9 * sizeof(float)));
+    DeviceMem output_cleanup(d_output);
+    manifold_seed_catalog_sampling_kernel<<<1, 1>>>(
+        ctx->d_manifold_seed_primitives,
+        ctx->manifold_seed_primitive_count, d_output);
+    CHECK_CUDA(cudaGetLastError());
+    float output[9] = {};
+    CHECK_CUDA(cudaMemcpy(
+        output, d_output, sizeof(output), cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(output[0], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(output[1], 0.0f, 0.0f);
+    CHECK_FLOAT_EQ(output[2] + output[3], 0.5f, 1e-6f);
+    CHECK_FLOAT_EQ(output[4], output[3], 1e-6f);
+    CHECK_FLOAT_EQ(output[5], output[2], 1e-6f);
+    CHECK_FLOAT_EQ(output[6], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(output[7], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(output[8], 4.0f, 1e-6f);
+    free_gpu_renderer(ctx);
+    return 0;
+}
+
 static int test_bidirectional_light_subpath_transports_rough_metal_stokes() {
     REQUIRE_GPU();
     ure::RenderConfig config;
@@ -4258,6 +4345,7 @@ int main() {
     RUN_TEST(test_manifold_pivoted_newton_step_on_device);
     RUN_TEST(test_manifold_sphere_and_triangle_newton_on_device);
     RUN_TEST(test_manifold_extracts_scene_primitives_on_device);
+    RUN_TEST(test_manifold_runtime_builds_complete_seed_catalog);
     RUN_TEST(test_bidirectional_light_subpath_transports_rough_metal_stokes);
     RUN_TEST(test_vcm_builds_bounded_grid_and_merges_surface_vertices);
     RUN_TEST(test_manifold_runtime_writes_converged_scene_solution);

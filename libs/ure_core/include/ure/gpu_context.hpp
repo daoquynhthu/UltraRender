@@ -154,6 +154,8 @@ struct GpuContext {
     float vcm_current_surface_radius = 0.0f;
     float vcm_current_volume_radius = 0.0f;
     GpuManifoldPathSolution* d_manifold_solutions = nullptr;
+    GpuManifoldSeedPrimitive* d_manifold_seed_primitives = nullptr;
+    int manifold_seed_primitive_count = 0;
     GpuManifoldTelemetry* d_manifold_telemetry = nullptr;
     GpuManifoldTelemetry last_manifold_telemetry = {};
     int bidirectional_camera_path_capacity = 0;
