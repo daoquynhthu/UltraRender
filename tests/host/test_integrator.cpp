@@ -1,6 +1,7 @@
 #include "ure/gpu_driver.hpp"
 #include "ure/integrator/restir_reservoir.hpp"
 #include "ure/integrator/restir_pt.hpp"
+#include "ure/mlt.hpp"
 #include "ure/render.hpp"
 #include "ure/scene_ir.hpp"
 #include "ure/specular_manifold.hpp"
@@ -275,10 +276,38 @@ static int test_mlt_metropolis_acceptance_ratio() {
     return 0;
 }
 
-static int test_gpu_renderer_rejects_unimplemented_mlt() {
+static int test_mlt_distributed_chain_shards_are_disjoint_and_reassemblable() {
+    constexpr int kShardCount = 4;
+    constexpr int kChainsPerShard = 17;
+    constexpr std::uint64_t kBase = 9'000'000'000ull;
+    for (int shard_id = 0; shard_id < kShardCount; ++shard_id) {
+        const auto shard = ure::integrator::make_mlt_chain_shard(
+            shard_id, kShardCount, kChainsPerShard, kBase);
+        CHECK(ure::integrator::validate_mlt_chain_shard(shard));
+        CHECK(shard.global_chain_offset ==
+            kBase + static_cast<std::uint64_t>(shard_id * kChainsPerShard));
+        if (shard_id > 0) {
+            const auto previous = ure::integrator::make_mlt_chain_shard(
+                shard_id - 1, kShardCount, kChainsPerShard, kBase);
+            CHECK(previous.global_chain_offset + kChainsPerShard ==
+                shard.global_chain_offset);
+        }
+    }
+    bool rejected = false;
+    try {
+        (void)ure::integrator::make_mlt_chain_shard(4, 4, 17, kBase);
+    } catch (const std::out_of_range&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
+static int test_gpu_renderer_rejects_mlt_bootstrap_smaller_than_chain_population() {
     ure::RenderConfig config;
     config.mlt.enabled = true;
     config.mlt.chain_count = 4;
+    config.mlt.bootstrap_samples = 3;
     config.mlt.mutations_per_chain = 1024;
     config.mlt.large_step_probability = 0.3f;
     config.mlt.small_step_sigma = 0.01f;
@@ -290,7 +319,7 @@ static int test_gpu_renderer_rejects_unimplemented_mlt() {
         ure::scene_ir::SceneIR scene;
         engine->load_scene_ir(scene);
     } catch (const std::runtime_error& e) {
-        rejected = std::string(e.what()).find("MLT primary-sample-space GPU integrator is not implemented yet") != std::string::npos;
+        rejected = std::string(e.what()).find("bootstrap_samples must cover every chain") != std::string::npos;
     }
     CHECK(rejected);
     return 0;
@@ -494,7 +523,8 @@ int main() {
     failed += run("test_mlt_small_step_is_symmetric_and_wrapped", test_mlt_small_step_is_symmetric_and_wrapped);
     failed += run("test_mlt_large_step_is_uniform_proposal", test_mlt_large_step_is_uniform_proposal);
     failed += run("test_mlt_metropolis_acceptance_ratio", test_mlt_metropolis_acceptance_ratio);
-    failed += run("test_gpu_renderer_rejects_unimplemented_mlt", test_gpu_renderer_rejects_unimplemented_mlt);
+    failed += run("test_mlt_distributed_chain_shards_are_disjoint_and_reassemblable", test_mlt_distributed_chain_shards_are_disjoint_and_reassemblable);
+    failed += run("test_gpu_renderer_rejects_mlt_bootstrap_smaller_than_chain_population", test_gpu_renderer_rejects_mlt_bootstrap_smaller_than_chain_population);
     failed += run("test_integrator_rejects_primary_sample_sampler_without_mlt_mode", test_integrator_rejects_primary_sample_sampler_without_mlt_mode);
     failed += run("test_integrator_rejects_restir_mode_without_biased_ack", test_integrator_rejects_restir_mode_without_biased_ack);
     failed += run("test_integrator_path_guided_mode_requires_enabled_guiding", test_integrator_path_guided_mode_requires_enabled_guiding);

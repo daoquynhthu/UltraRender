@@ -1,8 +1,10 @@
 add_library(ure_core STATIC
     src/mie_solver.cpp
+    src/mlt.cpp
     src/restir_reservoir.cpp
     src/restir_pt.cpp
     src/restir_pt_runtime.cu
+    src/mlt_runtime.cu
     src/restir_di_runtime.cu
     src/bidirectional_runtime.cu
     src/ure_c_api.cpp

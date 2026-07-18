@@ -109,7 +109,8 @@ static __device__ inline bool scatter(
     float ior_inside,
     BoundaryTransportMode transport_mode,
     int spectral_mode = SpectralRayModePacket,
-    int active_channel = 0
+    int active_channel = 0,
+    const RayQueue* sampling_queue = nullptr
 );
 
 static __device__ inline bool scatter(
@@ -127,5 +128,6 @@ static __device__ inline bool scatter(
     float ior_inside,
     BoundaryTransportMode transport_mode,
     int spectral_mode = SpectralRayModePacket,
-    int active_channel = 0
+    int active_channel = 0,
+    const RayQueue* sampling_queue = nullptr
 );

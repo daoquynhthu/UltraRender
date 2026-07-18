@@ -433,6 +433,7 @@ __device__ inline void store_packet_scattered_stokes(
         mat, mat_soa, dielectric_ior, r_in, scattered, n, uv, throughput,
         ior_outside, dispersion_clamp, sample_index, pixel_index, depth,
         current_queue.num_spectral_channels, BoundaryTransportMode::Radiance,
+        &current_queue,
         input_i, input_q, input_u, input_v,
         output_i, output_q, output_u, output_v);
     for (int channel = 0; channel < current_queue.num_spectral_channels; ++channel) {
@@ -816,7 +817,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
         : sigma_t_avg;
 
     if (sigma_t_proposal > 0.0f) {
-        float r_dist = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeDistance);
+        float r_dist = sample_path_dimension(current_queue, sample_index, pixel_index, depth, kPathDimVolumeDistance);
         float t_medium = -logf(1.0f - r_dist) / sigma_t_proposal;
 
         float max_allowed = scene.medium_max_distance > 0.0f ? scene.medium_max_distance : 1e30f;
@@ -833,12 +834,12 @@ __global__ __launch_bounds__(256) void shade_kernel(
             }
 
             if (!(scene.restir_di_unbiased && depth == 0) && scene.light_count > 0) {
-                float r_light_pick = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightPick);
+                float r_light_pick = sample_path_dimension(current_queue, sample_index, pixel_index, depth, kPathDimVolumeLightPick);
 
                 GpuVec3 p_vol = current_queue.origins[idx] + current_queue.directions[idx] * t_medium;
                 int light_idx_idx = sample_light_list_index_at(scene, p_vol, r_light_pick);
-                float r1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightU);
-                float r2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumeLightV);
+                float r1 = sample_path_dimension(current_queue, sample_index, pixel_index, depth, kPathDimVolumeLightU);
+                float r2 = sample_path_dimension(current_queue, sample_index, pixel_index, depth, kPathDimVolumeLightV);
                 SelectedLightSample light_sample;
 
                 if (sample_selected_light(scene, light_idx_idx, p_vol, r1, r2, light_sample)) {
@@ -925,8 +926,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 }
             }
 
-            float r_phase_1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumePhaseU);
-            float r_phase_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimVolumePhaseV);
+            float r_phase_1 = sample_path_dimension(current_queue, sample_index, pixel_index, depth, kPathDimVolumePhaseU);
+            float r_phase_2 = sample_path_dimension(current_queue, sample_index, pixel_index, depth, kPathDimVolumePhaseV);
             float phase_pdf = 0.0f;
             GpuVec3 new_dir;
             if (phase_function == VolumePhaseFunction::Mie) {
@@ -1266,9 +1267,9 @@ __global__ __launch_bounds__(256) void shade_kernel(
                                   mat.type == MaterialType::Cloth ||
                                   (mat.type == MaterialType::Metal && mat.roughness > 0.02f) ||
                                   is_rough_dielectric_bsdf(mat))) {
-        float r_light_pick = sample_path_dimension(sample_index, pixel_index, depth, kPathDimLightPick);
-        float r_light_1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimLightU);
-        float r_light_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimLightV);
+        float r_light_pick = sample_path_dimension(current_queue, sample_index, pixel_index, depth, kPathDimLightPick);
+        float r_light_1 = sample_path_dimension(current_queue, sample_index, pixel_index, depth, kPathDimLightU);
+        float r_light_2 = sample_path_dimension(current_queue, sample_index, pixel_index, depth, kPathDimLightV);
 
         int light_idx_idx = sample_light_list_index_at(scene, p, r_light_pick);
         SelectedLightSample light_sample;
@@ -1414,7 +1415,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
             if (is_composite) {
                 float lobe_sample = sample_path_dimension(
-                    sample_index, pixel_index, depth, kPathDimBsdfLobe);
+                    current_queue, sample_index, pixel_index, depth, kPathDimBsdfLobe);
                 const ResolvedMaterialBsdfLobe& selected = lobe_sample < composite_mix
                     ? resolved_material.substrate
                     : resolved_material.coating;
@@ -1472,8 +1473,9 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     sample_index,
                     pixel_index,
                     depth,
-                    scene.num_spectral_channels)
-                : scatter(r_in, mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, dielectric_ior, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, pdf_val, dispersion_clamp, sample_index, pixel_index, depth, scene.num_spectral_channels, ior_outside, scene.materials[mat_idx].ior, BoundaryTransportMode::Radiance, spectral_mode, active_channel);
+                    scene.num_spectral_channels,
+                    &current_queue)
+                : scatter(r_in, mat, mat_soa.albedo, mat_soa.extinction, mat_soa.metal_eta, dielectric_ior, p, n, uv, throughput, attenuation, scattered, current_stokes, seed, pdf_val, dispersion_clamp, sample_index, pixel_index, depth, scene.num_spectral_channels, ior_outside, scene.materials[mat_idx].ior, BoundaryTransportMode::Radiance, spectral_mode, active_channel, &current_queue);
             if (scattered_ok) {
                 if (is_composite && pdf_val > 0.0f) {
                     SpectralPacket pdf_a = pdf_bsdf_spectral(
@@ -1502,7 +1504,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 if (depth > 3) {
                     float prob = spectral_survival_probability(new_throughput, scene.num_spectral_channels, rr_min_prob);
 
-                    float r_rr = sample_path_dimension(sample_index, pixel_index, depth, kPathDimRussianRoulette);
+                    float r_rr = sample_path_dimension(current_queue, sample_index, pixel_index, depth, kPathDimRussianRoulette);
                     if (r_rr > prob) {
                         return;
                     }

@@ -105,10 +105,14 @@ typedef struct ure_integrator_config_t {
     int specular_manifold_newton_iterations;
     int mlt_enabled;
     int mlt_chain_count;
+    int mlt_bootstrap_samples;
+    int mlt_burn_in_mutations;
     int mlt_mutations_per_chain;
     float mlt_large_step_probability;
     float mlt_small_step_sigma;
+    int mlt_memory_budget_mb;
     uint32_t mlt_seed;
+    uint64_t mlt_chain_id_offset;
     int environment_light_direct_sampling;
     float environment_light_intensity;
     int path_guiding_spatial_cell_count;

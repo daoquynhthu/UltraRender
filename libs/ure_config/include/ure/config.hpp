@@ -115,10 +115,14 @@ struct VcmConfig {
 struct MltIntegratorConfig {
     bool enabled = false;
     int chain_count = 1;
+    int bootstrap_samples = 4096;
+    int burn_in_mutations = 256;
     int mutations_per_chain = 1024;
     double large_step_probability = 0.3;
     double small_step_sigma = 0.01;
+    int memory_budget_mb = 0;
     std::uint32_t seed = 1;
+    std::uint64_t chain_id_offset = 0;
 };
 
 struct IntegratorConfig {

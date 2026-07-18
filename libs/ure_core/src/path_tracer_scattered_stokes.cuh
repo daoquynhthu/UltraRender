@@ -75,6 +75,7 @@ static __device__ void transform_scattered_stokes_packets(
     int depth,
     int channel_count,
     BoundaryTransportMode transport_mode,
+    const RayQueue* sampling_queue,
     const SpectralPacket& input_i,
     const SpectralPacket& input_q,
     const SpectralPacket& input_u,
@@ -165,10 +166,16 @@ static __device__ void transform_scattered_stokes_packets(
     }
 
     if (mat.type == MaterialType::Dielectric) {
-        const float sample_u = sample_path_dimension(
-            sample_index, path_index, depth, kPathDimBsdf0);
-        const float sample_v = sample_path_dimension(
-            sample_index, path_index, depth, kPathDimBsdf1);
+        const float sample_u = sampling_queue
+            ? sample_path_dimension(
+                *sampling_queue, sample_index, path_index, depth, kPathDimBsdf0)
+            : sample_path_dimension(
+                sample_index, path_index, depth, kPathDimBsdf0);
+        const float sample_v = sampling_queue
+            ? sample_path_dimension(
+                *sampling_queue, sample_index, path_index, depth, kPathDimBsdf1)
+            : sample_path_dimension(
+                sample_index, path_index, depth, kPathDimBsdf1);
         GpuVec3 normal = incoming_ray.direction.dot(shading_normal) < 0.0f
             ? shading_normal : -shading_normal;
         const float jitter = mat.roughness * 0.002f;

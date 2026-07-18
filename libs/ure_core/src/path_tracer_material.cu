@@ -31,13 +31,22 @@ __device__ inline bool scatter(
     float ior_inside,
     BoundaryTransportMode transport_mode,
     int spectral_mode,
-    int active_channel
+    int active_channel,
+    const RayQueue* sampling_queue
 ) {
     (void)ior_inside;
-    float r_bsdf_1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf0);
-    float r_bsdf_2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf1);
-    float r_bsdf_3 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf2);
-    float r_bsdf_4 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf3);
+    float r_bsdf_1 = sampling_queue
+        ? sample_path_dimension(*sampling_queue, sample_index, pixel_index, depth, kPathDimBsdf0)
+        : sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf0);
+    float r_bsdf_2 = sampling_queue
+        ? sample_path_dimension(*sampling_queue, sample_index, pixel_index, depth, kPathDimBsdf1)
+        : sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf1);
+    float r_bsdf_3 = sampling_queue
+        ? sample_path_dimension(*sampling_queue, sample_index, pixel_index, depth, kPathDimBsdf2)
+        : sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf2);
+    float r_bsdf_4 = sampling_queue
+        ? sample_path_dimension(*sampling_queue, sample_index, pixel_index, depth, kPathDimBsdf3)
+        : sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf3);
 
     float effective_thickness = effective_thin_film_thickness(mat, uv);
 
@@ -539,12 +548,13 @@ __device__ inline bool scatter(
     float ior_inside,
     BoundaryTransportMode transport_mode,
     int spectral_mode,
-    int active_channel
+    int active_channel,
+    const RayQueue* sampling_queue
 ) {
     SpectralPacket dielectric_ior(mat.ior);
     return scatter(r_in, mat, albedo, extinction, metal_eta, dielectric_ior,
                    p, n, uv, current_throughput, attenuation, scattered, stokes, seed,
                    out_pdf, dispersion_clamp, sample_index, pixel_index, depth, num_spec,
                    ior_outside, ior_inside, transport_mode, spectral_mode,
-                   active_channel);
+                   active_channel, sampling_queue);
 }

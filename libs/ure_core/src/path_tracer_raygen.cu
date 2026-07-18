@@ -40,30 +40,17 @@ __device__ inline void store_stokes_packet(RayQueue& q, int idx, const StokesVec
     }
 }
 
-__global__ __launch_bounds__(512) void generate_rays_kernel(
-    RayQueue queue,
-    int width,
-    int height,
-    GpuCamera camera,
-    int sample_index,
-    int* sample_counts
-) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int j = blockIdx.y * blockDim.y + threadIdx.y;
-    
-    if (i >= width || j >= height) return;
-    
-    int pixel_index = j * width + i;
-    int ray_index = pixel_index; 
-    
+static __device__ void initialize_camera_ray(
+    RayQueue queue, int ray_index, int pixel_index, int width, int height,
+    GpuCamera camera, int sample_index, int* sample_counts,
+    float r1, float r2, float r_lambda) {
+    int i = pixel_index % width;
+    int j = pixel_index / width;
     if (sample_counts) {
         sample_counts[pixel_index] += 1;
     }
     
     unsigned int seed = wang_hash(1984 + pixel_index + sample_index * width * height);
-    
-    float r1 = sample_dimension(sample_index, pixel_index, kSampleDimCameraX);
-    float r2 = sample_dimension(sample_index, pixel_index, kSampleDimCameraY);
     
     float dx = (r1 < 0.5f) ? sqrtf(2.0f * r1) - 1.0f : 1.0f - sqrtf(2.0f * (1.0f - r1));
     float dy = (r2 < 0.5f) ? sqrtf(2.0f * r2) - 1.0f : 1.0f - sqrtf(2.0f * (1.0f - r2));
@@ -80,11 +67,9 @@ __global__ __launch_bounds__(512) void generate_rays_kernel(
 
     int spectral_mode = queue.initial_spectral_mode;
     int active_channel = -1;
-    float r_lambda = 0.0f;
     float sampled_lambda = kSpectralLambdaMin;
     float wavelength_pdf = 1.0f / (kSpectralLambdaMax - kSpectralLambdaMin);
     if (spectral_mode_is_sampled(spectral_mode)) {
-        r_lambda = sample_dimension(sample_index, pixel_index, kSampleDimWavelength);
         if (queue.wavelength_sampling_strategy == SpectralWavelengthSamplingSceneSpectralPower &&
             queue.wavelength_proposal_cdf &&
             queue.wavelength_proposal_pdf &&
@@ -141,6 +126,58 @@ __global__ __launch_bounds__(512) void generate_rays_kernel(
     queue.wavelength_pdfs[ray_index] = spectral_mode == SpectralRayModeSampled
         ? wavelength_pdf
         : 1.0f / fmaxf(1.0f, float(queue.num_spectral_channels));
+}
+
+__global__ __launch_bounds__(512) void generate_rays_kernel(
+    RayQueue queue,
+    int width,
+    int height,
+    GpuCamera camera,
+    int sample_index,
+    int* sample_counts
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i >= width || j >= height) return;
+    int pixel_index = j * width + i;
+    initialize_camera_ray(
+        queue, pixel_index, pixel_index, width, height, camera, sample_index,
+        sample_counts,
+        sample_dimension(sample_index, pixel_index, kSampleDimCameraX),
+        sample_dimension(sample_index, pixel_index, kSampleDimCameraY),
+        sample_dimension(sample_index, pixel_index, kSampleDimWavelength));
+}
+
+__global__ __launch_bounds__(256) void generate_primary_sample_rays_kernel(
+    RayQueue queue,
+    int chain_count,
+    int width,
+    int height,
+    GpuCamera camera,
+    int mutation_index,
+    int* film_pixels
+) {
+    int chain_index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (chain_index >= chain_count) return;
+    const float film_x = sample_dimension(
+        queue, mutation_index, chain_index, kSampleDimFilmX);
+    const float film_y = sample_dimension(
+        queue, mutation_index, chain_index, kSampleDimFilmY);
+    const int i = min(int(film_x * width), width - 1);
+    const int j = min(int(film_y * height), height - 1);
+    const int film_pixel = j * width + i;
+    if (film_pixels) film_pixels[chain_index] = film_pixel;
+    initialize_camera_ray(
+        queue, chain_index, film_pixel, width, height, camera,
+        mutation_index, nullptr,
+        sample_dimension(
+            queue, mutation_index, chain_index, kSampleDimCameraX),
+        sample_dimension(
+            queue, mutation_index, chain_index, kSampleDimCameraY),
+        sample_dimension(
+            queue, mutation_index, chain_index, kSampleDimWavelength));
+    queue.path_indices[chain_index] = static_cast<std::uint32_t>(chain_index);
+    queue.pixel_indices[chain_index] = chain_index;
 }
 
 } // namespace ure::gpu

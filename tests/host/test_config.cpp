@@ -462,10 +462,14 @@ static int test_integrator_mlt_json_fields() {
     "mlt": {
       "enabled": true,
       "chain_count": 8,
+      "bootstrap_samples": 16384,
+      "burn_in_mutations": 512,
       "mutations_per_chain": 4096,
       "large_step_probability": 0.2,
       "small_step_sigma": 0.015,
-      "seed": 12345
+      "memory_budget_mb": 768,
+      "seed": 12345,
+      "chain_id_offset": 4294967296
     }
   }
 })";
@@ -474,10 +478,14 @@ static int test_integrator_mlt_json_fields() {
     std::remove(path);
     CHECK(cfg.integrator.mlt.enabled);
     CHECK(cfg.integrator.mlt.chain_count == 8);
+    CHECK(cfg.integrator.mlt.bootstrap_samples == 16384);
+    CHECK(cfg.integrator.mlt.burn_in_mutations == 512);
     CHECK(cfg.integrator.mlt.mutations_per_chain == 4096);
     CHECK(std::fabs(cfg.integrator.mlt.large_step_probability - 0.2) < 1e-12);
     CHECK(std::fabs(cfg.integrator.mlt.small_step_sigma - 0.015) < 1e-12);
     CHECK(cfg.integrator.mlt.seed == 12345u);
+    CHECK(cfg.integrator.mlt.memory_budget_mb == 768);
+    CHECK(cfg.integrator.mlt.chain_id_offset == 4294967296ull);
     return 0;
 }
 
@@ -489,6 +497,10 @@ static int test_integrator_mlt_cli_overrides() {
         "--enable-mlt",
         "--mlt-chain-count",
         "16",
+        "--mlt-bootstrap-samples",
+        "32768",
+        "--mlt-burn-in-mutations",
+        "1024",
         "--mlt-mutations-per-chain",
         "2048",
         "--mlt-large-step-probability",
@@ -496,16 +508,24 @@ static int test_integrator_mlt_cli_overrides() {
         "--mlt-small-step-sigma",
         "0.02",
         "--mlt-seed",
-        "77"
+        "77",
+        "--mlt-memory-budget-mb",
+        "512",
+        "--mlt-chain-id-offset",
+        "9000000000"
     };
     auto result = ure::config::parse_cli(static_cast<int>(sizeof(argv) / sizeof(argv[0])), const_cast<char**>(argv));
     const auto& cfg = result.config;
     CHECK(cfg.integrator.mlt.enabled);
     CHECK(cfg.integrator.mlt.chain_count == 16);
+    CHECK(cfg.integrator.mlt.bootstrap_samples == 32768);
+    CHECK(cfg.integrator.mlt.burn_in_mutations == 1024);
     CHECK(cfg.integrator.mlt.mutations_per_chain == 2048);
     CHECK(std::fabs(cfg.integrator.mlt.large_step_probability - 0.1) < 1e-12);
     CHECK(std::fabs(cfg.integrator.mlt.small_step_sigma - 0.02) < 1e-12);
     CHECK(cfg.integrator.mlt.seed == 77u);
+    CHECK(cfg.integrator.mlt.memory_budget_mb == 512);
+    CHECK(cfg.integrator.mlt.chain_id_offset == 9000000000ull);
     return 0;
 }
 

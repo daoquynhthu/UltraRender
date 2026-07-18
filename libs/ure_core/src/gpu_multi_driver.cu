@@ -1,4 +1,5 @@
 #include "ure/gpu_multi_driver.hpp"
+#include "ure/mlt.hpp"
 #include "ure/gpu_structs.hpp"
 #include "ure/gpu_context.hpp"
 #include <cuda_runtime.h>
@@ -143,8 +144,15 @@ MultiGpuContext* init_multi_gpu_renderer(int width, int height,
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, i);
         UR_LOG_INFO(GPU, "  GPU[{}]: {}", i, prop.name);
+        ure::RenderConfig device_config = config;
+        if (device_config.mlt.enabled) {
+            device_config.mlt.chain_id_offset =
+                ure::integrator::make_mlt_chain_shard(
+                    i, num_gpus, config.mlt.chain_count,
+                    config.mlt.chain_id_offset).global_chain_offset;
+        }
         ctx->contexts[i] = init_gpu_renderer(width, height, meshes, instances, spheres, materials,
-                                             textures, config, mie_phase_resources);
+                                             textures, device_config, mie_phase_resources);
     }
 
     cudaSetDevice(0);
@@ -179,6 +187,9 @@ int render_pass_multi_gpu(MultiGpuContext* ctx, int samples_per_pass) {
     // GPU i: samples [base + i*spp, base + (i+1)*spp)
     // After the pass, all GPUs share the same new base.
     int current_base = ctx->contexts[0]->current_spp;
+    const bool mlt_mode =
+        ctx->contexts[0]->render_config.integrator.mode ==
+        ure::IntegratorMode::MLT;
     float path_guiding_baseline_factor = 1.0f;
     if (ctx->path_guiding_light_count > 0) {
         validate_path_guiding_merge_state(ctx);
@@ -199,14 +210,20 @@ int render_pass_multi_gpu(MultiGpuContext* ctx, int samples_per_pass) {
 
     for (int i = 0; i < ctx->num_gpus; ++i) {
         cudaSetDevice(i);
-        ctx->contexts[i]->current_spp = current_base + i * samples_per_pass;
+        if (!mlt_mode) {
+            ctx->contexts[i]->current_spp = current_base + i * samples_per_pass;
+        }
         render_pass_gpu(ctx->contexts[i], samples_per_pass);
         UR_CUDA_CHECK(cudaDeviceSynchronize());
     }
 
     merge_and_broadcast_path_guiding(ctx, path_guiding_baseline_factor);
 
-    int new_base = current_base + ctx->num_gpus * samples_per_pass;
+    int new_base = mlt_mode
+        ? current_base +
+            ctx->contexts[0]->render_config.mlt.mutations_per_chain *
+                samples_per_pass
+        : current_base + ctx->num_gpus * samples_per_pass;
     for (int i = 0; i < ctx->num_gpus; ++i) {
         ctx->contexts[i]->current_spp = new_base;
     }

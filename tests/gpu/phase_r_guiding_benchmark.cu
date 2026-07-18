@@ -1,6 +1,7 @@
 #include <cuda_runtime.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <fstream>
 #include <stdexcept>
@@ -71,6 +72,13 @@ static void build_scene(const std::string& name,
         add_sphere(spheres, GpuVec3(1.25f, 0.15f, -0.9f), 0.9f, 7);
         add_light(spheres, materials, GpuVec3(-2.8f, 3.8f, 1.5f), 0.3f, 18.0f);
         add_light(spheres, materials, GpuVec3(2.8f, 3.4f, -1.5f), 0.4f, 9.0f);
+    } else if (name == "high_occlusion") {
+        materials.push_back(make_material(MaterialType::Lambertian, 0.0f, 0.9f));
+        add_sphere(spheres, GpuVec3(0.0f, 0.0f, 0.0f), 1.0f, 7);
+        add_sphere(spheres, GpuVec3(-0.72f, 1.55f, 1.1f), 0.92f, 8);
+        add_sphere(spheres, GpuVec3(0.72f, 1.55f, 1.1f), 0.92f, 8);
+        add_sphere(spheres, GpuVec3(0.0f, 0.15f, 1.0f), 0.62f, 8);
+        add_light(spheres, materials, GpuVec3(0.0f, 3.2f, 1.4f), 0.22f, 120.0f);
     } else if (name == "complex_material") {
         materials.push_back(make_material(MaterialType::Metal, 0.9f, 0.08f));
         materials.push_back(make_material(MaterialType::Dielectric, 1.0f, 0.03f));
@@ -153,6 +161,21 @@ int main(int argc, char** argv) {
         config.specular_manifold.max_specular_events = 4;
         config.specular_manifold.solver_tolerance = 1e-5f;
         config.specular_manifold.max_newton_iterations = 48;
+    } else if (mode == 4) {
+        config.integrator.mode = ure::IntegratorMode::MLT;
+        config.integrator.sampler =
+            ure::IntegratorSampler::PrimarySampleSpace;
+        config.mlt.enabled = true;
+        config.mlt.chain_count = width * height;
+        const bool rare_event_scene = scene_name == "small_emitter";
+        config.mlt.bootstrap_samples = std::max(
+            rare_event_scene ? 65536 : 4096, width * height * 8);
+        config.mlt.burn_in_mutations = 64;
+        config.mlt.mutations_per_chain = 1;
+        config.mlt.large_step_probability = 0.3f;
+        config.mlt.small_step_sigma = 0.1f;
+        config.mlt.memory_budget_mb = 256;
+        config.mlt.seed = 117;
     }
 
     std::vector<GpuSphere> spheres;
@@ -193,8 +216,10 @@ int main(int argc, char** argv) {
             static_cast<size_t>(width) * height);
         std::vector<double> specular_emitter_image(
             static_cast<size_t>(width) * height * 3, 0.0);
-        for (int i = 0; i < spp; ++i) {
-            render_pass_gpu(context, 1);
+        const int render_iterations = mode == 4 ? 1 : spp;
+        const auto render_start = std::chrono::steady_clock::now();
+        for (int i = 0; i < render_iterations; ++i) {
+            render_pass_gpu(context, mode == 4 ? spp : 1);
             const cudaError_t reference_copy_status = cudaMemcpy(
                 specular_emitter_sample.data(),
                 context->d_specular_emitter_accum,
@@ -247,6 +272,8 @@ int main(int argc, char** argv) {
             manifold_total.rejected_occluded += current.rejected_occluded;
             manifold_total.rejected_response += current.rejected_response;
         }
+        const double render_seconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - render_start).count();
         std::vector<float> framebuffer(static_cast<size_t>(width) * height * 3);
         copy_frame_buffer_gpu(context, framebuffer.data());
         std::ofstream output(output_path, std::ios::binary);
@@ -278,7 +305,7 @@ int main(int argc, char** argv) {
             specular_emitter_image.size());
         for (size_t index = 0; index < specular_emitter_image.size(); ++index) {
             normalized_specular_emitter[index] = static_cast<float>(
-                specular_emitter_image[index] / double(spp));
+                specular_emitter_image[index] / double(render_iterations));
         }
         specular_emitter_output.write(
             reinterpret_cast<const char*>(normalized_specular_emitter.data()),
@@ -311,7 +338,19 @@ int main(int argc, char** argv) {
                   << "manifold_rejected_non_delta=" << manifold_total.rejected_non_delta << '\n'
                   << "manifold_rejected_occluded=" << manifold_total.rejected_occluded << '\n'
                   << "manifold_rejected_response=" << manifold_total.rejected_response << '\n'
-                  << "manifold_rgb_sum=" << manifold_rgb_sum << '\n';
+                  << "manifold_rgb_sum=" << manifold_rgb_sum << '\n'
+                  << "mlt_bootstrap_paths=" << context->last_mlt_diagnostics.bootstrap_paths << '\n'
+                  << "mlt_bootstrap_positive=" << context->last_mlt_diagnostics.bootstrap_positive << '\n'
+                  << "mlt_proposed=" << context->last_mlt_diagnostics.proposed_mutations << '\n'
+                  << "mlt_accepted=" << context->last_mlt_diagnostics.accepted_mutations << '\n'
+                  << "mlt_large_steps=" << context->last_mlt_diagnostics.large_steps << '\n'
+                  << "mlt_small_steps=" << context->last_mlt_diagnostics.small_steps << '\n'
+                  << "mlt_zero_target=" << context->last_mlt_diagnostics.zero_target_transitions << '\n'
+                  << "mlt_invalid=" << context->last_mlt_diagnostics.invalid_contributions << '\n'
+                  << "mlt_deposited=" << context->last_mlt_diagnostics.deposited_samples << '\n'
+                  << "mlt_bootstrap_mean=" << context->last_mlt_diagnostics.bootstrap_mean << '\n'
+                  << "mlt_acceptance_rate=" << context->last_mlt_diagnostics.acceptance_rate << '\n'
+                  << "render_seconds=" << render_seconds << '\n';
         if (!telemetry) throw std::runtime_error("failed to write benchmark telemetry");
     } catch (...) {
         free_gpu_renderer(context);

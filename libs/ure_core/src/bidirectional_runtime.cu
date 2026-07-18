@@ -1046,6 +1046,7 @@ __global__ void extend_light_subpaths_kernel(
                 hit_n, hit_uv, throughput, 1.0f, dispersion_clamp,
                 sample_index, path_index, depth, scene.num_spectral_channels,
                 BoundaryTransportMode::Importance,
+                nullptr,
                 stokes_i, stokes_q, stokes_u, stokes_v,
                 vertex.stokes_i, vertex.stokes_q,
                 vertex.stokes_u, vertex.stokes_v);
@@ -2317,6 +2318,7 @@ __global__ void evaluate_specular_manifold_contributions_kernel(
             anchor.throughput, surrounding_ior, dispersion_clamp,
             int(anchor.sample_index), path_index, event,
             scene.num_spectral_channels, BoundaryTransportMode::Radiance,
+            nullptr,
             stokes_i, stokes_q, stokes_u, stokes_v,
             output_i, output_q, output_u, output_v);
         stokes_i = output_i;

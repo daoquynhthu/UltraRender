@@ -144,10 +144,14 @@ RenderConfig load_config(const std::string& path) {
                 auto& m = i["mlt"];
                 if (m.contains("enabled")) cfg.integrator.mlt.enabled = m["enabled"].get<bool>();
                 if (m.contains("chain_count")) cfg.integrator.mlt.chain_count = m["chain_count"].get<int>();
+                if (m.contains("bootstrap_samples")) cfg.integrator.mlt.bootstrap_samples = m["bootstrap_samples"].get<int>();
+                if (m.contains("burn_in_mutations")) cfg.integrator.mlt.burn_in_mutations = m["burn_in_mutations"].get<int>();
                 if (m.contains("mutations_per_chain")) cfg.integrator.mlt.mutations_per_chain = m["mutations_per_chain"].get<int>();
                 if (m.contains("large_step_probability")) cfg.integrator.mlt.large_step_probability = m["large_step_probability"].get<double>();
                 if (m.contains("small_step_sigma")) cfg.integrator.mlt.small_step_sigma = m["small_step_sigma"].get<double>();
+                if (m.contains("memory_budget_mb")) cfg.integrator.mlt.memory_budget_mb = m["memory_budget_mb"].get<int>();
                 if (m.contains("seed")) cfg.integrator.mlt.seed = m["seed"].get<std::uint32_t>();
+                if (m.contains("chain_id_offset")) cfg.integrator.mlt.chain_id_offset = m["chain_id_offset"].get<std::uint64_t>();
             }
         }
     } catch (const std::exception& e) {
@@ -224,10 +228,14 @@ CliResult parse_cli(int argc, char** argv) {
     int vcm_grid_capacity = -1;
     bool integrator_mlt = false;
     int integrator_mlt_chain_count = -1;
+    int integrator_mlt_bootstrap_samples = -1;
+    int integrator_mlt_burn_in_mutations = -1;
     int integrator_mlt_mutations_per_chain = -1;
     double integrator_mlt_large_step_probability = -1.0;
     double integrator_mlt_small_step_sigma = -1.0;
+    int integrator_mlt_memory_budget_mb = -1;
     std::uint32_t integrator_mlt_seed = 0;
+    std::uint64_t integrator_mlt_chain_id_offset = 0;
     bool physics = false, audio = false;
     render_cmd->add_option("scene", scene_render, "Path to scene file (glTF)")->required();
     render_cmd->add_option("-c,--config", config_render, "Path to JSON config file");
@@ -293,10 +301,16 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_option("--vcm-grid-capacity", vcm_grid_capacity, "VCM spatial hash capacity; zero derives a bounded capacity");
     render_cmd->add_flag("--enable-mlt", integrator_mlt, "Request primary-sample-space MLT integration");
     render_cmd->add_option("--mlt-chain-count", integrator_mlt_chain_count, "Number of independent MLT chains");
+    render_cmd->add_option("--mlt-bootstrap-samples", integrator_mlt_bootstrap_samples, "Bootstrap paths used to seed MLT chains");
+    render_cmd->add_option("--mlt-burn-in-mutations", integrator_mlt_burn_in_mutations, "Discarded mutations per MLT chain");
     render_cmd->add_option("--mlt-mutations-per-chain", integrator_mlt_mutations_per_chain, "Mutations per MLT chain");
     render_cmd->add_option("--mlt-large-step-probability", integrator_mlt_large_step_probability, "MLT large-step probability");
     render_cmd->add_option("--mlt-small-step-sigma", integrator_mlt_small_step_sigma, "MLT small-step mutation sigma");
+    render_cmd->add_option("--mlt-memory-budget-mb", integrator_mlt_memory_budget_mb, "MLT runtime memory budget in MiB; zero derives a device budget");
     render_cmd->add_option("--mlt-seed", integrator_mlt_seed, "MLT primary-sample-space seed");
+    auto* mlt_chain_offset_option = render_cmd->add_option(
+        "--mlt-chain-id-offset", integrator_mlt_chain_id_offset,
+        "First global MLT chain identity");
     render_cmd->add_flag("--physics", physics, "Enable physics simulation");
     render_cmd->add_flag("--audio", audio, "Enable audio rendering");
 
@@ -413,10 +427,16 @@ CliResult parse_cli(int argc, char** argv) {
         if (vcm_grid_capacity >= 0) cfg.integrator.vcm.grid_capacity = vcm_grid_capacity;
         if (integrator_mlt) cfg.integrator.mlt.enabled = true;
         if (integrator_mlt_chain_count > 0) cfg.integrator.mlt.chain_count = integrator_mlt_chain_count;
+        if (integrator_mlt_bootstrap_samples > 0) cfg.integrator.mlt.bootstrap_samples = integrator_mlt_bootstrap_samples;
+        if (integrator_mlt_burn_in_mutations >= 0) cfg.integrator.mlt.burn_in_mutations = integrator_mlt_burn_in_mutations;
         if (integrator_mlt_mutations_per_chain > 0) cfg.integrator.mlt.mutations_per_chain = integrator_mlt_mutations_per_chain;
         if (integrator_mlt_large_step_probability >= 0.0) cfg.integrator.mlt.large_step_probability = integrator_mlt_large_step_probability;
         if (integrator_mlt_small_step_sigma > 0.0) cfg.integrator.mlt.small_step_sigma = integrator_mlt_small_step_sigma;
+        if (integrator_mlt_memory_budget_mb >= 0) cfg.integrator.mlt.memory_budget_mb = integrator_mlt_memory_budget_mb;
         if (integrator_mlt_seed > 0) cfg.integrator.mlt.seed = integrator_mlt_seed;
+        if (mlt_chain_offset_option->count() > 0) {
+            cfg.integrator.mlt.chain_id_offset = integrator_mlt_chain_id_offset;
+        }
         cfg.physics_enabled = physics;
         cfg.enable_audio = audio;
         cfg.scene_path = scene_render;

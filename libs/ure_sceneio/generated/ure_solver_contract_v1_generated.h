@@ -927,6 +927,10 @@ struct MLTT : public ::flatbuffers::NativeTable {
   float large_step_probability = 0.3f;
   float small_step_sigma = 0.01f;
   uint32_t seed = 1;
+  int32_t bootstrap_samples = 4096;
+  int32_t burn_in_mutations = 256;
+  int32_t memory_budget_mb = 0;
+  uint64_t chain_id_offset = 0;
 };
 
 struct MLT FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -939,7 +943,11 @@ struct MLT FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_MUTATIONS = 8,
     VT_LARGE_STEP_PROBABILITY = 10,
     VT_SMALL_STEP_SIGMA = 12,
-    VT_SEED = 14
+    VT_SEED = 14,
+    VT_BOOTSTRAP_SAMPLES = 16,
+    VT_BURN_IN_MUTATIONS = 18,
+    VT_MEMORY_BUDGET_MB = 20,
+    VT_CHAIN_ID_OFFSET = 22
   };
   bool enabled() const {
     return GetField<uint8_t>(VT_ENABLED, 0) != 0;
@@ -959,6 +967,18 @@ struct MLT FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   uint32_t seed() const {
     return GetField<uint32_t>(VT_SEED, 1);
   }
+  int32_t bootstrap_samples() const {
+    return GetField<int32_t>(VT_BOOTSTRAP_SAMPLES, 4096);
+  }
+  int32_t burn_in_mutations() const {
+    return GetField<int32_t>(VT_BURN_IN_MUTATIONS, 256);
+  }
+  int32_t memory_budget_mb() const {
+    return GetField<int32_t>(VT_MEMORY_BUDGET_MB, 0);
+  }
+  uint64_t chain_id_offset() const {
+    return GetField<uint64_t>(VT_CHAIN_ID_OFFSET, 0);
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -968,6 +988,10 @@ struct MLT FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<float>(verifier, VT_LARGE_STEP_PROBABILITY, 4) &&
            VerifyField<float>(verifier, VT_SMALL_STEP_SIGMA, 4) &&
            VerifyField<uint32_t>(verifier, VT_SEED, 4) &&
+           VerifyField<int32_t>(verifier, VT_BOOTSTRAP_SAMPLES, 4) &&
+           VerifyField<int32_t>(verifier, VT_BURN_IN_MUTATIONS, 4) &&
+           VerifyField<int32_t>(verifier, VT_MEMORY_BUDGET_MB, 4) &&
+           VerifyField<uint64_t>(verifier, VT_CHAIN_ID_OFFSET, 8) &&
            verifier.EndTable();
   }
   MLTT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -997,6 +1021,18 @@ struct MLTBuilder {
   void add_seed(uint32_t seed) {
     fbb_.AddElement<uint32_t>(MLT::VT_SEED, seed, 1);
   }
+  void add_bootstrap_samples(int32_t bootstrap_samples) {
+    fbb_.AddElement<int32_t>(MLT::VT_BOOTSTRAP_SAMPLES, bootstrap_samples, 4096);
+  }
+  void add_burn_in_mutations(int32_t burn_in_mutations) {
+    fbb_.AddElement<int32_t>(MLT::VT_BURN_IN_MUTATIONS, burn_in_mutations, 256);
+  }
+  void add_memory_budget_mb(int32_t memory_budget_mb) {
+    fbb_.AddElement<int32_t>(MLT::VT_MEMORY_BUDGET_MB, memory_budget_mb, 0);
+  }
+  void add_chain_id_offset(uint64_t chain_id_offset) {
+    fbb_.AddElement<uint64_t>(MLT::VT_CHAIN_ID_OFFSET, chain_id_offset, 0);
+  }
   explicit MLTBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -1015,8 +1051,16 @@ inline ::flatbuffers::Offset<MLT> CreateMLT(
     int32_t mutations = 1024,
     float large_step_probability = 0.3f,
     float small_step_sigma = 0.01f,
-    uint32_t seed = 1) {
+    uint32_t seed = 1,
+    int32_t bootstrap_samples = 4096,
+    int32_t burn_in_mutations = 256,
+    int32_t memory_budget_mb = 0,
+    uint64_t chain_id_offset = 0) {
   MLTBuilder builder_(_fbb);
+  builder_.add_chain_id_offset(chain_id_offset);
+  builder_.add_memory_budget_mb(memory_budget_mb);
+  builder_.add_burn_in_mutations(burn_in_mutations);
+  builder_.add_bootstrap_samples(bootstrap_samples);
   builder_.add_seed(seed);
   builder_.add_small_step_sigma(small_step_sigma);
   builder_.add_large_step_probability(large_step_probability);
@@ -1940,6 +1984,10 @@ inline void MLT::UnPackTo(MLTT *_o, const ::flatbuffers::resolver_function_t *_r
   { auto _e = large_step_probability(); _o->large_step_probability = _e; }
   { auto _e = small_step_sigma(); _o->small_step_sigma = _e; }
   { auto _e = seed(); _o->seed = _e; }
+  { auto _e = bootstrap_samples(); _o->bootstrap_samples = _e; }
+  { auto _e = burn_in_mutations(); _o->burn_in_mutations = _e; }
+  { auto _e = memory_budget_mb(); _o->memory_budget_mb = _e; }
+  { auto _e = chain_id_offset(); _o->chain_id_offset = _e; }
 }
 
 inline ::flatbuffers::Offset<MLT> CreateMLT(::flatbuffers::FlatBufferBuilder &_fbb, const MLTT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -1956,6 +2004,10 @@ inline ::flatbuffers::Offset<MLT> MLT::Pack(::flatbuffers::FlatBufferBuilder &_f
   auto _large_step_probability = _o->large_step_probability;
   auto _small_step_sigma = _o->small_step_sigma;
   auto _seed = _o->seed;
+  auto _bootstrap_samples = _o->bootstrap_samples;
+  auto _burn_in_mutations = _o->burn_in_mutations;
+  auto _memory_budget_mb = _o->memory_budget_mb;
+  auto _chain_id_offset = _o->chain_id_offset;
   return ure::solver::schema::CreateMLT(
       _fbb,
       _enabled,
@@ -1963,7 +2015,11 @@ inline ::flatbuffers::Offset<MLT> MLT::Pack(::flatbuffers::FlatBufferBuilder &_f
       _mutations,
       _large_step_probability,
       _small_step_sigma,
-      _seed);
+      _seed,
+      _bootstrap_samples,
+      _burn_in_mutations,
+      _memory_budget_mb,
+      _chain_id_offset);
 }
 
 inline WaveOpticsT *WaveOptics::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {

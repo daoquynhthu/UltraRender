@@ -1,6 +1,6 @@
 # UltraRender Current Status
 
-Last reviewed: 2026-07-16
+Last reviewed: 2026-07-18
 
 This document summarizes the current repository state for users and integrators. `PLAN.md` remains authoritative for construction order and phase completion criteria. Source, CMake registration, and fresh test output take precedence over prose when they disagree.
 
@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `R-P4`. Phase Q native scene work and R-P3 production ReSTIR are complete. The remaining Phase R sequence is `R-P4 -> R-P5 -> R-P7`; Phase T and later backend work must not be treated as implemented.
+The authoritative construction cursor is `R-P5`. Phase Q, R-P3 production ReSTIR, R-P4 specular-manifold/BDPT/VCM, and R-P6 Mie volume resources are complete. The remaining Phase R sequence is `R-P5 -> R-P7`; Phase T and later backend work must not be treated as implemented.
 
 ## Supported execution baseline
 
@@ -51,7 +51,10 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | HG/Rayleigh/Mie volume scattering | Implemented for current resource and transport contract | Mie uses precomputed/imported resources at runtime |
 | NEE, light tree and path guiding | Implemented for current Phase R-P1/R-P2 scope | Does not imply all advanced integrators are complete |
 | Production ReSTIR DI | Implemented and tested | Unbiased temporal/spatial GRIS policy is separate from biased preview metadata |
-| ReSTIR PT path reuse | Implemented for bounded diffuse surface and supported volume suffixes; R-P3 verification in progress | Specular-manifold reconnection remains fail-loud until R-P4 |
+| ReSTIR PT path reuse | Implemented and verified for bounded diffuse surface and supported volume suffixes | Unsupported suffix classes remain explicit rather than silently approximated |
+| GPU BDPT/VCM | Implemented and tested for the R-P4 bounded estimator contract | Does not imply arbitrary path-space techniques or unrestricted merge support |
+| Specular-manifold estimator | Implemented for the exact R-P4 support partition with up to four smooth-delta events | Independent technique AOV and four-scene statistical gate; unsupported paths remain wavefront-owned |
+| Primary-sample-space MLT | In progress under R-P5 | GPU chains, replay, bootstrap/burn-in, normalization, diagnostics and shard identities run end to end; difficult-scene benefit gate is not yet closed |
 | Multi-GPU sample partition/merge | Implemented | Not a complete distributed render-farm runtime |
 | Denoising | A tested GPU target exists | No general quality or production guarantee is claimed |
 | Wave-optics host/CUDA references | Partially implemented | Main production path remains radiometric |
@@ -77,9 +80,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 
 The following must not be described as production capabilities merely because enums, configuration fields, schemas, tests for rejection, or host references exist:
 
-- ReSTIR PT suffix classes requiring specular-manifold reconnection or more than four stored vertices;
-- GPU specular-manifold solver;
-- BDPT and VCM;
+- ReSTIR PT suffix classes outside the bounded production replay contract;
 - MLT chain integrator;
 - coherent/partial-coherent production transport and film merge;
 - production diffraction camera and general propagation backend;
@@ -107,7 +108,7 @@ Native scene closure gate:
 .\scripts\run_phase_q_validation_suite.ps1 -BuildDir build_modular_x64 -Config Release
 ```
 
-The current snapshot has passed 37/37 CTest entries, Phase Q/L/R static audits, the physics-optics targeted gate, FlatBuffers schema conformance, and `git diff --check`. These results describe the verified commit/worktree state only; they are not permanent guarantees.
+The active R-P5 implementation passes the complete Release build, 37/37 CTest entries, the Phase R static audit, documentation consistency audit, FlatBuffers schema conformance/regeneration check, and `git diff --check`. R-P4 also retains its independent four-scene manifold evidence. These checks validate the current runtime foundation; they do not close R-P5 because the second difficult-scene time-to-error benefit gate remains open.
 
 ## Known documentation rule
 

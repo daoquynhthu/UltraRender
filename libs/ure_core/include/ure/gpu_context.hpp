@@ -7,6 +7,7 @@
 #include "ure/integrator/restir_pt.cuh"
 #include "ure/integrator/bidirectional.cuh"
 #include "ure/integrator/specular_manifold.cuh"
+#include "ure/integrator/mlt.cuh"
 #include "ure/render_config.hpp"
 
 #if defined(_MSC_VER)
@@ -165,6 +166,27 @@ struct GpuContext {
     GpuManifoldTelemetry* d_manifold_telemetry = nullptr;
     GpuManifoldTelemetry last_manifold_telemetry = {};
     std::uint64_t manifold_proposal_sequence = 0;
+    float* d_mlt_bootstrap_samples = nullptr;
+    GpuVec3* d_mlt_bootstrap_contributions = nullptr;
+    float* d_mlt_bootstrap_targets = nullptr;
+    float* d_mlt_bootstrap_cdf = nullptr;
+    int* d_mlt_bootstrap_pixels = nullptr;
+    float* d_mlt_current_samples = nullptr;
+    float* d_mlt_proposed_samples = nullptr;
+    GpuVec3* d_mlt_current_contributions = nullptr;
+    GpuVec3* d_mlt_proposed_contributions = nullptr;
+    float* d_mlt_current_targets = nullptr;
+    int* d_mlt_current_pixels = nullptr;
+    int* d_mlt_proposed_pixels = nullptr;
+    int* d_mlt_large_step_flags = nullptr;
+    GpuMltTelemetry* d_mlt_telemetry = nullptr;
+    GpuMltTelemetry last_mlt_telemetry = {};
+    MltDiagnostics last_mlt_diagnostics = {};
+    int mlt_primary_dimension_count = 0;
+    size_t mlt_required_bytes = 0;
+    size_t mlt_budget_bytes = 0;
+    bool mlt_initialized = false;
+    std::uint64_t mlt_mutation_sequence = 0;
     int bidirectional_camera_path_capacity = 0;
     int bidirectional_light_path_capacity = 0;
     size_t bidirectional_required_bytes = 0;

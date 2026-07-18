@@ -731,6 +731,9 @@ struct RayQueue {
     int wavelength_proposal_count = 0;
     float wavelength_proposal_lambda_min = kSpectralLambdaMin;
     float wavelength_proposal_lambda_max = kSpectralLambdaMax;
+    const float* primary_samples = nullptr;
+    int primary_sample_stride = 0;
+    int primary_sample_count = 0;
 
     int* count = nullptr;
     int* overflow_count = nullptr;

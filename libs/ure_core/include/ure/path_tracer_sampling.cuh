@@ -8,6 +8,8 @@ namespace ure::gpu {
 
 static constexpr int kSampleDimCameraX = 0;
 static constexpr int kSampleDimCameraY = 1;
+static constexpr int kSampleDimFilmX = 2;
+static constexpr int kSampleDimFilmY = 3;
 static constexpr int kSampleDimWavelength = 7;
 static constexpr int kSampleDimPathBase = 8;
 static constexpr int kSampleDimPathStride = 16;
@@ -116,12 +118,35 @@ __device__ inline float sample_dimension(int sample_idx, int pixel_idx, int dim)
     return val;
 }
 
+__device__ inline float sample_dimension(const RayQueue& queue,
+                                         int sample_idx,
+                                         int path_idx,
+                                         int dim) {
+    if (queue.primary_samples && path_idx >= 0 &&
+        path_idx < queue.primary_sample_count && dim >= 0 &&
+        dim < queue.primary_sample_stride) {
+        return queue.primary_samples[
+            static_cast<size_t>(path_idx) * queue.primary_sample_stride + dim];
+    }
+    return sample_dimension(sample_idx, path_idx, dim);
+}
+
 __device__ inline int path_sample_dimension_index(int depth, int offset) {
     return kSampleDimPathBase + depth * kSampleDimPathStride + offset;
 }
 
 __device__ inline float sample_path_dimension(int sample_idx, int pixel_idx, int depth, int offset) {
     return sample_dimension(sample_idx, pixel_idx, path_sample_dimension_index(depth, offset));
+}
+
+__device__ inline float sample_path_dimension(const RayQueue& queue,
+                                              int sample_idx,
+                                              int path_idx,
+                                              int depth,
+                                              int offset) {
+    return sample_dimension(
+        queue, sample_idx, path_idx,
+        path_sample_dimension_index(depth, offset));
 }
 
 __device__ inline GpuVec3 sample_unit_vector_lds(float r1, float r2) {

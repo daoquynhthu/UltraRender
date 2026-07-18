@@ -71,7 +71,9 @@ int main() {
           restir_pt_binary.value->restir_pt.spatial_reuse &&
           restir_pt_binary.value->restir_pt.max_reuse_depth == 5,
           "ReSTIR PT binary roundtrip failed");
-    auto mlt = value; mlt.integrator = NativeIntegratorMode::MLT; mlt.mlt.enabled = true; mlt.sampler = IntegratorSampler::PrimarySampleSpace;
+    auto mlt = value; mlt.integrator = NativeIntegratorMode::MLT; mlt.mlt.enabled = true; mlt.mlt.bootstrap_samples = 8192; mlt.mlt.burn_in_mutations = 384; mlt.mlt.memory_budget_mb = 256; mlt.mlt.chain_id_offset = 4'000'000'000ull; mlt.sampler = IntegratorSampler::PrimarySampleSpace;
+    const auto mlt_binary = read_solver_contract_binary(write_solver_contract_binary(mlt));
+    check(mlt_binary.ok() && mlt_binary.value->mlt.bootstrap_samples == 8192 && mlt_binary.value->mlt.burn_in_mutations == 384 && mlt_binary.value->mlt.memory_budget_mb == 256 && mlt_binary.value->mlt.chain_id_offset == 4'000'000'000ull, "MLT binary runtime contract roundtrip failed");
     check(compile_solver_contract(mlt, registry).ok(), "MLT mapping failed");
     auto bdpt = value; bdpt.integrator = NativeIntegratorMode::BDPT;
     check(!compile_solver_contract(bdpt, registry).ok(), "unsupported BDPT silently degraded");

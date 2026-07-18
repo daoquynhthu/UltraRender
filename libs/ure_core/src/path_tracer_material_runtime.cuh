@@ -429,14 +429,21 @@ static __device__ bool scatter_layered_material(
     int sample_index,
     int pixel_index,
     int depth,
-    int num_spec
+    int num_spec,
+    const RayQueue* sampling_queue = nullptr
 ) {
     if (layer.coating.material.type != MaterialType::Dielectric ||
         layer.substrate.material.type != MaterialType::Lambertian) return false;
 
-    float r0 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf0);
-    float r1 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf1);
-    float r2 = sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf2);
+    float r0 = sampling_queue
+        ? sample_path_dimension(*sampling_queue, sample_index, pixel_index, depth, kPathDimBsdf0)
+        : sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf0);
+    float r1 = sampling_queue
+        ? sample_path_dimension(*sampling_queue, sample_index, pixel_index, depth, kPathDimBsdf1)
+        : sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf1);
+    float r2 = sampling_queue
+        ? sample_path_dimension(*sampling_queue, sample_index, pixel_index, depth, kPathDimBsdf2)
+        : sample_path_dimension(sample_index, pixel_index, depth, kPathDimBsdf2);
     GpuVec3 unit_direction = r_in.direction.normalize();
     if (unit_direction.dot(n) >= 0.0f) return false;
     float cos_i = fminf(1.0f, fmaxf(0.0f, (-unit_direction).dot(n)));

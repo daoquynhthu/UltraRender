@@ -1949,6 +1949,8 @@ R-P4 reciprocal-root proposal closure：host 端按 bidirectional VRAM budget �
 
 R-P4 final closure：standalone SMS 只接管“non-delta area anchor → 1..4 smooth-delta events → finite emitter”的精确支持集；wavefront flag 独立携带 last-delta 与 preceding-area-anchor 状态，未覆盖的 camera-delta、environment、rough、volume-interrupted 路径继续由 wavefront 负责。dielectric Mueller/Stokes response 按 camera-subpath 的 anchor→light radiance transport 方向应用 eta scale。独立 wavefront technique AOV 在分区前记录同一支持集，四场景 suite 不再使用 total-image subtraction 或 SMS self-reference。2026-07-18 默认 Release suite 以 8192 SPP 基准和 rare-event adaptive reference budgets 通过 glass caustic、SDS、small emitter、mixed rough/specular；high-SPP relative mean bias 为 14.3%/7.6%/7.1%/1.3%，95% bound 为 26.5%/32.2%/27.0%/14.1%，2 个 workload 给出正 time-to-error。R-P4 已闭环，权威游标进入 R-P5。
 
+R-P5 progress（2026-07-18）：独立 GPU chain scheduler 已接入生产 wavefront contribution evaluator，显式 queue-owned primary-sample view 覆盖 camera/film/wavelength/surface/volume/light/lobe/RR dimensions；bootstrap weighted seeding、burn-in、large/small step、PSSMLT 双端沉积与归一化、显存预算、chain diagnostics、64-bit global chain identity、多 GPU disjoint shard、原生 solver/JSON/CLI/C ABI/pyure 配置传播和 deterministic GPU replay 已实现并通过定向测试。困难场景 suite 已形成可靠参考与失败报告：small-emitter workload 给出正 time-to-error，普通 NEE-dominated glass/occlusion 尚未形成足够的第二类收益证据。R-P5 保持施工中，不得因运行时已启用而提前闭环。
+
 #### Phase R 执行顺序
 
 ```

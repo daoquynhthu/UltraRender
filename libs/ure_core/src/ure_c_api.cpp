@@ -206,10 +206,14 @@ bool make_integrator_config(const ure_integrator_config_t* integrator_config, Re
     cfg.vcm.merge_volumes = integrator_config->vcm_merge_volumes != 0;
     cfg.mlt.enabled = integrator_config->mlt_enabled != 0;
     if (integrator_config->mlt_chain_count > 0) cfg.mlt.chain_count = integrator_config->mlt_chain_count;
+    if (integrator_config->mlt_bootstrap_samples > 0) cfg.mlt.bootstrap_samples = integrator_config->mlt_bootstrap_samples;
+    if (integrator_config->mlt_burn_in_mutations >= 0) cfg.mlt.burn_in_mutations = integrator_config->mlt_burn_in_mutations;
     if (integrator_config->mlt_mutations_per_chain > 0) cfg.mlt.mutations_per_chain = integrator_config->mlt_mutations_per_chain;
     if (integrator_config->mlt_large_step_probability >= 0.0f) cfg.mlt.large_step_probability = integrator_config->mlt_large_step_probability;
     if (integrator_config->mlt_small_step_sigma > 0.0f) cfg.mlt.small_step_sigma = integrator_config->mlt_small_step_sigma;
+    if (integrator_config->mlt_memory_budget_mb >= 0) cfg.mlt.memory_budget_mb = integrator_config->mlt_memory_budget_mb;
     if (integrator_config->mlt_seed > 0) cfg.mlt.seed = integrator_config->mlt_seed;
+    cfg.mlt.chain_id_offset = integrator_config->mlt_chain_id_offset;
     cfg.environment_light.direct_sampling = integrator_config->environment_light_direct_sampling != 0;
     if (integrator_config->environment_light_intensity >= 0.0f) cfg.environment_light.intensity = integrator_config->environment_light_intensity;
     if (cfg.integrator.mode == IntegratorMode::PathGuided) cfg.path_guiding.enabled = true;

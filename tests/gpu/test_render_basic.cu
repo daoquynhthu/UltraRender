@@ -4452,6 +4452,61 @@ static int test_update_materials_gpu_rewrites_header_and_soa() {
     return 0;
 }
 
+static int test_mlt_runtime_replays_and_reports_chain_diagnostics() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.max_trace_depth = 4;
+    config.rays_per_block = 64;
+    config.integrator.mode = ure::IntegratorMode::MLT;
+    config.integrator.sampler = ure::IntegratorSampler::PrimarySampleSpace;
+    config.mlt.enabled = true;
+    config.mlt.chain_count = 4;
+    config.mlt.bootstrap_samples = 8;
+    config.mlt.burn_in_mutations = 2;
+    config.mlt.mutations_per_chain = 4;
+    config.mlt.large_step_probability = 0.3f;
+    config.mlt.small_step_sigma = 0.05f;
+    config.mlt.memory_budget_mb = 64;
+    config.mlt.seed = 19;
+
+    auto render_once = [&](std::vector<float>& framebuffer) {
+        GpuContext* ctx = init_gpu_renderer(2, 2, {}, {}, {}, {}, {}, config);
+        CHECK(ctx != nullptr);
+        CHECK(ctx->d_mlt_current_samples != nullptr);
+        CHECK(ctx->mlt_primary_dimension_count ==
+            kSampleDimPathBase + config.max_trace_depth * kSampleDimPathStride);
+        CHECK(ctx->mlt_required_bytes > 0);
+        CHECK(ctx->mlt_required_bytes <= ctx->mlt_budget_bytes);
+        CHECK(render_pass_gpu(ctx, 1) == config.mlt.mutations_per_chain);
+        CHECK(ctx->last_mlt_diagnostics.bootstrap_paths == 8);
+        CHECK(ctx->last_mlt_diagnostics.bootstrap_positive > 0);
+        CHECK(ctx->last_mlt_diagnostics.proposed_mutations == 24);
+        CHECK(ctx->last_mlt_diagnostics.deposited_samples == 16);
+        CHECK(ctx->last_mlt_diagnostics.large_steps +
+            ctx->last_mlt_diagnostics.small_steps == 24);
+        CHECK(ctx->last_mlt_diagnostics.acceptance_rate >= 0.0);
+        CHECK(ctx->last_mlt_diagnostics.acceptance_rate <= 1.0);
+        framebuffer.resize(12);
+        copy_frame_buffer_gpu(ctx, framebuffer.data());
+        bool nonzero = false;
+        for (float value : framebuffer) {
+            CHECK(std::isfinite(value));
+            nonzero = nonzero || value != 0.0f;
+        }
+        CHECK(nonzero);
+        free_gpu_renderer(ctx);
+        return 0;
+    };
+
+    std::vector<float> first;
+    std::vector<float> second;
+    CHECK(render_once(first) == 0);
+    CHECK(render_once(second) == 0);
+    CHECK(first == second);
+    return 0;
+}
+
 int main() {
     ure::log::set_min_level(ure::log::Level::Warn);
     printf("[GPU Basic Render Test]\n");
@@ -4517,6 +4572,7 @@ int main() {
     RUN_TEST(test_l11_spectral_texture_cache_budget_rejects_oversized_resident_upload);
     RUN_TEST(test_integrator_rejects_queue_capacity_below_primary_rays);
     RUN_TEST(test_integrator_primary_ray_count_uses_pixel_count);
+    RUN_TEST(test_mlt_runtime_replays_and_reports_chain_diagnostics);
     RUN_TEST(test_update_materials_gpu_rewrites_header_and_soa);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;

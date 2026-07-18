@@ -6,6 +6,7 @@
 #include "ure/gpu_structs.hpp"
 #include "ure/instance_transform.hpp"
 #include "ure/mie_phase.hpp"
+#include "ure/integrator/mlt.cuh"
 #include "ure/render_config.hpp"
 
 // Disable C4819 warning for MSVC (encoding issue)
@@ -72,6 +73,8 @@ void reset_accumulation_gpu(GpuContext* ctx);
 // Render one pass (accumulate samples)
 // Returns current total samples
 int render_pass_gpu(GpuContext* ctx, int samples_per_pass = 1);
+
+MltDiagnostics get_mlt_diagnostics(const GpuContext* ctx);
 
 // Phase P.1: Hot-update instance transforms (replaces full load_scene for transform changes)
 void update_instance_transforms_gpu(GpuContext* ctx,

@@ -229,6 +229,109 @@ void free_shadow_queue(ShadowQueue& q) {
     cudaFree(q.overflow_count);
 }
 
+static void free_mlt_runtime(GpuContext* ctx) {
+    cudaFree(ctx->d_mlt_bootstrap_samples);
+    cudaFree(ctx->d_mlt_bootstrap_contributions);
+    cudaFree(ctx->d_mlt_bootstrap_targets);
+    cudaFree(ctx->d_mlt_bootstrap_cdf);
+    cudaFree(ctx->d_mlt_bootstrap_pixels);
+    cudaFree(ctx->d_mlt_current_samples);
+    cudaFree(ctx->d_mlt_proposed_samples);
+    cudaFree(ctx->d_mlt_current_contributions);
+    cudaFree(ctx->d_mlt_proposed_contributions);
+    cudaFree(ctx->d_mlt_current_targets);
+    cudaFree(ctx->d_mlt_current_pixels);
+    cudaFree(ctx->d_mlt_proposed_pixels);
+    cudaFree(ctx->d_mlt_large_step_flags);
+    cudaFree(ctx->d_mlt_telemetry);
+    ctx->d_mlt_bootstrap_samples = nullptr;
+    ctx->d_mlt_bootstrap_contributions = nullptr;
+    ctx->d_mlt_bootstrap_targets = nullptr;
+    ctx->d_mlt_bootstrap_cdf = nullptr;
+    ctx->d_mlt_bootstrap_pixels = nullptr;
+    ctx->d_mlt_current_samples = nullptr;
+    ctx->d_mlt_proposed_samples = nullptr;
+    ctx->d_mlt_current_contributions = nullptr;
+    ctx->d_mlt_proposed_contributions = nullptr;
+    ctx->d_mlt_current_targets = nullptr;
+    ctx->d_mlt_current_pixels = nullptr;
+    ctx->d_mlt_proposed_pixels = nullptr;
+    ctx->d_mlt_large_step_flags = nullptr;
+    ctx->d_mlt_telemetry = nullptr;
+    ctx->mlt_initialized = false;
+}
+
+static size_t checked_mlt_product(size_t lhs, size_t rhs) {
+    if (rhs != 0 && lhs > std::numeric_limits<size_t>::max() / rhs) {
+        throw std::runtime_error("MLT allocation size overflow");
+    }
+    return lhs * rhs;
+}
+
+static void allocate_mlt_runtime(GpuContext* ctx) {
+    if (!ctx->render_config.mlt.enabled) return;
+    const auto& config = ctx->render_config.mlt;
+    const int dimensions = kSampleDimPathBase +
+        ctx->render_config.max_trace_depth * kSampleDimPathStride;
+    if (dimensions <= kSampleDimWavelength) {
+        throw std::runtime_error("MLT primary-sample dimension count is invalid");
+    }
+    const size_t bootstrap = static_cast<size_t>(config.bootstrap_samples);
+    const size_t chains = static_cast<size_t>(config.chain_count);
+    const size_t dimension_count = static_cast<size_t>(dimensions);
+    const size_t bootstrap_values = checked_mlt_product(bootstrap, dimension_count);
+    const size_t chain_values = checked_mlt_product(chains, dimension_count);
+    size_t required = checked_mlt_product(
+        bootstrap_values + 2 * chain_values, sizeof(float));
+    required += checked_mlt_product(bootstrap + 2 * chains, sizeof(GpuVec3));
+    required += checked_mlt_product(2 * bootstrap + chains, sizeof(float));
+    required += checked_mlt_product(bootstrap + 3 * chains, sizeof(int));
+    required += sizeof(GpuMltTelemetry);
+    size_t free_bytes = 0;
+    size_t total_bytes = 0;
+    UR_CUDA_CHECK(cudaMemGetInfo(&free_bytes, &total_bytes));
+    constexpr size_t kMiB = 1024ull * 1024ull;
+    const size_t budget = config.memory_budget_mb > 0
+        ? checked_mlt_product(static_cast<size_t>(config.memory_budget_mb), kMiB)
+        : free_bytes / 4;
+    if (required > budget) {
+        throw std::runtime_error("MLT runtime exceeds its device memory budget");
+    }
+    ctx->mlt_primary_dimension_count = dimensions;
+    ctx->mlt_required_bytes = required;
+    ctx->mlt_budget_bytes = budget;
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_bootstrap_samples,
+        bootstrap_values * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_bootstrap_contributions,
+        bootstrap * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_bootstrap_targets,
+        bootstrap * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_bootstrap_cdf,
+        bootstrap * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_bootstrap_pixels,
+        bootstrap * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_current_samples,
+        chain_values * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_proposed_samples,
+        chain_values * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_current_contributions,
+        chains * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_proposed_contributions,
+        chains * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_current_targets,
+        chains * sizeof(float)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_current_pixels,
+        chains * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_proposed_pixels,
+        chains * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_large_step_flags,
+        chains * sizeof(int)));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_mlt_telemetry,
+        sizeof(GpuMltTelemetry)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_mlt_telemetry, 0, sizeof(GpuMltTelemetry)));
+}
+
 // ===== compute_aabb helper =====
 
 static void compute_aabb(const std::vector<float>& vertices, GpuVec3& min_pt, GpuVec3& max_pt) {
@@ -543,9 +646,13 @@ static int checked_primary_ray_count(int width, int height) {
 }
 
 static int configured_ray_queue_capacity(const ure::RenderConfig& config, int primary_ray_count) {
-    const int capacity = config.queue_capacity > 0 ? config.queue_capacity : primary_ray_count;
-    if (capacity < primary_ray_count) {
-        throw std::runtime_error("RenderConfig queue_capacity must be >= width * height for primary ray generation");
+    const int required_capacity = config.mlt.enabled
+        ? std::max(primary_ray_count, config.mlt.chain_count)
+        : primary_ray_count;
+    const int capacity = config.queue_capacity > 0
+        ? config.queue_capacity : required_capacity;
+    if (capacity < required_capacity) {
+        throw std::runtime_error("RenderConfig queue_capacity must be >= width * height and cover MLT chains");
     }
     return capacity;
 }
@@ -1335,8 +1442,17 @@ static void validate_bidirectional_config(const ure::RenderConfig& config) {
 
 static void validate_mlt_config(const ure::RenderConfig& config) {
     if (!config.mlt.enabled) return;
+    if (config.max_trace_depth <= 0 || config.max_trace_depth > 256) {
+        throw std::runtime_error("MLT max_trace_depth must be in [1, 256]");
+    }
     if (config.mlt.chain_count <= 0) {
         throw std::runtime_error("MLT chain_count must be positive");
+    }
+    if (config.mlt.bootstrap_samples < config.mlt.chain_count) {
+        throw std::runtime_error("MLT bootstrap_samples must cover every chain");
+    }
+    if (config.mlt.burn_in_mutations < 0) {
+        throw std::runtime_error("MLT burn_in_mutations must be non-negative");
     }
     if (config.mlt.mutations_per_chain <= 0) {
         throw std::runtime_error("MLT mutations_per_chain must be positive");
@@ -1353,7 +1469,24 @@ static void validate_mlt_config(const ure::RenderConfig& config) {
     if (config.mlt.seed == 0) {
         throw std::runtime_error("MLT seed must be non-zero");
     }
-    throw std::runtime_error("MLT primary-sample-space GPU integrator is not implemented yet; use the default wavefront path tracer");
+    if (config.mlt.memory_budget_mb < 0) {
+        throw std::runtime_error("MLT memory_budget_mb must be non-negative");
+    }
+    const std::uint64_t dimensions =
+        static_cast<std::uint64_t>(kSampleDimPathBase) +
+        static_cast<std::uint64_t>(config.max_trace_depth) *
+            static_cast<std::uint64_t>(kSampleDimPathStride);
+    if (static_cast<std::uint64_t>(config.mlt.chain_count) * dimensions >
+            static_cast<std::uint64_t>(std::numeric_limits<int>::max()) ||
+        static_cast<std::uint64_t>(config.mlt.bootstrap_samples) * dimensions >
+            static_cast<std::uint64_t>(std::numeric_limits<int>::max())) {
+        throw std::runtime_error("MLT path population exceeds CUDA launch indexing limits");
+    }
+    if (config.mlt.chain_id_offset >
+        std::numeric_limits<std::uint64_t>::max() /
+            static_cast<std::uint64_t>(config.mlt.bootstrap_samples)) {
+        throw std::runtime_error("MLT chain_id_offset overflows bootstrap identity space");
+    }
 }
 
 static void validate_integrator_runtime_config(const ure::RenderConfig& config) {
@@ -1384,6 +1517,12 @@ static void validate_integrator_runtime_config(const ure::RenderConfig& config) 
         }
         if (config.integrator.sampler != ure::IntegratorSampler::PrimarySampleSpace) {
             throw std::runtime_error("MLT integrator mode requires primary_sample_space sampler");
+        }
+        if (config.path_guiding.enabled || config.restir_di.enabled ||
+            config.restir_pt.enabled || config.bidirectional.enabled ||
+            config.vcm.enabled || config.specular_manifold.enabled) {
+            throw std::runtime_error(
+                "MLT owns its Markov transition and cannot be combined with adaptive reuse, bidirectional, VCM, or manifold schedulers");
         }
     }
 }
@@ -2501,6 +2640,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     alloc_ray_queue(ctx->queueB, max_rays, num_spec);
     alloc_hit_queue(ctx->hitQueue, max_rays);
     alloc_shadow_queue(ctx->shadowQueue, max_rays, num_spec);
+    allocate_mlt_runtime(ctx);
     int initial_spectral_mode = (config.spectral_sampling_mode == ure::SpectralSamplingMode::PacketUniform && num_spec > 1)
         ? SpectralRayModePacket
         : SpectralRayModeSampled;
@@ -2970,6 +3110,14 @@ void reset_accumulation_gpu(GpuContext* ctx) {
         ? ctx->render_config.vcm.initial_radius : 0.0f;
     ctx->vcm_current_volume_radius = ctx->render_config.vcm.enabled
         ? ctx->render_config.vcm.initial_radius : 0.0f;
+    ctx->mlt_initialized = false;
+    ctx->mlt_mutation_sequence = 0;
+    ctx->last_mlt_telemetry = {};
+    ctx->last_mlt_diagnostics = {};
+    if (ctx->d_mlt_telemetry) {
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_mlt_telemetry, 0, sizeof(GpuMltTelemetry)));
+    }
 }
 
 void free_gpu_renderer(GpuContext* ctx) {
@@ -2996,6 +3144,7 @@ void free_gpu_renderer(GpuContext* ctx) {
     release_restir_pt_reservoirs(ctx);
     release_bidirectional_runtime(ctx);
     release_wavelength_proposal(ctx);
+    free_mlt_runtime(ctx);
 
     free_ray_queue(ctx->queueA);
     free_ray_queue(ctx->queueB);
@@ -3009,6 +3158,238 @@ void free_gpu_renderer(GpuContext* ctx) {
 
     free_debug_log();
     delete ctx;
+}
+
+static void evaluate_mlt_primary_batch(
+    GpuContext* ctx, GpuScene scene, const float* primary_samples,
+    int path_count, int* film_pixels, GpuVec3* contributions,
+    int mutation_index) {
+    const int threads = ctx->render_config.rays_per_block;
+    const int blocks = launch_blocks_for_active_count(path_count, threads);
+    UR_CUDA_CHECK(cudaMemset(
+        contributions, 0, static_cast<size_t>(path_count) * sizeof(GpuVec3)));
+    UR_CUDA_CHECK(cudaMemset(ctx->queueA.count, 0, sizeof(int)));
+    UR_CUDA_CHECK(cudaMemset(ctx->queueB.count, 0, sizeof(int)));
+    UR_CUDA_CHECK(cudaMemset(ctx->shadowQueue.count, 0, sizeof(int)));
+    UR_CUDA_CHECK(cudaMemset(ctx->queueA.overflow_count, 0, sizeof(int)));
+    UR_CUDA_CHECK(cudaMemset(ctx->queueB.overflow_count, 0, sizeof(int)));
+    UR_CUDA_CHECK(cudaMemset(ctx->shadowQueue.overflow_count, 0, sizeof(int)));
+    ctx->queueA.primary_samples = primary_samples;
+    ctx->queueA.primary_sample_stride = ctx->mlt_primary_dimension_count;
+    ctx->queueA.primary_sample_count = path_count;
+    ctx->queueB.primary_samples = primary_samples;
+    ctx->queueB.primary_sample_stride = ctx->mlt_primary_dimension_count;
+    ctx->queueB.primary_sample_count = path_count;
+    UR_CUDA_CHECK(cudaMemcpy(
+        ctx->queueA.count, &path_count, sizeof(int), cudaMemcpyHostToDevice));
+    generate_primary_sample_rays_kernel<<<blocks, threads>>>(
+        ctx->queueA, path_count, ctx->width, ctx->height, ctx->camera,
+        mutation_index, film_pixels);
+    UR_CUDA_CHECK(cudaGetLastError());
+    RayQueue* current = &ctx->queueA;
+    RayQueue* next = &ctx->queueB;
+    int active_count = path_count;
+    for (int depth = 0;
+         depth < ctx->render_config.max_trace_depth && active_count > 0;
+         ++depth) {
+        const int active_blocks = launch_blocks_for_active_count(
+            active_count, threads);
+        UR_CUDA_CHECK(cudaMemset(next->count, 0, sizeof(int)));
+        UR_CUDA_CHECK(cudaMemset(ctx->shadowQueue.count, 0, sizeof(int)));
+        extend_kernel<<<active_blocks, threads>>>(*current, ctx->hitQueue, scene);
+        UR_CUDA_CHECK(cudaGetLastError());
+        shade_kernel<<<active_blocks, threads>>>(
+            *current, ctx->hitQueue, *next, ctx->shadowQueue,
+            contributions, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+            ctx->camera, ctx->previous_camera, scene, mutation_index,
+            ctx->current_spp < 100 ? 5.0f : 20.0f,
+            ctx->current_spp < 100 ? 0.1f : 0.05f);
+        UR_CUDA_CHECK(cudaGetLastError());
+        const int shadow_count = copy_device_queue_count(
+            ctx->shadowQueue.count, ctx->shadowQueue.capacity);
+        if (shadow_count > 0) {
+            extend_shadow_kernel<<<
+                launch_blocks_for_active_count(shadow_count, threads), threads>>>(
+                    ctx->shadowQueue, contributions, scene,
+                    ctx->current_spp < 100 ? 5.0f : 20.0f);
+            UR_CUDA_CHECK(cudaGetLastError());
+        }
+        active_count = copy_device_queue_count(next->count, next->capacity);
+        std::swap(current, next);
+    }
+    int ray_overflow = 0;
+    int shadow_overflow = 0;
+    UR_CUDA_CHECK(cudaMemcpy(
+        &ray_overflow, ctx->queueA.overflow_count, sizeof(int),
+        cudaMemcpyDeviceToHost));
+    int second_overflow = 0;
+    UR_CUDA_CHECK(cudaMemcpy(
+        &second_overflow, ctx->queueB.overflow_count, sizeof(int),
+        cudaMemcpyDeviceToHost));
+    UR_CUDA_CHECK(cudaMemcpy(
+        &shadow_overflow, ctx->shadowQueue.overflow_count, sizeof(int),
+        cudaMemcpyDeviceToHost));
+    if (ray_overflow != 0 || second_overflow != 0 || shadow_overflow != 0) {
+        throw std::runtime_error("MLT contribution evaluator queue overflow");
+    }
+}
+
+static int render_mlt_pass(GpuContext* ctx, GpuScene scene,
+                           int samples_per_pass) {
+    const auto& config = ctx->render_config.mlt;
+    const int chains = config.chain_count;
+    const int dimensions = ctx->mlt_primary_dimension_count;
+    const int threads = ctx->render_config.rays_per_block;
+    const int chain_blocks = launch_blocks_for_active_count(chains, threads);
+    const int pixel_count = ctx->width * ctx->height;
+    if (!ctx->mlt_initialized) {
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_mlt_telemetry, 0, sizeof(GpuMltTelemetry)));
+        const int bootstrap = config.bootstrap_samples;
+        const size_t bootstrap_values =
+            static_cast<size_t>(bootstrap) * dimensions;
+        initialize_mlt_primary_samples_kernel<<<
+            launch_blocks_for_active_count(
+                static_cast<int>(bootstrap_values), threads), threads>>>(
+                    ctx->d_mlt_bootstrap_samples, bootstrap, dimensions,
+                    config.chain_id_offset *
+                        static_cast<std::uint64_t>(bootstrap),
+                    config.seed);
+        UR_CUDA_CHECK(cudaGetLastError());
+        for (int offset = 0; offset < bootstrap; offset += chains) {
+            const int batch = std::min(chains, bootstrap - offset);
+            const float* batch_samples = ctx->d_mlt_bootstrap_samples +
+                static_cast<size_t>(offset) * dimensions;
+            evaluate_mlt_primary_batch(
+                ctx, scene, batch_samples, batch,
+                ctx->d_mlt_proposed_pixels,
+                ctx->d_mlt_proposed_contributions, offset);
+            collect_mlt_bootstrap_kernel<<<
+                launch_blocks_for_active_count(batch, threads), threads>>>(
+                    ctx->d_mlt_proposed_contributions,
+                    ctx->d_mlt_proposed_pixels,
+                    ctx->d_mlt_bootstrap_contributions,
+                    ctx->d_mlt_bootstrap_targets,
+                    ctx->d_mlt_bootstrap_pixels, batch, offset,
+                    ctx->d_mlt_telemetry);
+            UR_CUDA_CHECK(cudaGetLastError());
+        }
+        std::vector<float> targets(static_cast<size_t>(bootstrap));
+        UR_CUDA_CHECK(cudaMemcpy(
+            targets.data(), ctx->d_mlt_bootstrap_targets,
+            targets.size() * sizeof(float), cudaMemcpyDeviceToHost));
+        double target_sum = 0.0;
+        for (float target : targets) target_sum += target;
+        if (!(target_sum > 0.0) || !std::isfinite(target_sum)) {
+            throw std::runtime_error(
+                "MLT bootstrap found no finite positive contribution");
+        }
+        std::vector<float> cdf(targets.size());
+        double prefix = 0.0;
+        for (size_t index = 0; index < targets.size(); ++index) {
+            prefix += targets[index];
+            cdf[index] = static_cast<float>(prefix / target_sum);
+        }
+        cdf.back() = 1.0f;
+        UR_CUDA_CHECK(cudaMemcpy(
+            ctx->d_mlt_bootstrap_cdf, cdf.data(),
+            cdf.size() * sizeof(float), cudaMemcpyHostToDevice));
+        seed_mlt_chains_kernel<<<chain_blocks, threads>>>(
+            ctx->d_mlt_bootstrap_samples,
+            ctx->d_mlt_bootstrap_contributions,
+            ctx->d_mlt_bootstrap_cdf, ctx->d_mlt_bootstrap_pixels,
+            bootstrap, dimensions, ctx->d_mlt_current_samples,
+            ctx->d_mlt_current_contributions, ctx->d_mlt_current_targets,
+            ctx->d_mlt_current_pixels, chains, config.chain_id_offset,
+            config.seed);
+        UR_CUDA_CHECK(cudaGetLastError());
+        ctx->last_mlt_diagnostics.bootstrap_mean =
+            target_sum / static_cast<double>(bootstrap);
+        for (int burn = 0; burn < config.burn_in_mutations; ++burn) {
+            mutate_mlt_primary_samples_kernel<<<
+                launch_blocks_for_active_count(chains * dimensions, threads),
+                threads>>>(
+                    ctx->d_mlt_current_samples,
+                    ctx->d_mlt_proposed_samples, chains, dimensions,
+                    config.chain_id_offset,
+                    ctx->mlt_mutation_sequence,
+                    config.large_step_probability, config.small_step_sigma,
+                    config.seed, ctx->d_mlt_large_step_flags);
+            UR_CUDA_CHECK(cudaGetLastError());
+            evaluate_mlt_primary_batch(
+                ctx, scene, ctx->d_mlt_proposed_samples, chains,
+                ctx->d_mlt_proposed_pixels,
+                ctx->d_mlt_proposed_contributions,
+                static_cast<int>(ctx->mlt_mutation_sequence));
+            accept_and_deposit_mlt_kernel<<<chain_blocks, threads>>>(
+                ctx->d_mlt_current_samples, ctx->d_mlt_proposed_samples,
+                ctx->d_mlt_current_contributions,
+                ctx->d_mlt_proposed_contributions,
+                ctx->d_mlt_current_targets, ctx->d_mlt_current_pixels,
+                ctx->d_mlt_proposed_pixels, ctx->d_mlt_large_step_flags,
+                chains, dimensions, config.chain_id_offset,
+                ctx->mlt_mutation_sequence,
+                config.seed,
+                static_cast<float>(ctx->last_mlt_diagnostics.bootstrap_mean),
+                pixel_count, 0, ctx->d_accum_buffer,
+                ctx->d_mlt_telemetry);
+            UR_CUDA_CHECK(cudaGetLastError());
+            ++ctx->mlt_mutation_sequence;
+        }
+        ctx->mlt_initialized = true;
+    }
+    const int mutations = config.mutations_per_chain * samples_per_pass;
+    for (int mutation = 0; mutation < mutations; ++mutation) {
+        mutate_mlt_primary_samples_kernel<<<
+            launch_blocks_for_active_count(chains * dimensions, threads),
+            threads>>>(
+                ctx->d_mlt_current_samples, ctx->d_mlt_proposed_samples,
+                chains, dimensions, config.chain_id_offset,
+                ctx->mlt_mutation_sequence,
+                config.large_step_probability, config.small_step_sigma,
+                config.seed, ctx->d_mlt_large_step_flags);
+        UR_CUDA_CHECK(cudaGetLastError());
+        evaluate_mlt_primary_batch(
+            ctx, scene, ctx->d_mlt_proposed_samples, chains,
+            ctx->d_mlt_proposed_pixels,
+            ctx->d_mlt_proposed_contributions,
+            static_cast<int>(ctx->mlt_mutation_sequence));
+        accept_and_deposit_mlt_kernel<<<chain_blocks, threads>>>(
+            ctx->d_mlt_current_samples, ctx->d_mlt_proposed_samples,
+            ctx->d_mlt_current_contributions,
+            ctx->d_mlt_proposed_contributions,
+            ctx->d_mlt_current_targets, ctx->d_mlt_current_pixels,
+            ctx->d_mlt_proposed_pixels, ctx->d_mlt_large_step_flags,
+            chains, dimensions, config.chain_id_offset,
+            ctx->mlt_mutation_sequence, config.seed,
+            static_cast<float>(ctx->last_mlt_diagnostics.bootstrap_mean),
+            pixel_count, 1, ctx->d_accum_buffer, ctx->d_mlt_telemetry);
+        UR_CUDA_CHECK(cudaGetLastError());
+        ++ctx->mlt_mutation_sequence;
+    }
+    add_mlt_sample_count_kernel<<<
+        launch_blocks_for_active_count(pixel_count, threads), threads>>>(
+            ctx->d_sample_counts, pixel_count, chains * mutations);
+    UR_CUDA_CHECK(cudaGetLastError());
+    UR_CUDA_CHECK(cudaMemcpy(
+        &ctx->last_mlt_telemetry, ctx->d_mlt_telemetry,
+        sizeof(GpuMltTelemetry), cudaMemcpyDeviceToHost));
+    auto& diagnostics = ctx->last_mlt_diagnostics;
+    diagnostics.bootstrap_paths = ctx->last_mlt_telemetry.bootstrap_paths;
+    diagnostics.bootstrap_positive = ctx->last_mlt_telemetry.bootstrap_positive;
+    diagnostics.proposed_mutations = ctx->last_mlt_telemetry.proposed_mutations;
+    diagnostics.accepted_mutations = ctx->last_mlt_telemetry.accepted_mutations;
+    diagnostics.large_steps = ctx->last_mlt_telemetry.large_steps;
+    diagnostics.small_steps = ctx->last_mlt_telemetry.small_steps;
+    diagnostics.zero_target_transitions = ctx->last_mlt_telemetry.zero_target_transitions;
+    diagnostics.invalid_contributions = ctx->last_mlt_telemetry.invalid_contributions;
+    diagnostics.deposited_samples = ctx->last_mlt_telemetry.deposited_samples;
+    diagnostics.acceptance_rate = diagnostics.proposed_mutations > 0
+        ? static_cast<double>(diagnostics.accepted_mutations) /
+            static_cast<double>(diagnostics.proposed_mutations)
+        : 0.0;
+    ctx->current_spp += mutations;
+    return ctx->current_spp;
 }
 
 int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
@@ -3175,6 +3556,10 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.medium_scattering = ctx->medium_scattering;
     scene.medium_absorption = ctx->medium_absorption;
     scene.medium_max_distance = ctx->medium_max_distance;
+
+    if (ctx->render_config.integrator.mode == ure::IntegratorMode::MLT) {
+        return render_mlt_pass(ctx, scene, samples_per_pass);
+    }
 
     dim3 threadsPerBlock(16, 16);
     dim3 numBlocks((ctx->width + threadsPerBlock.x - 1) / threadsPerBlock.x,
@@ -3701,6 +4086,13 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         }
     }
     return ctx->current_spp;
+}
+
+MltDiagnostics get_mlt_diagnostics(const GpuContext* ctx) {
+    if (!ctx) {
+        throw std::invalid_argument("MLT diagnostics require a valid GPU context");
+    }
+    return ctx->last_mlt_diagnostics;
 }
 
 void copy_frame_buffer_gpu(GpuContext* ctx, float* host_buffer) {

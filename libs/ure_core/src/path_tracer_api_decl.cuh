@@ -8,6 +8,9 @@ namespace ure::gpu {
 
 // From path_tracer_raygen.cu
 __global__ __launch_bounds__(512) void generate_rays_kernel(RayQueue queue, int width, int height, GpuCamera camera, int sample_index, int* sample_counts);
+__global__ __launch_bounds__(256) void generate_primary_sample_rays_kernel(
+    RayQueue queue, int chain_count, int width, int height, GpuCamera camera,
+    int mutation_index, int* film_pixels);
 
 // From path_tracer_post.cu
 __global__ __launch_bounds__(256) void resolve_framebuffer_kernel(
