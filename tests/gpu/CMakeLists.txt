@@ -89,12 +89,21 @@ if(CMAKE_CUDA_COMPILER)
     target_include_directories(gpu_phase_r_guiding_benchmark PRIVATE ${GPU_TEST_INCLUDES})
     target_link_libraries(gpu_phase_r_guiding_benchmark PRIVATE ure_core CUDA::cudart)
 
-    if(MSVC)
-    foreach(gpu_test gpu_test_device gpu_test_math gpu_test_spectral gpu_test_spectral_soa gpu_test_hardware gpu_test_render gpu_test_instance gpu_test_tangents gpu_test_denoise gpu_test_polarization gpu_test_volume gpu_test_contract gpu_test_wave_optics gpu_phase_r_guiding_benchmark)
-        target_compile_options(${gpu_test} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/EHsc;/utf-8;/wd4819>")
-            set_target_properties(${gpu_test} PROPERTIES CUDA_RUNTIME_LIBRARY None)
+    set(GPU_TEST_TARGETS
+        gpu_test_device gpu_test_math gpu_test_spectral gpu_test_spectral_soa
+        gpu_test_hardware gpu_test_render gpu_test_instance gpu_test_tangents
+        gpu_test_denoise gpu_test_polarization gpu_test_volume gpu_test_contract
+        gpu_test_wave_optics gpu_phase_r_guiding_benchmark
+    )
+    foreach(gpu_test IN LISTS GPU_TEST_TARGETS)
+        if(MSVC)
+            target_compile_options(${gpu_test} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/EHsc;/utf-8;/wd4819>")
+        endif()
+        set_target_properties(${gpu_test} PROPERTIES CUDA_RUNTIME_LIBRARY None)
+        if(CMAKE_GENERATOR MATCHES "Ninja")
+            set_property(TARGET ${gpu_test} PROPERTY JOB_POOL_COMPILE ur_cuda_heavy_compile)
+        endif()
     endforeach()
-    endif()
 
     add_test(NAME gpu_device COMMAND gpu_test_device)
     add_test(NAME gpu_math COMMAND gpu_test_math)

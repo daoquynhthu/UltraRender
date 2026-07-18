@@ -96,6 +96,7 @@ __global__ void commit_bidirectional_contributions_kernel(
     const GpuVec3* connection_accumulation,
     const GpuVec3* surface_merge_accumulation,
     const GpuVec3* volume_merge_accumulation,
+    const GpuVec3* manifold_accumulation,
     GpuVec3* film_accumulation,
     int path_count);
 
@@ -116,6 +117,54 @@ __global__ void solve_specular_manifold_paths_kernel(
     std::uint32_t scene_epoch,
     GpuManifoldTelemetry* telemetry);
 
+__global__ void generate_specular_manifold_targets_kernel(
+    GpuScene scene,
+    const GpuBidirectionalPathVertex* camera_vertices,
+    const int* camera_path_lengths,
+    int max_camera_vertices,
+    const GpuBidirectionalPathVertex* light_vertices,
+    const int* light_path_lengths,
+    int max_light_vertices,
+    GpuManifoldPathSolution* solutions,
+    int path_count,
+    int max_specular_events,
+    int proposal_sample_index,
+    float tolerance,
+    int max_iterations,
+    float dispersion_clamp,
+    std::uint32_t scene_epoch,
+    GpuManifoldTelemetry* telemetry);
+
+__global__ void initialize_manifold_root_states_kernel(
+    const GpuManifoldPathSolution* targets,
+    GpuManifoldRootState* states,
+    float* reciprocal_weights,
+    std::uint32_t* pending_count,
+    int path_count,
+    std::uint32_t scene_epoch);
+
+__global__ void advance_manifold_root_trials_kernel(
+    GpuScene scene,
+    const GpuBidirectionalPathVertex* camera_vertices,
+    const int* camera_path_lengths,
+    int max_camera_vertices,
+    const GpuBidirectionalPathVertex* light_vertices,
+    const int* light_path_lengths,
+    int max_light_vertices,
+    const GpuManifoldPathSolution* targets,
+    GpuManifoldRootState* states,
+    float* reciprocal_weights,
+    std::uint32_t* pending_count,
+    int path_count,
+    int max_specular_events,
+    int proposal_sample_index,
+    int trials_per_pass,
+    float tolerance,
+    int max_iterations,
+    float dispersion_clamp,
+    std::uint32_t scene_epoch,
+    GpuManifoldTelemetry* telemetry);
+
 __global__ void evaluate_specular_manifold_contributions_kernel(
     GpuScene scene,
     const GpuBidirectionalPathVertex* camera_vertices,
@@ -130,3 +179,19 @@ __global__ void evaluate_specular_manifold_contributions_kernel(
     float dispersion_clamp,
     std::uint32_t scene_epoch,
     GpuManifoldTelemetry* telemetry);
+
+__global__ void assign_manifold_exclusive_mis_weights_kernel(
+    const GpuManifoldPathSolution* solutions,
+    float* mis_weights,
+    int path_count,
+    std::uint32_t scene_epoch);
+
+__global__ void convert_manifold_contributions_kernel(
+    const GpuManifoldPathContribution* contributions,
+    const GpuManifoldPathSolution* solutions,
+    const GpuBidirectionalPathVertex* camera_vertices,
+    int max_camera_vertices,
+    GpuVec3* accumulation,
+    int path_count,
+    int spectral_channel_count,
+    std::uint32_t scene_epoch);

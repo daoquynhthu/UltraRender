@@ -72,6 +72,11 @@ Render Engine/
 .\scripts\build_x64.ps1 -BuildDir build_modular_x64 -Config Release
 ```
 
+Ninja 可并行构建宿主代码和独立目标；高内存 CUDA 编译由工程内的
+`ur_cuda_heavy_compile` job pool 单独限流，默认同一时刻运行一个。不要为常规构建
+全局指定 `--parallel 1`。只有在确认设备具备足够 host memory 后，才可在配置时通过
+`-DUR_CUDA_HEAVY_COMPILE_JOBS=<N>` 调高该池容量。
+
 运行完整注册测试：
 
 ```powershell

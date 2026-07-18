@@ -24,6 +24,19 @@ namespace ure::gpu {
 
 namespace {
 
+__device__ float manifold_iid_sample_dimension(
+    int sample_index,
+    int path_index,
+    int dimension) {
+    unsigned int bits = wang_hash(
+        static_cast<unsigned int>(sample_index) * 0x9e3779b9u ^
+        static_cast<unsigned int>(path_index) * 0x85ebca6bu ^
+        static_cast<unsigned int>(dimension) * 0xc2b2ae35u ^
+        0x27d4eb2fu);
+    bits = wang_hash(bits);
+    return float(bits >> 8) * 5.9604644775390625e-8f;
+}
+
 __device__ int vcm_cell_hash(int x, int y, int z, int capacity) {
     const unsigned int hash =
         static_cast<unsigned int>(x) * 73856093u ^
@@ -1504,6 +1517,7 @@ __global__ void commit_bidirectional_contributions_kernel(
     const GpuVec3* connection_accumulation,
     const GpuVec3* surface_merge_accumulation,
     const GpuVec3* volume_merge_accumulation,
+    const GpuVec3* manifold_accumulation,
     GpuVec3* film_accumulation,
     int path_count) {
     const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1518,11 +1532,481 @@ __global__ void commit_bidirectional_contributions_kernel(
     if (volume_merge_accumulation) {
         contribution = contribution + volume_merge_accumulation[path_index];
     }
+    if (manifold_accumulation) {
+        contribution = contribution + manifold_accumulation[path_index];
+    }
     if (isfinite(contribution.x) && isfinite(contribution.y) &&
         isfinite(contribution.z)) {
         film_accumulation[path_index] =
             film_accumulation[path_index] + contribution;
     }
+}
+
+static __device__ void record_manifold_solution_telemetry(
+    const GpuManifoldPathSolution& solution,
+    GpuManifoldTelemetry* telemetry) {
+    if (!telemetry) return;
+    if (solution.valid) {
+        atomicAdd(&telemetry->converged, 1u);
+        atomicAdd(
+            reinterpret_cast<unsigned long long*>(&telemetry->total_iterations),
+            static_cast<unsigned long long>(solution.iterations));
+        return;
+    }
+    switch (solution.reject_reason) {
+    case GpuManifoldRejectReason::NoTrailingChain:
+        atomicAdd(&telemetry->rejected_no_chain, 1u); break;
+    case GpuManifoldRejectReason::UnsupportedMaterial:
+        atomicAdd(&telemetry->rejected_material, 1u); break;
+    case GpuManifoldRejectReason::InvalidPrimitive:
+    case GpuManifoldRejectReason::InvalidInitialState:
+        atomicAdd(&telemetry->rejected_primitive, 1u); break;
+    case GpuManifoldRejectReason::Singular:
+        atomicAdd(&telemetry->rejected_singular, 1u); break;
+    case GpuManifoldRejectReason::TotalInternalReflection:
+        atomicAdd(&telemetry->rejected_tir, 1u); break;
+    case GpuManifoldRejectReason::Residual:
+        atomicAdd(&telemetry->rejected_residual, 1u); break;
+    case GpuManifoldRejectReason::Stale:
+        atomicAdd(&telemetry->rejected_stale, 1u); break;
+    case GpuManifoldRejectReason::Occluded:
+        atomicAdd(&telemetry->rejected_occluded, 1u); break;
+    case GpuManifoldRejectReason::InvalidDifferential:
+        atomicAdd(&telemetry->rejected_differential, 1u); break;
+    case GpuManifoldRejectReason::NonDeltaMaterial:
+        atomicAdd(&telemetry->rejected_non_delta, 1u); break;
+    case GpuManifoldRejectReason::SpectralSplitRequired:
+        atomicAdd(&telemetry->rejected_spectral_split, 1u); break;
+    default: break;
+    }
+}
+
+static __device__ GpuManifoldPathSolution solve_manifold_chain_candidate(
+    GpuScene scene,
+    GpuManifoldChainEvent* events,
+    const int* catalog_indices,
+    const int* geometry_types,
+    const int* geometry_indices,
+    const int* primitive_indices,
+    const int* material_indices,
+    int event_count,
+    const GpuBidirectionalPathVertex& anchor,
+    const GpuBidirectionalPathVertex& light,
+    int anchor_camera_vertex,
+    int light_vertex,
+    float tolerance,
+    int max_iterations,
+    std::uint32_t scene_epoch) {
+    GpuManifoldPathSolution solution = {};
+    solution.scene_epoch = scene_epoch;
+    solution.anchor_camera_vertex = anchor_camera_vertex;
+    solution.light_vertex = light_vertex;
+    solution.event_count = event_count;
+    const GpuManifoldChainSolveResult solved = solve_gpu_manifold_chain(
+        events, event_count, anchor.position, light.position,
+        tolerance, max_iterations);
+    solution.iterations = solved.iterations;
+    solution.determinant = solved.determinant;
+    solution.residual = solved.residual;
+    for (int event = 0; event < event_count; ++event) {
+        solution.surfaces[event] = solved.surfaces[event];
+        solution.parameters[event * 2] = solved.parameters[event * 2];
+        solution.parameters[event * 2 + 1] = solved.parameters[event * 2 + 1];
+        solution.catalog_indices[event] = catalog_indices[event];
+        solution.geometry_types[event] = geometry_types[event];
+        solution.geometry_indices[event] = geometry_indices[event];
+        solution.primitive_indices[event] = primitive_indices[event];
+        solution.material_indices[event] = material_indices[event];
+        solution.transmissions[event] = events[event].transmission;
+        solution.eta_i[event] = events[event].eta_i;
+        solution.eta_t[event] = events[event].eta_t;
+    }
+    if (!solved.valid) {
+        solution.reject_reason = solved.total_internal_reflection
+            ? GpuManifoldRejectReason::TotalInternalReflection
+            : (fabsf(solved.determinant) <= 1e-8f
+                ? GpuManifoldRejectReason::Singular
+                : GpuManifoldRejectReason::Residual);
+        return solution;
+    }
+    const GpuManifoldDifferentialResult differential =
+        evaluate_gpu_manifold_differential(
+            events, event_count, anchor.position, light.position,
+            anchor.geometric_normal, light.geometric_normal,
+            solved.parameters);
+    solution.differential_status = differential.status;
+    solution.endpoint_area_jacobian = differential.endpoint_area_jacobian;
+    solution.ordinary_geometry = differential.ordinary_geometry;
+    solution.generalized_geometry = differential.generalized_geometry;
+    if (!differential.valid) {
+        solution.reject_reason = GpuManifoldRejectReason::InvalidDifferential;
+        return solution;
+    }
+    solution.determinant = differential.constraint_determinant;
+    GpuVec3 segment_start = anchor.position;
+    for (int segment = 0; segment <= event_count; ++segment) {
+        const GpuVec3 segment_end = segment < event_count
+            ? solved.surfaces[segment].position : light.position;
+        const GpuVec3 edge = segment_end - segment_start;
+        const float distance = edge.length();
+        if (!(distance > 3e-4f)) {
+            solution.reject_reason = GpuManifoldRejectReason::Occluded;
+            return solution;
+        }
+        GpuRay visibility = {};
+        visibility.direction = edge * (1.0f / distance);
+        visibility.origin = segment_start + visibility.direction * 1e-4f;
+        visibility.t_min = 1e-4f;
+        visibility.t_max = distance - 2e-4f;
+        float hit_t = 0.0f;
+        GpuVec3 hit_position, hit_normal, hit_geometric_normal;
+        GpuVec2 hit_uv;
+        int hit_material = -1;
+        int hit_type = -1;
+        int hit_index = -1;
+        int hit_primitive = -1;
+        if (world_hit(
+                scene, visibility, visibility.t_min, visibility.t_max,
+                hit_t, hit_position, hit_normal, hit_geometric_normal,
+                hit_uv, hit_material, hit_type, hit_index, hit_primitive)) {
+            const int expected_type = segment < event_count
+                ? geometry_types[segment] : light.geometry_type;
+            const int expected_index = segment < event_count
+                ? geometry_indices[segment] : light.geometry_index;
+            const int expected_primitive = segment < event_count
+                ? primitive_indices[segment] : light.primitive_index;
+            const bool expected_endpoint = expected_type >= 0 &&
+                hit_type == expected_type && hit_index == expected_index &&
+                hit_primitive == expected_primitive &&
+                (hit_position - segment_end).length_sq() <=
+                    fmaxf(1e-8f, tolerance * tolerance * 16.0f);
+            if (!expected_endpoint) {
+                solution.reject_reason = GpuManifoldRejectReason::Occluded;
+                return solution;
+            }
+        }
+        segment_start = segment_end;
+    }
+    solution.reject_reason = GpuManifoldRejectReason::None;
+    solution.valid = 1;
+    return solution;
+}
+
+static __device__ GpuManifoldPathSolution propose_manifold_chain_candidate(
+    GpuScene scene,
+    const GpuBidirectionalPathVertex* camera_path,
+    int camera_length,
+    const GpuBidirectionalPathVertex& light,
+    int max_specular_events,
+    int proposal_sample_index,
+    int path_index,
+    float tolerance,
+    int max_iterations,
+    float dispersion_clamp,
+    std::uint32_t scene_epoch) {
+    GpuManifoldPathSolution candidate = {};
+    candidate.scene_epoch = scene_epoch;
+    int anchor_count = 0;
+    for (int vertex = 0; vertex < camera_length; ++vertex) {
+        const GpuBidirectionalPathVertex current = camera_path[vertex];
+        if (current.valid && current.scene_epoch == scene_epoch &&
+            !current.delta &&
+            current.measure == GpuPathVertexMeasure::Area) ++anchor_count;
+    }
+    if (anchor_count == 0 || !light.valid ||
+        light.scene_epoch != scene_epoch) {
+        candidate.reject_reason = GpuManifoldRejectReason::NoTrailingChain;
+        return candidate;
+    }
+    int selected_anchor = int(manifold_iid_sample_dimension(
+        proposal_sample_index, path_index, 90) * float(anchor_count));
+    selected_anchor = min(selected_anchor, anchor_count - 1);
+    int anchor_vertex = -1;
+    for (int vertex = 0; vertex < camera_length; ++vertex) {
+        const GpuBidirectionalPathVertex current = camera_path[vertex];
+        if (current.valid && current.scene_epoch == scene_epoch &&
+            !current.delta &&
+            current.measure == GpuPathVertexMeasure::Area &&
+            selected_anchor-- == 0) {
+            anchor_vertex = vertex;
+            break;
+        }
+    }
+    if (anchor_vertex < 0) {
+        candidate.reject_reason = GpuManifoldRejectReason::InvalidInitialState;
+        return candidate;
+    }
+    const GpuBidirectionalPathVertex anchor = camera_path[anchor_vertex];
+    const int event_count = min(max_specular_events, 1 + int(
+        manifold_iid_sample_dimension(proposal_sample_index, path_index, 91) *
+            float(max_specular_events)));
+    GpuManifoldChainEvent events[4] = {};
+    int catalog_indices[4] = {-1, -1, -1, -1};
+    int geometry_types[4] = {-1, -1, -1, -1};
+    int geometry_indices[4] = {-1, -1, -1, -1};
+    int primitive_indices[4] = {-1, -1, -1, -1};
+    int material_indices[4] = {-1, -1, -1, -1};
+    float seed_pdf = 1.0f;
+    float branch_pdf = 1.0f;
+    int current_medium = anchor.medium_index;
+    GpuVec3 previous_position = anchor.position;
+    for (int event = 0; event < event_count; ++event) {
+        const int dimension = 92 + event * 4;
+        const GpuManifoldSeedSample seed = sample_gpu_manifold_seed(
+            scene.manifold_seed_primitives,
+            scene.manifold_seed_primitive_count,
+            manifold_iid_sample_dimension(
+                proposal_sample_index, path_index, dimension),
+            manifold_iid_sample_dimension(
+                proposal_sample_index, path_index, dimension + 1),
+            manifold_iid_sample_dimension(
+                proposal_sample_index, path_index, dimension + 2));
+        if (!seed.valid) {
+            candidate.reject_reason = GpuManifoldRejectReason::InvalidPrimitive;
+            return candidate;
+        }
+        const GpuManifoldOpticalState optical = resolve_manifold_optical_state(
+            scene, seed.seed.material_index, seed.surface.uv,
+            anchor.throughput.wavelengths, dispersion_clamp);
+        if (!optical.valid) {
+            candidate.reject_reason =
+                GpuManifoldRejectReason::UnsupportedMaterial;
+            return candidate;
+        }
+        if (optical.material.roughness > 0.001001f) {
+            candidate.reject_reason = GpuManifoldRejectReason::NonDeltaMaterial;
+            return candidate;
+        }
+        int spectral_channel = 0;
+        if (spectral_mode_is_sampled(anchor.spectral_mode)) {
+            spectral_channel = anchor.active_channel;
+            if (spectral_channel < 0 ||
+                spectral_channel >= scene.num_spectral_channels) {
+                candidate.reject_reason =
+                    GpuManifoldRejectReason::SpectralSplitRequired;
+                return candidate;
+            }
+        } else if (optical.material.type == MaterialType::Dielectric) {
+            const float reference_ior = optical.dielectric_ior.values[0];
+            for (int channel = 1; channel < scene.num_spectral_channels;
+                 ++channel) {
+                if (fabsf(optical.dielectric_ior.values[channel] -
+                           reference_ior) > 1e-6f) {
+                    candidate.reject_reason =
+                        GpuManifoldRejectReason::SpectralSplitRequired;
+                    return candidate;
+                }
+            }
+        }
+        events[event].primitive = seed.seed.primitive;
+        events[event].u = seed.u;
+        events[event].v = seed.v;
+        if (optical.material.type == MaterialType::Dielectric) {
+            events[event].transmission = manifold_iid_sample_dimension(
+                proposal_sample_index, path_index, dimension + 3) < 0.5f;
+            branch_pdf *= 0.5f;
+        }
+        if (optical.material.type == MaterialType::Dielectric) {
+            const float previous_side = (previous_position -
+                seed.surface.position).dot(seed.surface.normal);
+            float surrounding_ior = 1.0f;
+            if (current_medium >= 0 &&
+                current_medium != seed.seed.material_index &&
+                current_medium < scene.material_count) {
+                const GpuManifoldOpticalState surrounding =
+                    resolve_manifold_optical_state(
+                        scene, current_medium, seed.surface.uv,
+                        anchor.throughput.wavelengths, dispersion_clamp);
+                if (surrounding.valid) surrounding_ior =
+                    surrounding.dielectric_ior.values[spectral_channel];
+            }
+            const float material_ior =
+                optical.dielectric_ior.values[spectral_channel];
+            const bool entering = previous_side > 0.0f;
+            events[event].eta_i = entering ? surrounding_ior : material_ior;
+            events[event].eta_t = entering ? material_ior : surrounding_ior;
+            if (events[event].transmission) {
+                current_medium = entering ? seed.seed.material_index : -1;
+            }
+        } else {
+            events[event].eta_i = 1.0f;
+            events[event].eta_t = 1.0f;
+        }
+        catalog_indices[event] = seed.catalog_index;
+        geometry_types[event] = seed.seed.geometry_type;
+        geometry_indices[event] = seed.seed.geometry_index;
+        primitive_indices[event] = seed.seed.primitive_index;
+        material_indices[event] = seed.seed.material_index;
+        seed_pdf *= seed.proposal_pdf;
+        previous_position = seed.surface.position;
+    }
+    candidate = solve_manifold_chain_candidate(
+        scene, events, catalog_indices, geometry_types, geometry_indices,
+        primitive_indices, material_indices, event_count, anchor, light,
+        anchor_vertex, 0, tolerance, max_iterations, scene_epoch);
+    candidate.anchor_selection_pdf = 1.0f / float(anchor_count);
+    candidate.event_count_pdf = 1.0f / float(max_specular_events);
+    candidate.seed_proposal_pdf = seed_pdf;
+    candidate.branch_proposal_pdf = branch_pdf;
+    return candidate;
+}
+
+__global__ void generate_specular_manifold_targets_kernel(
+    GpuScene scene,
+    const GpuBidirectionalPathVertex* camera_vertices,
+    const int* camera_path_lengths,
+    int max_camera_vertices,
+    const GpuBidirectionalPathVertex* light_vertices,
+    const int* light_path_lengths,
+    int max_light_vertices,
+    GpuManifoldPathSolution* solutions,
+    int path_count,
+    int max_specular_events,
+    int proposal_sample_index,
+    float tolerance,
+    int max_iterations,
+    float dispersion_clamp,
+    std::uint32_t scene_epoch,
+    GpuManifoldTelemetry* telemetry) {
+    const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (path_index >= path_count || !camera_vertices ||
+        !camera_path_lengths || !light_vertices || !light_path_lengths ||
+        !solutions || max_specular_events <= 0 || max_specular_events > 4) {
+        return;
+    }
+    const int camera_length = camera_path_lengths[path_index];
+    const int light_length = light_path_lengths[path_index];
+    if (camera_length <= 0 || camera_length > max_camera_vertices ||
+        light_length <= 0 || light_length > max_light_vertices) {
+        GpuManifoldPathSolution rejected = {};
+        rejected.scene_epoch = scene_epoch;
+        rejected.reject_reason = GpuManifoldRejectReason::NoTrailingChain;
+        solutions[path_index] = rejected;
+        record_manifold_solution_telemetry(rejected, telemetry);
+        return;
+    }
+    if (telemetry) atomicAdd(&telemetry->attempted, 1u);
+    const GpuBidirectionalPathVertex* camera_path =
+        camera_vertices + path_index * max_camera_vertices;
+    const GpuBidirectionalPathVertex light =
+        light_vertices[path_index * max_light_vertices];
+    const GpuManifoldPathSolution solution = propose_manifold_chain_candidate(
+        scene, camera_path, camera_length, light, max_specular_events,
+        proposal_sample_index, path_index, tolerance, max_iterations,
+        dispersion_clamp, scene_epoch);
+    solutions[path_index] = solution;
+    record_manifold_solution_telemetry(solution, telemetry);
+}
+
+static __device__ bool manifold_solutions_share_root(
+    const GpuManifoldPathSolution& target,
+    const GpuManifoldPathSolution& trial,
+    float tolerance) {
+    if (!target.valid || !trial.valid ||
+        target.anchor_camera_vertex != trial.anchor_camera_vertex ||
+        target.light_vertex != trial.light_vertex ||
+        target.event_count != trial.event_count) return false;
+    const float position_tolerance = fmaxf(1e-4f, tolerance * 16.0f);
+    const float position_tolerance_squared =
+        position_tolerance * position_tolerance;
+    for (int event = 0; event < target.event_count; ++event) {
+        if (target.catalog_indices[event] != trial.catalog_indices[event] ||
+            target.transmissions[event] != trial.transmissions[event] ||
+            target.geometry_types[event] != trial.geometry_types[event] ||
+            target.geometry_indices[event] != trial.geometry_indices[event] ||
+            target.primitive_indices[event] != trial.primitive_indices[event] ||
+            (target.surfaces[event].position - trial.surfaces[event].position)
+                .length_sq() > position_tolerance_squared) return false;
+    }
+    return true;
+}
+
+__global__ void initialize_manifold_root_states_kernel(
+    const GpuManifoldPathSolution* targets,
+    GpuManifoldRootState* states,
+    float* reciprocal_weights,
+    std::uint32_t* pending_count,
+    int path_count,
+    std::uint32_t scene_epoch) {
+    const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (path_index >= path_count || !targets || !states ||
+        !reciprocal_weights || !pending_count) return;
+    GpuManifoldRootState state = {};
+    state.scene_epoch = scene_epoch;
+    state.pending = targets[path_index].valid &&
+        targets[path_index].scene_epoch == scene_epoch;
+    states[path_index] = state;
+    reciprocal_weights[path_index] = 0.0f;
+    if (state.pending) atomicAdd(pending_count, 1u);
+}
+
+__global__ void advance_manifold_root_trials_kernel(
+    GpuScene scene,
+    const GpuBidirectionalPathVertex* camera_vertices,
+    const int* camera_path_lengths,
+    int max_camera_vertices,
+    const GpuBidirectionalPathVertex* light_vertices,
+    const int* light_path_lengths,
+    int max_light_vertices,
+    const GpuManifoldPathSolution* targets,
+    GpuManifoldRootState* states,
+    float* reciprocal_weights,
+    std::uint32_t* pending_count,
+    int path_count,
+    int max_specular_events,
+    int proposal_sample_index,
+    int trials_per_pass,
+    float tolerance,
+    int max_iterations,
+    float dispersion_clamp,
+    std::uint32_t scene_epoch,
+    GpuManifoldTelemetry* telemetry) {
+    const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (path_index >= path_count || !camera_vertices ||
+        !camera_path_lengths || !light_vertices || !light_path_lengths ||
+        !targets || !states || !reciprocal_weights || !pending_count) return;
+    GpuManifoldRootState state = states[path_index];
+    if (!state.pending) return;
+    if (state.scene_epoch != scene_epoch ||
+        targets[path_index].scene_epoch != scene_epoch) {
+        state.pending = 0;
+        states[path_index] = state;
+        return;
+    }
+    const int camera_length = camera_path_lengths[path_index];
+    const int light_length = light_path_lengths[path_index];
+    if (camera_length <= 0 || camera_length > max_camera_vertices ||
+        light_length <= 0 || light_length > max_light_vertices) {
+        state.pending = 0;
+        states[path_index] = state;
+        return;
+    }
+    const GpuBidirectionalPathVertex* camera_path =
+        camera_vertices + path_index * max_camera_vertices;
+    const GpuBidirectionalPathVertex light =
+        light_vertices[path_index * max_light_vertices];
+    const int bounded_trials = min(max(trials_per_pass, 1), 64);
+    for (int trial_index = 0; trial_index < bounded_trials; ++trial_index) {
+        const GpuManifoldPathSolution trial =
+            propose_manifold_chain_candidate(
+                scene, camera_path, camera_length, light,
+                max_specular_events, proposal_sample_index + trial_index,
+                path_index, tolerance, max_iterations, dispersion_clamp,
+                scene_epoch);
+        ++state.trial_count;
+        if (telemetry) atomicAdd(
+            reinterpret_cast<unsigned long long*>(
+                &telemetry->total_root_trials), 1ull);
+        if (manifold_solutions_share_root(
+                targets[path_index], trial, tolerance)) {
+            reciprocal_weights[path_index] = float(state.trial_count);
+            state.pending = 0;
+            if (telemetry) atomicAdd(&telemetry->root_matches, 1u);
+            break;
+        }
+    }
+    if (state.pending) atomicAdd(pending_count, 1u);
+    states[path_index] = state;
 }
 
 __global__ void solve_specular_manifold_paths_kernel(
@@ -1670,7 +2154,7 @@ __global__ void solve_specular_manifold_paths_kernel(
         }
         events[event].eta_i = outside ? surrounding_ior : manifold_ior;
         events[event].eta_t = outside ? manifold_ior : surrounding_ior;
-        if (!events[event].transmission) {
+        if (material.type == MaterialType::Metal) {
             events[event].eta_i = 1.0f;
             events[event].eta_t = 1.0f;
         }
@@ -1684,121 +2168,25 @@ __global__ void solve_specular_manifold_paths_kernel(
         if (telemetry) atomicAdd(&telemetry->rejected_stale, 1u);
         return;
     }
-    const GpuManifoldChainSolveResult solved = solve_gpu_manifold_chain(
-        events, event_count, anchor.position, light.position,
-        tolerance, max_iterations);
-    solution.anchor_camera_vertex = chain_start - 1;
-    solution.light_vertex = 0;
-    solution.event_count = event_count;
-    solution.iterations = solved.iterations;
-    solution.determinant = solved.determinant;
-    solution.residual = solved.residual;
+    int catalog_indices[4] = {-1, -1, -1, -1};
+    int geometry_types[4] = {-1, -1, -1, -1};
+    int geometry_indices[4] = {-1, -1, -1, -1};
+    int primitive_indices[4] = {-1, -1, -1, -1};
+    int material_indices[4] = {-1, -1, -1, -1};
     for (int event = 0; event < event_count; ++event) {
-        solution.surfaces[event] = solved.surfaces[event];
-        solution.parameters[event * 2] = solved.parameters[event * 2];
-        solution.parameters[event * 2 + 1] = solved.parameters[event * 2 + 1];
         const GpuBidirectionalPathVertex seed =
             camera_path[chain_start + event];
-        solution.geometry_types[event] = seed.geometry_type;
-        solution.geometry_indices[event] = seed.geometry_index;
-        solution.primitive_indices[event] = seed.primitive_index;
-        solution.material_indices[event] = seed.material_index;
-        solution.transmissions[event] = events[event].transmission;
+        geometry_types[event] = seed.geometry_type;
+        geometry_indices[event] = seed.geometry_index;
+        primitive_indices[event] = seed.primitive_index;
+        material_indices[event] = seed.material_index;
     }
-    if (!solved.valid) {
-        solution.reject_reason = solved.total_internal_reflection
-            ? GpuManifoldRejectReason::TotalInternalReflection
-            : (fabsf(solved.determinant) <= 1e-8f
-                ? GpuManifoldRejectReason::Singular
-                : GpuManifoldRejectReason::Residual);
-        solutions[path_index] = solution;
-        if (telemetry) {
-            if (solved.total_internal_reflection) {
-                atomicAdd(&telemetry->rejected_tir, 1u);
-            } else if (solution.reject_reason ==
-                       GpuManifoldRejectReason::Singular) {
-                atomicAdd(&telemetry->rejected_singular, 1u);
-            } else {
-                atomicAdd(&telemetry->rejected_residual, 1u);
-            }
-        }
-        return;
-    }
-    const GpuManifoldDifferentialResult differential =
-        evaluate_gpu_manifold_differential(
-            events, event_count, anchor.position, light.position,
-            anchor.geometric_normal, light.geometric_normal,
-            solved.parameters);
-    solution.differential_status = differential.status;
-    solution.endpoint_area_jacobian = differential.endpoint_area_jacobian;
-    solution.ordinary_geometry = differential.ordinary_geometry;
-    solution.generalized_geometry = differential.generalized_geometry;
-    if (!differential.valid) {
-        solution.reject_reason =
-            GpuManifoldRejectReason::InvalidDifferential;
-        solutions[path_index] = solution;
-        if (telemetry) {
-            atomicAdd(&telemetry->rejected_differential, 1u);
-        }
-        return;
-    }
-    solution.determinant = differential.constraint_determinant;
-    GpuVec3 segment_start = anchor.position;
-    for (int segment = 0; segment <= event_count; ++segment) {
-        const GpuVec3 segment_end = segment < event_count
-            ? solved.surfaces[segment].position : light.position;
-        const GpuVec3 edge = segment_end - segment_start;
-        const float distance = edge.length();
-        if (!(distance > 3e-4f)) {
-            solution.reject_reason = GpuManifoldRejectReason::Occluded;
-            solutions[path_index] = solution;
-            if (telemetry) atomicAdd(&telemetry->rejected_occluded, 1u);
-            return;
-        }
-        GpuRay visibility = {};
-        visibility.direction = edge * (1.0f / distance);
-        visibility.origin = segment_start + visibility.direction * 1e-4f;
-        visibility.t_min = 1e-4f;
-        visibility.t_max = distance - 2e-4f;
-        float hit_t = 0.0f;
-        GpuVec3 hit_position, hit_normal, hit_geometric_normal;
-        GpuVec2 hit_uv;
-        int hit_material = -1;
-        int hit_type = -1;
-        int hit_index = -1;
-        int hit_primitive = -1;
-        if (world_hit(
-                scene, visibility, visibility.t_min, visibility.t_max,
-                hit_t, hit_position, hit_normal, hit_geometric_normal,
-                hit_uv, hit_material, hit_type, hit_index, hit_primitive)) {
-            bool expected_endpoint = false;
-            const GpuBidirectionalPathVertex expected = segment < event_count
-                ? camera_path[chain_start + segment] : light;
-            if (expected.geometry_type >= 0) {
-                expected_endpoint = hit_type == expected.geometry_type &&
-                    hit_index == expected.geometry_index &&
-                    hit_primitive == expected.primitive_index &&
-                    (hit_position - segment_end).length_sq() <=
-                        fmaxf(1e-8f, tolerance * tolerance * 16.0f);
-            }
-            if (!expected_endpoint) {
-                solution.reject_reason = GpuManifoldRejectReason::Occluded;
-                solutions[path_index] = solution;
-                if (telemetry) atomicAdd(&telemetry->rejected_occluded, 1u);
-                return;
-            }
-        }
-        segment_start = segment_end;
-    }
-    solution.reject_reason = GpuManifoldRejectReason::None;
-    solution.valid = 1;
+    solution = solve_manifold_chain_candidate(
+        scene, events, catalog_indices, geometry_types, geometry_indices,
+        primitive_indices, material_indices, event_count, anchor, light,
+        chain_start - 1, 0, tolerance, max_iterations, scene_epoch);
     solutions[path_index] = solution;
-    if (telemetry) {
-        atomicAdd(&telemetry->converged, 1u);
-        atomicAdd(
-            reinterpret_cast<unsigned long long*>(&telemetry->total_iterations),
-            static_cast<unsigned long long>(solved.iterations));
-    }
+    record_manifold_solution_telemetry(solution, telemetry);
 }
 
 __device__ SpectralPacket manifold_light_emission(
@@ -1910,10 +2298,24 @@ __global__ void evaluate_specular_manifold_contributions_kernel(
         SpectralPacket output_q = {};
         SpectralPacket output_u = {};
         SpectralPacket output_v = {};
+        float surrounding_ior = 1.0f;
+        if (optical.material.type == MaterialType::Dielectric) {
+            const int optical_channel = spectral_mode_is_sampled(
+                anchor.spectral_mode)
+                ? min(max(anchor.active_channel, 0),
+                      scene.num_spectral_channels - 1)
+                : 0;
+            const float material_ior =
+                optical.dielectric_ior.values[optical_channel];
+            surrounding_ior =
+                fabsf(solution.eta_i[event] - material_ior) <
+                    fabsf(solution.eta_t[event] - material_ior)
+                ? solution.eta_t[event] : solution.eta_i[event];
+        }
         transform_scattered_stokes_packets(
             optical.material, optical.spectra, optical.dielectric_ior,
             incoming, scattered, surface.normal, surface.uv,
-            anchor.throughput, 1.0f, dispersion_clamp,
+            anchor.throughput, surrounding_ior, dispersion_clamp,
             int(anchor.sample_index), path_index, event,
             scene.num_spectral_channels, BoundaryTransportMode::Radiance,
             stokes_i, stokes_q, stokes_u, stokes_v,
@@ -1951,6 +2353,50 @@ __global__ void evaluate_specular_manifold_contributions_kernel(
     contribution.mis_weight = mis_weight;
     contribution.valid = 1;
     contributions[path_index] = contribution;
+}
+
+__global__ void assign_manifold_exclusive_mis_weights_kernel(
+    const GpuManifoldPathSolution* solutions,
+    float* mis_weights,
+    int path_count,
+    std::uint32_t scene_epoch) {
+    const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (path_index >= path_count || !solutions || !mis_weights) return;
+    const GpuManifoldPathSolution solution = solutions[path_index];
+    mis_weights[path_index] = solution.valid &&
+        solution.scene_epoch == scene_epoch && solution.event_count > 0
+        ? 1.0f : 0.0f;
+}
+
+__global__ void convert_manifold_contributions_kernel(
+    const GpuManifoldPathContribution* contributions,
+    const GpuManifoldPathSolution* solutions,
+    const GpuBidirectionalPathVertex* camera_vertices,
+    int max_camera_vertices,
+    GpuVec3* accumulation,
+    int path_count,
+    int spectral_channel_count,
+    std::uint32_t scene_epoch) {
+    const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (path_index >= path_count || !contributions || !solutions ||
+        !camera_vertices || !accumulation || max_camera_vertices <= 0) return;
+    accumulation[path_index] = {};
+    const GpuManifoldPathContribution contribution =
+        contributions[path_index];
+    const GpuManifoldPathSolution solution = solutions[path_index];
+    if (!contribution.valid || contribution.scene_epoch != scene_epoch ||
+        !solution.valid || solution.scene_epoch != scene_epoch ||
+        solution.anchor_camera_vertex < 0 ||
+        solution.anchor_camera_vertex >= max_camera_vertices) return;
+    const GpuBidirectionalPathVertex anchor = camera_vertices[
+        path_index * max_camera_vertices + solution.anchor_camera_vertex];
+    const GpuVec3 xyz = spectral_sample_to_xyz(
+        contribution.radiance, spectral_channel_count,
+        anchor.active_channel, anchor.wavelength_pdf, anchor.spectral_mode);
+    const GpuVec3 rgb = xyz_to_rgb(xyz);
+    if (isfinite(rgb.x) && isfinite(rgb.y) && isfinite(rgb.z)) {
+        accumulation[path_index] = rgb;
+    }
 }
 
 }

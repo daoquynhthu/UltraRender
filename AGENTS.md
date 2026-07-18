@@ -388,4 +388,4 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
 - Phase Q and R-P3 are complete; the authoritative construction cursor is R-P4. R-P6 Mie / volume phase resources and Phase M are complete.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
-- CUDA compilation must be serialized per heavy target in this development environment to avoid concurrent `ptxas` host-memory allocation failures.
+- High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 1) to avoid concurrent `ptxas` host-memory allocation failures; host and unrelated targets remain globally parallel.

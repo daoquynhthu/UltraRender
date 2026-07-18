@@ -154,10 +154,17 @@ struct GpuContext {
     float vcm_current_surface_radius = 0.0f;
     float vcm_current_volume_radius = 0.0f;
     GpuManifoldPathSolution* d_manifold_solutions = nullptr;
+    GpuManifoldRootState* d_manifold_root_states = nullptr;
+    float* d_manifold_reciprocal_weights = nullptr;
+    float* d_manifold_mis_weights = nullptr;
+    GpuManifoldPathContribution* d_manifold_contributions = nullptr;
+    GpuVec3* d_manifold_accum = nullptr;
+    std::uint32_t* d_manifold_pending_count = nullptr;
     GpuManifoldSeedPrimitive* d_manifold_seed_primitives = nullptr;
     int manifold_seed_primitive_count = 0;
     GpuManifoldTelemetry* d_manifold_telemetry = nullptr;
     GpuManifoldTelemetry last_manifold_telemetry = {};
+    std::uint64_t manifold_proposal_sequence = 0;
     int bidirectional_camera_path_capacity = 0;
     int bidirectional_light_path_capacity = 0;
     size_t bidirectional_required_bytes = 0;

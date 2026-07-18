@@ -432,6 +432,10 @@ __global__ void manifold_seed_catalog_sampling_kernel(
     output[6] = float(second.valid);
     output[7] = float(second.catalog_index);
     output[8] = second.surface.position.x;
+    output[9] = first.surface_area_pdf;
+    output[10] = first.proposal_pdf;
+    output[11] = second.surface_area_pdf;
+    output[12] = second.proposal_pdf;
 }
 
 __global__ void path_guided_light_selection_kernel(float* cdf, float* guide_weights, float* out) {
@@ -3011,13 +3015,13 @@ static int test_manifold_runtime_builds_complete_seed_catalog() {
     CHECK(catalog[1].geometry_index == 0);
     CHECK_FLOAT_EQ(catalog[1].primitive.p0.x, 4.0f, 0.0f);
     float* d_output = nullptr;
-    CHECK_CUDA(cudaMalloc(&d_output, 9 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_output, 13 * sizeof(float)));
     DeviceMem output_cleanup(d_output);
     manifold_seed_catalog_sampling_kernel<<<1, 1>>>(
         ctx->d_manifold_seed_primitives,
         ctx->manifold_seed_primitive_count, d_output);
     CHECK_CUDA(cudaGetLastError());
-    float output[9] = {};
+    float output[13] = {};
     CHECK_CUDA(cudaMemcpy(
         output, d_output, sizeof(output), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(output[0], 1.0f, 0.0f);
@@ -3028,6 +3032,10 @@ static int test_manifold_runtime_builds_complete_seed_catalog() {
     CHECK_FLOAT_EQ(output[6], 1.0f, 0.0f);
     CHECK_FLOAT_EQ(output[7], 1.0f, 0.0f);
     CHECK_FLOAT_EQ(output[8], 4.0f, 1e-6f);
+    CHECK_FLOAT_EQ(output[9], 0.5f, 1e-6f);
+    CHECK_FLOAT_EQ(output[10], 0.25f, 1e-6f);
+    CHECK_FLOAT_EQ(output[11], 0.5f, 1e-6f);
+    CHECK_FLOAT_EQ(output[12], 0.25f, 1e-6f);
     free_gpu_renderer(ctx);
     return 0;
 }
@@ -3265,6 +3273,12 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
         {diffuse, mirror, emitter}, {}, config);
     CHECK(ctx != nullptr);
     CHECK(ctx->d_manifold_solutions != nullptr);
+    CHECK(ctx->d_manifold_root_states != nullptr);
+    CHECK(ctx->d_manifold_reciprocal_weights != nullptr);
+    CHECK(ctx->d_manifold_mis_weights != nullptr);
+    CHECK(ctx->d_manifold_contributions != nullptr);
+    CHECK(ctx->d_manifold_accum != nullptr);
+    CHECK(ctx->d_manifold_pending_count != nullptr);
     CHECK(ctx->d_manifold_telemetry != nullptr);
     std::vector<GpuBidirectionalPathVertex> camera_vertices(
         16 * config.bidirectional.max_camera_vertices);
@@ -3484,6 +3498,25 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
     material = smooth_mirror;
     material.type = MaterialType::Dielectric;
     material.ior = 1.5f;
+    material.dispersion = 0.0f;
+    CHECK_CUDA(cudaMemcpy(
+        ctx->d_materials + 8, &material, sizeof(material),
+        cudaMemcpyHostToDevice));
+    solve_specular_manifold_paths_kernel<<<1, 32>>>(
+        scene, ctx->d_camera_path_vertices, ctx->d_camera_path_lengths,
+        config.bidirectional.max_camera_vertices,
+        ctx->d_light_path_vertices, ctx->d_light_path_lengths,
+        config.bidirectional.max_light_vertices,
+        ctx->d_manifold_solutions, 16, 2, 1e-5f, 32, 5.0f,
+        ctx->bidirectional_scene_epoch, ctx->d_manifold_telemetry);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaMemcpy(
+        &solution, ctx->d_manifold_solutions, sizeof(solution),
+        cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(
+        std::min(solution.eta_i[0], solution.eta_t[0]), 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(
+        std::max(solution.eta_i[0], solution.eta_t[0]), 1.5f, 1e-6f);
     material.dispersion = 0.02f;
     CHECK_CUDA(cudaMemcpy(
         ctx->d_materials + 8, &material, sizeof(material),
@@ -3507,6 +3540,154 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
     CHECK(solution.reject_reason ==
           GpuManifoldRejectReason::SpectralSplitRequired);
     CHECK(telemetry.rejected_spectral_split == 1);
+    CHECK_CUDA(cudaMemcpy(
+        ctx->d_materials + 8, &smooth_mirror, sizeof(smooth_mirror),
+        cudaMemcpyHostToDevice));
+    for (int path = 1; path < 16; ++path) {
+        camera_vertices[path * config.bidirectional.max_camera_vertices] =
+            camera_vertices[0];
+        camera_vertices[path * config.bidirectional.max_camera_vertices + 1] =
+            camera_vertices[1];
+        light_vertices[path * config.bidirectional.max_light_vertices] =
+            light_vertices[0];
+        camera_lengths[path] = 2;
+        light_lengths[path] = 1;
+    }
+    CHECK_CUDA(cudaMemcpy(
+        ctx->d_camera_path_vertices, camera_vertices.data(),
+        camera_vertices.size() * sizeof(GpuBidirectionalPathVertex),
+        cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(
+        ctx->d_light_path_vertices, light_vertices.data(),
+        light_vertices.size() * sizeof(GpuBidirectionalPathVertex),
+        cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(
+        ctx->d_camera_path_lengths, camera_lengths.data(),
+        camera_lengths.size() * sizeof(int), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(
+        ctx->d_light_path_lengths, light_lengths.data(),
+        light_lengths.size() * sizeof(int), cudaMemcpyHostToDevice));
+    scene.manifold_seed_primitives = ctx->d_manifold_seed_primitives;
+    scene.manifold_seed_primitive_count = 1;
+    CHECK_CUDA(cudaMemset(
+        ctx->d_manifold_telemetry, 0, sizeof(GpuManifoldTelemetry)));
+    generate_specular_manifold_targets_kernel<<<1, 32>>>(
+        scene, ctx->d_camera_path_vertices, ctx->d_camera_path_lengths,
+        config.bidirectional.max_camera_vertices,
+        ctx->d_light_path_vertices, ctx->d_light_path_lengths,
+        config.bidirectional.max_light_vertices,
+        ctx->d_manifold_solutions, 16, 1, 17, 1e-5f, 32, 5.0f,
+        ctx->bidirectional_scene_epoch, ctx->d_manifold_telemetry);
+    CHECK_CUDA(cudaGetLastError());
+    CHECK_CUDA(cudaMemcpy(
+        &solution, ctx->d_manifold_solutions, sizeof(solution),
+        cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(
+        &telemetry, ctx->d_manifold_telemetry, sizeof(telemetry),
+        cudaMemcpyDeviceToHost));
+    CHECK(solution.catalog_indices[0] == 0);
+    CHECK(solution.geometry_types[0] == 0);
+    CHECK(solution.material_indices[0] == 8);
+    CHECK_FLOAT_EQ(solution.anchor_selection_pdf, 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(solution.event_count_pdf, 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(
+        solution.seed_proposal_pdf,
+        1.0f / (4.0f * 3.14159265358979323846f), 1e-6f);
+    CHECK_FLOAT_EQ(solution.branch_proposal_pdf, 1.0f, 0.0f);
+    CHECK(telemetry.attempted == 16);
+    CHECK(telemetry.converged > 0);
+    GpuManifoldRootState* d_root_states = nullptr;
+    float* d_reciprocal_weights = nullptr;
+    std::uint32_t* d_pending_count = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_root_states,
+                          16 * sizeof(GpuManifoldRootState)));
+    DeviceMem root_states_cleanup(d_root_states);
+    CHECK_CUDA(cudaMalloc(&d_reciprocal_weights, 16 * sizeof(float)));
+    DeviceMem reciprocal_weights_cleanup(d_reciprocal_weights);
+    CHECK_CUDA(cudaMalloc(&d_pending_count, sizeof(std::uint32_t)));
+    DeviceMem pending_count_cleanup(d_pending_count);
+    CHECK_CUDA(cudaMemset(d_pending_count, 0, sizeof(std::uint32_t)));
+    initialize_manifold_root_states_kernel<<<1, 32>>>(
+        ctx->d_manifold_solutions, d_root_states, d_reciprocal_weights,
+        d_pending_count, 16, ctx->bidirectional_scene_epoch);
+    CHECK_CUDA(cudaGetLastError());
+    std::uint32_t initial_pending = 0;
+    CHECK_CUDA(cudaMemcpy(
+        &initial_pending, d_pending_count, sizeof(initial_pending),
+        cudaMemcpyDeviceToHost));
+    CHECK(initial_pending == telemetry.converged);
+    std::uint32_t pending = initial_pending;
+    int root_pass = 0;
+    while (pending > 0 && root_pass < 4096) {
+        CHECK_CUDA(cudaMemset(d_pending_count, 0, sizeof(std::uint32_t)));
+        advance_manifold_root_trials_kernel<<<1, 32>>>(
+            scene, ctx->d_camera_path_vertices, ctx->d_camera_path_lengths,
+            config.bidirectional.max_camera_vertices,
+            ctx->d_light_path_vertices, ctx->d_light_path_lengths,
+            config.bidirectional.max_light_vertices,
+            ctx->d_manifold_solutions, d_root_states,
+            d_reciprocal_weights, d_pending_count, 16, 1,
+            18 + root_pass * 8, 8, 1e-5f, 32, 5.0f,
+            ctx->bidirectional_scene_epoch, ctx->d_manifold_telemetry);
+        CHECK_CUDA(cudaGetLastError());
+        CHECK_CUDA(cudaMemcpy(
+            &pending, d_pending_count, sizeof(pending),
+            cudaMemcpyDeviceToHost));
+        ++root_pass;
+    }
+    CHECK(pending == 0);
+    CHECK_CUDA(cudaMemcpy(
+        &telemetry, ctx->d_manifold_telemetry, sizeof(telemetry),
+        cudaMemcpyDeviceToHost));
+    CHECK(telemetry.root_matches == initial_pending);
+    CHECK(telemetry.total_root_trials >= initial_pending);
+    std::vector<float> reciprocal_weights(16, 0.0f);
+    CHECK_CUDA(cudaMemcpy(
+        reciprocal_weights.data(), d_reciprocal_weights,
+        reciprocal_weights.size() * sizeof(float), cudaMemcpyDeviceToHost));
+    int positive_weights = 0;
+    for (float weight : reciprocal_weights) {
+        positive_weights += weight > 0.0f;
+    }
+    CHECK(positive_weights == int(initial_pending));
+    assign_manifold_exclusive_mis_weights_kernel<<<1, 32>>>(
+        ctx->d_manifold_solutions, ctx->d_manifold_mis_weights, 16,
+        ctx->bidirectional_scene_epoch);
+    CHECK_CUDA(cudaGetLastError());
+    evaluate_specular_manifold_contributions_kernel<<<1, 32>>>(
+        scene, ctx->d_camera_path_vertices,
+        config.bidirectional.max_camera_vertices,
+        ctx->d_light_path_vertices,
+        config.bidirectional.max_light_vertices,
+        ctx->d_manifold_solutions, d_reciprocal_weights,
+        ctx->d_manifold_mis_weights, ctx->d_manifold_contributions,
+        16, 5.0f, ctx->bidirectional_scene_epoch,
+        ctx->d_manifold_telemetry);
+    CHECK_CUDA(cudaGetLastError());
+    convert_manifold_contributions_kernel<<<1, 32>>>(
+        ctx->d_manifold_contributions, ctx->d_manifold_solutions,
+        ctx->d_camera_path_vertices,
+        config.bidirectional.max_camera_vertices,
+        ctx->d_manifold_accum, 16, scene.num_spectral_channels,
+        ctx->bidirectional_scene_epoch);
+    CHECK_CUDA(cudaGetLastError());
+    GpuVec3* d_manifold_film = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_manifold_film, 16 * sizeof(GpuVec3)));
+    DeviceMem manifold_film_cleanup(d_manifold_film);
+    CHECK_CUDA(cudaMemset(d_manifold_film, 0, 16 * sizeof(GpuVec3)));
+    commit_bidirectional_contributions_kernel<<<1, 32>>>(
+        nullptr, nullptr, nullptr, ctx->d_manifold_accum,
+        d_manifold_film, 16);
+    CHECK_CUDA(cudaGetLastError());
+    std::vector<GpuVec3> manifold_film(16);
+    CHECK_CUDA(cudaMemcpy(
+        manifold_film.data(), d_manifold_film,
+        manifold_film.size() * sizeof(GpuVec3), cudaMemcpyDeviceToHost));
+    int nonzero_manifold_pixels = 0;
+    for (const GpuVec3& value : manifold_film) {
+        nonzero_manifold_pixels += value.length_sq() > 0.0f;
+    }
+    CHECK(nonzero_manifold_pixels == int(initial_pending));
     free_gpu_renderer(ctx);
     return 0;
 }

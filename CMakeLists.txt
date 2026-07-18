@@ -9,6 +9,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
+set(UR_CUDA_HEAVY_COMPILE_JOBS 1 CACHE STRING
+    "Maximum concurrent high-memory CUDA target compilations under Ninja")
+if(CMAKE_GENERATOR MATCHES "Ninja")
+    if(NOT UR_CUDA_HEAVY_COMPILE_JOBS MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR "UR_CUDA_HEAVY_COMPILE_JOBS must be a positive integer")
+    endif()
+    set_property(GLOBAL PROPERTY JOB_POOLS
+        ur_cuda_heavy_compile=${UR_CUDA_HEAVY_COMPILE_JOBS})
+endif()
+
 # Ensure static libraries can be linked into shared Python extension modules on Linux
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 

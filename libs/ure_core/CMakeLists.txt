@@ -51,6 +51,9 @@ set_target_properties(ure_core PROPERTIES
     CUDA_STANDARD 20
     CUDA_STANDARD_REQUIRED ON
 )
+if(CMAKE_GENERATOR MATCHES "Ninja")
+    set_property(TARGET ure_core PROPERTY JOB_POOL_COMPILE ur_cuda_heavy_compile)
+endif()
 
 target_compile_options(ure_core PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>

@@ -51,6 +51,8 @@ struct GpuManifoldSeedSample {
     GpuManifoldSurfacePoint surface = {};
     float u = 0.0f;
     float v = 0.0f;
+    float surface_area_pdf = 0.0f;
+    float proposal_pdf = 0.0f;
     int catalog_index = -1;
     int valid = 0;
 };
@@ -111,10 +113,16 @@ struct GpuManifoldPathSolution {
     int primitive_indices[4] = {-1, -1, -1, -1};
     int material_indices[4] = {-1, -1, -1, -1};
     int transmissions[4] = {};
+    float eta_i[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    float eta_t[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     float determinant = 0.0f;
     float endpoint_area_jacobian = 0.0f;
     float ordinary_geometry = 0.0f;
     float generalized_geometry = 0.0f;
+    float anchor_selection_pdf = 0.0f;
+    float event_count_pdf = 0.0f;
+    float seed_proposal_pdf = 0.0f;
+    float branch_proposal_pdf = 0.0f;
     GpuManifoldRejectReason differential_status =
         GpuManifoldRejectReason::None;
     float residual = 0.0f;
@@ -153,6 +161,12 @@ struct GpuManifoldPathContribution {
     int valid = 0;
 };
 
+struct GpuManifoldRootState {
+    std::uint64_t trial_count = 0;
+    std::uint32_t scene_epoch = 0;
+    int pending = 0;
+};
+
 struct GpuManifoldTelemetry {
     std::uint32_t attempted = 0;
     std::uint32_t converged = 0;
@@ -168,7 +182,9 @@ struct GpuManifoldTelemetry {
     std::uint32_t rejected_non_delta = 0;
     std::uint32_t rejected_spectral_split = 0;
     std::uint32_t rejected_response = 0;
+    std::uint32_t root_matches = 0;
     std::uint64_t total_iterations = 0;
+    std::uint64_t total_root_trials = 0;
 };
 
 static __device__ inline void project_gpu_manifold_parameters(
@@ -212,7 +228,19 @@ static __device__ inline GpuManifoldSeedSample sample_gpu_manifold_seed(
     }
     sample.surface = evaluate_gpu_manifold_surface(
         sample.seed.primitive, sample.u, sample.v);
-    sample.valid = sample.surface.valid;
+    float area = 0.0f;
+    if (sample.seed.primitive.kind == GpuManifoldPrimitiveKind::Sphere) {
+        area = 4.0f * 3.14159265358979323846f *
+            sample.seed.primitive.radius * sample.seed.primitive.radius;
+    } else {
+        area = 0.5f * (sample.seed.primitive.p1 - sample.seed.primitive.p0)
+            .cross(sample.seed.primitive.p2 - sample.seed.primitive.p0).length();
+    }
+    if (!(area > 0.0f)) return sample;
+    sample.surface_area_pdf = 1.0f / area;
+    sample.proposal_pdf = sample.surface_area_pdf / float(catalog_count);
+    sample.valid = sample.surface.valid && isfinite(sample.proposal_pdf) &&
+        sample.proposal_pdf > 0.0f;
     return sample;
 }
 
