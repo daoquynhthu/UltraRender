@@ -74,6 +74,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
     RayQueue next_queue,
     ShadowQueue shadow_queue,
     GpuVec3* accum_buffer,
+    GpuVec3* specular_emitter_accum,
     GpuVec3* normal_buffer,
     GpuVec3* albedo_buffer,
     float* depth_buffer,

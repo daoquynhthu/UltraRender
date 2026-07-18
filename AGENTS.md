@@ -43,6 +43,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | L (Large Spectral Domain) | Done | `domain_bins` / `packet_lanes` split, 1M oracle/sampled smoke, resource descriptors, distributed spectral shard metadata, runtime presets, static audit |
 | R-P6 (Mie Volume Resources) | Done | Deterministic Lorenz-Mie generation, strict table adapter, immutable SceneIR resources, spectral GPU eval/pdf/sample, NEE/continuation, Session rebuild |
 | R-P3 (Production ReSTIR) | Done | Unbiased temporal/spatial DI; bounded diffuse/volume PT suffix replay; bias/variance benchmark suite |
+| R-P4 (Specular Manifold) | Done | GPU SMS + BDPT/VCM; exact support partition; independent technique AOV; four-scene statistical gate |
 | Q.0-Q.12 (Native Scene) | Done | Native schema/serialization, procedural/script, resources/solvers/simulation, tooling/adapters/cache/farm, validation suite |
 | W (Wave Optics Solver) | In progress | W.0 audit + rough dielectric spectral/UV PDF/MIS fix done; W.1 WaveOpticsConfig gates done; W.2 Airy PSF oracle started |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
@@ -382,10 +383,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 8 | 2026-07-13 R-P6 | Completed production Mie volume resources and hardened the implementation after independent audit | Canonical phase/CDF normalization, retained-scene deep freeze, strict host validation/import budgets, high-x Csca/g/CDF convergence, direct extinction transport, independent GPU CDF bounds, nonzero comparative E2E and variance gates; sm_120 Release build, Phase L/R and physics-optics audits, and 26/26 CTest passed. Governance now requires progressive PLAN retrieval and single-agent-by-default GPT/Claude execution. |
 | 9 | 2026-07-16 R-P3 | Completed production ReSTIR DI and bounded ReSTIR PT path reuse | Per-ray global sample identity, versioned actual suffix capture, surface/volume replay with PDF/Jacobian/Stokes metadata, isolated candidate accumulation, context-owned reservoirs, fail-loud specular boundary, three-scene bias/variance suite; Release build, Phase R audit, and 37/37 CTest passed |
 | 10 | 2026-07-18 R-P4 | Closed production manifold visibility and differential geometry, then began SDS response work | Every solved chain edge uses formal traversal with typed occlusion; generalized geometry is reconstructed as endpoint differential area Jacobian times anchor geometry rather than the Newton determinant; planar/sphere/device/E2E stability gates pass. Current work adds true surface/light UV, smooth-delta eligibility, spectral-lane boundaries, Stokes response, and unbiased root selection. |
+| 11 | 2026-07-18 R-P4 closure | Closed standalone specular-manifold correctness and benefit validation | Camera-direction dielectric transport fixed; exact anchored-delta support partition; independent wavefront technique AOV; glass/SDS/small-emitter/mixed suite passed with two positive time-to-error workloads; next cursor R-P5 |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- Phase Q and R-P3 are complete; the authoritative construction cursor is R-P4. R-P6 Mie / volume phase resources and Phase M are complete.
+- Phase Q, R-P3, R-P4, and R-P6 are complete; the authoritative construction cursor is R-P5. Phase M is complete.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 1) to avoid concurrent `ptxas` host-memory allocation failures; host and unrelated targets remain globally parallel.

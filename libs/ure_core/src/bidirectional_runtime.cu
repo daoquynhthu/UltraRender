@@ -2275,8 +2275,8 @@ __global__ void evaluate_specular_manifold_contributions_kernel(
         stokes_u.wavelengths[channel] = wavelength;
         stokes_v.wavelengths[channel] = wavelength;
     }
-    GpuVec3 next_position = light.position;
-    for (int event = solution.event_count - 1; event >= 0; --event) {
+    GpuVec3 previous_position = anchor.position;
+    for (int event = 0; event < solution.event_count; ++event) {
         const GpuManifoldSurfacePoint surface = solution.surfaces[event];
         const GpuManifoldOpticalState optical =
             resolve_manifold_optical_state(
@@ -2287,13 +2287,12 @@ __global__ void evaluate_specular_manifold_contributions_kernel(
             if (telemetry) atomicAdd(&telemetry->rejected_response, 1u);
             return;
         }
-        const GpuVec3 previous_position = event > 0
-            ? solution.surfaces[event - 1].position : anchor.position;
+        const GpuVec3 next_position = event + 1 < solution.event_count
+            ? solution.surfaces[event + 1].position : light.position;
         GpuRay incoming = {};
-        incoming.direction = (surface.position - next_position).normalize();
+        incoming.direction = (surface.position - previous_position).normalize();
         GpuRay scattered = {};
-        scattered.direction =
-            (previous_position - surface.position).normalize();
+        scattered.direction = (next_position - surface.position).normalize();
         SpectralPacket output_i = {};
         SpectralPacket output_q = {};
         SpectralPacket output_u = {};
@@ -2324,7 +2323,7 @@ __global__ void evaluate_specular_manifold_contributions_kernel(
         stokes_q = output_q;
         stokes_u = output_u;
         stokes_v = output_v;
-        next_position = surface.position;
+        previous_position = surface.position;
     }
     const GpuVec3 first_to_anchor =
         (anchor.position - solution.surfaces[0].position).normalize();

@@ -23,7 +23,6 @@ struct GpuContext {
 
     GpuVec3* d_output = nullptr;
     GpuVec3* d_accum_buffer = nullptr;
-    GpuVec3* d_accum_sq_buffer = nullptr;
     int* d_sample_counts = nullptr;
 
     GpuVec3* d_normal_buffer = nullptr;
@@ -159,6 +158,7 @@ struct GpuContext {
     float* d_manifold_mis_weights = nullptr;
     GpuManifoldPathContribution* d_manifold_contributions = nullptr;
     GpuVec3* d_manifold_accum = nullptr;
+    GpuVec3* d_specular_emitter_accum = nullptr;
     std::uint32_t* d_manifold_pending_count = nullptr;
     GpuManifoldSeedPrimitive* d_manifold_seed_primitives = nullptr;
     int manifold_seed_primitive_count = 0;

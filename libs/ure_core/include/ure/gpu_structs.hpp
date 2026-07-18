@@ -673,6 +673,7 @@ struct GpuScene {
     GpuBidirectionalTelemetry* bidirectional_telemetry;
     GpuManifoldSeedPrimitive* manifold_seed_primitives;
     int manifold_seed_primitive_count;
+    int manifold_sms_partition;
     int light_count;
 
     // Global Homogeneous Medium (Volumetric Fog)

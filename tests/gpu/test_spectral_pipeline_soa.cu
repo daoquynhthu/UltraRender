@@ -1256,7 +1256,8 @@ __global__ void bsdf_mix_contract_kernel(GpuScene scene, GpuMaterial parent, flo
         bool ok = scatter(incoming, selected.material, selected.spectra.albedo,
             selected.spectra.extinction, selected.spectra.metal_eta, selected.dielectric_ior,
             p, n, uv, throughput, attenuation, scattered, stokes, seed, pdf, 20.0f,
-            sample, 17, 0, 2, 1.0f, 1.0f, SpectralRayModePacket, -1);
+            sample, 17, 0, 2, 1.0f, 1.0f,
+            BoundaryTransportMode::Radiance, SpectralRayModePacket, -1);
         if (ok) attenuation_sum += attenuation.values[0];
     }
     out[3] = attenuation_sum / float(sample_count);
@@ -1454,8 +1455,11 @@ __global__ void t10_kernel(float* out_ior, float* out_attenuation, int num_spec)
                       0,
                       0,
                       num_spec,
-                      1.0f,
-                      1.0f);
+                       1.0f,
+                       1.0f,
+                       BoundaryTransportMode::Radiance,
+                       SpectralRayModePacket,
+                       -1);
 
     if (!ok) {
         out_attenuation[0] = -1.0f;
@@ -1551,8 +1555,11 @@ __global__ void t11_kernel(float* out_attenuation, float* out_expected, int num_
                       0,
                       0,
                       num_spec,
-                      1.0f,
-                      1.0f);
+                       1.0f,
+                       1.0f,
+                       BoundaryTransportMode::Radiance,
+                       SpectralRayModePacket,
+                       -1);
 
     if (!ok) {
         out_attenuation[0] = -1.0f;
@@ -1814,7 +1821,10 @@ __global__ void t12_kernel(float* out_weight, float* out_enter, float* out_exit,
                                 0,
                                 num_spec,
                                 1.0f,
-                                1.5f);
+                                1.5f,
+                                BoundaryTransportMode::Radiance,
+                                SpectralRayModePacket,
+                                -1);
         if (!enter_ok || inside_ray.direction.z >= -0.99f) {
             continue;
         }
@@ -1843,7 +1853,10 @@ __global__ void t12_kernel(float* out_weight, float* out_enter, float* out_exit,
                                1,
                                num_spec,
                                1.0f,
-                               1.5f);
+                               1.5f,
+                               BoundaryTransportMode::Radiance,
+                               SpectralRayModePacket,
+                               -1);
         if (!exit_ok || exit_ray.direction.z >= -0.99f) {
             continue;
         }
@@ -2100,6 +2113,7 @@ __global__ void c7_lane_dielectric_active_channel_kernel(float* out_dir_z, int* 
             num_spec,
             1.0f,
             1.1f,
+            BoundaryTransportMode::Radiance,
             SpectralRayModeLane,
             0);
         if (ok) {
@@ -2383,6 +2397,7 @@ __global__ void c10_rough_dielectric_microfacet_kernel(float* out, int* out_samp
             num_spec,
             1.0f,
             1.5f,
+            BoundaryTransportMode::Radiance,
             SpectralRayModePacket,
             -1);
         if (!ok || scattered.direction.z >= -1e-6f) {

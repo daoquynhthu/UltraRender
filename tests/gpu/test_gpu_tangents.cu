@@ -6,9 +6,6 @@
 #include "ure/gpu_context.hpp"
 #include "ure/log.hpp"
 
-// Include the kernel source directly to access GpuContext internals
-#include "../../libs/ure_core/src/path_tracer_kernel.cu"
-
 using namespace ure::gpu;
 
 static int test_tangent_upload_readback() {

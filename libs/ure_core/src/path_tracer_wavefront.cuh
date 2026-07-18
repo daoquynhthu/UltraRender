@@ -532,7 +532,8 @@ __device__ inline bool split_dispersive_dielectric_lanes(
                 }
                 next_queue.pixel_indices[out_idx] = pixel_index;
                 next_queue.depths[out_idx] = depth + 1;
-                next_queue.flags[out_idx] = 1;
+                next_queue.flags[out_idx] =
+                    1 | (current_queue.flags[idx] & 2);
                 next_queue.last_pdf[out_idx] = 1.0f;
                 next_queue.spectral_modes[out_idx] = SpectralRayModeLane;
                 next_queue.active_channels[out_idx] = c;
@@ -579,7 +580,8 @@ __device__ inline bool split_dispersive_dielectric_lanes(
                 }
                 next_queue.pixel_indices[out_idx] = pixel_index;
                 next_queue.depths[out_idx] = depth + 1;
-                next_queue.flags[out_idx] = 1;
+                next_queue.flags[out_idx] =
+                    1 | (current_queue.flags[idx] & 2);
                 next_queue.last_pdf[out_idx] = 1.0f;
                 next_queue.spectral_modes[out_idx] = SpectralRayModeLane;
                 next_queue.active_channels[out_idx] = c;
@@ -734,6 +736,7 @@ __global__ __launch_bounds__(256) void shade_kernel(
     RayQueue next_queue,
     ShadowQueue shadow_queue,
     GpuVec3* accum_buffer,
+    GpuVec3* specular_emitter_accum,
     GpuVec3* normal_buffer,
     GpuVec3* albedo_buffer,
     float* depth_buffer,
@@ -1200,6 +1203,26 @@ __global__ __launch_bounds__(256) void shade_kernel(
              }
         }
 
+        if (specular_emitter_accum && depth > 0 && (flag & 3) == 3 &&
+            mis_weight > 0.0f) {
+            SpectralPacket reference_emission = mat_soa.emission;
+            for (int c = 0; c < scene.num_spectral_channels; ++c) {
+                reference_emission.wavelengths[c] = throughput.wavelengths[c];
+            }
+            const SpectralPacket reference =
+                throughput * reference_emission * mis_weight;
+            const GpuVec3 rgb = xyz_to_rgb(spectral_mode_is_sampled(spectral_mode)
+                ? spectral_sample_to_xyz(
+                    reference, scene.num_spectral_channels, active_channel,
+                    current_queue.wavelength_pdfs[idx], spectral_mode)
+                : spectrum_to_xyz(reference, scene.num_spectral_channels));
+            atomicAdd(&specular_emitter_accum[pixel_index].x, rgb.x);
+            atomicAdd(&specular_emitter_accum[pixel_index].y, rgb.y);
+            atomicAdd(&specular_emitter_accum[pixel_index].z, rgb.z);
+        }
+        if (scene.manifold_sms_partition && depth > 0 && (flag & 3) == 3) {
+            mis_weight = 0.0f;
+        }
         if (mis_weight > 0.0f) {
             SpectralPacket emission_spectrum = mat_soa.emission;
             for (int c = 0; c < scene.num_spectral_channels; ++c) {
@@ -1486,13 +1509,13 @@ __global__ __launch_bounds__(256) void shade_kernel(
                     new_throughput = new_throughput * (1.0f / prob);
                 }
 
-                int next_flag = 0;
+                int next_flag = 2;
                 bool is_delta = scene.light_count == 0 ||
                     (mat.type == MaterialType::Metal && mat.roughness <= 0.02f) ||
                     (mat.type == MaterialType::Dielectric && pdf_val <= 0.0f) ||
                     (is_layered && pdf_val <= 0.0f);
                 if (is_delta) {
-                    next_flag = 1;
+                    next_flag = 1 | (flag & 2);
                 }
 
                 const float reverse_pdf = mat.type == MaterialType::Lambertian

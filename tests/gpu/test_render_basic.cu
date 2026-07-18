@@ -870,7 +870,7 @@ static int test_shade_kernel_emissive() {
 
     GpuCamera current_camera = make_test_camera(0.0f);
     GpuCamera previous_camera = current_camera;
-    shade_kernel<<<1, 1>>>(qA, hQ, qB, sQ, d_accum, nullptr, nullptr, nullptr, nullptr, nullptr, current_camera, previous_camera, scene, 0, 5.0f, 0.1f);
+    shade_kernel<<<1, 1>>>(qA, hQ, qB, sQ, d_accum, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, current_camera, previous_camera, scene, 0, 5.0f, 0.1f);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
 
@@ -1009,7 +1009,7 @@ static int test_dispersive_dielectric_splits_packet_to_lanes() {
 
     GpuCamera current_camera = make_test_camera(0.0f);
     GpuCamera previous_camera = make_test_camera(0.0f);
-    shade_kernel<<<1, 1>>>(qA, hQ, qB, sQ, d_accum, d_normal, d_albedo_buf, d_depth, d_uv, d_motion, current_camera, previous_camera, scene, 0, 20.0f, 0.05f);
+    shade_kernel<<<1, 1>>>(qA, hQ, qB, sQ, d_accum, nullptr, d_normal, d_albedo_buf, d_depth, d_uv, d_motion, current_camera, previous_camera, scene, 0, 20.0f, 0.05f);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
 
@@ -1162,7 +1162,7 @@ static int test_dispersive_dielectric_critical_angle_splits_n8() {
 
     GpuCamera current_camera = make_test_camera(0.0f);
     GpuCamera previous_camera = current_camera;
-    shade_kernel<<<1, 1>>>(qA, hQ, qB, sQ, d_accum, d_normal, d_albedo_buf, d_depth, d_uv, d_motion, current_camera, previous_camera, scene, 0, 20.0f, 0.05f);
+    shade_kernel<<<1, 1>>>(qA, hQ, qB, sQ, d_accum, nullptr, d_normal, d_albedo_buf, d_depth, d_uv, d_motion, current_camera, previous_camera, scene, 0, 20.0f, 0.05f);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
 
@@ -2746,14 +2746,7 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
     const float camera_position[] = {0.0f, 0.0f, 2.0f};
     const float camera_target[] = {0.0f, 0.0f, -1.0f};
     update_camera_gpu(ctx, camera_position, camera_target, 18.0f);
-    bool rejected = false;
-    try {
-        render_pass_gpu(ctx, 1);
-    } catch (const std::runtime_error& error) {
-        rejected = std::string(error.what()).find("R-P4 implementation") !=
-                   std::string::npos;
-    }
-    CHECK(rejected);
+    CHECK(render_pass_gpu(ctx, 1) == 1);
     CHECK(ctx->last_bidirectional_telemetry.light_vertices > 16);
     CHECK(ctx->last_bidirectional_telemetry.camera_vertices > 0);
     CHECK(ctx->last_bidirectional_telemetry.attempted_connections > 0);
@@ -3061,14 +3054,7 @@ static int test_bidirectional_light_subpath_transports_rough_metal_stokes() {
     GpuContext* ctx = init_gpu_renderer(
         8, 8, {}, {}, {ground, light}, {metal, emitter}, {}, config);
     CHECK(ctx != nullptr);
-    bool rejected = false;
-    try {
-        render_pass_gpu(ctx, 1);
-    } catch (const std::runtime_error& error) {
-        rejected = std::string(error.what()).find("R-P4 implementation") !=
-                   std::string::npos;
-    }
-    CHECK(rejected);
+    CHECK(render_pass_gpu(ctx, 1) == 1);
     std::vector<GpuBidirectionalPathVertex> vertices(
         config.queue_capacity * config.bidirectional.max_light_vertices);
     CHECK_CUDA(cudaMemcpy(
@@ -3097,14 +3083,7 @@ static int test_bidirectional_light_subpath_transports_rough_metal_stokes() {
     ctx = init_gpu_renderer(
         8, 8, {}, {}, {ground, light}, {dielectric, emitter}, {}, config);
     CHECK(ctx != nullptr);
-    rejected = false;
-    try {
-        render_pass_gpu(ctx, 1);
-    } catch (const std::runtime_error& error) {
-        rejected = std::string(error.what()).find("R-P4 implementation") !=
-                   std::string::npos;
-    }
-    CHECK(rejected);
+    CHECK(render_pass_gpu(ctx, 1) == 1);
     CHECK_CUDA(cudaMemcpy(
         vertices.data(), ctx->d_light_path_vertices,
         vertices.size() * sizeof(GpuBidirectionalPathVertex),
@@ -3160,14 +3139,7 @@ static int test_vcm_builds_bounded_grid_and_merges_surface_vertices() {
     const float camera_position[] = {0.0f, 0.0f, 2.0f};
     const float camera_target[] = {0.0f, 0.0f, -1.0f};
     update_camera_gpu(ctx, camera_position, camera_target, 18.0f);
-    bool rejected = false;
-    try {
-        render_pass_gpu(ctx, 1);
-    } catch (const std::runtime_error& error) {
-        rejected = std::string(error.what()).find("R-P4 implementation") !=
-                   std::string::npos;
-    }
-    CHECK(rejected);
+    CHECK(render_pass_gpu(ctx, 1) == 1);
     CHECK(ctx->vcm_radius_iteration == 1);
     CHECK_FLOAT_EQ(
         ctx->vcm_current_surface_radius,
@@ -3210,14 +3182,7 @@ static int test_vcm_builds_bounded_grid_and_merges_surface_vertices() {
     update_medium_gpu(
         ctx, 2.0f, 0.0f, SpectralPacket(1.0f), SpectralPacket(0.0f),
         10.0f, static_cast<int>(VolumePhaseFunction::HenyeyGreenstein));
-    rejected = false;
-    try {
-        render_pass_gpu(ctx, 1);
-    } catch (const std::runtime_error& error) {
-        rejected = std::string(error.what()).find("R-P4 implementation") !=
-                   std::string::npos;
-    }
-    CHECK(rejected);
+    CHECK(render_pass_gpu(ctx, 1) == 1);
     entry_count = 0;
     CHECK_CUDA(cudaMemcpy(
         &entry_count, ctx->d_vcm_volume_grid_entry_count,
@@ -3278,6 +3243,7 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
     CHECK(ctx->d_manifold_mis_weights != nullptr);
     CHECK(ctx->d_manifold_contributions != nullptr);
     CHECK(ctx->d_manifold_accum != nullptr);
+    CHECK(ctx->d_specular_emitter_accum != nullptr);
     CHECK(ctx->d_manifold_pending_count != nullptr);
     CHECK(ctx->d_manifold_telemetry != nullptr);
     std::vector<GpuBidirectionalPathVertex> camera_vertices(

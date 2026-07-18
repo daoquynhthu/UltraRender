@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-15 (Phase Q closure and R-P3 cursor)
+最后更新: 2026-07-18 (R-P4 closure and R-P5 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -51,7 +51,10 @@ R-P6 Mie / volume resources [done]
 Phase Q complete [done]
    │
    ▼
-当前游标: R-P4 → R-P5 → R-P7
+R-P4 specular manifold + BDPT/VCM [done]
+   │
+   ▼
+当前游标: R-P5 → R-P7
    │
    ▼
 Phase T complete
@@ -75,7 +78,8 @@ Phase X complete
 - **Phase M 已闭环**: MaterialGraph、BSDF layering、procedural nodes、MaterialX import/export 和 presets 已稳定材质语义；skin 采用 participating dielectric medium preset，不做 Lambert fallback。
 - **R-P6 已闭环**: deterministic Lorenz-Mie generator、严格 table adapter、不可变 SceneIR resource、GPU spectral eval/pdf/sample、NEE/continuation、scalar-depolarizing Stokes、Session rebuild 和端到端生命周期均已进入生产与验证路径。
 - **Phase Q 已闭环**: URE native schema、serialization、programmatic graph、feature declaration、tooling/adapter、compiled cache/farm 与 validation suite 已冻结为后续阶段的权威 authoring contract。
-- **当前唯一施工项 — Phase R remainder**: 固定顺序为 R-P4、R-P5、R-P7；R-P1/R-P2/R-P3/R-P6 已完成。当前游标为 R-P4，Phase R 未通过 R-P7 不得启动 Phase T 实现。
+- **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
+- **当前唯一施工项 — Phase R remainder**: 固定顺序为 R-P5、R-P7；R-P1/R-P2/R-P3/R-P4/R-P6 已完成。当前游标为 R-P5，Phase R 未通过 R-P7 不得启动 Phase T 实现。
 - **Phase T → V → W**: T 先稳定 backend-neutral runtime 并迁移 CUDA/Vulkan/DXR；V 再建设统一 acceleration provider；W 最后把已有 reference/oracle 工作接入稳定执行与加速合同。现有 W 成果保留，新增 W production work 冻结。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
@@ -1942,6 +1946,8 @@ R-P4 differential geometry closure：最终解不再误用 Newton constraint det
 R-P4 spectral response progress：sphere/triangle/instance manifold surface 与 light endpoint 已携带真实 UV；smooth-delta eligibility 会拒绝粗糙 metal/dielectric，色散 packet 必须先拆为 wavelength lane，material expression/texture 与 Cauchy IOR 均按实际 UV/wavelength 求值。独立 GPU SDS response artifact 会重算 light emission、anchor BSDF、逐事件实际 `eta_i/eta_t` Mueller/Stokes radiance transport，并显式消费 generalized geometry、endpoint PDF、reciprocal-root 与 MIS 权重；resolved artifact 已按 anchor wavelength state 转换并进入唯一 bidirectional film commit。GPU oracle 覆盖正 radiance、Stokes physical bound、rough/spectral-split rejection、nested-medium IOR identity 和 nonzero film commit。最终多场景 bias/energy/benefit benchmark 仍未完成。
 
 R-P4 reciprocal-root proposal closure：host 端按 bidirectional VRAM budget 持有覆盖全部非退化 sphere、direct mesh triangle 和 world-transformed instance triangle 的 GPU geometry catalog，保留稳定 identity/UV/material binding，且不因材质突变陈旧；非 smooth-specular proposal 是普通 Bernoulli miss。target/trial 共享 counter-based IID normalized proposal，联合采样 camera anchor、event count、catalog topology、uniform-area parameters 与 reflection/transmission branch。context-owned root state 以无固定上限的 8-trial bounded GPU pass 持续执行 geometric count，按完整 topology 与 converged world-position 匹配 target root，并在每个 render sample 提交前 drain 全部 pending。内部 delta-chain 对当前 connection/merge technique 是 disjoint support，显式 exclusive MIS=1；resolved spectral contribution 只进入一次 film commit。GPU gate 覆盖 proposal density、16-path pending drain、reciprocal weights、telemetry、VRAM lifecycle 与 nonzero commit；最终 statistical bias/variance/benefit benchmark 仍未完成。
+
+R-P4 final closure：standalone SMS 只接管“non-delta area anchor → 1..4 smooth-delta events → finite emitter”的精确支持集；wavefront flag 独立携带 last-delta 与 preceding-area-anchor 状态，未覆盖的 camera-delta、environment、rough、volume-interrupted 路径继续由 wavefront 负责。dielectric Mueller/Stokes response 按 camera-subpath 的 anchor→light radiance transport 方向应用 eta scale。独立 wavefront technique AOV 在分区前记录同一支持集，四场景 suite 不再使用 total-image subtraction 或 SMS self-reference。2026-07-18 默认 Release suite 以 8192 SPP 基准和 rare-event adaptive reference budgets 通过 glass caustic、SDS、small emitter、mixed rough/specular；high-SPP relative mean bias 为 14.3%/7.6%/7.1%/1.3%，95% bound 为 26.5%/32.2%/27.0%/14.1%，2 个 workload 给出正 time-to-error。R-P4 已闭环，权威游标进入 R-P5。
 
 #### Phase R 执行顺序
 
