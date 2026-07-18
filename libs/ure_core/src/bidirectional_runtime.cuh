@@ -112,5 +112,21 @@ __global__ void solve_specular_manifold_paths_kernel(
     int max_specular_events,
     float tolerance,
     int max_iterations,
+    float dispersion_clamp,
+    std::uint32_t scene_epoch,
+    GpuManifoldTelemetry* telemetry);
+
+__global__ void evaluate_specular_manifold_contributions_kernel(
+    GpuScene scene,
+    const GpuBidirectionalPathVertex* camera_vertices,
+    int max_camera_vertices,
+    const GpuBidirectionalPathVertex* light_vertices,
+    int max_light_vertices,
+    const GpuManifoldPathSolution* solutions,
+    const float* root_reciprocal_weights,
+    const float* mis_weights,
+    GpuManifoldPathContribution* contributions,
+    int path_count,
+    float dispersion_clamp,
     std::uint32_t scene_epoch,
     GpuManifoldTelemetry* telemetry);

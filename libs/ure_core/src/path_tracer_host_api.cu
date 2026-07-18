@@ -3333,6 +3333,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
                 ctx->render_config.specular_manifold.max_specular_events,
                 ctx->render_config.specular_manifold.solver_tolerance,
                 ctx->render_config.specular_manifold.max_newton_iterations,
+                ctx->current_spp < 100 ? 5.0f : 20.0f,
                 ctx->bidirectional_scene_epoch,
                 ctx->d_manifold_telemetry);
             UR_CUDA_CHECK(cudaGetLastError());

@@ -22,7 +22,11 @@ struct GpuManifoldPrimitive {
     GpuVec3 p0 = {};
     GpuVec3 p1 = {};
     GpuVec3 p2 = {};
+    GpuVec2 uv0 = {};
+    GpuVec2 uv1 = {};
+    GpuVec2 uv2 = {};
     float radius = 0.0f;
+    int has_uv = 0;
 };
 
 struct GpuManifoldSurfacePoint {
@@ -30,6 +34,7 @@ struct GpuManifoldSurfacePoint {
     GpuVec3 normal = {};
     GpuVec3 dp_du = {};
     GpuVec3 dp_dv = {};
+    GpuVec2 uv = {};
     int valid = 0;
 };
 
@@ -75,7 +80,9 @@ enum class GpuManifoldRejectReason : int {
     Residual = 7,
     Stale = 8,
     Occluded = 9,
-    InvalidDifferential = 10
+    InvalidDifferential = 10,
+    NonDeltaMaterial = 11,
+    SpectralSplitRequired = 12
 };
 
 struct GpuManifoldPathSolution {
@@ -108,6 +115,21 @@ struct GpuManifoldDifferentialResult {
     int valid = 0;
 };
 
+struct GpuManifoldPathContribution {
+    SpectralPacket radiance = {};
+    SpectralPacket emission = {};
+    SpectralPacket anchor_scattering = {};
+    SpectralPacket specular_response = {};
+    SpectralPacket stokes_i = {};
+    SpectralPacket stokes_q = {};
+    SpectralPacket stokes_u = {};
+    SpectralPacket stokes_v = {};
+    float root_reciprocal_weight = 0.0f;
+    float mis_weight = 0.0f;
+    std::uint32_t scene_epoch = 0;
+    int valid = 0;
+};
+
 struct GpuManifoldTelemetry {
     std::uint32_t attempted = 0;
     std::uint32_t converged = 0;
@@ -120,6 +142,9 @@ struct GpuManifoldTelemetry {
     std::uint32_t rejected_stale = 0;
     std::uint32_t rejected_occluded = 0;
     std::uint32_t rejected_differential = 0;
+    std::uint32_t rejected_non_delta = 0;
+    std::uint32_t rejected_spectral_split = 0;
+    std::uint32_t rejected_response = 0;
     std::uint64_t total_iterations = 0;
 };
 
@@ -143,6 +168,7 @@ static __device__ inline bool extract_gpu_manifold_primitive(
         primitive.kind = GpuManifoldPrimitiveKind::Sphere;
         primitive.p0 = sphere.center;
         primitive.radius = sphere.radius;
+        primitive.has_uv = 1;
         return true;
     }
     int mesh_index = geometry_index;
@@ -169,6 +195,12 @@ static __device__ inline bool extract_gpu_manifold_primitive(
     primitive.p0 = mesh.vertices[i0];
     primitive.p1 = mesh.vertices[i1];
     primitive.p2 = mesh.vertices[i2];
+    if (mesh.uvs) {
+        primitive.uv0 = mesh.uvs[i0];
+        primitive.uv1 = mesh.uvs[i1];
+        primitive.uv2 = mesh.uvs[i2];
+        primitive.has_uv = 1;
+    }
     if (instance) {
         primitive.p0 = instance->transform.transform_point(primitive.p0);
         primitive.p1 = instance->transform.transform_point(primitive.p1);
@@ -228,6 +260,7 @@ evaluate_gpu_manifold_surface(
         surface.normal = GpuVec3(
             sin_theta * cos_phi, cos_theta, sin_theta * sin_phi);
         surface.position = primitive.p0 + surface.normal * primitive.radius;
+        surface.uv = GpuVec2(v, u);
         surface.dp_du = GpuVec3(
             cos_theta * cos_phi, -sin_theta, cos_theta * sin_phi) *
             (primitive.radius * 3.14159265358979323846f);
@@ -243,6 +276,10 @@ evaluate_gpu_manifold_surface(
         surface.normal = raw_normal.normalize();
         surface.position = primitive.p0 + surface.dp_du * u +
             surface.dp_dv * v;
+        if (primitive.has_uv) {
+            surface.uv = primitive.uv0 * (1.0f - u - v) +
+                primitive.uv1 * u + primitive.uv2 * v;
+        }
     }
     if (surface.dp_du.length_sq() <= 1e-16f ||
         surface.dp_dv.length_sq() <= 1e-16f) return {};

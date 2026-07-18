@@ -257,6 +257,83 @@ __device__ float bidirectional_complete_path_connection_mis_weight(
         light_path_count);
 }
 
+struct GpuManifoldOpticalState {
+    GpuMaterial material = {};
+    GpuMaterialSoA spectra = {};
+    SpectralPacket dielectric_ior = {};
+    int valid = 0;
+};
+
+__device__ GpuManifoldOpticalState resolve_manifold_optical_state(
+    const GpuScene& scene,
+    int material_index,
+    const GpuVec2& uv,
+    const float* wavelengths,
+    float dispersion_clamp) {
+    GpuManifoldOpticalState state = {};
+    if (material_index < 0 || material_index >= scene.material_count ||
+        !wavelengths) return state;
+    state.material = scene.materials[material_index];
+    if (state.material.type != MaterialType::Metal &&
+        state.material.type != MaterialType::Dielectric) return state;
+    state.spectra = load_mat_spectra_6x(
+        scene, material_index, wavelengths);
+    if (state.material.albedo_expression_root >= 0) {
+        state.spectra.albedo = eval_material_expression(
+            scene, state.material, state.material.albedo_expression_root,
+            uv.u, uv.v, wavelengths, scene.num_spectral_channels);
+    }
+    if (state.material.texture_index >= 0) {
+        state.spectra.albedo = state.spectra.albedo * sample_texture(
+            scene, state.material.texture_index, uv.u, uv.v,
+            wavelengths, scene.num_spectral_channels);
+    }
+    if (state.material.metal_eta_expression_root >= 0) {
+        state.spectra.metal_eta = eval_material_expression(
+            scene, state.material,
+            state.material.metal_eta_expression_root,
+            uv.u, uv.v, wavelengths, scene.num_spectral_channels);
+    }
+    if (state.material.extinction_expression_root >= 0) {
+        state.spectra.extinction = eval_material_expression(
+            scene, state.material,
+            state.material.extinction_expression_root,
+            uv.u, uv.v, wavelengths, scene.num_spectral_channels);
+    }
+    if (state.material.roughness_expression_root >= 0) {
+        state.material.roughness = fminf(1.0f, fmaxf(
+            0.001f, material_expression_scalar(
+                scene, state.material,
+                state.material.roughness_expression_root,
+                uv, wavelengths)));
+    }
+    if (state.material.roughness_texture_index >= 0) {
+        const SpectralPacket roughness = sample_texture(
+            scene, state.material.roughness_texture_index,
+            uv.u, uv.v, wavelengths, scene.num_spectral_channels);
+        float average = 0.0f;
+        for (int channel = 0; channel < scene.num_spectral_channels;
+             ++channel) average += roughness.values[channel];
+        state.material.roughness = fminf(1.0f, fmaxf(
+            0.001f, state.material.roughness * average /
+                fmaxf(1.0f, float(scene.num_spectral_channels))));
+    }
+    state.dielectric_ior = SpectralPacket(state.material.ior);
+    for (int channel = 0; channel < scene.num_spectral_channels; ++channel) {
+        state.dielectric_ior.wavelengths[channel] = wavelengths[channel];
+        state.dielectric_ior.values[channel] = dispersed_dielectric_ior(
+            state.material.ior, state.material.dispersion,
+            wavelengths[channel], dispersion_clamp);
+    }
+    if (state.material.ior_expression_root >= 0) {
+        state.dielectric_ior = eval_material_expression(
+            scene, state.material, state.material.ior_expression_root,
+            uv.u, uv.v, wavelengths, scene.num_spectral_channels);
+    }
+    state.valid = 1;
+    return state;
+}
+
 __device__ bool evaluate_bidirectional_vertex_scattering(
     const GpuScene& scene,
     const GpuBidirectionalPathVertex& vertex,
@@ -406,6 +483,7 @@ __device__ bool sample_light_position(const GpuScene& scene,
                                       float u2,
                                       GpuVec3& position,
                                       GpuVec3& normal,
+                                      GpuVec2& uv,
                                       int& material_index,
                                       int& geometry_type,
                                       int& geometry_index,
@@ -423,6 +501,11 @@ __device__ bool sample_light_position(const GpuScene& scene,
         const GpuSphere sphere = scene.spheres[record.primitive_index];
         normal = sample_unit_vector_lds(u1, u2);
         position = sphere.center + normal * sphere.radius;
+        uv.u = atan2f(normal.z, normal.x) /
+            6.2831853071795864769f;
+        if (uv.u < 0.0f) uv.u += 1.0f;
+        uv.v = acosf(fminf(1.0f, fmaxf(-1.0f, normal.y))) /
+            3.14159265358979323846f;
         material_index = sphere.material_index;
         geometry_type = 0;
         primitive_index = record.primitive_index;
@@ -437,6 +520,17 @@ __device__ bool sample_light_position(const GpuScene& scene,
         position = v0 * b0 + v1 * b1 + v2 * b2;
         normal = (v1 - v0).cross(v2 - v0).normalize();
         geometry_type = record.kind == GpuLightKind::MeshTriangle ? 1 : 2;
+        const int mesh_index = record.kind == GpuLightKind::MeshTriangle
+            ? record.primitive_index
+            : scene.instance_descs[record.primitive_index].mesh_index;
+        const GpuMesh mesh = scene.meshes[mesh_index];
+        if (mesh.uvs) {
+            const int i0 = mesh.indices[record.secondary_index * 3];
+            const int i1 = mesh.indices[record.secondary_index * 3 + 1];
+            const int i2 = mesh.indices[record.secondary_index * 3 + 2];
+            uv = mesh.uvs[i0] * b0 + mesh.uvs[i1] * b1 +
+                mesh.uvs[i2] * b2;
+        }
     } else {
         return false;
     }
@@ -604,6 +698,7 @@ __global__ void generate_light_subpath_endpoints_kernel(
             sample_dimension(sample_index, path_index, 65),
             sample_dimension(sample_index, path_index, 66),
             vertex.position, vertex.geometric_normal,
+            vertex.uv,
             vertex.material_index, vertex.geometry_type,
             vertex.geometry_index, vertex.primitive_index,
             position_pdf)) {
@@ -631,8 +726,23 @@ __global__ void generate_light_subpath_endpoints_kernel(
             ((kSpectralLambdaMax - kSpectralLambdaMin) /
              float(scene.num_spectral_channels));
     }
-    const SpectralPacket emission = load_mat_emission_spectrum(
+    const GpuMaterial light_material =
+        scene.materials[vertex.material_index];
+    SpectralPacket emission = load_mat_emission_spectrum(
         scene, vertex.material_index, vertex.throughput.wavelengths);
+    if (light_material.emission_expression_root >= 0) {
+        emission = eval_material_expression(
+            scene, light_material,
+            light_material.emission_expression_root,
+            vertex.uv.u, vertex.uv.v, vertex.throughput.wavelengths,
+            scene.num_spectral_channels);
+    }
+    if (light_material.emission_texture_index >= 0) {
+        emission = emission * sample_texture(
+            scene, light_material.emission_texture_index,
+            vertex.uv.u, vertex.uv.v, vertex.throughput.wavelengths,
+            scene.num_spectral_channels);
+    }
     const float joint_pdf = position_pdf * vertex.forward_directional_pdf;
     if (joint_pdf <= 0.0f || cosine <= 0.0f) return;
     vertex.throughput = emission * (1.0f / position_pdf);
@@ -1428,6 +1538,7 @@ __global__ void solve_specular_manifold_paths_kernel(
     int max_specular_events,
     float tolerance,
     int max_iterations,
+    float dispersion_clamp,
     std::uint32_t scene_epoch,
     GpuManifoldTelemetry* telemetry) {
     const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1489,6 +1600,43 @@ __global__ void solve_specular_manifold_paths_kernel(
             if (telemetry) atomicAdd(&telemetry->rejected_material, 1u);
             return;
         }
+        const GpuManifoldOpticalState optical =
+            resolve_manifold_optical_state(
+                scene, vertex.material_index, vertex.uv,
+                vertex.throughput.wavelengths, dispersion_clamp);
+        if (!optical.valid || optical.material.roughness > 0.001001f) {
+            solution.reject_reason = GpuManifoldRejectReason::NonDeltaMaterial;
+            solutions[path_index] = solution;
+            if (telemetry) atomicAdd(&telemetry->rejected_non_delta, 1u);
+            return;
+        }
+        int spectral_channel = 0;
+        if (spectral_mode_is_sampled(vertex.spectral_mode)) {
+            spectral_channel = vertex.active_channel;
+            if (spectral_channel < 0 ||
+                spectral_channel >= scene.num_spectral_channels) {
+                solution.reject_reason =
+                    GpuManifoldRejectReason::SpectralSplitRequired;
+                solutions[path_index] = solution;
+                if (telemetry) atomicAdd(
+                    &telemetry->rejected_spectral_split, 1u);
+                return;
+            }
+        } else if (material.type == MaterialType::Dielectric) {
+            const float reference_ior = optical.dielectric_ior.values[0];
+            for (int channel = 1; channel < scene.num_spectral_channels;
+                 ++channel) {
+                if (fabsf(optical.dielectric_ior.values[channel] -
+                           reference_ior) > 1e-6f) {
+                    solution.reject_reason =
+                        GpuManifoldRejectReason::SpectralSplitRequired;
+                    solutions[path_index] = solution;
+                    if (telemetry) atomicAdd(
+                        &telemetry->rejected_spectral_split, 1u);
+                    return;
+                }
+            }
+        }
         if (!extract_gpu_manifold_primitive(
                 scene, vertex.geometry_type, vertex.geometry_index,
                 vertex.primitive_index, events[event].primitive) ||
@@ -1505,8 +1653,23 @@ __global__ void solve_specular_manifold_paths_kernel(
                 vertex.outgoing.dot(vertex.geometric_normal) < 0.0f ? 1 : 0;
         const bool outside =
             vertex.incoming.dot(vertex.geometric_normal) > 0.0f;
-        events[event].eta_i = outside ? 1.0f : material.ior;
-        events[event].eta_t = outside ? material.ior : 1.0f;
+        const float manifold_ior =
+            optical.dielectric_ior.values[spectral_channel];
+        float surrounding_ior = 1.0f;
+        if (vertex.medium_index >= 0 &&
+            vertex.medium_index != vertex.material_index &&
+            vertex.medium_index < scene.material_count) {
+            const GpuManifoldOpticalState surrounding =
+                resolve_manifold_optical_state(
+                    scene, vertex.medium_index, vertex.uv,
+                    vertex.throughput.wavelengths, dispersion_clamp);
+            if (surrounding.valid) {
+                surrounding_ior =
+                    surrounding.dielectric_ior.values[spectral_channel];
+            }
+        }
+        events[event].eta_i = outside ? surrounding_ior : manifold_ior;
+        events[event].eta_t = outside ? manifold_ior : surrounding_ior;
         if (!events[event].transmission) {
             events[event].eta_i = 1.0f;
             events[event].eta_t = 1.0f;
@@ -1629,6 +1792,162 @@ __global__ void solve_specular_manifold_paths_kernel(
             reinterpret_cast<unsigned long long*>(&telemetry->total_iterations),
             static_cast<unsigned long long>(solved.iterations));
     }
+}
+
+__device__ SpectralPacket manifold_light_emission(
+    const GpuScene& scene,
+    const GpuBidirectionalPathVertex& light,
+    const float* wavelengths) {
+    const GpuMaterial material = scene.materials[light.material_index];
+    SpectralPacket emission = load_mat_emission_spectrum(
+        scene, light.material_index, wavelengths);
+    if (material.emission_expression_root >= 0) {
+        emission = eval_material_expression(
+            scene, material, material.emission_expression_root,
+            light.uv.u, light.uv.v, wavelengths,
+            scene.num_spectral_channels);
+    }
+    if (material.emission_texture_index >= 0) {
+        emission = emission * sample_texture(
+            scene, material.emission_texture_index,
+            light.uv.u, light.uv.v, wavelengths,
+            scene.num_spectral_channels);
+    }
+    return emission;
+}
+
+__global__ void evaluate_specular_manifold_contributions_kernel(
+    GpuScene scene,
+    const GpuBidirectionalPathVertex* camera_vertices,
+    int max_camera_vertices,
+    const GpuBidirectionalPathVertex* light_vertices,
+    int max_light_vertices,
+    const GpuManifoldPathSolution* solutions,
+    const float* root_reciprocal_weights,
+    const float* mis_weights,
+    GpuManifoldPathContribution* contributions,
+    int path_count,
+    float dispersion_clamp,
+    std::uint32_t scene_epoch,
+    GpuManifoldTelemetry* telemetry) {
+    const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+    if (path_index >= path_count || !camera_vertices || !light_vertices ||
+        !solutions || !root_reciprocal_weights || !mis_weights ||
+        !contributions || max_camera_vertices <= 0 ||
+        max_light_vertices <= 0) return;
+    GpuManifoldPathContribution contribution = {};
+    contribution.scene_epoch = scene_epoch;
+    const GpuManifoldPathSolution solution = solutions[path_index];
+    const float reciprocal_weight = root_reciprocal_weights[path_index];
+    const float mis_weight = mis_weights[path_index];
+    if (!solution.valid || solution.scene_epoch != scene_epoch ||
+        solution.anchor_camera_vertex < 0 ||
+        solution.anchor_camera_vertex >= max_camera_vertices ||
+        solution.anchor_camera_vertex + solution.event_count >=
+            max_camera_vertices ||
+        solution.light_vertex < 0 ||
+        solution.light_vertex >= max_light_vertices ||
+        solution.event_count <= 0 || solution.event_count > 4 ||
+        !(solution.generalized_geometry > 0.0f) ||
+        !(reciprocal_weight > 0.0f) || !(mis_weight > 0.0f)) {
+        contributions[path_index] = contribution;
+        if (telemetry) atomicAdd(&telemetry->rejected_response, 1u);
+        return;
+    }
+    const GpuBidirectionalPathVertex* camera_path =
+        camera_vertices + path_index * max_camera_vertices;
+    const GpuBidirectionalPathVertex* light_path =
+        light_vertices + path_index * max_light_vertices;
+    const GpuBidirectionalPathVertex anchor =
+        camera_path[solution.anchor_camera_vertex];
+    const GpuBidirectionalPathVertex light =
+        light_path[solution.light_vertex];
+    if (!anchor.valid || !light.valid ||
+        anchor.scene_epoch != scene_epoch || light.scene_epoch != scene_epoch ||
+        light.material_index < 0 ||
+        light.material_index >= scene.material_count ||
+        !(light.endpoint_pdf > 0.0f)) {
+        contributions[path_index] = contribution;
+        if (telemetry) atomicAdd(&telemetry->rejected_response, 1u);
+        return;
+    }
+    SpectralPacket stokes_i(1.0f);
+    SpectralPacket stokes_q(0.0f);
+    SpectralPacket stokes_u(0.0f);
+    SpectralPacket stokes_v(0.0f);
+    for (int channel = 0; channel < scene.num_spectral_channels; ++channel) {
+        const float wavelength = anchor.throughput.wavelengths[channel];
+        stokes_i.wavelengths[channel] = wavelength;
+        stokes_q.wavelengths[channel] = wavelength;
+        stokes_u.wavelengths[channel] = wavelength;
+        stokes_v.wavelengths[channel] = wavelength;
+    }
+    GpuVec3 next_position = light.position;
+    for (int event = solution.event_count - 1; event >= 0; --event) {
+        const GpuManifoldSurfacePoint surface = solution.surfaces[event];
+        const GpuBidirectionalPathVertex seed =
+            camera_path[solution.anchor_camera_vertex + 1 + event];
+        const GpuManifoldOpticalState optical =
+            resolve_manifold_optical_state(
+                scene, seed.material_index, surface.uv,
+                anchor.throughput.wavelengths, dispersion_clamp);
+        if (!surface.valid || !optical.valid) {
+            contributions[path_index] = contribution;
+            if (telemetry) atomicAdd(&telemetry->rejected_response, 1u);
+            return;
+        }
+        const GpuVec3 previous_position = event > 0
+            ? solution.surfaces[event - 1].position : anchor.position;
+        GpuRay incoming = {};
+        incoming.direction = (surface.position - next_position).normalize();
+        GpuRay scattered = {};
+        scattered.direction =
+            (previous_position - surface.position).normalize();
+        SpectralPacket output_i = {};
+        SpectralPacket output_q = {};
+        SpectralPacket output_u = {};
+        SpectralPacket output_v = {};
+        transform_scattered_stokes_packets(
+            optical.material, optical.spectra, optical.dielectric_ior,
+            incoming, scattered, surface.normal, surface.uv,
+            anchor.throughput, 1.0f, dispersion_clamp,
+            int(seed.sample_index), path_index, event,
+            scene.num_spectral_channels, BoundaryTransportMode::Radiance,
+            stokes_i, stokes_q, stokes_u, stokes_v,
+            output_i, output_q, output_u, output_v);
+        stokes_i = output_i;
+        stokes_q = output_q;
+        stokes_u = output_u;
+        stokes_v = output_v;
+        next_position = surface.position;
+    }
+    const GpuVec3 first_to_anchor =
+        (anchor.position - solution.surfaces[0].position).normalize();
+    SpectralPacket anchor_factor = {};
+    if (!evaluate_bidirectional_vertex_scattering(
+            scene, anchor, -first_to_anchor, anchor.incoming,
+            dispersion_clamp, anchor_factor)) {
+        contributions[path_index] = contribution;
+        if (telemetry) atomicAdd(&telemetry->rejected_response, 1u);
+        return;
+    }
+    const SpectralPacket emission = manifold_light_emission(
+        scene, light, anchor.throughput.wavelengths);
+    const SpectralPacket base = anchor.throughput * anchor_factor * emission *
+        (solution.generalized_geometry * reciprocal_weight * mis_weight /
+         light.endpoint_pdf);
+    contribution.stokes_i = base * stokes_i;
+    contribution.stokes_q = base * stokes_q;
+    contribution.stokes_u = base * stokes_u;
+    contribution.stokes_v = base * stokes_v;
+    contribution.radiance = contribution.stokes_i;
+    contribution.emission = emission;
+    contribution.anchor_scattering = anchor_factor;
+    contribution.specular_response = stokes_i;
+    contribution.root_reciprocal_weight = reciprocal_weight;
+    contribution.mis_weight = mis_weight;
+    contribution.valid = 1;
+    contributions[path_index] = contribution;
 }
 
 }

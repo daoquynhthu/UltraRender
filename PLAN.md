@@ -1939,6 +1939,8 @@ R-P4 visibility closure：production manifold solve 对 anchor→specular chain�
 
 R-P4 differential geometry closure：最终解不再误用 Newton constraint determinant 作为 radiometric 权重；GPU 依据 specular-manifold differential geometry 重建 `|P₂ A⁻¹ B_L| × G(anchor, first)`，并分别持久化 constraint determinant、endpoint area Jacobian、ordinary geometry 与 generalized geometry。sphere 周期经度 seam 的中心差分已使用拓扑正确的 `2h` 分母；解析 planar mirror oracle、sphere oracle、生产 artifact 与 50 次重复稳定门禁均通过。SDS spectral/Stokes response、root-selection PDF/MIS 与最终 benchmark 仍未完成。
 
+R-P4 spectral response progress：sphere/triangle/instance manifold surface 与 light endpoint 已携带真实 UV；smooth-delta eligibility 会拒绝粗糙 metal/dielectric，色散 packet 必须先拆为 wavelength lane，material expression/texture 与 Cauchy IOR 均按实际 UV/wavelength 求值。独立 GPU SDS response artifact 已重算 light emission、anchor BSDF、逐事件 Mueller/Stokes radiance transport，并显式消费 generalized geometry、endpoint PDF、reciprocal-root 与 MIS 权重；GPU oracle 覆盖正 radiance、Stokes physical bound、rough rejection 和 spectral-split rejection。贡献尚不提交 film；必须先完成跨 pass 有界但期望无偏的 reciprocal-root SMS 状态与最终 MIS/scheduling gate。
+
 #### Phase R 执行顺序
 
 ```
