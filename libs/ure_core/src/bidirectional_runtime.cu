@@ -1554,6 +1554,25 @@ __global__ void solve_specular_manifold_paths_kernel(
         }
         return;
     }
+    const GpuManifoldDifferentialResult differential =
+        evaluate_gpu_manifold_differential(
+            events, event_count, anchor.position, light.position,
+            anchor.geometric_normal, light.geometric_normal,
+            solved.parameters);
+    solution.differential_status = differential.status;
+    solution.endpoint_area_jacobian = differential.endpoint_area_jacobian;
+    solution.ordinary_geometry = differential.ordinary_geometry;
+    solution.generalized_geometry = differential.generalized_geometry;
+    if (!differential.valid) {
+        solution.reject_reason =
+            GpuManifoldRejectReason::InvalidDifferential;
+        solutions[path_index] = solution;
+        if (telemetry) {
+            atomicAdd(&telemetry->rejected_differential, 1u);
+        }
+        return;
+    }
+    solution.determinant = differential.constraint_determinant;
     GpuVec3 segment_start = anchor.position;
     for (int segment = 0; segment <= event_count; ++segment) {
         const GpuVec3 segment_end = segment < event_count

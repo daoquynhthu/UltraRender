@@ -324,6 +324,52 @@ __global__ void manifold_primitive_newton_kernel(float* output) {
     output[15] = chain_result.surfaces[1].position.y;
     output[16] = chain_result.surfaces[1].position.z;
     output[17] = chain_result.residual;
+    GpuManifoldChainEvent planar = {};
+    planar.primitive.kind = GpuManifoldPrimitiveKind::Triangle;
+    planar.primitive.p0 = GpuVec3(-10.0f, -10.0f, 0.0f);
+    planar.primitive.p1 = GpuVec3(20.0f, -10.0f, 0.0f);
+    planar.primitive.p2 = GpuVec3(-10.0f, 20.0f, 0.0f);
+    planar.u = 1.0f / 3.0f;
+    planar.v = 1.0f / 3.0f;
+    planar.eta_i = 1.0f;
+    planar.eta_t = 1.0f;
+    const GpuVec3 planar_camera(-1.0f, 0.0f, 1.0f);
+    const GpuVec3 planar_light(1.0f, 0.0f, 1.0f);
+    const GpuManifoldChainSolveResult planar_solve =
+        solve_gpu_manifold_chain(
+            &planar, 1, planar_camera, planar_light, 1e-6f, 16);
+    const GpuManifoldDifferentialResult planar_differential =
+        evaluate_gpu_manifold_differential(
+            &planar, 1, planar_camera, planar_light,
+            GpuVec3(1.0f, 0.0f, -1.0f).normalize(),
+            GpuVec3(0.0f, 0.0f, -1.0f),
+            planar_solve.parameters);
+    output[18] = float(planar_solve.valid);
+    output[19] = float(planar_differential.valid);
+    output[20] = planar_differential.endpoint_area_jacobian;
+    output[21] = planar_differential.generalized_geometry;
+    GpuManifoldChainEvent curved = {};
+    curved.primitive.kind = GpuManifoldPrimitiveKind::Sphere;
+    curved.primitive.radius = 1.0f;
+    curved.u = 0.42f;
+    curved.v = 0.12f;
+    curved.eta_i = 1.0f;
+    curved.eta_t = 1.0f;
+    const GpuVec3 curved_camera(2.0f, 1.0f, 0.0f);
+    const GpuVec3 curved_light(2.0f, -1.0f, 0.0f);
+    const GpuManifoldChainSolveResult curved_solve =
+        solve_gpu_manifold_chain(
+            &curved, 1, curved_camera, curved_light, 1e-5f, 32);
+    const GpuManifoldDifferentialResult curved_differential =
+        evaluate_gpu_manifold_differential(
+            &curved, 1, curved_camera, curved_light,
+            GpuVec3(-1.0f, -1.0f, 0.0f).normalize(),
+            GpuVec3(-1.0f, 1.0f, 0.0f).normalize(),
+            curved_solve.parameters);
+    output[22] = float(curved_solve.valid);
+    output[23] = float(curved_differential.valid);
+    output[24] = curved_differential.endpoint_area_jacobian;
+    output[25] = curved_differential.generalized_geometry;
 }
 
 __global__ void manifold_scene_primitive_extraction_kernel(
@@ -2776,11 +2822,11 @@ static int test_manifold_pivoted_newton_step_on_device() {
 static int test_manifold_sphere_and_triangle_newton_on_device() {
     REQUIRE_GPU();
     float* output = nullptr;
-    CHECK_CUDA(cudaMalloc(&output, 18 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&output, 26 * sizeof(float)));
     DeviceMem cleanup(output);
     manifold_primitive_newton_kernel<<<1, 1>>>(output);
     CHECK_CUDA(cudaGetLastError());
-    float values[18] = {};
+    float values[26] = {};
     CHECK_CUDA(cudaMemcpy(
         values, output, sizeof(values), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(values[0], 1.0f, 0.0f);
@@ -2801,6 +2847,14 @@ static int test_manifold_sphere_and_triangle_newton_on_device() {
     CHECK_FLOAT_EQ(values[15], 0.0f, 1e-4f);
     CHECK_FLOAT_EQ(values[16], 0.0f, 1e-4f);
     CHECK(values[17] <= 1e-5f);
+    CHECK_FLOAT_EQ(values[18], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[19], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[20], 0.25f, 2e-3f);
+    CHECK_FLOAT_EQ(values[21], 0.08838835f, 1e-3f);
+    CHECK_FLOAT_EQ(values[22], 1.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[23], 1.0f, 0.0f);
+    CHECK(values[24] > 0.0f);
+    CHECK(values[25] > 0.0f);
     return 0;
 }
 
@@ -3106,6 +3160,8 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
         std::sin(theta) * std::cos(phi), std::cos(theta),
         std::sin(theta) * std::sin(phi));
     camera_vertices[0].position = GpuVec3(2.0f, 1.0f, 0.0f);
+    camera_vertices[0].geometric_normal =
+        GpuVec3(-1.0f, -1.0f, 0.0f).normalize();
     camera_vertices[0].valid = 1;
     camera_vertices[0].scene_epoch = ctx->bidirectional_scene_epoch;
     camera_vertices[1].position = initial_normal;
@@ -3120,6 +3176,8 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
     camera_vertices[1].valid = 1;
     camera_vertices[1].scene_epoch = ctx->bidirectional_scene_epoch;
     light_vertices[0].position = GpuVec3(2.0f, -1.0f, 0.0f);
+    light_vertices[0].geometric_normal =
+        GpuVec3(-1.0f, 1.0f, 0.0f).normalize();
     light_vertices[0].geometry_type = 0;
     light_vertices[0].geometry_index = 1;
     light_vertices[0].primitive_index = 0;
@@ -3166,12 +3224,19 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
     CHECK_CUDA(cudaMemcpy(
         &telemetry, ctx->d_manifold_telemetry, sizeof(telemetry),
         cudaMemcpyDeviceToHost));
+    CHECK(solution.endpoint_area_jacobian > 0.0f);
+    CHECK(solution.ordinary_geometry > 0.0f);
+    CHECK(solution.differential_status == GpuManifoldRejectReason::None);
+    CHECK(telemetry.rejected_differential == 0);
+    CHECK(telemetry.rejected_occluded == 0);
+    CHECK(solution.reject_reason == GpuManifoldRejectReason::None);
     CHECK(solution.valid == 1);
     CHECK(solution.event_count == 1);
     CHECK(solution.anchor_camera_vertex == 0);
     CHECK_FLOAT_EQ(solution.surfaces[0].position.x, 1.0f, 1e-4f);
     CHECK(solution.residual <= 1e-5f);
     CHECK(std::fabs(solution.determinant) > 1e-8f);
+    CHECK(solution.generalized_geometry > 0.0f);
     CHECK(telemetry.attempted == 1);
     CHECK(telemetry.converged == 1);
     scene.sphere_count = 3;

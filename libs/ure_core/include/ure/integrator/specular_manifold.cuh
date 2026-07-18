@@ -74,13 +74,19 @@ enum class GpuManifoldRejectReason : int {
     TotalInternalReflection = 6,
     Residual = 7,
     Stale = 8,
-    Occluded = 9
+    Occluded = 9,
+    InvalidDifferential = 10
 };
 
 struct GpuManifoldPathSolution {
     GpuManifoldSurfacePoint surfaces[4] = {};
     float parameters[kMaxGpuManifoldVariables] = {};
     float determinant = 0.0f;
+    float endpoint_area_jacobian = 0.0f;
+    float ordinary_geometry = 0.0f;
+    float generalized_geometry = 0.0f;
+    GpuManifoldRejectReason differential_status =
+        GpuManifoldRejectReason::None;
     float residual = 0.0f;
     std::uint32_t scene_epoch = 0;
     int anchor_camera_vertex = -1;
@@ -89,6 +95,16 @@ struct GpuManifoldPathSolution {
     int iterations = 0;
     GpuManifoldRejectReason reject_reason =
         GpuManifoldRejectReason::NoTrailingChain;
+    int valid = 0;
+};
+
+struct GpuManifoldDifferentialResult {
+    float constraint_determinant = 0.0f;
+    float endpoint_area_jacobian = 0.0f;
+    float ordinary_geometry = 0.0f;
+    float generalized_geometry = 0.0f;
+    GpuManifoldRejectReason status =
+        GpuManifoldRejectReason::InvalidDifferential;
     int valid = 0;
 };
 
@@ -103,6 +119,7 @@ struct GpuManifoldTelemetry {
     std::uint32_t rejected_residual = 0;
     std::uint32_t rejected_stale = 0;
     std::uint32_t rejected_occluded = 0;
+    std::uint32_t rejected_differential = 0;
     std::uint64_t total_iterations = 0;
 };
 
@@ -461,8 +478,12 @@ solve_gpu_single_manifold_vertex(
                 !gpu_manifold_constraint(
                     primitive, previous, next, minus_u, minus_v, transmission,
                     eta_i, eta_t, minus_residual)) return result;
-            const float parameter_delta = variable == 0
-                ? plus_u - minus_u : plus_v - minus_v;
+            const float parameter_delta =
+                primitive.kind == GpuManifoldPrimitiveKind::Sphere &&
+                    variable == 1
+                ? 2.0f * kDifferenceStep
+                : (variable == 0
+                    ? plus_u - minus_u : plus_v - minus_v);
             if (fabsf(parameter_delta) <= 1e-8f) return result;
             jacobian[variable] =
                 (plus_residual[0] - minus_residual[0]) / parameter_delta;
@@ -578,6 +599,14 @@ static __device__ inline float gpu_manifold_residual_norm(
     return sqrtf(squared);
 }
 
+static __device__ inline bool build_gpu_manifold_constraint_jacobian(
+    const GpuManifoldChainEvent* events,
+    int event_count,
+    const GpuVec3& camera_endpoint,
+    const GpuVec3& light_endpoint,
+    const float* parameters,
+    float* jacobian);
+
 static __device__ inline GpuManifoldChainSolveResult
 solve_gpu_manifold_chain(
     const GpuManifoldChainEvent* events,
@@ -599,7 +628,6 @@ solve_gpu_manifold_chain(
             events[event].primitive.kind, parameters[event * 2],
             parameters[event * 2 + 1]);
     }
-    constexpr float kDifferenceStep = 1e-4f;
     for (int iteration = 0; iteration < max_iterations; ++iteration) {
         float residual[kMaxGpuManifoldVariables] = {};
         GpuManifoldSurfacePoint surfaces[4] = {};
@@ -628,41 +656,9 @@ solve_gpu_manifold_chain(
         }
         float jacobian[kMaxGpuManifoldVariables *
                        kMaxGpuManifoldVariables] = {};
-        for (int variable = 0; variable < dimension; ++variable) {
-            float plus[kMaxGpuManifoldVariables] = {};
-            float minus[kMaxGpuManifoldVariables] = {};
-            for (int index = 0; index < dimension; ++index) {
-                plus[index] = parameters[index];
-                minus[index] = parameters[index];
-            }
-            plus[variable] += kDifferenceStep;
-            minus[variable] -= kDifferenceStep;
-            const int event = variable / 2;
-            project_gpu_manifold_parameters(
-                events[event].primitive.kind, plus[event * 2],
-                plus[event * 2 + 1]);
-            project_gpu_manifold_parameters(
-                events[event].primitive.kind, minus[event * 2],
-                minus[event * 2 + 1]);
-            float plus_residual[kMaxGpuManifoldVariables] = {};
-            float minus_residual[kMaxGpuManifoldVariables] = {};
-            GpuManifoldSurfacePoint scratch[4] = {};
-            if (!evaluate_gpu_manifold_chain_residual(
-                    events, event_count, camera_endpoint, light_endpoint,
-                    plus, plus_residual, scratch, nullptr, nullptr) ||
-                !evaluate_gpu_manifold_chain_residual(
-                    events, event_count, camera_endpoint, light_endpoint,
-                    minus, minus_residual, scratch, nullptr, nullptr)) {
-                result.failed_event = event;
-                return result;
-            }
-            const float delta = plus[variable] - minus[variable];
-            if (fabsf(delta) <= 1e-8f) return result;
-            for (int row = 0; row < dimension; ++row) {
-                jacobian[row * dimension + variable] =
-                    (plus_residual[row] - minus_residual[row]) / delta;
-            }
-        }
+        if (!build_gpu_manifold_constraint_jacobian(
+                events, event_count, camera_endpoint, light_endpoint,
+                parameters, jacobian)) return result;
         const GpuManifoldLinearSolveResult step =
             solve_gpu_manifold_newton_step(
                 jacobian, residual, dimension, 1e-8f);
@@ -700,6 +696,150 @@ solve_gpu_manifold_chain(
         if (!accepted) return result;
     }
     result.iterations = max_iterations;
+    return result;
+}
+
+static __device__ inline bool build_gpu_manifold_constraint_jacobian(
+    const GpuManifoldChainEvent* events,
+    int event_count,
+    const GpuVec3& camera_endpoint,
+    const GpuVec3& light_endpoint,
+    const float* parameters,
+    float* jacobian) {
+    if (!events || !parameters || !jacobian || event_count <= 0 ||
+        event_count > 4) return false;
+    const int dimension = event_count * 2;
+    constexpr float kParameterStep = 1e-4f;
+    for (int variable = 0; variable < dimension; ++variable) {
+        float plus[kMaxGpuManifoldVariables] = {};
+        float minus[kMaxGpuManifoldVariables] = {};
+        for (int index = 0; index < dimension; ++index) {
+            plus[index] = parameters[index];
+            minus[index] = parameters[index];
+        }
+        plus[variable] += kParameterStep;
+        minus[variable] -= kParameterStep;
+        const int event = variable / 2;
+        project_gpu_manifold_parameters(
+            events[event].primitive.kind,
+            plus[event * 2], plus[event * 2 + 1]);
+        project_gpu_manifold_parameters(
+            events[event].primitive.kind,
+            minus[event * 2], minus[event * 2 + 1]);
+        float plus_residual[kMaxGpuManifoldVariables] = {};
+        float minus_residual[kMaxGpuManifoldVariables] = {};
+        GpuManifoldSurfacePoint scratch[4] = {};
+        if (!evaluate_gpu_manifold_chain_residual(
+                events, event_count, camera_endpoint, light_endpoint,
+                plus, plus_residual, scratch, nullptr, nullptr) ||
+            !evaluate_gpu_manifold_chain_residual(
+                events, event_count, camera_endpoint, light_endpoint,
+                minus, minus_residual, scratch, nullptr, nullptr)) {
+            return false;
+        }
+        const float delta =
+            events[event].primitive.kind ==
+                    GpuManifoldPrimitiveKind::Sphere &&
+                variable % 2 == 1
+            ? 2.0f * kParameterStep
+            : plus[variable] - minus[variable];
+        if (fabsf(delta) <= 1e-8f) return false;
+        for (int row = 0; row < dimension; ++row) {
+            jacobian[row * dimension + variable] =
+                (plus_residual[row] - minus_residual[row]) / delta;
+        }
+    }
+    return true;
+}
+
+static __device__ inline GpuManifoldDifferentialResult
+evaluate_gpu_manifold_differential(
+    const GpuManifoldChainEvent* events,
+    int event_count,
+    const GpuVec3& camera_endpoint,
+    const GpuVec3& light_endpoint,
+    const GpuVec3& camera_normal,
+    const GpuVec3& light_normal,
+    const float* parameters) {
+    GpuManifoldDifferentialResult result = {};
+    if (!events || !parameters || event_count <= 0 || event_count > 4 ||
+        camera_normal.length_sq() <= 1e-16f ||
+        light_normal.length_sq() <= 1e-16f) return result;
+    const int dimension = event_count * 2;
+    float jacobian[kMaxGpuManifoldVariables *
+                   kMaxGpuManifoldVariables] = {};
+    if (!build_gpu_manifold_constraint_jacobian(
+            events, event_count, camera_endpoint, light_endpoint,
+            parameters, jacobian)) return result;
+    const GpuVec3 light_n = light_normal.normalize();
+    const GpuVec3 light_seed = fabsf(light_n.x) > 0.9f
+        ? GpuVec3(0.0f, 1.0f, 0.0f) : GpuVec3(1.0f, 0.0f, 0.0f);
+    const GpuVec3 light_tangent = light_seed.cross(light_n).normalize();
+    const GpuVec3 light_bitangent = light_n.cross(light_tangent);
+    const float endpoint_step = 1e-4f * fmaxf(
+        1.0f, (light_endpoint - camera_endpoint).length());
+    float first_parameter_derivative[4] = {};
+    float determinant = 0.0f;
+    for (int column = 0; column < 2; ++column) {
+        const GpuVec3 direction = column == 0
+            ? light_tangent : light_bitangent;
+        float plus_residual[kMaxGpuManifoldVariables] = {};
+        float minus_residual[kMaxGpuManifoldVariables] = {};
+        GpuManifoldSurfacePoint scratch[4] = {};
+        if (!evaluate_gpu_manifold_chain_residual(
+                events, event_count, camera_endpoint,
+                light_endpoint + direction * endpoint_step,
+                parameters, plus_residual, scratch, nullptr, nullptr) ||
+            !evaluate_gpu_manifold_chain_residual(
+                events, event_count, camera_endpoint,
+                light_endpoint - direction * endpoint_step,
+                parameters, minus_residual, scratch, nullptr, nullptr)) {
+            return result;
+        }
+        float right_hand_side[kMaxGpuManifoldVariables] = {};
+        for (int row = 0; row < dimension; ++row) {
+            right_hand_side[row] =
+                -(plus_residual[row] - minus_residual[row]) /
+                (2.0f * endpoint_step);
+        }
+        const GpuManifoldLinearSolveResult solve =
+            solve_gpu_manifold_linear_system(
+                jacobian, right_hand_side, dimension, 1e-8f);
+        if (!solve.valid) return result;
+        determinant = solve.determinant;
+        first_parameter_derivative[column * 2] = solve.solution[0];
+        first_parameter_derivative[column * 2 + 1] = solve.solution[1];
+    }
+    const GpuManifoldSurfacePoint first = evaluate_gpu_manifold_surface(
+        events[0].primitive, parameters[0], parameters[1]);
+    if (!first.valid) return result;
+    const GpuVec3 first_tangent = first.dp_du.normalize();
+    const GpuVec3 first_bitangent =
+        first.normal.cross(first_tangent).normalize();
+    float area_map[4] = {};
+    for (int column = 0; column < 2; ++column) {
+        const GpuVec3 displacement =
+            first.dp_du * first_parameter_derivative[column * 2] +
+            first.dp_dv * first_parameter_derivative[column * 2 + 1];
+        area_map[column] = displacement.dot(first_tangent);
+        area_map[2 + column] = displacement.dot(first_bitangent);
+    }
+    const float area_jacobian = fabsf(
+        area_map[0] * area_map[3] - area_map[1] * area_map[2]);
+    const GpuVec3 first_edge = first.position - camera_endpoint;
+    const float distance_squared = first_edge.length_sq();
+    result.constraint_determinant = determinant;
+    result.endpoint_area_jacobian = area_jacobian;
+    if (!(distance_squared > 1e-12f)) return result;
+    const GpuVec3 direction = first_edge * (1.0f / sqrtf(distance_squared));
+    const float ordinary_geometry =
+        fabsf(camera_normal.normalize().dot(direction)) *
+        fabsf(first.normal.dot(-direction)) / distance_squared;
+    result.ordinary_geometry = ordinary_geometry;
+    result.generalized_geometry = area_jacobian * ordinary_geometry;
+    result.valid = isfinite(result.generalized_geometry) &&
+        result.generalized_geometry > 0.0f;
+    if (result.valid) result.status = GpuManifoldRejectReason::None;
     return result;
 }
 

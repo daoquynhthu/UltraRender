@@ -1937,6 +1937,8 @@ R.13-R.19 是能力编号，不是线性施工顺序。实际执行按依赖拆�
 
 R-P4 visibility closure：production manifold solve 对 anchor→specular chain→light 的每条 edge 使用正式 traversal 验证 visibility；预期 manifold/light endpoint 仅按 geometry identity 与端点容差豁免，其他提前命中统一以 typed `Occluded` reason 和 telemetry 拒绝。GPU E2E 同时覆盖无 blocker 收敛和真实 blocker 拒绝。SDS contribution evaluator 与最终 benchmark 仍未完成。
 
+R-P4 differential geometry closure：最终解不再误用 Newton constraint determinant 作为 radiometric 权重；GPU 依据 specular-manifold differential geometry 重建 `|P₂ A⁻¹ B_L| × G(anchor, first)`，并分别持久化 constraint determinant、endpoint area Jacobian、ordinary geometry 与 generalized geometry。sphere 周期经度 seam 的中心差分已使用拓扑正确的 `2h` 分母；解析 planar mirror oracle、sphere oracle、生产 artifact 与 50 次重复稳定门禁均通过。SDS spectral/Stokes response、root-selection PDF/MIS 与最终 benchmark 仍未完成。
+
 #### Phase R 执行顺序
 
 ```
