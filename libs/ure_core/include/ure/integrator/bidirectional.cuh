@@ -129,6 +129,25 @@ static __device__ inline float bidirectional_strategy_probability(
     return isfinite(probability) ? probability : 0.0f;
 }
 
+static __device__ inline int select_multiplexed_bidirectional_technique(
+    float primary_sample, int technique_count) {
+    if (!isfinite(primary_sample) || primary_sample < 0.0f ||
+        primary_sample >= 1.0f || technique_count <= 0) return -1;
+    const int selected = static_cast<int>(primary_sample * technique_count);
+    return selected < technique_count ? selected : technique_count - 1;
+}
+
+static __device__ inline float multiplexed_bidirectional_technique_probability(
+    int technique_count) {
+    return technique_count > 0 ? 1.0f / static_cast<float>(technique_count)
+                               : 0.0f;
+}
+
+static __device__ inline float multiplexed_bidirectional_technique_compensation(
+    int technique_count) {
+    return technique_count > 0 ? static_cast<float>(technique_count) : 0.0f;
+}
+
 static __device__ inline float bidirectional_strategy_mis_weight(
     const GpuBidirectionalPdfEdge* edges,
     int edge_count,

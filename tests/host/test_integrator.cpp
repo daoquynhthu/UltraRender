@@ -146,6 +146,21 @@ static int test_bidirectional_technique_enumeration_and_mis_partition() {
     CHECK_NEAR(sum, 1.0, 1e-15);
     CHECK_NEAR(ure::integrator::bidirectional_power_heuristic(
                    probabilities, 4, 3), 0.0, 0.0);
+    CHECK(ure::integrator::select_multiplexed_bidirectional_technique(
+              0.0, count) == 0);
+    CHECK(ure::integrator::select_multiplexed_bidirectional_technique(
+              0.5, count) == 4);
+    CHECK(ure::integrator::select_multiplexed_bidirectional_technique(
+              0.999999, count) == count - 1);
+    CHECK(ure::integrator::select_multiplexed_bidirectional_technique(
+              1.0, count) == -1);
+    CHECK_NEAR(
+        ure::integrator::multiplexed_bidirectional_technique_probability(count),
+        0.125, 1e-15);
+    CHECK_NEAR(
+        ure::integrator::multiplexed_bidirectional_technique_probability(count) *
+            ure::integrator::multiplexed_bidirectional_technique_compensation(count),
+        1.0, 1e-15);
     return 0;
 }
 

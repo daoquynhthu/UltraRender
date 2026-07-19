@@ -5,6 +5,24 @@
 
 namespace ure::integrator {
 
+int select_multiplexed_bidirectional_technique(double primary_sample,
+                                               int technique_count) {
+    if (!std::isfinite(primary_sample) || primary_sample < 0.0 ||
+        primary_sample >= 1.0 || technique_count <= 0) return -1;
+    return std::min(
+        static_cast<int>(primary_sample * technique_count),
+        technique_count - 1);
+}
+
+double multiplexed_bidirectional_technique_probability(int technique_count) {
+    return technique_count > 0 ? 1.0 / static_cast<double>(technique_count)
+                               : 0.0;
+}
+
+double multiplexed_bidirectional_technique_compensation(int technique_count) {
+    return technique_count > 0 ? static_cast<double>(technique_count) : 0.0;
+}
+
 bool is_ready(SpecularManifoldStatus status) {
     return status == SpecularManifoldStatus::Ready;
 }

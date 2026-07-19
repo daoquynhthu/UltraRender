@@ -54,7 +54,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | ReSTIR PT path reuse | Implemented and verified for bounded diffuse surface and supported volume suffixes | Unsupported suffix classes remain explicit rather than silently approximated |
 | GPU BDPT/VCM | Implemented and tested for the R-P4 bounded estimator contract | Does not imply arbitrary path-space techniques or unrestricted merge support |
 | Specular-manifold estimator | Implemented for the exact R-P4 support partition with up to four smooth-delta events | Independent technique AOV and four-scene statistical gate; unsupported paths remain wavefront-owned |
-| Primary-sample-space MLT | In progress under R-P5 | GPU chains, deterministic replay, Laplace mutation, stratified bootstrap seeding, normalization, diagnostics and shard identities run end to end; fixed-NMSE SDS benefit passes, but the required second positive workload remains open |
+| Primary-sample-space MLT | In progress under R-P5 | GPU chains, deterministic replay, Laplace mutation, stratified bootstrap seeding, normalization, diagnostics and shard identities run end to end; host/device multiplexed-technique selection parity is established, while endpoint execution and the required second positive workload remain open |
 | Multi-GPU sample partition/merge | Implemented | Not a complete distributed render-farm runtime |
 | Denoising | A tested GPU target exists | No general quality or production guarantee is claimed |
 | Wave-optics host/CUDA references | Partially implemented | Main production path remains radiometric |

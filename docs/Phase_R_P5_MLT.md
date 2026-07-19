@@ -79,3 +79,10 @@ omits the camera-only technique from the complete MIS partition. A production
 multiplexed evaluator must own the full technique index and all camera/light
 primary dimensions. Until that contract exists, MLT continues to reject
 bidirectional, VCM, and manifold schedulers instead of producing a biased image.
+
+The shared host/device contract now maps one primary dimension uniformly onto
+the complete enumerated technique range and applies the reciprocal selection
+probability exactly once. Host and GPU tests lock boundary mapping and
+probability-compensation parity. Executing the camera-only, light-tracing, and
+internal connection techniques remains the next construction slice; selection
+parity alone does not enable the combined mode.

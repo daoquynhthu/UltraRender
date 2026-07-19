@@ -238,6 +238,10 @@ __global__ void bidirectional_strategy_density_kernel(float* output) {
             edges, 3, split, 2, 0.3f, 0.8f, 4.0f, 16);
     }
     output[4] = partition;
+    output[5] = float(select_multiplexed_bidirectional_technique(0.0f, 5));
+    output[6] = float(select_multiplexed_bidirectional_technique(0.999999f, 5));
+    output[7] = multiplexed_bidirectional_technique_probability(5) *
+        multiplexed_bidirectional_technique_compensation(5);
 }
 
 __global__ void manifold_pivoted_solve_kernel(float* output) {
@@ -2809,11 +2813,11 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
 static int test_bidirectional_strategy_density_partitions_on_device() {
     REQUIRE_GPU();
     float* output = nullptr;
-    CHECK_CUDA(cudaMalloc(&output, 5 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&output, 8 * sizeof(float)));
     DeviceMem cleanup(output);
     bidirectional_strategy_density_kernel<<<1, 1>>>(output);
     CHECK_CUDA(cudaGetLastError());
-    float values[5] = {};
+    float values[8] = {};
     CHECK_CUDA(cudaMemcpy(
         values, output, sizeof(values), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(values[0], 1.0f, 1e-5f);
@@ -2823,6 +2827,9 @@ static int test_bidirectional_strategy_density_partitions_on_device() {
         values[3], 0.3f * 0.4f * 0.8f * 0.1f * 4.0f / 16.0f,
         1e-7f);
     CHECK_FLOAT_EQ(values[4], 1.0f, 1e-5f);
+    CHECK_FLOAT_EQ(values[5], 0.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[6], 4.0f, 0.0f);
+    CHECK_FLOAT_EQ(values[7], 1.0f, 1e-6f);
     return 0;
 }
 

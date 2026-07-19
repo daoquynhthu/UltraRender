@@ -136,6 +136,8 @@ Assert-Contains "libs\ure_core\src\path_tracer_host_api.cu" "render_mlt_pass" "R
 Assert-Contains "libs\ure_core\src\mlt_runtime.cu" "accept_and_deposit_mlt_kernel" "R-P5 Metropolis deposition runtime"
 Assert-Contains "libs\ure_core\src\mlt_runtime.cu" "const float sign = u2 < 0.5f" "R-P5 wrapped symmetric Laplace small step"
 Assert-Contains "libs\ure_core\src\mlt_runtime.cu" "const float jitter = mlt_uniform" "R-P5 per-shard stratified bootstrap seeding"
+Assert-Contains "libs\ure_core\src\specular_manifold.cpp" "select_multiplexed_bidirectional_technique" "R-P5 host multiplexed technique selection"
+Assert-Contains "libs\ure_core\include\ure\integrator\bidirectional.cuh" "multiplexed_bidirectional_technique_compensation" "R-P5 GPU technique selection compensation"
 Assert-Contains "libs\ure_core\include\ure\path_tracer_sampling.cuh" "queue.primary_samples" "R-P5 shared primary-sample replay boundary"
 Assert-Contains "libs\ure_core\src\gpu_multi_driver.cu" "make_mlt_chain_shard" "R-P5 multi-GPU chain identity partition"
 Assert-Contains "tools\benchmarks\run_phase_r_mlt_suite.ps1" "time_to_error_benefit" "R-P5 difficult-scene time-to-error gate"
