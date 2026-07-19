@@ -5,8 +5,9 @@ param(
     [int]$Height = 16,
     [int[]]$CurveSpp = @(64, 256, 1024),
     [int]$ReferenceSpp = 8192,
+    [double]$TargetNormalizedMse = 0.05,
     [string[]]$Scenes = @(
-        "glass_caustic", "small_emitter", "high_occlusion"),
+        "sds", "small_emitter", "glass_caustic", "high_occlusion"),
     [switch]$SkipBuild
 )
 
@@ -39,11 +40,14 @@ function Get-ErrorMetrics {
     $sumSquared = 0.0
     $sumDelta = 0.0
     $sumReference = 0.0
+    $sumReferenceSquared = 0.0
     for ($index = 0; $index -lt $Image.values.Length; $index++) {
         $delta = $Image.values[$index] - $Reference.values[$index]
         $sumSquared += $delta * $delta
         $sumDelta += $delta
         $sumReference += [Math]::Abs($Reference.values[$index])
+        $sumReferenceSquared +=
+            $Reference.values[$index] * $Reference.values[$index]
     }
     $count = [double]$Image.values.Length
     $meanDelta = $sumDelta / $count
@@ -52,6 +56,8 @@ function Get-ErrorMetrics {
     $scale = [Math]::Max($sumReference / $count, 1.0e-12)
     [ordered]@{
         mse = $mse
+        normalized_mse = $mse /
+            [Math]::Max($sumReferenceSquared / $count, 1.0e-20)
         relative_mean_bias = [Math]::Abs($sumDelta) /
             [Math]::Max($sumReference, 1.0e-12)
         relative_bias_95_bound =
@@ -90,6 +96,10 @@ if (-not $SkipBuild) {
 }
 if (-not (Test-Path $ExePath)) { throw "MLT benchmark executable missing" }
 if ($CurveSpp.Count -lt 2) { throw "MLT curve requires at least two points" }
+if (-not [double]::IsFinite($TargetNormalizedMse) -or
+    $TargetNormalizedMse -le 0.0) {
+    throw "TargetNormalizedMse must be finite and positive"
+}
 foreach ($spp in $CurveSpp) {
     if ($spp -le 0 -or $spp -ge $ReferenceSpp) {
         throw "CurveSpp must be positive and below ReferenceSpp"
@@ -102,6 +112,8 @@ $benefitScenes = 0
 foreach ($scene in $Scenes) {
     $sceneReferenceSpp = if ($scene -eq "small_emitter") {
         $ReferenceSpp * 32
+    } elseif ($scene -eq "sds" -or $scene -eq "glass_caustic") {
+        $ReferenceSpp * 8
     } elseif ($scene -eq "high_occlusion") {
         $ReferenceSpp * 4
     } else {
@@ -127,30 +139,38 @@ foreach ($scene in $Scenes) {
             spp = $spp
             elapsed_seconds = [Math]::Round($wave.elapsed_seconds, 6)
             mse = [Math]::Round($waveMetrics.mse, 12)
+            normalized_mse = [Math]::Round($waveMetrics.normalized_mse, 8)
         }
         $mltCurve += [ordered]@{
             spp = $spp
             elapsed_seconds = [Math]::Round($mlt.elapsed_seconds, 6)
             mse = [Math]::Round($mltMetrics.mse, 12)
+            normalized_mse = [Math]::Round($mltMetrics.normalized_mse, 8)
             relative_mean_bias = [Math]::Round($mltMetrics.relative_mean_bias, 8)
             relative_bias_95_bound = [Math]::Round($mltMetrics.relative_bias_95_bound, 8)
             acceptance_rate = [Math]::Round($mlt.telemetry.mlt_acceptance_rate, 8)
         }
     }
-    if ([double]$mltCurve[-1].mse -gt [double]$mltCurve[0].mse) {
+    if ([double]$mltCurve[-1].normalized_mse -gt
+        [double]$mltCurve[0].normalized_mse) {
         throw "MLT convergence gate failed: $scene"
     }
     if ([double]$mltCurve[-1].relative_bias_95_bound -gt 0.35) {
         throw "MLT high-sample bias bound failed: $scene"
     }
-    $targetMse = [double]$mltCurve[-1].mse * 1.05
     $waveTime = $null
     $mltTime = $null
     foreach ($point in $waveCurve) {
-        if ([double]$point.mse -le $targetMse) { $waveTime = $point.elapsed_seconds; break }
+        if ([double]$point.normalized_mse -le $TargetNormalizedMse) {
+            $waveTime = $point.elapsed_seconds
+            break
+        }
     }
     foreach ($point in $mltCurve) {
-        if ([double]$point.mse -le $targetMse) { $mltTime = $point.elapsed_seconds; break }
+        if ([double]$point.normalized_mse -le $TargetNormalizedMse) {
+            $mltTime = $point.elapsed_seconds
+            break
+        }
     }
     $benefit = $null -ne $mltTime -and
         ($null -eq $waveTime -or [double]$mltTime -lt [double]$waveTime)
@@ -158,7 +178,7 @@ foreach ($scene in $Scenes) {
     $reports += [ordered]@{
         scene = $scene
         reference_spp = $sceneReferenceSpp
-        target_mse = $targetMse
+        target_normalized_mse = $TargetNormalizedMse
         wavefront = $waveCurve
         mlt = $mltCurve
         time_to_error_benefit = $benefit
@@ -169,6 +189,7 @@ $result = [ordered]@{
     generated_utc = [DateTime]::UtcNow.ToString("o")
     width = $Width
     height = $Height
+    target_normalized_mse = $TargetNormalizedMse
     benefit_scene_count = $benefitScenes
     workloads = $reports
 }

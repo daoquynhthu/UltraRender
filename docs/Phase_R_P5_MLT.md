@@ -4,9 +4,9 @@
 
 R-P5 is the active construction phase. The GPU chain runtime is enabled for
 validation and now has diagnostics plus deterministic shard identities. The phase
-is not closed until the difficult-scene benefit suite passes; current short and
-full-scale diagnostic runs show a real gain on the maintained small-emitter case,
-but not yet across the complete caustic/small-light/high-occlusion set.
+is not closed until the difficult-scene benefit suite passes. The maintained SDS
+workload has a reproducible gain at a fixed normalized-error target; the second
+positive workload is still open.
 
 ## Estimator boundary
 
@@ -32,9 +32,13 @@ The production scheduler evaluates independent chains in batches:
    image location, last-large-step epoch, and counter-based random stream.
 3. Burn-in runs the same transition kernel without film deposition.
 4. A large step replaces the complete active vector. A small step mutates every
-   dimension with a wrapped symmetric proposal. Camera, wavelength, surface,
+   dimension with the same wrapped symmetric Laplace proposal used by the host
+   oracle. Camera, wavelength, surface,
    volume, light, lobe, and roulette dimensions therefore mutate together.
-5. Proposed and current contributions are deposited with the standard PSSMLT
+5. Each GPU shard uses deterministic stratified bootstrap CDF resampling,
+   reducing redundant seeds within that shard without changing the target
+   distribution. Global chain identities keep shard RNG streams disjoint.
+6. Proposed and current contributions are deposited with the standard PSSMLT
    acceptance weights and bootstrap normalization. Proposal pixels are never
    written into the film before the accept/reject decision.
 
@@ -62,3 +66,16 @@ reassembly tests, full CTest, and Release curves for low-probability caustic,
 small-emitter, and high-occlusion workloads. At least two workloads must improve
 time-to-error over the default wavefront baseline without introducing a
 statistically significant high-sample bias.
+
+Time-to-error uses a fixed normalized MSE target, `MSE / mean(reference^2)`, so
+improving the candidate integrator cannot silently tighten its own gate. The
+2026-07-19 SDS diagnostic reached the 5% target at 256 SPP in 0.444 seconds;
+wavefront reached it at 1024 SPP in 0.805 seconds. Glass caustic, small-emitter,
+and high-occlusion diagnostics remain boundary failures rather than claimed
+benefits.
+
+The existing BDPT connection AOV is not a valid drop-in MLT target because it
+omits the camera-only technique from the complete MIS partition. A production
+multiplexed evaluator must own the full technique index and all camera/light
+primary dimensions. Until that contract exists, MLT continues to reject
+bidirectional, VCM, and manifold schedulers instead of producing a biased image.

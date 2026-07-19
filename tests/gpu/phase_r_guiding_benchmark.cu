@@ -73,12 +73,14 @@ static void build_scene(const std::string& name,
         add_light(spheres, materials, GpuVec3(-2.8f, 3.8f, 1.5f), 0.3f, 18.0f);
         add_light(spheres, materials, GpuVec3(2.8f, 3.4f, -1.5f), 0.4f, 9.0f);
     } else if (name == "high_occlusion") {
+        materials.push_back(make_material(MaterialType::Lambertian, 0.82f, 0.9f));
         materials.push_back(make_material(MaterialType::Lambertian, 0.0f, 0.9f));
         add_sphere(spheres, GpuVec3(0.0f, 0.0f, 0.0f), 1.0f, 7);
-        add_sphere(spheres, GpuVec3(-0.72f, 1.55f, 1.1f), 0.92f, 8);
-        add_sphere(spheres, GpuVec3(0.72f, 1.55f, 1.1f), 0.92f, 8);
-        add_sphere(spheres, GpuVec3(0.0f, 0.15f, 1.0f), 0.62f, 8);
-        add_light(spheres, materials, GpuVec3(0.0f, 3.2f, 1.4f), 0.22f, 120.0f);
+        add_sphere(spheres, GpuVec3(0.0f, 0.0f, -1005.0f), 1000.0f, 8);
+        add_sphere(spheres, GpuVec3(-1004.0f, 0.0f, 0.0f), 1000.0f, 8);
+        add_sphere(spheres, GpuVec3(1004.0f, 0.0f, 0.0f), 1000.0f, 8);
+        add_sphere(spheres, GpuVec3(0.0f, 1.25f, -1.7f), 1.45f, 9);
+        add_light(spheres, materials, GpuVec3(0.0f, 3.6f, -3.8f), 0.08f, 500.0f);
     } else if (name == "complex_material") {
         materials.push_back(make_material(MaterialType::Metal, 0.9f, 0.08f));
         materials.push_back(make_material(MaterialType::Dielectric, 1.0f, 0.03f));
@@ -96,19 +98,27 @@ static void build_scene(const std::string& name,
         add_light(spheres, materials, GpuVec3(2.5f, 3.0f, -1.0f), 0.35f, 6.0f);
         add_light(spheres, materials, GpuVec3(0.0f, 4.5f, -3.0f), 0.45f, 18.0f);
     } else if (name == "glass_caustic") {
+        materials[0] = make_material(MaterialType::Lambertian, 0.0f, 0.9f);
         materials.push_back(make_material(MaterialType::Dielectric, 1.0f, 0.0f));
-        add_sphere(spheres, GpuVec3(0.0f, -3.0f, 0.0f), 1.0f, 7);
+        materials.push_back(make_material(MaterialType::Lambertian, 0.72f, 0.9f));
+        add_sphere(spheres, GpuVec3(0.0f, -2.0f, 0.0f), 1.0f, 9);
         add_sphere(spheres, GpuVec3(0.0f, 0.0f, 0.0f), 1.0f, 8);
-        add_light(spheres, materials, GpuVec3(0.3f, 0.3f, 0.0f), 0.05f, 320.0f);
+        add_light(spheres, materials, GpuVec3(0.0f, 3.0f, 0.0f), 0.1f, 120.0f);
     } else if (name == "sds") {
+        materials[0] = make_material(MaterialType::Lambertian, 0.0f, 0.9f);
         materials.push_back(make_material(MaterialType::Metal, 0.92f, 0.0f));
-        add_sphere(spheres, GpuVec3(2.7071068f, 1.7071068f, 0.0f), 1.0f, 7);
+        materials.push_back(make_material(MaterialType::Lambertian, 0.72f, 0.9f));
+        add_sphere(spheres, GpuVec3(2.7071068f, 1.7071068f, 0.0f), 1.0f, 9);
         add_sphere(spheres, GpuVec3(0.0f, 0.0f, 0.0f), 1.0f, 8);
+        add_sphere(spheres, GpuVec3(2.4f, 0.3f, 0.0f), 0.35f, 7);
         add_light(spheres, materials, GpuVec3(2.0707107f, -1.0707107f, 0.0f), 0.1f, 80.0f);
     } else if (name == "small_emitter") {
+        materials[0] = make_material(MaterialType::Lambertian, 0.0f, 0.9f);
         materials.push_back(make_material(MaterialType::Metal, 0.95f, 0.0f));
-        add_sphere(spheres, GpuVec3(2.7071068f, 1.7071068f, 0.0f), 1.0f, 7);
+        materials.push_back(make_material(MaterialType::Lambertian, 0.72f, 0.9f));
+        add_sphere(spheres, GpuVec3(2.7071068f, 1.7071068f, 0.0f), 1.0f, 9);
         add_sphere(spheres, GpuVec3(0.0f, 0.0f, 0.0f), 1.0f, 8);
+        add_sphere(spheres, GpuVec3(2.4f, 0.3f, 0.0f), 0.8f, 7);
         add_light(spheres, materials, GpuVec3(2.0141421f, -1.0141421f, 0.0f), 0.02f, 2000.0f);
     } else if (name == "mixed_specular") {
         materials.push_back(make_material(MaterialType::Metal, 0.92f, 0.0f));
@@ -167,13 +177,16 @@ int main(int argc, char** argv) {
             ure::IntegratorSampler::PrimarySampleSpace;
         config.mlt.enabled = true;
         config.mlt.chain_count = width * height;
-        const bool rare_event_scene = scene_name == "small_emitter";
+        const bool rare_event_scene = scene_name == "small_emitter" ||
+            scene_name == "high_occlusion";
+        const int bootstrap_floor = scene_name == "sds"
+            ? 16384 : (rare_event_scene ? 65536 : 4096);
         config.mlt.bootstrap_samples = std::max(
-            rare_event_scene ? 65536 : 4096, width * height * 8);
+            bootstrap_floor, width * height * 8);
         config.mlt.burn_in_mutations = 64;
         config.mlt.mutations_per_chain = 1;
         config.mlt.large_step_probability = 0.3f;
-        config.mlt.small_step_sigma = 0.1f;
+        config.mlt.small_step_sigma = 0.01f;
         config.mlt.memory_budget_mb = 256;
         config.mlt.seed = 117;
     }

@@ -28,7 +28,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 - 多 GPU sample-space 分区与 framebuffer 合并。完整渲染农场调度和跨机器运行时仍不属于已完成范围。
 - production ReSTIR DI 的 temporal/spatial reuse，以及 ReSTIR PT 的有界、版本化 path-suffix replay；超出该有界契约的 suffix 会明确失败，不会静默近似。
 - GPU BDPT/VCM 与最多四事件的 specular-manifold estimator；其适用范围、独立 wavefront technique-AOV 对照和统计门禁见 [Phase R-P4 文档](docs/Phase_R_P4_Specular_Manifold.md)。
-- R-P5 已把 primary-sample-space replay、独立 GPU chains、bootstrap/burn-in、PSSMLT 归一化、诊断与多 GPU chain identity 接入同一套 wavefront contribution evaluator；阶段仍在困难场景收益曲线闭环中，因此尚不列为完成，设计与证据边界见 [Phase R-P5 文档](docs/Phase_R_P5_MLT.md)。
+- R-P5 已把 primary-sample-space replay、独立 GPU chains、对称 Laplace mutation、stratified bootstrap seeding、归一化、诊断与多 GPU chain identity 接入同一套 wavefront contribution evaluator；固定 NMSE 的 SDS 收益已建立，但第二个正收益 workload 尚未闭环，因此阶段仍不列为完成。设计与证据边界见 [Phase R-P5 文档](docs/Phase_R_P5_MLT.md)。
 
 ## 明确未完成或受限的能力
 

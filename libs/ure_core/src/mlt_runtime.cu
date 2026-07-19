@@ -63,8 +63,8 @@ __global__ void mutate_mlt_primary_samples_kernel(
     }
     const float u1 = fmaxf(mlt_uniform(dimension_key), 1.0e-7f);
     const float u2 = mlt_uniform(dimension_key ^ 0xbf58476d1ce4e5b9ull);
-    const float delta = small_step_sigma * sqrtf(-2.0f * logf(u1)) *
-        cosf(6.283185307179586f * u2);
+    const float sign = u2 < 0.5f ? -1.0f : 1.0f;
+    const float delta = sign * small_step_sigma * -logf(u1);
     float value = current[index] + delta;
     value -= floorf(value);
     proposed[index] = value;
@@ -102,9 +102,11 @@ __global__ void seed_mlt_chains_kernel(
     std::uint64_t global_chain_offset, std::uint32_t seed) {
     const int chain = blockIdx.x * blockDim.x + threadIdx.x;
     if (chain >= chain_count) return;
-    const float pick = mlt_uniform(
+    const float jitter = mlt_uniform(
         (global_chain_offset + chain) * 0xd1b54a32d192ed03ull ^ seed ^
         0x8cb92baa3f3d8dd7ull);
+    const float pick = (static_cast<float>(chain) + jitter) /
+        static_cast<float>(chain_count);
     int low = 0;
     int high = bootstrap_count - 1;
     while (low < high) {

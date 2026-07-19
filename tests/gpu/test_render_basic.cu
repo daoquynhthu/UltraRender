@@ -8,6 +8,7 @@
 
 #include "test_framework.cuh"
 #include "ure/gpu_context.hpp"
+#include "ure/integrator/mlt.cuh"
 #include "ure/integrator/restir_di.cuh"
 #include "ure/integrator/specular_manifold.cuh"
 #include "ure/gpu_driver.hpp"
@@ -4507,6 +4508,60 @@ static int test_mlt_runtime_replays_and_reports_chain_diagnostics() {
     return 0;
 }
 
+static int test_mlt_small_step_kernel_is_deterministic_and_wrapped() {
+    REQUIRE_GPU();
+    constexpr int count = 16;
+    std::vector<float> current(count);
+    for (int index = 0; index < count; ++index) {
+        current[index] = (static_cast<float>(index) + 0.5f) /
+            static_cast<float>(count);
+    }
+    float* d_current = nullptr;
+    float* d_first = nullptr;
+    float* d_second = nullptr;
+    int* d_flags = nullptr;
+    CHECK_CUDA(cudaMalloc(&d_current, count * sizeof(float)));
+    DeviceMem current_guard(d_current);
+    CHECK_CUDA(cudaMalloc(&d_first, count * sizeof(float)));
+    DeviceMem first_guard(d_first);
+    CHECK_CUDA(cudaMalloc(&d_second, count * sizeof(float)));
+    DeviceMem second_guard(d_second);
+    CHECK_CUDA(cudaMalloc(&d_flags, sizeof(int)));
+    DeviceMem flags_guard(d_flags);
+    CHECK_CUDA(cudaMemcpy(
+        d_current, current.data(), count * sizeof(float),
+        cudaMemcpyHostToDevice));
+    mutate_mlt_primary_samples_kernel<<<1, 32>>>(
+        d_current, d_first, 1, count, 41, 73, 0.0f, 0.01f, 19,
+        d_flags);
+    CHECK_CUDA(cudaGetLastError());
+    mutate_mlt_primary_samples_kernel<<<1, 32>>>(
+        d_current, d_second, 1, count, 41, 73, 0.0f, 0.01f, 19,
+        d_flags);
+    CHECK_CUDA(cudaGetLastError());
+    std::vector<float> first(count);
+    std::vector<float> second(count);
+    int flag = -1;
+    CHECK_CUDA(cudaMemcpy(
+        first.data(), d_first, count * sizeof(float),
+        cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(
+        second.data(), d_second, count * sizeof(float),
+        cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(
+        &flag, d_flags, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK(flag == 0);
+    CHECK(first == second);
+    bool changed = false;
+    for (int index = 0; index < count; ++index) {
+        CHECK(first[index] >= 0.0f);
+        CHECK(first[index] < 1.0f);
+        changed = changed || first[index] != current[index];
+    }
+    CHECK(changed);
+    return 0;
+}
+
 int main() {
     ure::log::set_min_level(ure::log::Level::Warn);
     printf("[GPU Basic Render Test]\n");
@@ -4572,6 +4627,7 @@ int main() {
     RUN_TEST(test_l11_spectral_texture_cache_budget_rejects_oversized_resident_upload);
     RUN_TEST(test_integrator_rejects_queue_capacity_below_primary_rays);
     RUN_TEST(test_integrator_primary_ray_count_uses_pixel_count);
+    RUN_TEST(test_mlt_small_step_kernel_is_deterministic_and_wrapped);
     RUN_TEST(test_mlt_runtime_replays_and_reports_chain_diagnostics);
     RUN_TEST(test_update_materials_gpu_rewrites_header_and_soa);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
