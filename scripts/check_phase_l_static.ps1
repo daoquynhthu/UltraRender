@@ -152,7 +152,10 @@ if ($wavefront -match "sampled_spectrum_to_xyz") {
 if ($wavefront -notmatch "eval_material_expression") {
     throw "MaterialGraph expression evaluator is missing"
 }
-if ($wavefront -notmatch "SpectralExpressionNodeKind::Texture") {
+$materialRuntimePath = Join-Path $RepoRoot "libs\ure_core\src\path_tracer_material_runtime.cuh"
+$materialRuntime = Get-Content -Raw $materialRuntimePath
+if ($wavefront -notmatch 'path_tracer_material_runtime\.cuh' -or
+    $materialRuntime -notmatch "SpectralExpressionNodeKind::Texture") {
     throw "MaterialGraph texture expression evaluation is missing"
 }
 
@@ -275,8 +278,8 @@ if ($distributedFileIo -notmatch "write_shard_metadata") {
 if ($distributedFileIo -notmatch "read_shard_metadata") {
     throw "L.10 distributed file reader must restore shard metadata"
 }
-if ($distributedFileIo -notmatch "constexpr\s+int\s+kVersion\s*=\s*2") {
-    throw "L.10 distributed file format version must be bumped"
+if ($distributedFileIo -notmatch "constexpr\s+int\s+kVersion\s*=\s*3") {
+    throw "L.10 distributed file format version must preserve current metadata schema"
 }
 
 $distributedContractTestPath = Join-Path $RepoRoot "tests\gpu\test_distributed_contract.cu"
