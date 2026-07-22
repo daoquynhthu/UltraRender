@@ -195,6 +195,7 @@ $result = [ordered]@{
     height = $Height
     target_normalized_mse = $TargetNormalizedMse
     benefit_scene_count = $benefitScenes
+    boundary_scene_count = 0
     workloads = $reports
 }
 $result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ResultPath -Encoding utf8

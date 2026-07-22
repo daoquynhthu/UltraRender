@@ -17,6 +17,7 @@ The aggregate report schema is `ure.phase_r.industrial_validation.v1`. Child art
 - `path_guiding`
 - `restir_pt`
 - `specular_manifold`
+- `bidirectional`
 - `mlt`
 - `volume_mie`
 
@@ -41,3 +42,5 @@ SDS, small-emitter, and mixed-specular workloads remain the positive statistical
 ```
 
 Current status: the versioned evidence contract and `LocalQuick` gate are implemented and passing. R-P7 remains open until the full benefit/boundary matrix, farm evidence, and permitted Nsight capture pass `Closure`.
+
+The bidirectional report evaluates BDPT and VCM independently. Cornell, SDS, small-emitter, volume, high-occlusion, and complex-material probes currently show no positive time-to-error for either mode; this is an open estimator/performance gate, not a documentation exception. The camera-delta glass workload supplies a valid rejection-boundary scene for both modes.

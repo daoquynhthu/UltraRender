@@ -201,11 +201,20 @@ int main(int argc, char** argv) {
             ? 0.03f : 0.01f;
         config.mlt.memory_budget_mb = 256;
         config.mlt.seed = 117;
+    } else if (mode == 5) {
+        config.integrator.mode = ure::IntegratorMode::VCM;
+        config.bidirectional.max_camera_vertices = 8;
+        config.bidirectional.max_light_vertices = 8;
+        config.bidirectional.connections_per_pixel = 4;
+        config.bidirectional.memory_budget_mb = 256;
+        config.vcm.initial_radius = 0.5f;
+        config.vcm.alpha = 0.75f;
+        config.vcm.grid_capacity = width * height * 8;
     } else if (mode == 6) {
         config.integrator.mode = ure::IntegratorMode::BDPT;
         config.bidirectional.max_camera_vertices = 8;
         config.bidirectional.max_light_vertices = 8;
-        config.bidirectional.connections_per_pixel = 64;
+        config.bidirectional.connections_per_pixel = 4;
         config.bidirectional.memory_budget_mb = 256;
     }
 
@@ -249,6 +258,12 @@ int main(int argc, char** argv) {
             static_cast<size_t>(width) * height * 3, 0.0);
         std::vector<GpuVec3> bidirectional_sample(
             static_cast<size_t>(width) * height);
+        std::vector<double> connection_image(
+            static_cast<size_t>(width) * height * 3, 0.0);
+        std::vector<double> surface_merge_image(
+            static_cast<size_t>(width) * height * 3, 0.0);
+        std::vector<double> volume_merge_image(
+            static_cast<size_t>(width) * height * 3, 0.0);
         double bidirectional_camera_rgb_sum = 0.0;
         double bidirectional_connection_rgb_sum = 0.0;
         const int render_iterations = mode == 4 ? 1 : spp;
@@ -272,7 +287,8 @@ int main(int argc, char** argv) {
                 specular_emitter_image[pixel * 3 + 2] += value.z;
             }
             const auto accumulate_bidirectional = [&](
-                const GpuVec3* device_values, double& sum) {
+                const GpuVec3* device_values, double& sum,
+                std::vector<double>* image) {
                 if (!device_values) return;
                 const cudaError_t status = cudaMemcpy(
                     bidirectional_sample.data(), device_values,
@@ -282,16 +298,30 @@ int main(int argc, char** argv) {
                     throw std::runtime_error(
                         "failed to copy bidirectional benchmark AOV");
                 }
-                for (const GpuVec3& value : bidirectional_sample) {
+                for (size_t pixel = 0; pixel < bidirectional_sample.size();
+                     ++pixel) {
+                    const GpuVec3 value = bidirectional_sample[pixel];
                     sum += value.x + value.y + value.z;
+                    if (image) {
+                        (*image)[pixel * 3] += value.x;
+                        (*image)[pixel * 3 + 1] += value.y;
+                        (*image)[pixel * 3 + 2] += value.z;
+                    }
                 }
             };
             accumulate_bidirectional(
                 context->d_bidirectional_camera_accum,
-                bidirectional_camera_rgb_sum);
+                bidirectional_camera_rgb_sum, nullptr);
             accumulate_bidirectional(
                 context->d_bidirectional_connection_accum,
-                bidirectional_connection_rgb_sum);
+                bidirectional_connection_rgb_sum, &connection_image);
+            double ignored_sum = 0.0;
+            accumulate_bidirectional(
+                context->d_vcm_merge_accum, ignored_sum,
+                &surface_merge_image);
+            accumulate_bidirectional(
+                context->d_vcm_volume_merge_accum, ignored_sum,
+                &volume_merge_image);
             if (mode == 3) {
                 const cudaError_t copy_status = cudaMemcpy(
                     manifold_sample.data(), context->d_manifold_accum,
@@ -338,6 +368,27 @@ int main(int argc, char** argv) {
         output.write(reinterpret_cast<const char*>(framebuffer.data()),
                      static_cast<std::streamsize>(framebuffer.size() * sizeof(float)));
         if (!output) throw std::runtime_error("failed to write benchmark output");
+        const auto write_technique_aov = [&] (
+            const std::string& suffix, const std::vector<double>& image) {
+            std::ofstream stream(output_path + suffix, std::ios::binary);
+            stream.write(reinterpret_cast<const char*>(dimensions),
+                         sizeof(dimensions));
+            std::vector<float> normalized(image.size());
+            for (size_t index = 0; index < image.size(); ++index) {
+                normalized[index] = static_cast<float>(
+                    image[index] / double(render_iterations));
+            }
+            stream.write(reinterpret_cast<const char*>(normalized.data()),
+                static_cast<std::streamsize>(
+                    normalized.size() * sizeof(float)));
+            if (!stream) {
+                throw std::runtime_error(
+                    "failed to write bidirectional technique AOV");
+            }
+        };
+        write_technique_aov(".bidirectional_connection", connection_image);
+        write_technique_aov(".vcm_surface_merge", surface_merge_image);
+        write_technique_aov(".vcm_volume_merge", volume_merge_image);
         std::ofstream manifold_output(output_path + ".manifold", std::ios::binary);
         manifold_output.write(
             reinterpret_cast<const char*>(dimensions), sizeof(dimensions));

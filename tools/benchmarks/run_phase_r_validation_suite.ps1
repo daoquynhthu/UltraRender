@@ -81,6 +81,7 @@ try {
         [ordered]@{ name = "path_guiding"; schema = "ure.phase_r.path_guiding_suite.v1"; script = "run_phase_r_path_guiding_suite.ps1"; report = "phase_r_path_guiding_suite.json"; args = @{ Width = $Width; Height = $Height } },
         [ordered]@{ name = "restir_pt"; schema = "ure.phase_r.restir_pt_suite.v1"; script = "run_phase_r_restir_pt_suite.ps1"; report = "phase_r_restir_pt_suite.json"; args = @{ Width = $Width; Height = $Height } },
         [ordered]@{ name = "specular_manifold"; schema = "ure.phase_r.manifold_suite.v1"; script = "run_phase_r_manifold_suite.ps1"; report = "phase_r_manifold_suite.json"; args = if ($Profile -eq "LocalQuick") { @{ Scenes = @("glass_caustic") } } else { @{} } },
+        [ordered]@{ name = "bidirectional"; schema = "ure.phase_r.bidirectional_suite.v1"; script = "run_phase_r_bidirectional_suite.ps1"; report = "phase_r_bidirectional_suite.json"; args = if ($Profile -eq "LocalQuick") { @{ Scenes = @("glass_caustic") } } else { @{ MinBdptBenefitScenes = 1; MinVcmBenefitScenes = 1 } } },
         [ordered]@{ name = "mlt"; schema = "ure.phase_r.mlt_suite.v1"; script = "run_phase_r_mlt_suite.ps1"; report = "phase_r_mlt_suite.json"; args = if ($Profile -eq "LocalQuick") { @{ Scenes = @("sds", "sds_small_light"); MinBenefitScenes = 0 } } else { @{} } }
     )
     $evidence = @()
@@ -100,6 +101,10 @@ try {
     $smoke = ($evidence | Where-Object name -eq "integrator_smoke").report
     $light = ($evidence | Where-Object name -eq "light_sampling").report
     $guiding = ($evidence | Where-Object name -eq "path_guiding").report
+    $restir = ($evidence | Where-Object name -eq "restir_pt").report
+    $manifold = ($evidence | Where-Object name -eq "specular_manifold").report
+    $bidirectional = ($evidence | Where-Object name -eq "bidirectional").report
+    $mlt = ($evidence | Where-Object name -eq "mlt").report
     $commit = (& git rev-parse HEAD).Trim()
     $dirty = -not [string]::IsNullOrWhiteSpace((& git status --porcelain) -join "")
     $report = [ordered]@{
@@ -123,7 +128,14 @@ try {
             mse = [ordered]@{ status = "collected"; value = [double]$light.scenes[0].curve[-1].mse_to_reference; source = "light_sampling" }
             time_to_error_seconds = [ordered]@{ status = "collected"; value = [double]$guiding.scenes[0].modes[0].time_to_error_seconds; source = "path_guiding" }
         }
-        integrator_gates = @()
+        integrator_gates = @(
+            [ordered]@{ mode = "path_guiding"; positive_benefit_count = [int]$guiding.benefit_scene_count; boundary_failure_count = [int]$guiding.boundary_scene_count },
+            [ordered]@{ mode = "restir_pt"; positive_benefit_count = [int]$restir.benefit_scene_count; boundary_failure_count = [int]$restir.boundary_scene_count },
+            [ordered]@{ mode = "specular_manifold"; positive_benefit_count = [int]$manifold.benefit_scene_count; boundary_failure_count = [int]$manifold.boundary_scene_count },
+            [ordered]@{ mode = "bdpt"; positive_benefit_count = [int]$bidirectional.bdpt_benefit_scene_count; boundary_failure_count = [int]$bidirectional.bdpt_boundary_scene_count },
+            [ordered]@{ mode = "vcm"; positive_benefit_count = [int]$bidirectional.vcm_benefit_scene_count; boundary_failure_count = [int]$bidirectional.vcm_boundary_scene_count },
+            [ordered]@{ mode = "mlt"; positive_benefit_count = [int]$mlt.benefit_scene_count; boundary_failure_count = [int]$mlt.boundary_scene_count }
+        )
         farm = Import-ExternalEvidence $FarmReportPath "farm"
         nsight = Import-ExternalEvidence $NsightReportPath "Nsight"
         steps = $steps

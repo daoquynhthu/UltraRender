@@ -64,6 +64,7 @@ foreach ($spp in $CurveSpp) { if ($spp -le 0 -or $spp -ge $ReferenceSpp) { throw
 New-Item -ItemType Directory -Path $ResultDir -Force | Out-Null
 
 $reports = @()
+$benefitScenes = 0
 foreach ($scene in @("cornell", "multi_light", "complex_material", "volume")) {
     $referenceRun = Invoke-GuidingRender $scene $false $ReferenceSpp "phase_r_guiding_${scene}_reference.bin"
     $reference = Read-FloatImage $referenceRun.path
@@ -95,6 +96,11 @@ foreach ($scene in @("cornell", "multi_light", "complex_material", "volume")) {
         }
         $mode["time_to_error_seconds"] = $timeToError
     }
+    if ($null -ne $modeReports[1].time_to_error_seconds -and
+        ($null -eq $modeReports[0].time_to_error_seconds -or
+         $modeReports[1].time_to_error_seconds -lt $modeReports[0].time_to_error_seconds)) {
+        ++$benefitScenes
+    }
     $reports += [ordered]@{
         name = $scene
         reference_spp = $ReferenceSpp
@@ -114,6 +120,8 @@ $report = [ordered]@{
     height = $Height
     curve_spp = $CurveSpp
     reference_spp = $ReferenceSpp
+    benefit_scene_count = $benefitScenes
+    boundary_scene_count = 0
     scenes = $reports
 }
 $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ResultPath -Encoding UTF8

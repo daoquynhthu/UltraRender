@@ -68,7 +68,7 @@ Assert-Condition ($report.identity.git_commit -match '^[0-9a-f]{40}$') "git comm
 if ($Profile -eq "Closure") {
     Assert-Condition ($report.identity.dirty -eq $false) "closure evidence must originate from a clean worktree"
 }
-Assert-Condition ($report.suites.Count -ge 7) "industrial report does not cover every Phase R suite"
+Assert-Condition ($report.suites.Count -ge 8) "industrial report does not cover every Phase R suite"
 
 $requiredSuites = @(
     "integrator_smoke",
@@ -76,6 +76,7 @@ $requiredSuites = @(
     "path_guiding",
     "restir_pt",
     "specular_manifold",
+    "bidirectional",
     "mlt",
     "volume_mie"
 )
@@ -102,8 +103,11 @@ Assert-PositiveNumber $report.metrics.samples_per_second.value "samples_per_seco
 if ($Profile -eq "Closure") {
     Test-FarmEvidence $report.farm
     Test-NsightEvidence $report.nsight
-    Assert-Condition ($report.integrator_gates.Count -ge 4) "advanced integrator gates are incomplete"
-    foreach ($gate in $report.integrator_gates) {
+    $requiredModes = @("path_guiding", "restir_pt", "specular_manifold", "bdpt", "vcm", "mlt")
+    foreach ($mode in $requiredModes) {
+        $matches = @($report.integrator_gates | Where-Object { $_.mode -eq $mode })
+        Assert-Condition ($matches.Count -eq 1) "integrator gate '$mode' must occur exactly once"
+        $gate = $matches[0]
         Assert-Condition ($gate.positive_benefit_count -ge 1) "$($gate.mode) has no positive-benefit scene"
         Assert-Condition ($gate.boundary_failure_count -ge 1) "$($gate.mode) has no boundary-failure scene"
     }

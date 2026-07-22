@@ -6,7 +6,7 @@ $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("ure-rp7-" + [guid]::New
 function Write-Fixture {
     param([string]$Path, [string]$Profile)
     $hash = "a" * 64
-    $suites = @("integrator_smoke", "light_sampling", "path_guiding", "restir_pt", "specular_manifold", "mlt", "volume_mie") |
+    $suites = @("integrator_smoke", "light_sampling", "path_guiding", "restir_pt", "specular_manifold", "bidirectional", "mlt", "volume_mie") |
         ForEach-Object { [ordered]@{ name = $_; status = "passed"; artifact_sha256 = $hash } }
     $report = [ordered]@{
         schema = "ure.phase_r.industrial_validation.v1"
@@ -21,7 +21,7 @@ function Write-Fixture {
             mse = [ordered]@{ status = "collected"; value = 0 }
             time_to_error_seconds = [ordered]@{ status = "collected"; value = 1 }
         }
-        integrator_gates = @("path_guiding", "restir_pt", "specular_manifold", "mlt") |
+        integrator_gates = @("path_guiding", "restir_pt", "specular_manifold", "bdpt", "vcm", "mlt") |
             ForEach-Object { [ordered]@{ mode = $_; positive_benefit_count = 1; boundary_failure_count = 1 } }
         farm = [ordered]@{ status = "not_collected" }
         nsight = [ordered]@{ status = "not_collected" }

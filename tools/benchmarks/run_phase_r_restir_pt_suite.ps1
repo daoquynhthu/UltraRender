@@ -89,6 +89,7 @@ foreach ($spp in $CurveSpp) { if ($spp -le 0 -or $spp -ge $ReferenceSpp) { throw
 New-Item -ItemType Directory -Path $ResultDir -Force | Out-Null
 
 $reports = @()
+$benefitScenes = 0
 foreach ($scene in @("multi_light", "occlusion", "volume")) {
     $referenceRun = Invoke-Render $scene 0 $ReferenceSpp "phase_r_restir_pt_${scene}_reference.bin"
     $reference = Read-FloatImage $referenceRun.path
@@ -128,6 +129,11 @@ foreach ($scene in @("multi_light", "occlusion", "volume")) {
         }
         $mode["time_to_error_seconds"] = $timeToError
     }
+    if ($null -ne $modes[1].time_to_error_seconds -and
+        ($null -eq $modes[0].time_to_error_seconds -or
+         $modes[1].time_to_error_seconds -lt $modes[0].time_to_error_seconds)) {
+        ++$benefitScenes
+    }
     $reports += [ordered]@{
         name = $scene
         reference_spp = $ReferenceSpp
@@ -147,6 +153,8 @@ $report = [ordered]@{
     height = $Height
     curve_spp = $CurveSpp
     reference_spp = $ReferenceSpp
+    benefit_scene_count = $benefitScenes
+    boundary_scene_count = 0
     scenes = $reports
 }
 $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ResultPath -Encoding UTF8
