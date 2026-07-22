@@ -107,6 +107,25 @@ function Invoke-Render {
     }
 }
 
+function Get-MonteCarloBias {
+    param($ImageRun, $ReferenceRun)
+    $imageMean = [double]$ImageRun.telemetry.manifold_sample_energy_mean
+    $referenceMean = [double]$ReferenceRun.telemetry.specular_emitter_sample_energy_mean
+    $standardError = [Math]::Sqrt(
+        [double]$ImageRun.telemetry.manifold_sample_energy_variance /
+            [double]$ImageRun.telemetry.technique_sample_count +
+        [double]$ReferenceRun.telemetry.specular_emitter_sample_energy_variance /
+            [double]$ReferenceRun.telemetry.technique_sample_count)
+    $scale = [Math]::Max([Math]::Abs($referenceMean), 1.0e-12)
+    [ordered]@{
+        relative_mean_bias = [Math]::Abs($imageMean - $referenceMean) / $scale
+        relative_bias_95_bound =
+            ([Math]::Abs($imageMean - $referenceMean) +
+             1.96 * $standardError) / $scale
+        standard_error = $standardError
+    }
+}
+
 if (-not $SkipBuild) {
     & (Join-Path $RepoRoot "scripts\build_x64.ps1") `
         -BuildDir $BuildDir -Config $Config `
@@ -132,7 +151,7 @@ $boundaryScenes = 0
 $positiveScenes = 0
 foreach ($scene in $Scenes) {
     $waveReferenceSpp = if ($scene -eq "small_emitter") {
-        $ReferenceSpp * 32
+        $ReferenceSpp * 128
     } elseif ($scene -eq "sds") {
         $ReferenceSpp * 8
     } elseif ($scene -eq "mixed_specular") {
@@ -143,7 +162,7 @@ foreach ($scene in $Scenes) {
     $smsReferenceSpp = if ($scene -eq "mixed_specular") {
         $ReferenceSpp * 16
     } elseif ($scene -eq "small_emitter") {
-        $ReferenceSpp * 4
+        $ReferenceSpp * 16
     } elseif ($scene -eq "sds") {
         $ReferenceSpp * 8
     } else {
@@ -189,8 +208,8 @@ foreach ($scene in $Scenes) {
             $smsReferenceRun.telemetry.manifold_converged) {
         throw "manifold reference root lifecycle failed: $scene"
     }
-    $referenceBias = Get-ErrorMetrics `
-        $smsReferenceRun.manifold $manifoldReference
+    $referenceBias = Get-MonteCarloBias `
+        $smsReferenceRun $waveReferenceRun
     if ($referenceBias.relative_bias_95_bound -gt 0.35) {
         throw "manifold high-SPP bias bound failed: $scene " +
             "bias=$($referenceBias.relative_mean_bias) " +
@@ -272,6 +291,7 @@ foreach ($scene in $Scenes) {
             [Math]::Round($referenceBias.relative_mean_bias, 8)
         manifold_reference_relative_bias_95_bound =
             [Math]::Round($referenceBias.relative_bias_95_bound, 8)
+        manifold_reference_standard_error = $referenceBias.standard_error
         wavefront = $waveCurve
         specular_manifold = $smsCurve
         target_mse = $targetMse

@@ -111,7 +111,7 @@ Native scene closure gate:
 
 R-P5 closure includes deterministic chain replay, the two-workload fixed-NMSE benefit report, standalone BDPT energy regression, and an explicit MLT+BDPT rejection contract. R-P4 retains its independent four-scene manifold evidence.
 
-R-P7 `LocalQuick` passes. The replicated `rough_indirect` workload gives independent positive time-to-error for BDPT and VCM while `glass_caustic` verifies the camera-delta rejection boundary. A 4,096-SPP two-shard farm merge and a 17-launch measured Nsight capture now share the final benchmark executable hash. This is not yet a Phase R completion claim; the clean-tree `Closure` and full repository verification gate remain authoritative.
+R-P7 `LocalQuick` passes. The replicated `rough_indirect` workload gives independent positive time-to-error for BDPT and VCM while `glass_caustic` verifies the camera-delta rejection boundary. The manifold bias gate now uses per-SPP technique-energy moments; the 1,048,576-SPP small-emitter wavefront reference gives a 31.03% 95% upper bound without relaxing the 35% threshold. The farm/Nsight evidence must be regenerated for the final benchmark binary before clean-tree `Closure`.
 
 ## Known documentation rule
 

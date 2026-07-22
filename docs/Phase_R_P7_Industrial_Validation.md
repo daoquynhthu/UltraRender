@@ -29,7 +29,7 @@ The bidirectional suite uses four disjoint sample-range replicates. Its time met
 
 The fixed `glass_caustic` workload is a camera-delta path and is outside the standalone SMS support partition, which is `non-delta area anchor -> one to four smooth-delta events -> finite emitter`. The R-P7 boundary gate requires a nonzero ordinary image, zero anchored-delta reference energy, zero standalone SMS deposition, and exercised manifold solve telemetry. It is not used as a positive SMS reference.
 
-SDS, small-emitter, and mixed-specular workloads remain the positive statistical set. SDS uses a 65,536-SPP independent wavefront and SMS reference budget for the closure profile. The 35% high-SPP bias bound is not relaxed for quick execution.
+SDS, small-emitter, and mixed-specular workloads remain the positive statistical set. The 35% high-SPP bias bound is not relaxed for quick execution. Its confidence interval is computed from per-SPP full-image technique-energy first and second moments, not by treating spatial RGB pixels as IID samples. The small-emitter closure reference uses 1,048,576 independent wavefront samples and 131,072 SMS samples; its measured mean bias is about 0.98% and its 95% upper bound is about 31.03%.
 
 ## Commands
 

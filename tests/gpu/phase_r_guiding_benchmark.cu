@@ -271,6 +271,10 @@ int main(int argc, char** argv) {
         context->current_spp = sample_begin;
         GpuManifoldTelemetry manifold_total = {};
         double manifold_rgb_sum = 0.0;
+        double manifold_sample_energy_sum = 0.0;
+        double manifold_sample_energy_squared_sum = 0.0;
+        double specular_emitter_sample_energy_sum = 0.0;
+        double specular_emitter_sample_energy_squared_sum = 0.0;
         std::vector<GpuVec3> manifold_sample(
             static_cast<size_t>(width) * height);
         std::vector<double> manifold_image(
@@ -302,13 +306,21 @@ int main(int argc, char** argv) {
                 throw std::runtime_error(
                     "failed to copy specular-emitter benchmark AOV");
             }
+            double specular_emitter_iteration_energy = 0.0;
             for (size_t pixel = 0; pixel < specular_emitter_sample.size();
                  ++pixel) {
                 const GpuVec3 value = specular_emitter_sample[pixel];
                 specular_emitter_image[pixel * 3] += value.x;
                 specular_emitter_image[pixel * 3 + 1] += value.y;
                 specular_emitter_image[pixel * 3 + 2] += value.z;
+                specular_emitter_iteration_energy +=
+                    value.x + value.y + value.z;
             }
+            specular_emitter_sample_energy_sum +=
+                specular_emitter_iteration_energy;
+            specular_emitter_sample_energy_squared_sum +=
+                specular_emitter_iteration_energy *
+                specular_emitter_iteration_energy;
             const auto accumulate_bidirectional = [&](
                 const GpuVec3* device_values, double& sum,
                 std::vector<double>* image) {
@@ -354,15 +366,20 @@ int main(int argc, char** argv) {
                     throw std::runtime_error(
                         "failed to copy manifold benchmark accumulation");
                 }
+                double manifold_iteration_energy = 0.0;
                 for (size_t pixel = 0; pixel < manifold_sample.size();
                      ++pixel) {
                     const GpuVec3 value = manifold_sample[pixel];
                     manifold_rgb_sum += std::abs(value.x) +
                         std::abs(value.y) + std::abs(value.z);
+                    manifold_iteration_energy += value.x + value.y + value.z;
                     manifold_image[pixel * 3] += value.x;
                     manifold_image[pixel * 3 + 1] += value.y;
                     manifold_image[pixel * 3 + 2] += value.z;
                 }
+                manifold_sample_energy_sum += manifold_iteration_energy;
+                manifold_sample_energy_squared_sum +=
+                    manifold_iteration_energy * manifold_iteration_energy;
             }
             const GpuManifoldTelemetry current =
                 context->last_manifold_telemetry;
@@ -445,6 +462,13 @@ int main(int argc, char** argv) {
             throw std::runtime_error(
                 "failed to write specular-emitter benchmark AOV");
         }
+        const auto sample_variance = [render_iterations](
+            double sum, double squared_sum) {
+            if (render_iterations < 2) return 0.0;
+            return std::max(0.0, (squared_sum - sum * sum /
+                static_cast<double>(render_iterations)) /
+                static_cast<double>(render_iterations - 1));
+        };
         std::ofstream telemetry(output_path + ".telemetry");
         telemetry << "surface_suffixes=" << context->last_restir_pt_telemetry.surface_suffixes << '\n'
                   << "volume_suffixes=" << context->last_restir_pt_telemetry.volume_suffixes << '\n'
@@ -469,6 +493,17 @@ int main(int argc, char** argv) {
                   << "manifold_rejected_occluded=" << manifold_total.rejected_occluded << '\n'
                   << "manifold_rejected_response=" << manifold_total.rejected_response << '\n'
                   << "manifold_rgb_sum=" << manifold_rgb_sum << '\n'
+                  << "technique_sample_count=" << render_iterations << '\n'
+                  << "manifold_sample_energy_mean="
+                  << manifold_sample_energy_sum / render_iterations << '\n'
+                  << "manifold_sample_energy_variance="
+                  << sample_variance(manifold_sample_energy_sum,
+                                     manifold_sample_energy_squared_sum) << '\n'
+                  << "specular_emitter_sample_energy_mean="
+                  << specular_emitter_sample_energy_sum / render_iterations << '\n'
+                  << "specular_emitter_sample_energy_variance="
+                  << sample_variance(specular_emitter_sample_energy_sum,
+                                     specular_emitter_sample_energy_squared_sum) << '\n'
                   << "mlt_bootstrap_paths=" << context->last_mlt_diagnostics.bootstrap_paths << '\n'
                   << "mlt_bootstrap_positive=" << context->last_mlt_diagnostics.bootstrap_positive << '\n'
                   << "mlt_proposed=" << context->last_mlt_diagnostics.proposed_mutations << '\n'
