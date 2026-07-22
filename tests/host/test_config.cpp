@@ -406,7 +406,7 @@ static int test_bidirectional_and_vcm_json_fields() {
     const char* path = "test_config_bidirectional.json";
     {
         std::ofstream out(path);
-        out << R"({"integrator":{"mode":"vcm","bidirectional":{"enabled":true,"max_camera_vertices":12,"max_light_vertices":10,"connections_per_pixel":6,"memory_budget_mb":384,"light_tracing":true},"vcm":{"enabled":true,"initial_radius":0.25,"alpha":0.7,"grid_capacity":65536,"merge_surfaces":true,"merge_volumes":false}}})";
+        out << R"({"integrator":{"mode":"vcm","bidirectional":{"enabled":true,"max_camera_vertices":12,"max_light_vertices":10,"connections_per_pixel":13,"memory_budget_mb":384,"light_tracing":true},"vcm":{"enabled":true,"initial_radius":0.25,"alpha":0.7,"grid_capacity":65536,"merge_surfaces":true,"merge_volumes":false}}})";
     }
     const auto cfg = ure::config::load_config(path);
     std::remove(path);
@@ -414,7 +414,7 @@ static int test_bidirectional_and_vcm_json_fields() {
     CHECK(cfg.integrator.bidirectional.enabled);
     CHECK(cfg.integrator.bidirectional.max_camera_vertices == 12);
     CHECK(cfg.integrator.bidirectional.max_light_vertices == 10);
-    CHECK(cfg.integrator.bidirectional.connections_per_pixel == 6);
+    CHECK(cfg.integrator.bidirectional.connections_per_pixel == 13);
     CHECK(cfg.integrator.bidirectional.memory_budget_mb == 384);
     CHECK(cfg.integrator.bidirectional.light_tracing);
     CHECK(cfg.integrator.vcm.enabled);
@@ -430,7 +430,7 @@ static int test_bidirectional_and_vcm_cli_overrides() {
         "ure_cli", "render", "scene.gltf", "--integrator-mode", "vcm",
         "--enable-bidirectional", "--bidirectional-max-camera-vertices", "11",
         "--bidirectional-max-light-vertices", "9",
-        "--bidirectional-connections-per-pixel", "5",
+        "--bidirectional-connections-per-pixel", "12",
         "--bidirectional-memory-budget-mb", "256",
         "--bidirectional-light-tracing", "--enable-vcm",
         "--vcm-initial-radius", "0.2", "--vcm-alpha", "0.8",
@@ -443,7 +443,7 @@ static int test_bidirectional_and_vcm_cli_overrides() {
     CHECK(cfg.integrator.bidirectional.enabled);
     CHECK(cfg.integrator.bidirectional.max_camera_vertices == 11);
     CHECK(cfg.integrator.bidirectional.max_light_vertices == 9);
-    CHECK(cfg.integrator.bidirectional.connections_per_pixel == 5);
+    CHECK(cfg.integrator.bidirectional.connections_per_pixel == 12);
     CHECK(cfg.integrator.bidirectional.memory_budget_mb == 256);
     CHECK(cfg.integrator.bidirectional.light_tracing);
     CHECK(cfg.integrator.vcm.enabled);

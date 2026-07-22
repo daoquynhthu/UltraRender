@@ -28,10 +28,12 @@ function Write-Fixture {
     }
     if ($Profile -eq "Closure") {
         $report.farm = [ordered]@{
-            schema = "ure.phase_r.farm_evidence.v1"; status = "collected"; run_id = "fixture"; expected_sample_count = 20
+            schema = "ure.phase_r.farm_evidence.v1"; status = "collected"; run_id = "fixture"; expected_sample_count = 4096
+            width = 1; height = 1; executable_sha256 = $hash; merged_artifact_sha256 = $hash
+            reference_artifact_sha256 = $hash; merge_normalized_mse = 0
             shards = @(
-                [ordered]@{ worker_id = "w0"; sample_begin = 0; sample_end = 10; artifact_sha256 = $hash },
-                [ordered]@{ worker_id = "w1"; sample_begin = 10; sample_end = 20; artifact_sha256 = $hash }
+                [ordered]@{ worker_id = "w0"; sample_begin = 0; sample_end = 2048; artifact_sha256 = $hash; elapsed_seconds = 1 },
+                [ordered]@{ worker_id = "w1"; sample_begin = 2048; sample_end = 4096; artifact_sha256 = ("b" * 64); elapsed_seconds = 1 }
             )
         }
         $report.nsight = [ordered]@{
@@ -106,12 +108,17 @@ try {
 
     "a" | Set-Content -LiteralPath (Join-Path $TempDir "shard0.bin")
     "b" | Set-Content -LiteralPath (Join-Path $TempDir "shard1.bin")
+    "merged" | Set-Content -LiteralPath (Join-Path $TempDir "merged.bin")
+    "reference" | Set-Content -LiteralPath (Join-Path $TempDir "reference.bin")
     $manifestPath = Join-Path $TempDir "farm_manifest.json"
     [ordered]@{
-        schema = "ure.phase_r.farm_manifest.v1"; run_id = "fixture"; expected_sample_count = 20
+        schema = "ure.phase_r.farm_manifest.v1"; run_id = "fixture"; expected_sample_count = 4096
+        executable = $Validator; executable_sha256 = (Get-FileHash $Validator -Algorithm SHA256).Hash
+        scene = "fixture"; mode = 0; width = 1; height = 1; merged_artifact = "merged.bin"
+        reference_artifact = "reference.bin"; merge_normalized_mse = 0
         shards = @(
-            [ordered]@{ worker_id = "w0"; sample_begin = 0; sample_end = 10; artifact = "shard0.bin" },
-            [ordered]@{ worker_id = "w1"; sample_begin = 10; sample_end = 20; artifact = "shard1.bin" }
+            [ordered]@{ worker_id = "w0"; sample_begin = 0; sample_end = 2048; artifact = "shard0.bin"; elapsed_seconds = 1 },
+            [ordered]@{ worker_id = "w1"; sample_begin = 2048; sample_end = 4096; artifact = "shard1.bin"; elapsed_seconds = 1 }
         )
     } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath
     $farmPath = Join-Path $TempDir "farm.json"

@@ -3,9 +3,13 @@ param(
     [string]$Config = "Release",
     [int]$Width = 16,
     [int]$Height = 16,
-    [int[]]$CurveSpp = @(4, 16, 64),
-    [int]$ReferenceSpp = 256,
-    [string[]]$Scenes = @("cornell", "sds", "glass_caustic"),
+    [int[]]$CurveSpp = @(4, 16, 32, 64, 128, 256),
+    [int]$ReferenceSpp = 4096,
+    [int]$ReplicateCount = 4,
+    [string[]]$Scenes = @(
+        "cornell", "sds", "rough_indirect", "glass_caustic"),
+    [double]$TargetNormalizedMse = 0.33,
+    [double]$HighQualityNormalizedMse = 0.25,
     [int]$MinBdptBenefitScenes = 0,
     [int]$MinVcmBenefitScenes = 0,
     [switch]$SkipBuild
@@ -48,10 +52,11 @@ function Get-Metrics {
 }
 
 function Invoke-Render {
-    param([string]$Scene, [int]$Mode, [int]$Spp, [string]$Name)
+    param([string]$Scene, [int]$Mode, [int]$Spp, [string]$Name,
+          [int]$SampleBegin = 0)
     $path = Join-Path $ResultDir $Name
     $elapsed = Measure-Command {
-        & $ExePath $Scene $Mode $Width $Height $Spp $path
+        & $ExePath $Scene $Mode $Width $Height $Spp $path $SampleBegin
         if ($LASTEXITCODE -ne 0) { throw "bidirectional benchmark failed: $Scene mode=$Mode spp=$Spp" }
     }
     $telemetry = [ordered]@{}
@@ -64,8 +69,41 @@ function Invoke-Render {
         connection = Read-FloatImage ($path + ".bidirectional_connection")
         surface_merge = Read-FloatImage ($path + ".vcm_surface_merge")
         volume_merge = Read-FloatImage ($path + ".vcm_volume_merge")
-        elapsed_seconds = $elapsed.TotalSeconds
+        elapsed_seconds = [double]$telemetry.render_seconds
+        process_seconds = $elapsed.TotalSeconds
         telemetry = $telemetry
+    }
+}
+
+function Get-ReplicateMetrics {
+    param($Runs, $Reference)
+    $mseSum = 0.0
+    $elapsedSum = 0.0
+    $means = New-Object 'double[]' $Reference.values.Length
+    foreach ($run in $Runs) {
+        $mseSum += (Get-Metrics $run.image $Reference).normalized_mse
+        $elapsedSum += $run.elapsed_seconds
+        for ($index = 0; $index -lt $means.Length; ++$index) {
+            $means[$index] += $run.image.values[$index] / $Runs.Count
+        }
+    }
+    $varianceSum = 0.0
+    $referenceSquared = 0.0
+    for ($index = 0; $index -lt $means.Length; ++$index) {
+        foreach ($run in $Runs) {
+            $delta = $run.image.values[$index] - $means[$index]
+            $varianceSum += $delta * $delta
+        }
+        $referenceSquared += $Reference.values[$index] *
+            $Reference.values[$index]
+    }
+    [ordered]@{
+        normalized_mse = $mseSum / $Runs.Count
+        normalized_variance = if ($Runs.Count -gt 1) {
+            $varianceSum / (($Runs.Count - 1) *
+                [Math]::Max($referenceSquared, 1.0e-20))
+        } else { 0.0 }
+        elapsed_seconds = $elapsedSum / $Runs.Count
     }
 }
 
@@ -74,6 +112,12 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) { throw "bidirectional benchmark build failed" }
 }
 if (-not (Test-Path $ExePath)) { throw "bidirectional benchmark executable not found" }
+if ($ReplicateCount -lt 2 -or $TargetNormalizedMse -le 0.0 -or
+    $HighQualityNormalizedMse -le 0.0 -or
+    @($CurveSpp | Where-Object { $_ -le 0 }).Count -gt 0) {
+    throw "bidirectional statistical gate configuration is invalid"
+}
+$maxCurveSpp = [int](($CurveSpp | Measure-Object -Maximum).Maximum)
 New-Item -ItemType Directory -Path $ResultDir -Force | Out-Null
 
 $reports = @()
@@ -116,20 +160,35 @@ foreach ($scene in $Scenes) {
         [ordered]@{ name = "vcm"; value = 5 })) {
         $curve = @()
         foreach ($spp in $CurveSpp) {
-            $run = Invoke-Render $scene $mode.value $spp "phase_r_bidir_${scene}_$($mode.name)_spp${spp}.bin"
-            $metrics = Get-Metrics $run.image $referenceRun.image
+            $runs = @()
+            for ($replicate = 0; $replicate -lt $ReplicateCount;
+                 ++$replicate) {
+                $sampleBegin = $ReferenceSpp +
+                    $replicate * ($maxCurveSpp + 1)
+                $runs += Invoke-Render $scene $mode.value $spp `
+                    "phase_r_bidir_${scene}_$($mode.name)_spp${spp}_r${replicate}.bin" `
+                    $sampleBegin
+            }
+            $metrics = Get-ReplicateMetrics $runs $referenceRun.image
             $curve += [ordered]@{
                 spp = $spp
-                elapsed_seconds = [Math]::Round($run.elapsed_seconds, 6)
+                elapsed_seconds = [Math]::Round($metrics.elapsed_seconds, 6)
                 normalized_mse = [Math]::Round($metrics.normalized_mse, 10)
-                samples_per_second = [Math]::Round(($Width * $Height * $spp) / $run.elapsed_seconds, 3)
+                normalized_variance = [Math]::Round(
+                    $metrics.normalized_variance, 10)
+                samples_per_second = [Math]::Round(
+                    ($Width * $Height * $spp) / $metrics.elapsed_seconds, 3)
             }
         }
         $modes += [ordered]@{ mode = $mode.name; curve = $curve }
     }
-    $target = 1.05 * [Math]::Min(
-        [double]$modes[1].curve[-1].normalized_mse,
-        [double]$modes[2].curve[-1].normalized_mse)
+    foreach ($mode in $modes) {
+        if ([double]$mode.curve[-1].normalized_mse -gt
+            $HighQualityNormalizedMse) {
+            throw "$($mode.mode) did not reach the high-quality convergence gate in $scene"
+        }
+    }
+    $target = $TargetNormalizedMse
     foreach ($mode in $modes) {
         $time = $null
         foreach ($point in $mode.curve) {
@@ -154,6 +213,9 @@ $report = [ordered]@{
     height = $Height
     curve_spp = $CurveSpp
     reference_spp = $ReferenceSpp
+    replicate_count = $ReplicateCount
+    target_normalized_mse = $TargetNormalizedMse
+    high_quality_normalized_mse = $HighQualityNormalizedMse
     bdpt_benefit_scene_count = $benefits.bdpt
     vcm_benefit_scene_count = $benefits.vcm
     bdpt_boundary_scene_count = $boundaries.bdpt

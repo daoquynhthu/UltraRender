@@ -104,6 +104,12 @@ static void build_scene(const std::string& name,
         add_sphere(spheres, GpuVec3(0.0f, -2.0f, 0.0f), 1.0f, 9);
         add_sphere(spheres, GpuVec3(0.0f, 0.0f, 0.0f), 1.0f, 8);
         add_light(spheres, materials, GpuVec3(0.0f, 3.0f, 0.0f), 0.1f, 120.0f);
+    } else if (name == "rough_indirect") {
+        materials.push_back(make_material(MaterialType::Metal, 0.92f, 0.12f));
+        materials.push_back(make_material(MaterialType::Lambertian, 0.0f, 0.9f));
+        add_sphere(spheres, GpuVec3(0.0f, 2.2f, -1.8f), 1.5f, 8);
+        add_sphere(spheres, GpuVec3(0.0f, 0.7f, 0.4f), 1.1f, 9);
+        add_light(spheres, materials, GpuVec3(0.0f, 3.8f, 1.2f), 0.08f, 500.0f);
     } else if (name == "sds") {
         materials[0] = make_material(MaterialType::Lambertian, 0.0f, 0.9f);
         materials.push_back(make_material(MaterialType::Metal, 0.92f, 0.0f));
@@ -141,14 +147,15 @@ static void build_scene(const std::string& name,
 }
 
 int main(int argc, char** argv) {
-    if (argc != 7) return 2;
+    if (argc != 7 && argc != 8) return 2;
     const std::string scene_name = argv[1];
     const int mode = std::stoi(argv[2]);
     const int width = std::stoi(argv[3]);
     const int height = std::stoi(argv[4]);
     const int spp = std::stoi(argv[5]);
     const std::string output_path = argv[6];
-    if (width <= 0 || height <= 0 || spp <= 0) return 3;
+    const int sample_begin = argc == 8 ? std::stoi(argv[7]) : 0;
+    if (width <= 0 || height <= 0 || spp <= 0 || sample_begin < 0) return 3;
 
     ure::RenderConfig config;
     config.num_wavelengths = 8;
@@ -205,16 +212,16 @@ int main(int argc, char** argv) {
         config.integrator.mode = ure::IntegratorMode::VCM;
         config.bidirectional.max_camera_vertices = 8;
         config.bidirectional.max_light_vertices = 8;
-        config.bidirectional.connections_per_pixel = 4;
+        config.bidirectional.connections_per_pixel = 9;
         config.bidirectional.memory_budget_mb = 256;
         config.vcm.initial_radius = 0.5f;
         config.vcm.alpha = 0.75f;
         config.vcm.grid_capacity = width * height * 8;
-    } else if (mode == 6) {
+    } else if (mode == 6 || mode == 10) {
         config.integrator.mode = ure::IntegratorMode::BDPT;
         config.bidirectional.max_camera_vertices = 8;
         config.bidirectional.max_light_vertices = 8;
-        config.bidirectional.connections_per_pixel = 4;
+        config.bidirectional.connections_per_pixel = mode == 10 ? 64 : 9;
         config.bidirectional.memory_budget_mb = 256;
     } else if (mode == 7) {
         config.integrator.mode = ure::IntegratorMode::PathGuided;
@@ -261,6 +268,7 @@ int main(int argc, char** argv) {
         if (volume) {
             update_medium_gpu(context, 0.08f, 0.35f, SpectralPacket(0.35f), SpectralPacket(0.015f), 20.0f);
         }
+        context->current_spp = sample_begin;
         GpuManifoldTelemetry manifold_total = {};
         double manifold_rgb_sum = 0.0;
         std::vector<GpuVec3> manifold_sample(

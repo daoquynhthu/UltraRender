@@ -108,7 +108,7 @@ struct BidirectionalConfig {
     bool enabled = false;
     int max_camera_vertices = 8;
     int max_light_vertices = 8;
-    int connections_per_pixel = 4;
+    int connections_per_pixel = 9;
     int memory_budget_mb = 0;
     bool light_tracing = false;
 };

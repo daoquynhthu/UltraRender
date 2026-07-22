@@ -1428,10 +1428,11 @@ static void validate_bidirectional_config(const ure::RenderConfig& config) {
         config.bidirectional.max_camera_vertices > 32 ||
         config.bidirectional.max_light_vertices < 1 ||
         config.bidirectional.max_light_vertices > 32 ||
-        config.bidirectional.connections_per_pixel < 1 ||
+        config.bidirectional.connections_per_pixel <
+            config.bidirectional.max_camera_vertices + 1 ||
         config.bidirectional.connections_per_pixel > 1024 ||
         config.bidirectional.memory_budget_mb < 0) {
-        throw std::runtime_error("Bidirectional path bounds or memory budget are invalid");
+        throw std::runtime_error("Bidirectional path bounds, endpoint-strategy budget, or memory budget are invalid");
     }
     if (config.integrator.mode == ure::IntegratorMode::VCM || config.vcm.enabled) {
         if (!std::isfinite(config.vcm.initial_radius) ||
@@ -3903,6 +3904,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
                 ctx->render_config.bidirectional.max_light_vertices,
                 ctx->d_bidirectional_connection_accum, primary_ray_count,
                 ctx->render_config.bidirectional.connections_per_pixel,
+                ctx->current_spp - 1,
                 ctx->current_spp < 100 ? 5.0f : 20.0f,
                 ctx->vcm_current_surface_radius,
                 ctx->vcm_current_volume_radius,

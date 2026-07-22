@@ -21,6 +21,7 @@ __global__ void connect_bidirectional_subpaths_kernel(
     GpuVec3* connection_accumulation,
     int path_count,
     int connections_per_path,
+    int sample_index,
     float dispersion_clamp,
     float surface_merge_radius,
     float volume_merge_radius,

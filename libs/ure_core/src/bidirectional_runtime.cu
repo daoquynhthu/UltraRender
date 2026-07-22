@@ -1390,6 +1390,7 @@ __global__ void connect_bidirectional_subpaths_kernel(
     GpuVec3* connection_accumulation,
     int path_count,
     int connections_per_path,
+    int sample_index,
     float dispersion_clamp,
     float surface_merge_radius,
     float volume_merge_radius,
@@ -1414,24 +1415,43 @@ __global__ void connect_bidirectional_subpaths_kernel(
         total.wavelengths[channel] =
             camera_path[0].throughput.wavelengths[channel];
     }
-    int attempted = 0;
-    for (int light_index = 0; light_index < light_length; ++light_index) {
+    const int pair_count = light_length * camera_length;
+    const int endpoint_count = camera_length;
+    const int deeper_pair_count = pair_count - endpoint_count;
+    const int deeper_selected_count = min(
+        max(0, connections_per_path - endpoint_count), deeper_pair_count);
+    const int selected_count = endpoint_count + deeper_selected_count;
+    const unsigned int selection_bits = wang_hash(
+        static_cast<unsigned int>(sample_index) * 0x9e3779b9u ^
+        static_cast<unsigned int>(path_index) * 0x85ebca6bu ^
+        0x7f4a7c15u);
+    const int deeper_selection_begin = deeper_selected_count == 0 ||
+        deeper_selected_count == deeper_pair_count ? 0 :
+        static_cast<int>(selection_bits %
+            static_cast<unsigned int>(deeper_pair_count));
+    for (int selection = 0; selection < selected_count; ++selection) {
+        const bool endpoint_strategy = selection < endpoint_count;
+        const int pair_index = endpoint_strategy ? selection :
+            endpoint_count + (deeper_selection_begin +
+                selection - endpoint_count) % deeper_pair_count;
+        const float selection_weight = endpoint_strategy ||
+                deeper_selected_count == deeper_pair_count
+            ? 1.0f : static_cast<float>(deeper_pair_count) /
+                static_cast<float>(deeper_selected_count);
+        const int light_index = pair_index / camera_length;
+        const int camera_index = pair_index % camera_length;
         const GpuBidirectionalPathVertex light = light_path[light_index];
         if (!light.valid || light.scene_epoch != scene_epoch) continue;
-        for (int camera_index = 0; camera_index < camera_length;
-             ++camera_index) {
-            if (attempted >= connections_per_path) break;
-            const GpuBidirectionalPathVertex camera = camera_path[camera_index];
-            if (!camera.valid || camera.scene_epoch != scene_epoch) {
-                if (telemetry) atomicAdd(&telemetry->rejected_stale, 1u);
-                continue;
-            }
-            ++attempted;
-            if (telemetry) atomicAdd(&telemetry->attempted_connections, 1u);
-            if (camera.delta || light.delta) {
-                if (telemetry) atomicAdd(&telemetry->rejected_delta, 1u);
-                continue;
-            }
+        const GpuBidirectionalPathVertex camera = camera_path[camera_index];
+        if (!camera.valid || camera.scene_epoch != scene_epoch) {
+            if (telemetry) atomicAdd(&telemetry->rejected_stale, 1u);
+            continue;
+        }
+        if (telemetry) atomicAdd(&telemetry->attempted_connections, 1u);
+        if (camera.delta || light.delta) {
+            if (telemetry) atomicAdd(&telemetry->rejected_delta, 1u);
+            continue;
+        }
             const GpuVec3 edge = camera.position - light.position;
             const float distance_squared = edge.length_sq();
             if (!(distance_squared > 1e-10f)) continue;
@@ -1512,10 +1532,9 @@ __global__ void connect_bidirectional_subpaths_kernel(
             total = total + light.throughput * light_factor *
                 camera.throughput * camera_factor *
                 (light_cosine * camera_cosine / distance_squared *
-                 mis_weight);
+                 mis_weight * selection_weight);
             if (telemetry) atomicAdd(
                 &telemetry->accepted_connections, 1u);
-        }
     }
     const GpuBidirectionalPathVertex camera = camera_path[0];
     const GpuVec3 xyz = spectral_sample_to_xyz(

@@ -22,13 +22,27 @@ function Test-FarmEvidence {
     Assert-Condition ($Farm.schema -eq "ure.phase_r.farm_evidence.v1") "invalid farm evidence schema"
     Assert-Condition ($Farm.status -eq "collected") "farm evidence was not collected"
     Assert-Condition (-not [string]::IsNullOrWhiteSpace($Farm.run_id)) "farm run_id is missing"
-    Assert-Condition ($Farm.shards.Count -gt 0) "farm evidence has no shards"
+    Assert-Condition ([uint64]$Farm.expected_sample_count -ge 4096) "farm evidence is not a long-run"
+    Assert-Condition ($Farm.shards.Count -ge 2) "farm evidence requires multiple shards"
+    Assert-Condition ($Farm.executable_sha256 -match '^[0-9a-fA-F]{64}$') "farm executable hash is invalid"
+    Assert-Condition ($Farm.merged_artifact_sha256 -match '^[0-9a-fA-F]{64}$') "farm merged artifact hash is invalid"
+    Assert-Condition ($Farm.reference_artifact_sha256 -match '^[0-9a-fA-F]{64}$') "farm reference artifact hash is invalid"
+    Assert-Condition ([double]$Farm.merge_normalized_mse -ge 0.0 -and
+        [double]$Farm.merge_normalized_mse -le 1.0e-6) "farm merge error is invalid"
+    Assert-Condition ([int]$Farm.width -gt 0 -and [int]$Farm.height -gt 0) "farm dimensions are invalid"
 
     $ordered = @($Farm.shards | Sort-Object { [uint64]$_.sample_begin })
+    $workerIds = @{}
+    $artifactHashes = @{}
     [uint64]$cursor = 0
     foreach ($shard in $ordered) {
         Assert-Condition (-not [string]::IsNullOrWhiteSpace($shard.worker_id)) "farm worker_id is missing"
+        Assert-Condition (-not $workerIds.ContainsKey($shard.worker_id)) "farm worker_id is duplicated"
+        $workerIds[$shard.worker_id] = $true
         Assert-Condition ($shard.artifact_sha256 -match '^[0-9a-fA-F]{64}$') "invalid farm artifact hash"
+        Assert-Condition (-not $artifactHashes.ContainsKey($shard.artifact_sha256)) "farm shards reused the same framebuffer"
+        $artifactHashes[$shard.artifact_sha256] = $true
+        Assert-PositiveNumber $shard.elapsed_seconds "farm shard elapsed_seconds"
         [uint64]$begin = $shard.sample_begin
         [uint64]$end = $shard.sample_end
         Assert-Condition ($begin -eq $cursor) "farm sample ranges contain a gap or overlap at $cursor"
@@ -103,6 +117,8 @@ Assert-PositiveNumber $report.metrics.samples_per_second.value "samples_per_seco
 if ($Profile -eq "Closure") {
     Test-FarmEvidence $report.farm
     Test-NsightEvidence $report.nsight
+    Assert-Condition ($report.farm.executable_sha256 -eq
+        $report.nsight.profiled_executable_sha256) "farm and Nsight executable hashes differ"
     $requiredModes = @("path_guiding", "restir_pt", "specular_manifold", "bdpt", "vcm", "mlt")
     foreach ($mode in $requiredModes) {
         $matches = @($report.integrator_gates | Where-Object { $_.mode -eq $mode })

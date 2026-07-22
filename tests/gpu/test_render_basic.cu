@@ -2721,7 +2721,7 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
     config.bidirectional.enabled = false;
     config.bidirectional.max_camera_vertices = 6;
     config.bidirectional.max_light_vertices = 5;
-    config.bidirectional.connections_per_pixel = 4;
+    config.bidirectional.connections_per_pixel = 7;
     config.bidirectional.memory_budget_mb = 64;
 
     GpuMaterialData diffuse = {};
