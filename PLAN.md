@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-18 (R-P4 closure and R-P5 cursor)
+最后更新: 2026-07-22 (R-P5 closure and R-P7 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -54,7 +54,7 @@ Phase Q complete [done]
 R-P4 specular manifold + BDPT/VCM [done]
    │
    ▼
-当前游标: R-P5 → R-P7
+当前游标: R-P7
    │
    ▼
 Phase T complete
@@ -79,7 +79,7 @@ Phase X complete
 - **R-P6 已闭环**: deterministic Lorenz-Mie generator、严格 table adapter、不可变 SceneIR resource、GPU spectral eval/pdf/sample、NEE/continuation、scalar-depolarizing Stokes、Session rebuild 和端到端生命周期均已进入生产与验证路径。
 - **Phase Q 已闭环**: URE native schema、serialization、programmatic graph、feature declaration、tooling/adapter、compiled cache/farm 与 validation suite 已冻结为后续阶段的权威 authoring contract。
 - **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
-- **当前唯一施工项 — Phase R remainder**: 固定顺序为 R-P5、R-P7；R-P1/R-P2/R-P3/R-P4/R-P6 已完成。当前游标为 R-P5，Phase R 未通过 R-P7 不得启动 Phase T 实现。
+- **当前唯一施工项 — Phase R remainder**: R-P1 至 R-P6 已完成，当前游标为 R-P7。Phase R 未通过 R-P7 不得启动 Phase T 实现。
 - **Phase T → V → W**: T 先稳定 backend-neutral runtime 并迁移 CUDA/Vulkan/DXR；V 再建设统一 acceleration provider；W 最后把已有 reference/oracle 工作接入稳定执行与加速合同。现有 W 成果保留，新增 W production work 冻结。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
@@ -1949,7 +1949,7 @@ R-P4 reciprocal-root proposal closure：host 端按 bidirectional VRAM budget �
 
 R-P4 final closure：standalone SMS 只接管“non-delta area anchor → 1..4 smooth-delta events → finite emitter”的精确支持集；wavefront flag 独立携带 last-delta 与 preceding-area-anchor 状态，未覆盖的 camera-delta、environment、rough、volume-interrupted 路径继续由 wavefront 负责。dielectric Mueller/Stokes response 按 camera-subpath 的 anchor→light radiance transport 方向应用 eta scale。独立 wavefront technique AOV 在分区前记录同一支持集，四场景 suite 不再使用 total-image subtraction 或 SMS self-reference。2026-07-18 默认 Release suite 以 8192 SPP 基准和 rare-event adaptive reference budgets 通过 glass caustic、SDS、small emitter、mixed rough/specular；high-SPP relative mean bias 为 14.3%/7.6%/7.1%/1.3%，95% bound 为 26.5%/32.2%/27.0%/14.1%，2 个 workload 给出正 time-to-error。R-P4 已闭环，权威游标进入 R-P5。
 
-R-P5 progress（2026-07-19）：独立 GPU chain scheduler 已接入生产 wavefront contribution evaluator，显式 queue-owned primary-sample view 覆盖 camera/film/wavelength/surface/volume/light/lobe/RR dimensions；bootstrap weighted seeding、burn-in、large/small step、PSSMLT 双端沉积与归一化、显存预算、chain diagnostics、64-bit global chain identity、多 GPU disjoint shard、原生 solver/JSON/CLI/C ABI/pyure 配置传播和 deterministic GPU replay 已实现。GPU small-step 已与 host oracle 统一为 wrapped symmetric Laplace proposal，bootstrap chain seeds 使用 deterministic stratified CDF resampling。suite 改用与被测算法无关的固定 normalized-MSE 门槛；SDS workload 在 5% 门槛下由 MLT 256 SPP/0.444s 对 wavefront 1024 SPP/0.805s 给出正 time-to-error，glass/small-emitter/high-occlusion 保留为失败边界，第二个正收益 workload 仍未闭环。审计确认现有 BDPT connection AOV 缺少 camera-only technique，不能直接作为无偏 MLT target；shared host/device contract 已用独立 primary dimension 均匀选择完整枚举 technique range，并验证 reciprocal selection-probability compensation 一次且仅一次。下一施工片必须执行 camera-only、light-tracing 和 internal connection 全端点技术后才能启用 combined mode。R-P5 保持施工中，不得因 selection contract 或运行时已启用而提前闭环。
+R-P5 closure（2026-07-22）：独立 GPU chain scheduler 已接入生产 wavefront contribution evaluator，queue-owned primary-sample replay 覆盖 camera/film/wavelength/surface/volume/light/lobe/RR dimensions；bootstrap weighted/stratified seeding、burn-in、wrapped symmetric Laplace large/small step、PSSMLT 双端沉积与归一化、显存预算、chain diagnostics、64-bit global chain identity、多 GPU disjoint shard、配置/API 传播和 deterministic GPU replay 均已实现。固定 normalized-MSE=5% 的 8x8 Release suite 使用 65,536-SPP independent wavefront reference：SDS 与面积补偿的 0.075-radius SDS small-light 两个 workload 均由 MLT 在 256 SPP 达标，而 wavefront 需 1024 SPP；MLT 1024-SPP bias 95% bound 分别为 4.58% 与 1.26%。小步尺度 0.03 将两场景 acceptance 控制在约 0.80/0.85。BDPT 审计同时修复 spectral accumulator wavelength 丢失与 camera reverse-PDF 方向错误；standalone energy regression 通过。MLT+BDPT 因 sampled-lane camera/light subpath 尚无共享 wavelength primary sample 而 fail-loud，VCM/manifold/adaptive reuse 继续拒绝，不以 uniform-packet 偶然正确冒充通用估计器。R-P5 已闭环，权威游标进入 R-P7。
 
 #### Phase R 执行顺序
 

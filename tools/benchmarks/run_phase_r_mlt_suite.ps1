@@ -7,7 +7,8 @@ param(
     [int]$ReferenceSpp = 8192,
     [double]$TargetNormalizedMse = 0.05,
     [string[]]$Scenes = @(
-        "sds", "small_emitter", "glass_caustic", "high_occlusion"),
+        "sds", "sds_small_light", "small_emitter", "glass_caustic",
+        "high_occlusion"),
     [switch]$SkipBuild
 )
 
@@ -112,7 +113,8 @@ $benefitScenes = 0
 foreach ($scene in $Scenes) {
     $sceneReferenceSpp = if ($scene -eq "small_emitter") {
         $ReferenceSpp * 32
-    } elseif ($scene -eq "sds" -or $scene -eq "glass_caustic") {
+    } elseif ($scene -eq "sds" -or $scene -eq "sds_small_light" -or
+              $scene -eq "glass_caustic") {
         $ReferenceSpp * 8
     } elseif ($scene -eq "high_occlusion") {
         $ReferenceSpp * 4

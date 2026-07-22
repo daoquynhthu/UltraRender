@@ -671,6 +671,7 @@ struct GpuScene {
     int bidirectional_max_camera_vertices;
     std::uint32_t bidirectional_scene_epoch;
     GpuBidirectionalTelemetry* bidirectional_telemetry;
+    int bidirectional_mis_partition;
     GpuManifoldSeedPrimitive* manifold_seed_primitives;
     int manifold_seed_primitive_count;
     int manifold_sms_partition;
@@ -733,6 +734,7 @@ struct RayQueue {
     float wavelength_proposal_lambda_max = kSpectralLambdaMax;
     const float* primary_samples = nullptr;
     int primary_sample_stride = 0;
+    int primary_sample_dimension_count = 0;
     int primary_sample_count = 0;
 
     int* count = nullptr;

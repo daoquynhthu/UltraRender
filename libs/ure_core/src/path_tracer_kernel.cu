@@ -18,7 +18,6 @@ namespace ure::gpu {
 #include "path_tracer_scattered_stokes.cuh"
 #include "path_tracer_volume.cuh"
 #include "restir_pt_capture.cuh"
-#include "bidirectional_capture.cuh"
 #include "path_tracer_wavefront.cuh"
 
 #include "path_tracer_material.cu"

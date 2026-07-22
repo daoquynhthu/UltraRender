@@ -44,6 +44,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | R-P6 (Mie Volume Resources) | Done | Deterministic Lorenz-Mie generation, strict table adapter, immutable SceneIR resources, spectral GPU eval/pdf/sample, NEE/continuation, Session rebuild |
 | R-P3 (Production ReSTIR) | Done | Unbiased temporal/spatial DI; bounded diffuse/volume PT suffix replay; bias/variance benchmark suite |
 | R-P4 (Specular Manifold) | Done | GPU SMS + BDPT/VCM; exact support partition; independent technique AOV; four-scene statistical gate |
+| R-P5 (PSSMLT) | Done | Independent GPU chains, production wavefront replay, normalization/diagnostics/shards, two-workload fixed-NMSE benefit gate |
 | Q.0-Q.12 (Native Scene) | Done | Native schema/serialization, procedural/script, resources/solvers/simulation, tooling/adapters/cache/farm, validation suite |
 | W (Wave Optics Solver) | In progress | W.0 audit + rough dielectric spectral/UV PDF/MIS fix done; W.1 WaveOpticsConfig gates done; W.2 Airy PSF oracle started |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
@@ -386,10 +387,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 11 | 2026-07-18 R-P4 closure | Closed standalone specular-manifold correctness and benefit validation | Camera-direction dielectric transport fixed; exact anchored-delta support partition; independent wavefront technique AOV; glass/SDS/small-emitter/mixed suite passed with two positive time-to-error workloads; next cursor R-P5 |
 | 12 | 2026-07-18 R-P5 implementation | Enabled production PSSMLT runtime while retaining the R-P5 cursor | Shared queue-owned primary-sample replay, independent GPU chains, bootstrap/burn-in/normalization, diagnostics, memory budgets, 64-bit multi-GPU shard identity, native/config/C/Python propagation, and deterministic GPU E2E are implemented. The difficult-scene benefit gate remained open. |
 | 13 | 2026-07-19 R-P5 estimator audit | Hardened mutation/seeding and replaced the self-referential benefit metric | GPU and host now share wrapped symmetric Laplace small steps; bootstrap chains use deterministic stratified CDF resampling; time-to-error uses a fixed normalized-MSE target. SDS reaches 5% NMSE at 256 SPP/0.444s versus wavefront 1024 SPP/0.805s. Glass, small-emitter, and high-occlusion remain boundary failures; the second positive workload and complete multiplexed technique partition remain open. |
+| 14 | 2026-07-22 R-P5 closure | Closed PSSMLT benefit evidence and hardened the BDPT boundary | Corrected spectral accumulator wavelength retention and camera reverse-PDF direction; rejected MLT+BDPT until sampled-lane subpaths share one wavelength primary sample; tuned SDS small steps; SDS and area-compensated small-light SDS both pass the fixed 5% NMSE time-to-error gate. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- Phase Q, R-P3, R-P4, and R-P6 are complete; the authoritative construction cursor is R-P5. Phase M is complete.
+- Phase Q and R-P3 through R-P6 are complete; the authoritative construction cursor is R-P7. Phase M is complete.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 1) to avoid concurrent `ptxas` host-memory allocation failures; host and unrelated targets remain globally parallel.

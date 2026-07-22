@@ -112,6 +112,14 @@ static void build_scene(const std::string& name,
         add_sphere(spheres, GpuVec3(0.0f, 0.0f, 0.0f), 1.0f, 8);
         add_sphere(spheres, GpuVec3(2.4f, 0.3f, 0.0f), 0.35f, 7);
         add_light(spheres, materials, GpuVec3(2.0707107f, -1.0707107f, 0.0f), 0.1f, 80.0f);
+    } else if (name == "sds_small_light") {
+        materials[0] = make_material(MaterialType::Lambertian, 0.0f, 0.9f);
+        materials.push_back(make_material(MaterialType::Metal, 0.92f, 0.0f));
+        materials.push_back(make_material(MaterialType::Lambertian, 0.72f, 0.9f));
+        add_sphere(spheres, GpuVec3(2.7071068f, 1.7071068f, 0.0f), 1.0f, 9);
+        add_sphere(spheres, GpuVec3(0.0f, 0.0f, 0.0f), 1.0f, 8);
+        add_sphere(spheres, GpuVec3(2.4f, 0.3f, 0.0f), 0.35f, 7);
+        add_light(spheres, materials, GpuVec3(2.0707107f, -1.0707107f, 0.0f), 0.075f, 142.22223f);
     } else if (name == "small_emitter") {
         materials[0] = make_material(MaterialType::Lambertian, 0.0f, 0.9f);
         materials.push_back(make_material(MaterialType::Metal, 0.95f, 0.0f));
@@ -179,16 +187,26 @@ int main(int argc, char** argv) {
         config.mlt.chain_count = width * height;
         const bool rare_event_scene = scene_name == "small_emitter" ||
             scene_name == "high_occlusion";
-        const int bootstrap_floor = scene_name == "sds"
+        const int bootstrap_floor = scene_name == "sds" ||
+                scene_name == "sds_small_light"
             ? 16384 : (rare_event_scene ? 65536 : 4096);
         config.mlt.bootstrap_samples = std::max(
             bootstrap_floor, width * height * 8);
         config.mlt.burn_in_mutations = 64;
         config.mlt.mutations_per_chain = 1;
         config.mlt.large_step_probability = 0.3f;
-        config.mlt.small_step_sigma = 0.01f;
+        config.mlt.small_step_sigma =
+            scene_name == "sds" || scene_name == "sds_small_light" ||
+                    scene_name == "mixed_specular"
+            ? 0.03f : 0.01f;
         config.mlt.memory_budget_mb = 256;
         config.mlt.seed = 117;
+    } else if (mode == 6) {
+        config.integrator.mode = ure::IntegratorMode::BDPT;
+        config.bidirectional.max_camera_vertices = 8;
+        config.bidirectional.max_light_vertices = 8;
+        config.bidirectional.connections_per_pixel = 64;
+        config.bidirectional.memory_budget_mb = 256;
     }
 
     std::vector<GpuSphere> spheres;
@@ -206,8 +224,8 @@ int main(int argc, char** argv) {
             camera_target[0] = 0.0f;
             camera_target[1] = -2.0f;
             camera_target[2] = 0.0f;
-        } else if (scene_name == "sds" || scene_name == "small_emitter" ||
-                   scene_name == "mixed_specular") {
+        } else if (scene_name == "sds" || scene_name == "sds_small_light" ||
+                   scene_name == "small_emitter" || scene_name == "mixed_specular") {
             camera_position[0] = 0.0f;
             camera_position[1] = -1.0f;
             camera_position[2] = 3.0f;
@@ -229,6 +247,10 @@ int main(int argc, char** argv) {
             static_cast<size_t>(width) * height);
         std::vector<double> specular_emitter_image(
             static_cast<size_t>(width) * height * 3, 0.0);
+        std::vector<GpuVec3> bidirectional_sample(
+            static_cast<size_t>(width) * height);
+        double bidirectional_camera_rgb_sum = 0.0;
+        double bidirectional_connection_rgb_sum = 0.0;
         const int render_iterations = mode == 4 ? 1 : spp;
         const auto render_start = std::chrono::steady_clock::now();
         for (int i = 0; i < render_iterations; ++i) {
@@ -249,6 +271,27 @@ int main(int argc, char** argv) {
                 specular_emitter_image[pixel * 3 + 1] += value.y;
                 specular_emitter_image[pixel * 3 + 2] += value.z;
             }
+            const auto accumulate_bidirectional = [&](
+                const GpuVec3* device_values, double& sum) {
+                if (!device_values) return;
+                const cudaError_t status = cudaMemcpy(
+                    bidirectional_sample.data(), device_values,
+                    bidirectional_sample.size() * sizeof(GpuVec3),
+                    cudaMemcpyDeviceToHost);
+                if (status != cudaSuccess) {
+                    throw std::runtime_error(
+                        "failed to copy bidirectional benchmark AOV");
+                }
+                for (const GpuVec3& value : bidirectional_sample) {
+                    sum += value.x + value.y + value.z;
+                }
+            };
+            accumulate_bidirectional(
+                context->d_bidirectional_camera_accum,
+                bidirectional_camera_rgb_sum);
+            accumulate_bidirectional(
+                context->d_bidirectional_connection_accum,
+                bidirectional_connection_rgb_sum);
             if (mode == 3) {
                 const cudaError_t copy_status = cudaMemcpy(
                     manifold_sample.data(), context->d_manifold_accum,
@@ -363,6 +406,8 @@ int main(int argc, char** argv) {
                   << "mlt_deposited=" << context->last_mlt_diagnostics.deposited_samples << '\n'
                   << "mlt_bootstrap_mean=" << context->last_mlt_diagnostics.bootstrap_mean << '\n'
                   << "mlt_acceptance_rate=" << context->last_mlt_diagnostics.acceptance_rate << '\n'
+                  << "bidirectional_camera_rgb_sum=" << bidirectional_camera_rgb_sum << '\n'
+                  << "bidirectional_connection_rgb_sum=" << bidirectional_connection_rgb_sum << '\n'
                   << "render_seconds=" << render_seconds << '\n';
         if (!telemetry) throw std::runtime_error("failed to write benchmark telemetry");
     } catch (...) {

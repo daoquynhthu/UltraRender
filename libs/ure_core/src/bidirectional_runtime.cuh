@@ -93,6 +93,7 @@ __global__ void merge_vcm_surface_vertices_kernel(
     GpuBidirectionalTelemetry* telemetry);
 
 __global__ void commit_bidirectional_contributions_kernel(
+    const GpuVec3* camera_accumulation,
     const GpuVec3* connection_accumulation,
     const GpuVec3* surface_merge_accumulation,
     const GpuVec3* volume_merge_accumulation,

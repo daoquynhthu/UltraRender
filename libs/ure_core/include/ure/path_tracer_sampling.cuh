@@ -124,7 +124,7 @@ __device__ inline float sample_dimension(const RayQueue& queue,
                                          int dim) {
     if (queue.primary_samples && path_idx >= 0 &&
         path_idx < queue.primary_sample_count && dim >= 0 &&
-        dim < queue.primary_sample_stride) {
+        dim < queue.primary_sample_dimension_count) {
         return queue.primary_samples[
             static_cast<size_t>(path_idx) * queue.primary_sample_stride + dim];
     }

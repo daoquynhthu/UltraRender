@@ -139,6 +139,7 @@ struct GpuContext {
     int* d_light_path_lengths = nullptr;
     std::uint32_t* d_bidirectional_next_path_index = nullptr;
     GpuBidirectionalTelemetry* d_bidirectional_telemetry = nullptr;
+    GpuVec3* d_bidirectional_camera_accum = nullptr;
     GpuVec3* d_bidirectional_connection_accum = nullptr;
     int* d_vcm_grid_heads = nullptr;
     GpuVcmGridEntry* d_vcm_grid_entries = nullptr;

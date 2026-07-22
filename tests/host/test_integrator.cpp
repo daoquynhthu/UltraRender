@@ -146,21 +146,6 @@ static int test_bidirectional_technique_enumeration_and_mis_partition() {
     CHECK_NEAR(sum, 1.0, 1e-15);
     CHECK_NEAR(ure::integrator::bidirectional_power_heuristic(
                    probabilities, 4, 3), 0.0, 0.0);
-    CHECK(ure::integrator::select_multiplexed_bidirectional_technique(
-              0.0, count) == 0);
-    CHECK(ure::integrator::select_multiplexed_bidirectional_technique(
-              0.5, count) == 4);
-    CHECK(ure::integrator::select_multiplexed_bidirectional_technique(
-              0.999999, count) == count - 1);
-    CHECK(ure::integrator::select_multiplexed_bidirectional_technique(
-              1.0, count) == -1);
-    CHECK_NEAR(
-        ure::integrator::multiplexed_bidirectional_technique_probability(count),
-        0.125, 1e-15);
-    CHECK_NEAR(
-        ure::integrator::multiplexed_bidirectional_technique_probability(count) *
-            ure::integrator::multiplexed_bidirectional_technique_compensation(count),
-        1.0, 1e-15);
     return 0;
 }
 
@@ -209,16 +194,15 @@ static int test_bidirectional_strategy_density_reconstructs_same_path() {
         {0.5, 0.2, false, false},
         {0.6, 0.1, false, false}
     };
-    double probabilities[5] = {};
+    double probabilities[4] = {};
     const int count =
         ure::integrator::reconstruct_bidirectional_strategy_probabilities(
-            edges, 3, 0.3, 0.8, probabilities, 5);
-    CHECK(count == 5);
+            edges, 3, 0.3, 0.8, probabilities, 4);
+    CHECK(count == 4);
     CHECK_NEAR(probabilities[0], 0.8 * 0.25 * 0.2 * 0.1, 1e-15);
     CHECK_NEAR(probabilities[1], 0.3 * 0.8 * 0.2 * 0.1, 1e-15);
     CHECK_NEAR(probabilities[2], 0.3 * 0.4 * 0.8 * 0.1, 1e-15);
     CHECK_NEAR(probabilities[3], 0.3 * 0.4 * 0.5 * 0.8, 1e-15);
-    CHECK_NEAR(probabilities[4], 0.3 * 0.4 * 0.5 * 0.6, 1e-15);
     double weight_sum = 0.0;
     for (int technique = 0; technique < count; ++technique) {
         weight_sum += ure::integrator::bidirectional_power_heuristic(
@@ -233,7 +217,7 @@ static int test_bidirectional_strategy_density_reconstructs_same_path() {
         edges[2]
     };
     CHECK(ure::integrator::reconstruct_bidirectional_strategy_probabilities(
-              delta_edges, 3, 0.3, 0.8, probabilities, 5) == 5);
+              delta_edges, 3, 0.3, 0.8, probabilities, 4) == 4);
     CHECK_NEAR(probabilities[2], 0.0, 0.0);
     return 0;
 }
@@ -351,6 +335,27 @@ static int test_integrator_rejects_primary_sample_sampler_without_mlt_mode() {
         engine->load_scene_ir(scene);
     } catch (const std::runtime_error& e) {
         rejected = std::string(e.what()).find("primary_sample_space sampler is only valid with MLT") != std::string::npos;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
+static int test_integrator_rejects_mlt_bidirectional_without_shared_spectral_sample() {
+    ure::RenderConfig config;
+    config.integrator.mode = ure::IntegratorMode::MLT;
+    config.integrator.sampler = ure::IntegratorSampler::PrimarySampleSpace;
+    config.mlt.enabled = true;
+    config.bidirectional.enabled = true;
+
+    bool rejected = false;
+    try {
+        std::unique_ptr<ure::IRenderEngine> engine =
+            ure::RenderEngineFactory::create_gpu_renderer(config);
+        ure::scene_ir::SceneIR scene;
+        engine->load_scene_ir(scene);
+    } catch (const std::runtime_error& error) {
+        rejected = std::string(error.what()).find(
+            "share one spectral primary-sample contract") != std::string::npos;
     }
     CHECK(rejected);
     return 0;
@@ -541,6 +546,7 @@ int main() {
     failed += run("test_mlt_distributed_chain_shards_are_disjoint_and_reassemblable", test_mlt_distributed_chain_shards_are_disjoint_and_reassemblable);
     failed += run("test_gpu_renderer_rejects_mlt_bootstrap_smaller_than_chain_population", test_gpu_renderer_rejects_mlt_bootstrap_smaller_than_chain_population);
     failed += run("test_integrator_rejects_primary_sample_sampler_without_mlt_mode", test_integrator_rejects_primary_sample_sampler_without_mlt_mode);
+    failed += run("test_integrator_rejects_mlt_bidirectional_without_shared_spectral_sample", test_integrator_rejects_mlt_bidirectional_without_shared_spectral_sample);
     failed += run("test_integrator_rejects_restir_mode_without_biased_ack", test_integrator_rejects_restir_mode_without_biased_ack);
     failed += run("test_integrator_path_guided_mode_requires_enabled_guiding", test_integrator_path_guided_mode_requires_enabled_guiding);
     failed += run("test_restir_reservoir_matches_enumerated_mixture_expectation", test_restir_reservoir_matches_enumerated_mixture_expectation);

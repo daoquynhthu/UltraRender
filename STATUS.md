@@ -1,6 +1,6 @@
 # UltraRender Current Status
 
-Last reviewed: 2026-07-18
+Last reviewed: 2026-07-22
 
 This document summarizes the current repository state for users and integrators. `PLAN.md` remains authoritative for construction order and phase completion criteria. Source, CMake registration, and fresh test output take precedence over prose when they disagree.
 
@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `R-P5`. Phase Q, R-P3 production ReSTIR, R-P4 specular-manifold/BDPT/VCM, and R-P6 Mie volume resources are complete. The remaining Phase R sequence is `R-P5 -> R-P7`; Phase T and later backend work must not be treated as implemented.
+The authoritative construction cursor is `R-P7`. Phase Q and R-P3 through R-P6 are complete; Phase T and later backend work must not be treated as implemented.
 
 ## Supported execution baseline
 
@@ -54,7 +54,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | ReSTIR PT path reuse | Implemented and verified for bounded diffuse surface and supported volume suffixes | Unsupported suffix classes remain explicit rather than silently approximated |
 | GPU BDPT/VCM | Implemented and tested for the R-P4 bounded estimator contract | Does not imply arbitrary path-space techniques or unrestricted merge support |
 | Specular-manifold estimator | Implemented for the exact R-P4 support partition with up to four smooth-delta events | Independent technique AOV and four-scene statistical gate; unsupported paths remain wavefront-owned |
-| Primary-sample-space MLT | In progress under R-P5 | GPU chains, deterministic replay, Laplace mutation, stratified bootstrap seeding, normalization, diagnostics and shard identities run end to end; host/device multiplexed-technique selection parity is established, while endpoint execution and the required second positive workload remain open |
+| Primary-sample-space MLT | Implemented under R-P5 | GPU chains, production wavefront replay, tuned symmetric Laplace mutation, stratified bootstrap seeding, normalization, diagnostics and shard identities; two fixed-NMSE SDS workloads show positive time-to-error. MLT+BDPT is rejected until both subpaths share one spectral primary sample |
 | Multi-GPU sample partition/merge | Implemented | Not a complete distributed render-farm runtime |
 | Denoising | A tested GPU target exists | No general quality or production guarantee is claimed |
 | Wave-optics host/CUDA references | Partially implemented | Main production path remains radiometric |
@@ -81,7 +81,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 The following must not be described as production capabilities merely because enums, configuration fields, schemas, tests for rejection, or host references exist:
 
 - ReSTIR PT suffix classes outside the bounded production replay contract;
-- MLT chain integrator;
+- MLT combined with BDPT/VCM/manifold or adaptive reuse schedulers;
 - coherent/partial-coherent production transport and film merge;
 - production diffraction camera and general propagation backend;
 - Vulkan, D3D12/DXR and OptiX render backends;
@@ -108,7 +108,7 @@ Native scene closure gate:
 .\scripts\run_phase_q_validation_suite.ps1 -BuildDir build_modular_x64 -Config Release
 ```
 
-The active R-P5 implementation passes the complete Release build, 37/37 CTest entries, the Phase R static audit, documentation consistency audit, FlatBuffers schema conformance/regeneration check, and `git diff --check`. R-P4 also retains its independent four-scene manifold evidence. These checks validate the current runtime foundation; they do not close R-P5 because the second difficult-scene time-to-error benefit gate remains open.
+R-P5 closure includes deterministic chain replay, the two-workload fixed-NMSE benefit report, standalone BDPT energy regression, and an explicit MLT+BDPT rejection contract. R-P4 retains its independent four-scene manifold evidence.
 
 ## Known documentation rule
 

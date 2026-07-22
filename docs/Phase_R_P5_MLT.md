@@ -2,11 +2,9 @@
 
 ## Status
 
-R-P5 is the active construction phase. The GPU chain runtime is enabled for
-validation and now has diagnostics plus deterministic shard identities. The phase
-is not closed until the difficult-scene benefit suite passes. The maintained SDS
-workload has a reproducible gain at a fixed normalized-error target; the second
-positive workload is still open.
+R-P5 is complete. The GPU chain runtime, diagnostics, deterministic shard
+identities, and fixed-error benefit suite are production paths within the
+boundaries below. The authoritative construction cursor has advanced to R-P7.
 
 ## Estimator boundary
 
@@ -69,20 +67,29 @@ statistically significant high-sample bias.
 
 Time-to-error uses a fixed normalized MSE target, `MSE / mean(reference^2)`, so
 improving the candidate integrator cannot silently tighten its own gate. The
-2026-07-19 SDS diagnostic reached the 5% target at 256 SPP in 0.444 seconds;
-wavefront reached it at 1024 SPP in 0.805 seconds. Glass caustic, small-emitter,
-and high-occlusion diagnostics remain boundary failures rather than claimed
-benefits.
+maintained 8x8 Release suite uses 65,536-SPP independent wavefront references.
+Both workloads cross the 0.05 target at 256 MLT SPP while wavefront requires
+1024 SPP:
 
-The existing BDPT connection AOV is not a valid drop-in MLT target because it
-omits the camera-only technique from the complete MIS partition. A production
-multiplexed evaluator must own the full technique index and all camera/light
-primary dimensions. Until that contract exists, MLT continues to reject
-bidirectional, VCM, and manifold schedulers instead of producing a biased image.
+| Workload | MLT 256 SPP | Wavefront first pass | MLT 1024 bias bound |
+|---|---:|---:|---:|
+| SDS | 0.04837 NMSE / 0.408 s | 0.01029 / 0.758 s | 4.58% |
+| SDS small light | 0.01325 / 0.452 s | 0.00257 / 0.813 s | 1.26% |
 
-The shared host/device contract now maps one primary dimension uniformly onto
-the complete enumerated technique range and applies the reciprocal selection
-probability exactly once. Host and GPU tests lock boundary mapping and
-probability-compensation parity. Executing the camera-only, light-tracing, and
-internal connection techniques remains the next construction slice; selection
-parity alone does not enable the combined mode.
+The small-light case uses a 0.075-radius emitter with area-compensated radiance,
+preserving approximately the same emitted power while reducing path support.
+Glass caustic, the original 0.02-radius small-emitter case, high occlusion, and
+mixed specular remain documented non-benefit boundaries. The machine-readable
+report is `output/benchmarks/phase_r_mlt_suite.json`.
+
+The BDPT audit corrected two independent defects: spectral accumulators now
+retain the camera path wavelength grid, and reverse strategy reconstruction uses
+the camera vertex's actual outgoing-light direction. The standalone diffuse
+energy regression covers this boundary.
+
+The complete bidirectional evaluator remains available to standalone BDPT, but
+is not an MLT target. Camera and light subpaths do not yet share one authoritative
+spectral wavelength sample in sampled-lane mode. MLT+BDPT therefore fails loudly
+instead of exposing a configuration that is only correct for uniform packets.
+VCM, manifold, and adaptive reuse schedulers remain rejected in MLT mode until
+their mutable state and spectral contracts are Markov-owned.

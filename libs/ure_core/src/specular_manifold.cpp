@@ -5,24 +5,6 @@
 
 namespace ure::integrator {
 
-int select_multiplexed_bidirectional_technique(double primary_sample,
-                                               int technique_count) {
-    if (!std::isfinite(primary_sample) || primary_sample < 0.0 ||
-        primary_sample >= 1.0 || technique_count <= 0) return -1;
-    return std::min(
-        static_cast<int>(primary_sample * technique_count),
-        technique_count - 1);
-}
-
-double multiplexed_bidirectional_technique_probability(int technique_count) {
-    return technique_count > 0 ? 1.0 / static_cast<double>(technique_count)
-                               : 0.0;
-}
-
-double multiplexed_bidirectional_technique_compensation(int technique_count) {
-    return technique_count > 0 ? static_cast<double>(technique_count) : 0.0;
-}
-
 bool is_ready(SpecularManifoldStatus status) {
     return status == SpecularManifoldStatus::Ready;
 }
@@ -305,7 +287,7 @@ int reconstruct_bidirectional_strategy_probabilities(
     double* probabilities,
     int capacity) {
     if (!edges || edge_count < 1 || !probabilities ||
-        capacity < edge_count + 2 || !std::isfinite(light_endpoint_pdf) ||
+        capacity < edge_count + 1 || !std::isfinite(light_endpoint_pdf) ||
         !std::isfinite(camera_endpoint_pdf) || light_endpoint_pdf <= 0.0 ||
         camera_endpoint_pdf <= 0.0) {
         return 0;
@@ -319,7 +301,7 @@ int reconstruct_bidirectional_strategy_probabilities(
         }
     }
     const int vertex_count = edge_count + 1;
-    for (int split = 0; split <= vertex_count; ++split) {
+    for (int split = 0; split < vertex_count; ++split) {
         double probability = 1.0;
         if (split > 0) probability *= light_endpoint_pdf;
         if (split < vertex_count) probability *= camera_endpoint_pdf;
@@ -335,7 +317,7 @@ int reconstruct_bidirectional_strategy_probabilities(
         }
         probabilities[split] = probability;
     }
-    return vertex_count + 1;
+    return vertex_count;
 }
 
 namespace {

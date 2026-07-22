@@ -217,7 +217,7 @@ __global__ void bidirectional_strategy_density_kernel(float* output) {
     edges[2].forward_measure_pdf = 0.6f;
     edges[2].reverse_measure_pdf = 0.1f;
     float sum = 0.0f;
-    for (int split = 0; split <= 4; ++split) {
+    for (int split = 0; split < 4; ++split) {
         sum += bidirectional_strategy_mis_weight(
             edges, 3, split, 0.3f, 0.8f);
     }
@@ -233,15 +233,13 @@ __global__ void bidirectional_strategy_density_kernel(float* output) {
     float partition = bidirectional_merge_strategy_mis_weight(
         edges, 3, 2, 0.3f, 0.8f, 4.0f, 16);
     const int vertex_count = 4;
-    for (int split = 0; split <= vertex_count; ++split) {
+    for (int split = 0; split < vertex_count; ++split) {
         partition += bidirectional_connection_vcm_mis_weight(
             edges, 3, split, 2, 0.3f, 0.8f, 4.0f, 16);
     }
     output[4] = partition;
-    output[5] = float(select_multiplexed_bidirectional_technique(0.0f, 5));
-    output[6] = float(select_multiplexed_bidirectional_technique(0.999999f, 5));
-    output[7] = multiplexed_bidirectional_technique_probability(5) *
-        multiplexed_bidirectional_technique_compensation(5);
+    output[5] = bidirectional_strategy_probability(
+        edges, 3, 4, 0.3f, 0.8f);
 }
 
 __global__ void manifold_pivoted_solve_kernel(float* output) {
@@ -2744,6 +2742,7 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
     CHECK(ctx->d_camera_path_lengths != nullptr);
     CHECK(ctx->d_light_path_lengths != nullptr);
     CHECK(ctx->d_bidirectional_telemetry != nullptr);
+    CHECK(ctx->d_bidirectional_camera_accum != nullptr);
     CHECK(ctx->bidirectional_camera_path_capacity == 16);
     CHECK(ctx->bidirectional_light_path_capacity == 16);
     CHECK(ctx->bidirectional_required_bytes > 0);
@@ -2786,6 +2785,11 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
     CHECK(camera_vertex.forward_directional_pdf > 0.0f);
     CHECK(camera_vertex.scene_epoch == ctx->bidirectional_scene_epoch);
     std::vector<GpuVec3> connections(16);
+    std::vector<GpuVec3> camera_contributions(16);
+    CHECK_CUDA(cudaMemcpy(
+        camera_contributions.data(), ctx->d_bidirectional_camera_accum,
+        camera_contributions.size() * sizeof(GpuVec3),
+        cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaMemcpy(
         connections.data(), ctx->d_bidirectional_connection_accum,
         connections.size() * sizeof(GpuVec3), cudaMemcpyDeviceToHost));
@@ -2801,23 +2805,42 @@ static int test_bidirectional_runtime_owns_bounded_vertex_storage() {
     bool nonzero_film = false;
     for (size_t index = 0; index < film.size(); ++index) {
         nonzero_film = nonzero_film || film[index].length_sq() > 0.0f;
-        CHECK_FLOAT_EQ(film[index].x, connections[index].x, 1e-6f);
-        CHECK_FLOAT_EQ(film[index].y, connections[index].y, 1e-6f);
-        CHECK_FLOAT_EQ(film[index].z, connections[index].z, 1e-6f);
+        CHECK_FLOAT_EQ(
+            film[index].x,
+            camera_contributions[index].x + connections[index].x, 1e-6f);
+        CHECK_FLOAT_EQ(
+            film[index].y,
+            camera_contributions[index].y + connections[index].y, 1e-6f);
+        CHECK_FLOAT_EQ(
+            film[index].z,
+            camera_contributions[index].z + connections[index].z, 1e-6f);
     }
     CHECK(nonzero_film);
     free_gpu_renderer(ctx);
+    ctx = nullptr;
+    config.bidirectional.light_tracing = true;
+    bool rejected_light_tracing = false;
+    try {
+        ctx = init_gpu_renderer(
+            4, 4, {}, {}, {surface, ground, light},
+            {diffuse, emitter}, {}, config);
+    } catch (const std::runtime_error& error) {
+        rejected_light_tracing = std::string(error.what()).find(
+            "sensor-measure estimator") != std::string::npos;
+    }
+    if (ctx) free_gpu_renderer(ctx);
+    CHECK(rejected_light_tracing);
     return 0;
 }
 
 static int test_bidirectional_strategy_density_partitions_on_device() {
     REQUIRE_GPU();
     float* output = nullptr;
-    CHECK_CUDA(cudaMalloc(&output, 8 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&output, 6 * sizeof(float)));
     DeviceMem cleanup(output);
     bidirectional_strategy_density_kernel<<<1, 1>>>(output);
     CHECK_CUDA(cudaGetLastError());
-    float values[8] = {};
+    float values[6] = {};
     CHECK_CUDA(cudaMemcpy(
         values, output, sizeof(values), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(values[0], 1.0f, 1e-5f);
@@ -2828,8 +2851,6 @@ static int test_bidirectional_strategy_density_partitions_on_device() {
         1e-7f);
     CHECK_FLOAT_EQ(values[4], 1.0f, 1e-5f);
     CHECK_FLOAT_EQ(values[5], 0.0f, 0.0f);
-    CHECK_FLOAT_EQ(values[6], 4.0f, 0.0f);
-    CHECK_FLOAT_EQ(values[7], 1.0f, 1e-6f);
     return 0;
 }
 
@@ -3650,7 +3671,7 @@ static int test_manifold_runtime_writes_converged_scene_solution() {
     DeviceMem manifold_film_cleanup(d_manifold_film);
     CHECK_CUDA(cudaMemset(d_manifold_film, 0, 16 * sizeof(GpuVec3)));
     commit_bidirectional_contributions_kernel<<<1, 32>>>(
-        nullptr, nullptr, nullptr, ctx->d_manifold_accum,
+        nullptr, nullptr, nullptr, nullptr, ctx->d_manifold_accum,
         d_manifold_film, 16);
     CHECK_CUDA(cudaGetLastError());
     std::vector<GpuVec3> manifold_film(16);
@@ -4482,8 +4503,9 @@ static int test_mlt_runtime_replays_and_reports_chain_diagnostics() {
         GpuContext* ctx = init_gpu_renderer(2, 2, {}, {}, {}, {}, {}, config);
         CHECK(ctx != nullptr);
         CHECK(ctx->d_mlt_current_samples != nullptr);
-        CHECK(ctx->mlt_primary_dimension_count ==
-            kSampleDimPathBase + config.max_trace_depth * kSampleDimPathStride);
+        const int camera_dimensions = kSampleDimPathBase +
+            config.max_trace_depth * kSampleDimPathStride;
+        CHECK(ctx->mlt_primary_dimension_count == camera_dimensions);
         CHECK(ctx->mlt_required_bytes > 0);
         CHECK(ctx->mlt_required_bytes <= ctx->mlt_budget_bytes);
         CHECK(render_pass_gpu(ctx, 1) == config.mlt.mutations_per_chain);
@@ -4512,6 +4534,62 @@ static int test_mlt_runtime_replays_and_reports_chain_diagnostics() {
     CHECK(render_once(first) == 0);
     CHECK(render_once(second) == 0);
     CHECK(first == second);
+    return 0;
+}
+
+static int test_bdpt_preserves_diffuse_direct_light_energy() {
+    REQUIRE_GPU();
+    GpuMaterialData diffuse = {};
+    diffuse.header.type = MaterialType::Lambertian;
+    diffuse.albedo = SpectralPacket(0.8f);
+    GpuMaterialData emitter = {};
+    emitter.header.type = MaterialType::Light;
+    emitter.emission = SpectralPacket(20.0f);
+    const std::vector<GpuSphere> spheres = {
+        {GpuVec3(0.0f, 0.0f, -1.0f), 0.9f, 7},
+        {GpuVec3(0.0f, -1001.0f, 0.0f), 1000.0f, 7},
+        {GpuVec3(0.0f, 2.0f, 0.0f), 0.7f, 8}};
+    const std::vector<GpuMaterialData> materials = {diffuse, emitter};
+    const auto render_sum = [&](bool bidirectional) -> double {
+        ure::RenderConfig config;
+        config.num_wavelengths = 8;
+        config.queue_capacity = 64;
+        config.max_trace_depth = 6;
+        if (bidirectional) {
+            config.integrator.mode = ure::IntegratorMode::BDPT;
+            config.bidirectional.max_camera_vertices = 6;
+            config.bidirectional.max_light_vertices = 6;
+            config.bidirectional.connections_per_pixel = 36;
+            config.bidirectional.memory_budget_mb = 64;
+        }
+        GpuContext* ctx = init_gpu_renderer(
+            8, 8, {}, {}, spheres, materials, {}, config);
+        const float camera_position[] = {0.0f, 0.0f, 2.0f};
+        const float camera_target[] = {0.0f, 0.0f, -1.0f};
+        update_camera_gpu(ctx, camera_position, camera_target, 24.0f);
+        constexpr int kSamples = 512;
+        if (bidirectional) {
+            for (int sample = 0; sample < kSamples; ++sample) {
+                CHECK(render_pass_gpu(ctx, 1) == sample + 1);
+            }
+        } else {
+            CHECK(render_pass_gpu(ctx, kSamples) == kSamples);
+        }
+        std::vector<float> framebuffer(8 * 8 * 3);
+        copy_frame_buffer_gpu(ctx, framebuffer.data());
+        double sum = 0.0;
+        for (float value : framebuffer) {
+            CHECK(std::isfinite(value));
+            sum += value;
+        }
+        free_gpu_renderer(ctx);
+        return sum;
+    };
+    const double wavefront_sum = render_sum(false);
+    const double bidirectional_sum = render_sum(true);
+    CHECK(wavefront_sum > 0.0);
+    CHECK(bidirectional_sum / wavefront_sum > 0.8);
+    CHECK(bidirectional_sum / wavefront_sum < 1.2);
     return 0;
 }
 
@@ -4636,6 +4714,7 @@ int main() {
     RUN_TEST(test_integrator_primary_ray_count_uses_pixel_count);
     RUN_TEST(test_mlt_small_step_kernel_is_deterministic_and_wrapped);
     RUN_TEST(test_mlt_runtime_replays_and_reports_chain_diagnostics);
+    RUN_TEST(test_bdpt_preserves_diffuse_direct_light_energy);
     RUN_TEST(test_update_materials_gpu_rewrites_header_and_soa);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;

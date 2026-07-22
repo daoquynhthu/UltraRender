@@ -1420,6 +1420,10 @@ static void validate_bidirectional_config(const ure::RenderConfig& config) {
         config.integrator.mode == ure::IntegratorMode::VCM ||
         config.integrator.mode == ure::IntegratorMode::SpecularManifold;
     if (!requested) return;
+    if (config.bidirectional.light_tracing) {
+        throw std::runtime_error(
+            "Bidirectional pinhole light tracing requires a sensor-measure estimator");
+    }
     if (config.bidirectional.max_camera_vertices < 2 ||
         config.bidirectional.max_camera_vertices > 32 ||
         config.bidirectional.max_light_vertices < 1 ||
@@ -1518,11 +1522,15 @@ static void validate_integrator_runtime_config(const ure::RenderConfig& config) 
         if (config.integrator.sampler != ure::IntegratorSampler::PrimarySampleSpace) {
             throw std::runtime_error("MLT integrator mode requires primary_sample_space sampler");
         }
-        if (config.path_guiding.enabled || config.restir_di.enabled ||
-            config.restir_pt.enabled || config.bidirectional.enabled ||
-            config.vcm.enabled || config.specular_manifold.enabled) {
+        if (config.bidirectional.enabled) {
             throw std::runtime_error(
-                "MLT owns its Markov transition and cannot be combined with adaptive reuse, bidirectional, VCM, or manifold schedulers");
+                "MLT cannot be combined with bidirectional transport until camera and light subpaths share one spectral primary-sample contract");
+        }
+        if (config.path_guiding.enabled || config.restir_di.enabled ||
+            config.restir_pt.enabled || config.vcm.enabled ||
+            config.specular_manifold.enabled) {
+            throw std::runtime_error(
+                "MLT owns its Markov transition and cannot be combined with adaptive reuse, VCM, or manifold schedulers");
         }
     }
 }
@@ -1754,6 +1762,7 @@ static void release_bidirectional_runtime(GpuContext* ctx) {
     cudaFree(ctx->d_light_path_lengths);
     cudaFree(ctx->d_bidirectional_next_path_index);
     cudaFree(ctx->d_bidirectional_telemetry);
+    cudaFree(ctx->d_bidirectional_camera_accum);
     cudaFree(ctx->d_bidirectional_connection_accum);
     cudaFree(ctx->d_vcm_grid_heads);
     cudaFree(ctx->d_vcm_grid_entries);
@@ -1778,6 +1787,7 @@ static void release_bidirectional_runtime(GpuContext* ctx) {
     ctx->d_light_path_lengths = nullptr;
     ctx->d_bidirectional_next_path_index = nullptr;
     ctx->d_bidirectional_telemetry = nullptr;
+    ctx->d_bidirectional_camera_accum = nullptr;
     ctx->d_bidirectional_connection_accum = nullptr;
     ctx->d_vcm_grid_heads = nullptr;
     ctx->d_vcm_grid_entries = nullptr;
@@ -1830,17 +1840,18 @@ static void alloc_bidirectional_runtime(
     const size_t pixel_count = static_cast<size_t>(
         checked_primary_ray_count(ctx->width, ctx->height));
     const size_t camera_path_count = static_cast<size_t>(ctx->queueA.capacity);
+    const size_t light_path_count = static_cast<size_t>(ctx->queueA.capacity);
     const size_t camera_vertices = static_cast<size_t>(
         ctx->render_config.bidirectional.max_camera_vertices);
     const size_t light_vertices = static_cast<size_t>(
         ctx->render_config.bidirectional.max_light_vertices);
     const size_t max_size = std::numeric_limits<size_t>::max();
     if (camera_path_count > max_size / camera_vertices ||
-        pixel_count > max_size / light_vertices) {
+        light_path_count > max_size / light_vertices) {
         throw std::runtime_error("Bidirectional path count overflow");
     }
     const size_t camera_count = camera_path_count * camera_vertices;
-    const size_t light_count = pixel_count * light_vertices;
+    const size_t light_count = light_path_count * light_vertices;
     if (camera_count > max_size / sizeof(GpuBidirectionalPathVertex) ||
         light_count > max_size / sizeof(GpuBidirectionalPathVertex)) {
         throw std::runtime_error("Bidirectional vertex storage overflow");
@@ -1848,8 +1859,8 @@ static void alloc_bidirectional_runtime(
     const size_t camera_bytes = camera_count * sizeof(GpuBidirectionalPathVertex);
     const size_t light_bytes = light_count * sizeof(GpuBidirectionalPathVertex);
     const size_t camera_lengths_bytes = camera_path_count * sizeof(int);
-    const size_t light_lengths_bytes = pixel_count * sizeof(int);
-    const size_t connection_bytes = pixel_count * sizeof(GpuVec3);
+    const size_t light_lengths_bytes = light_path_count * sizeof(int);
+    const size_t connection_bytes = light_path_count * sizeof(GpuVec3);
     size_t vcm_grid_capacity = 0;
     if (ctx->render_config.vcm.enabled) {
         if (ctx->render_config.vcm.grid_capacity > 0) {
@@ -1945,6 +1956,7 @@ static void alloc_bidirectional_runtime(
     add_bytes(light_lengths_bytes);
     add_bytes(sizeof(std::uint32_t));
     add_bytes(connection_bytes);
+    add_bytes(connection_bytes);
     add_bytes(sizeof(GpuBidirectionalTelemetry));
     add_bytes(vcm_heads_bytes);
     add_bytes(vcm_entries_bytes);
@@ -1992,6 +2004,8 @@ static void alloc_bidirectional_runtime(
         &ctx->d_bidirectional_next_path_index, sizeof(std::uint32_t)));
     UR_CUDA_CHECK(cudaMalloc(
         &ctx->d_bidirectional_telemetry, sizeof(GpuBidirectionalTelemetry)));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_bidirectional_camera_accum, connection_bytes));
     UR_CUDA_CHECK(cudaMalloc(
         &ctx->d_bidirectional_connection_accum, connection_bytes));
     if (ctx->render_config.vcm.enabled &&
@@ -2069,6 +2083,8 @@ static void alloc_bidirectional_runtime(
     UR_CUDA_CHECK(cudaMemset(
         ctx->d_bidirectional_telemetry, 0, sizeof(GpuBidirectionalTelemetry)));
     UR_CUDA_CHECK(cudaMemset(
+        ctx->d_bidirectional_camera_accum, 0, connection_bytes));
+    UR_CUDA_CHECK(cudaMemset(
         ctx->d_bidirectional_connection_accum, 0, connection_bytes));
     if (ctx->render_config.vcm.enabled &&
         ctx->render_config.vcm.merge_surfaces) {
@@ -2098,7 +2114,7 @@ static void alloc_bidirectional_runtime(
             ctx->render_config.vcm.initial_radius;
     }
     ctx->bidirectional_camera_path_capacity = ctx->queueA.capacity;
-    ctx->bidirectional_light_path_capacity = static_cast<int>(pixel_count);
+    ctx->bidirectional_light_path_capacity = static_cast<int>(light_path_count);
 }
 
 struct HostLightMeshData {
@@ -3176,9 +3192,13 @@ static void evaluate_mlt_primary_batch(
     UR_CUDA_CHECK(cudaMemset(ctx->shadowQueue.overflow_count, 0, sizeof(int)));
     ctx->queueA.primary_samples = primary_samples;
     ctx->queueA.primary_sample_stride = ctx->mlt_primary_dimension_count;
+    ctx->queueA.primary_sample_dimension_count =
+        ctx->mlt_primary_dimension_count;
     ctx->queueA.primary_sample_count = path_count;
     ctx->queueB.primary_samples = primary_samples;
     ctx->queueB.primary_sample_stride = ctx->mlt_primary_dimension_count;
+    ctx->queueB.primary_sample_dimension_count =
+        ctx->mlt_primary_dimension_count;
     ctx->queueB.primary_sample_count = path_count;
     UR_CUDA_CHECK(cudaMemcpy(
         ctx->queueA.count, &path_count, sizeof(int), cudaMemcpyHostToDevice));
@@ -3200,7 +3220,8 @@ static void evaluate_mlt_primary_batch(
         UR_CUDA_CHECK(cudaGetLastError());
         shade_kernel<<<active_blocks, threads>>>(
             *current, ctx->hitQueue, *next, ctx->shadowQueue,
-            contributions, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+            contributions, nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr,
             ctx->camera, ctx->previous_camera, scene, mutation_index,
             ctx->current_spp < 100 ? 5.0f : 20.0f,
             ctx->current_spp < 100 ? 0.1f : 0.05f);
@@ -3546,6 +3567,9 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     const bool standalone_manifold =
         ctx->render_config.integrator.mode ==
         ure::IntegratorMode::SpecularManifold;
+    scene.bidirectional_mis_partition =
+        (ctx->render_config.bidirectional.enabled ||
+         ctx->render_config.vcm.enabled) && !standalone_manifold ? 1 : 0;
     scene.manifold_sms_partition = standalone_manifold ? 1 : 0;
     scene.light_count = ctx->light_count;
 
@@ -3559,6 +3583,13 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
 
     if (ctx->render_config.integrator.mode == ure::IntegratorMode::MLT) {
         return render_mlt_pass(ctx, scene, samples_per_pass);
+    }
+    if ((ctx->render_config.bidirectional.enabled ||
+         ctx->render_config.vcm.enabled ||
+         ctx->render_config.specular_manifold.enabled) &&
+        samples_per_pass != 1) {
+        throw std::runtime_error(
+            "Bidirectional, VCM, and manifold passes require one sample per pass");
     }
 
     dim3 threadsPerBlock(16, 16);
@@ -3591,6 +3622,9 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             ctx->d_bidirectional_telemetry, 0,
             sizeof(GpuBidirectionalTelemetry)));
         UR_CUDA_CHECK(cudaMemset(
+            ctx->d_bidirectional_camera_accum, 0,
+            static_cast<size_t>(primary_ray_count) * sizeof(GpuVec3)));
+        UR_CUDA_CHECK(cudaMemset(
             ctx->d_bidirectional_connection_accum, 0,
             static_cast<size_t>(primary_ray_count) * sizeof(GpuVec3)));
         if (ctx->d_manifold_telemetry) {
@@ -3608,14 +3642,16 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             ctx->d_bidirectional_next_path_index, &next_path_index,
             sizeof(next_path_index), cudaMemcpyHostToDevice));
         generate_light_subpath_endpoints_kernel<<<blocks, num_threads_wf>>>(
-            scene, ctx->d_light_path_vertices, ctx->d_light_path_lengths,
+            scene, ctx->d_light_path_vertices,
+            ctx->d_light_path_lengths,
             primary_ray_count,
             ctx->render_config.bidirectional.max_light_vertices,
             ctx->current_spp, ctx->bidirectional_scene_epoch,
             ctx->d_bidirectional_telemetry);
         UR_CUDA_CHECK(cudaGetLastError());
         extend_light_subpaths_kernel<<<blocks, num_threads_wf>>>(
-            scene, ctx->d_light_path_vertices, ctx->d_light_path_lengths,
+            scene, ctx->d_light_path_vertices,
+            ctx->d_light_path_lengths,
             primary_ray_count,
             ctx->render_config.bidirectional.max_light_vertices,
             ctx->current_spp, ctx->current_spp < 100 ? 5.0f : 20.0f,
@@ -3736,7 +3772,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             : (!standalone_manifold &&
                (ctx->render_config.bidirectional.enabled ||
                ctx->render_config.vcm.enabled)
-                ? ctx->d_bidirectional_connection_accum
+                ? ctx->d_bidirectional_camera_accum
                 : ctx->d_accum_buffer);
         if (restir_pt) {
             UR_CUDA_CHECK(cudaMemset(
@@ -4038,6 +4074,8 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             UR_CUDA_CHECK(cudaGetLastError());
         }
         commit_bidirectional_contributions_kernel<<<blocks, num_threads_wf>>>(
+            standalone_manifold
+                ? nullptr : ctx->d_bidirectional_camera_accum,
             standalone_manifold
                 ? nullptr : ctx->d_bidirectional_connection_accum,
             ctx->render_config.vcm.enabled &&

@@ -109,7 +109,7 @@ static __device__ inline float bidirectional_strategy_probability(
     float light_endpoint_pdf,
     float camera_endpoint_pdf) {
     const int vertex_count = edge_count + 1;
-    if (!edges || edge_count < 1 || split < 0 || split > vertex_count ||
+    if (!edges || edge_count < 1 || split < 0 || split >= vertex_count ||
         !(light_endpoint_pdf > 0.0f) || !(camera_endpoint_pdf > 0.0f)) {
         return 0.0f;
     }
@@ -129,25 +129,6 @@ static __device__ inline float bidirectional_strategy_probability(
     return isfinite(probability) ? probability : 0.0f;
 }
 
-static __device__ inline int select_multiplexed_bidirectional_technique(
-    float primary_sample, int technique_count) {
-    if (!isfinite(primary_sample) || primary_sample < 0.0f ||
-        primary_sample >= 1.0f || technique_count <= 0) return -1;
-    const int selected = static_cast<int>(primary_sample * technique_count);
-    return selected < technique_count ? selected : technique_count - 1;
-}
-
-static __device__ inline float multiplexed_bidirectional_technique_probability(
-    int technique_count) {
-    return technique_count > 0 ? 1.0f / static_cast<float>(technique_count)
-                               : 0.0f;
-}
-
-static __device__ inline float multiplexed_bidirectional_technique_compensation(
-    int technique_count) {
-    return technique_count > 0 ? static_cast<float>(technique_count) : 0.0f;
-}
-
 static __device__ inline float bidirectional_strategy_mis_weight(
     const GpuBidirectionalPdfEdge* edges,
     int edge_count,
@@ -160,7 +141,7 @@ static __device__ inline float bidirectional_strategy_mis_weight(
         camera_endpoint_pdf);
     if (!(selected > 0.0f)) return 0.0f;
     double denominator = 0.0;
-    for (int split = 0; split <= vertex_count; ++split) {
+    for (int split = 0; split < vertex_count; ++split) {
         const double probability = bidirectional_strategy_probability(
             edges, edge_count, split, light_endpoint_pdf,
             camera_endpoint_pdf);
@@ -212,7 +193,7 @@ static __device__ inline float bidirectional_merge_strategy_mis_weight(
     if (!(selected > 0.0f)) return 0.0f;
     double denominator = double(selected) * double(selected);
     const int vertex_count = edge_count + 1;
-    for (int split = 0; split <= vertex_count; ++split) {
+    for (int split = 0; split < vertex_count; ++split) {
         const double probability = bidirectional_strategy_probability(
             edges, edge_count, split, light_endpoint_pdf,
             camera_endpoint_pdf);
@@ -238,7 +219,7 @@ static __device__ inline float bidirectional_connection_vcm_mis_weight(
     if (!(selected > 0.0f)) return 0.0f;
     double denominator = 0.0;
     const int vertex_count = edge_count + 1;
-    for (int split = 0; split <= vertex_count; ++split) {
+    for (int split = 0; split < vertex_count; ++split) {
         const double probability = bidirectional_strategy_probability(
             edges, edge_count, split, light_endpoint_pdf,
             camera_endpoint_pdf);

@@ -194,7 +194,7 @@ __device__ int build_bidirectional_complete_path_edges(
     const float light_directional_pdf = vcm_vertex_directional_pdf(
         scene, light, light.incoming, direction, dispersion_clamp);
     const float camera_directional_pdf = vcm_vertex_directional_pdf(
-        scene, camera, -direction, camera.incoming, dispersion_clamp);
+        scene, camera, camera.incoming, -direction, dispersion_clamp);
     const float camera_target = camera.measure == GpuPathVertexMeasure::Area
         ? fabsf(camera.geometric_normal.dot(-direction)) : 1.0f;
     const float light_target = light.measure == GpuPathVertexMeasure::Area
@@ -1138,6 +1138,10 @@ __global__ void merge_vcm_surface_vertices_kernel(
         1.0f / (3.14159265358979323846f * radius_squared);
     const float inverse_radius = 1.0f / radius;
     SpectralPacket total = {};
+    for (int channel = 0; channel < scene.num_spectral_channels; ++channel) {
+        total.wavelengths[channel] = camera_vertices[
+            path_index * max_camera_vertices].throughput.wavelengths[channel];
+    }
     bool accepted = false;
     for (int camera_index = 0; camera_index < camera_length; ++camera_index) {
         const GpuBidirectionalPathVertex camera =
@@ -1255,6 +1259,10 @@ __global__ void merge_vcm_volume_vertices_kernel(
         (4.0f * 3.14159265358979323846f * radius * radius_squared);
     const float inverse_radius = 1.0f / radius;
     SpectralPacket total = {};
+    for (int channel = 0; channel < scene.num_spectral_channels; ++channel) {
+        total.wavelengths[channel] = camera_vertices[
+            path_index * max_camera_vertices].throughput.wavelengths[channel];
+    }
     bool accepted = false;
     for (int camera_index = 0; camera_index < camera_length; ++camera_index) {
         const GpuBidirectionalPathVertex camera =
@@ -1402,15 +1410,17 @@ __global__ void connect_bidirectional_subpaths_kernel(
     const GpuBidirectionalPathVertex* light_path =
         light_vertices + path_index * max_light_vertices;
     SpectralPacket total = {};
+    for (int channel = 0; channel < scene.num_spectral_channels; ++channel) {
+        total.wavelengths[channel] =
+            camera_path[0].throughput.wavelengths[channel];
+    }
     int attempted = 0;
-    for (int light_index = 0;
-         light_index < light_length && attempted < connections_per_path;
-         ++light_index) {
+    for (int light_index = 0; light_index < light_length; ++light_index) {
         const GpuBidirectionalPathVertex light = light_path[light_index];
         if (!light.valid || light.scene_epoch != scene_epoch) continue;
-        for (int camera_index = 0;
-             camera_index < camera_length && attempted < connections_per_path;
+        for (int camera_index = 0; camera_index < camera_length;
              ++camera_index) {
+            if (attempted >= connections_per_path) break;
             const GpuBidirectionalPathVertex camera = camera_path[camera_index];
             if (!camera.valid || camera.scene_epoch != scene_epoch) {
                 if (telemetry) atomicAdd(&telemetry->rejected_stale, 1u);
@@ -1461,7 +1471,7 @@ __global__ void connect_bidirectional_subpaths_kernel(
             }
             SpectralPacket camera_factor = {};
             if (!evaluate_bidirectional_vertex_scattering(
-                    scene, camera, -direction, camera.incoming,
+                    scene, camera, camera.incoming, -direction,
                     dispersion_clamp, camera_factor)) continue;
             SpectralPacket light_factor(1.0f);
             if (light_index > 0 &&
@@ -1515,6 +1525,7 @@ __global__ void connect_bidirectional_subpaths_kernel(
 }
 
 __global__ void commit_bidirectional_contributions_kernel(
+    const GpuVec3* camera_accumulation,
     const GpuVec3* connection_accumulation,
     const GpuVec3* surface_merge_accumulation,
     const GpuVec3* volume_merge_accumulation,
@@ -1524,6 +1535,9 @@ __global__ void commit_bidirectional_contributions_kernel(
     const int path_index = blockIdx.x * blockDim.x + threadIdx.x;
     if (path_index >= path_count || !film_accumulation) return;
     GpuVec3 contribution = {};
+    if (camera_accumulation) {
+        contribution = contribution + camera_accumulation[path_index];
+    }
     if (connection_accumulation) {
         contribution = contribution + connection_accumulation[path_index];
     }

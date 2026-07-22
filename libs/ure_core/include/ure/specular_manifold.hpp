@@ -110,10 +110,6 @@ double solid_angle_to_volume_pdf(double directional_pdf,
 double bidirectional_power_heuristic(const double* technique_probabilities,
                                      int count,
                                      int selected);
-int select_multiplexed_bidirectional_technique(double primary_sample,
-                                               int technique_count);
-double multiplexed_bidirectional_technique_probability(int technique_count);
-double multiplexed_bidirectional_technique_compensation(int technique_count);
 int enumerate_bidirectional_techniques(int light_vertex_count,
                                        int camera_vertex_count,
                                        BidirectionalTechnique* output,

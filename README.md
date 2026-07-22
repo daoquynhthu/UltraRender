@@ -6,11 +6,11 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- 已完成 Phase Q 原生场景系统、R-P3 production ReSTIR 和 R-P4 specular-manifold/BDPT/VCM；当前施工游标是 `R-P5`。
+- 已完成 Phase Q、R-P3 production ReSTIR、R-P4 specular-manifold/BDPT/VCM 和 R-P5 PSSMLT；当前施工游标是 `R-P7`。
 - 默认生产执行后端是 CUDA。Vulkan、D3D12/DXR 和 OptiX 路径尚未完成。
 - 默认积分器是 spectral/polarimetric radiometric wavefront path tracer。
 - coherent field、partial coherence、完整衍射相机和局部全波耦合仍属于 Phase W 后续工作；当前主渲染路径不会静默模拟这些能力。
-- production unbiased/spatial ReSTIR DI 与受限 ReSTIR PT suffix reuse 已完成验证。GPU specular-manifold、BDPT 和 VCM 已通过独立 technique-AOV、多场景偏差与收益门禁；MLT chain integrator 尚未完成。
+- production unbiased/spatial ReSTIR DI 与受限 ReSTIR PT suffix reuse 已完成验证。GPU specular-manifold、BDPT、VCM 和独立 PSSMLT 已通过各自统计门禁；MLT 与 bidirectional/VCM/manifold 的组合仍明确拒绝。
 - 当前验证基线为 Windows 11、Visual Studio 2022 Build Tools、CUDA 13.0 和 NVIDIA compute capability 12.0。其他平台与工具链尚未形成同等验证证据。
 
 ## 已验证的能力
@@ -28,7 +28,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 - 多 GPU sample-space 分区与 framebuffer 合并。完整渲染农场调度和跨机器运行时仍不属于已完成范围。
 - production ReSTIR DI 的 temporal/spatial reuse，以及 ReSTIR PT 的有界、版本化 path-suffix replay；超出该有界契约的 suffix 会明确失败，不会静默近似。
 - GPU BDPT/VCM 与最多四事件的 specular-manifold estimator；其适用范围、独立 wavefront technique-AOV 对照和统计门禁见 [Phase R-P4 文档](docs/Phase_R_P4_Specular_Manifold.md)。
-- R-P5 已把 primary-sample-space replay、独立 GPU chains、对称 Laplace mutation、stratified bootstrap seeding、归一化、诊断与多 GPU chain identity 接入同一套 wavefront contribution evaluator；固定 NMSE 的 SDS 收益已建立，但第二个正收益 workload 尚未闭环，因此阶段仍不列为完成。设计与证据边界见 [Phase R-P5 文档](docs/Phase_R_P5_MLT.md)。
+- R-P5 已完成 primary-sample-space replay、独立 GPU chains、对称 Laplace mutation、stratified bootstrap seeding、归一化、诊断与多 GPU chain identity；两个固定 NMSE 的 SDS 工作负载建立了正 time-to-error。MLT 与 BDPT/VCM/manifold 的组合在共享光谱主样本合同完成前明确拒绝。设计与证据边界见 [Phase R-P5 文档](docs/Phase_R_P5_MLT.md)。
 
 ## 明确未完成或受限的能力
 

@@ -235,6 +235,7 @@ __device__ inline int next_dielectric_medium_index(
 }
 
 #include "path_tracer_light_sampling.cuh"
+#include "bidirectional_capture.cuh"
 
 __global__ void decay_path_guiding_weights_kernel(float* weights, size_t count, float decay) {
     const size_t index = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
@@ -833,7 +834,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 throughput.values[c] *= tr_vals[c] * sigma_s.values[c] * density * (1.0f / pdf_t);
             }
 
-            if (!(scene.restir_di_unbiased && depth == 0) && scene.light_count > 0) {
+            if (!(scene.restir_di_unbiased && depth == 0) &&
+                !scene.bidirectional_mis_partition && scene.light_count > 0) {
                 float r_light_pick = sample_path_dimension(current_queue, sample_index, pixel_index, depth, kPathDimVolumeLightPick);
 
                 GpuVec3 p_vol = current_queue.origins[idx] + current_queue.directions[idx] * t_medium;
@@ -1171,7 +1173,14 @@ __global__ __launch_bounds__(256) void shade_kernel(
         }
         float mis_weight = 1.0f;
 
-        if (depth > 0 && !(flag & 1) && scene.light_count > 0) {
+        if (scene.bidirectional_mis_partition &&
+            mat.type == MaterialType::Light) {
+            mis_weight = capture_bidirectional_emitter_vertex(
+                scene, current_queue, idx, depth, p, ng, hit_uv, throughput,
+                mat_idx, hit_queue.hit_types[idx], hit_queue.hit_indices[idx],
+                hit_queue.hit_primitive_indices
+                    ? hit_queue.hit_primitive_indices[idx] : -1);
+        } else if (depth > 0 && !(flag & 1) && scene.light_count > 0) {
              float pdf_nee = 0.0f;
              int hit_type = hit_queue.hit_types[idx];
              int hit_index = hit_queue.hit_indices[idx];
@@ -1260,7 +1269,8 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
     if (depth >= 50) return;
 
-    if (!(scene.restir_di_unbiased && depth == 0) && scene.light_count > 0 &&
+    if (!(scene.restir_di_unbiased && depth == 0) &&
+        !scene.bidirectional_mis_partition && scene.light_count > 0 &&
         (mat.type == MaterialType::Composite ||
                                   mat.type == MaterialType::Layered ||
                                   mat.type == MaterialType::Lambertian ||
