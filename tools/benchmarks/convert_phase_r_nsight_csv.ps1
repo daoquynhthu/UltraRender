@@ -19,24 +19,49 @@ if ($vram.schema -ne "ure.phase_r.vram_evidence.v1" -or
     [uint64]$vram.peak_vram_bytes -eq 0) {
     throw "invalid measured VRAM evidence"
 }
-$rows = @(Import-Csv -LiteralPath $resolvedCsv)
+$occupancyMetric = "sm__warps_active.avg.pct_of_peak_sustained_active"
+$csvLines = @(Get-Content -LiteralPath $resolvedCsv)
+$headerIndex = -1
+for ($index = 0; $index -lt $csvLines.Count; ++$index) {
+    if ($csvLines[$index] -match '(?:^|,)"?Kernel Name"?(?:,|$)' -and
+        ($csvLines[$index] -match '(?:^|,)"?Metric Name"?(?:,|$)' -or
+         $csvLines[$index] -like "*$occupancyMetric*")) {
+        $headerIndex = $index
+        break
+    }
+}
+if ($headerIndex -lt 0) { throw "Nsight CSV header was not found" }
+$rows = @($csvLines[$headerIndex..($csvLines.Count - 1)] | ConvertFrom-Csv)
 if ($rows.Count -eq 0) { throw "Nsight CSV is empty" }
 
 $kernelColumn = @("Kernel Name", "Kernel Name (Demangled)", "Kernel") | Where-Object { $_ -in $rows[0].PSObject.Properties.Name } | Select-Object -First 1
 $metricColumn = @("Metric Name", "Metric") | Where-Object { $_ -in $rows[0].PSObject.Properties.Name } | Select-Object -First 1
 $valueColumn = @("Metric Value", "Value") | Where-Object { $_ -in $rows[0].PSObject.Properties.Name } | Select-Object -First 1
-if ($null -eq $kernelColumn -or $null -eq $metricColumn -or $null -eq $valueColumn) {
-    throw "Nsight CSV does not expose kernel, metric, and value columns"
+$wideOccupancyColumn = $occupancyMetric | Where-Object { $_ -in $rows[0].PSObject.Properties.Name }
+if ($null -eq $kernelColumn -or
+    (($null -eq $metricColumn -or $null -eq $valueColumn) -and
+     $null -eq $wideOccupancyColumn)) {
+    throw "Nsight CSV does not expose a supported kernel/occupancy layout"
 }
 
-$occupancyMetric = "sm__warps_active.avg.pct_of_peak_sustained_active"
 $kernels = @()
 foreach ($group in $rows | Group-Object { $_.$kernelColumn }) {
     if ([string]::IsNullOrWhiteSpace($group.Name)) { continue }
-    $occupancyRows = @($group.Group | Where-Object { $_.$metricColumn -eq $occupancyMetric })
+    $occupancyRows = if ($null -ne $wideOccupancyColumn) {
+        @($group.Group | Where-Object {
+            -not [string]::IsNullOrWhiteSpace($_.$wideOccupancyColumn)
+        })
+    } else {
+        @($group.Group | Where-Object { $_.$metricColumn -eq $occupancyMetric })
+    }
     if ($occupancyRows.Count -eq 0) { throw "missing achieved occupancy for kernel $($group.Name)" }
     $values = @($occupancyRows | ForEach-Object {
-        [double](($_.$valueColumn -replace ',', '') -replace '%', '')
+        $value = if ($null -ne $wideOccupancyColumn) {
+            $_.$wideOccupancyColumn
+        } else {
+            $_.$valueColumn
+        }
+        [double](($value -replace ',', '') -replace '%', '')
     })
     $kernels += [ordered]@{
         name = $group.Name

@@ -55,7 +55,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | GPU BDPT/VCM | Implemented and tested for the R-P4 bounded estimator contract | Does not imply arbitrary path-space techniques or unrestricted merge support |
 | Specular-manifold estimator | Implemented for the exact R-P4 support partition with up to four smooth-delta events | Independent technique AOV and four-scene statistical gate; unsupported paths remain wavefront-owned |
 | Primary-sample-space MLT | Implemented under R-P5 | GPU chains, production wavefront replay, tuned symmetric Laplace mutation, stratified bootstrap seeding, normalization, diagnostics and shard identities; two fixed-NMSE SDS workloads show positive time-to-error. MLT+BDPT is rejected until both subpaths share one spectral primary sample |
-| Industrial validation | R-P7 in progress | Versioned eight-category local report, artifact hashes, runtime mode-boundary evidence, farm/Nsight schemas and strict closure validator are implemented; BDPT/VCM positive benefit and full farm/profiler evidence remain open |
+| Industrial validation | R-P7 in progress | Versioned eight-category local report, artifact hashes, runtime mode-boundary evidence, measured local Nsight/VRAM evidence, farm schema and strict closure validator are implemented; BDPT/VCM positive benefit and fresh farm long-run remain open |
 | Multi-GPU sample partition/merge | Implemented | Not a complete distributed render-farm runtime |
 | Denoising | A tested GPU target exists | No general quality or production guarantee is claimed |
 | Wave-optics host/CUDA references | Partially implemented | Main production path remains radiometric |

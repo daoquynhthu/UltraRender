@@ -161,6 +161,7 @@ Assert-Contains "tools\benchmarks\validate_phase_r_industrial_report.ps1" "farm 
 Assert-Contains "tools\benchmarks\validate_phase_r_industrial_report.ps1" "occupancy_pct" "R-P7 measured occupancy gate"
 Assert-Contains "tools\benchmarks\collect_phase_r_vram_evidence.ps1" "device_used_delta" "R-P7 measured VRAM delta evidence"
 Assert-Contains "tools\benchmarks\convert_phase_r_nsight_csv.ps1" "sm__warps_active.avg.pct_of_peak_sustained_active" "R-P7 achieved occupancy import"
+Assert-Contains "tools\benchmarks\convert_phase_r_nsight_csv.ps1" "wideOccupancyColumn" "R-P7 current Nsight raw CSV layout"
 Assert-Contains "tools\benchmarks\run_phase_r_manifold_suite.ps1" "camera_delta_outside_anchored_sms_support" "R-P7 manifold support boundary scene"
 Assert-Contains "tools\benchmarks\run_phase_r_bidirectional_suite.ps1" "ure.phase_r.bidirectional_suite.v1" "R-P7 versioned BDPT/VCM evidence"
 Assert-Contains "tools\benchmarks\run_phase_r_bidirectional_suite.ps1" "camera_delta_outside_ordinary_connection_and_photon_merge_support" "R-P7 BDPT/VCM support boundary scene"

@@ -90,6 +90,20 @@ try {
         throw "Nsight conversion did not preserve launch and occupancy evidence"
     }
 
+    @(
+        '==PROF== Connected to process 1',
+        '"ID","Kernel Name","sm__warps_active.avg.pct_of_peak_sustained_active"',
+        '"","","%"',
+        '"0","shade_kernel","42.5"',
+        '"1","shade_kernel","57.5"',
+        '==PROF== Disconnected from process 1'
+    ) | Set-Content -LiteralPath $csvPath -Encoding utf8
+    & (Join-Path $PSScriptRoot "convert_phase_r_nsight_csv.ps1") -CsvPath $csvPath -VramEvidencePath $vramPath -OutputPath $nsightPath -ToolVersion "wide-fixture"
+    $nsight = Get-Content -Raw $nsightPath | ConvertFrom-Json
+    if ($nsight.total_kernel_launches -ne 2 -or $nsight.kernels[0].occupancy_pct -ne 50) {
+        throw "wide Nsight conversion did not preserve launch and occupancy evidence"
+    }
+
     "a" | Set-Content -LiteralPath (Join-Path $TempDir "shard0.bin")
     "b" | Set-Content -LiteralPath (Join-Path $TempDir "shard1.bin")
     $manifestPath = Join-Path $TempDir "farm_manifest.json"
