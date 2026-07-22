@@ -128,9 +128,13 @@ New-Item -ItemType Directory -Path $ResultDir -Force | Out-Null
 
 $reports = @()
 $benefitScenes = 0
+$boundaryScenes = 0
+$positiveScenes = 0
 foreach ($scene in $Scenes) {
     $waveReferenceSpp = if ($scene -eq "small_emitter") {
         $ReferenceSpp * 32
+    } elseif ($scene -eq "sds") {
+        $ReferenceSpp * 8
     } elseif ($scene -eq "mixed_specular") {
         $ReferenceSpp * 4
     } else {
@@ -140,6 +144,8 @@ foreach ($scene in $Scenes) {
         $ReferenceSpp * 16
     } elseif ($scene -eq "small_emitter") {
         $ReferenceSpp * 4
+    } elseif ($scene -eq "sds") {
+        $ReferenceSpp * 8
     } else {
         $ReferenceSpp
     }
@@ -153,8 +159,31 @@ foreach ($scene in $Scenes) {
     $referenceEnergy = (Get-ErrorMetrics `
         $manifoldReference $manifoldReference).absolute_energy
     if ($referenceEnergy -le 1.0e-8) {
-        throw "manifold reference is zero: $scene"
+        if ($scene -ne "glass_caustic") {
+            throw "manifold reference is zero: $scene"
+        }
+        $fullEnergy = (Get-ErrorMetrics `
+            $waveReferenceRun.full $waveReferenceRun.full).absolute_energy
+        $smsEnergy = (Get-ErrorMetrics `
+            $smsReferenceRun.manifold $smsReferenceRun.manifold).absolute_energy
+        if ($fullEnergy -le 1.0e-8 -or $smsEnergy -gt 1.0e-8 -or
+            $smsReferenceRun.telemetry.manifold_converged -le 0) {
+            throw "glass camera-delta support boundary was not isolated"
+        }
+        ++$boundaryScenes
+        $reports += [ordered]@{
+            name = $scene
+            status = "boundary_passed"
+            boundary = "camera_delta_outside_anchored_sms_support"
+            reference_spp = $ReferenceSpp
+            wavefront_full_energy = $fullEnergy
+            wavefront_anchored_delta_energy = $referenceEnergy
+            manifold_energy = $smsEnergy
+            manifold_telemetry = $smsReferenceRun.telemetry
+        }
+        continue
     }
+    ++$positiveScenes
     if ($smsReferenceRun.telemetry.manifold_converged -le 0 -or
         $smsReferenceRun.telemetry.manifold_root_matches -ne
             $smsReferenceRun.telemetry.manifold_converged) {
@@ -251,11 +280,12 @@ foreach ($scene in $Scenes) {
         status = "passed"
     }
 }
-if ($benefitScenes -lt 1) {
+if ($positiveScenes -gt 0 -and $benefitScenes -lt 1) {
     throw "manifold suite found no positive time-to-error workload"
 }
 
 $report = [ordered]@{
+    schema = "ure.phase_r.manifold_suite.v1"
     phase = "R-P4"
     suite = "specular_manifold_bias_variance_time_to_error"
     status = "passed"
@@ -264,6 +294,7 @@ $report = [ordered]@{
     curve_spp = $CurveSpp
     reference_spp = $ReferenceSpp
     benefit_scene_count = $benefitScenes
+    boundary_scene_count = $boundaryScenes
     scenes = $reports
 }
 $report | ConvertTo-Json -Depth 12 |

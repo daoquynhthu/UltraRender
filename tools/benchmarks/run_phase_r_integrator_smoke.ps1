@@ -38,6 +38,8 @@ $sppPerSecond = if ($elapsed.TotalSeconds -gt 0.0) { $sampleCount / $pixels / $e
 $samplesPerSecond = if ($elapsed.TotalSeconds -gt 0.0) { $sampleCount / $elapsed.TotalSeconds } else { 0.0 }
 
 $result = [ordered]@{
+    schema = "ure.phase_r.integrator_smoke.v1"
+    status = "passed"
     phase = "R"
     benchmark = "integrator_smoke"
     scene = (Resolve-Path $ScenePath).Path

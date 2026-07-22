@@ -106,6 +106,7 @@ foreach ($scene in @("cornell", "multi_light", "complex_material", "volume")) {
 }
 
 $report = [ordered]@{
+    schema = "ure.phase_r.path_guiding_suite.v1"
     phase = "R-P2"
     suite = "path_guiding_variance_mse_time_to_error"
     status = "passed"

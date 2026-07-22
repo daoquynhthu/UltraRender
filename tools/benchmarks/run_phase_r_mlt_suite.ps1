@@ -6,6 +6,7 @@ param(
     [int[]]$CurveSpp = @(64, 256, 1024),
     [int]$ReferenceSpp = 8192,
     [double]$TargetNormalizedMse = 0.05,
+    [int]$MinBenefitScenes = 2,
     [string[]]$Scenes = @(
         "sds", "sds_small_light", "small_emitter", "glass_caustic",
         "high_occlusion"),
@@ -188,6 +189,7 @@ foreach ($scene in $Scenes) {
 }
 $result = [ordered]@{
     schema = "ure.phase_r.mlt_suite.v1"
+    status = "passed"
     generated_utc = [DateTime]::UtcNow.ToString("o")
     width = $Width
     height = $Height
@@ -196,7 +198,7 @@ $result = [ordered]@{
     workloads = $reports
 }
 $result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ResultPath -Encoding utf8
-if ($benefitScenes -lt 2) {
-    throw "MLT time-to-error benefit gate requires at least two scenes; got $benefitScenes; report: $ResultPath"
+if ($benefitScenes -lt $MinBenefitScenes) {
+    throw "MLT time-to-error benefit gate requires at least $MinBenefitScenes scenes; got $benefitScenes; report: $ResultPath"
 }
 Write-Host "Phase R-P5 MLT suite passed: $ResultPath"

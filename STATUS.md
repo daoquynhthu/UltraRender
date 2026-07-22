@@ -55,6 +55,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | GPU BDPT/VCM | Implemented and tested for the R-P4 bounded estimator contract | Does not imply arbitrary path-space techniques or unrestricted merge support |
 | Specular-manifold estimator | Implemented for the exact R-P4 support partition with up to four smooth-delta events | Independent technique AOV and four-scene statistical gate; unsupported paths remain wavefront-owned |
 | Primary-sample-space MLT | Implemented under R-P5 | GPU chains, production wavefront replay, tuned symmetric Laplace mutation, stratified bootstrap seeding, normalization, diagnostics and shard identities; two fixed-NMSE SDS workloads show positive time-to-error. MLT+BDPT is rejected until both subpaths share one spectral primary sample |
+| Industrial validation | R-P7 in progress | Versioned seven-category local report, artifact hashes, farm/Nsight schemas and strict closure validator are implemented; full farm/profiler evidence and the complete benefit/boundary matrix remain open |
 | Multi-GPU sample partition/merge | Implemented | Not a complete distributed render-farm runtime |
 | Denoising | A tested GPU target exists | No general quality or production guarantee is claimed |
 | Wave-optics host/CUDA references | Partially implemented | Main production path remains radiometric |
@@ -109,6 +110,8 @@ Native scene closure gate:
 ```
 
 R-P5 closure includes deterministic chain replay, the two-workload fixed-NMSE benefit report, standalone BDPT energy regression, and an explicit MLT+BDPT rejection contract. R-P4 retains its independent four-scene manifold evidence.
+
+R-P7 `LocalQuick` currently passes with seven hashed evidence categories. The `glass_caustic` workload is now treated as a verified camera-delta boundary outside standalone anchored SMS support. This local result is not a Phase R completion claim; `Closure` still requires a clean run, full advanced-integrator benefit and rejection coverage, exact farm shard coverage, and measured Nsight evidence.
 
 ## Known documentation rule
 

@@ -139,6 +139,7 @@ foreach ($scene in @("multi_light", "occlusion", "volume")) {
 }
 
 $report = [ordered]@{
+    schema = "ure.phase_r.restir_pt_suite.v1"
     phase = "R-P3"
     suite = "restir_pt_bias_variance_time_to_error"
     status = "passed"

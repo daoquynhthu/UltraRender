@@ -87,6 +87,37 @@ function Get-ImageVariance {
     $sum / [double]$Image.values.Length
 }
 
+function Convert-LabPivot {
+    param([double]$Value)
+    if ($Value -gt 0.008856451679) { [Math]::Pow($Value, 1.0 / 3.0) } else { 7.787037037 * $Value + 16.0 / 116.0 }
+}
+
+function Convert-LinearRgbToLab {
+    param([double]$R, [double]$G, [double]$B)
+    $x = (0.4124564 * $R + 0.3575761 * $G + 0.1804375 * $B) / 0.95047
+    $y = 0.2126729 * $R + 0.7151522 * $G + 0.0721750 * $B
+    $z = (0.0193339 * $R + 0.1191920 * $G + 0.9503041 * $B) / 1.08883
+    $fx = Convert-LabPivot ([Math]::Max(0.0, $x))
+    $fy = Convert-LabPivot ([Math]::Max(0.0, $y))
+    $fz = Convert-LabPivot ([Math]::Max(0.0, $z))
+    @((116.0 * $fy - 16.0), (500.0 * ($fx - $fy)), (200.0 * ($fy - $fz)))
+}
+
+function Get-MeanDeltaE76 {
+    param($A, $B)
+    if ($A.width -ne $B.width -or $A.height -ne $B.height) { throw "image dimensions differ" }
+    $sum = 0.0
+    for ($i = 0; $i -lt $A.values.Length; $i += 3) {
+        $aLab = Convert-LinearRgbToLab $A.values[$i] $A.values[$i + 1] $A.values[$i + 2]
+        $bLab = Convert-LinearRgbToLab $B.values[$i] $B.values[$i + 1] $B.values[$i + 2]
+        $d0 = $aLab[0] - $bLab[0]
+        $d1 = $aLab[1] - $bLab[1]
+        $d2 = $aLab[2] - $bLab[2]
+        $sum += [Math]::Sqrt($d0 * $d0 + $d1 * $d1 + $d2 * $d2)
+    }
+    $sum / [double]($A.values.Length / 3)
+}
+
 function Invoke-Render {
     param(
         [string]$Scene,
@@ -136,6 +167,7 @@ foreach ($scene in $scenes) {
         $image = Read-RgbeImage -Path $run.output
         $mse = Get-ImageMse -A $image -B $referenceImage
         $variance = Get-ImageVariance -Image $image
+        $deltaE = Get-MeanDeltaE76 -A $image -B $referenceImage
         $pixels = [int64]$Width * [int64]$Height
         $samplesPerSecond = if ($run.elapsed_seconds -gt 0.0) {
             ($pixels * [int64]$spp) / [double]$run.elapsed_seconds
@@ -148,6 +180,7 @@ foreach ($scene in $scenes) {
             elapsed_seconds = $run.elapsed_seconds
             mse_to_reference = [Math]::Round($mse, 12)
             radiance_variance = [Math]::Round($variance, 12)
+            mean_delta_e_76 = [Math]::Round($deltaE, 8)
             samples_per_second = [Math]::Round($samplesPerSecond, 3)
         }
     }
@@ -179,6 +212,7 @@ foreach ($scene in $scenes) {
 }
 
 $report = [ordered]@{
+    schema = "ure.phase_r.light_sampling_suite.v1"
     phase = "R-P1"
     suite = "light_sampling_variance_mse_local"
     status = "passed"

@@ -1951,6 +1951,8 @@ R-P4 final closure：standalone SMS 只接管“non-delta area anchor → 1..4 s
 
 R-P5 closure（2026-07-22）：独立 GPU chain scheduler 已接入生产 wavefront contribution evaluator，queue-owned primary-sample replay 覆盖 camera/film/wavelength/surface/volume/light/lobe/RR dimensions；bootstrap weighted/stratified seeding、burn-in、wrapped symmetric Laplace large/small step、PSSMLT 双端沉积与归一化、显存预算、chain diagnostics、64-bit global chain identity、多 GPU disjoint shard、配置/API 传播和 deterministic GPU replay 均已实现。固定 normalized-MSE=5% 的 8x8 Release suite 使用 65,536-SPP independent wavefront reference：SDS 与面积补偿的 0.075-radius SDS small-light 两个 workload 均由 MLT 在 256 SPP 达标，而 wavefront 需 1024 SPP；MLT 1024-SPP bias 95% bound 分别为 4.58% 与 1.26%。小步尺度 0.03 将两场景 acceptance 控制在约 0.80/0.85。BDPT 审计同时修复 spectral accumulator wavelength 丢失与 camera reverse-PDF 方向错误；standalone energy regression 通过。MLT+BDPT 因 sampled-lane camera/light subpath 尚无共享 wavelength primary sample 而 fail-loud，VCM/manifold/adaptive reuse 继续拒绝，不以 uniform-packet 偶然正确冒充通用估计器。R-P5 已闭环，权威游标进入 R-P7。
 
+R-P7 progress（2026-07-22）：`ure.phase_r.industrial_validation.v1` 已聚合 integrator smoke、light sampling、path guiding、ReSTIR PT、specular manifold、MLT 和 volume/Mie 七类 SHA-256 evidence；所有 JSON 子 suite 已拥有版本化 schema。`LocalQuick` 已通过，记录 samples/s、MSE、variance、time-to-error 与线性 spectral-render RGB reconstruction 的 CIE76 色差；farm sample-range/hash contract、Nsight achieved-occupancy/launch/peak-VRAM contract 及严格 `Closure` validator 已落地。旧 `glass_caustic` statistical reference 在修正后的采样合同下确认属于 camera-delta、超出 standalone anchored-SMS support，现作为要求普通图像非零且 SMS 不重复沉积的边界场景，不再冒充正向 SMS oracle。R-P7 尚未闭环：完整高级积分器正收益/边界矩阵、fresh farm long-run 与真实 Nsight counter evidence 仍是硬门禁。
+
 #### Phase R 执行顺序
 
 ```
