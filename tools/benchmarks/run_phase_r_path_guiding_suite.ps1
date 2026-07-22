@@ -54,8 +54,18 @@ function Invoke-GuidingRender {
     [ordered]@{ path = $path; elapsed_seconds = [Math]::Round($elapsed.TotalSeconds, 6) }
 }
 
+function Assert-RejectionBoundary {
+    param([string]$Scene, [int]$Mode, [string]$Expected, [string]$Name)
+    $path = Join-Path $ResultDir $Name
+    & $ExePath $Scene $Mode $Width $Height 1 $path
+    if ($LASTEXITCODE -eq 0) { throw "path guiding boundary unexpectedly rendered" }
+    $message = Get-Content -Raw -LiteralPath ($path + ".error")
+    if ($message -notlike "*$Expected*") { throw "unexpected path guiding boundary: $message" }
+    [ordered]@{ name = $Scene; status = "boundary_passed"; rejection = $message }
+}
+
 if (-not $SkipBuild) {
-    & (Join-Path $RepoRoot "scripts\build_x64.ps1") -BuildDir $BuildDir -Config $Config -Target gpu_phase_r_guiding_benchmark
+    & (Join-Path $RepoRoot "scripts\build_x64.ps1") -BuildDir $BuildDir -Config $Config -Targets gpu_phase_r_guiding_benchmark
     if ($LASTEXITCODE -ne 0) { throw "path guiding benchmark build failed" }
 }
 if (-not (Test-Path $ExePath)) { throw "path guiding benchmark executable not found: $ExePath" }
@@ -110,6 +120,9 @@ foreach ($scene in @("cornell", "multi_light", "complex_material", "volume")) {
         status = "passed"
     }
 }
+$boundary = Assert-RejectionBoundary "cornell" 7 `
+    "path_guided requires path_guiding.enabled" "phase_r_guiding_disabled_boundary.bin"
+$reports += $boundary
 
 $report = [ordered]@{
     schema = "ure.phase_r.path_guiding_suite.v1"
@@ -121,7 +134,7 @@ $report = [ordered]@{
     curve_spp = $CurveSpp
     reference_spp = $ReferenceSpp
     benefit_scene_count = $benefitScenes
-    boundary_scene_count = 0
+    boundary_scene_count = 1
     scenes = $reports
 }
 $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ResultPath -Encoding UTF8

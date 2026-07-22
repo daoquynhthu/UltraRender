@@ -90,6 +90,17 @@ function Invoke-Render {
     }
 }
 
+function Assert-RejectionBoundary {
+    $path = Join-Path $ResultDir "phase_r_mlt_guiding_boundary.bin"
+    & $ExePath "sds" 9 $Width $Height 1 $path
+    if ($LASTEXITCODE -eq 0) { throw "MLT adaptive-reuse boundary unexpectedly rendered" }
+    $message = Get-Content -Raw -LiteralPath ($path + ".error")
+    if ($message -notlike "*cannot be combined with adaptive reuse*") {
+        throw "unexpected MLT boundary: $message"
+    }
+    [ordered]@{ name = "sds"; status = "boundary_passed"; rejection = $message }
+}
+
 if (-not $SkipBuild) {
     & (Join-Path $RepoRoot "scripts\build_x64.ps1") `
         -BuildDir $BuildDir -Config $Config -SkipConfigure `
@@ -187,6 +198,7 @@ foreach ($scene in $Scenes) {
         time_to_error_benefit = $benefit
     }
 }
+$reports += Assert-RejectionBoundary
 $result = [ordered]@{
     schema = "ure.phase_r.mlt_suite.v1"
     status = "passed"
@@ -195,7 +207,7 @@ $result = [ordered]@{
     height = $Height
     target_normalized_mse = $TargetNormalizedMse
     benefit_scene_count = $benefitScenes
-    boundary_scene_count = 0
+    boundary_scene_count = 1
     workloads = $reports
 }
 $result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ResultPath -Encoding utf8

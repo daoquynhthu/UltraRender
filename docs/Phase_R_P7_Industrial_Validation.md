@@ -44,3 +44,5 @@ SDS, small-emitter, and mixed-specular workloads remain the positive statistical
 Current status: the versioned evidence contract and `LocalQuick` gate are implemented and passing. R-P7 remains open until the full benefit/boundary matrix, farm evidence, and permitted Nsight capture pass `Closure`.
 
 The bidirectional report evaluates BDPT and VCM independently. Cornell, SDS, small-emitter, volume, high-occlusion, and complex-material probes currently show no positive time-to-error for either mode; this is an open estimator/performance gate, not a documentation exception. The camera-delta glass workload supplies a valid rejection-boundary scene for both modes.
+
+Path guiding, ReSTIR PT, and MLT reports also execute their production configuration boundaries against retained workloads. A selected path-guided or ReSTIR PT mode without its required state is rejected before allocation; MLT rejects a scene configured with an adaptive guiding scheduler because the Markov chain exclusively owns transitions. These are runtime fail-loud evidence, not host-only configuration assertions.

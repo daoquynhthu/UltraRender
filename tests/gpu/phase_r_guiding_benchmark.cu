@@ -216,14 +216,29 @@ int main(int argc, char** argv) {
         config.bidirectional.max_light_vertices = 8;
         config.bidirectional.connections_per_pixel = 4;
         config.bidirectional.memory_budget_mb = 256;
+    } else if (mode == 7) {
+        config.integrator.mode = ure::IntegratorMode::PathGuided;
+    } else if (mode == 8) {
+        config.integrator.mode = ure::IntegratorMode::RestirPT;
+    } else if (mode == 9) {
+        config.integrator.mode = ure::IntegratorMode::MLT;
+        config.integrator.sampler = ure::IntegratorSampler::PrimarySampleSpace;
+        config.mlt.enabled = true;
+        config.mlt.chain_count = width * height;
+        config.mlt.bootstrap_samples = std::max(4096, width * height * 8);
+        config.mlt.burn_in_mutations = 64;
+        config.mlt.mutations_per_chain = 1;
+        config.mlt.memory_budget_mb = 256;
+        config.path_guiding.enabled = true;
     }
 
     std::vector<GpuSphere> spheres;
     std::vector<GpuMaterialData> materials;
     bool volume = false;
     build_scene(scene_name, spheres, materials, volume);
-    GpuContext* context = init_gpu_renderer(width, height, {}, {}, spheres, materials, {}, config);
+    GpuContext* context = nullptr;
     try {
+        context = init_gpu_renderer(width, height, {}, {}, spheres, materials, {}, config);
         float camera_position[3] = {0.0f, 1.5f, 8.0f};
         float camera_target[3] = {0.0f, 0.3f, 0.0f};
         if (scene_name == "glass_caustic") {
@@ -461,9 +476,14 @@ int main(int argc, char** argv) {
                   << "bidirectional_connection_rgb_sum=" << bidirectional_connection_rgb_sum << '\n'
                   << "render_seconds=" << render_seconds << '\n';
         if (!telemetry) throw std::runtime_error("failed to write benchmark telemetry");
+    } catch (const std::exception& error) {
+        if (context) free_gpu_renderer(context);
+        std::ofstream error_output(output_path + ".error");
+        error_output << error.what();
+        return 4;
     } catch (...) {
-        free_gpu_renderer(context);
-        throw;
+        if (context) free_gpu_renderer(context);
+        return 5;
     }
     free_gpu_renderer(context);
     return 0;

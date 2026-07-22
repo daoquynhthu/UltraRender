@@ -79,8 +79,19 @@ function Invoke-Render {
     }
 }
 
+function Assert-RejectionBoundary {
+    $path = Join-Path $ResultDir "phase_r_restir_pt_disabled_boundary.bin"
+    & $ExePath "occlusion" 8 $Width $Height 1 $path
+    if ($LASTEXITCODE -eq 0) { throw "ReSTIR PT boundary unexpectedly rendered" }
+    $message = Get-Content -Raw -LiteralPath ($path + ".error")
+    if ($message -notlike "*restir_pt requires restir_pt.enabled*") {
+        throw "unexpected ReSTIR PT boundary: $message"
+    }
+    [ordered]@{ name = "occlusion"; status = "boundary_passed"; rejection = $message }
+}
+
 if (-not $SkipBuild) {
-    & (Join-Path $RepoRoot "scripts\build_x64.ps1") -BuildDir $BuildDir -Config $Config -Target gpu_phase_r_guiding_benchmark
+    & (Join-Path $RepoRoot "scripts\build_x64.ps1") -BuildDir $BuildDir -Config $Config -Targets gpu_phase_r_guiding_benchmark
     if ($LASTEXITCODE -ne 0) { throw "ReSTIR PT benchmark build failed" }
 }
 if (-not (Test-Path $ExePath)) { throw "ReSTIR PT benchmark executable not found: $ExePath" }
@@ -143,6 +154,7 @@ foreach ($scene in @("multi_light", "occlusion", "volume")) {
         status = "passed"
     }
 }
+$reports += Assert-RejectionBoundary
 
 $report = [ordered]@{
     schema = "ure.phase_r.restir_pt_suite.v1"
@@ -154,7 +166,7 @@ $report = [ordered]@{
     curve_spp = $CurveSpp
     reference_spp = $ReferenceSpp
     benefit_scene_count = $benefitScenes
-    boundary_scene_count = 0
+    boundary_scene_count = 1
     scenes = $reports
 }
 $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ResultPath -Encoding UTF8
