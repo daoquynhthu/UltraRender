@@ -1,6 +1,6 @@
 # UltraRender Documentation Index
 
-Last reviewed: 2026-07-22
+Last reviewed: 2026-07-23
 
 This index separates current references from historical records. `PLAN.md` is the only authoritative construction queue. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
 
@@ -17,7 +17,8 @@ This index separates current references from historical records. `PLAN.md` is th
 | [`Phase_Q_Native_Scene_Format.md`](Phase_Q_Native_Scene_Format.md) | Completed native scene architecture and closure record |
 | [`Phase_R_P6_Mie_Volume_Resources.md`](Phase_R_P6_Mie_Volume_Resources.md) | Completed Mie resource/transport contract |
 | [`Phase_R_P5_MLT.md`](Phase_R_P5_MLT.md) | Completed production PSSMLT architecture and closure gates |
-| [`Phase_R_P7_Industrial_Validation.md`](Phase_R_P7_Industrial_Validation.md) | Current industrial evidence schemas, profiles and open closure gates |
+| [`Phase_R_P7_Industrial_Validation.md`](Phase_R_P7_Industrial_Validation.md) | Completed Phase R industrial evidence schemas and Closure record |
+| [`Phase_T_Portable_GPU_Runtime.md`](Phase_T_Portable_GPU_Runtime.md) | Current CUDA coupling ledger, migration ownership and static regression boundary |
 | [`Phase_W_Wave_Optics_Audit.md`](Phase_W_Wave_Optics_Audit.md) | Current boundary between references and production wave transport |
 
 ## Completed-phase evidence records

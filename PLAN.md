@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-23 (Phase R closure and T.0 cursor)
+最后更新: 2026-07-23 (T.0 closure and T.1 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -25,9 +25,9 @@
 远期 Phase S:   Session API + 脚本化                                已完成
 远期 Phase M:   材质系统                                             已完成
 远期 Phase L:   百万级光谱域 / packet-resolution 解耦                已完成 (L.0-L.12)
-远期 Phase Q:   URE 原生场景系统 / 程序化工业格式                    计划中
-远期 Phase R:   工业级/科研级积分器升级                              进行中
-远期 Phase T:   可移植 GPU 运行时 / 多后端执行                        计划中
+远期 Phase Q:   URE 原生场景系统 / 程序化工业格式                    已完成
+远期 Phase R:   工业级/科研级积分器升级                              已完成
+远期 Phase T:   可移植 GPU 运行时 / 多后端执行                        进行中 (T.0 完成)
 远期 Phase V:   GPU 几何加速结构 / BVH / OptiX / Clustered Geometry   计划中
 远期 Phase W:   波动光学求解器 / 相干场输运                          进行中
 ```
@@ -54,7 +54,7 @@ Phase Q complete [done]
 R-P4 specular manifold + BDPT/VCM [done]
    │
    ▼
-当前游标: T.0
+当前游标: T.1
    │
    ▼
 Phase T complete
@@ -79,7 +79,7 @@ Phase X complete
 - **R-P6 已闭环**: deterministic Lorenz-Mie generator、严格 table adapter、不可变 SceneIR resource、GPU spectral eval/pdf/sample、NEE/continuation、scalar-depolarizing Stokes、Session rebuild 和端到端生命周期均已进入生产与验证路径。
 - **Phase Q 已闭环**: URE native schema、serialization、programmatic graph、feature declaration、tooling/adapter、compiled cache/farm 与 validation suite 已冻结为后续阶段的权威 authoring contract。
 - **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
-- **当前唯一施工项 — Phase T**: Phase R 已通过 clean-tree R-P7 Closure，当前游标为 T.0 CUDA coupling audit。T.0 未冻结耦合清单、迁移批次和静态回归规则前不得进入 T.1。
+- **当前唯一施工项 — Phase T**: Phase R 已通过 clean-tree R-P7 Closure，T.0 已冻结 CUDA coupling ledger、迁移批次和静态回归规则，当前游标为 T.1 backend identity/capability contract。
 - **Phase T → V → W**: T 先稳定 backend-neutral runtime 并迁移 CUDA/Vulkan/DXR；V 再建设统一 acceleration provider；W 最后把已有 reference/oracle 工作接入稳定执行与加速合同。现有 W 成果保留，新增 W production work 冻结。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
@@ -1994,7 +1994,7 @@ R-P1 必须先于 R-P2/R-P3/R-P4，因为 path guiding、ReSTIR、BDPT/VCM 都�
 
 ### Phase T — 可移植 GPU 运行时 / Portable Multi-Backend Execution
 
-**状态**: 进行中，当前游标 T.0。Phase R 已闭环；Phase V 的正式实现必须建立在 Phase T 合同之上。
+**状态**: 进行中，T.0 已完成，当前游标 T.1。Phase R 已闭环；Phase V 的正式实现必须建立在 Phase T 合同之上。
 
 **目标**: 把 UltraRender 从“核心语义由 CUDA 实现细节定义”升级为“同一套物理、资源、调度和加速合同可由多个 GPU backend 执行”。CUDA 保留为当前生产后端、物理参考实现和 NVIDIA 性能路径，但不再拥有公共架构；Vulkan 是 Windows/Linux 跨厂商生产后端；D3D12/DXR 是 Windows 可选后端。各 backend 可以使用专有优化，不要求退化到最低公分母。
 
@@ -2038,6 +2038,8 @@ Phase T 不允许简单维护三份独立 path tracer。T.2 必须用实际 spec
 | T.9 | D3D12/DXR optional backend：复用 KernelIR/runtime/resource/acceleration contract，加入 DXIL、descriptor heap、queue/fence、DXR provider 和 DRED | Windows 可选构建；无 D3D12/DXR 环境不影响 CUDA/Vulkan；核心 parity fixtures 通过 |
 | T.10 | Multi-backend scheduling：同构与异构 multi-GPU/farm capability negotiation、resource cache key、compiler/backend identity 和 merge compatibility | 不兼容 feature/precision/coherent mode 拒绝混合；允许兼容 sample shard 跨 backend 合并并保留可复现 metadata |
 | T.11 | Cross-backend validation/performance suite：物理单元、hit metadata、reference renders、variance/MSE、device loss、budget、build cache、cold/warm launch、VRAM 和 throughput | `run_phase_t_validation_suite.ps1` 输出机器可读报告；CUDA/Vulkan 是必测生产后端，DXR 按 capability 可选；差异有阈值和原因分类 |
+
+T.0 closure（2026-07-23）：`docs/Phase_T_Portable_GPU_Runtime.md` 已覆盖 build、device、public API、C ABI/pyure、GpuContext、resource/texture、queue/dispatch、kernel、multi-GPU、wave optics、acceleration、diagnostics、scene lowering 和 validation 14 类耦合；每类均指定 contract owner 与 T.1-T.11 迁移批次。`scripts/check_phase_t_static.ps1` 阻止 CUDA SDK/native handle 进入 backend-neutral modules、RenderConfig、SceneIR、C ABI 和 pyure，并冻结现有 4 个 public CUDA include debt allowlist，后续迁移只能缩减不能扩张。T.0 不声称第二后端存在；权威游标进入 T.1。
 
 #### 完成标准
 

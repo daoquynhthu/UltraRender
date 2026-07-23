@@ -1,6 +1,6 @@
 # UltraRender Current Status
 
-Last reviewed: 2026-07-22
+Last reviewed: 2026-07-23
 
 This document summarizes the current repository state for users and integrators. `PLAN.md` remains authoritative for construction order and phase completion criteria. Source, CMake registration, and fresh test output take precedence over prose when they disagree.
 
@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `T.0`. Phase Q and Phase R are complete; Phase T backend-neutral runtime work has started with the CUDA coupling audit, while later backend steps must not be treated as implemented.
+The authoritative construction cursor is `T.1`. Phase Q and Phase R are complete; Phase T has frozen the T.0 CUDA coupling ledger and regression boundary, while backend identity/capability and later runtime steps must not yet be treated as implemented.
 
 ## Supported execution baseline
 

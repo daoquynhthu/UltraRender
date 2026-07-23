@@ -6,7 +6,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- Phase Q 与 Phase R 已完成；当前施工游标是 `T.0`（CUDA coupling audit）。
+- Phase Q 与 Phase R 已完成；Phase T 的 CUDA coupling audit 已冻结，当前施工游标是 `T.1`（backend identity/capability contract）。
 - 默认生产执行后端是 CUDA。Vulkan、D3D12/DXR 和 OptiX 路径尚未完成。
 - 默认积分器是 spectral/polarimetric radiometric wavefront path tracer。
 - coherent field、partial coherence、完整衍射相机和局部全波耦合仍属于 Phase W 后续工作；当前主渲染路径不会静默模拟这些能力。
