@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `R-P7`. Phase Q and R-P3 through R-P6 are complete; Phase T and later backend work must not be treated as implemented.
+The authoritative construction cursor is `T.0`. Phase Q and Phase R are complete; Phase T backend-neutral runtime work has started with the CUDA coupling audit, while later backend steps must not be treated as implemented.
 
 ## Supported execution baseline
 
@@ -55,7 +55,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | GPU BDPT/VCM | Implemented and tested for the R-P4 bounded estimator contract | Does not imply arbitrary path-space techniques or unrestricted merge support |
 | Specular-manifold estimator | Implemented for the exact R-P4 support partition with up to four smooth-delta events | Independent technique AOV and four-scene statistical gate; unsupported paths remain wavefront-owned |
 | Primary-sample-space MLT | Implemented under R-P5 | GPU chains, production wavefront replay, symmetric Laplace mutation, stratified bootstrap seeding, normalization, diagnostics and shard identities; replicated disjoint-range validation retains SDS small light as the positive time-to-error workload and records the remaining difficult scenes as boundaries. MLT+BDPT is rejected until both subpaths share one spectral primary sample |
-| Industrial validation | R-P7 closure verification in progress | Versioned eight-category report, artifact hashes, runtime boundaries, independent BDPT/VCM benefit, disjoint 4,096-SPP farm merge, measured Nsight/VRAM evidence, and strict closure validator are implemented; clean-tree Closure and full repository gate remain |
+| Industrial validation | R-P7 complete | Clean-tree versioned eight-category report, artifact hashes, runtime boundaries, independent BDPT/VCM and MLT benefit/boundary evidence, disjoint 4,096-SPP farm merge, measured Nsight/VRAM evidence, and strict Closure validator passed |
 | Multi-GPU sample partition/merge | Implemented | Not a complete distributed render-farm runtime |
 | Denoising | A tested GPU target exists | No general quality or production guarantee is claimed |
 | Wave-optics host/CUDA references | Partially implemented | Main production path remains radiometric |
@@ -111,7 +111,7 @@ Native scene closure gate:
 
 R-P5 closure includes deterministic chain replay, replicated fixed-NMSE evidence with disjoint reference/sample ranges and non-overlapping chain-identity intervals, standalone BDPT energy regression, and an explicit MLT+BDPT rejection contract. The earlier two-workload claim used a reference-correlated wavefront prefix and is superseded; the hardened gate retains one reproducible SDS small-light benefit workload plus explicit non-benefit boundaries, matching the R-P7 per-mode criterion. R-P4 retains its independent four-scene manifold evidence.
 
-R-P7 `LocalQuick` passes. The replicated `rough_indirect` workload gives independent positive time-to-error for BDPT and VCM while `glass_caustic` verifies the camera-delta rejection boundary. The manifold bias gate now uses per-SPP technique-energy moments; the 1,048,576-SPP small-emitter wavefront reference gives a 31.03% 95% upper bound without relaxing the 35% threshold. The farm/Nsight evidence must be regenerated for the final benchmark binary before clean-tree `Closure`.
+R-P7 `Closure` passes on clean commit `56d1121`. The replicated `rough_indirect` workload gives independent positive time-to-error for BDPT and VCM while `glass_caustic` verifies the camera-delta rejection boundary. The manifold bias gate uses per-SPP technique-energy moments; the 1,048,576-SPP small-emitter wavefront reference remains below the 35% confidence threshold. Farm, Nsight, and the final benchmark binary share SHA-256 `7b32d2a64bc03dd412874075bf3b6df62f128d39319fdfcf69cb451abad7a95d`.
 
 ## Known documentation rule
 

@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-22 (R-P5 closure and R-P7 cursor)
+最后更新: 2026-07-23 (Phase R closure and T.0 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -54,7 +54,7 @@ Phase Q complete [done]
 R-P4 specular manifold + BDPT/VCM [done]
    │
    ▼
-当前游标: R-P7
+当前游标: T.0
    │
    ▼
 Phase T complete
@@ -79,7 +79,7 @@ Phase X complete
 - **R-P6 已闭环**: deterministic Lorenz-Mie generator、严格 table adapter、不可变 SceneIR resource、GPU spectral eval/pdf/sample、NEE/continuation、scalar-depolarizing Stokes、Session rebuild 和端到端生命周期均已进入生产与验证路径。
 - **Phase Q 已闭环**: URE native schema、serialization、programmatic graph、feature declaration、tooling/adapter、compiled cache/farm 与 validation suite 已冻结为后续阶段的权威 authoring contract。
 - **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
-- **当前唯一施工项 — Phase R remainder**: R-P1 至 R-P6 已完成，当前游标为 R-P7。Phase R 未通过 R-P7 不得启动 Phase T 实现。
+- **当前唯一施工项 — Phase T**: Phase R 已通过 clean-tree R-P7 Closure，当前游标为 T.0 CUDA coupling audit。T.0 未冻结耦合清单、迁移批次和静态回归规则前不得进入 T.1。
 - **Phase T → V → W**: T 先稳定 backend-neutral runtime 并迁移 CUDA/Vulkan/DXR；V 再建设统一 acceleration provider；W 最后把已有 reference/oracle 工作接入稳定执行与加速合同。现有 W 成果保留，新增 W production work 冻结。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
@@ -1855,9 +1855,9 @@ Phase L 的配置必须在 scene load 前解析成 `SpectralRuntimePlan`，并�
 
 ### Phase R — 工业级/科研级积分器升级 / Research-Grade Radiometric Integrator
 
-**状态**: 进行中，不能视为 Phase R 完成。R.0-R.12 只闭环 local contract baseline；R-P1、R-P2 与 R-P6 已完成 production closure，Phase M 已闭环，当前权威执行游标是 Phase Q。R-P2 已把全局 per-light scalar guide 扩展为 GPU resident `spatial cell × light × direction bin` cache：guide domain 来自完整 scene bounds，surface/volume NEE、emissive-hit MIS 与 environment-miss MIS 的 `*_at(reference_point)` 路径使用同一 reference-conditioned mixture proposal/PDF，cache 无样本时回退 light tree/global guide。训练目标学习局部 `Le × BSDF/phase × cosine × transmittance` 光谱 product；sampled/lane 模式通过显式 wavelength PDF 转换为 photometric Y target，并记录 representative wavelength、spectral mode、wavelength PDF 和 cache epoch。pass-boundary decay、reset、light/material rebuild、instance-domain mutation 和 stale epoch rejection均已闭环。multi-GPU 使用“衰减后的共同基线 + 各设备本轮增量”合并并广播，避免重复累加共同历史；device 0 merge scratch 纳入三份 guide footprint 的预算门禁。`memory_budget_mb=0` 根据 free/total VRAM、保留量和硬上限自动规划，显式预算和自动预算都在分配前做 checked size 与 fail-loud。专用 GPU benchmark 内建 Cornell enclosure、多光源、复杂材质和参与介质四类 workload，并输出 baseline/guided variance、MSE、time-to-error 曲线。
+**状态**: ✅ 完成。R.0-R.12 local contract baseline 与 R-P1..R-P7 production closure 均已闭环；2026-07-23 clean-tree `Closure` 在 commit `56d1121` 上通过，权威执行游标进入 T.0。
 
-**必须显式承认的未生产化能力**: R-P2 spatial-directional product guide、spectral metadata、decay/epoch、multi-GPU merge、memory budget 和四类本地收益曲线已生产化；R-P3 production ReSTIR DI 与有界 diffuse/volume ReSTIR PT path reuse、R-P6 真实 Mie phase resource/parameterization 也已闭环。specular manifold GPU solver、BDPT、VCM、MLT chain integrator，以及跨剩余 R-P4/R-P5/R-P7 的完整多场景/farm/Nsight 长跑 dashboard 均未完成。ReSTIR PT 的 specular reconnection 明确依赖 R-P4，不会静默近似；当前代码对其他未完成能力仍 deliberate fail-loud。
+**必须显式承认的能力边界**: Phase R 完成只覆盖各文档定义的 estimator support partition，不代表任意路径类型或算法组合均可用。ReSTIR PT 仍限于有界 diffuse/volume suffix；MLT 与 BDPT/VCM/manifold/adaptive reuse 的组合继续 fail-loud；unsupported spectral、material、volume 或 camera-delta 路径不会静默近似。
 
 **目标**: 将当前 CUDA spectral/polarimetric wavefront path tracer 从“可用的物理路径追踪器”升级为工业级/科研级 radiometric light transport integrator。Phase R 不替代 Phase W：Phase R 处理默认非相干 radiance/Stokes transport 的调度、采样、MIS、路径空间算法和性能/收敛基准；Phase W 处理相干场、衍射、部分相干和局部全波求解。任何高级积分器都必须保持 Phase E/L 的 explicit wavelength PDF、spectral domain/resource contract、Stokes/Mueller 语义和 fail-loud wave feature policy。
 
@@ -1951,7 +1951,7 @@ R-P4 final closure：standalone SMS 只接管“non-delta area anchor → 1..4 s
 
 R-P5 closure（2026-07-23 统计复核）：独立 GPU chain scheduler 已接入生产 wavefront contribution evaluator，queue-owned primary-sample replay 覆盖 camera/film/wavelength/surface/volume/light/lobe/RR dimensions；bootstrap weighted/stratified seeding、burn-in、wrapped symmetric Laplace large/small step、PSSMLT 双端沉积与归一化、显存预算、chain diagnostics、64-bit global chain identity、多 GPU disjoint shard、配置/API 传播和 deterministic GPU replay 均已实现。R-P7 复核发现旧 8x8 两场景结论的 wavefront curve 与 reference 共享 sample prefix，相关误差使其不能作为独立收益证据。新版 `ure.phase_r.mlt_suite.v2` 使用 4 个不相交 reference shard、4 个不相交 wavefront sample range、4 个不重叠 MLT chain identity interval，并把 reference uncertainty 纳入 full-image replicate bias interval；固定 normalized-MSE=5% 下，SDS small-light 由 MLT 在 64 SPP/约 0.157 秒达标，而 wavefront 在 256 SPP/约 0.294 秒达标，最终 95% relative-bias bound 约 1.7%；SDS、小光源、玻璃焦散及 high-occlusion 作为统计边界。更极端的 high-occlusion area-compensated small-light 仅保留 deterministic path-distribution contract，因当前预算下 high-sample confidence bound 不稳定而不进入默认统计矩阵。BDPT 审计同时修复 spectral accumulator wavelength 丢失与 camera reverse-PDF 方向错误；standalone energy regression 通过。MLT+BDPT 因 sampled-lane camera/light subpath 尚无共享 wavelength primary sample 而 fail-loud，VCM/manifold/adaptive reuse 继续拒绝。R-P5 实现保持闭环，证据按 R-P7 每个 mode 至少一正收益和一边界的标准重新加固。
 
-R-P7 progress（2026-07-22）：`ure.phase_r.industrial_validation.v1` 已聚合 integrator smoke、light sampling、path guiding、ReSTIR PT、specular manifold、独立 BDPT/VCM、MLT 和 volume/Mie 八类 SHA-256 evidence；所有 JSON 子 suite 已拥有版本化 schema。`LocalQuick` 已通过，记录 samples/s、MSE、variance、time-to-error 与线性 spectral-render RGB reconstruction 的 CIE76 色差。BDPT 有界连接不再截断固定前缀：light-endpoint 策略逐 SPP 全覆盖，deeper 策略按 global sample identity 轮换并作 inverse-selection-probability compensation；4,096 SPP 对 full-64 enumeration 的总能量误差约 6.4e-6、各 RGB channel 小于 8.6e-6。四个 disjoint-range replicate 和 GPU render-loop timing 下，固定 0.33 NMSE 的 `rough_indirect` workload 中 wavefront/BDPT/VCM time-to-error 约为 0.335/0.255/0.270 秒，且三者最终均通过 0.25 NMSE convergence gate；`glass_caustic` 继续作为 camera-delta 边界。manifold 95% bias gate 已改为消费每 SPP 全图 technique-energy 一阶/二阶矩，不再把空间 RGB pixel 伪设为 IID；small-emitter 使用 1,048,576-SPP wavefront 与 131,072-SPP SMS 独立参考，mean bias 约 0.98%、95% upper bound 约 31.03%，在不放宽 35% 阈值下通过。真实 farm long-run 与 Nsight 已验证其严格合同，但 benchmark binary 因统计 telemetry 更新而须在最终 commit 后重新采集。R-P7 尚未闭环：仍须用同一最终 executable 重建 farm/Nsight，并在 clean tree 上通过完整 `Closure`、Release/37 CTest 和静态审计后才能声明 Phase R completion。
+R-P7 closure（2026-07-23）：`ure.phase_r.industrial_validation.v1` 在 clean commit `56d1121` 上通过 `Closure`，聚合 integrator smoke、light sampling、path guiding、ReSTIR PT、specular manifold、独立 BDPT/VCM、MLT 和 volume/Mie 八类 SHA-256 evidence。Release 全构建、37/37 CTest、Phase Q/L/R 静态审计与 physics-optics gate 全绿。最终 farm 使用两个不重叠 shard 覆盖 4,096 SPP；farm、Nsight 与当前 benchmark executable 的 SHA-256 均为 `7b32d2a64bc03dd412874075bf3b6df62f128d39319fdfcf69cb451abad7a95d`。Nsight 实测 14 次 launch、5 类 kernel 和 1,250,951,168-byte peak VRAM delta。BDPT/VCM、SMS 和 replicated MLT v2 均满足各自正收益、收敛、bias 与拒绝边界合同。Phase R 已闭环，权威游标进入 T.0。
 
 #### Phase R 执行顺序
 
@@ -1994,7 +1994,7 @@ R-P1 必须先于 R-P2/R-P3/R-P4，因为 path guiding、ReSTIR、BDPT/VCM 都�
 
 ### Phase T — 可移植 GPU 运行时 / Portable Multi-Backend Execution
 
-**状态**: 计划中。Phase R 可继续在当前 CUDA 工作后端上推进；Phase V 的正式实现必须建立在 Phase T 合同之上。
+**状态**: 进行中，当前游标 T.0。Phase R 已闭环；Phase V 的正式实现必须建立在 Phase T 合同之上。
 
 **目标**: 把 UltraRender 从“核心语义由 CUDA 实现细节定义”升级为“同一套物理、资源、调度和加速合同可由多个 GPU backend 执行”。CUDA 保留为当前生产后端、物理参考实现和 NVIDIA 性能路径，但不再拥有公共架构；Vulkan 是 Windows/Linux 跨厂商生产后端；D3D12/DXR 是 Windows 可选后端。各 backend 可以使用专有优化，不要求退化到最低公分母。
 

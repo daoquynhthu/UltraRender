@@ -6,7 +6,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- 已完成 Phase Q、R-P3 production ReSTIR、R-P4 specular-manifold/BDPT/VCM 和 R-P5 PSSMLT；当前施工游标是 `R-P7`。
+- Phase Q 与 Phase R 已完成；当前施工游标是 `T.0`（CUDA coupling audit）。
 - 默认生产执行后端是 CUDA。Vulkan、D3D12/DXR 和 OptiX 路径尚未完成。
 - 默认积分器是 spectral/polarimetric radiometric wavefront path tracer。
 - coherent field、partial coherence、完整衍射相机和局部全波耦合仍属于 Phase W 后续工作；当前主渲染路径不会静默模拟这些能力。
@@ -29,7 +29,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 - production ReSTIR DI 的 temporal/spatial reuse，以及 ReSTIR PT 的有界、版本化 path-suffix replay；超出该有界契约的 suffix 会明确失败，不会静默近似。
 - GPU BDPT/VCM 与最多四事件的 specular-manifold estimator；其适用范围、独立 wavefront technique-AOV 对照和统计门禁见 [Phase R-P4 文档](docs/Phase_R_P4_Specular_Manifold.md)。
 - R-P5 已完成 primary-sample-space replay、独立 GPU chains、对称 Laplace mutation、stratified bootstrap seeding、归一化、诊断与多 GPU chain identity。R-P7 的独立 sample-range/chain-identity 复核否定了旧版相关参考图的两场景结论；当前只保留可复现的 SDS small-light 正收益，并将 SDS、小光源、玻璃焦散和高遮挡记录为统计边界，不以数量替代统计独立性。更极端的面积补偿小光源只保留路径分布契约，不冒充在当前预算下稳定的统计证据。MLT 与 BDPT/VCM/manifold 的组合在共享光谱主样本合同完成前明确拒绝。设计与证据边界见 [Phase R-P5 文档](docs/Phase_R_P5_MLT.md)。
-- R-P7 已建立版本化工业验证报告，聚合八类带哈希证据及 MSE、方差、色差、time-to-error 和吞吐指标；BDPT/VCM 独立收益与边界矩阵、4,096-SPP 分片合并以及同一可执行文件的 Nsight/VRAM 实测证据已经取得。完整 clean-tree Closure 和仓库总门禁通过前仍不声明 Phase R 完成。见 [Phase R-P7 文档](docs/Phase_R_P7_Industrial_Validation.md)。
+- R-P7 已在 clean commit 上通过 `Closure`：版本化工业验证报告聚合八类带哈希证据及 MSE、方差、色差、time-to-error 和吞吐指标；BDPT/VCM 独立收益与边界矩阵、4,096-SPP 分片合并以及同一可执行文件的 Nsight/VRAM 实测证据均通过验证。Phase R 已闭环。见 [Phase R-P7 文档](docs/Phase_R_P7_Industrial_Validation.md)。
 
 ## 明确未完成或受限的能力
 
