@@ -25,6 +25,17 @@ Image evidence records MSE, variance, time-to-error, samples per second, and mea
 
 The bidirectional suite uses four disjoint sample-range replicates. Its time metric is the renderer's measured GPU render loop, not process startup or context construction. The fixed preview target is normalized MSE 0.33, while every compared mode must also reach normalized MSE 0.25 at the final curve point. `rough_indirect` is the positive workload: a near-light rough reflector and direct-light blocker make importance subpaths materially easier than camera subpaths. `glass_caustic` remains the explicit camera-delta boundary workload.
 
+The MLT suite uses the same independence standard in
+`ure.phase_r.mlt_suite.v2`: four disjoint reference shards, four disjoint
+wavefront sample ranges, and four MLT chain identities. Its full-image replicate
+bias interval includes reference-shard uncertainty. This supersedes the earlier
+reference-correlated two-SDS-workload result; `sds_small_light` is the retained
+positive workload, while SDS, small-emitter, glass-caustic, and high occlusion
+remain explicit statistical boundaries.
+The more extreme high-occlusion small-light variant is retained only as a
+deterministic scene/path-distribution contract because it does not satisfy the
+current-budget high-sample confidence gate.
+
 ## Specular-manifold support boundary
 
 The fixed `glass_caustic` workload is a camera-delta path and is outside the standalone SMS support partition, which is `non-delta area anchor -> one to four smooth-delta events -> finite emitter`. The R-P7 boundary gate requires a nonzero ordinary image, zero anchored-delta reference energy, zero standalone SMS deposition, and exercised manifold solve telemetry. It is not used as a positive SMS reference.

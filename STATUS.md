@@ -54,7 +54,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | ReSTIR PT path reuse | Implemented and verified for bounded diffuse surface and supported volume suffixes | Unsupported suffix classes remain explicit rather than silently approximated |
 | GPU BDPT/VCM | Implemented and tested for the R-P4 bounded estimator contract | Does not imply arbitrary path-space techniques or unrestricted merge support |
 | Specular-manifold estimator | Implemented for the exact R-P4 support partition with up to four smooth-delta events | Independent technique AOV and four-scene statistical gate; unsupported paths remain wavefront-owned |
-| Primary-sample-space MLT | Implemented under R-P5 | GPU chains, production wavefront replay, tuned symmetric Laplace mutation, stratified bootstrap seeding, normalization, diagnostics and shard identities; two fixed-NMSE SDS workloads show positive time-to-error. MLT+BDPT is rejected until both subpaths share one spectral primary sample |
+| Primary-sample-space MLT | Implemented under R-P5 | GPU chains, production wavefront replay, symmetric Laplace mutation, stratified bootstrap seeding, normalization, diagnostics and shard identities; replicated disjoint-range validation retains SDS small light as the positive time-to-error workload and records the remaining difficult scenes as boundaries. MLT+BDPT is rejected until both subpaths share one spectral primary sample |
 | Industrial validation | R-P7 closure verification in progress | Versioned eight-category report, artifact hashes, runtime boundaries, independent BDPT/VCM benefit, disjoint 4,096-SPP farm merge, measured Nsight/VRAM evidence, and strict closure validator are implemented; clean-tree Closure and full repository gate remain |
 | Multi-GPU sample partition/merge | Implemented | Not a complete distributed render-farm runtime |
 | Denoising | A tested GPU target exists | No general quality or production guarantee is claimed |
@@ -109,7 +109,7 @@ Native scene closure gate:
 .\scripts\run_phase_q_validation_suite.ps1 -BuildDir build_modular_x64 -Config Release
 ```
 
-R-P5 closure includes deterministic chain replay, the two-workload fixed-NMSE benefit report, standalone BDPT energy regression, and an explicit MLT+BDPT rejection contract. R-P4 retains its independent four-scene manifold evidence.
+R-P5 closure includes deterministic chain replay, replicated fixed-NMSE evidence with disjoint reference/sample ranges and non-overlapping chain-identity intervals, standalone BDPT energy regression, and an explicit MLT+BDPT rejection contract. The earlier two-workload claim used a reference-correlated wavefront prefix and is superseded; the hardened gate retains one reproducible SDS small-light benefit workload plus explicit non-benefit boundaries, matching the R-P7 per-mode criterion. R-P4 retains its independent four-scene manifold evidence.
 
 R-P7 `LocalQuick` passes. The replicated `rough_indirect` workload gives independent positive time-to-error for BDPT and VCM while `glass_caustic` verifies the camera-delta rejection boundary. The manifold bias gate now uses per-SPP technique-energy moments; the 1,048,576-SPP small-emitter wavefront reference gives a 31.03% 95% upper bound without relaxing the 35% threshold. The farm/Nsight evidence must be regenerated for the final benchmark binary before clean-tree `Closure`.
 

@@ -21,6 +21,7 @@ struct GpuMltTelemetry {
 struct MltDiagnostics {
     std::uint64_t bootstrap_paths = 0;
     std::uint64_t bootstrap_positive = 0;
+    std::uint64_t bootstrap_batches = 0;
     std::uint64_t proposed_mutations = 0;
     std::uint64_t accepted_mutations = 0;
     std::uint64_t large_steps = 0;

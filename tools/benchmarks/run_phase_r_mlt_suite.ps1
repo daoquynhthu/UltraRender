@@ -3,10 +3,12 @@ param(
     [string]$Config = "Release",
     [int]$Width = 16,
     [int]$Height = 16,
-    [int[]]$CurveSpp = @(64, 256, 1024),
+    [int[]]$CurveSpp = @(64, 128, 256, 1024),
     [int]$ReferenceSpp = 8192,
     [double]$TargetNormalizedMse = 0.05,
-    [int]$MinBenefitScenes = 2,
+    [int]$MinBenefitScenes = 1,
+    [int]$ReplicateCount = 4,
+    [int]$ReferenceBaseSample = 1000000,
     [string[]]$Scenes = @(
         "sds", "sds_small_light", "small_emitter", "glass_caustic",
         "high_occlusion"),
@@ -37,42 +39,143 @@ function Read-FloatImage {
     [ordered]@{ width = $width; height = $height; values = $values }
 }
 
+function Merge-Images {
+    param([object[]]$Images)
+    $values = New-Object 'double[]' $Images[0].values.Length
+    foreach ($image in $Images) {
+        if ($image.width -ne $Images[0].width -or
+            $image.height -ne $Images[0].height) {
+            throw "MLT reference shard dimensions differ"
+        }
+        for ($index = 0; $index -lt $values.Length; $index++) {
+            $values[$index] += $image.values[$index] / $Images.Count
+        }
+    }
+    [ordered]@{
+        width = $Images[0].width
+        height = $Images[0].height
+        values = $values
+    }
+}
+
+function Get-Mean {
+    param([double[]]$Values)
+    if ($Values.Count -eq 0) { throw "cannot average an empty sample" }
+    ($Values | Measure-Object -Average).Average
+}
+
+function Get-SampleVariance {
+    param([double[]]$Values)
+    if ($Values.Count -lt 2) { return 0.0 }
+    $mean = Get-Mean $Values
+    $sum = 0.0
+    foreach ($value in $Values) {
+        $delta = $value - $mean
+        $sum += $delta * $delta
+    }
+    $sum / ($Values.Count - 1)
+}
+
+function Get-Median {
+    param([double[]]$Values)
+    $sorted = @($Values | Sort-Object)
+    $middle = [int][Math]::Floor($sorted.Count / 2)
+    if (($sorted.Count % 2) -eq 1) { return $sorted[$middle] }
+    0.5 * ($sorted[$middle - 1] + $sorted[$middle])
+}
+
+function Get-ImageMean {
+    param($Image)
+    Get-Mean ([double[]]$Image.values)
+}
+
 function Get-ErrorMetrics {
     param($Image, $Reference)
     $sumSquared = 0.0
-    $sumDelta = 0.0
-    $sumReference = 0.0
-    $sumReferenceSquared = 0.0
     for ($index = 0; $index -lt $Image.values.Length; $index++) {
         $delta = $Image.values[$index] - $Reference.values[$index]
         $sumSquared += $delta * $delta
-        $sumDelta += $delta
-        $sumReference += [Math]::Abs($Reference.values[$index])
-        $sumReferenceSquared +=
-            $Reference.values[$index] * $Reference.values[$index]
+    }
+    $sumReferenceSquared = 0.0
+    foreach ($value in $Reference.values) {
+        $sumReferenceSquared += $value * $value
     }
     $count = [double]$Image.values.Length
-    $meanDelta = $sumDelta / $count
     $mse = $sumSquared / $count
-    $variance = [Math]::Max(0.0, $mse - $meanDelta * $meanDelta)
-    $scale = [Math]::Max($sumReference / $count, 1.0e-12)
     [ordered]@{
         mse = $mse
         normalized_mse = $mse /
             [Math]::Max($sumReferenceSquared / $count, 1.0e-20)
-        relative_mean_bias = [Math]::Abs($sumDelta) /
-            [Math]::Max($sumReference, 1.0e-12)
-        relative_bias_95_bound =
-            ([Math]::Abs($meanDelta) +
-             1.96 * [Math]::Sqrt($variance / $count)) / $scale
+    }
+}
+
+function Get-ReplicatedMetrics {
+    param(
+        [object[]]$Runs,
+        $Reference,
+        [double]$ReferenceMean,
+        [double]$ReferenceMeanVariance
+    )
+    $mseValues = @()
+    $normalizedMseValues = @()
+    $imageMeans = @()
+    $elapsedValues = @()
+    foreach ($run in $Runs) {
+        $metrics = Get-ErrorMetrics $run.image $Reference
+        $run.mse = [Math]::Round($metrics.mse, 12)
+        $run.normalized_mse = [Math]::Round(
+            $metrics.normalized_mse, 8)
+        $mseValues += $metrics.mse
+        $normalizedMseValues += $metrics.normalized_mse
+        $imageMeans += Get-ImageMean $run.image
+        $elapsedValues += $run.elapsed_seconds
+    }
+    $meanImage = Get-Mean ([double[]]$imageMeans)
+    $standardError = [Math]::Sqrt(
+        (Get-SampleVariance ([double[]]$imageMeans)) / $Runs.Count +
+        $ReferenceMeanVariance / $ReplicateCount)
+    $relativeBias = [Math]::Abs($meanImage - $ReferenceMean) /
+        [Math]::Max([Math]::Abs($ReferenceMean), 1.0e-12)
+    $relativeBiasBound =
+        ([Math]::Abs($meanImage - $ReferenceMean) +
+         3.182 * $standardError) /
+        [Math]::Max([Math]::Abs($ReferenceMean), 1.0e-12)
+    $replicateEvidence = @($Runs | ForEach-Object {
+        $entry = [ordered]@{}
+        foreach ($field in $_.GetEnumerator()) {
+            if ($field.Key -ne "image") {
+                $entry[$field.Key] = $field.Value
+            }
+        }
+        $entry
+    })
+    [ordered]@{
+        elapsed_seconds = [Math]::Round(
+            (Get-Median ([double[]]$elapsedValues)), 6)
+        mse = [Math]::Round((Get-Mean ([double[]]$mseValues)), 12)
+        normalized_mse = [Math]::Round(
+            (Get-Mean ([double[]]$normalizedMseValues)), 8)
+        normalized_mse_variance = [Math]::Round(
+            (Get-SampleVariance ([double[]]$normalizedMseValues)), 12)
+        relative_mean_bias = [Math]::Round($relativeBias, 8)
+        relative_bias_95_bound = [Math]::Round($relativeBiasBound, 8)
+        replicates = $replicateEvidence
     }
 }
 
 function Invoke-Render {
-    param([string]$Scene, [int]$Mode, [int]$Spp, [string]$Name)
+    param(
+        [string]$Scene,
+        [int]$Mode,
+        [int]$Spp,
+        [string]$Name,
+        [int]$SampleBegin = 0,
+        [uint64]$IdentityOffset = 0
+    )
     $path = Join-Path $ResultDir $Name
     $elapsed = Measure-Command {
-        & $ExePath $Scene $Mode $Width $Height $Spp $path
+        & $ExePath $Scene $Mode $Width $Height $Spp $path `
+            $SampleBegin $IdentityOffset
         if ($LASTEXITCODE -ne 0) {
             throw "MLT benchmark failed: $Scene mode=$Mode spp=$Spp"
         }
@@ -84,6 +187,7 @@ function Invoke-Render {
     }
     [ordered]@{
         image = Read-FloatImage $path
+        image_sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
         elapsed_seconds = [double]$telemetry.render_seconds
         process_elapsed_seconds = $elapsed.TotalSeconds
         telemetry = $telemetry
@@ -109,6 +213,8 @@ if (-not $SkipBuild) {
 }
 if (-not (Test-Path $ExePath)) { throw "MLT benchmark executable missing" }
 if ($CurveSpp.Count -lt 2) { throw "MLT curve requires at least two points" }
+if ($ReplicateCount -lt 4) { throw "MLT suite requires at least four replicates" }
+if ($ReferenceBaseSample -lt 0) { throw "ReferenceBaseSample must be nonnegative" }
 if (-not [double]::IsFinite($TargetNormalizedMse) -or
     $TargetNormalizedMse -le 0.0) {
     throw "TargetNormalizedMse must be finite and positive"
@@ -122,55 +228,122 @@ New-Item -ItemType Directory -Path $ResultDir -Force | Out-Null
 
 $reports = @()
 $benefitScenes = 0
-foreach ($scene in $Scenes) {
+$maxCurveSpp = ($CurveSpp | Measure-Object -Maximum).Maximum
+for ($sceneIndex = 0; $sceneIndex -lt $Scenes.Count; $sceneIndex++) {
+    $scene = $Scenes[$sceneIndex]
     $sceneReferenceSpp = if ($scene -eq "small_emitter") {
         $ReferenceSpp * 32
     } elseif ($scene -eq "sds" -or $scene -eq "sds_small_light" -or
-              $scene -eq "glass_caustic") {
+              $scene -eq "glass_caustic" -or
+              $scene -eq "mixed_specular" -or
+              $scene -eq "rough_indirect") {
         $ReferenceSpp * 8
     } elseif ($scene -eq "high_occlusion") {
         $ReferenceSpp * 4
+    } elseif ($scene -eq "high_occlusion_small_light") {
+        $ReferenceSpp * 8
+    } elseif ($scene -eq "volume") {
+        $ReferenceSpp * 8
     } else {
         $ReferenceSpp
     }
-    $reference = Invoke-Render $scene 0 $sceneReferenceSpp `
-        "phase_r_mlt_${scene}_reference.bin"
+    if (($sceneReferenceSpp % $ReplicateCount) -ne 0) {
+        throw "reference SPP must be divisible by replicate count: $scene"
+    }
+    $referenceShardSpp = [int]($sceneReferenceSpp / $ReplicateCount)
+    $referenceRuns = @()
+    $referenceEvidence = @()
+    for ($replicate = 0; $replicate -lt $ReplicateCount; $replicate++) {
+        $sampleBegin = $ReferenceBaseSample +
+            $sceneIndex * 10000000 + $replicate * $referenceShardSpp
+        $run = Invoke-Render $scene 0 $referenceShardSpp `
+            "phase_r_mlt_${scene}_reference_r${replicate}.bin" `
+            $sampleBegin 0
+        $referenceRuns += $run
+        $referenceEvidence += [ordered]@{
+            replicate = $replicate
+            spp = $referenceShardSpp
+            sample_begin = $sampleBegin
+            image_sha256 = $run.image_sha256
+            elapsed_seconds = [Math]::Round($run.elapsed_seconds, 6)
+            image_mean = [Math]::Round((Get-ImageMean $run.image), 12)
+        }
+    }
+    $reference = Merge-Images @($referenceRuns.image)
+    $referenceMeans = [double[]]@(
+        $referenceRuns | ForEach-Object { Get-ImageMean $_.image })
+    $referenceMean = Get-Mean $referenceMeans
+    $referenceMeanVariance = Get-SampleVariance $referenceMeans
     $waveCurve = @()
     $mltCurve = @()
     foreach ($spp in $CurveSpp) {
-        $wave = Invoke-Render $scene 0 $spp `
-            "phase_r_mlt_${scene}_wave_spp${spp}.bin"
-        $mlt = Invoke-Render $scene 4 $spp `
-            "phase_r_mlt_${scene}_mlt_spp${spp}.bin"
-        $waveMetrics = Get-ErrorMetrics $wave.image $reference.image
-        $mltMetrics = Get-ErrorMetrics $mlt.image $reference.image
-        if ($mlt.telemetry.mlt_bootstrap_positive -le 0 -or
-            $mlt.telemetry.mlt_invalid -ne 0 -or
-            $mlt.telemetry.mlt_deposited -ne $Width * $Height * $spp) {
-            throw "MLT chain lifecycle gate failed: $scene spp=$spp"
+        $waveRuns = @()
+        $mltRuns = @()
+        for ($replicate = 0; $replicate -lt $ReplicateCount; $replicate++) {
+            $sampleBegin = $sceneIndex * 1000000 +
+                $replicate * $maxCurveSpp
+            $wave = Invoke-Render $scene 0 $spp `
+                "phase_r_mlt_${scene}_wave_spp${spp}_r${replicate}.bin" `
+                $sampleBegin 0
+            $waveRuns += [ordered]@{
+                replicate = $replicate
+                sample_begin = $sampleBegin
+                image = $wave.image
+                image_sha256 = $wave.image_sha256
+                elapsed_seconds = [double]$wave.elapsed_seconds
+            }
+            $identityOffset = [uint64](
+                ($sceneIndex * $ReplicateCount + $replicate) *
+                $Width * $Height)
+            $mlt = Invoke-Render $scene 4 $spp `
+                "phase_r_mlt_${scene}_mlt_spp${spp}_r${replicate}.bin" `
+                0 $identityOffset
+            if ($mlt.telemetry.mlt_bootstrap_positive -le 0 -or
+                $mlt.telemetry.mlt_invalid -ne 0 -or
+                $mlt.telemetry.mlt_deposited -ne $Width * $Height * $spp) {
+                throw "MLT chain lifecycle gate failed: $scene spp=$spp replicate=$replicate"
+            }
+            $mltRuns += [ordered]@{
+                replicate = $replicate
+                identity_offset = $identityOffset
+                image = $mlt.image
+                image_sha256 = $mlt.image_sha256
+                elapsed_seconds = [double]$mlt.elapsed_seconds
+                acceptance_rate = [Math]::Round(
+                    $mlt.telemetry.mlt_acceptance_rate, 8)
+            }
         }
         $waveCurve += [ordered]@{
             spp = $spp
-            elapsed_seconds = [Math]::Round($wave.elapsed_seconds, 6)
-            mse = [Math]::Round($waveMetrics.mse, 12)
-            normalized_mse = [Math]::Round($waveMetrics.normalized_mse, 8)
+            metrics = Get-ReplicatedMetrics $waveRuns $reference `
+                $referenceMean $referenceMeanVariance
         }
         $mltCurve += [ordered]@{
             spp = $spp
-            elapsed_seconds = [Math]::Round($mlt.elapsed_seconds, 6)
-            mse = [Math]::Round($mltMetrics.mse, 12)
-            normalized_mse = [Math]::Round($mltMetrics.normalized_mse, 8)
-            relative_mean_bias = [Math]::Round($mltMetrics.relative_mean_bias, 8)
-            relative_bias_95_bound = [Math]::Round($mltMetrics.relative_bias_95_bound, 8)
-            acceptance_rate = [Math]::Round($mlt.telemetry.mlt_acceptance_rate, 8)
+            metrics = Get-ReplicatedMetrics $mltRuns $reference `
+                $referenceMean $referenceMeanVariance
         }
     }
+    $waveCurve = @($waveCurve | ForEach-Object {
+        $point = [ordered]@{ spp = $_.spp }
+        foreach ($entry in $_.metrics.GetEnumerator()) {
+            $point[$entry.Key] = $entry.Value
+        }
+        $point
+    })
+    $mltCurve = @($mltCurve | ForEach-Object {
+        $point = [ordered]@{ spp = $_.spp }
+        foreach ($entry in $_.metrics.GetEnumerator()) {
+            $point[$entry.Key] = $entry.Value
+        }
+        $point
+    })
     if ([double]$mltCurve[-1].normalized_mse -gt
         [double]$mltCurve[0].normalized_mse) {
         throw "MLT convergence gate failed: $scene"
     }
     if ([double]$mltCurve[-1].relative_bias_95_bound -gt 0.35) {
-        throw "MLT high-sample bias bound failed: $scene"
+        throw "MLT high-sample replicate bias bound failed: $scene"
     }
     $waveTime = $null
     $mltTime = $null
@@ -192,6 +365,7 @@ foreach ($scene in $Scenes) {
     $reports += [ordered]@{
         scene = $scene
         reference_spp = $sceneReferenceSpp
+        reference_shards = $referenceEvidence
         target_normalized_mse = $TargetNormalizedMse
         wavefront = $waveCurve
         mlt = $mltCurve
@@ -200,17 +374,19 @@ foreach ($scene in $Scenes) {
 }
 $reports += Assert-RejectionBoundary
 $result = [ordered]@{
-    schema = "ure.phase_r.mlt_suite.v1"
+    schema = "ure.phase_r.mlt_suite.v2"
     status = "passed"
     generated_utc = [DateTime]::UtcNow.ToString("o")
     width = $Width
     height = $Height
     target_normalized_mse = $TargetNormalizedMse
+    replicate_count = $ReplicateCount
+    reference_base_sample = $ReferenceBaseSample
     benefit_scene_count = $benefitScenes
     boundary_scene_count = 1
     workloads = $reports
 }
-$result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ResultPath -Encoding utf8
+$result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ResultPath -Encoding utf8
 if ($benefitScenes -lt $MinBenefitScenes) {
     throw "MLT time-to-error benefit gate requires at least $MinBenefitScenes scenes; got $benefitScenes; report: $ResultPath"
 }

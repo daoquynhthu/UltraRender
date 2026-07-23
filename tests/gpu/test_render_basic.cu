@@ -4511,6 +4511,10 @@ static int test_mlt_runtime_replays_and_reports_chain_diagnostics() {
         CHECK(render_pass_gpu(ctx, 1) == config.mlt.mutations_per_chain);
         CHECK(ctx->last_mlt_diagnostics.bootstrap_paths == 8);
         CHECK(ctx->last_mlt_diagnostics.bootstrap_positive > 0);
+        CHECK(ctx->last_mlt_diagnostics.bootstrap_batches ==
+            static_cast<std::uint64_t>(
+                (config.mlt.bootstrap_samples + ctx->queueA.capacity - 1) /
+                ctx->queueA.capacity));
         CHECK(ctx->last_mlt_diagnostics.proposed_mutations == 24);
         CHECK(ctx->last_mlt_diagnostics.deposited_samples == 16);
         CHECK(ctx->last_mlt_diagnostics.large_steps +

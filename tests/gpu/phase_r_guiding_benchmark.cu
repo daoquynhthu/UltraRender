@@ -72,7 +72,8 @@ static void build_scene(const std::string& name,
         add_sphere(spheres, GpuVec3(1.25f, 0.15f, -0.9f), 0.9f, 7);
         add_light(spheres, materials, GpuVec3(-2.8f, 3.8f, 1.5f), 0.3f, 18.0f);
         add_light(spheres, materials, GpuVec3(2.8f, 3.4f, -1.5f), 0.4f, 9.0f);
-    } else if (name == "high_occlusion") {
+    } else if (name == "high_occlusion" ||
+               name == "high_occlusion_small_light") {
         materials.push_back(make_material(MaterialType::Lambertian, 0.82f, 0.9f));
         materials.push_back(make_material(MaterialType::Lambertian, 0.0f, 0.9f));
         add_sphere(spheres, GpuVec3(0.0f, 0.0f, 0.0f), 1.0f, 7);
@@ -80,7 +81,10 @@ static void build_scene(const std::string& name,
         add_sphere(spheres, GpuVec3(-1004.0f, 0.0f, 0.0f), 1000.0f, 8);
         add_sphere(spheres, GpuVec3(1004.0f, 0.0f, 0.0f), 1000.0f, 8);
         add_sphere(spheres, GpuVec3(0.0f, 1.25f, -1.7f), 1.45f, 9);
-        add_light(spheres, materials, GpuVec3(0.0f, 3.6f, -3.8f), 0.08f, 500.0f);
+        const bool small_light = name == "high_occlusion_small_light";
+        add_light(spheres, materials, GpuVec3(0.0f, 3.6f, -3.8f),
+                  small_light ? 0.04f : 0.08f,
+                  small_light ? 2000.0f : 500.0f);
     } else if (name == "complex_material") {
         materials.push_back(make_material(MaterialType::Metal, 0.9f, 0.08f));
         materials.push_back(make_material(MaterialType::Dielectric, 1.0f, 0.03f));
@@ -147,14 +151,16 @@ static void build_scene(const std::string& name,
 }
 
 int main(int argc, char** argv) {
-    if (argc != 7 && argc != 8) return 2;
+    if (argc != 7 && argc != 8 && argc != 9) return 2;
     const std::string scene_name = argv[1];
     const int mode = std::stoi(argv[2]);
     const int width = std::stoi(argv[3]);
     const int height = std::stoi(argv[4]);
     const int spp = std::stoi(argv[5]);
     const std::string output_path = argv[6];
-    const int sample_begin = argc == 8 ? std::stoi(argv[7]) : 0;
+    const int sample_begin = argc >= 8 ? std::stoi(argv[7]) : 0;
+    const std::uint64_t identity_offset =
+        argc == 9 ? std::stoull(argv[8]) : 0;
     if (width <= 0 || height <= 0 || spp <= 0 || sample_begin < 0) return 3;
 
     ure::RenderConfig config;
@@ -193,21 +199,26 @@ int main(int argc, char** argv) {
         config.mlt.enabled = true;
         config.mlt.chain_count = width * height;
         const bool rare_event_scene = scene_name == "small_emitter" ||
-            scene_name == "high_occlusion";
+            scene_name == "high_occlusion" ||
+            scene_name == "high_occlusion_small_light";
         const int bootstrap_floor = scene_name == "sds" ||
                 scene_name == "sds_small_light"
             ? 16384 : (rare_event_scene ? 65536 : 4096);
         config.mlt.bootstrap_samples = std::max(
             bootstrap_floor, width * height * 8);
+        config.queue_capacity = std::max(
+            config.queue_capacity,
+            std::min(config.mlt.bootstrap_samples, 16384));
         config.mlt.burn_in_mutations = 64;
         config.mlt.mutations_per_chain = 1;
         config.mlt.large_step_probability = 0.3f;
         config.mlt.small_step_sigma =
-            scene_name == "sds" || scene_name == "sds_small_light" ||
-                    scene_name == "mixed_specular"
-            ? 0.03f : 0.01f;
+            rare_event_scene ? 0.20f :
+            ((scene_name == "sds" || scene_name == "sds_small_light")
+                ? 0.03f : 0.01f);
         config.mlt.memory_budget_mb = 256;
         config.mlt.seed = 117;
+        config.mlt.chain_id_offset = identity_offset;
     } else if (mode == 5) {
         config.integrator.mode = ure::IntegratorMode::VCM;
         config.bidirectional.max_camera_vertices = 8;
@@ -506,6 +517,7 @@ int main(int argc, char** argv) {
                                      specular_emitter_sample_energy_squared_sum) << '\n'
                   << "mlt_bootstrap_paths=" << context->last_mlt_diagnostics.bootstrap_paths << '\n'
                   << "mlt_bootstrap_positive=" << context->last_mlt_diagnostics.bootstrap_positive << '\n'
+                  << "mlt_bootstrap_batches=" << context->last_mlt_diagnostics.bootstrap_batches << '\n'
                   << "mlt_proposed=" << context->last_mlt_diagnostics.proposed_mutations << '\n'
                   << "mlt_accepted=" << context->last_mlt_diagnostics.accepted_mutations << '\n'
                   << "mlt_large_steps=" << context->last_mlt_diagnostics.large_steps << '\n'

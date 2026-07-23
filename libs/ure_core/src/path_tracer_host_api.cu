@@ -3278,23 +3278,26 @@ static int render_mlt_pass(GpuContext* ctx, GpuScene scene,
                         static_cast<std::uint64_t>(bootstrap),
                     config.seed);
         UR_CUDA_CHECK(cudaGetLastError());
-        for (int offset = 0; offset < bootstrap; offset += chains) {
-            const int batch = std::min(chains, bootstrap - offset);
+        for (int offset = 0; offset < bootstrap;
+             offset += ctx->queueA.capacity) {
+            const int batch = std::min(
+                ctx->queueA.capacity, bootstrap - offset);
             const float* batch_samples = ctx->d_mlt_bootstrap_samples +
                 static_cast<size_t>(offset) * dimensions;
             evaluate_mlt_primary_batch(
                 ctx, scene, batch_samples, batch,
-                ctx->d_mlt_proposed_pixels,
-                ctx->d_mlt_proposed_contributions, offset);
+                ctx->d_mlt_bootstrap_pixels + offset,
+                ctx->d_mlt_bootstrap_contributions + offset, offset);
             collect_mlt_bootstrap_kernel<<<
                 launch_blocks_for_active_count(batch, threads), threads>>>(
-                    ctx->d_mlt_proposed_contributions,
-                    ctx->d_mlt_proposed_pixels,
+                    ctx->d_mlt_bootstrap_contributions + offset,
+                    ctx->d_mlt_bootstrap_pixels + offset,
                     ctx->d_mlt_bootstrap_contributions,
                     ctx->d_mlt_bootstrap_targets,
                     ctx->d_mlt_bootstrap_pixels, batch, offset,
                     ctx->d_mlt_telemetry);
             UR_CUDA_CHECK(cudaGetLastError());
+            ++ctx->last_mlt_diagnostics.bootstrap_batches;
         }
         std::vector<float> targets(static_cast<size_t>(bootstrap));
         UR_CUDA_CHECK(cudaMemcpy(

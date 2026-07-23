@@ -82,7 +82,7 @@ try {
         [ordered]@{ name = "restir_pt"; schema = "ure.phase_r.restir_pt_suite.v1"; script = "run_phase_r_restir_pt_suite.ps1"; report = "phase_r_restir_pt_suite.json"; args = @{ Width = $Width; Height = $Height } },
         [ordered]@{ name = "specular_manifold"; schema = "ure.phase_r.manifold_suite.v1"; script = "run_phase_r_manifold_suite.ps1"; report = "phase_r_manifold_suite.json"; args = if ($Profile -eq "LocalQuick") { @{ Scenes = @("glass_caustic") } } else { @{} } },
         [ordered]@{ name = "bidirectional"; schema = "ure.phase_r.bidirectional_suite.v1"; script = "run_phase_r_bidirectional_suite.ps1"; report = "phase_r_bidirectional_suite.json"; args = if ($Profile -eq "LocalQuick") { @{ Scenes = @("glass_caustic") } } else { @{ MinBdptBenefitScenes = 1; MinVcmBenefitScenes = 1 } } },
-        [ordered]@{ name = "mlt"; schema = "ure.phase_r.mlt_suite.v1"; script = "run_phase_r_mlt_suite.ps1"; report = "phase_r_mlt_suite.json"; args = if ($Profile -eq "LocalQuick") { @{ Scenes = @("sds", "sds_small_light"); MinBenefitScenes = 0 } } else { @{} } }
+        [ordered]@{ name = "mlt"; schema = "ure.phase_r.mlt_suite.v2"; script = "run_phase_r_mlt_suite.ps1"; report = "phase_r_mlt_suite.json"; args = if ($Profile -eq "LocalQuick") { @{ Scenes = @("sds", "sds_small_light"); MinBenefitScenes = 0 } } else { @{} } }
     )
     $evidence = @()
     foreach ($job in $jobs) {

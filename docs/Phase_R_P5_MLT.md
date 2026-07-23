@@ -61,26 +61,30 @@ counted, never silently deposited.
 
 Closure requires deterministic CPU/GPU replay tests, shard seed disjointness and
 reassembly tests, full CTest, and Release curves for low-probability caustic,
-small-emitter, and high-occlusion workloads. At least two workloads must improve
-time-to-error over the default wavefront baseline without introducing a
-statistically significant high-sample bias.
+small-emitter, and high-occlusion workloads. The R-P7 contract requires at least
+one reproducible positive workload and one explicit boundary for each advanced
+mode, without a statistically significant high-sample bias.
 
 Time-to-error uses a fixed normalized MSE target, `MSE / mean(reference^2)`, so
-improving the candidate integrator cannot silently tighten its own gate. The
-maintained 8x8 Release suite uses 65,536-SPP independent wavefront references.
-Both workloads cross the 0.05 target at 256 MLT SPP while wavefront requires
-1024 SPP:
+improving the candidate integrator cannot silently tighten its own gate. Schema
+`ure.phase_r.mlt_suite.v2` uses four disjoint wavefront reference shards, four
+independent wavefront sample ranges, and four independent MLT chain identities.
+It reports replicate mean/variance, median GPU time, and a full-image replicate
+bias interval that also includes reference-shard uncertainty.
 
-| Workload | MLT 256 SPP | Wavefront first pass | MLT 1024 bias bound |
-|---|---:|---:|---:|
-| SDS | 0.04837 NMSE / 0.408 s | 0.01029 / 0.758 s | 4.58% |
-| SDS small light | 0.01325 / 0.452 s | 0.00257 / 0.813 s | 1.26% |
-
-The small-light case uses a 0.075-radius emitter with area-compensated radiance,
-preserving approximately the same emitted power while reducing path support.
-Glass caustic, the original 0.02-radius small-emitter case, high occlusion, and
-mixed specular remain documented non-benefit boundaries. The machine-readable
-report is `output/benchmarks/phase_r_mlt_suite.json`.
+This audit invalidated the earlier 8x8 two-workload claim: its wavefront curve
+shared a sample prefix with the reference image, correlating the error estimate.
+The claim is removed rather than preserved as historical evidence. Under the
+hardened 16x16 gate, `sds_small_light` reaches 5% NMSE at 64 MLT SPP in
+approximately 0.157 seconds, while wavefront first reaches it at 256 SPP in
+approximately 0.294 seconds; its final 95% relative-bias bound is approximately
+1.7%. SDS, the original small-emitter case, glass caustic, and high occlusion
+are retained as non-benefit statistical boundaries. The more extreme
+area-compensated high-occlusion small-light
+variant has a deterministic path-distribution contract, but is not included in
+the default statistical matrix because its current-budget high-sample
+confidence bound is unstable. The machine-readable report is
+`output/benchmarks/phase_r_mlt_suite.json`.
 
 The BDPT audit corrected two independent defects: spectral accumulators now
 retain the camera path wavelength grid, and reverse strategy reconstruction uses
