@@ -1,7 +1,9 @@
-#include <cuda_runtime.h>
+#include <algorithm>
 #include <cmath>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include <cuda_runtime.h>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -16,6 +18,7 @@
 #include "ure/detail/cuda_texture_view.cuh"
 #include "ure/log.hpp"
 #include "ure/render_config.hpp"
+#include "ure/runtime/execution_graph.hpp"
 #include "ure/specular_manifold.hpp"
 
 #include "../../libs/ure_core/src/path_tracer_kernel.cu"
@@ -2466,6 +2469,15 @@ static int test_restir_di_allocates_and_resets_temporal_reservoirs() {
     CHECK(valid == 0);
     free_gpu_renderer(ctx);
 
+    ure::RenderConfig disabled = config;
+    disabled.restir_di.enabled = false;
+    disabled.restir_di.unbiased = true;
+    GpuContext* disabled_ctx =
+        init_gpu_renderer(4, 4, {}, {}, {}, {}, {}, disabled);
+    CHECK(disabled_ctx->d_restir_di_reservoirs[0] == nullptr);
+    CHECK(render_pass_gpu(disabled_ctx, 1) == 1);
+    free_gpu_renderer(disabled_ctx);
+
     bool threw_invalid = false;
     try {
         ure::RenderConfig bad = config;
@@ -2698,9 +2710,19 @@ static int test_restir_pt_owns_bounded_ping_pong_suffix_history() {
     CHECK(ctx->restir_pt_scene_epoch != previous_epoch);
 
     CHECK(render_pass_gpu(ctx, 1) == 1);
+    CHECK(ctx->last_execution_graph_schema ==
+          ure::runtime::kExecutionGraphSchemaVersion);
+    CHECK(std::any_of(
+        ctx->last_execution_graph_fingerprint.begin(),
+        ctx->last_execution_graph_fingerprint.end(),
+        [](std::uint64_t value) { return value != 0; }));
+    const auto first_execution_fingerprint =
+        ctx->last_execution_graph_fingerprint;
     CHECK(ctx->last_restir_pt_telemetry.accepted_reconnections > 0);
     CHECK(ctx->restir_pt_input_index == 1);
     CHECK(render_pass_gpu(ctx, 1) == 2);
+    CHECK(ctx->last_execution_graph_fingerprint !=
+          first_execution_fingerprint);
     CHECK(ctx->restir_pt_input_index == 0);
     GpuRestirPTReservoir reused = {};
     CHECK_CUDA(cudaMemcpy(

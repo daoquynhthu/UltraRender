@@ -2,8 +2,8 @@
 
 ## Status
 
-T.0 through T.4 are complete and the authoritative cursor is T.5. This document
-is the migration ledger for T.5 through T.11. CUDA remains the only production
+T.0 through T.5 are complete and the authoritative cursor is T.6. This document
+is the migration ledger for T.6 through T.11. CUDA remains the only production
 backend at this cursor; Vulkan and D3D12 identities are reserved values whose
 explicit selection fails loudly.
 
@@ -41,16 +41,16 @@ identity belong above it.
 | T0-DEV | `gpu_hardware.hpp` includes `cuda_runtime.h`; `gpu_hardware.cu` exposes CUDA attributes as the device capability model. CLI `list-devices` calls CUDA directly. | Adapter/capability registry | T.1 |
 | T0-API | `render.hpp` mutation methods now consume SceneIR and CUDA scene compilation is backend-private. The legacy factory name and low-level CUDA driver headers remain for T.6 migration. | Public runtime/session API | T.1, T.3, T.4 |
 | T0-ABI | The C ABI is handle-opaque and contains no CUDA SDK type, but creation still routes directly to the GPU/CUDA factory. pyure inherits that single-backend behavior and has no backend identity metadata. | C ABI and language bindings | T.1, T.3 |
-| T0-CTX | Public `GpuContext` and `MultiGpuContext` are opaque. CUDA context fields remain backend-private; texture and retained-resource native ownership is isolated in the T.4 RAII registry, while queue/executor state remains for T.5/T.6. | Runtime context and resource lifetime | T.3, T.4, T.5, T.6 |
+| T0-CTX | Public `GpuContext` and `MultiGpuContext` are opaque. CUDA context fields remain backend-private; texture and retained-resource native ownership is isolated in the T.4 RAII registry, while queue/executor lowering remains for T.6. | Runtime context and resource lifetime | T.3-T.5 complete; T.6 lowering |
 | T0-RES | Stable ResourceId, typed buffer/image/spectral layouts, residency, sparse tiles and upload plans now own public semantics. CUDA arrays, texture objects and spectral allocations exist only in backend-private views/registry; remaining raw device views are CUDA lowering state. | Resource/descriptor model | T.4 |
-| T0-EXE | `path_tracer_host_api.cu` directly allocates every queue/resource and launches the complete pass sequence. Active-count reads, synchronization, copies, barriers, and estimator epoch order are implicit CUDA host control flow. | Dispatch graph and CUDA executor | T.5, T.6 |
-| T0-KRN | Spectral, Mueller, BSDF/phase, traversal, guiding, ReSTIR, BDPT/VCM, manifold, MLT, denoise, and wave kernels use CUDA qualifiers/intrinsics and CUDA compilation units. Shared physical semantics are not yet expressed as a portable kernel contract. | Kernel toolchain and semantic library | T.2, T.5, T.6-T.9 |
+| T0-EXE | Stable execution regions now expose queue counts, indirect work, barriers, transfers, boundaries and estimator order. `path_tracer_host_api.cu` generates and fingerprints that graph but still performs direct CUDA allocation, count readback and launch lowering. | Dispatch graph and CUDA executor | T.5 complete; T.6 lowering |
+| T0-KRN | Estimator/PDF versions and critical stage order are backend-neutral. Spectral, Mueller, BSDF/phase, traversal, guiding, ReSTIR, BDPT/VCM, manifold, MLT, denoise, and wave kernel bodies still use CUDA qualifiers/intrinsics and CUDA compilation units. | Kernel toolchain and semantic library | T.2/T.5 complete; T.6-T.9 lowering |
 | T0-MGPU | `MultiGpuContext` allocation state is backend-private; scheduling still uses device ordinals, `cudaSetDevice`, peer copies and global synchronization. Capability negotiation remains CUDA-only. | Multi-adapter scheduler | T.3, T.4, T.10 |
-| T0-WAVE | The Fraunhofer CUDA reference directly allocates, launches, synchronizes, and copies through the runtime API. Host oracles are portable, but production wave execution has no backend-neutral operator contract. | Wave operator/runtime integration | T.2, T.5, T.6-T.9 |
-| T0-ACC | Production traversal is embedded in CUDA kernels and consumes `GpuScene`. `gpu_accelerator.hpp::OptixAccelerator` is a nonfunctional host stub and must not be treated as a provider. There is no BLAS/TLAS provider contract. | Acceleration-provider API | T.3, T.5, then Phase V |
+| T0-WAVE | Fraunhofer upload, barrier, dispatch and readback generate a stable backend-neutral wave graph. The current CUDA reference still directly allocates, launches and synchronizes until T.6 lowering. | Wave operator/runtime integration | T.2/T.5 complete; T.6-T.9 lowering |
+| T0-ACC | Production traversal is embedded in CUDA kernels and consumes `GpuScene`. `gpu_accelerator.hpp::OptixAccelerator` is a nonfunctional host stub and must not be treated as a provider. T.5 freezes traversal stage order but does not claim a BLAS/TLAS provider contract. | Acceleration-provider API | T.3/T.5 boundary complete; provider work remains Phase V |
 | T0-DIAG | `ure_diag/check_cuda.hpp` exposes `cudaError_t` in a public project header and can reset the device. Nsight/VRAM evidence is backend-specific and lacks a neutral diagnostic event model. | Runtime error and diagnostics | T.3, T.6 |
 | T0-SCN | SceneIR and native serialization contain no backend handle. `CompiledGpuScene` and CUDA lowering types are private implementation details; complete lowering through the runtime remains T.6. | Scene compiler/lowering | T.3, T.4 |
-| T0-TEST | SDK-free host gates cover runtime and resource contracts, including million-domain spectral budgets; GPU parity remains CUDA-only until T.11 cross-backend fixtures. | Validation architecture | T.1-T.4, T.11 |
+| T0-TEST | SDK-free host gates cover runtime, resources and execution graphs, including million-domain budgets, order/cycle/overflow rejection and stable fingerprints; GPU parity remains CUDA-only until T.11. | Validation architecture | T.1-T.5 complete; T.11 parity |
 
 ## Migration order
 
@@ -128,7 +128,7 @@ identity without importing the CUDA runtime in the CLI.
 T.1 verification covers JSON and CLI precedence, CUDA adapter identity and
 limits, explicit selection and rejection boundaries, C ABI-backed pyure
 enumeration/session creation, and unsupported backend failure. The
-authoritative next cursor is T.3.
+T.1 closure advanced the cursor to T.2.
 
 ## T.2 portable kernel toolchain gate
 
@@ -141,8 +141,9 @@ evidence, CUDA occupancy, and actual CUDA numerical execution.
 Restricted shared C++ was rejected because it lacks one validated
 SPIR-V/DXIL frontend and reflection/debug contract. A custom URE KernelIR shader
 compiler was rejected because owning three optimizer/code-generator/debugger
-stacks would be avoidable compiler debt. T.5 may still define a small
-dispatch/execution IR; it must not duplicate shader compiler responsibilities.
+stacks would be avoidable compiler debt. T.5 subsequently defined only the
+dispatch/execution contract and does not duplicate shader compiler
+responsibilities.
 
 The full decision, measurements, dependency boundary, and reproduction command
 are recorded in `docs/Phase_T2_Kernel_Toolchain_Decision.md`. T.2 does not adopt
@@ -203,3 +204,60 @@ C++-only CMake project and rejects any configured CUDA compiler;
 headers there and covers mip layout, sparse tiles, dependency cycles, overlap,
 overflow and budget rejection. CUDA texture tests retain RGB hardware filtering
 and source-sample spectral parity.
+
+## T.5 dispatch and queue execution IR
+
+`ure_runtime/execution_graph.hpp` owns the SDK-free semantic graph above the
+backend command DAG. Stable regions represent pass, sample, candidate, bounded
+depth, bootstrap, mutation and manifold-root iteration. Queue contracts carry
+payload, active-count and indirect-argument resource identities. A
+queue-terminated region names both the producer of its initial active count and
+the producer carried from the previous iteration; compact ray/shadow work uses
+explicit indirect arguments, while the sparse manifold-root scan remains a
+fixed dispatch guarded by its pending-count region.
+
+Commands distinguish 3D direct work, region-chunked work, queue-driven indirect
+work, queue reset/swap, ranged or whole-resource clear, resource barrier,
+ranged or whole-resource asynchronous transfer, and nested pass/estimator epoch
+boundaries. Chunked work keeps MLT
+bootstrap batching explicit without repeating whole-batch dispatches or
+expanding a node per bootstrap sample. A typed host stage freezes bootstrap
+target normalization and CDF construction between readback and upload. The
+path graph records separate guiding-light and guiding-spatial decay, wavefront
+intersection/shading/shadow order, first-depth
+ReSTIR DI/PT work, candidate streaming/finalization, BDPT/VCM/manifold
+techniques, and PSSMLT bootstrap/burn-in/production mutation regions. Typed
+state transitions carry ReSTIR reservoir ping-pong indices, sample-count
+advance, VCM radius iteration and MLT mutation sequence, including modular and
+overflow rules. The wave
+graph records upload, input barrier, propagation, output barrier and readback.
+Loop regions remain compact templates; samples, candidates and depth are not
+expanded into unbounded node arrays.
+
+The estimator contract carries versioned spectral, scattering-solid-angle,
+medium-phase-solid-angle, light-selection, ReSTIR-target,
+technique-support-partition and MLT primary-sampling semantics. Every critical
+stage appears in one
+dependency-closed ordered sequence. Schema-v1 validation requires canonical
+IDs and a dependency-closed command order, validates region parents and
+active-count producers, rejects invalid indirect layouts and dispatch-count
+overflow, checks resource/barrier/transfer contracts, and requires exactly
+nested pass/epoch boundaries. A deterministic four-lane fingerprint covers the
+complete canonical graph and estimator contract.
+
+The CUDA path entry generates the graph from the live render configuration and
+epochs before launching work, then stores its schema and fingerprint in the
+backend-private context. The Fraunhofer CUDA entry generates and fingerprints
+the same wave contract before allocation and launch. This integration detects
+semantic drift but does not claim T.6 lowering: CUDA allocations, streams,
+kernel launch syntax, active-count readback and multi-GPU orchestration still
+execute through the existing private backend code.
+
+`run_phase_t5_execution_gate.ps1` configures a C++-only project, rejects any
+configured CUDA compiler, and builds the graph contract with warnings as
+errors. Contract tests cover deterministic generation, exact advanced
+estimator order, cold/warm MLT state, wave transfers/barriers, active-count
+loops, indirect arguments, epoch identity, cycle/order drift, invalid PDF
+versions and dispatch overflow. CUDA render and wave tests verify entry
+integration; the Release inventory contains 40 registered tests at this
+closure snapshot. The authoritative cursor is T.6.

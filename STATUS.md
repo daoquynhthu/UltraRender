@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `T.5`. Phase Q and Phase R are complete; Phase T has completed T.0-T.4, including the Slang toolchain gate, SDK-free runtime API, typed resource/upload planning, and private CUDA native-resource ownership. Dispatch/queue IR, complete production CUDA runtime integration, and additional execution backends must not yet be treated as implemented.
+The authoritative construction cursor is `T.6`. Phase Q and Phase R are complete; Phase T has completed T.0-T.5, including the Slang toolchain gate, SDK-free runtime/resource contracts, private CUDA native-resource ownership, and the stable dispatch/queue execution graph. Complete production CUDA runtime lowering and additional execution backends must not yet be treated as implemented.
 
 ## Supported execution baseline
 
@@ -19,7 +19,7 @@ The authoritative construction cursor is `T.5`. Phase Q and Phase R are complete
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
 | Build tree | `build_modular_x64` using Ninja |
 | Primary executable | `build_modular_x64/apps/ure_cli/ure_cli.exe` |
-| Registered tests | 39 CTest entries at this snapshot |
+| Registered tests | 40 CTest entries at this snapshot |
 
 Linux, macOS, non-NVIDIA execution, and older CUDA architectures do not currently have equivalent repository-level verification evidence.
 
@@ -28,7 +28,7 @@ Linux, macOS, non-NVIDIA execution, and older CUDA architectures do not currentl
 | Module | Responsibility | Status |
 |---|---|---|
 | `ure_types` | Backend-neutral types, SceneIR, native contracts | Active |
-| `ure_runtime` | SDK-free device/resource/synchronization/dispatch contracts | Active; backend implementations not yet migrated |
+| `ure_runtime` | SDK-free device/resource/synchronization/dispatch/execution contracts | Active; CUDA lowering is the T.6 cursor |
 | `ure_core` | CUDA renderer, GPU scene compiler, sessions and C ABI | Active |
 | `ure_sceneio` | Native scene I/O, glTF/MaterialX adapters, image/SPD/Mie I/O | Active |
 | `ure_config` | JSON configuration and CLI parsing | Active |
@@ -46,6 +46,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | CUDA wavefront path tracing | Implemented and tested | Primary runtime path |
 | Backend identity/capability selection | Implemented and tested | CUDA is the Auto/default production backend; Vulkan and D3D12 requests fail loudly |
 | Portable kernel toolchain | Slang selected and feasibility-tested | Six prototypes compile deterministically to PTX/SPIR-V/DXIL; production kernels remain CUDA-owned until T.6 |
+| Backend-neutral execution graph | Implemented and tested | Stable path/guiding/ReSTIR/advanced-integrator/wave graphs freeze estimator and PDF order; CUDA path/wave entry integration exists, full executor lowering remains T.6 |
 | Runtime spectral domain / wavelength packets | Implemented and tested | Packet cap 32; sampled lane mode supported |
 | Stokes/Mueller polarization | Implemented for covered boundary/transport paths | Not coherent field transport |
 | Lambertian/metal/dielectric/cloth | Implemented for tested paths | Material model coverage is not exhaustive |

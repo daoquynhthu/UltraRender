@@ -1,9 +1,10 @@
-#include "ure/wave_optics.hpp"
+#include <stdexcept>
+#include <string>
 
 #include <cuda_runtime.h>
 
-#include <stdexcept>
-#include <string>
+#include "ure/runtime/execution_graph.hpp"
+#include "ure/wave_optics.hpp"
 
 namespace ure::wave {
 
@@ -63,6 +64,16 @@ FraunhoferFieldGrid propagate_fraunhofer_gpu(const WaveFieldGrid& field) {
 
     const std::size_t count = static_cast<std::size_t>(field.width) * static_cast<std::size_t>(field.height);
     const std::size_t bytes = count * sizeof(ComplexAmplitude);
+    const auto execution_graph =
+        runtime::make_wave_execution_graph({
+            count,
+            bytes,
+            bytes,
+            128,
+            0});
+    const auto execution_identity =
+        runtime::execution_fingerprint(execution_graph);
+    static_cast<void>(execution_identity);
     ComplexAmplitude* d_input = nullptr;
     ComplexAmplitude* d_output = nullptr;
 

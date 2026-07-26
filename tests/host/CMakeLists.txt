@@ -27,6 +27,10 @@ target_include_directories(test_resource_plan PRIVATE
 target_link_libraries(test_resource_plan PRIVATE ure_runtime)
 add_test(NAME test_resource_plan COMMAND test_resource_plan)
 
+add_executable(test_execution_graph test_execution_graph.cpp)
+target_link_libraries(test_execution_graph PRIVATE ure_runtime)
+add_test(NAME test_execution_graph COMMAND test_execution_graph)
+
 add_executable(test_spectral_oracle test_spectral_oracle.cpp)
 target_link_libraries(test_spectral_oracle PRIVATE ure_types)
 add_test(NAME test_spectral_oracle COMMAND test_spectral_oracle)

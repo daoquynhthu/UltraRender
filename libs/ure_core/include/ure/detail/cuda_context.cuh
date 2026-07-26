@@ -1,7 +1,10 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
 #include <memory>
 #include <vector>
+
 #include "ure/gpu_structs.hpp"
 #include "ure/host_texture.hpp"
 #include "ure/integrator/restir_pt.cuh"
@@ -224,6 +227,8 @@ struct GpuContext {
     float medium_max_distance = 0.0f;
 
     ure::RenderConfig render_config;
+    std::array<std::uint64_t, 4> last_execution_graph_fingerprint = {};
+    std::uint32_t last_execution_graph_schema = 0;
     int last_integrator_initial_ray_count = 0;
     int last_integrator_final_ray_count = 0;
     int last_integrator_peak_ray_count = 0;

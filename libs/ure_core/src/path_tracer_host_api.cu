@@ -27,6 +27,7 @@
 #include "ure/gpu_spectrum_utils.cuh"
 #include "ure/gpu_material_helpers.cuh"
 #include "ure/mie_phase_validation.hpp"
+#include "ure/runtime/execution_graph.hpp"
 #include "ure/runtime/resource_plan.hpp"
 #include "ure/specular_manifold.hpp"
 #include "ure/path_tracer_sampling.cuh"
@@ -3526,6 +3527,89 @@ static int render_mlt_pass(GpuContext* ctx, GpuScene scene,
 }
 
 int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
+    if (samples_per_pass <= 0) {
+        throw std::runtime_error(
+            "samples_per_pass must be positive");
+    }
+    std::uint64_t sample_increment =
+        static_cast<std::uint64_t>(samples_per_pass);
+    if (ctx->render_config.integrator.mode ==
+        ure::IntegratorMode::MLT) {
+        sample_increment *= static_cast<std::uint64_t>(
+            std::max(
+                ctx->render_config.mlt.mutations_per_chain,
+                0));
+    }
+    if (sample_increment >
+            static_cast<std::uint64_t>(
+                std::numeric_limits<int>::max()) ||
+        ctx->current_spp >
+            std::numeric_limits<int>::max() -
+                static_cast<int>(sample_increment)) {
+        throw std::runtime_error(
+            "render sample count overflows CUDA context storage");
+    }
+    const bool path_guiding_decay_due =
+        ctx->d_path_guiding_light_weights &&
+        ctx->light_count > 0 &&
+        ctx->path_guiding_passes_since_decay + 1 >=
+            ctx->render_config.path_guiding.decay_interval;
+    std::uint32_t guiding_epoch = ctx->path_guiding_epoch;
+    if (path_guiding_decay_due) {
+        ++guiding_epoch;
+        if (guiding_epoch == 0) guiding_epoch = 1;
+    }
+    ure::runtime::PathExecutionConfig execution_config;
+    execution_config.render = ctx->render_config;
+    execution_config.width =
+        static_cast<std::uint32_t>(ctx->width);
+    execution_config.height =
+        static_cast<std::uint32_t>(ctx->height);
+    execution_config.primary_ray_count =
+        static_cast<std::uint64_t>(
+            checked_primary_ray_count(ctx->width, ctx->height));
+    execution_config.queue_capacity =
+        static_cast<std::uint64_t>(
+            std::max(ctx->queueA.capacity, 0));
+    if (path_guiding_decay_due) {
+        execution_config.path_guiding_light_count =
+            static_cast<std::uint64_t>(ctx->light_count);
+        execution_config.path_guiding_spatial_entry_count =
+            execution_config.path_guiding_light_count *
+            static_cast<std::uint64_t>(
+                ctx->path_guiding_spatial_cell_count) *
+            static_cast<std::uint64_t>(
+                ctx->path_guiding_directional_bin_count);
+    }
+    execution_config.samples_per_pass =
+        static_cast<std::uint32_t>(samples_per_pass);
+    execution_config.path_guiding_decay_due =
+        path_guiding_decay_due;
+    execution_config.mlt_primary_dimension_count =
+        static_cast<std::uint64_t>(
+            std::max(ctx->mlt_primary_dimension_count, 0));
+    execution_config.mlt_initialized = ctx->mlt_initialized;
+    execution_config.pass_epoch =
+        static_cast<std::uint64_t>(ctx->current_spp);
+    execution_config.guiding_epoch = guiding_epoch;
+    execution_config.restir_di_epoch = ctx->restir_di_scene_epoch;
+    execution_config.restir_pt_epoch = ctx->restir_pt_scene_epoch;
+    execution_config.restir_di_input_index =
+        static_cast<std::uint32_t>(ctx->restir_di_input_index);
+    execution_config.restir_pt_input_index =
+        static_cast<std::uint32_t>(ctx->restir_pt_input_index);
+    execution_config.bidirectional_epoch =
+        ctx->bidirectional_scene_epoch;
+    execution_config.vcm_radius_iteration =
+        ctx->vcm_radius_iteration;
+    execution_config.mlt_epoch = ctx->mlt_mutation_sequence;
+    const auto execution_graph =
+        ure::runtime::make_path_execution_graph(execution_config);
+    ctx->last_execution_graph_fingerprint =
+        ure::runtime::execution_fingerprint(execution_graph);
+    ctx->last_execution_graph_schema =
+        execution_graph.schema_version;
+
     if (ctx->d_path_guiding_light_weights && ctx->light_count > 0) {
         ++ctx->path_guiding_passes_since_decay;
         if (ctx->path_guiding_passes_since_decay >= ctx->render_config.path_guiding.decay_interval) {
@@ -3639,7 +3723,9 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.restir_di_enabled = restir_di_enabled(ctx->render_config) ? 1 : 0;
     scene.restir_di_temporal_reuse = ctx->render_config.restir_di.temporal_reuse ? 1 : 0;
     scene.restir_di_spatial_reuse = ctx->render_config.restir_di.spatial_reuse ? 1 : 0;
-    scene.restir_di_unbiased = ctx->render_config.restir_di.unbiased ? 1 : 0;
+    scene.restir_di_unbiased =
+        restir_di_enabled(ctx->render_config) &&
+        ctx->render_config.restir_di.unbiased ? 1 : 0;
     scene.restir_di_max_history = std::max(1, ctx->render_config.restir_di.max_history);
     scene.restir_di_min_target = std::max(ctx->render_config.restir_di.min_target, 0.0f);
     const int restir_input_index = ctx->restir_di_input_index;
@@ -3860,7 +3946,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
                 static_cast<size_t>(primary_ray_count) *
                     sizeof(GpuRestirPTReservoir)));
         }
-        if (ctx->render_config.restir_di.unbiased) {
+        if (scene.restir_di_unbiased) {
             const int input_index = ctx->restir_di_input_index;
             const int output_index = 1 - input_index;
             scene.restir_di_input_reservoirs = ctx->d_restir_di_reservoirs[input_index];
@@ -3994,7 +4080,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             UR_CUDA_CHECK(cudaGetLastError());
             ctx->restir_pt_input_index = restir_pt_output_index;
         }
-        if (ctx->render_config.restir_di.unbiased) {
+        if (scene.restir_di_unbiased) {
             ctx->restir_di_input_index = 1 - ctx->restir_di_input_index;
         }
     }
