@@ -7,11 +7,6 @@
 #include <memory>
 #include <vector>
 
-namespace ure::gpu {
-struct GpuInstanceTransform;
-struct GpuMaterialData;
-}
-
 namespace ure {
 
 enum class IntegratorEstimatorPolicy : std::uint32_t {
@@ -74,11 +69,11 @@ public:
 
     // Hot-update instance transforms without reloading the entire scene.
     // Must be called after load_scene_ir().
-    virtual void update_transforms(const gpu::GpuInstanceTransform* transforms, int count) = 0;
+    virtual void update_transforms(const scene_ir::SceneIR& scene_ir) = 0;
 
     // Hot-update the scene-owned material segment without reallocating geometry.
     // The engine owns default/internal material offsets; callers pass only scene materials.
-    virtual void update_materials(const gpu::GpuMaterialData* materials, int count) = 0;
+    virtual void update_materials(const scene_ir::SceneIR& scene_ir) = 0;
 
     // Blocking render, implemented using render_pass loop.
     virtual void render(const RenderSettings& settings) = 0;

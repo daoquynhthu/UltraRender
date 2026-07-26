@@ -7,7 +7,7 @@
 #include <sstream>
 
 #include <ure/native_procedural_graph.hpp>
-#include <ure/gpu_scene_compiler.hpp>
+#include <ure/detail/cuda_scene_compiler.hpp>
 
 namespace {
 

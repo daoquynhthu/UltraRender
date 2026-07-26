@@ -2,8 +2,8 @@
 
 ## Status
 
-T.0 through T.3 are complete and the authoritative cursor is T.4. This document
-is the migration ledger for T.4 through T.11. CUDA remains the only production
+T.0 through T.4 are complete and the authoritative cursor is T.5. This document
+is the migration ledger for T.5 through T.11. CUDA remains the only production
 backend at this cursor; Vulkan and D3D12 identities are reserved values whose
 explicit selection fails loudly.
 
@@ -39,18 +39,18 @@ identity belong above it.
 |---|---|---|---|
 | T0-BLD | Root CMake declares `LANGUAGES CXX CUDA`, globally includes the CUDA toolkit, requires `CUDAToolkit`, and applies CUDA architecture/compiler policy. GPU tests directly link `CUDA::cudart`. | Build/backend registration | T.1, T.2, T.6 |
 | T0-DEV | `gpu_hardware.hpp` includes `cuda_runtime.h`; `gpu_hardware.cu` exposes CUDA attributes as the device capability model. CLI `list-devices` calls CUDA directly. | Adapter/capability registry | T.1 |
-| T0-API | `render.hpp` exposes `gpu::GpuInstanceTransform` and `gpu::GpuMaterialData`; its factory is named `create_gpu_renderer`. `gpu_driver.hpp`, `gpu_multi_driver.hpp`, and `gpu_scene_compiler.hpp` expose CUDA-era context and scene vocabulary. | Public runtime/session API | T.1, T.3, T.4 |
+| T0-API | `render.hpp` mutation methods now consume SceneIR and CUDA scene compilation is backend-private. The legacy factory name and low-level CUDA driver headers remain for T.6 migration. | Public runtime/session API | T.1, T.3, T.4 |
 | T0-ABI | The C ABI is handle-opaque and contains no CUDA SDK type, but creation still routes directly to the GPU/CUDA factory. pyure inherits that single-backend behavior and has no backend identity metadata. | C ABI and language bindings | T.1, T.3 |
-| T0-CTX | `gpu_context.hpp` is a monolithic CUDA allocation owner containing device pointers, CUDA arrays, texture objects, estimator state, queues, AOVs, and diagnostics. | Runtime context and resource lifetime | T.3, T.4, T.5, T.6 |
-| T0-RES | `gpu_structs.hpp::GpuTexture` stores `cudaTextureObject_t`; texture upload and retained cleanup own CUDA arrays/objects directly. Queue and scene structs use raw device pointers as both semantic views and allocation handles. | Resource/descriptor model | T.4 |
+| T0-CTX | Public `GpuContext` and `MultiGpuContext` are opaque. CUDA context fields remain backend-private; texture and retained-resource native ownership is isolated in the T.4 RAII registry, while queue/executor state remains for T.5/T.6. | Runtime context and resource lifetime | T.3, T.4, T.5, T.6 |
+| T0-RES | Stable ResourceId, typed buffer/image/spectral layouts, residency, sparse tiles and upload plans now own public semantics. CUDA arrays, texture objects and spectral allocations exist only in backend-private views/registry; remaining raw device views are CUDA lowering state. | Resource/descriptor model | T.4 |
 | T0-EXE | `path_tracer_host_api.cu` directly allocates every queue/resource and launches the complete pass sequence. Active-count reads, synchronization, copies, barriers, and estimator epoch order are implicit CUDA host control flow. | Dispatch graph and CUDA executor | T.5, T.6 |
 | T0-KRN | Spectral, Mueller, BSDF/phase, traversal, guiding, ReSTIR, BDPT/VCM, manifold, MLT, denoise, and wave kernels use CUDA qualifiers/intrinsics and CUDA compilation units. Shared physical semantics are not yet expressed as a portable kernel contract. | Kernel toolchain and semantic library | T.2, T.5, T.6-T.9 |
-| T0-MGPU | `MultiGpuContext` publicly owns raw device pointers and `GpuContext**`; scheduling uses device ordinals, `cudaSetDevice`, peer copies, and global synchronization. Capability negotiation is CUDA-only. | Multi-adapter scheduler | T.3, T.4, T.10 |
+| T0-MGPU | `MultiGpuContext` allocation state is backend-private; scheduling still uses device ordinals, `cudaSetDevice`, peer copies and global synchronization. Capability negotiation remains CUDA-only. | Multi-adapter scheduler | T.3, T.4, T.10 |
 | T0-WAVE | The Fraunhofer CUDA reference directly allocates, launches, synchronizes, and copies through the runtime API. Host oracles are portable, but production wave execution has no backend-neutral operator contract. | Wave operator/runtime integration | T.2, T.5, T.6-T.9 |
 | T0-ACC | Production traversal is embedded in CUDA kernels and consumes `GpuScene`. `gpu_accelerator.hpp::OptixAccelerator` is a nonfunctional host stub and must not be treated as a provider. There is no BLAS/TLAS provider contract. | Acceleration-provider API | T.3, T.5, then Phase V |
 | T0-DIAG | `ure_diag/check_cuda.hpp` exposes `cudaError_t` in a public project header and can reset the device. Nsight/VRAM evidence is backend-specific and lacks a neutral diagnostic event model. | Runtime error and diagnostics | T.3, T.6 |
-| T0-SCN | SceneIR and native serialization contain no CUDA handle, but `CompiledGpuScene` lowers directly into `Gpu*` storage and `SpectralPacket`, binding scene compilation to the CUDA layout before runtime selection. | Scene compiler/lowering | T.3, T.4 |
-| T0-TEST | Host tests are mostly portable; GPU tests are CUDA translation units and the registered gate assumes a CUDA compiler/device. No mock runtime contract or cross-backend parity fixture exists. | Validation architecture | T.1-T.4, T.11 |
+| T0-SCN | SceneIR and native serialization contain no backend handle. `CompiledGpuScene` and CUDA lowering types are private implementation details; complete lowering through the runtime remains T.6. | Scene compiler/lowering | T.3, T.4 |
+| T0-TEST | SDK-free host gates cover runtime and resource contracts, including million-domain spectral budgets; GPU parity remains CUDA-only until T.11 cross-backend fixtures. | Validation architecture | T.1-T.4, T.11 |
 
 ## Migration order
 
@@ -81,9 +81,8 @@ traversal contracts remain CUDA-owned.
 - no CUDA SDK include or native CUDA handle/type in `ure_types`,
   `ure_sceneio`, `ure_config`, `render_config.hpp`, `scene_ir.hpp`,
   `ure_c_api.h`, or pyure;
-- no new public project header may include `cuda_runtime.h` beyond the frozen
-  T.0 allowlist (`gpu_context.hpp`, `gpu_hardware.hpp`, `gpu_structs.hpp`, and
-  `check_cuda.hpp`);
+- no new public project header may include `cuda_runtime.h` beyond the reduced
+  allowlist (`gpu_hardware.hpp`, `gpu_structs.hpp`, and `check_cuda.hpp`);
 - the C ABI remains free of `GpuContext`, `GpuScene`, `GpuMaterialData`, and
   `GpuTexture`;
 - this ledger retains every coupling ID, owner, and migration batch;
@@ -170,3 +169,37 @@ workgroup overflow, allocation budgets, use-after-destroy, module/pipeline
 ownership, copy/binding bounds, event ordering, timeline waits/signals, graph
 cycles, and fail-loud device loss. T.3 intentionally does not wrap
 `GpuContext`; CUDA native objects remain private until T.4/T.6 migration.
+
+## T.4 resource and descriptor migration
+
+`ResourceId` is a semantic 128-bit identity and is distinct from runtime object
+handles. `ResourceLayout` is typed as buffer, image, or spectral-table layout.
+Image descriptors carry every mip/layer offset and pitch; spectral descriptors
+separate source sample count from logical domain bins. Residency declares
+minimum and maximum committed bytes, priority and budget group, with explicit
+resident, streamed, and sparse-tiled modes.
+
+Upload plans are deterministic resource-and-offset ordered DAG inputs. Before
+backend lowering they reject empty or duplicate IDs, missing or cyclic
+dependencies, invalid subresource pitches, overlapping ranges, sparse tile
+mismatches, integer overflow, incomplete initial residency and memory-budget
+excess. A one-million-bin spectral domain with four texels and eight source
+samples occupies 128 bytes; domain bins and packet lanes never multiply its
+resident footprint.
+
+The CUDA backend lowers validated texture plans through a ResourceId-keyed RAII
+registry. CUDA arrays, texture objects and spectral allocations are created,
+looked up and destroyed only there. The device texture view, context allocation
+state, multi-GPU context and `CompiledGpuScene` are backend-private and excluded
+from installation. The stable render/session mutation boundary consumes
+SceneIR, not CUDA-era material or transform structs.
+
+Distributed file format v4 persists a resource-set hash, descriptor count,
+logical bytes and minimum resident bytes. Merge compatibility now includes that
+identity, preventing shards produced from different resident resource sets from
+being combined. `run_phase_t4_resource_gate.ps1` configures an independent
+C++-only CMake project and rejects any configured CUDA compiler;
+`test_resource_plan` compiles SceneIR, MaterialIR, Session and distributed
+headers there and covers mip layout, sparse tiles, dependency cycles, overlap,
+overflow and budget rejection. CUDA texture tests retain RGB hardware filtering
+and source-sample spectral parity.

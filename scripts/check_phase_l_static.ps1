@@ -63,6 +63,7 @@ if ($rawLaneModeChecks) {
 }
 
 $gpuStructs = Get-Content -Raw (Join-Path $RepoRoot "libs\ure_core\include\ure\gpu_structs.hpp")
+$gpuTextureView = Get-Content -Raw (Join-Path $RepoRoot "libs\ure_core\include\ure\detail\cuda_texture_view.cuh")
 if ($gpuStructs -notmatch "struct\s+SpectralSample") {
     throw "SpectralSample is missing"
 }
@@ -75,10 +76,10 @@ if ($gpuStructs -notmatch "enum\s+class\s+SpectralTextureResourceKind") {
 if ($gpuStructs -match "\bspectral_values\b") {
     throw "GpuTexture legacy spectral_values field must not return"
 }
-if ($gpuStructs -notmatch "spectral_source_values") {
+if ($gpuTextureView -notmatch "spectral_source_values") {
     throw "GpuTexture spectral source sample pointer is missing"
 }
-if ($gpuStructs -notmatch "spectral_sample_count") {
+if ($gpuTextureView -notmatch "spectral_sample_count") {
     throw "GpuTexture spectral source sample count is missing"
 }
 if ($gpuStructs -notmatch "SpectralRayModeSampled") {
@@ -278,7 +279,7 @@ if ($distributedFileIo -notmatch "write_shard_metadata") {
 if ($distributedFileIo -notmatch "read_shard_metadata") {
     throw "L.10 distributed file reader must restore shard metadata"
 }
-if ($distributedFileIo -notmatch "constexpr\s+int\s+kVersion\s*=\s*3") {
+if ($distributedFileIo -notmatch "constexpr\s+int\s+kVersion\s*=\s*4") {
     throw "L.10 distributed file format version must preserve current metadata schema"
 }
 

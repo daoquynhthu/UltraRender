@@ -227,6 +227,16 @@ static int test_spectral_shard_merge_contract() {
     auto fb_a = make_sharded_fb(2, 2, 4, 1.0f, shard_a, frame);
     auto fb_b = make_sharded_fb(2, 2, 5, 2.0f, shard_b, frame);
 
+    auto resource_set = ure::resource::ResourceSetMetadata{};
+    resource_set.content_hash[0] = 0x5a;
+    resource_set.descriptor_count = 2;
+    resource_set.logical_bytes = 384;
+    resource_set.minimum_resident_bytes = 256;
+    fb_a.shard.resources = resource_set;
+    CHECK(validate_shard_metadata(fb_a.shard));
+    CHECK(!compatible_shard_metadata_for_merge(accum.shard, fb_a.shard));
+    accum.shard.resources = resource_set;
+    fb_b.shard.resources = resource_set;
     CHECK(compatible_shard_metadata_for_merge(accum.shard, fb_a.shard));
     CHECK(compatible_shard_metadata_for_merge(accum.shard, fb_b.shard));
     merge_partial_framebuffer(accum, fb_a);

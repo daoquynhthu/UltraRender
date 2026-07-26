@@ -5,10 +5,11 @@
 #include <filesystem>
 
 #include "test_framework.cuh"
-#include "ure/gpu_context.hpp"
+#include "ure/detail/cuda_context.cuh"
+#include "ure/detail/cuda_multi_context.cuh"
 #include "ure/gpu_driver.hpp"
 #include "ure/gpu_multi_driver.hpp"
-#include "ure/gpu_scene_compiler.hpp"
+#include "ure/detail/cuda_scene_compiler.hpp"
 #include "ure/gpu_structs.hpp"
 #include "ure/mie_phase_validation.hpp"
 #include "ure/mie_phase_io.hpp"

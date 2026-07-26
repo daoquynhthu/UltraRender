@@ -37,8 +37,6 @@ public:
     static CompiledGpuScene compile(const scene_ir::SceneIR& scene_ir);
     static CompiledGpuScene compile(const scene_ir::SceneIR& scene_ir, const RenderConfig& config);
 
-    // Build a single GpuInstanceTransform from entity pose + mesh AABB.
-    // Used for hot-update path via IRenderEngine::update_transforms().
     static void build_instance_transform(const core::Vec3f& position,
                                          const core::Vec3f& scale,
                                          const core::Quat& rotation,

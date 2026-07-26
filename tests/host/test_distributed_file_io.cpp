@@ -131,6 +131,10 @@ static int test_shard_metadata_file_roundtrip() {
     ure::gpu::DistributedSampleRange range = ure::gpu::make_sample_range(1, 4, 33, 4, 4);
     range.shard.spectral = ure::gpu::make_spectral_domain_shard(2, 5, 1'000'000, 360.0f, 830.0f);
     range.shard.frame = ure::gpu::make_frame_shard(7, 16);
+    range.shard.resources.content_hash[0] = 0x5a;
+    range.shard.resources.descriptor_count = 2;
+    range.shard.resources.logical_bytes = 384;
+    range.shard.resources.minimum_resident_bytes = 256;
     ure::gpu::write_sample_range_file(range_path, range);
     ure::gpu::DistributedSampleRange loaded_range = ure::gpu::read_sample_range_file(range_path);
     CHECK(loaded_range.shard.spectral.shard_id == 2);
@@ -143,6 +147,7 @@ static int test_shard_metadata_file_roundtrip() {
                    1e-8f);
     CHECK(loaded_range.shard.frame.frame_index == 7);
     CHECK(loaded_range.shard.frame.frame_count == 16);
+    CHECK(loaded_range.shard.resources == range.shard.resources);
 
     std::vector<float> data;
     ure::gpu::DistributedFrameBuffer fb = make_sharded_view(
@@ -152,6 +157,7 @@ static int test_shard_metadata_file_roundtrip() {
         data,
         range.shard.spectral,
         range.shard.frame);
+    fb.shard.resources = range.shard.resources;
     for (size_t i = 0; i < data.size(); ++i) {
         data[i] = static_cast<float>(i + 1);
     }
@@ -161,6 +167,7 @@ static int test_shard_metadata_file_roundtrip() {
     CHECK(loaded_frame.shard.spectral.domain_bins == 1'000'000);
     CHECK(loaded_frame.shard.frame.frame_index == 7);
     CHECK(loaded_frame.shard.frame.frame_count == 16);
+    CHECK(loaded_frame.shard.resources == range.shard.resources);
     CHECK(loaded_frame.data.size() == data.size());
     for (size_t i = 0; i < data.size(); ++i) {
         CHECK_FLOAT_EQ(loaded_frame.data[i], data[i], 1e-6f);

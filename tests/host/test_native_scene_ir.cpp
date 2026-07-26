@@ -7,7 +7,7 @@
 #include <vector>
 
 #include <ure/native_scene_ir.hpp>
-#include <ure/gpu_scene_compiler.hpp>
+#include <ure/detail/cuda_scene_compiler.hpp>
 
 static int g_passed = 0;
 static int g_failed = 0;

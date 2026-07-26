@@ -1,6 +1,4 @@
 #include <ure/session.hpp>
-#include <ure/gpu_scene_compiler.hpp>
-#include <ure/gpu_structs.hpp>
 #include <ure/log.hpp>
 #include <ure/mie_phase_validation.hpp>
 #include <ure/scene_ir.hpp>
@@ -52,20 +50,19 @@ public:
         spp = 0;
     }
 
-    void update_transforms(const ure::gpu::GpuInstanceTransform* transforms, int count) override {
+    void update_transforms(const ure::scene_ir::SceneIR& scene_ir) override {
         transform_updates += 1;
-        last_transform_count = count;
-        last_transforms.assign(transforms, transforms + count);
+        last_transform_count = static_cast<int>(scene_ir.instances.size());
+        last_scene = scene_ir;
         spp = 0;
     }
 
-    void update_materials(const ure::gpu::GpuMaterialData* materials, int count) override {
+    void update_materials(const ure::scene_ir::SceneIR& scene_ir) override {
         material_updates += 1;
-        last_material_count = count;
-        if (count > 0) {
-            last_materials.assign(materials, materials + count);
-        } else {
-            last_materials.clear();
+        last_material_count = static_cast<int>(scene_ir.materials.size());
+        last_materials.clear();
+        for (const auto& material : scene_ir.materials) {
+            if (material) last_materials.push_back(*material);
         }
         spp = 0;
     }
@@ -140,8 +137,8 @@ public:
     int camera_updates = 0;
     int width = 1;
     int height = 1;
-    std::vector<ure::gpu::GpuInstanceTransform> last_transforms;
-    std::vector<ure::gpu::GpuMaterialData> last_materials;
+    ure::scene_ir::SceneIR last_scene;
+    std::vector<ure::scene_ir::MaterialNode> last_materials;
     std::vector<float> framebuffer = {0.1f, 0.2f, 0.3f};
     std::vector<float> normal_aov = {0.0f, 1.0f, 0.0f};
     std::vector<float> albedo_aov = {0.8f, 0.7f, 0.6f};
@@ -446,14 +443,10 @@ static int test_scene_diff_instance_transform_ir() {
     CHECK(raw_engine->last_transform_count == 1);
     CHECK(raw_engine->spp == 0);
     CHECK(session.state() == ure::RenderSessionState::Ready);
-    CHECK(raw_engine->last_transforms.size() == 1);
-    const auto& transform = raw_engine->last_transforms[0];
-    CHECK(transform.transform.m[0][3] == 2.0f);
-    CHECK(transform.transform.m[0][0] == 3.0f);
-    CHECK(transform.inverse_transform.m[0][0] > 0.3333f && transform.inverse_transform.m[0][0] < 0.3334f);
-    CHECK(transform.inverse_transform.m[0][3] < -0.6666f && transform.inverse_transform.m[0][3] > -0.6667f);
-    CHECK(transform.min_pt.x == 2.0f);
-    CHECK(transform.max_pt.x == 5.0f);
+    CHECK(raw_engine->last_scene.instances.size() == 1);
+    const auto& transform = raw_engine->last_scene.instances[0];
+    CHECK(transform.position.x == 2.0f);
+    CHECK(transform.scale.x == 3.0f);
     return 0;
 }
 
@@ -515,9 +508,9 @@ static int test_scene_diff_material_update_ir() {
     CHECK(raw_engine->material_updates == 1);
     CHECK(raw_engine->last_material_count == 1);
     CHECK(raw_engine->last_materials.size() == 1);
-    CHECK(raw_engine->last_materials[0].header.type == ure::gpu::MaterialType::Metal);
-    CHECK(raw_engine->last_materials[0].header.roughness == 0.2f);
-    CHECK(raw_engine->last_materials[0].header.ior == 2.0f);
+    CHECK(raw_engine->last_materials[0].model == ure::scene_ir::MaterialModel::Metal);
+    CHECK(raw_engine->last_materials[0].roughness == 0.2f);
+    CHECK(raw_engine->last_materials[0].ior == 2.0f);
     CHECK(raw_engine->spp == 0);
     CHECK(session.state() == ure::RenderSessionState::Ready);
     return 0;

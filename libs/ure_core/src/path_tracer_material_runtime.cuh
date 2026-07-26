@@ -28,8 +28,8 @@ static __device__ SpectralPacket sample_texture(const GpuScene& scene, int tex_i
 
     GpuTexture tex = scene.textures[tex_idx];
 
-    if (tex.texObj) {
-        float4 val = tex2D<float4>(tex.texObj, u, v);
+    if (tex.texture_object) {
+        float4 val = tex2D<float4>(tex.texture_object, u, v);
         return rgb_to_spectrum(GpuVec3(val.x, val.y, val.z), wavelengths, num_spec);
     }
 
@@ -80,10 +80,11 @@ static __device__ SpectralPacket sample_expression_texture(const GpuScene& scene
                                                     int num_spec) {
     if (tex_idx < 0 || tex_idx >= scene.texture_count) return SpectralPacket(0.0f);
     const GpuTexture tex = scene.textures[tex_idx];
-    if (!tex.texObj || tex.spectral_kind == SpectralTextureResourceKind::SourceSampleGrid) {
+    if (!tex.texture_object ||
+        tex.spectral_kind == SpectralTextureResourceKind::SourceSampleGrid) {
         return sample_texture(scene, tex_idx, u, v, wavelengths, num_spec);
     }
-    const float4 value = tex2D<float4>(tex.texObj, u, v);
+    const float4 value = tex2D<float4>(tex.texture_object, u, v);
     const GpuVec3 rgb(value.x, value.y, value.z);
     SpectralPacket result;
     for (int c = 0; c < num_spec; ++c) {

@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <span>
+#include <string>
 #include <vector>
 #include <iostream>
 #include <iomanip>
@@ -18,18 +20,21 @@
 #include <ure/check_cuda.hpp>
 
 #include "ure/gpu_driver.hpp"
-#include "ure/gpu_context.hpp"
+#include "ure/detail/cuda_context.cuh"
+#include "ure/detail/cuda_texture_view.cuh"
 #include "ure/gpu_auto_config.hpp"
 #include "ure/gpu_structs.hpp"
 #include "ure/gpu_spectrum_utils.cuh"
 #include "ure/gpu_material_helpers.cuh"
 #include "ure/mie_phase_validation.hpp"
+#include "ure/runtime/resource_plan.hpp"
 #include "ure/specular_manifold.hpp"
 #include "ure/path_tracer_sampling.cuh"
 #include "ure/gpu_scene_loader.hpp"
 #include "ure/bvh_builder.hpp"
 
 #include "path_tracer_api_decl.cuh"
+#include "cuda_resource_registry.cuh"
 
 // ===== Diagnostic Logging Pipeline (host side) =====
 #if defined(UR_LOG_LEVEL) && UR_LOG_LEVEL <= 1
@@ -95,6 +100,9 @@ void free_debug_log() {
 #endif
 
 namespace ure::gpu {
+
+GpuContext::GpuContext() = default;
+GpuContext::~GpuContext() = default;
 
 #include "restir_di_runtime.cuh"
 #include "restir_pt_runtime.cuh"
@@ -403,7 +411,7 @@ static void upload_material_resources(SpectralResource*& d_resources,
                                       int count,
                                       int first_material_index,
                                       HostSpectralResource GpuMaterialData::* resource_field,
-                                      std::vector<void*>& free_list) {
+                                      CudaResourceRegistry& resources) {
     if (!d_resources || !data || count <= 0) return;
 
     std::vector<SpectralResource> descriptors(count);
@@ -422,8 +430,8 @@ static void upload_material_resources(SpectralResource*& d_resources,
             UR_CUDA_CHECK(cudaMalloc(&d_values, bytes));
             UR_CUDA_CHECK(cudaMemcpy(d_wavelengths, host.wavelengths.data(), bytes, cudaMemcpyHostToDevice));
             UR_CUDA_CHECK(cudaMemcpy(d_values, host.values.data(), bytes, cudaMemcpyHostToDevice));
-            free_list.push_back(d_wavelengths);
-            free_list.push_back(d_values);
+            resources.retain_material_resource(d_wavelengths);
+            resources.retain_material_resource(d_values);
             desc.wavelengths = d_wavelengths;
             desc.values = d_values;
             desc.sample_count = samples;
@@ -438,7 +446,7 @@ static void upload_material_resources(SpectralResource*& d_resources,
 }
 
 static SpectralResource upload_host_resource_descriptor(const HostSpectralResource& host,
-                                                        std::vector<void*>& free_list) {
+                                                        CudaResourceRegistry& resources) {
     SpectralResource desc = {};
     desc.kind = host.kind;
     desc.constant = host.constant;
@@ -452,8 +460,8 @@ static SpectralResource upload_host_resource_descriptor(const HostSpectralResour
         UR_CUDA_CHECK(cudaMalloc(&d_values, bytes));
         UR_CUDA_CHECK(cudaMemcpy(d_wavelengths, host.wavelengths.data(), bytes, cudaMemcpyHostToDevice));
         UR_CUDA_CHECK(cudaMemcpy(d_values, host.values.data(), bytes, cudaMemcpyHostToDevice));
-        free_list.push_back(d_wavelengths);
-        free_list.push_back(d_values);
+        resources.retain_material_resource(d_wavelengths);
+        resources.retain_material_resource(d_values);
         desc.wavelengths = d_wavelengths;
         desc.values = d_values;
         desc.sample_count = samples;
@@ -511,7 +519,9 @@ static void upload_material_expression_graphs(GpuContext* ctx,
             node.input_a = root(host_node.input_a);
             node.input_b = root(host_node.input_b);
             node.input_factor = root(host_node.input_factor);
-            node.resource = upload_host_resource_descriptor(host_node.resource, ctx->material_resource_tables_to_free);
+            node.resource = upload_host_resource_descriptor(
+                host_node.resource,
+                *ctx->resources);
             nodes.push_back(node);
         }
     }
@@ -521,7 +531,8 @@ static void upload_material_expression_graphs(GpuContext* ctx,
         size_t bytes = nodes.size() * sizeof(SpectralExpressionNode);
         UR_CUDA_CHECK(cudaMalloc(&ctx->d_material_expression_nodes, bytes));
         UR_CUDA_CHECK(cudaMemcpy(ctx->d_material_expression_nodes, nodes.data(), bytes, cudaMemcpyHostToDevice));
-        ctx->pointers_to_free.push_back(ctx->d_material_expression_nodes);
+        ctx->resources->retain_allocation(
+            ctx->d_material_expression_nodes);
     } else {
         ctx->d_material_expression_nodes = nullptr;
     }
@@ -531,15 +542,14 @@ static void upload_material_expression_graphs(GpuContext* ctx,
         size_t bytes = lobes.size() * sizeof(GpuMaterialBsdfLobe);
         UR_CUDA_CHECK(cudaMalloc(&ctx->d_material_bsdf_lobes, bytes));
         UR_CUDA_CHECK(cudaMemcpy(ctx->d_material_bsdf_lobes, lobes.data(), bytes, cudaMemcpyHostToDevice));
-        ctx->pointers_to_free.push_back(ctx->d_material_bsdf_lobes);
+        ctx->resources->retain_allocation(ctx->d_material_bsdf_lobes);
     } else {
         ctx->d_material_bsdf_lobes = nullptr;
     }
 }
 
 static void free_material_resource_tables(GpuContext* ctx) {
-    for (void* ptr : ctx->material_resource_tables_to_free) cudaFree(ptr);
-    ctx->material_resource_tables_to_free.clear();
+    ctx->resources->release_material_resources();
 }
 
 static bool contains_material_expression_graph(const GpuMaterialData* materials, int count) {
@@ -2499,7 +2509,7 @@ static void rebuild_light_distribution(GpuContext* ctx) {
 template <typename Value>
 static void upload_mie_array(Value*& device,
                              const std::vector<Value>& host,
-                             std::vector<void*>& free_list) {
+                             CudaResourceRegistry& resources) {
     if (host.empty()) {
         device = nullptr;
         return;
@@ -2507,7 +2517,7 @@ static void upload_mie_array(Value*& device,
     UR_CUDA_CHECK(cudaMalloc(&device, host.size() * sizeof(Value)));
     UR_CUDA_CHECK(cudaMemcpy(device, host.data(), host.size() * sizeof(Value),
                              cudaMemcpyHostToDevice));
-    free_list.push_back(device);
+    resources.retain_allocation(device);
 }
 
 static int checked_mie_offset(std::size_t value) {
@@ -2554,21 +2564,120 @@ static void upload_mie_phase_resources(
         asymmetry.insert(asymmetry.end(), resource.asymmetry.begin(), resource.asymmetry.end());
         descriptors.push_back(descriptor);
     }
-    upload_mie_array(ctx->d_mie_phase_resources, descriptors, ctx->pointers_to_free);
-    upload_mie_array(ctx->d_mie_wavelengths, wavelengths, ctx->pointers_to_free);
-    upload_mie_array(ctx->d_mie_cos_theta, cosines, ctx->pointers_to_free);
-    upload_mie_array(ctx->d_mie_phase_values, phase, ctx->pointers_to_free);
-    upload_mie_array(ctx->d_mie_cdf_values, cdf, ctx->pointers_to_free);
-    upload_mie_array(ctx->d_mie_scattering_cross_sections, scattering, ctx->pointers_to_free);
-    upload_mie_array(ctx->d_mie_extinction_cross_sections, extinction, ctx->pointers_to_free);
-    upload_mie_array(ctx->d_mie_absorption_cross_sections, absorption, ctx->pointers_to_free);
-    upload_mie_array(ctx->d_mie_asymmetry, asymmetry, ctx->pointers_to_free);
+    upload_mie_array(
+        ctx->d_mie_phase_resources,
+        descriptors,
+        *ctx->resources);
+    upload_mie_array(ctx->d_mie_wavelengths, wavelengths, *ctx->resources);
+    upload_mie_array(ctx->d_mie_cos_theta, cosines, *ctx->resources);
+    upload_mie_array(ctx->d_mie_phase_values, phase, *ctx->resources);
+    upload_mie_array(ctx->d_mie_cdf_values, cdf, *ctx->resources);
+    upload_mie_array(
+        ctx->d_mie_scattering_cross_sections,
+        scattering,
+        *ctx->resources);
+    upload_mie_array(
+        ctx->d_mie_extinction_cross_sections,
+        extinction,
+        *ctx->resources);
+    upload_mie_array(
+        ctx->d_mie_absorption_cross_sections,
+        absorption,
+        *ctx->resources);
+    upload_mie_array(ctx->d_mie_asymmetry, asymmetry, *ctx->resources);
     ctx->mie_phase_resource_count = checked_mie_offset(descriptors.size());
     ctx->mie_wavelength_count = checked_mie_offset(wavelengths.size());
     ctx->mie_angle_count = checked_mie_offset(cosines.size());
     ctx->mie_phase_value_count = checked_mie_offset(phase.size());
     ctx->mie_cdf_value_count = checked_mie_offset(cdf.size());
     ctx->mie_cross_section_count = checked_mie_offset(scattering.size());
+}
+
+static runtime::UploadPlan make_texture_upload_plan(
+    const std::vector<HostTexture>& textures,
+    const RenderConfig& config) {
+    runtime::UploadPlan plan;
+    std::uint64_t source_offset = 0;
+    for (std::size_t index = 0; index < textures.size(); ++index) {
+        const auto& texture = textures[index];
+        if (texture.width <= 0 || texture.height <= 0 ||
+            texture.channels <= 0) {
+            throw std::invalid_argument(
+                "HostTexture dimensions and channels must be positive");
+        }
+        const auto id = resource::ResourceId{
+            0x5552455f54455800ull,
+            static_cast<std::uint64_t>(index) + 1
+        };
+        runtime::ResourceDesc desc;
+        desc.id = id;
+        desc.label = "scene-texture-" + std::to_string(index);
+        if (texture.channels == 3) {
+            runtime::ImageDesc image;
+            image.format = runtime::Format::Rgba32Float;
+            image.width = static_cast<std::uint32_t>(texture.width);
+            image.height = static_cast<std::uint32_t>(texture.height);
+            image.usage =
+                runtime::ImageUsage::Sampled |
+                runtime::ImageUsage::TransferDestination;
+            const auto row_pitch =
+                static_cast<std::uint64_t>(texture.width) *
+                sizeof(float4);
+            desc.layout = runtime::ImageLayout{
+                image,
+                {{
+                    0,
+                    0,
+                    0,
+                    row_pitch,
+                    row_pitch *
+                        static_cast<std::uint64_t>(texture.height)
+                }}
+            };
+        } else {
+            desc.layout = runtime::SpectralTableLayout{
+                static_cast<std::uint64_t>(texture.width) *
+                    static_cast<std::uint64_t>(texture.height),
+                static_cast<std::uint64_t>(texture.channels),
+                spectral_domain_bins(config),
+                kSpectralLambdaMin,
+                kSpectralLambdaMax,
+                static_cast<std::uint64_t>(texture.channels) *
+                    sizeof(float)
+            };
+        }
+        const auto bytes = runtime::resource_size_bytes(desc.layout);
+        desc.residency = {
+            resource::ResidencyMode::Resident,
+            bytes,
+            bytes,
+            7,
+            1
+        };
+        if (bytes >
+            std::numeric_limits<std::uint64_t>::max() - source_offset) {
+            throw runtime::Error(
+                runtime::ErrorCode::Overflow,
+                "texture upload source size overflow");
+        }
+        plan.resources.push_back(desc);
+        plan.chunks.push_back({
+            id,
+            source_offset,
+            0,
+            bytes,
+            std::nullopt
+        });
+        source_offset += bytes;
+    }
+    plan.source_size_bytes = source_offset;
+    plan.budget_bytes = config.backend.memory_budget_bytes == 0
+        ? std::numeric_limits<std::uint64_t>::max()
+        : config.backend.memory_budget_bytes;
+    if (!plan.resources.empty()) {
+        static_cast<void>(runtime::validate(plan));
+    }
+    return plan;
 }
 
 GpuContext* init_gpu_renderer(int width, int height,
@@ -2596,6 +2705,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     const int max_rays = configured_ray_queue_capacity(config, primary_ray_count);
 
     GpuContext* ctx = new GpuContext();
+    ctx->resources = std::make_unique<CudaResourceRegistry>();
     ctx->width = width;
     ctx->height = height;
     ctx->current_spp = 0;
@@ -2693,38 +2803,38 @@ GpuContext* init_gpu_renderer(int width, int height,
     UR_CUDA_CHECK(cudaMemcpy(ctx->d_materials, host_headers.data(), mat_count * sizeof(GpuMaterial), cudaMemcpyHostToDevice));
     ctx->material_count = mat_count;
 
-    auto alloc_soa = [mat_count, num_channels](float*& d_ptr, std::vector<void*>& free_list) {
+    auto alloc_soa = [ctx, mat_count, num_channels](float*& d_ptr) {
         if (mat_count > 0) {
             UR_CUDA_CHECK(cudaMalloc(&d_ptr, mat_count * num_channels * sizeof(float)));
-            free_list.push_back(d_ptr);
+            ctx->resources->retain_allocation(d_ptr);
         } else {
             d_ptr = nullptr;
         }
     };
-    alloc_soa(ctx->d_mat_albedo, ctx->pointers_to_free);
-    alloc_soa(ctx->d_mat_metal_eta, ctx->pointers_to_free);
-    alloc_soa(ctx->d_mat_extinction, ctx->pointers_to_free);
-    alloc_soa(ctx->d_mat_medium_scattering, ctx->pointers_to_free);
-    alloc_soa(ctx->d_mat_medium_absorption, ctx->pointers_to_free);
-    alloc_soa(ctx->d_mat_emission, ctx->pointers_to_free);
+    alloc_soa(ctx->d_mat_albedo);
+    alloc_soa(ctx->d_mat_metal_eta);
+    alloc_soa(ctx->d_mat_extinction);
+    alloc_soa(ctx->d_mat_medium_scattering);
+    alloc_soa(ctx->d_mat_medium_absorption);
+    alloc_soa(ctx->d_mat_emission);
     ctx->num_spectral_channels = num_channels;
     alloc_restir_di_reservoirs(ctx);
     alloc_restir_pt_reservoirs(ctx);
 
-    auto alloc_resources = [mat_count](SpectralResource*& d_ptr, std::vector<void*>& free_list) {
+    auto alloc_resources = [ctx, mat_count](SpectralResource*& d_ptr) {
         if (mat_count > 0) {
             UR_CUDA_CHECK(cudaMalloc(&d_ptr, mat_count * sizeof(SpectralResource)));
-            free_list.push_back(d_ptr);
+            ctx->resources->retain_allocation(d_ptr);
         } else {
             d_ptr = nullptr;
         }
     };
-    alloc_resources(ctx->d_mat_albedo_resources, ctx->pointers_to_free);
-    alloc_resources(ctx->d_mat_metal_eta_resources, ctx->pointers_to_free);
-    alloc_resources(ctx->d_mat_extinction_resources, ctx->pointers_to_free);
-    alloc_resources(ctx->d_mat_medium_scattering_resources, ctx->pointers_to_free);
-    alloc_resources(ctx->d_mat_medium_absorption_resources, ctx->pointers_to_free);
-    alloc_resources(ctx->d_mat_emission_resources, ctx->pointers_to_free);
+    alloc_resources(ctx->d_mat_albedo_resources);
+    alloc_resources(ctx->d_mat_metal_eta_resources);
+    alloc_resources(ctx->d_mat_extinction_resources);
+    alloc_resources(ctx->d_mat_medium_scattering_resources);
+    alloc_resources(ctx->d_mat_medium_absorption_resources);
+    alloc_resources(ctx->d_mat_emission_resources);
 
     auto upload_soa = [&](float* d_ptr,
                           const GpuMaterialData* data,
@@ -2742,12 +2852,12 @@ GpuContext* init_gpu_renderer(int width, int height,
         upload_soa(ctx->d_mat_medium_scattering, data, &GpuMaterialData::medium_scattering, &GpuMaterialData::medium_scattering_resource);
         upload_soa(ctx->d_mat_medium_absorption, data, &GpuMaterialData::medium_absorption, &GpuMaterialData::medium_absorption_resource);
         upload_soa(ctx->d_mat_emission, data, &GpuMaterialData::emission, &GpuMaterialData::emission_resource);
-        upload_material_resources(ctx->d_mat_albedo_resources, data, mat_count, 0, &GpuMaterialData::albedo_resource, ctx->material_resource_tables_to_free);
-        upload_material_resources(ctx->d_mat_metal_eta_resources, data, mat_count, 0, &GpuMaterialData::metal_eta_resource, ctx->material_resource_tables_to_free);
-        upload_material_resources(ctx->d_mat_extinction_resources, data, mat_count, 0, &GpuMaterialData::extinction_resource, ctx->material_resource_tables_to_free);
-        upload_material_resources(ctx->d_mat_medium_scattering_resources, data, mat_count, 0, &GpuMaterialData::medium_scattering_resource, ctx->material_resource_tables_to_free);
-        upload_material_resources(ctx->d_mat_medium_absorption_resources, data, mat_count, 0, &GpuMaterialData::medium_absorption_resource, ctx->material_resource_tables_to_free);
-        upload_material_resources(ctx->d_mat_emission_resources, data, mat_count, 0, &GpuMaterialData::emission_resource, ctx->material_resource_tables_to_free);
+        upload_material_resources(ctx->d_mat_albedo_resources, data, mat_count, 0, &GpuMaterialData::albedo_resource, *ctx->resources);
+        upload_material_resources(ctx->d_mat_metal_eta_resources, data, mat_count, 0, &GpuMaterialData::metal_eta_resource, *ctx->resources);
+        upload_material_resources(ctx->d_mat_extinction_resources, data, mat_count, 0, &GpuMaterialData::extinction_resource, *ctx->resources);
+        upload_material_resources(ctx->d_mat_medium_scattering_resources, data, mat_count, 0, &GpuMaterialData::medium_scattering_resource, *ctx->resources);
+        upload_material_resources(ctx->d_mat_medium_absorption_resources, data, mat_count, 0, &GpuMaterialData::medium_absorption_resource, *ctx->resources);
+        upload_material_resources(ctx->d_mat_emission_resources, data, mat_count, 0, &GpuMaterialData::emission_resource, *ctx->resources);
     }
 
     std::vector<GpuSphere> host_spheres = spheres;
@@ -2776,7 +2886,7 @@ GpuContext* init_gpu_renderer(int width, int height,
              cudaMalloc(&d_uv, uv_size);
              cudaMemcpy(d_uv, input_mesh.uvs.data(), uv_size, cudaMemcpyHostToDevice);
              mesh.uvs = d_uv;
-             ctx->pointers_to_free.push_back(d_uv);
+             ctx->resources->retain_allocation(d_uv);
         } else { mesh.uvs = nullptr; }
 
         if (!input_mesh.normals.empty()) {
@@ -2785,7 +2895,7 @@ GpuContext* init_gpu_renderer(int width, int height,
              cudaMalloc(&d_n, n_size);
              cudaMemcpy(d_n, input_mesh.normals.data(), n_size, cudaMemcpyHostToDevice);
              mesh.normals = d_n;
-             ctx->pointers_to_free.push_back(d_n);
+             ctx->resources->retain_allocation(d_n);
         } else { mesh.normals = nullptr; }
 
         if (!input_mesh.tangents.empty()) {
@@ -2794,7 +2904,7 @@ GpuContext* init_gpu_renderer(int width, int height,
             cudaMalloc(&d_t, t_size);
             cudaMemcpy(d_t, input_mesh.tangents.data(), t_size, cudaMemcpyHostToDevice);
             mesh.tangents = d_t;
-            ctx->pointers_to_free.push_back(d_t);
+            ctx->resources->retain_allocation(d_t);
         } else { mesh.tangents = nullptr; }
 
         compute_aabb(input_mesh.vertices, mesh.min_pt, mesh.max_pt);
@@ -2810,7 +2920,7 @@ GpuContext* init_gpu_renderer(int width, int height,
              cudaMemcpy(d_nodes, build_nodes.data(), bvh_size, cudaMemcpyHostToDevice);
              mesh.bvh_nodes = d_nodes;
              mesh.bvh_node_count = (int)build_nodes.size();
-             ctx->pointers_to_free.push_back(d_nodes);
+             ctx->resources->retain_allocation(d_nodes);
         } else { mesh.bvh_nodes = nullptr; mesh.bvh_node_count = 0; }
 
         size_t v_size = input_mesh.vertices.size() * sizeof(float);
@@ -2818,14 +2928,14 @@ GpuContext* init_gpu_renderer(int width, int height,
         cudaMalloc(&d_v, v_size);
         cudaMemcpy(d_v, input_mesh.vertices.data(), v_size, cudaMemcpyHostToDevice);
         mesh.vertices = d_v;
-        ctx->pointers_to_free.push_back(d_v);
+        ctx->resources->retain_allocation(d_v);
 
         size_t i_size = temp_indices.size() * sizeof(int);
         int* d_i;
         cudaMalloc(&d_i, i_size);
         cudaMemcpy(d_i, temp_indices.data(), i_size, cudaMemcpyHostToDevice);
         mesh.indices = d_i;
-        ctx->pointers_to_free.push_back(d_i);
+        ctx->resources->retain_allocation(d_i);
 
         host_gpu_meshes.push_back(mesh);
         host_light_meshes.push_back(HostLightMeshData{
@@ -2847,21 +2957,21 @@ GpuContext* init_gpu_renderer(int width, int height,
              cudaMemcpy(d_nodes, build_nodes.data(), bvh_size, cudaMemcpyHostToDevice);
              mesh.bvh_nodes = d_nodes;
              mesh.bvh_node_count = (int)build_nodes.size();
-             ctx->pointers_to_free.push_back(d_nodes);
+             ctx->resources->retain_allocation(d_nodes);
         } else { mesh.bvh_nodes = nullptr; mesh.bvh_node_count = 0; }
         size_t v_size = hm.vertices.size() * sizeof(float);
         GpuVec3* d_v;
         cudaMalloc(&d_v, v_size);
         cudaMemcpy(d_v, hm.vertices.data(), v_size, cudaMemcpyHostToDevice);
         mesh.vertices = d_v;
-        ctx->pointers_to_free.push_back(d_v);
+        ctx->resources->retain_allocation(d_v);
         if (!hm.normals.empty()) {
             size_t n_size = hm.normals.size() * sizeof(float);
             GpuVec3* d_n;
             cudaMalloc(&d_n, n_size);
             cudaMemcpy(d_n, hm.normals.data(), n_size, cudaMemcpyHostToDevice);
             mesh.normals = d_n;
-            ctx->pointers_to_free.push_back(d_n);
+            ctx->resources->retain_allocation(d_n);
         } else { mesh.normals = nullptr; }
         if (!hm.tangents.empty()) {
             size_t t_size = hm.tangents.size() * sizeof(float);
@@ -2869,7 +2979,7 @@ GpuContext* init_gpu_renderer(int width, int height,
             cudaMalloc(&d_t, t_size);
             cudaMemcpy(d_t, hm.tangents.data(), t_size, cudaMemcpyHostToDevice);
             mesh.tangents = d_t;
-            ctx->pointers_to_free.push_back(d_t);
+            ctx->resources->retain_allocation(d_t);
         } else { mesh.tangents = nullptr; }
         if (!hm.uvs.empty()) {
             size_t uv_size = hm.uvs.size() * sizeof(float);
@@ -2877,14 +2987,14 @@ GpuContext* init_gpu_renderer(int width, int height,
             cudaMalloc(&d_uv, uv_size);
             cudaMemcpy(d_uv, hm.uvs.data(), uv_size, cudaMemcpyHostToDevice);
             mesh.uvs = d_uv;
-            ctx->pointers_to_free.push_back(d_uv);
+            ctx->resources->retain_allocation(d_uv);
         } else { mesh.uvs = nullptr; }
         size_t i_size = hm.indices.size() * sizeof(int);
         int* d_i;
         cudaMalloc(&d_i, i_size);
         cudaMemcpy(d_i, hm.indices.data(), i_size, cudaMemcpyHostToDevice);
         mesh.indices = d_i;
-        ctx->pointers_to_free.push_back(d_i);
+        ctx->resources->retain_allocation(d_i);
         host_gpu_meshes.push_back(mesh);
         host_light_meshes.push_back(HostLightMeshData{
             hm.vertices, hm.uvs, hm.indices, hm.material_index});
@@ -2920,7 +3030,7 @@ GpuContext* init_gpu_renderer(int width, int height,
             }
             cudaMemcpy(ctx->d_instance_descs, host_descs.data(), desc_bytes, cudaMemcpyHostToDevice);
         }
-        ctx->pointers_to_free.push_back(ctx->d_instance_descs);
+        ctx->resources->retain_allocation(ctx->d_instance_descs);
     }
     {
         std::vector<GpuInstanceTransform> host_transforms(host_instances.size());
@@ -2935,11 +3045,12 @@ GpuContext* init_gpu_renderer(int width, int height,
         cudaMalloc(&ctx->d_instance_transforms, xform_bytes);
         if (!host_transforms.empty())
             cudaMemcpy(ctx->d_instance_transforms, host_transforms.data(), xform_bytes, cudaMemcpyHostToDevice);
-        ctx->pointers_to_free.push_back(ctx->d_instance_transforms);
+        ctx->resources->retain_allocation(ctx->d_instance_transforms);
         cudaMalloc(&ctx->d_previous_instance_transforms, xform_bytes);
         if (!host_transforms.empty())
             cudaMemcpy(ctx->d_previous_instance_transforms, host_transforms.data(), xform_bytes, cudaMemcpyHostToDevice);
-        ctx->pointers_to_free.push_back(ctx->d_previous_instance_transforms);
+        ctx->resources->retain_allocation(
+            ctx->d_previous_instance_transforms);
     }
     ctx->instance_count = (int)host_instances.size();
 
@@ -2956,13 +3067,21 @@ GpuContext* init_gpu_renderer(int width, int height,
             cudaMemcpyHostToDevice));
     }
 
+    const runtime::UploadPlan texture_upload_plan =
+        make_texture_upload_plan(host_scene.textures, config);
     std::vector<GpuTexture> host_gpu_textures;
-    for (const auto& h_tex : host_scene.textures) {
+    for (std::size_t texture_index = 0;
+         texture_index < host_scene.textures.size();
+         ++texture_index) {
+        const auto& h_tex = host_scene.textures[texture_index];
+        const auto& resource_desc =
+            texture_upload_plan.resources[texture_index];
         GpuTexture d_tex = {};
         d_tex.width = h_tex.width;
         d_tex.height = h_tex.height;
         d_tex.channels = h_tex.channels > 0 ? h_tex.channels : 3;
-        d_tex.texObj = 0;
+        d_tex.resource_id = resource_desc.id;
+        d_tex.texture_object = 0;
         d_tex.spectral_kind = SpectralTextureResourceKind::None;
         d_tex.spectral_source_values = nullptr;
         d_tex.spectral_sample_count = 0;
@@ -2982,34 +3101,21 @@ GpuContext* init_gpu_renderer(int width, int height,
                 float b = h_tex.data[i * 3 + 2];
                 temp_float4[i] = make_float4(r, g, b, 1.0f);
             }
-
-            cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float4>();
-            cudaArray_t cuArray;
-            UR_CUDA_CHECK(cudaMallocArray(&cuArray, &channelDesc, d_tex.width, d_tex.height));
-            ctx->arrays_to_free.push_back(cuArray);
-            UR_CUDA_CHECK(cudaMemcpy2DToArray(cuArray, 0, 0, temp_float4.data(), d_tex.width * sizeof(float4), d_tex.width * sizeof(float4), d_tex.height, cudaMemcpyHostToDevice));
-
-            struct cudaResourceDesc resDesc;
-            memset(&resDesc, 0, sizeof(resDesc));
-            resDesc.resType = cudaResourceTypeArray;
-            resDesc.res.array.array = cuArray;
-            struct cudaTextureDesc texDesc;
-            memset(&texDesc, 0, sizeof(texDesc));
-            texDesc.addressMode[0] = cudaAddressModeWrap;
-            texDesc.addressMode[1] = cudaAddressModeWrap;
-            texDesc.filterMode = cudaFilterModeLinear;
-            texDesc.readMode = cudaReadModeElementType;
-            texDesc.normalizedCoords = 1;
-            UR_CUDA_CHECK(cudaCreateTextureObject(&d_tex.texObj, &resDesc, &texDesc, NULL));
-            ctx->tex_objs_to_free.push_back(d_tex.texObj);
+            const auto binding = ctx->resources->create_rgba32_image(
+                resource_desc.id,
+                d_tex.width,
+                d_tex.height,
+                temp_float4);
+            d_tex.texture_object = binding.texture_object;
         } else {
-            size_t size_bytes = expected_values * sizeof(float);
-            float* d_values = nullptr;
-            UR_CUDA_CHECK(cudaMalloc(&d_values, size_bytes));
-            UR_CUDA_CHECK(cudaMemcpy(d_values, h_tex.data.data(), size_bytes, cudaMemcpyHostToDevice));
-            ctx->pointers_to_free.push_back(d_values);
+            const auto binding = ctx->resources->create_spectral_table(
+                resource_desc.id,
+                std::span<const float>{
+                    h_tex.data.data(),
+                    expected_values
+                });
             d_tex.spectral_kind = SpectralTextureResourceKind::SourceSampleGrid;
-            d_tex.spectral_source_values = d_values;
+            d_tex.spectral_source_values = binding.spectral_values;
             d_tex.spectral_sample_count = d_tex.channels;
         }
         host_gpu_textures.push_back(d_tex);
@@ -3018,10 +3124,15 @@ GpuContext* init_gpu_renderer(int width, int height,
     {
         size_t tex_bytes = host_gpu_textures.size() * sizeof(GpuTexture);
         if (tex_bytes == 0) tex_bytes = sizeof(GpuTexture);
-        cudaMalloc(&ctx->d_textures, tex_bytes);
-        if (!host_gpu_textures.empty())
-            cudaMemcpy(ctx->d_textures, host_gpu_textures.data(), host_gpu_textures.size() * sizeof(GpuTexture), cudaMemcpyHostToDevice);
-        ctx->pointers_to_free.push_back(ctx->d_textures);
+        UR_CUDA_CHECK(cudaMalloc(&ctx->d_textures, tex_bytes));
+        if (!host_gpu_textures.empty()) {
+            UR_CUDA_CHECK(cudaMemcpy(
+                ctx->d_textures,
+                host_gpu_textures.data(),
+                host_gpu_textures.size() * sizeof(GpuTexture),
+                cudaMemcpyHostToDevice));
+        }
+        ctx->resources->retain_allocation(ctx->d_textures);
     }
     ctx->texture_count = (int)host_gpu_textures.size();
 
@@ -3169,9 +3280,6 @@ void free_gpu_renderer(GpuContext* ctx) {
     free_shadow_queue(ctx->shadowQueue);
 
     free_material_resource_tables(ctx);
-    for (void* ptr : ctx->pointers_to_free) cudaFree(ptr);
-    for (auto t : ctx->tex_objs_to_free) cudaDestroyTextureObject(t);
-    for (auto a : ctx->arrays_to_free) cudaFreeArray(a);
 
     free_debug_log();
     delete ctx;
@@ -4272,12 +4380,12 @@ void update_materials_gpu(GpuContext* ctx,
     upload_material_soa(ctx->d_mat_medium_scattering, materials, count, num_channels, first_material_index, &GpuMaterialData::medium_scattering, &GpuMaterialData::medium_scattering_resource);
     upload_material_soa(ctx->d_mat_medium_absorption, materials, count, num_channels, first_material_index, &GpuMaterialData::medium_absorption, &GpuMaterialData::medium_absorption_resource);
     upload_material_soa(ctx->d_mat_emission, materials, count, num_channels, first_material_index, &GpuMaterialData::emission, &GpuMaterialData::emission_resource);
-    upload_material_resources(ctx->d_mat_albedo_resources, materials, count, first_material_index, &GpuMaterialData::albedo_resource, ctx->material_resource_tables_to_free);
-    upload_material_resources(ctx->d_mat_metal_eta_resources, materials, count, first_material_index, &GpuMaterialData::metal_eta_resource, ctx->material_resource_tables_to_free);
-    upload_material_resources(ctx->d_mat_extinction_resources, materials, count, first_material_index, &GpuMaterialData::extinction_resource, ctx->material_resource_tables_to_free);
-    upload_material_resources(ctx->d_mat_medium_scattering_resources, materials, count, first_material_index, &GpuMaterialData::medium_scattering_resource, ctx->material_resource_tables_to_free);
-    upload_material_resources(ctx->d_mat_medium_absorption_resources, materials, count, first_material_index, &GpuMaterialData::medium_absorption_resource, ctx->material_resource_tables_to_free);
-    upload_material_resources(ctx->d_mat_emission_resources, materials, count, first_material_index, &GpuMaterialData::emission_resource, ctx->material_resource_tables_to_free);
+    upload_material_resources(ctx->d_mat_albedo_resources, materials, count, first_material_index, &GpuMaterialData::albedo_resource, *ctx->resources);
+    upload_material_resources(ctx->d_mat_metal_eta_resources, materials, count, first_material_index, &GpuMaterialData::metal_eta_resource, *ctx->resources);
+    upload_material_resources(ctx->d_mat_extinction_resources, materials, count, first_material_index, &GpuMaterialData::extinction_resource, *ctx->resources);
+    upload_material_resources(ctx->d_mat_medium_scattering_resources, materials, count, first_material_index, &GpuMaterialData::medium_scattering_resource, *ctx->resources);
+    upload_material_resources(ctx->d_mat_medium_absorption_resources, materials, count, first_material_index, &GpuMaterialData::medium_absorption_resource, *ctx->resources);
+    upload_material_resources(ctx->d_mat_emission_resources, materials, count, first_material_index, &GpuMaterialData::emission_resource, *ctx->resources);
 
     for (int i = 0; i < count; ++i) {
         ctx->host_materials_for_light_distribution[static_cast<size_t>(first_material_index + i)] = materials[i];

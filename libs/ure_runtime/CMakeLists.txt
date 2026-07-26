@@ -1,4 +1,5 @@
 add_library(ure_runtime STATIC
+    src/resource_plan.cpp
     src/runtime_validation.cpp
 )
 

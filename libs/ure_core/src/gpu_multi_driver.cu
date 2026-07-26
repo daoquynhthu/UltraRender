@@ -1,7 +1,8 @@
 #include "ure/gpu_multi_driver.hpp"
 #include "ure/mlt.hpp"
 #include "ure/gpu_structs.hpp"
-#include "ure/gpu_context.hpp"
+#include "ure/detail/cuda_context.cuh"
+#include "ure/detail/cuda_multi_context.cuh"
 #include <cuda_runtime.h>
 #include <ure/log.hpp>
 #include <ure/check_cuda.hpp>

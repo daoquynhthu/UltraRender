@@ -4,6 +4,7 @@
 
 #include "test_framework.cuh"
 #include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_texture_view.cuh"
 
 #include "../../libs/ure_core/src/path_tracer_kernel.cu"
 
@@ -963,7 +964,7 @@ static int test_sample_texture_spectral_data_n8() {
     h_texture.height = 2;
     h_texture.channels = source_samples;
     h_texture.spectral_source_values = d_texels;
-    h_texture.texObj = 0;
+    h_texture.texture_object = 0;
     h_texture.spectral_kind = SpectralTextureResourceKind::SourceSampleGrid;
     h_texture.spectral_sample_count = source_samples;
     h_texture.spectral_lambda_min = kSpectralLambdaMin;
@@ -1114,7 +1115,7 @@ static int test_material_expression_optical_constant_texture_semantic() {
     h_texture.width = 1;
     h_texture.height = 1;
     h_texture.channels = 4;
-    h_texture.texObj = texture_object;
+    h_texture.texture_object = texture_object;
     GpuTexture* d_textures = nullptr;
     CHECK_CUDA(cudaMalloc(&d_textures, sizeof(GpuTexture)));
     DeviceMem texture_storage(d_textures);

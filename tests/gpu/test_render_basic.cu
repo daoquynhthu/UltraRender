@@ -7,12 +7,13 @@
 #include <vector>
 
 #include "test_framework.cuh"
-#include "ure/gpu_context.hpp"
+#include "ure/detail/cuda_context.cuh"
 #include "ure/integrator/mlt.cuh"
 #include "ure/integrator/restir_di.cuh"
 #include "ure/integrator/specular_manifold.cuh"
 #include "ure/gpu_driver.hpp"
 #include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_texture_view.cuh"
 #include "ure/log.hpp"
 #include "ure/render_config.hpp"
 #include "ure/specular_manifold.hpp"
@@ -4296,7 +4297,8 @@ static int test_l8_spectral_texture_upload_keeps_source_sample_count() {
 
     GpuTexture uploaded = {};
     CHECK_CUDA(cudaMemcpy(&uploaded, ctx->d_textures, sizeof(GpuTexture), cudaMemcpyDeviceToHost));
-    CHECK(uploaded.texObj == 0);
+    CHECK(static_cast<bool>(uploaded.resource_id));
+    CHECK(uploaded.texture_object == 0);
     CHECK(uploaded.spectral_kind == SpectralTextureResourceKind::SourceSampleGrid);
     CHECK(uploaded.spectral_sample_count == texture.channels);
     CHECK(static_cast<std::uint64_t>(uploaded.spectral_sample_count) != config.spectral_domain_bins);
@@ -4342,7 +4344,8 @@ static int test_l8_rgb_texture_upload_keeps_hardware_filtering() {
 
     GpuTexture uploaded = {};
     CHECK_CUDA(cudaMemcpy(&uploaded, ctx->d_textures, sizeof(GpuTexture), cudaMemcpyDeviceToHost));
-    CHECK(uploaded.texObj != 0);
+    CHECK(static_cast<bool>(uploaded.resource_id));
+    CHECK(uploaded.texture_object != 0);
     CHECK(uploaded.spectral_kind == SpectralTextureResourceKind::None);
     CHECK(uploaded.spectral_source_values == nullptr);
     CHECK(uploaded.spectral_sample_count == 0);

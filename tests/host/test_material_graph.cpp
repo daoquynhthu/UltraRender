@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <string>
 
-#include <ure/gpu_scene_compiler.hpp>
+#include <ure/detail/cuda_scene_compiler.hpp>
 #include <ure/material_presets.hpp>
 #include <ure/render_config.hpp>
 #include <ure/scene_ir.hpp>

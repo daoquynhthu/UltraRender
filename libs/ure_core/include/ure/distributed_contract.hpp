@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "ure/render.hpp"
+#include "ure/resource_types.hpp"
 
 namespace ure::gpu {
 
@@ -28,6 +29,7 @@ struct DistributedFrameShard {
 struct DistributedShardMetadata {
     DistributedSpectralDomainShard spectral;
     DistributedFrameShard frame;
+    resource::ResourceSetMetadata resources;
 };
 
 // Describes which sample range a node should render.

@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "ure/gpu_context.hpp"
+#include "ure/detail/cuda_context.cuh"
 #include "ure/gpu_driver.hpp"
 
 using namespace ure::gpu;

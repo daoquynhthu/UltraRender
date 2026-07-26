@@ -9,7 +9,7 @@
 #include <cstring>
 #include <stdexcept>
 
-#include <ure/gpu_scene_compiler.hpp>
+#include <ure/detail/cuda_scene_compiler.hpp>
 #include <ure/gltf_scene_frontend.hpp>
 #include <ure/render.hpp>
 #include <ure/render_config.hpp>

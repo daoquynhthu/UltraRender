@@ -2,7 +2,7 @@
 #include <ure/mie_phase_io.hpp>
 #include <ure/mie_phase_validation.hpp>
 #include <ure/mie_solver.hpp>
-#include <ure/gpu_scene_compiler.hpp>
+#include <ure/detail/cuda_scene_compiler.hpp>
 #include <ure/scene_ir.hpp>
 
 #include <cmath>

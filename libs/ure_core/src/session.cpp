@@ -1,5 +1,4 @@
 #include "ure/session.hpp"
-#include "ure/gpu_scene_compiler.hpp"
 #include "ure/mie_phase_validation.hpp"
 
 #include <algorithm>
@@ -112,29 +111,6 @@ void erase_indices_descending(std::vector<T>& items,
         }
         items.erase(items.begin() + static_cast<std::ptrdiff_t>(*it));
     }
-}
-
-void compile_scene_ir_transforms(const scene_ir::SceneIR& scene_ir,
-                                 std::vector<gpu::GpuInstanceTransform>& out) {
-    out.clear();
-    out.reserve(scene_ir.instances.size());
-    for (const auto& instance : scene_ir.instances) {
-        if (!instance.mesh || !instance.mesh->mesh) {
-            continue;
-        }
-        gpu::GpuInstanceTransform transform = {};
-        GpuSceneCompiler::build_instance_transform(instance.position,
-                                                   instance.scale,
-                                                   instance.rotation,
-                                                   instance.mesh->mesh,
-                                                   transform);
-        out.push_back(transform);
-    }
-}
-
-std::vector<gpu::GpuMaterialData> compile_scene_ir_materials(const scene_ir::SceneIR& scene_ir,
-                                                             const RenderConfig& config) {
-    return GpuSceneCompiler::compile(scene_ir, config).materials;
 }
 
 } // namespace
@@ -479,9 +455,7 @@ bool RenderSession::apply_instance_transform_mutations(const std::vector<Instanc
         if (!upload || requires_reload) {
             return requires_reload;
         }
-        std::vector<gpu::GpuInstanceTransform> transforms;
-        compile_scene_ir_transforms(*current_scene_ir_, transforms);
-        engine_->update_transforms(transforms.data(), static_cast<int>(transforms.size()));
+        engine_->update_transforms(*current_scene_ir_);
         state_ = RenderSessionState::Ready;
         return false;
     }
@@ -514,8 +488,7 @@ bool RenderSession::apply_material_mutations(const std::vector<SceneIrMaterialMu
         if (!upload || requires_reload) {
             return requires_reload;
         }
-        std::vector<gpu::GpuMaterialData> materials = compile_scene_ir_materials(*current_scene_ir_, config_);
-        engine_->update_materials(materials.data(), static_cast<int>(materials.size()));
+        engine_->update_materials(*current_scene_ir_);
         state_ = RenderSessionState::Ready;
         return false;
     }

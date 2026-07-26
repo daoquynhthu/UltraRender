@@ -1,7 +1,7 @@
 #include "ure/render.hpp"
 #include "ure/backend.hpp"
-#include "ure/gpu_context.hpp"
-#include "ure/gpu_scene_compiler.hpp"
+#include "ure/detail/cuda_context.cuh"
+#include "ure/detail/cuda_scene_compiler.hpp"
 #include "ure/gpu_driver.hpp"
 #include "ure/transform_ring_buffer.hpp"
 #include "ure/render_config.hpp"
@@ -121,14 +121,29 @@ public:
         initialized_ = true;
     }
 
-    void update_transforms(const gpu::GpuInstanceTransform* transforms, int count) override {
+    void update_transforms(const scene_ir::SceneIR& scene_ir) override {
+        const CompiledGpuScene compiled =
+            GpuSceneCompiler::compile(scene_ir, config_);
+        std::vector<gpu::GpuInstanceTransform> transforms(
+            compiled.instances.size());
+        for (std::size_t index = 0; index < compiled.instances.size(); ++index) {
+            transforms[index].transform = compiled.instances[index].transform;
+            transforms[index].inverse_transform =
+                compiled.instances[index].inverse_transform;
+            transforms[index].min_pt = compiled.instances[index].min_pt;
+            transforms[index].max_pt = compiled.instances[index].max_pt;
+        }
+        const int count = static_cast<int>(compiled.instances.size());
         assert(gpu_context_ != nullptr && "update_transforms: no GPU context");
         assert(count == transform_ring_buffer_.instance_count && "update_transforms: instance count mismatch");
 
         // Step 1: Write new transforms into current write frame
         gpu::GpuInstanceTransform* dst = transform_ring_buffer_.begin_write();
         assert(dst != nullptr);
-        std::memcpy(dst, transforms, count * sizeof(gpu::GpuInstanceTransform));
+        std::memcpy(
+            dst,
+            transforms.data(),
+            count * sizeof(gpu::GpuInstanceTransform));
         transform_ring_buffer_.end_write();
 
         // Step 2: Advance write index (release fence + release store)
@@ -143,7 +158,11 @@ public:
         reset_accumulation();
     }
 
-    void update_materials(const gpu::GpuMaterialData* materials, int count) override {
+    void update_materials(const scene_ir::SceneIR& scene_ir) override {
+        const CompiledGpuScene compiled =
+            GpuSceneCompiler::compile(scene_ir, config_);
+        const auto* materials = compiled.materials.data();
+        const int count = static_cast<int>(compiled.materials.size());
         if (!gpu_context_) {
             throw std::runtime_error("update_materials: no GPU context");
         }

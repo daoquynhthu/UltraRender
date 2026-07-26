@@ -1,5 +1,5 @@
 #include "test_framework.cuh"
-#include <ure/gpu_context.hpp>
+#include <ure/detail/cuda_context.cuh>
 #include <ure/gpu_driver.hpp>
 #include <ure/gpu_structs.hpp>
 #include <ure/log.hpp>

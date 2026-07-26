@@ -1,6 +1,6 @@
 #include "ure/materialx_io.hpp"
 
-#include "ure/gpu_scene_compiler.hpp"
+#include "ure/detail/cuda_scene_compiler.hpp"
 #include "ure/render_config.hpp"
 
 #include <cstdio>

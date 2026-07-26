@@ -35,7 +35,6 @@ try {
     Assert-NoMatch @("libs/ure_core/include/ure/ure_c_api.h") 'Gpu(Context|Scene|MaterialData|Texture)' "C ABI exposes CUDA-era implementation structs"
 
     $allowedCudaHeaders = @(
-        "libs/ure_core/include/ure/gpu_context.hpp",
         "libs/ure_core/include/ure/gpu_hardware.hpp",
         "libs/ure_core/include/ure/gpu_structs.hpp",
         "libs/ure_diag/include/ure/check_cuda.hpp"
@@ -85,8 +84,26 @@ try {
     Assert-Contains "libs/ure_runtime/include/ure/runtime/runtime.hpp" "DeviceLossInfo" "T.3 device-loss contract is missing"
     Assert-Contains "tests/host/test_runtime_contract.cpp" "test_lifetime_overflow_and_sync" "T.3 lifecycle/synchronization tests are missing"
     Assert-Contains "tests/host/test_runtime_contract.cpp" "test_graph_validation_and_device_loss" "T.3 graph/device-loss tests are missing"
-    Assert-Contains "PLAN.md" "当前游标: T\.4" "PLAN cursor did not advance to T.4"
-    Assert-Contains "PLAN.md" "T\.3 closure.*权威游标进入 T\.4" "PLAN lacks the T.3 closure and T.4 gate"
+    Assert-Contains "libs/ure_types/include/ure/resource_types.hpp" "struct ResourceId" "T.4 stable resource id is missing"
+    Assert-Contains "libs/ure_runtime/include/ure/runtime/resource_plan.hpp" "using ResourceLayout" "T.4 typed resource layout is missing"
+    Assert-Contains "libs/ure_runtime/include/ure/runtime/resource_plan.hpp" "SparseTileLayout" "T.4 sparse/tiled contract is missing"
+    Assert-Contains "libs/ure_runtime/include/ure/runtime/resource_plan.hpp" "struct UploadPlan" "T.4 upload plan is missing"
+    Assert-NoMatch @(
+        "libs/ure_core/include/ure/gpu_context.hpp",
+        "libs/ure_core/include/ure/gpu_structs.hpp"
+    ) 'cudaTextureObject_t|cudaArray_t|pointers_to_free|arrays_to_free|tex_objs_to_free|material_resource_tables_to_free' "T.4 CUDA resource ownership leaked into public headers"
+    Assert-NoMatch @("libs/ure_core/include/ure/render.hpp") 'GpuInstanceTransform|GpuMaterialData' "T.4 render API still exposes CUDA-era mutation structs"
+    Assert-NoMatch @(
+        "libs/ure_core/include/ure/gpu_context.hpp",
+        "libs/ure_core/include/ure/gpu_multi_driver.hpp"
+    ) 'struct[[:space:]]+(GpuContext|MultiGpuContext)[[:space:]]*\{' "T.4 public runtime context still exposes backend allocation state"
+    Assert-Contains "libs/ure_core/src/cuda_resource_registry.cuh" "class CudaResourceRegistry" "T.4 CUDA native resource registry is missing"
+    Assert-Contains "libs/ure_core/include/ure/detail/cuda_scene_compiler.hpp" "struct CompiledGpuScene" "T.4 CUDA scene lowering was not moved behind the backend boundary"
+    Assert-Contains "tests/host/test_resource_plan.cpp" "1'000'000" "T.4 million-domain resource budget gate is missing"
+    Assert-Contains "tests/sdk_free/CMakeLists.txt" "LANGUAGES CXX" "T.4 independent SDK-free target is missing"
+    Assert-Contains "scripts/run_phase_t4_resource_gate.ps1" "CMAKE_CUDA_COMPILER" "T.4 SDK-free compiler audit is missing"
+    Assert-Contains "PLAN.md" "当前游标: T\.5" "PLAN cursor did not advance to T.5"
+    Assert-Contains "PLAN.md" "T\.4 closure.*权威游标进入 T\.5" "PLAN lacks the T.4 closure and T.5 gate"
     Write-Host "Phase T static audit passed"
 } finally {
     Pop-Location

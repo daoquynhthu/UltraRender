@@ -156,9 +156,25 @@ bool validate_frame_shard(const DistributedFrameShard& shard) {
            shard.frame_index < shard.frame_count;
 }
 
+static bool validate_resource_set_metadata(
+    const resource::ResourceSetMetadata& resources) {
+    const bool hash_empty = std::ranges::all_of(
+        resources.content_hash,
+        [](std::uint8_t value) { return value == 0; });
+    if (resources.descriptor_count == 0) {
+        return hash_empty &&
+               resources.logical_bytes == 0 &&
+               resources.minimum_resident_bytes == 0;
+    }
+    return !hash_empty &&
+           resources.logical_bytes > 0 &&
+           resources.minimum_resident_bytes <= resources.logical_bytes;
+}
+
 bool validate_shard_metadata(const DistributedShardMetadata& metadata) {
     return validate_spectral_domain_shard(metadata.spectral) &&
-           validate_frame_shard(metadata.frame);
+           validate_frame_shard(metadata.frame) &&
+           validate_resource_set_metadata(metadata.resources);
 }
 
 bool compatible_shard_metadata_for_merge(const DistributedShardMetadata& accum,
@@ -172,7 +188,8 @@ bool compatible_shard_metadata_for_merge(const DistributedShardMetadata& accum,
            a.lambda_min == b.lambda_min &&
            a.lambda_max == b.lambda_max &&
            accum.frame.frame_index == incoming.frame.frame_index &&
-           accum.frame.frame_count == incoming.frame.frame_count;
+           accum.frame.frame_count == incoming.frame.frame_count &&
+           accum.resources == incoming.resources;
 }
 
 bool validate_sample_range(const DistributedSampleRange& range) {

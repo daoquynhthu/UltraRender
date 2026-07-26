@@ -8,6 +8,7 @@ add_library(ure_core STATIC
     src/restir_di_runtime.cu
     src/bidirectional_runtime.cu
     src/backend_cuda.cu
+    src/cuda_resource_registry.cu
     src/ure_c_api.cpp
     src/path_tracer_kernel.cu
     src/path_tracer_host_api.cu
@@ -37,7 +38,7 @@ target_include_directories(ure_core PUBLIC
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../ure_sceneio/include"
 )
-target_link_libraries(ure_core PUBLIC ure_types ure_diag PRIVATE ure_sceneio)
+target_link_libraries(ure_core PUBLIC ure_types ure_runtime ure_diag PRIVATE ure_sceneio)
 
 if(MSVC)
     target_compile_options(ure_core PRIVATE
@@ -68,6 +69,7 @@ install(TARGETS ure_core EXPORT UltraRender_Targets
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     PATTERN "*.cuh" EXCLUDE
     PATTERN "*.cu" EXCLUDE
+    PATTERN "detail" EXCLUDE
 )
 
 add_library(pyure_native SHARED src/ure_c_api.cpp)

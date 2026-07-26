@@ -15,6 +15,7 @@ namespace ure::gpu {
 struct GpuBidirectionalPathVertex;
 struct GpuBidirectionalTelemetry;
 struct GpuManifoldSeedPrimitive;
+struct GpuTexture;
 
 struct GpuRestirPathSuffix;
 struct GpuRestirPTTelemetry;
@@ -348,18 +349,6 @@ struct GpuMaterialBsdfLobe {
     int metal_eta_expression_root = -1;
     int extinction_expression_root = -1;
     int ior_expression_root = -1;
-};
-
-struct GpuTexture {
-    int width;
-    int height;
-    int channels;
-    cudaTextureObject_t texObj; // Texture Object (Hardware Filtering)
-    SpectralTextureResourceKind spectral_kind = SpectralTextureResourceKind::None;
-    const float* spectral_source_values = nullptr;
-    int spectral_sample_count = 0;
-    float spectral_lambda_min = kSpectralLambdaMin;
-    float spectral_lambda_max = kSpectralLambdaMax;
 };
 
 enum class GpuLightKind : int {

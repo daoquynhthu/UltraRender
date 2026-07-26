@@ -1,4 +1,4 @@
-#include "ure/gpu_scene_compiler.hpp"
+#include "ure/detail/cuda_scene_compiler.hpp"
 #include "ure/gpu_scene_loader.hpp"
 #include "ure/gpu_spectrum_utils.cuh"
 #include "ure/image_loader.hpp"

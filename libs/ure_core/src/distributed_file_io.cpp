@@ -11,7 +11,7 @@ namespace {
 
 constexpr std::array<char, 8> kRangeMagic = {'U', 'R', 'D', 'R', 'A', 'N', 'G', 'E'};
 constexpr std::array<char, 8> kFrameMagic = {'U', 'R', 'D', 'F', 'R', 'A', 'M', 'E'};
-constexpr int kVersion = 3;
+constexpr int kVersion = 4;
 
 int pixel_value_count(int width, int height) {
     if (width <= 0 || height <= 0) {
@@ -90,6 +90,10 @@ void write_shard_metadata(std::ofstream& out, const DistributedShardMetadata& me
     write_value(out, metadata.spectral.wavelength_pdf_integral);
     write_value(out, metadata.frame.frame_index);
     write_value(out, metadata.frame.frame_count);
+    write_value(out, metadata.resources.content_hash);
+    write_value(out, metadata.resources.descriptor_count);
+    write_value(out, metadata.resources.logical_bytes);
+    write_value(out, metadata.resources.minimum_resident_bytes);
 }
 
 DistributedShardMetadata read_shard_metadata(std::ifstream& in) {
@@ -104,6 +108,12 @@ DistributedShardMetadata read_shard_metadata(std::ifstream& in) {
     metadata.spectral.wavelength_pdf_integral = read_value<float>(in);
     metadata.frame.frame_index = read_value<int>(in);
     metadata.frame.frame_count = read_value<int>(in);
+    metadata.resources.content_hash =
+        read_value<std::array<std::uint8_t, 32>>(in);
+    metadata.resources.descriptor_count = read_value<std::uint64_t>(in);
+    metadata.resources.logical_bytes = read_value<std::uint64_t>(in);
+    metadata.resources.minimum_resident_bytes =
+        read_value<std::uint64_t>(in);
     if (!validate_shard_metadata(metadata)) {
         throw std::runtime_error("invalid distributed shard metadata payload");
     }
