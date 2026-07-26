@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `T.2`. Phase Q and Phase R are complete; Phase T has completed the T.0 CUDA coupling audit and T.1 backend identity/capability contract. Portable kernel compilation and additional execution backends must not yet be treated as implemented.
+The authoritative construction cursor is `T.3`. Phase Q and Phase R are complete; Phase T has completed the T.0 CUDA coupling audit, T.1 backend identity/capability contract, and T.2 Slang toolchain feasibility gate. The backend-neutral runtime API, production kernel migration, and additional execution backends must not yet be treated as implemented.
 
 ## Supported execution baseline
 
@@ -44,6 +44,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 |---|---|---|
 | CUDA wavefront path tracing | Implemented and tested | Primary runtime path |
 | Backend identity/capability selection | Implemented and tested | CUDA is the Auto/default production backend; Vulkan and D3D12 requests fail loudly |
+| Portable kernel toolchain | Slang selected and feasibility-tested | Six prototypes compile deterministically to PTX/SPIR-V/DXIL; production kernels remain CUDA-owned until T.6 |
 | Runtime spectral domain / wavelength packets | Implemented and tested | Packet cap 32; sampled lane mode supported |
 | Stokes/Mueller polarization | Implemented for covered boundary/transport paths | Not coherent field transport |
 | Lambertian/metal/dielectric/cloth | Implemented for tested paths | Material model coverage is not exhaustive |

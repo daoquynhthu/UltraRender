@@ -2,8 +2,8 @@
 
 ## Status
 
-T.0 and T.1 are complete and the authoritative cursor is T.2. This document is
-the migration ledger for T.2 through T.11. CUDA remains the only production
+T.0 through T.2 are complete and the authoritative cursor is T.3. This document
+is the migration ledger for T.3 through T.11. CUDA remains the only production
 backend at this cursor; Vulkan and D3D12 identities are reserved values whose
 explicit selection fails loudly.
 
@@ -57,7 +57,7 @@ identity belong above it.
 1. T.1 introduces backend identity, adapter capabilities, limits, memory
    budgets, and compiler/driver identity across config, CLI, ABI, and pyure.
    CUDA remains the default and only accepted production backend.
-2. T.2 selects a kernel toolchain using real spectral, Mueller, queue,
+2. T.2 selected Slang using real spectral, Mueller, queue,
    scattering, wave, and traversal prototypes. No source duplication decision is
    allowed before generated-code and debugging evidence exists.
 3. T.3 establishes device, queue, synchronization, resource, module, pipeline,
@@ -129,5 +129,23 @@ identity without importing the CUDA runtime in the CLI.
 T.1 verification covers JSON and CLI precedence, CUDA adapter identity and
 limits, explicit selection and rejection boundaries, C ABI-backed pyure
 enumeration/session creation, and unsupported backend failure. The
-authoritative next cursor is T.2; no portable kernel toolchain has been selected
-yet.
+authoritative next cursor is T.3.
+
+## T.2 portable kernel toolchain gate
+
+Slang 2026.14 is pinned as the shared-source frontend after direct compilation
+of six nontrivial prototypes to CUDA PTX/cubin, SPIR-V, and DXIL. The gate
+validates deterministic artifacts and reflection, 64-bit layout, subgroup and
+atomic lowering, specialization, debug/source mapping, PTX register/spill
+evidence, CUDA occupancy, and actual CUDA numerical execution.
+
+Restricted shared C++ was rejected because it lacks one validated
+SPIR-V/DXIL frontend and reflection/debug contract. A custom URE KernelIR shader
+compiler was rejected because owning three optimizer/code-generator/debugger
+stacks would be avoidable compiler debt. T.5 may still define a small
+dispatch/execution IR; it must not duplicate shader compiler responsibilities.
+
+The full decision, measurements, dependency boundary, and reproduction command
+are recorded in `docs/Phase_T2_Kernel_Toolchain_Decision.md`. T.2 does not adopt
+Slang RHI and does not migrate the production CUDA executor. Those boundaries
+remain T.3-T.6.

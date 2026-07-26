@@ -49,7 +49,9 @@ foreach ($file in $executionRecords) {
 }
 
 $markdownFiles = @(Get-ChildItem -LiteralPath $root -File -Recurse -Filter "*.md" | Where-Object {
-    $_.FullName -notmatch '[\\/]third_party[\\/]' -and $_.FullName -notmatch '[\\/]build[^\\/]*[\\/]'
+    $_.FullName -notmatch '[\\/]third_party[\\/]' -and
+    $_.FullName -notmatch '[\\/]\.build[\\/]' -and
+    $_.FullName -notmatch '[\\/]build[^\\/]*[\\/]'
 })
 $linkPattern = [regex]'\[[^\]]+\]\((?!https?://|mailto:|#)(?<target>[^)#]+)(?:#[^)]*)?\)'
 foreach ($file in $markdownFiles) {

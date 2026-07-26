@@ -47,7 +47,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | R-P5 (PSSMLT) | Done | Independent GPU chains, production wavefront replay, normalization/diagnostics/shards, replicated disjoint-range fixed-NMSE gate |
 | R-P7 (Industrial Validation) | Done | Clean-tree eight-category Closure, farm/Nsight same-binary evidence, 37/37 CTest |
 | Q.0-Q.12 (Native Scene) | Done | Native schema/serialization, procedural/script, resources/solvers/simulation, tooling/adapters/cache/farm, validation suite |
-| T (Portable GPU Runtime) | In progress | T.0 coupling audit and T.1 backend identity/capability complete; T.2 is the authoritative cursor |
+| T (Portable GPU Runtime) | In progress | T.0-T.2 complete; Slang toolchain selected; T.3 is the authoritative cursor |
 | W (Wave Optics Solver) | In progress | W.0 audit + rough dielectric spectral/UV PDF/MIS fix done; W.1 WaveOpticsConfig gates done; W.2 Airy PSF oracle started |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
@@ -394,10 +394,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 16 | 2026-07-23 R-P7 closure | Closed Phase R on a clean committed tree | Release build, 37/37 CTest, Q/L/R and physics-optics gates, eight-category Closure, disjoint 4,096-SPP farm merge, and same-binary Nsight/VRAM evidence passed; cursor advanced to T.0. |
 | 17 | 2026-07-23 T.0 | Froze the portable-runtime coupling ledger and regression boundary | Fourteen coupling categories cover build through validation with owners and migration batches; static audit prevents new CUDA SDK/native-handle leakage into backend-neutral surfaces and freezes four existing public-header debts. |
 | 18 | 2026-07-26 T.1 | Established the backend identity, capability and selection contract | Backend-neutral identity/features/limits/budgets and driver/compiler metadata now span RenderConfig, JSON, CLI, C ABI and pyure; CUDA remains Auto/default, while unavailable backends and invalid adapter/feature/budget requests fail loudly. |
+| 19 | 2026-07-26 T.2 | Selected and verified the portable kernel toolchain | Pinned Slang 2026.14 compiled spectral, Mueller, queue, BSDF, wave and traversal prototypes deterministically to PTX/SPIR-V/DXIL with reflection/debug/capability evidence; sm_120 cubins had zero spills, full measured occupancy and passed numerical execution. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- Phase Q, Phase M, and Phase R are complete; T.0-T.1 are complete and the authoritative construction cursor is T.2.
+- Phase Q, Phase M, and Phase R are complete; T.0-T.2 are complete and the authoritative construction cursor is T.3.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 1) to avoid concurrent `ptxas` host-memory allocation failures; host and unrelated targets remain globally parallel.

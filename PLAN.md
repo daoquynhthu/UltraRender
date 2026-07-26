@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-26 (T.1 closure and T.2 cursor)
+最后更新: 2026-07-26 (T.2 closure and T.3 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -54,7 +54,7 @@ Phase Q complete [done]
 R-P4 specular manifold + BDPT/VCM [done]
    │
    ▼
-当前游标: T.2
+当前游标: T.3
    │
    ▼
 Phase T complete
@@ -79,7 +79,7 @@ Phase X complete
 - **R-P6 已闭环**: deterministic Lorenz-Mie generator、严格 table adapter、不可变 SceneIR resource、GPU spectral eval/pdf/sample、NEE/continuation、scalar-depolarizing Stokes、Session rebuild 和端到端生命周期均已进入生产与验证路径。
 - **Phase Q 已闭环**: URE native schema、serialization、programmatic graph、feature declaration、tooling/adapter、compiled cache/farm 与 validation suite 已冻结为后续阶段的权威 authoring contract。
 - **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
-- **当前唯一施工项 — Phase T**: Phase R 已通过 clean-tree R-P7 Closure；T.0 已冻结 CUDA coupling ledger，T.1 已闭环 backend identity/capability contract，当前游标为 T.2 portable kernel toolchain feasibility。
+- **当前唯一施工项 — Phase T**: Phase R 已通过 clean-tree R-P7 Closure；T.0-T.1 已冻结 coupling 与 backend identity，T.2 已用六类原型锁定 Slang 多目标工具链，当前游标为 T.3 backend-neutral runtime API。
 - **Phase T → V → W**: T 先稳定 backend-neutral runtime 并迁移 CUDA/Vulkan/DXR；V 再建设统一 acceleration provider；W 最后把已有 reference/oracle 工作接入稳定执行与加速合同。现有 W 成果保留，新增 W production work 冻结。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
@@ -1994,7 +1994,7 @@ R-P1 必须先于 R-P2/R-P3/R-P4，因为 path guiding、ReSTIR、BDPT/VCM 都�
 
 ### Phase T — 可移植 GPU 运行时 / Portable Multi-Backend Execution
 
-**状态**: 进行中，T.0-T.1 已完成，当前游标 T.2。Phase R 已闭环；Phase V 的正式实现必须建立在 Phase T 合同之上。
+**状态**: 进行中，T.0-T.2 已完成，当前游标 T.3。Phase R 已闭环；Phase V 的正式实现必须建立在 Phase T 合同之上。
 
 **目标**: 把 UltraRender 从“核心语义由 CUDA 实现细节定义”升级为“同一套物理、资源、调度和加速合同可由多个 GPU backend 执行”。CUDA 保留为当前生产后端、物理参考实现和 NVIDIA 性能路径，但不再拥有公共架构；Vulkan 是 Windows/Linux 跨厂商生产后端；D3D12/DXR 是 Windows 可选后端。各 backend 可以使用专有优化，不要求退化到最低公分母。
 
@@ -2042,6 +2042,8 @@ Phase T 不允许简单维护三份独立 path tracer。T.2 必须用实际 spec
 T.0 closure（2026-07-23）：`docs/Phase_T_Portable_GPU_Runtime.md` 已覆盖 build、device、public API、C ABI/pyure、GpuContext、resource/texture、queue/dispatch、kernel、multi-GPU、wave optics、acceleration、diagnostics、scene lowering 和 validation 14 类耦合；每类均指定 contract owner 与 T.1-T.11 迁移批次。`scripts/check_phase_t_static.ps1` 阻止 CUDA SDK/native handle 进入 backend-neutral modules、RenderConfig、SceneIR、C ABI 和 pyure，并冻结现有 4 个 public CUDA include debt allowlist，后续迁移只能缩减不能扩张。T.0 不声称第二后端存在；权威游标进入 T.1。
 
 T.1 closure（2026-07-26）：backend-neutral `BackendKind`、stable adapter id、feature bitset、limits、memory capacity/budget 和 driver/compiler identity 已贯穿 RenderConfig、JSON、CLI、C ABI 与 pyure；`Auto` 和显式 `Cuda` 选择当前 CUDA production backend，UUID adapter identity、能力/预算验证和设备激活均 fail-loud。Vulkan/D3D12 仅保留身份值，显式请求不会静默回退。CLI device inventory 已移除直接 CUDA SDK 依赖；配置、GPU、C ABI-backed pyure 与静态审计门禁覆盖选择和拒绝边界。权威游标进入 T.2。
+
+T.2 closure（2026-07-26）：固定 Slang 2026.14 及 release SHA-256，以共享 semantic module 和 spectral conversion、Mueller/Stokes、subgroup+atomic queue compaction、BSDF sampling、complex wave propagation、AABB traversal 六个 compute 原型直接生成 CUDA PTX/cubin、SPIR-V 与 DXIL。`run_phase_t2_kernel_toolchain_gate.ps1` 对全部 18 个目标产物执行 warnings-as-errors、双编译哈希一致、reflection/64-bit layout、subgroup/atomic、specialization、debug/source mapping 和 target validation；sm_120 cubin 通过 Driver API 数值执行，15-40 registers、零 spill、64-thread block 实测 occupancy 100%。受限共享 C++ 因无统一 SPIR-V/DXIL frontend/reflection/debug contract 淘汰；自研 shader KernelIR 因会引入三套 compiler backend 技术债淘汰。Slang RHI 未纳入，生产 CUDA executor 仍保持不变；权威游标进入 T.3。
 
 #### 完成标准
 
