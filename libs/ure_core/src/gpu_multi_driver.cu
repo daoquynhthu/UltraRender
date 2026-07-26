@@ -1,15 +1,20 @@
-#include "ure/gpu_multi_driver.hpp"
-#include "ure/mlt.hpp"
-#include "ure/gpu_structs.hpp"
-#include "ure/detail/cuda_context.cuh"
-#include "ure/detail/cuda_multi_context.cuh"
-#include <cuda_runtime.h>
-#include <ure/log.hpp>
-#include <ure/check_cuda.hpp>
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+
+#include <cuda_runtime.h>
+
+#include "cuda_check.cuh"
+#include "cuda_runtime_device.cuh"
+#include "ure/detail/cuda_context.cuh"
+#include "ure/detail/cuda_multi_context.cuh"
+#include "ure/detail/cuda_multi_driver.cuh"
+#include "ure/detail/cuda_structs.cuh"
+#include "ure/log.hpp"
+#include "ure/mlt.hpp"
+#include "ure/runtime/execution_graph.hpp"
 
 namespace ure::gpu {
 
@@ -83,7 +88,7 @@ static void merge_and_broadcast_path_guiding(MultiGpuContext* ctx, float baselin
     constexpr int kBlockSize = 256;
     const size_t light_bytes = ctx->path_guiding_light_count * sizeof(float);
     const size_t spatial_bytes = ctx->path_guiding_spatial_count * sizeof(float);
-    cudaSetDevice(0);
+    UR_CUDA_CHECK(cudaSetDevice(0));
     for (int i = 1; i < ctx->num_gpus; ++i) {
         UR_CUDA_CHECK(cudaMemcpyPeer(ctx->d_path_guiding_temp_light, 0,
                                      ctx->contexts[i]->d_path_guiding_light_weights, i,
@@ -128,7 +133,7 @@ MultiGpuContext* init_multi_gpu_renderer(int width, int height,
                                          const ure::RenderConfig& config,
                                          const std::vector<scene_ir::MiePhaseResource>& mie_phase_resources) {
     int device_count = 0;
-    cudaGetDeviceCount(&device_count);
+    UR_CUDA_CHECK(cudaGetDeviceCount(&device_count));
     int num_gpus = std::min(device_count, config.num_gpus_to_use);
     if (num_gpus < 1) num_gpus = 1;
 
@@ -141,9 +146,9 @@ MultiGpuContext* init_multi_gpu_renderer(int width, int height,
     UR_LOG_INFO(GPU, "Initializing {} GPU(s) for multi-GPU rendering ({}x{})", num_gpus, width, height);
 
     for (int i = 0; i < num_gpus; ++i) {
-        cudaSetDevice(i);
+        UR_CUDA_CHECK(cudaSetDevice(i));
         cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop, i);
+        UR_CUDA_CHECK(cudaGetDeviceProperties(&prop, i));
         UR_LOG_INFO(GPU, "  GPU[{}]: {}", i, prop.name);
         ure::RenderConfig device_config = config;
         if (device_config.mlt.enabled) {
@@ -156,12 +161,18 @@ MultiGpuContext* init_multi_gpu_renderer(int width, int height,
                                              textures, device_config, mie_phase_resources);
     }
 
-    cudaSetDevice(0);
+    UR_CUDA_CHECK(cudaSetDevice(0));
     size_t fb_size = width * height * sizeof(GpuVec3);
-    cudaMalloc(&ctx->d_merged_accum, fb_size);
-    cudaMemset(ctx->d_merged_accum, 0, fb_size);
-    cudaMalloc(&ctx->d_merged_counts, width * height * sizeof(int));
-    cudaMemset(ctx->d_merged_counts, 0, width * height * sizeof(int));
+    UR_CUDA_CHECK(cudaMalloc(&ctx->d_merged_accum, fb_size));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_merged_accum, 0, fb_size));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_merged_counts,
+        width * height * sizeof(int)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_merged_counts,
+        0,
+        width * height * sizeof(int)));
     allocate_path_guiding_merge_buffers(ctx);
 
     return ctx;
@@ -169,16 +180,20 @@ MultiGpuContext* init_multi_gpu_renderer(int width, int height,
 
 void free_multi_gpu_renderer(MultiGpuContext* ctx) {
     for (int i = 0; i < ctx->num_gpus; ++i) {
-        cudaSetDevice(i);
+        UR_CUDA_CHECK(cudaSetDevice(i));
         free_gpu_renderer(ctx->contexts[i]);
     }
-    cudaSetDevice(0);
-    cudaFree(ctx->d_merged_accum);
-    cudaFree(ctx->d_merged_counts);
-    cudaFree(ctx->d_path_guiding_baseline_light);
-    cudaFree(ctx->d_path_guiding_baseline_spatial);
-    cudaFree(ctx->d_path_guiding_temp_light);
-    cudaFree(ctx->d_path_guiding_temp_spatial);
+    UR_CUDA_CHECK(cudaSetDevice(0));
+    UR_CUDA_CHECK(cudaFree(ctx->d_merged_accum));
+    UR_CUDA_CHECK(cudaFree(ctx->d_merged_counts));
+    UR_CUDA_CHECK(cudaFree(
+        ctx->d_path_guiding_baseline_light));
+    UR_CUDA_CHECK(cudaFree(
+        ctx->d_path_guiding_baseline_spatial));
+    UR_CUDA_CHECK(cudaFree(
+        ctx->d_path_guiding_temp_light));
+    UR_CUDA_CHECK(cudaFree(
+        ctx->d_path_guiding_temp_spatial));
     delete[] ctx->contexts;
     delete ctx;
 }
@@ -198,7 +213,7 @@ int render_pass_multi_gpu(MultiGpuContext* ctx, int samples_per_pass) {
         const bool decay_this_pass =
             first->path_guiding_passes_since_decay + 1 >= first->render_config.path_guiding.decay_interval;
         path_guiding_baseline_factor = decay_this_pass ? first->render_config.path_guiding.decay : 1.0f;
-        cudaSetDevice(0);
+        UR_CUDA_CHECK(cudaSetDevice(0));
         UR_CUDA_CHECK(cudaMemcpy(ctx->d_path_guiding_baseline_light,
                                  first->d_path_guiding_light_weights,
                                  ctx->path_guiding_light_count * sizeof(float),
@@ -210,12 +225,54 @@ int render_pass_multi_gpu(MultiGpuContext* ctx, int samples_per_pass) {
     }
 
     for (int i = 0; i < ctx->num_gpus; ++i) {
-        cudaSetDevice(i);
+        UR_CUDA_CHECK(cudaSetDevice(i));
         if (!mlt_mode) {
             ctx->contexts[i]->current_spp = current_base + i * samples_per_pass;
         }
         render_pass_gpu(ctx->contexts[i], samples_per_pass);
-        UR_CUDA_CHECK(cudaDeviceSynchronize());
+        const auto* current = ctx->contexts[i];
+        if (current->last_runtime_submission == 0 ||
+            current->last_execution_graph_schema !=
+                runtime::kExecutionGraphSchemaVersion) {
+            throw runtime::Error(
+                runtime::ErrorCode::BackendFailure,
+                "multi-GPU child did not produce a runtime submission");
+        }
+        if (i == 0) {
+            ctx->execution_graph_schema =
+                current->last_execution_graph_schema;
+            ctx->lowered_execution_node_count =
+                current->lowered_execution_node_count;
+            ctx->lowered_dispatch_count =
+                current->lowered_dispatch_count;
+            ctx->lowered_indirect_dispatch_count =
+                current->lowered_indirect_dispatch_count;
+        } else if (
+            current->last_execution_graph_schema !=
+                    ctx->execution_graph_schema ||
+            current->lowered_execution_node_count !=
+                    ctx->lowered_execution_node_count ||
+            current->lowered_dispatch_count !=
+                    ctx->lowered_dispatch_count ||
+            current->lowered_indirect_dispatch_count !=
+                    ctx->lowered_indirect_dispatch_count) {
+            throw runtime::Error(
+                runtime::ErrorCode::InvalidArgument,
+                "multi-GPU execution contracts are incompatible");
+        }
+    }
+    for (int i = 0; i < ctx->num_gpus; ++i) {
+        UR_CUDA_CHECK(cudaSetDevice(i));
+        auto* current = ctx->contexts[i];
+        if (!current->runtime_device->wait(
+                {current->execution_fence,
+                 current->execution_timeline},
+                std::chrono::nanoseconds::max())) {
+            throw runtime::Error(
+                runtime::ErrorCode::Timeout,
+                "multi-GPU runtime completion wait failed");
+        }
+        ++ctx->completed_submissions;
     }
 
     merge_and_broadcast_path_guiding(ctx, path_guiding_baseline_factor);
@@ -240,43 +297,71 @@ static void ensure_merged(MultiGpuContext* ctx) {
     size_t fb_size = n_pixels * sizeof(GpuVec3);
     size_t cnt_size = n_pixels * sizeof(int);
 
-    cudaSetDevice(0);
+    UR_CUDA_CHECK(cudaSetDevice(0));
 
     // Reset merged buffers
-    cudaMemset(ctx->d_merged_accum, 0, fb_size);
-    cudaMemset(ctx->d_merged_counts, 0, cnt_size);
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_merged_accum, 0, fb_size));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_merged_counts, 0, cnt_size));
 
     GpuVec3* temp_accum = nullptr;
     int* temp_counts = nullptr;
-    cudaMalloc(&temp_accum, fb_size);
-    cudaMalloc(&temp_counts, cnt_size);
+    UR_CUDA_CHECK(cudaMalloc(&temp_accum, fb_size));
+    UR_CUDA_CHECK(cudaMalloc(&temp_counts, cnt_size));
 
     for (int i = 0; i < ctx->num_gpus; ++i) {
         if (i == 0) {
-            cudaMemcpy(temp_accum, ctx->contexts[0]->d_accum_buffer, fb_size, cudaMemcpyDeviceToDevice);
-            cudaMemcpy(temp_counts, ctx->contexts[0]->d_sample_counts, cnt_size, cudaMemcpyDeviceToDevice);
+            UR_CUDA_CHECK(cudaMemcpy(
+                temp_accum,
+                ctx->contexts[0]->d_accum_buffer,
+                fb_size,
+                cudaMemcpyDeviceToDevice));
+            UR_CUDA_CHECK(cudaMemcpy(
+                temp_counts,
+                ctx->contexts[0]->d_sample_counts,
+                cnt_size,
+                cudaMemcpyDeviceToDevice));
         } else {
-            cudaMemcpyPeer(temp_accum, 0, ctx->contexts[i]->d_accum_buffer, i, fb_size);
-            cudaMemcpyPeer(temp_counts, 0, ctx->contexts[i]->d_sample_counts, i, cnt_size);
+            UR_CUDA_CHECK(cudaMemcpyPeer(
+                temp_accum,
+                0,
+                ctx->contexts[i]->d_accum_buffer,
+                i,
+                fb_size));
+            UR_CUDA_CHECK(cudaMemcpyPeer(
+                temp_counts,
+                0,
+                ctx->contexts[i]->d_sample_counts,
+                i,
+                cnt_size));
         }
         merge_accum_kernel<<<grid, block>>>(ctx->d_merged_accum, temp_accum, n_pixels);
         merge_counts_kernel<<<grid, block>>>(ctx->d_merged_counts, temp_counts, n_pixels);
-        cudaDeviceSynchronize();
+        UR_CUDA_CHECK(cudaDeviceSynchronize());
     }
 
-    cudaFree(temp_accum);
-    cudaFree(temp_counts);
+    UR_CUDA_CHECK(cudaFree(temp_accum));
+    UR_CUDA_CHECK(cudaFree(temp_counts));
 }
 
 void copy_frame_buffer_multi_gpu(MultiGpuContext* ctx, float* host_buffer) {
     ensure_merged(ctx);
 
-    cudaSetDevice(0);
+    UR_CUDA_CHECK(cudaSetDevice(0));
     size_t fb_size = ctx->width * ctx->height * sizeof(GpuVec3);
 
     // Write merged accum/counts into device 0 context for the copy helper
-    cudaMemcpy(ctx->contexts[0]->d_accum_buffer, ctx->d_merged_accum, fb_size, cudaMemcpyDeviceToDevice);
-    cudaMemcpy(ctx->contexts[0]->d_sample_counts, ctx->d_merged_counts, ctx->width * ctx->height * sizeof(int), cudaMemcpyDeviceToDevice);
+    UR_CUDA_CHECK(cudaMemcpy(
+        ctx->contexts[0]->d_accum_buffer,
+        ctx->d_merged_accum,
+        fb_size,
+        cudaMemcpyDeviceToDevice));
+    UR_CUDA_CHECK(cudaMemcpy(
+        ctx->contexts[0]->d_sample_counts,
+        ctx->d_merged_counts,
+        ctx->width * ctx->height * sizeof(int),
+        cudaMemcpyDeviceToDevice));
 
     copy_frame_buffer_gpu(ctx->contexts[0], host_buffer);
 }

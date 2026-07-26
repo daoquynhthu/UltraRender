@@ -1,8 +1,9 @@
-#include <stdexcept>
-#include <string>
+#include <chrono>
 
 #include <cuda_runtime.h>
 
+#include "cuda_check.cuh"
+#include "cuda_runtime_device.cuh"
 #include "ure/runtime/execution_graph.hpp"
 #include "ure/wave_optics.hpp"
 
@@ -42,12 +43,6 @@ __global__ void fraunhofer_direct_kernel(const ComplexAmplitude* input,
     output[index] = {real, imag};
 }
 
-void check_cuda(cudaError_t status, const char* operation) {
-    if (status != cudaSuccess) {
-        throw std::runtime_error(std::string(operation) + ": " + cudaGetErrorString(status));
-    }
-}
-
 bool is_valid_gpu_field(const WaveFieldGrid& field) {
     return field.width > 0 &&
            field.height > 0 &&
@@ -71,24 +66,53 @@ FraunhoferFieldGrid propagate_fraunhofer_gpu(const WaveFieldGrid& field) {
             bytes,
             128,
             0});
-    const auto execution_identity =
-        runtime::execution_fingerprint(execution_graph);
-    static_cast<void>(execution_identity);
-    ComplexAmplitude* d_input = nullptr;
-    ComplexAmplitude* d_output = nullptr;
-
-    check_cuda(cudaMalloc(&d_input, bytes), "cudaMalloc input");
+    auto device =
+        gpu::make_cuda_runtime_device_for_current_adapter();
+    const auto queue = device->create_queue({
+        runtime::QueueClass::ComputeTransfer,
+        0,
+        "ure.cuda.wave"});
+    const auto fence = device->create_fence(0);
+    const auto plan = device->lower(execution_graph);
+    const auto stream = device->native_stream(queue);
+    runtime::BufferHandle input;
+    runtime::BufferHandle output;
     try {
-        check_cuda(cudaMalloc(&d_output, bytes), "cudaMalloc output");
-        check_cuda(cudaMemcpy(d_input, field.samples.data(), bytes, cudaMemcpyHostToDevice),
-                   "cudaMemcpy input");
+        input = device->create_buffer({
+            bytes,
+            alignof(ComplexAmplitude),
+            runtime::BufferUsage::Storage |
+                runtime::BufferUsage::TransferDestination,
+            runtime::MemoryClass::DeviceLocal,
+            "wave.input"});
+        output = device->create_buffer({
+            bytes,
+            alignof(ComplexAmplitude),
+            runtime::BufferUsage::Storage |
+                runtime::BufferUsage::TransferSource,
+            runtime::MemoryClass::DeviceLocal,
+            "wave.output"});
+        auto* d_input = static_cast<ComplexAmplitude*>(
+            device->native_buffer(input));
+        auto* d_output = static_cast<ComplexAmplitude*>(
+            device->native_buffer(output));
+        gpu::detail::check_cuda(
+            cudaMemcpyAsync(
+                d_input,
+                field.samples.data(),
+                bytes,
+                cudaMemcpyHostToDevice,
+                stream),
+            "cudaMemcpyAsync wave input");
 
         const int threads = 128;
         const int blocks = static_cast<int>((count + static_cast<std::size_t>(threads) - 1) /
                                             static_cast<std::size_t>(threads));
-        fraunhofer_direct_kernel<<<blocks, threads>>>(d_input, field.width, field.height, d_output);
-        check_cuda(cudaGetLastError(), "fraunhofer_direct_kernel launch");
-        check_cuda(cudaDeviceSynchronize(), "fraunhofer_direct_kernel synchronize");
+        fraunhofer_direct_kernel<<<blocks, threads, 0, stream>>>(
+            d_input, field.width, field.height, d_output);
+        gpu::detail::check_cuda(
+            cudaGetLastError(),
+            "fraunhofer_direct_kernel launch");
 
         out.width = field.width;
         out.height = field.height;
@@ -96,16 +120,32 @@ FraunhoferFieldGrid propagate_fraunhofer_gpu(const WaveFieldGrid& field) {
         out.frequency_pitch_y_cycles_per_m = 1.0 / (static_cast<double>(field.height) * field.sample_pitch_m);
         out.wavelength_m = field.wavelength_m;
         out.amplitudes.resize(count);
-        check_cuda(cudaMemcpy(out.amplitudes.data(), d_output, bytes, cudaMemcpyDeviceToHost),
-                   "cudaMemcpy output");
+        gpu::detail::check_cuda(
+            cudaMemcpyAsync(
+                out.amplitudes.data(),
+                d_output,
+                bytes,
+                cudaMemcpyDeviceToHost,
+                stream),
+            "cudaMemcpyAsync wave output");
+        const runtime::TimelinePoint completion{fence, 1};
+        static_cast<void>(
+            device->complete_external(queue, plan, completion));
+        if (!device->wait(
+                completion,
+                std::chrono::nanoseconds::max())) {
+            throw runtime::Error(
+                runtime::ErrorCode::Timeout,
+                "CUDA wave execution timeline wait failed");
+        }
     } catch (...) {
-        cudaFree(d_output);
-        cudaFree(d_input);
         throw;
     }
 
-    cudaFree(d_output);
-    cudaFree(d_input);
+    device->destroy(output);
+    device->destroy(input);
+    device->destroy(fence);
+    device->destroy(queue);
     return out;
 }
 

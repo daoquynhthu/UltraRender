@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <vector>
-#include "ure/gpu_driver.hpp"
+#include "ure/detail/cuda_driver.cuh"
 #include "ure/render_config.hpp"
 
 namespace ure::gpu {

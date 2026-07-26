@@ -35,6 +35,15 @@ target_link_libraries(test_execution_graph_sdk_free PRIVATE
     ure_runtime_sdk_free
 )
 
+add_executable(test_public_surface_sdk_free
+    "${URE_ROOT}/tests/host/test_public_surface_sdk_free.cpp"
+)
+target_include_directories(test_public_surface_sdk_free PRIVATE
+    "${URE_ROOT}/libs/ure_core/include"
+    "${URE_ROOT}/libs/ure_types/include"
+    "${URE_ROOT}/libs/ure_runtime/include"
+)
+
 if(MSVC)
     target_compile_options(ure_runtime_sdk_free PRIVATE
         /W4 /WX /utf-8 /EHsc /wd4819
@@ -43,6 +52,9 @@ if(MSVC)
         /W4 /WX /utf-8 /EHsc /wd4819
     )
     target_compile_options(test_execution_graph_sdk_free PRIVATE
+        /W4 /WX /utf-8 /EHsc /wd4819
+    )
+    target_compile_options(test_public_surface_sdk_free PRIVATE
         /W4 /WX /utf-8 /EHsc /wd4819
     )
 else()
@@ -55,8 +67,12 @@ else()
     target_compile_options(test_execution_graph_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
     )
+    target_compile_options(test_public_surface_sdk_free PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+    )
 endif()
 
 enable_testing()
 add_test(NAME resource_plan_sdk_free COMMAND test_resource_plan_sdk_free)
 add_test(NAME execution_graph_sdk_free COMMAND test_execution_graph_sdk_free)
+add_test(NAME public_surface_sdk_free COMMAND test_public_surface_sdk_free)

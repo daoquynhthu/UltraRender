@@ -3,7 +3,7 @@
 // Phase P.1: Static instance descriptor (never changes after scene load).
 // Separated from dynamic transform to enable per-frame hot-update
 // without touching mesh/material bindings.
-// NOTE: Designed to be included from within namespace ure::gpu (e.g. via gpu_structs.hpp).
+// NOTE: Designed to be included from within namespace ure::gpu (e.g. via cuda_structs.cuh).
 // Do NOT wrap in an additional namespace declaration.
 
 struct GpuInstanceDesc {

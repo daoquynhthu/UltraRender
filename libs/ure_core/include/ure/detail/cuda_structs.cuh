@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "ure/spectral_limits.hpp"
+
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable: 4324)
@@ -139,11 +141,14 @@ struct StokesVector {
 // Spectral range constants.
 constexpr float kSpectralLambdaMin = 360.0f;
 constexpr float kSpectralLambdaMax = 830.0f;
-constexpr int kMinPacketLanes = 1;
-constexpr int kMaxPacketLanes = 32;
+constexpr int kMinPacketLanes =
+    ure::kMinSpectralPacketLanes;
+constexpr int kMaxPacketLanes =
+    ure::kMaxSpectralPacketLanes;
 
 __host__ __device__ inline bool valid_packet_lane_count(int lanes) {
-    return lanes == 1 || (lanes >= 8 && lanes <= kMaxPacketLanes);
+    return lanes == 1 ||
+        (lanes >= 8 && lanes <= kMaxPacketLanes);
 }
 
 struct SpectralSample {
@@ -520,8 +525,8 @@ struct GpuMesh {
 };
 
 // Phase P.1: Independent desc and transform files (referenced from GpuScene below)
-#include "ure/instance_desc.hpp"
-#include "ure/instance_transform.hpp"
+#include "ure/detail/cuda_instance_desc.cuh"
+#include "ure/detail/cuda_instance_transform.cuh"
 
 // Packed instance layout retained for existing GPU kernels.
 // Layout: GpuInstanceDesc (8B) + GpuInstanceTransform (152B) = 160B total

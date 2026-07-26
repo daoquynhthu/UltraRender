@@ -1,8 +1,8 @@
 #pragma once
 
 #include "ure/ure_api.hpp"
-#include "ure/gpu_driver.hpp"
-#include "ure/gpu_scene_loader.hpp"
+#include "ure/detail/cuda_driver.cuh"
+#include "ure/detail/cuda_scene_loader.cuh"
 #include "ure/render_config.hpp"
 #include "ure/scene_ir.hpp"
 

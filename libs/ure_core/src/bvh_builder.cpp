@@ -1,4 +1,4 @@
-#include "ure/bvh_builder.hpp"
+#include "ure/detail/cuda_bvh_builder.cuh"
 #include <algorithm>
 #include <numeric>
 #include <memory>

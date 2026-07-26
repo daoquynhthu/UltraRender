@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "ure/detail/cuda_context.cuh"
-#include "ure/gpu_driver.hpp"
+#include "ure/detail/cuda_driver.cuh"
 
 using namespace ure::gpu;
 

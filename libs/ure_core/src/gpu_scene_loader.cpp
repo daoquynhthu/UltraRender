@@ -1,5 +1,5 @@
-#include "ure/gpu_scene_loader.hpp"
-#include "ure/material_library.hpp"
+#include "ure/detail/cuda_scene_loader.cuh"
+#include "ure/detail/cuda_material_library.cuh"
 #include <cmath>
 
 namespace ure::gpu {

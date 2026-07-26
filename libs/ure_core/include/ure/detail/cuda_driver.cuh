@@ -2,9 +2,9 @@
 
 #include <cstddef>
 #include <vector>
-#include "ure/gpu_scene_loader.hpp"
-#include "ure/gpu_structs.hpp"
-#include "ure/instance_transform.hpp"
+#include "ure/detail/cuda_scene_loader.cuh"
+#include "ure/detail/cuda_structs.cuh"
+#include "ure/detail/cuda_instance_transform.cuh"
 #include "ure/mie_phase.hpp"
 #include "ure/integrator/mlt.cuh"
 #include "ure/render_config.hpp"
@@ -48,7 +48,8 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<GpuMaterialData>& materials,
                               const std::vector<HostTexture>& textures = {},
                               const ure::RenderConfig& config = ure::RenderConfig{},
-                              const std::vector<scene_ir::MiePhaseResource>& mie_phase_resources = {});
+                             const std::vector<scene_ir::MiePhaseResource>& mie_phase_resources = {},
+                             const BackendAdapterInfo* backend_adapter = nullptr);
 
 // Cleanup GPU resources
 void free_gpu_renderer(GpuContext* ctx);

@@ -5,13 +5,14 @@
 #include <memory>
 #include <vector>
 
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/host_texture.hpp"
 #include "ure/integrator/restir_pt.cuh"
 #include "ure/integrator/bidirectional.cuh"
 #include "ure/integrator/specular_manifold.cuh"
 #include "ure/integrator/mlt.cuh"
 #include "ure/render_config.hpp"
+#include "ure/runtime/runtime.hpp"
 
 #if defined(_MSC_VER)
 #pragma warning(push)
@@ -21,6 +22,7 @@
 namespace ure::gpu {
 
 class CudaResourceRegistry;
+class CudaRuntimeDevice;
 
 struct GpuContext {
     GpuContext();
@@ -227,6 +229,17 @@ struct GpuContext {
     float medium_max_distance = 0.0f;
 
     ure::RenderConfig render_config;
+    std::unique_ptr<CudaRuntimeDevice> runtime_device;
+    runtime::QueueHandle execution_queue;
+    runtime::FenceHandle execution_fence;
+    cudaStream_t execution_stream = nullptr;
+    runtime::SubmissionId last_runtime_submission = 0;
+    std::uint64_t execution_timeline = 0;
+    std::uint32_t lowered_execution_node_count = 0;
+    std::uint32_t lowered_dispatch_count = 0;
+    std::uint32_t lowered_indirect_dispatch_count = 0;
+    std::uint32_t lowered_barrier_count = 0;
+    std::uint32_t lowered_transfer_count = 0;
     std::array<std::uint64_t, 4> last_execution_graph_fingerprint = {};
     std::uint32_t last_execution_graph_schema = 0;
     int last_integrator_initial_ray_count = 0;

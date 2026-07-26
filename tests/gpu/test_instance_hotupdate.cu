@@ -1,9 +1,9 @@
 #include "test_framework.cuh"
 #include <ure/detail/cuda_context.cuh>
-#include <ure/gpu_driver.hpp>
-#include <ure/gpu_structs.hpp>
+#include <ure/detail/cuda_driver.cuh>
+#include <ure/detail/cuda_structs.cuh>
 #include <ure/log.hpp>
-#include <ure/transform_ring_buffer.hpp>
+#include <ure/detail/cuda_transform_ring_buffer.cuh>
 
 // --- Layout verification (host-side) ---
 // GpuInstance layout:

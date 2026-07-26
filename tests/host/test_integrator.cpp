@@ -1,4 +1,3 @@
-#include "ure/gpu_driver.hpp"
 #include "ure/integrator/restir_reservoir.hpp"
 #include "ure/integrator/restir_pt.hpp"
 #include "ure/mlt.hpp"

@@ -3,7 +3,7 @@
 #include <math.h>
 
 #include "test_framework.cuh"
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/gpu_math_functions.cuh"
 
 namespace ure::gpu {

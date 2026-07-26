@@ -4,7 +4,7 @@
 
 #include <cuda_runtime.h>
 
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/gpu_material_helpers.cuh"
 #include "ure/integrator/restir_pt.cuh"
 #include "ure/path_tracer_sampling.cuh"

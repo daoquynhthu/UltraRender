@@ -1,7 +1,7 @@
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <math.h>
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 
 using namespace ure::gpu;
 

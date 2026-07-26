@@ -133,6 +133,18 @@ add_executable(test_distributed_file_io test_distributed_file_io.cpp)
 target_link_libraries(test_distributed_file_io PRIVATE ure_core ure_diag)
 add_test(NAME test_distributed_file_io COMMAND test_distributed_file_io)
 
+set(CUDA_BACKEND_HOST_TESTS
+    test_gltf_frontend
+    test_materialx_io
+    test_material_graph
+    test_mie_phase
+    test_native_procedural_graph
+    test_native_scene_ir
+)
+foreach(cuda_backend_test IN LISTS CUDA_BACKEND_HOST_TESTS)
+    target_link_libraries(${cuda_backend_test} PRIVATE CUDA::cudart)
+endforeach()
+
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
     add_test(NAME test_pyure_smoke

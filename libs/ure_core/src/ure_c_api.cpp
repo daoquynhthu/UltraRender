@@ -1,12 +1,12 @@
 #include "ure/ure_c_api.h"
 #include "ure/backend.hpp"
-#include "ure/gpu_structs.hpp"
 #include "ure/render.hpp"
 #include "ure/session.hpp"
 #include "ure/scene_frontend.hpp"
 #include "ure/image_saver.hpp"
 #include "ure/native_scene_tooling.hpp"
 #include "ure/native_adapter.hpp"
+#include "ure/spectral_limits.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
@@ -47,7 +47,7 @@ bool map_aov_type(ure_aov_type_t type, AovType& out) {
 }
 
 bool valid_spectral_runtime_config(std::uint64_t domain_bins, int packet_lanes) {
-    if (!ure::gpu::valid_packet_lane_count(packet_lanes)) {
+    if (!ure::valid_spectral_packet_lane_count(packet_lanes)) {
         return false;
     }
     return domain_bins >= static_cast<std::uint64_t>(packet_lanes);

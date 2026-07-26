@@ -5,7 +5,7 @@
 
 #include "ure/gpu_material_helpers.cuh"
 #include "ure/gpu_spectrum_utils.cuh"
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/detail/cuda_texture_view.cuh"
 #include "ure/integrator/restir_di.cuh"
 #include "ure/path_tracer_sampling.cuh"

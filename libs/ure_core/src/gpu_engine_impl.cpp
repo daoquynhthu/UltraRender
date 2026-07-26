@@ -2,8 +2,8 @@
 #include "ure/backend.hpp"
 #include "ure/detail/cuda_context.cuh"
 #include "ure/detail/cuda_scene_compiler.hpp"
-#include "ure/gpu_driver.hpp"
-#include "ure/transform_ring_buffer.hpp"
+#include "ure/detail/cuda_driver.cuh"
+#include "ure/detail/cuda_transform_ring_buffer.cuh"
 #include "ure/render_config.hpp"
 #include "ure/wave_optics.hpp"
 
@@ -98,7 +98,14 @@ public:
 
     ~GpuRenderEngine() {
         if (gpu_context_) {
-            ure::gpu::free_gpu_renderer(gpu_context_);
+            try {
+                ure::gpu::free_gpu_renderer(gpu_context_);
+            } catch (const std::exception& error) {
+                UR_LOG_ERROR(
+                    GPU,
+                    "CUDA backend cleanup failed: {}",
+                    error.what());
+            }
             gpu_context_ = nullptr;
         }
     }
@@ -324,7 +331,9 @@ private:
 
         gpu_context_ = ure::gpu::init_gpu_renderer(
             compiled.width, compiled.height, cached_meshes_, compiled.instances, cached_spheres_,
-            cached_materials_, compiled.textures, config_, compiled.mie_phase_resources);
+            cached_materials_, compiled.textures, config_,
+            compiled.mie_phase_resources,
+            &backend_selection_.adapter);
         assert(gpu_context_ != nullptr && "init_gpu_renderer failed -- check CUDA state");
         
         // Phase P.3: initialize ring buffer with all frames from compiled instances

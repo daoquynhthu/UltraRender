@@ -1,37 +1,39 @@
 cmake_minimum_required(VERSION 3.25)
-project(UltraRender VERSION 1.0.0 LANGUAGES CXX CUDA)
+project(UltraRender VERSION 1.0.0 LANGUAGES CXX)
 
 option(UR_BUILD_TESTS "Build tests" ON)
 option(UR_BUILD_CLI "Build CLI" ON)
 option(UR_BUILD_PHYSICS "Build physics/acoustic subsystem" ON)
+option(UR_ENABLE_CUDA "Build the CUDA production backend" ON)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_STANDARD 20)
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-set(UR_CUDA_HEAVY_COMPILE_JOBS 1 CACHE STRING
-    "Maximum concurrent high-memory CUDA target compilations under Ninja")
-if(CMAKE_GENERATOR MATCHES "Ninja")
-    if(NOT UR_CUDA_HEAVY_COMPILE_JOBS MATCHES "^[1-9][0-9]*$")
-        message(FATAL_ERROR "UR_CUDA_HEAVY_COMPILE_JOBS must be a positive integer")
+if(UR_ENABLE_CUDA)
+    enable_language(CUDA)
+    set(CMAKE_CUDA_STANDARD 20)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    set(UR_CUDA_HEAVY_COMPILE_JOBS 1 CACHE STRING
+        "Maximum concurrent high-memory CUDA target compilations under Ninja")
+    if(CMAKE_GENERATOR MATCHES "Ninja")
+        if(NOT UR_CUDA_HEAVY_COMPILE_JOBS MATCHES "^[1-9][0-9]*$")
+            message(FATAL_ERROR "UR_CUDA_HEAVY_COMPILE_JOBS must be a positive integer")
+        endif()
+        set_property(GLOBAL PROPERTY JOB_POOLS
+            ur_cuda_heavy_compile=${UR_CUDA_HEAVY_COMPILE_JOBS})
     endif()
-    set_property(GLOBAL PROPERTY JOB_POOLS
-        ur_cuda_heavy_compile=${UR_CUDA_HEAVY_COMPILE_JOBS})
+
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES "all-major")
+    endif()
+
+    if(MSVC)
+        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler /wd4819")
+    endif()
+
+    find_package(CUDAToolkit REQUIRED)
 endif()
 
-# Ensure static libraries can be linked into shared Python extension modules on Linux
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-    set(CMAKE_CUDA_ARCHITECTURES "all-major")
-endif()
-
-if(MSVC)
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler /wd4819")
-endif()
-
-include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
-find_package(CUDAToolkit REQUIRED)
 include(GNUInstallDirs)
 
 add_subdirectory(libs/ure_types)
@@ -40,20 +42,27 @@ add_subdirectory(libs/ure_runtime)
 
 add_subdirectory(libs/ure_config)
 add_subdirectory(libs/ure_sceneio)
-add_subdirectory(libs/ure_core)
+
+if(UR_ENABLE_CUDA)
+    add_subdirectory(libs/ure_core)
+endif()
 
 if(UR_BUILD_PHYSICS)
     add_subdirectory(libs/ure_physics)
 endif()
 
-if(UR_BUILD_CLI)
+if(UR_BUILD_CLI AND UR_ENABLE_CUDA)
     add_subdirectory(apps/ure_cli)
+elseif(UR_BUILD_CLI)
+    message(STATUS "Skipping ure_cli because no production backend is enabled")
 endif()
 
-if(UR_BUILD_TESTS)
+if(UR_BUILD_TESTS AND UR_ENABLE_CUDA)
     enable_testing()
     add_subdirectory(tests/gpu)
     add_subdirectory(tests/host)
+elseif(UR_BUILD_TESTS)
+    message(STATUS "Skipping CUDA-coupled root tests; use tests/sdk_free")
 endif()
 
 # ── Install / Export for find_package() support ──

@@ -17,13 +17,14 @@
 #include <stdexcept>
 
 #include <ure/log.hpp>
-#include <ure/check_cuda.hpp>
+#include "cuda_check.cuh"
+#include "cuda_runtime_device.cuh"
 
-#include "ure/gpu_driver.hpp"
+#include "ure/detail/cuda_driver.cuh"
 #include "ure/detail/cuda_context.cuh"
 #include "ure/detail/cuda_texture_view.cuh"
 #include "ure/gpu_auto_config.hpp"
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/gpu_spectrum_utils.cuh"
 #include "ure/gpu_material_helpers.cuh"
 #include "ure/mie_phase_validation.hpp"
@@ -31,8 +32,8 @@
 #include "ure/runtime/resource_plan.hpp"
 #include "ure/specular_manifold.hpp"
 #include "ure/path_tracer_sampling.cuh"
-#include "ure/gpu_scene_loader.hpp"
-#include "ure/bvh_builder.hpp"
+#include "ure/detail/cuda_scene_loader.cuh"
+#include "ure/detail/cuda_bvh_builder.cuh"
 
 #include "path_tracer_api_decl.cuh"
 #include "cuda_resource_registry.cuh"
@@ -2688,7 +2689,8 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const std::vector<ure::gpu::GpuMaterialData>& materials,
                               const std::vector<ure::gpu::HostTexture>& textures,
                               const ure::RenderConfig& config,
-                              const std::vector<scene_ir::MiePhaseResource>& mie_phase_resources) {
+                              const std::vector<scene_ir::MiePhaseResource>& mie_phase_resources,
+                              const BackendAdapterInfo* backend_adapter) {
     validate_explicit_spectral_resident_budget(materials, textures, mie_phase_resources, config);
     validate_integrator_runtime_config(config);
     validate_environment_light_config(config);
@@ -2705,7 +2707,25 @@ GpuContext* init_gpu_renderer(int width, int height,
     const int primary_ray_count = checked_primary_ray_count(width, height);
     const int max_rays = configured_ray_queue_capacity(config, primary_ray_count);
 
+    auto runtime_device = backend_adapter
+        ? make_cuda_runtime_device(
+              *backend_adapter,
+              config.backend.memory_budget_bytes)
+        : make_cuda_runtime_device_for_current_adapter(
+              config.backend.memory_budget_bytes);
+    const auto execution_queue = runtime_device->create_queue({
+        runtime::QueueClass::ComputeTransfer,
+        0,
+        "ure.cuda.production"});
+    const auto execution_fence =
+        runtime_device->create_fence(0);
+    const auto execution_stream =
+        runtime_device->native_stream(execution_queue);
     GpuContext* ctx = new GpuContext();
+    ctx->runtime_device = std::move(runtime_device);
+    ctx->execution_queue = execution_queue;
+    ctx->execution_fence = execution_fence;
+    ctx->execution_stream = execution_stream;
     ctx->resources = std::make_unique<CudaResourceRegistry>();
     ctx->width = width;
     ctx->height = height;
@@ -3252,7 +3272,11 @@ void reset_accumulation_gpu(GpuContext* ctx) {
 void free_gpu_renderer(GpuContext* ctx) {
     if (!ctx) return;
 
-    cudaDeviceSynchronize();
+    if (ctx->runtime_device) {
+        ctx->runtime_device->wait_idle();
+    } else {
+        UR_CUDA_CHECK(cudaDeviceSynchronize());
+    }
 
     cudaFree(ctx->d_output);
     cudaFree(ctx->d_accum_buffer);
@@ -3283,6 +3307,11 @@ void free_gpu_renderer(GpuContext* ctx) {
     free_material_resource_tables(ctx);
 
     free_debug_log();
+    if (ctx->runtime_device) {
+        ctx->runtime_device->destroy(ctx->execution_fence);
+        ctx->runtime_device->destroy(ctx->execution_queue);
+        ctx->execution_stream = nullptr;
+    }
     delete ctx;
 }
 
@@ -3605,10 +3634,41 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     execution_config.mlt_epoch = ctx->mlt_mutation_sequence;
     const auto execution_graph =
         ure::runtime::make_path_execution_graph(execution_config);
+    const auto execution_plan =
+        ctx->runtime_device->lower(execution_graph);
     ctx->last_execution_graph_fingerprint =
-        ure::runtime::execution_fingerprint(execution_graph);
+        execution_plan.fingerprint;
     ctx->last_execution_graph_schema =
-        execution_graph.schema_version;
+        execution_plan.schema_version;
+    ctx->lowered_execution_node_count =
+        execution_plan.node_count;
+    ctx->lowered_dispatch_count =
+        execution_plan.dispatch_count;
+    ctx->lowered_indirect_dispatch_count =
+        execution_plan.indirect_dispatch_count;
+    ctx->lowered_barrier_count =
+        execution_plan.barrier_count;
+    ctx->lowered_transfer_count =
+        execution_plan.transfer_count;
+    const auto complete_execution =
+        [&](int sample_count) {
+            if (ctx->execution_timeline ==
+                std::numeric_limits<std::uint64_t>::max()) {
+                throw runtime::Error(
+                    runtime::ErrorCode::Overflow,
+                    "CUDA execution timeline overflows");
+            }
+            ++ctx->execution_timeline;
+            const runtime::TimelinePoint point{
+                ctx->execution_fence,
+                ctx->execution_timeline};
+            ctx->last_runtime_submission =
+                ctx->runtime_device->complete_external(
+                    ctx->execution_queue,
+                    execution_plan,
+                    point);
+            return sample_count;
+        };
 
     if (ctx->d_path_guiding_light_weights && ctx->light_count > 0) {
         ++ctx->path_guiding_passes_since_decay;
@@ -3780,7 +3840,8 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.medium_max_distance = ctx->medium_max_distance;
 
     if (ctx->render_config.integrator.mode == ure::IntegratorMode::MLT) {
-        return render_mlt_pass(ctx, scene, samples_per_pass);
+        return complete_execution(
+            render_mlt_pass(ctx, scene, samples_per_pass));
     }
     if ((ctx->render_config.bidirectional.enabled ||
          ctx->render_config.vcm.enabled ||
@@ -4322,7 +4383,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             throw std::runtime_error("VCM spatial hash entry capacity overflow");
         }
     }
-    return ctx->current_spp;
+    return complete_execution(ctx->current_spp);
 }
 
 MltDiagnostics get_mlt_diagnostics(const GpuContext* ctx) {

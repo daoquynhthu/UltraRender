@@ -4,7 +4,7 @@
 // Updated every frame via cudaMemcpy (hot-update path).
 // Separated from GpuInstanceDesc so only transform data
 // is transferred each frame.
-// NOTE: Designed to be included from within namespace ure::gpu (e.g. via gpu_structs.hpp).
+// NOTE: Designed to be included from within namespace ure::gpu (e.g. via cuda_structs.cuh).
 // Do NOT wrap in an additional namespace declaration.
 // Requires GpuMat4 and GpuVec3 to be defined prior to inclusion.
 

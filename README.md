@@ -6,11 +6,11 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- Phase Q 与 Phase R 已完成；Phase T 已建立 backend-neutral runtime、资源规划和 execution graph 合同，当前施工游标是 `T.6`（CUDA backend 迁移）。
+- Phase Q 与 Phase R 已完成；Phase T 已完成 CUDA production backend 向 backend-neutral runtime/resource/execution contract 的迁移，当前施工游标是 `T.7`（Vulkan compute production foundation）。
 - 默认生产执行后端是 CUDA。Vulkan、D3D12/DXR 和 OptiX 路径尚未完成。
 - 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure；显式请求尚未实现的后端会失败，不会静默回退。
-- Slang 2026.14 已用六类真实计算原型完成固定版本、确定性多目标编译、反射、debug mapping、CUDA 占用率及数值执行验证；生产 CUDA kernels 尚未迁移，Slang RHI 也未被引入。
-- 纯 C++ `ure_runtime` 已定义 device、queue、timeline fence、event、buffer、image、sampler、module、pipeline、资源规划、dispatch DAG、execution graph 和 device-loss 合同；当前 CUDA path/wave 入口会生成并验证 execution graph，但 kernel、resource、stream 和 multi-GPU 的完整 lowering 仍属于 T.6。
+- Slang 2026.14 已用六类真实计算原型完成固定版本、确定性多目标编译、反射、debug mapping、CUDA 占用率及数值执行验证；现有 production kernels 仍是私有 `.cu` fast path，后续 backend 的共享 Slang lowering 尚未实现，Slang RHI 也未被引入。
+- 纯 C++ `ure_runtime` 已定义 device、queue、timeline fence、event、buffer、image、sampler、module、pipeline、资源规划、dispatch DAG、execution graph 和 device-loss 合同；CUDA production backend 已实现这些合同的私有 lowering，并覆盖 path、wave、multi-GPU、PTX pipeline 与结构化错误路径。
 - 默认积分器是 spectral/polarimetric radiometric wavefront path tracer。
 - coherent field、partial coherence、完整衍射相机和局部全波耦合仍属于 Phase W 后续工作；当前主渲染路径不会静默模拟这些能力。
 - production unbiased/spatial ReSTIR DI 与受限 ReSTIR PT suffix reuse 已完成验证。GPU specular-manifold、BDPT、VCM 和独立 PSSMLT 已通过各自统计门禁；MLT 与 bidirectional/VCM/manifold 的组合仍明确拒绝。
@@ -51,7 +51,7 @@ Render Engine/
 ├── apps/ure_cli/       # 离线命令行入口
 ├── libs/ure_types/     # backend-neutral 类型与 SceneIR
 ├── libs/ure_runtime/   # backend-neutral GPU runtime contracts
-├── libs/ure_core/      # CUDA 渲染核心和 GPU scene compiler
+├── libs/ure_core/      # 渲染核心、会话 API 和私有 CUDA production backend
 ├── libs/ure_sceneio/   # 原生场景、glTF、MaterialX、图像和光谱资源 I/O
 ├── libs/ure_config/    # JSON/CLI 配置
 ├── libs/ure_diag/      # 日志与诊断
@@ -90,7 +90,14 @@ Ninja 可并行构建宿主代码和独立目标；高内存 CUDA 编译由工�
 ctest --test-dir build_modular_x64 -C Release --output-on-failure
 ```
 
-当前构建树注册 40 个 CTest。这个数字是当前快照，不应用作长期固定接口；以 `ctest -N` 的输出为准。
+当前构建树注册 41 个 CTest。这个数字是当前快照，不应用作长期固定接口；以 `ctest -N` 的输出为准。
+
+仅构建不依赖 GPU SDK 的公共基础库时，可关闭 CUDA backend：
+
+```powershell
+cmake -S . -B build_sdk_free -DUR_ENABLE_CUDA=OFF -DUR_BUILD_CLI=OFF -DUR_BUILD_TESTS=OFF
+cmake --build build_sdk_free --config Release --target ure_runtime ure_sceneio ure_config
+```
 
 ## 命令行工具
 

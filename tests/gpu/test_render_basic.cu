@@ -13,8 +13,8 @@
 #include "ure/integrator/mlt.cuh"
 #include "ure/integrator/restir_di.cuh"
 #include "ure/integrator/specular_manifold.cuh"
-#include "ure/gpu_driver.hpp"
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_driver.cuh"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/detail/cuda_texture_view.cuh"
 #include "ure/log.hpp"
 #include "ure/render_config.hpp"
@@ -2712,6 +2712,14 @@ static int test_restir_pt_owns_bounded_ping_pong_suffix_history() {
     CHECK(render_pass_gpu(ctx, 1) == 1);
     CHECK(ctx->last_execution_graph_schema ==
           ure::runtime::kExecutionGraphSchemaVersion);
+    CHECK(ctx->runtime_device != nullptr);
+    CHECK(ctx->execution_stream != nullptr);
+    CHECK(ctx->last_runtime_submission > 0);
+    CHECK(ctx->execution_timeline == 1);
+    CHECK(ctx->lowered_execution_node_count > 0);
+    CHECK(ctx->lowered_dispatch_count > 0);
+    CHECK(ctx->lowered_indirect_dispatch_count > 0);
+    CHECK(ctx->lowered_barrier_count > 0);
     CHECK(std::any_of(
         ctx->last_execution_graph_fingerprint.begin(),
         ctx->last_execution_graph_fingerprint.end(),
@@ -2721,6 +2729,8 @@ static int test_restir_pt_owns_bounded_ping_pong_suffix_history() {
     CHECK(ctx->last_restir_pt_telemetry.accepted_reconnections > 0);
     CHECK(ctx->restir_pt_input_index == 1);
     CHECK(render_pass_gpu(ctx, 1) == 2);
+    CHECK(ctx->execution_timeline == 2);
+    CHECK(ctx->last_runtime_submission > 1);
     CHECK(ctx->last_execution_graph_fingerprint !=
           first_execution_fingerprint);
     CHECK(ctx->restir_pt_input_index == 0);

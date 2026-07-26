@@ -11,13 +11,13 @@
 
 #include <ure/config.hpp>
 #include <ure/backend.hpp>
-#include <ure/gpu_structs.hpp>
 #include <ure/image_saver.hpp>
 #include <ure/log.hpp>
 #include <ure/native_adapter.hpp>
 #include <ure/native_scene_tooling.hpp>
 #include <ure/render.hpp>
 #include <ure/scene_frontend.hpp>
+#include <ure/spectral_limits.hpp>
 
 namespace {
 
@@ -293,8 +293,11 @@ int cmd_render(const ure::config::CliResult& cli) {
         : static_cast<std::uint64_t>(std::max(app_config.spectral.bands, 0));
     const int packet_lanes = app_config.spectral.packet_lanes > 0
         ? app_config.spectral.packet_lanes
-        : std::min(std::max(app_config.spectral.bands, ure::gpu::kMinPacketLanes),
-                   ure::gpu::kMaxPacketLanes);
+        : std::min(
+              std::max(
+                  app_config.spectral.bands,
+                  ure::kMinSpectralPacketLanes),
+              ure::kMaxSpectralPacketLanes);
     gpu_config.spectral_domain_bins = domain_bins;
     gpu_config.spectral_packet_lanes = packet_lanes;
     gpu_config.spectral_max_resident_mb = app_config.spectral.max_resident_mb;
@@ -362,9 +365,10 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.num_wavelengths = packet_lanes;
     gpu_config.queue_capacity = app_config.gpu.wavefront_capacity;
     gpu_config.max_trace_depth = app_config.renderer.max_depth;
-    if (!ure::gpu::valid_packet_lane_count(gpu_config.spectral_packet_lanes)) {
+    if (!ure::valid_spectral_packet_lane_count(
+            gpu_config.spectral_packet_lanes)) {
         std::cerr << "Error: spectral packet lanes must be 1 or in [8, "
-                  << ure::gpu::kMaxPacketLanes << "], got "
+                  << ure::kMaxSpectralPacketLanes << "], got "
                   << gpu_config.spectral_packet_lanes << "\n";
         return 1;
     }

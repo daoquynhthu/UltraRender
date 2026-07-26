@@ -1,5 +1,5 @@
 #pragma once
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include <vector>
 
 namespace ure::gpu {

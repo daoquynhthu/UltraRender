@@ -1,8 +1,8 @@
 #include <vector>
 
 #include "test_framework.cuh"
-#include "ure/gpu_structs.hpp"
-#include "ure/gpu_driver.hpp"
+#include "ure/detail/cuda_structs.cuh"
+#include "ure/detail/cuda_driver.cuh"
 #include "ure/detail/cuda_context.cuh"
 #include "ure/log.hpp"
 

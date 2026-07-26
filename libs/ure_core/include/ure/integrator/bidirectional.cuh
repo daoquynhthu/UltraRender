@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 
 namespace ure::gpu {
 

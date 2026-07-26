@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-#include "ure/check_cuda.hpp"
+#include "cuda_check.cuh"
 
 namespace ure::gpu {
 

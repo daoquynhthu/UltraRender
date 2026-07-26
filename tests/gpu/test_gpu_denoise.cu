@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "test_framework.cuh"
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 
 #include "../../libs/ure_core/src/path_tracer_kernel.cu"
 #include "../../libs/ure_core/src/path_tracer_api_decl.cuh"

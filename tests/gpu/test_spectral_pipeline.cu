@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "test_framework.cuh"
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/gpu_spectrum_utils.cuh"
 #include "ure/spectral/spectral_oracle.hpp"
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/gpu_spectrum_utils.cuh"
 
 namespace ure::gpu {

@@ -2,7 +2,7 @@
 #include <device_launch_parameters.h>
 #include <float.h>
 #include <math.h>
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/gpu_spectrum_utils.cuh"
 #include "ure/path_tracer_sampling.cuh"
 

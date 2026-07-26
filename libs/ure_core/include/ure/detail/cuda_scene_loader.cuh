@@ -1,6 +1,6 @@
 #pragma once
 #include <vector>
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/host_texture.hpp"
 
 namespace ure::gpu {

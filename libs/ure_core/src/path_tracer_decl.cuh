@@ -6,7 +6,7 @@
 #include <assert.h>
 #include <float.h>
 
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 
 // ===== Diagnostic Logging Pipeline =====
 #if defined(UR_LOG_LEVEL) && UR_LOG_LEVEL <= 1

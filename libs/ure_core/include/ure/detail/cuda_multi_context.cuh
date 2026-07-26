@@ -1,6 +1,9 @@
 #pragma once
 
-#include "ure/gpu_multi_driver.hpp"
+#include <cstdint>
+
+#include "ure/detail/cuda_multi_driver.cuh"
+#include "ure/runtime/runtime.hpp"
 
 namespace ure::gpu {
 
@@ -17,6 +20,11 @@ struct MultiGpuContext {
     float* d_path_guiding_temp_spatial = nullptr;
     size_t path_guiding_light_count = 0;
     size_t path_guiding_spatial_count = 0;
+    std::uint32_t execution_graph_schema = 0;
+    std::uint32_t lowered_execution_node_count = 0;
+    std::uint32_t lowered_dispatch_count = 0;
+    std::uint32_t lowered_indirect_dispatch_count = 0;
+    runtime::SubmissionId completed_submissions = 0;
 };
 
 }

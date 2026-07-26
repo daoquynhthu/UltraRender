@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 #include "test_framework.cuh"
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/detail/cuda_texture_view.cuh"
 
 #include "../../libs/ure_core/src/path_tracer_kernel.cu"

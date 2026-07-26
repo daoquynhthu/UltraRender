@@ -2,8 +2,8 @@
 
 ## Status
 
-T.0 through T.5 are complete and the authoritative cursor is T.6. This document
-is the migration ledger for T.6 through T.11. CUDA remains the only production
+T.0 through T.6 are complete and the authoritative cursor is T.7. This document
+is the migration ledger for T.7 through T.11. CUDA remains the only production
 backend at this cursor; Vulkan and D3D12 identities are reserved values whose
 explicit selection fails loudly.
 
@@ -37,20 +37,20 @@ identity belong above it.
 
 | ID | Coupling and current evidence | Contract owner | Migration batch |
 |---|---|---|---|
-| T0-BLD | Root CMake declares `LANGUAGES CXX CUDA`, globally includes the CUDA toolkit, requires `CUDAToolkit`, and applies CUDA architecture/compiler policy. GPU tests directly link `CUDA::cudart`. | Build/backend registration | T.1, T.2, T.6 |
-| T0-DEV | `gpu_hardware.hpp` includes `cuda_runtime.h`; `gpu_hardware.cu` exposes CUDA attributes as the device capability model. CLI `list-devices` calls CUDA directly. | Adapter/capability registry | T.1 |
-| T0-API | `render.hpp` mutation methods now consume SceneIR and CUDA scene compilation is backend-private. The legacy factory name and low-level CUDA driver headers remain for T.6 migration. | Public runtime/session API | T.1, T.3, T.4 |
-| T0-ABI | The C ABI is handle-opaque and contains no CUDA SDK type, but creation still routes directly to the GPU/CUDA factory. pyure inherits that single-backend behavior and has no backend identity metadata. | C ABI and language bindings | T.1, T.3 |
-| T0-CTX | Public `GpuContext` and `MultiGpuContext` are opaque. CUDA context fields remain backend-private; texture and retained-resource native ownership is isolated in the T.4 RAII registry, while queue/executor lowering remains for T.6. | Runtime context and resource lifetime | T.3-T.5 complete; T.6 lowering |
+| T0-BLD | Root project is C++-only until `UR_ENABLE_CUDA` enables the production backend; CUDA toolkit discovery, architecture policy and SDK linkage are backend-local. A root SDK-free configuration builds runtime, scene I/O and config without a CUDA compiler. | Build/backend registration | T.6 complete; T.7 adds Vulkan registration |
+| T0-DEV | Backend-neutral adapter/capability identity owns public device semantics. `gpu_hardware.hpp` is SDK-free legacy auto-configuration data; CUDA queries and CLI adapter enumeration stay behind `backend.hpp`. | Adapter/capability registry | T.1/T.6 complete |
+| T0-API | `render.hpp`, Session, installed headers, C ABI and pyure contain no CUDA SDK type. Raw CUDA driver/scene/native structs are `.cuh` files under the non-installed `detail/` boundary. | Public runtime/session API | T.1-T.6 complete |
+| T0-ABI | The C ABI is handle-opaque and carries backend identity/configuration parity; production creation selects CUDA through the neutral backend contract and unsupported backends fail loudly. | C ABI and language bindings | T.1/T.3 complete |
+| T0-CTX | `GpuContext` and `MultiGpuContext` are backend-private. Each CUDA context owns a production runtime Device, queue, timeline fence, lowered-plan metrics and durable submission identity in addition to T.4 resource registries. | Runtime context and resource lifetime | T.3-T.6 complete |
 | T0-RES | Stable ResourceId, typed buffer/image/spectral layouts, residency, sparse tiles and upload plans now own public semantics. CUDA arrays, texture objects and spectral allocations exist only in backend-private views/registry; remaining raw device views are CUDA lowering state. | Resource/descriptor model | T.4 |
-| T0-EXE | Stable execution regions now expose queue counts, indirect work, barriers, transfers, boundaries and estimator order. `path_tracer_host_api.cu` generates and fingerprints that graph but still performs direct CUDA allocation, count readback and launch lowering. | Dispatch graph and CUDA executor | T.5 complete; T.6 lowering |
-| T0-KRN | Estimator/PDF versions and critical stage order are backend-neutral. Spectral, Mueller, BSDF/phase, traversal, guiding, ReSTIR, BDPT/VCM, manifold, MLT, denoise, and wave kernel bodies still use CUDA qualifiers/intrinsics and CUDA compilation units. | Kernel toolchain and semantic library | T.2/T.5 complete; T.6-T.9 lowering |
-| T0-MGPU | `MultiGpuContext` allocation state is backend-private; scheduling still uses device ordinals, `cudaSetDevice`, peer copies and global synchronization. Capability negotiation remains CUDA-only. | Multi-adapter scheduler | T.3, T.4, T.10 |
-| T0-WAVE | Fraunhofer upload, barrier, dispatch and readback generate a stable backend-neutral wave graph. The current CUDA reference still directly allocates, launches and synchronizes until T.6 lowering. | Wave operator/runtime integration | T.2/T.5 complete; T.6-T.9 lowering |
+| T0-EXE | Stable execution graphs are validated and lowered against CUDA adapter limits before work. Static `.cu` estimator kernels remain a private native fast path whose completion is fenced by runtime-owned queue/timeline submissions; portable PTX pipelines execute through the generic DAG. | Dispatch graph and CUDA executor | T.5/T.6 complete |
+| T0-KRN | Estimator/PDF versions and critical stage order are backend-neutral. Existing optimized `.cu` bodies remain a private CUDA fast path; Slang shared-source modules and later Vulkan/DXR lowering continue in T.7-T.9 without changing estimator semantics. | Kernel toolchain and semantic library | T.2/T.5/T.6 complete; T.7-T.9 additional lowering |
+| T0-MGPU | CUDA multi-GPU still uses private device ordinals and peer copies, but every child submits a compatible runtime schema/node/dispatch contract and fail-loud validation precedes merge. Heterogeneous negotiation remains T.10. | Multi-adapter scheduler | CUDA migration complete; T.10 heterogeneous scheduling |
+| T0-WAVE | Fraunhofer upload, device-local buffers, stream launch, readback and timeline completion are owned by the CUDA runtime Device and lower the stable wave graph. | Wave operator/runtime integration | T.2/T.5/T.6 complete; T.7-T.9 additional backends |
 | T0-ACC | Production traversal is embedded in CUDA kernels and consumes `GpuScene`. `gpu_accelerator.hpp::OptixAccelerator` is a nonfunctional host stub and must not be treated as a provider. T.5 freezes traversal stage order but does not claim a BLAS/TLAS provider contract. | Acceleration-provider API | T.3/T.5 boundary complete; provider work remains Phase V |
-| T0-DIAG | `ure_diag/check_cuda.hpp` exposes `cudaError_t` in a public project header and can reset the device. Nsight/VRAM evidence is backend-specific and lacks a neutral diagnostic event model. | Runtime error and diagnostics | T.3, T.6 |
-| T0-SCN | SceneIR and native serialization contain no backend handle. `CompiledGpuScene` and CUDA lowering types are private implementation details; complete lowering through the runtime remains T.6. | Scene compiler/lowering | T.3, T.4 |
-| T0-TEST | SDK-free host gates cover runtime, resources and execution graphs, including million-domain budgets, order/cycle/overflow rejection and stable fingerprints; GPU parity remains CUDA-only until T.11. | Validation architecture | T.1-T.5 complete; T.11 parity |
+| T0-DIAG | Public diagnostics are SDK-free. Private CUDA checks throw structured runtime errors instead of resetting/aborting; the production Device retains loss epoch/reason/driver diagnostics and timeline completion. | Runtime error and diagnostics | T.3/T.6 complete |
+| T0-SCN | SceneIR and native serialization contain no backend handle. `CompiledGpuScene`, CUDA native resource views and lowering state are private; runtime resource and execution identities define the portable boundary. | Scene compiler/lowering | T.3/T.4/T.6 complete |
+| T0-TEST | SDK-free gates cover runtime/resources/execution and the installed public surface; CUDA tests execute PTX DAGs and native path/wave/multi-GPU lowering. Cross-backend physical parity remains T.11. | Validation architecture | T.1-T.6 complete; T.11 parity |
 
 ## Migration order
 
@@ -81,16 +81,15 @@ traversal contracts remain CUDA-owned.
 - no CUDA SDK include or native CUDA handle/type in `ure_types`,
   `ure_sceneio`, `ure_config`, `render_config.hpp`, `scene_ir.hpp`,
   `ure_c_api.h`, or pyure;
-- no new public project header may include `cuda_runtime.h` beyond the reduced
-  allowlist (`gpu_hardware.hpp`, `gpu_structs.hpp`, and `check_cuda.hpp`);
+- no installed public project header may include `cuda_runtime.h`; the former
+  CUDA include debt allowlist is empty;
 - the C ABI remains free of `GpuContext`, `GpuScene`, `GpuMaterialData`, and
   `GpuTexture`;
 - this ledger retains every coupling ID, owner, and migration batch;
 - the PLAN cursor and T.0/T.1 dependency remain explicit.
 
-The allowlist records debt to migrate; it is not permission to expand CUDA
-types into additional public files. Each later batch must shrink the allowlist
-when its owner moves below the backend boundary.
+CUDA SDK types may exist only in backend-private `.cu`/`.cuh` implementation
+files and must not re-enter SDK-free modules or installed headers.
 
 ## T.0 completion evidence
 
@@ -261,3 +260,60 @@ loops, indirect arguments, epoch identity, cycle/order drift, invalid PDF
 versions and dispatch overflow. CUDA render and wave tests verify entry
 integration; the Release inventory contains 40 registered tests at this
 closure snapshot. The authoritative cursor is T.6.
+
+## T.6 CUDA production backend migration
+
+`CudaRuntimeDevice` is the production implementation of the SDK-free
+`runtime::Device` contract. It owns real CUDA streams, timeline checkpoints,
+events, device/upload/readback buffers, mipmapped images, sampler-texture
+bindings, PTX modules and compute pipelines. Generic dispatch DAG submission
+performs a complete preflight before enqueueing work: handles, usage flags,
+binding/copy bounds, adapter grid limits, event order and monotonic timeline
+signals all fail through structured `runtime::Error`. CUDA Driver API kernels
+consume bindings in stable slot order, while resource and module lifetime rules
+prevent use-after-destroy.
+
+The T.5 execution graph lowers to a backend-private `CudaExecutionPlan` before
+every path or wave submission. Lowering checks direct/chunked/indirect launch
+limits and records stable schema, fingerprint, node, dispatch, barrier,
+transfer and state-transition counts. Existing highly optimized `.cu` path
+kernels remain a permitted private native fast path: their fixed estimator
+order is the T.5 contract, and a runtime-owned blocking stream/timeline
+checkpoint encloses completion without exposing CUDA handles above the backend
+boundary. The Fraunhofer path goes further and allocates its input/output
+through the runtime Device, performs asynchronous transfers and launches on the
+runtime stream. CUDA multi-GPU children must report compatible lowered schema,
+node and dispatch shapes before merge.
+
+The former public CUDA diagnostic header was removed. Backend-private checks
+map allocation, timeout, invalid argument, unsupported operation and device
+loss to `runtime::ErrorCode`; the Device retains loss epoch, reason and driver
+identity. Raw GPU structs, driver entrypoints, scene lowering and material
+helpers are non-installed `.cuh` files under `detail/`. `USE_CUDA` is private
+to `ure_core`, and the root project declares only C++ until
+`UR_ENABLE_CUDA=ON` activates CUDA. A root `UR_ENABLE_CUDA=OFF` configuration
+builds and installs `ure_runtime`, `ure_sceneio` and `ure_config` without
+discovering a CUDA compiler. A separate CMake consumer finds the installed
+package and links those components. An independent warnings-as-errors
+public-surface target includes Render, Session, C ABI, backend and wave headers
+under the same SDK-free condition.
+
+The migration baseline is the same committed T.5 executable and Cornell
+fixture used by `run_phase_t6_cuda_backend_gate.ps1`:
+
+| Workload | T.5 baseline | T.6 measured | Contract |
+|---|---:|---:|---|
+| 64×64, 8 SPP, five-process median | 247.062 ms | 252.95 ms | SHA-256 `9e8e27f1bbc1c48384feaec755498dcee33effdcf20092d4abb2dec0bdae9d73` |
+| 512×512, 64 SPP | 11857.174 ms | 12611.37 ms | SHA-256 `ff81b8e08386f9b593748cc56ff5b9c3c481f4014658cf41a0795cdd1ed9e935` |
+| 512×512 fixed-time VRAM delta | 1753 MiB | 1752 MiB | one scheduled sample, no polling loop |
+
+The final closure gate measured the larger render 6.4% slower and the small
+five-process median 2.4% slower. Both remain below the explicit 20% fail-loud
+threshold; repeated closure runs varied on both sides of the baseline. Kernel
+bodies, launch dimensions, estimator order and reference pixels are unchanged,
+and VRAM did not increase. The production Device numerical test executes a PTX
+buffer kernel through
+copy/event/dispatch/barrier/copy DAG submission and also covers budget, image,
+module/pipeline lifetime, invalid handles, unsupported module format and
+timeline behavior. The Release inventory is 41 registered tests at this
+closure snapshot. The authoritative cursor is T.7.

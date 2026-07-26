@@ -14,6 +14,7 @@
 #include <ure/render.hpp>
 #include <ure/render_config.hpp>
 #include <ure/scene_ir.hpp>
+#include <ure/spectral_limits.hpp>
 
 static int g_passed = 0, g_failed = 0;
 static int g_counter = 0;
@@ -329,7 +330,8 @@ static int test_spectral_spd_compiles_runtime_n() {
     bool rejected = false;
     try {
         ure::RenderConfig invalid = config;
-        invalid.num_wavelengths = ure::gpu::kMaxPacketLanes + 1;
+        invalid.num_wavelengths =
+            ure::kMaxSpectralPacketLanes + 1;
         (void)ure::GpuSceneCompiler::compile(scene, invalid);
     } catch (const std::runtime_error&) {
         rejected = true;

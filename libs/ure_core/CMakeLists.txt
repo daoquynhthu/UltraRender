@@ -8,6 +8,7 @@ add_library(ure_core STATIC
     src/restir_di_runtime.cu
     src/bidirectional_runtime.cu
     src/backend_cuda.cu
+    src/cuda_runtime_device.cu
     src/cuda_resource_registry.cu
     src/ure_c_api.cpp
     src/path_tracer_kernel.cu
@@ -46,8 +47,8 @@ if(MSVC)
     )
 endif()
 
-target_link_libraries(ure_core PRIVATE CUDA::cudart)
-target_compile_definitions(ure_core PUBLIC USE_CUDA)
+target_link_libraries(ure_core PRIVATE CUDA::cudart CUDA::cuda_driver)
+target_compile_definitions(ure_core PRIVATE USE_CUDA)
 
 set_target_properties(ure_core PROPERTIES
     CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"

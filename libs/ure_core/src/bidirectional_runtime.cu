@@ -4,7 +4,7 @@
 
 #include "ure/gpu_material_helpers.cuh"
 #include "ure/gpu_spectrum_utils.cuh"
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/detail/cuda_texture_view.cuh"
 #include "ure/integrator/bidirectional.cuh"
 #include "ure/integrator/specular_manifold.cuh"

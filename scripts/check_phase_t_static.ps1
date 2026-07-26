@@ -34,11 +34,7 @@ try {
     ) 'cuda_runtime|cuda(TextureObject|Array|Stream|Event|Error)_t|CU(deviceptr|context|stream|event)' "public configuration, SceneIR, or C ABI exposes CUDA SDK types"
     Assert-NoMatch @("libs/ure_core/include/ure/ure_c_api.h") 'Gpu(Context|Scene|MaterialData|Texture)' "C ABI exposes CUDA-era implementation structs"
 
-    $allowedCudaHeaders = @(
-        "libs/ure_core/include/ure/gpu_hardware.hpp",
-        "libs/ure_core/include/ure/gpu_structs.hpp",
-        "libs/ure_diag/include/ure/check_cuda.hpp"
-    )
+    $allowedCudaHeaders = @()
     $actualCudaHeaders = @(
         & rg -l '#include[[:space:]]*[<"]cuda_runtime\.h' libs -g "*.h" -g "*.hpp" |
             ForEach-Object { $_ -replace '\\', '/' } |
@@ -89,13 +85,11 @@ try {
     Assert-Contains "libs/ure_runtime/include/ure/runtime/resource_plan.hpp" "SparseTileLayout" "T.4 sparse/tiled contract is missing"
     Assert-Contains "libs/ure_runtime/include/ure/runtime/resource_plan.hpp" "struct UploadPlan" "T.4 upload plan is missing"
     Assert-NoMatch @(
-        "libs/ure_core/include/ure/gpu_context.hpp",
-        "libs/ure_core/include/ure/gpu_structs.hpp"
+        "libs/ure_core/include/ure/gpu_context.hpp"
     ) 'cudaTextureObject_t|cudaArray_t|pointers_to_free|arrays_to_free|tex_objs_to_free|material_resource_tables_to_free' "T.4 CUDA resource ownership leaked into public headers"
     Assert-NoMatch @("libs/ure_core/include/ure/render.hpp") 'GpuInstanceTransform|GpuMaterialData' "T.4 render API still exposes CUDA-era mutation structs"
     Assert-NoMatch @(
-        "libs/ure_core/include/ure/gpu_context.hpp",
-        "libs/ure_core/include/ure/gpu_multi_driver.hpp"
+        "libs/ure_core/include/ure/gpu_context.hpp"
     ) 'struct[[:space:]]+(GpuContext|MultiGpuContext)[[:space:]]*\{' "T.4 public runtime context still exposes backend allocation state"
     Assert-Contains "libs/ure_core/src/cuda_resource_registry.cuh" "class CudaResourceRegistry" "T.4 CUDA native resource registry is missing"
     Assert-Contains "libs/ure_core/include/ure/detail/cuda_scene_compiler.hpp" "struct CompiledGpuScene" "T.4 CUDA scene lowering was not moved behind the backend boundary"
@@ -118,8 +112,27 @@ try {
     Assert-Contains "tests/host/test_execution_graph.cpp" "test_advanced_estimator_order_is_frozen" "T.5 estimator-order test is missing"
     Assert-Contains "tests/host/test_execution_graph.cpp" "test_validation_rejects_semantic_changes" "T.5 semantic-drift rejection test is missing"
     Assert-Contains "scripts/run_phase_t5_execution_gate.ps1" "CMAKE_CUDA_COMPILER" "T.5 SDK-free compiler audit is missing"
-    Assert-Contains "PLAN.md" "当前游标: T\.6" "PLAN cursor did not advance to T.6"
-    Assert-Contains "PLAN.md" "T\.5 closure.*权威游标进入 T\.6" "PLAN lacks the T.5 closure and T.6 gate"
+    Assert-Contains "libs/ure_core/src/cuda_runtime_device.cuh" "public runtime::Device" "T.6 CUDA runtime device is missing"
+    Assert-Contains "libs/ure_core/src/cuda_runtime_device.cu" "cuLaunchKernel" "T.6 portable pipeline dispatch lowering is missing"
+    Assert-Contains "libs/ure_core/src/cuda_runtime_device.cu" "complete_external" "T.6 native CUDA fast-path completion bridge is missing"
+    Assert-Contains "libs/ure_core/src/path_tracer_host_api.cu" "runtime_device->lower" "T.6 path execution graph is not lowered"
+    Assert-Contains "libs/ure_core/src/wave_optics_gpu.cu" "create_buffer" "T.6 wave resources do not use the runtime device"
+    Assert-Contains "libs/ure_core/src/gpu_multi_driver.cu" "multi-GPU execution contracts are incompatible" "T.6 multi-GPU runtime compatibility gate is missing"
+    Assert-Contains "tests/gpu/test_cuda_runtime_device.cu" "test_cuda_device_executes_runtime_graph" "T.6 production runtime execution test is missing"
+    Assert-Contains "tests/host/test_public_surface_sdk_free.cpp" "SDK-free public surface compiled" "T.6 public SDK-free compile test is missing"
+    Assert-Contains "tests/sdk_free/package_consumer/CMakeLists.txt" "find_package" "T.6 SDK-free package consumer is missing"
+    Assert-Contains "scripts/run_phase_t6_cuda_backend_gate.ps1" "T5VramMiB" "T.6 VRAM regression gate is missing"
+    Assert-Contains "scripts/run_phase_t6_cuda_backend_gate.ps1" "MaximumRegression" "T.6 performance regression gate is missing"
+    Assert-Contains "CMakeLists.txt" "option\(UR_ENABLE_CUDA" "T.6 CUDA-optional root build is missing"
+    Assert-Contains "CMakeLists.txt" "project\(UltraRender VERSION 1\.0\.0 LANGUAGES CXX\)" "T.6 root project still requires CUDA language"
+    if (Test-Path "libs/ure_core/include/ure/gpu_structs.hpp") {
+        throw "T.6 CUDA structs remain in the installed public surface"
+    }
+    if (Test-Path "libs/ure_diag/include/ure/check_cuda.hpp") {
+        throw "T.6 CUDA diagnostics remain in the installed public surface"
+    }
+    Assert-Contains "PLAN.md" "当前游标: T\.7" "PLAN cursor did not advance to T.7"
+    Assert-Contains "PLAN.md" "T\.6 closure.*权威游标进入 T\.7" "PLAN lacks the T.6 closure and T.7 gate"
     Write-Host "Phase T static audit passed"
 } finally {
     Pop-Location

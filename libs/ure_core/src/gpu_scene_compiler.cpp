@@ -1,8 +1,9 @@
 #include "ure/detail/cuda_scene_compiler.hpp"
-#include "ure/gpu_scene_loader.hpp"
+#include "ure/detail/cuda_scene_loader.cuh"
 #include "ure/gpu_spectrum_utils.cuh"
 #include "ure/image_loader.hpp"
 #include "ure/spd_loader.hpp"
+#include "ure/spectral_limits.hpp"
 #include "ure/spectral/spectral.hpp"
 #include "ure/mie_phase_validation.hpp"
 #include <algorithm>
@@ -26,7 +27,7 @@ ure::gpu::GpuVec3 to_gpu_vec3(const core::Vec3f& v) {
 
 int checked_packet_lanes(const RenderConfig& config) {
     int lanes = spectral_packet_lanes(config);
-    if (!ure::gpu::valid_packet_lane_count(lanes)) {
+    if (!ure::valid_spectral_packet_lane_count(lanes)) {
         throw std::runtime_error("RenderConfig spectral packet lanes must be 1 or in [8, kMaxPacketLanes]");
     }
     if (spectral_domain_bins(config) < static_cast<std::uint64_t>(lanes)) {
@@ -50,7 +51,9 @@ void assign_spectrum(ure::gpu::SpectralPacket& target,
                      const std::vector<float>& values,
                      const std::vector<float>& wavelengths) {
     target = ure::gpu::SpectralPacket();
-    int n = std::min<int>(static_cast<int>(values.size()), ure::gpu::kMaxPacketLanes);
+    int n = std::min<int>(
+        static_cast<int>(values.size()),
+        ure::kMaxSpectralPacketLanes);
     for (int c = 0; c < n; ++c) {
         target.values[c] = values[c];
         target.wavelengths[c] = wavelengths[c];

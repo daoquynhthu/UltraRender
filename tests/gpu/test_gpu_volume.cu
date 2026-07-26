@@ -7,15 +7,16 @@
 #include "test_framework.cuh"
 #include "ure/detail/cuda_context.cuh"
 #include "ure/detail/cuda_multi_context.cuh"
-#include "ure/gpu_driver.hpp"
-#include "ure/gpu_multi_driver.hpp"
+#include "ure/detail/cuda_driver.cuh"
+#include "ure/detail/cuda_multi_driver.cuh"
 #include "ure/detail/cuda_scene_compiler.hpp"
-#include "ure/gpu_structs.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/mie_phase_validation.hpp"
 #include "ure/mie_phase_io.hpp"
 #include "ure/mie_solver.hpp"
 #include "ure/path_tracer_sampling.cuh"
 #include "ure/render.hpp"
+#include "ure/runtime/execution_graph.hpp"
 #include "ure/scene_ir.hpp"
 
 using namespace ure::gpu;
@@ -662,6 +663,13 @@ static int test_mie_upload_offsets_and_lifecycle() {
         1, 1, {}, {}, {}, {}, {}, config, resources);
     CHECK(multi != nullptr && multi->num_gpus == 1);
     CHECK(multi->contexts[0]->mie_phase_resource_count == 2);
+    CHECK(render_pass_multi_gpu(multi, 1) == 1);
+    CHECK(multi->execution_graph_schema ==
+          ure::runtime::kExecutionGraphSchemaVersion);
+    CHECK(multi->lowered_execution_node_count > 0);
+    CHECK(multi->lowered_dispatch_count > 0);
+    CHECK(multi->lowered_indirect_dispatch_count > 0);
+    CHECK(multi->completed_submissions == 1);
     free_multi_gpu_renderer(multi);
     config.spectral_max_resident_mb = 1;
     bool budget_rejected = false;

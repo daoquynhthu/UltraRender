@@ -9,7 +9,8 @@ if ($LASTEXITCODE -ne 0) {
     throw "T.5 SDK-free configure failed"
 }
 
-& cmake --build $BuildDir --config Release --target test_execution_graph_sdk_free
+& cmake --build $BuildDir --config Release --target `
+    test_execution_graph_sdk_free test_public_surface_sdk_free
 if ($LASTEXITCODE -ne 0) {
     throw "T.5 SDK-free build failed"
 }
@@ -19,7 +20,9 @@ if ($Cache -match "CMAKE_CUDA_COMPILER") {
     throw "T.5 SDK-free gate configured a CUDA compiler"
 }
 
-& ctest --test-dir $BuildDir -C Release -R "^execution_graph_sdk_free$" --output-on-failure
+& ctest --test-dir $BuildDir -C Release `
+    -R "^(execution_graph_sdk_free|public_surface_sdk_free)$" `
+    --output-on-failure
 if ($LASTEXITCODE -ne 0) {
     throw "T.5 SDK-free execution graph tests failed"
 }

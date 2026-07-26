@@ -62,7 +62,7 @@ if ($rawLaneModeChecks) {
     throw "sampled/lane estimator split"
 }
 
-$gpuStructs = Get-Content -Raw (Join-Path $RepoRoot "libs\ure_core\include\ure\gpu_structs.hpp")
+$gpuStructs = Get-Content -Raw (Join-Path $RepoRoot "libs\ure_core\include\ure\detail\cuda_structs.cuh")
 $gpuTextureView = Get-Content -Raw (Join-Path $RepoRoot "libs\ure_core\include\ure\detail\cuda_texture_view.cuh")
 if ($gpuStructs -notmatch "struct\s+SpectralSample") {
     throw "SpectralSample is missing"
