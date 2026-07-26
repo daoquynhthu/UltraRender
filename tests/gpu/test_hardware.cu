@@ -1,7 +1,20 @@
+#include <exception>
+
 #include "test_framework.cuh"
+#include "ure/backend.hpp"
 #include "ure/gpu_hardware.hpp"
 #include "ure/gpu_auto_config.hpp"
 #include "ure/log.hpp"
+
+template <typename Fn>
+static bool throws_exception(Fn&& fn) {
+    try {
+        fn();
+    } catch (const std::exception&) {
+        return true;
+    }
+    return false;
+}
 
 static int test_query_hardware() {
     REQUIRE_GPU();
@@ -163,6 +176,70 @@ static int test_spectral_runtime_plan_high_end_and_farm_presets() {
     return 0;
 }
 
+static int test_backend_identity_and_capability_contract() {
+    REQUIRE_GPU();
+    CHECK(ure::parse_backend_kind("auto") == ure::BackendKind::Auto);
+    CHECK(ure::parse_backend_kind("cuda") == ure::BackendKind::Cuda);
+    CHECK(ure::parse_backend_kind("vulkan") == ure::BackendKind::Vulkan);
+    CHECK(!ure::parse_backend_kind("invalid"));
+    const auto adapters = ure::enumerate_backend_adapters();
+    CHECK(!adapters.empty());
+    const auto& adapter = adapters.front();
+    CHECK(adapter.kind == ure::BackendKind::Cuda);
+    CHECK(adapter.adapter_id.starts_with("cuda:"));
+    CHECK(!adapter.name.empty());
+    CHECK(adapter.vendor_id == 0x10de);
+    CHECK(adapter.features != 0);
+    CHECK(ure::backend_has_features(
+        adapter.features,
+        ure::backend_feature_bit(
+            ure::BackendFeature::SpectralTransport) |
+        ure::backend_feature_bit(
+            ure::BackendFeature::Polarization) |
+        ure::backend_feature_bit(
+            ure::BackendFeature::SelfComputeTraversal)));
+    CHECK(adapter.limits.max_workgroup_threads > 0);
+    CHECK(adapter.limits.subgroup_size == 32);
+    CHECK(adapter.limits.max_spectral_packet_lanes == 32);
+    CHECK(adapter.memory.total_bytes > 0);
+    CHECK(adapter.memory.available_bytes > 0);
+    CHECK(!adapter.driver_identity.empty());
+    CHECK(!adapter.compiler_identity.empty());
+
+    ure::RenderConfig config;
+    auto automatic = ure::select_backend(config);
+    CHECK(automatic.adapter.kind == ure::BackendKind::Cuda);
+    CHECK(automatic.memory_budget_bytes > 0);
+    CHECK(automatic.memory_budget_bytes <=
+          automatic.adapter.memory.available_bytes);
+
+    config.backend.kind = ure::BackendKind::Cuda;
+    config.backend.adapter_id = adapter.adapter_id;
+    config.backend.adapter_ordinal =
+        std::numeric_limits<std::uint32_t>::max();
+    config.backend.memory_budget_bytes = 64ull * 1024ull * 1024ull;
+    const auto explicit_selection = ure::select_backend(config);
+    CHECK(explicit_selection.adapter.adapter_id == adapter.adapter_id);
+    CHECK(explicit_selection.memory_budget_bytes ==
+          config.backend.memory_budget_bytes);
+
+    config.backend.adapter_id = "cuda:missing";
+    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    config.backend.adapter_id.clear();
+    config.backend.adapter_ordinal =
+        std::numeric_limits<std::uint32_t>::max();
+    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    config.backend.adapter_ordinal = 0;
+    config.backend.required_features = 1ull << 63;
+    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    config.backend.required_features = 0;
+    config.backend.kind = ure::BackendKind::Vulkan;
+    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    config.backend.kind = ure::BackendKind::D3D12;
+    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    return 0;
+}
+
 int main() {
     ure::log::set_min_level(ure::log::Level::Warn);
     printf("[Hardware Config Test]\n");
@@ -175,6 +252,7 @@ int main() {
     RUN_TEST(test_spectral_runtime_plan_million_domain);
     RUN_TEST(test_spectral_runtime_plan_low_end_reject_signal);
     RUN_TEST(test_spectral_runtime_plan_high_end_and_farm_presets);
+    RUN_TEST(test_backend_identity_and_capability_contract);
     printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;
 }

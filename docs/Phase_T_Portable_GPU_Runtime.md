@@ -2,9 +2,10 @@
 
 ## Status
 
-T.0 CUDA coupling audit is complete and the authoritative cursor is T.1. This document is the migration ledger for
-T.1 through T.11. CUDA remains the only production backend at this cursor; the
-audit does not imply that Vulkan or D3D12 execution exists.
+T.0 and T.1 are complete and the authoritative cursor is T.2. This document is
+the migration ledger for T.2 through T.11. CUDA remains the only production
+backend at this cursor; Vulkan and D3D12 identities are reserved values whose
+explicit selection fails loudly.
 
 ## Audit method and boundary
 
@@ -100,5 +101,33 @@ when its owner moves below the backend boundary.
 - Every coupling has a contract owner and migration batch.
 - Static regression rules prevent new CUDA leakage into backend-neutral
   surfaces and freeze the existing public-header debt.
-- The authoritative next cursor is T.1; no Vulkan/D3D12 implementation is
-  claimed by this audit.
+- No Vulkan/D3D12 implementation is claimed by this audit.
+
+## T.1 backend identity and capability contract
+
+The backend-neutral contract is owned by `ure_types/backend_types.hpp`.
+`BackendKind`, stable adapter identity, feature bits, numeric limits, memory
+capacity/budget, and driver/compiler identity contain no CUDA SDK type. The
+CUDA implementation lives below that boundary in `backend_cuda.cu`.
+
+Selection is deterministic and fail-loud:
+
+- `Auto` resolves to CUDA, the current production default.
+- `Cuda` accepts a stable UUID-derived adapter ID or an ordinal.
+- Explicit `Vulkan` and `D3D12` requests are rejected until their production
+  backends exist.
+- Unknown adapters, missing required features, invalid backend values, and
+  memory budgets above current availability are rejected.
+- Automatic memory budgeting reserves headroom against both current
+  availability and physical capacity.
+
+The same selection fields are available through `RenderConfig`, JSON, render
+CLI options, the C ABI, and pyure. `list-devices` now consumes the neutral
+adapter registry and reports the stable ID, memory, driver, and compiler
+identity without importing the CUDA runtime in the CLI.
+
+T.1 verification covers JSON and CLI precedence, CUDA adapter identity and
+limits, explicit selection and rejection boundaries, C ABI-backed pyure
+enumeration/session creation, and unsupported backend failure. The
+authoritative next cursor is T.2; no portable kernel toolchain has been selected
+yet.

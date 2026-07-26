@@ -18,6 +18,53 @@ def wait_until(predicate, timeout=2.0):
 def main() -> int:
     pyure.set_min_log_level(pyure.LogLevel.WARN)
 
+    adapters = pyure.enumerate_backend_adapters()
+    assert adapters
+    cuda_adapter = adapters[0]
+    assert cuda_adapter.kind == pyure.BackendKind.CUDA
+    assert cuda_adapter.adapter_id.startswith("cuda:")
+    assert cuda_adapter.features & pyure.BackendFeature.SPECTRAL_TRANSPORT
+    assert cuda_adapter.features & pyure.BackendFeature.POLARIZATION
+    assert cuda_adapter.total_memory_bytes > 0
+    assert cuda_adapter.available_memory_bytes > 0
+    assert cuda_adapter.driver_identity
+    assert cuda_adapter.compiler_identity
+    with pyure.create_session(
+        backend="cuda",
+        backend_adapter_id=cuda_adapter.adapter_id,
+        backend_required_features=(
+            pyure.BackendFeature.SPECTRAL_TRANSPORT
+            | pyure.BackendFeature.POLARIZATION
+        ),
+        backend_memory_budget_bytes=64 * 1024 * 1024,
+    ) as session:
+        assert session.progress().state == pyure.SessionState.EMPTY
+
+    for unavailable_backend in ("vulkan", "d3d12"):
+        try:
+            pyure.create_session(backend=unavailable_backend)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError(
+                f"{unavailable_backend} must fail until implemented"
+            )
+    try:
+        pyure.create_session(backend="invalid")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unknown backend must fail")
+    try:
+        pyure.create_session(
+            backend="cuda",
+            backend_adapter_id="cuda:missing",
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("unknown backend adapter must fail")
+
     with tempfile.TemporaryDirectory() as directory:
         package = Path(directory) / "pyure_fixture.urepkg"
         subprocess.run([

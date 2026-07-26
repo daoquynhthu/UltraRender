@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ure/backend_types.hpp"
 #include "ure/render_config.hpp"
 #include "ure/ure_api.hpp"
 #include <cstdint>
@@ -108,6 +109,7 @@ public:
     virtual const std::vector<float>& get_aov(AovType type) const = 0;
 
     virtual IntegratorEstimatorMetadata get_estimator_metadata() const = 0;
+    virtual const BackendSelection& get_backend_selection() const = 0;
 
     // Backward compatibility alias
     const std::vector<float>& get_frame_buffer() const { return get_framebuffer(); }

@@ -3,7 +3,7 @@ from __future__ import annotations
 import ctypes
 import os
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 from pathlib import Path
 from typing import Optional
 
@@ -48,6 +48,30 @@ class MaterialType(IntEnum):
     LIGHT = 3
 
 
+class BackendKind(IntEnum):
+    AUTO = 0
+    CUDA = 1
+    VULKAN = 2
+    D3D12 = 3
+
+
+class BackendFeature(IntFlag):
+    COMPUTE = 1 << 0
+    SUBGROUP = 1 << 1
+    INT64 = 1 << 2
+    FLOAT_ATOMICS = 1 << 3
+    TEXTURE_SAMPLING = 1 << 4
+    MULTI_ADAPTER = 1 << 5
+    SPECTRAL_TRANSPORT = 1 << 6
+    POLARIZATION = 1 << 7
+    PATH_GUIDING = 1 << 8
+    RESTIR = 1 << 9
+    BIDIRECTIONAL = 1 << 10
+    MLT = 1 << 11
+    WAVE_REFERENCE = 1 << 12
+    SELF_COMPUTE_TRAVERSAL = 1 << 13
+
+
 class _Progress(ctypes.Structure):
     _fields_ = [
         ("spp", ctypes.c_int),
@@ -75,6 +99,39 @@ class _SpectralConfig(ctypes.Structure):
         ("max_resident_mb", ctypes.c_int),
         ("queue_capacity", ctypes.c_int),
         ("max_trace_depth", ctypes.c_int),
+    ]
+
+
+class _BackendConfig(ctypes.Structure):
+    _fields_ = [
+        ("kind", ctypes.c_int),
+        ("adapter_id", ctypes.c_char_p),
+        ("adapter_ordinal", ctypes.c_uint32),
+        ("required_features", ctypes.c_uint64),
+        ("memory_budget_bytes", ctypes.c_uint64),
+    ]
+
+
+class _BackendAdapterInfo(ctypes.Structure):
+    _fields_ = [
+        ("kind", ctypes.c_int),
+        ("adapter_id", ctypes.c_char * 64),
+        ("ordinal", ctypes.c_uint32),
+        ("vendor_id", ctypes.c_uint32),
+        ("device_id", ctypes.c_uint32),
+        ("name", ctypes.c_char * 128),
+        ("features", ctypes.c_uint64),
+        ("max_workgroup_threads", ctypes.c_uint32),
+        ("subgroup_size", ctypes.c_uint32),
+        ("max_grid_dimension_x", ctypes.c_uint32),
+        ("max_grid_dimension_y", ctypes.c_uint32),
+        ("max_grid_dimension_z", ctypes.c_uint32),
+        ("max_shared_memory_per_workgroup", ctypes.c_uint64),
+        ("max_spectral_packet_lanes", ctypes.c_uint32),
+        ("total_memory_bytes", ctypes.c_uint64),
+        ("available_memory_bytes", ctypes.c_uint64),
+        ("driver_identity", ctypes.c_char * 64),
+        ("compiler_identity", ctypes.c_char * 64),
     ]
 
 
@@ -174,6 +231,24 @@ class EstimatorMetadata:
     scene_epoch: int
 
 
+@dataclass(frozen=True)
+class BackendAdapter:
+    kind: BackendKind
+    adapter_id: str
+    ordinal: int
+    vendor_id: int
+    device_id: int
+    name: str
+    features: BackendFeature
+    max_workgroup_threads: int
+    subgroup_size: int
+    max_spectral_packet_lanes: int
+    total_memory_bytes: int
+    available_memory_bytes: int
+    driver_identity: str
+    compiler_identity: str
+
+
 def _candidate_library_paths() -> list[Path]:
     here = Path(__file__).resolve().parent
     env_path = os.environ.get("PYURE_NATIVE")
@@ -216,6 +291,21 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(_IntegratorConfig),
     ]
     lib.ure_session_create_integrator_config.restype = ctypes.c_void_p
+    lib.ure_session_create_backend_config.argtypes = [
+        ctypes.POINTER(_SpectralConfig),
+        ctypes.POINTER(_WaveOpticsConfig),
+        ctypes.POINTER(_IntegratorConfig),
+        ctypes.POINTER(_BackendConfig),
+    ]
+    lib.ure_session_create_backend_config.restype = ctypes.c_void_p
+    lib.ure_backend_adapter_count.argtypes = [ctypes.c_int]
+    lib.ure_backend_adapter_count.restype = ctypes.c_int
+    lib.ure_backend_get_adapter_info.argtypes = [
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(_BackendAdapterInfo),
+    ]
+    lib.ure_backend_get_adapter_info.restype = ctypes.c_int
     lib.ure_session_destroy.argtypes = [ctypes.c_void_p]
     lib.ure_session_load_scene_file.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
     lib.ure_session_load_scene_file.restype = ctypes.c_int
@@ -350,6 +440,56 @@ def _integrator_quality_preset_id(preset: str) -> int:
         raise ValueError(f"unsupported integrator quality preset: {preset}") from exc
 
 
+def _backend_kind_id(kind: str | BackendKind) -> int:
+    if isinstance(kind, BackendKind):
+        return int(kind)
+    kinds = {
+        "auto": BackendKind.AUTO,
+        "cuda": BackendKind.CUDA,
+        "vulkan": BackendKind.VULKAN,
+        "d3d12": BackendKind.D3D12,
+    }
+    try:
+        return int(kinds[kind.lower()])
+    except KeyError as exc:
+        raise ValueError(f"unsupported backend: {kind}") from exc
+
+
+def enumerate_backend_adapters(
+    kind: str | BackendKind = BackendKind.AUTO,
+) -> list[BackendAdapter]:
+    kind_id = _backend_kind_id(kind)
+    count = native().ure_backend_adapter_count(kind_id)
+    if count < 0:
+        raise RuntimeError("failed to enumerate UltraRender backend adapters")
+    adapters: list[BackendAdapter] = []
+    for index in range(count):
+        info = _BackendAdapterInfo()
+        if native().ure_backend_get_adapter_info(
+            kind_id, index, ctypes.byref(info)
+        ) != 0:
+            raise RuntimeError("failed to query UltraRender backend adapter")
+        adapters.append(
+            BackendAdapter(
+                BackendKind(info.kind),
+                bytes(info.adapter_id).split(b"\0", 1)[0].decode(),
+                int(info.ordinal),
+                int(info.vendor_id),
+                int(info.device_id),
+                bytes(info.name).split(b"\0", 1)[0].decode(),
+                BackendFeature(info.features),
+                int(info.max_workgroup_threads),
+                int(info.subgroup_size),
+                int(info.max_spectral_packet_lanes),
+                int(info.total_memory_bytes),
+                int(info.available_memory_bytes),
+                bytes(info.driver_identity).split(b"\0", 1)[0].decode(),
+                bytes(info.compiler_identity).split(b"\0", 1)[0].decode(),
+            )
+        )
+    return adapters
+
+
 def _vec3(values: tuple[float, float, float] | list[float]) -> ctypes.Array[ctypes.c_float]:
     if len(values) != 3:
         raise ValueError("expected a 3-float vector")
@@ -404,6 +544,11 @@ class RenderSession:
         mlt_memory_budget_mb: int = 0,
         mlt_seed: int = 1,
         mlt_chain_id_offset: int = 0,
+        backend: str | BackendKind = BackendKind.AUTO,
+        backend_adapter_id: str = "",
+        backend_adapter_ordinal: int = 0,
+        backend_required_features: BackendFeature | int = 0,
+        backend_memory_budget_bytes: int = 0,
     ):
         self._handle: Optional[int] = None
         wave_requested = (
@@ -431,7 +576,101 @@ class RenderSession:
             or environment_light_direct_sampling
             or restir_di
         )
-        if integrator_requested:
+        backend_requested = (
+            _backend_kind_id(backend) != int(BackendKind.AUTO)
+            or bool(backend_adapter_id)
+            or backend_adapter_ordinal != 0
+            or int(backend_required_features) != 0
+            or backend_memory_budget_bytes != 0
+        )
+        if backend_requested:
+            cfg = _SpectralConfig(
+                int(domain_bins),
+                int(packet_lanes if packet_lanes > 0 else num_wavelengths),
+                int(max_resident_mb),
+                int(queue_capacity),
+                int(max_trace_depth),
+            )
+            wave = _WaveOpticsConfig(
+                _wave_optics_mode_id(wave_optics_mode),
+                int(camera_diffraction),
+                int(coherent_field),
+                int(partial_coherence),
+                int(diffractive_materials),
+                int(fluorescence),
+                int(specular_manifold),
+                int(local_fullwave),
+                int(allow_wave_preview_degradation),
+            )
+            adapter_id_bytes = (
+                backend_adapter_id.encode() if backend_adapter_id else None
+            )
+            backend_config = _BackendConfig(
+                _backend_kind_id(backend),
+                adapter_id_bytes,
+                int(backend_adapter_ordinal),
+                int(backend_required_features),
+                int(backend_memory_budget_bytes),
+            )
+            integrator_ptr = None
+            if integrator_requested:
+                integrator = _IntegratorConfig(
+                    _integrator_mode_id(integrator_mode),
+                    _integrator_sampler_id(integrator_sampler),
+                    _integrator_quality_preset_id(integrator_quality_preset),
+                    int(allow_biased_integrator_reuse),
+                    int(path_guiding),
+                    float(path_guiding_light_mixture),
+                    float(path_guiding_learning_rate),
+                    float(path_guiding_min_weight),
+                    int(restir_di),
+                    int(restir_di_temporal_reuse),
+                    int(restir_di_spatial_reuse),
+                    int(restir_di_unbiased),
+                    int(restir_di_max_history),
+                    int(specular_manifold),
+                    2,
+                    1e-4,
+                    16,
+                    int(integrator_mode == "mlt"),
+                    int(mlt_chain_count),
+                    int(mlt_bootstrap_samples),
+                    int(mlt_burn_in_mutations),
+                    int(mlt_mutations_per_chain),
+                    float(mlt_large_step_probability),
+                    float(mlt_small_step_sigma),
+                    int(mlt_memory_budget_mb),
+                    int(mlt_seed),
+                    int(mlt_chain_id_offset),
+                    int(environment_light_direct_sampling),
+                    float(environment_light_intensity),
+                    int(path_guiding_spatial_cell_count),
+                    int(path_guiding_directional_bin_count),
+                    float(path_guiding_decay),
+                    int(path_guiding_decay_interval),
+                    int(path_guiding_memory_budget_mb),
+                    4,
+                    8,
+                    1e-6,
+                    int(integrator_mode == "restir_pt"),
+                    1,
+                    0,
+                    4,
+                    4,
+                    8,
+                    0.01,
+                    0.9,
+                    0.01,
+                    0.9,
+                )
+                integrator_ptr = ctypes.byref(integrator)
+            handle = native().ure_session_create_backend_config(
+                ctypes.byref(cfg),
+                ctypes.byref(wave),
+                integrator_ptr,
+                ctypes.byref(backend_config),
+            )
+        elif integrator_requested:
             cfg = _SpectralConfig(
                 int(domain_bins),
                 int(packet_lanes if packet_lanes > 0 else num_wavelengths),
@@ -769,6 +1008,11 @@ def create_session(
     mlt_memory_budget_mb: int = 0,
     mlt_seed: int = 1,
     mlt_chain_id_offset: int = 0,
+    backend: str | BackendKind = BackendKind.AUTO,
+    backend_adapter_id: str = "",
+    backend_adapter_ordinal: int = 0,
+    backend_required_features: BackendFeature | int = 0,
+    backend_memory_budget_bytes: int = 0,
 ) -> RenderSession:
     return RenderSession(
         num_wavelengths,
@@ -815,6 +1059,11 @@ def create_session(
         mlt_memory_budget_mb=mlt_memory_budget_mb,
         mlt_seed=mlt_seed,
         mlt_chain_id_offset=mlt_chain_id_offset,
+        backend=backend,
+        backend_adapter_id=backend_adapter_id,
+        backend_adapter_ordinal=backend_adapter_ordinal,
+        backend_required_features=backend_required_features,
+        backend_memory_budget_bytes=backend_memory_budget_bytes,
     )
 
 

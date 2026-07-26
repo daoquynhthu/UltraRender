@@ -1,4 +1,7 @@
 #pragma once
+
+#include "ure/backend_types.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -143,6 +146,7 @@ struct IntegratorRuntimeConfig {
 };
 
 struct RenderConfig {
+    BackendSelectionConfig backend;
     int queue_capacity = 0;       // 0 = auto (width * height)
     int max_trace_depth = 50;
     int num_wavelengths = 8;      // Legacy alias for spectral_packet_lanes.

@@ -47,6 +47,22 @@ RenderConfig load_config(const std::string& path) {
             if (g.contains("wavefront_capacity"))
                 cfg.gpu.wavefront_capacity = g["wavefront_capacity"].get<int>();
         }
+        if (j.contains("backend")) {
+            auto& b = j["backend"];
+            if (b.contains("kind"))
+                cfg.backend.kind = b["kind"].get<std::string>();
+            if (b.contains("adapter_id"))
+                cfg.backend.adapter_id = b["adapter_id"].get<std::string>();
+            if (b.contains("adapter_ordinal"))
+                cfg.backend.adapter_ordinal =
+                    b["adapter_ordinal"].get<std::uint32_t>();
+            if (b.contains("required_features"))
+                cfg.backend.required_features =
+                    b["required_features"].get<std::vector<std::string>>();
+            if (b.contains("memory_budget_mb"))
+                cfg.backend.memory_budget_mb =
+                    b["memory_budget_mb"].get<std::uint64_t>();
+        }
         if (j.contains("wave_optics")) {
             auto& w = j["wave_optics"];
             if (w.contains("mode")) cfg.wave_optics.mode = w["mode"].get<std::string>();
@@ -175,6 +191,11 @@ CliResult parse_cli(int argc, char** argv) {
     std::uint64_t spectral_domain_bins = 0;
     int spectral_packet_lanes = 0, spectral_max_resident_mb = 0;
     std::string spectral_sampling_mode;
+    std::string backend_kind;
+    std::string backend_adapter_id;
+    std::uint32_t backend_adapter_ordinal = 0;
+    std::vector<std::string> backend_required_features;
+    std::uint64_t backend_memory_budget_mb = 0;
     std::string wave_optics_mode;
     bool wave_camera_diffraction = false;
     bool wave_coherent_field = false;
@@ -248,6 +269,17 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_option("--spectral-packet-lanes", spectral_packet_lanes, "GPU spectral packet lanes");
     render_cmd->add_option("--spectral-max-resident-mb", spectral_max_resident_mb, "Resident spectral resource budget in MB");
     render_cmd->add_option("--spectral-sampling", spectral_sampling_mode, "Spectral sampling mode");
+    render_cmd->add_option("--backend", backend_kind, "Execution backend: auto, cuda, vulkan, d3d12");
+    render_cmd->add_option("--backend-adapter", backend_adapter_id, "Stable backend adapter identity");
+    auto* backend_adapter_ordinal_option = render_cmd->add_option(
+        "--backend-adapter-ordinal", backend_adapter_ordinal,
+        "Backend adapter ordinal used when no stable identity is specified");
+    render_cmd->add_option(
+        "--require-backend-feature", backend_required_features,
+        "Additional required backend feature")->take_all();
+    auto* backend_memory_budget_option = render_cmd->add_option(
+        "--backend-memory-budget-mb", backend_memory_budget_mb,
+        "Backend memory budget in MiB; zero derives a device budget");
     render_cmd->add_option("--wave-optics-mode", wave_optics_mode, "Wave optics mode: radiometric, camera_diffraction, coherent_field, partial_coherence");
     render_cmd->add_flag("--enable-camera-diffraction", wave_camera_diffraction, "Enable wave-optics camera diffraction");
     render_cmd->add_flag("--enable-coherent-field", wave_coherent_field, "Enable coherent complex-field transport");
@@ -318,7 +350,7 @@ CliResult parse_cli(int argc, char** argv) {
     std::string scene_info;
     info_cmd->add_option("scene", scene_info, "Path to scene file")->required();
 
-    app.add_subcommand("list-devices", "List available CUDA devices");
+    app.add_subcommand("list-devices", "List available backend adapters");
 
     auto* validate_cmd = app.add_subcommand("validate", "Validate a scene file");
     std::string scene_validate;
@@ -374,6 +406,15 @@ CliResult parse_cli(int argc, char** argv) {
         if (spectral_packet_lanes > 0) cfg.spectral.packet_lanes = spectral_packet_lanes;
         if (spectral_max_resident_mb > 0) cfg.spectral.max_resident_mb = spectral_max_resident_mb;
         if (!spectral_sampling_mode.empty()) cfg.spectral.sampling_mode = spectral_sampling_mode;
+        if (!backend_kind.empty()) cfg.backend.kind = backend_kind;
+        if (!backend_adapter_id.empty())
+            cfg.backend.adapter_id = backend_adapter_id;
+        if (backend_adapter_ordinal_option->count() > 0)
+            cfg.backend.adapter_ordinal = backend_adapter_ordinal;
+        if (!backend_required_features.empty())
+            cfg.backend.required_features = backend_required_features;
+        if (backend_memory_budget_option->count() > 0)
+            cfg.backend.memory_budget_mb = backend_memory_budget_mb;
         if (!wave_optics_mode.empty()) cfg.wave_optics.mode = wave_optics_mode;
         if (wave_camera_diffraction) cfg.wave_optics.camera_diffraction_enabled = true;
         if (wave_coherent_field) cfg.wave_optics.coherent_field_enabled = true;

@@ -1,4 +1,5 @@
 #include "ure/ure_c_api.h"
+#include "ure/backend.hpp"
 #include "ure/gpu_structs.hpp"
 #include "ure/render.hpp"
 #include "ure/session.hpp"
@@ -6,6 +7,7 @@
 #include "ure/image_saver.hpp"
 #include "ure/native_scene_tooling.hpp"
 #include "ure/native_adapter.hpp"
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <ure/log.hpp>
@@ -255,6 +257,65 @@ bool apply_spectral_config(RenderConfig& config, const ure_spectral_config_t* sp
     return true;
 }
 
+bool apply_backend_config(
+    RenderConfig& config,
+    const ure_backend_config_t* backend_config) {
+    if (!backend_config) return true;
+    if (backend_config->kind < URE_BACKEND_AUTO ||
+        backend_config->kind > URE_BACKEND_D3D12) {
+        return false;
+    }
+    config.backend.kind =
+        static_cast<BackendKind>(backend_config->kind);
+    config.backend.adapter_id =
+        backend_config->adapter_id ? backend_config->adapter_id : "";
+    config.backend.adapter_ordinal = backend_config->adapter_ordinal;
+    config.backend.required_features =
+        backend_config->required_features;
+    config.backend.memory_budget_bytes =
+        backend_config->memory_budget_bytes;
+    return true;
+}
+
+template <std::size_t N>
+void copy_c_string(char (&destination)[N], const std::string& source) {
+    const auto count = std::min(source.size(), N - 1);
+    std::copy_n(source.data(), count, destination);
+    destination[count] = '\0';
+}
+
+void fill_backend_adapter_info(
+    const BackendAdapterInfo& source,
+    ure_backend_adapter_info_t& destination) {
+    destination = {};
+    destination.kind = static_cast<int>(source.kind);
+    copy_c_string(destination.adapter_id, source.adapter_id);
+    destination.ordinal = source.ordinal;
+    destination.vendor_id = source.vendor_id;
+    destination.device_id = source.device_id;
+    copy_c_string(destination.name, source.name);
+    destination.features = source.features;
+    destination.max_workgroup_threads =
+        source.limits.max_workgroup_threads;
+    destination.subgroup_size = source.limits.subgroup_size;
+    destination.max_grid_dimension_x =
+        source.limits.max_grid_dimension_x;
+    destination.max_grid_dimension_y =
+        source.limits.max_grid_dimension_y;
+    destination.max_grid_dimension_z =
+        source.limits.max_grid_dimension_z;
+    destination.max_shared_memory_per_workgroup =
+        source.limits.max_shared_memory_per_workgroup;
+    destination.max_spectral_packet_lanes =
+        source.limits.max_spectral_packet_lanes;
+    destination.total_memory_bytes = source.memory.total_bytes;
+    destination.available_memory_bytes =
+        source.memory.available_bytes;
+    copy_c_string(destination.driver_identity, source.driver_identity);
+    copy_c_string(
+        destination.compiler_identity, source.compiler_identity);
+}
+
 ure::log::Level map_log_level(ure_log_level_t level) {
     switch (level) {
     case URE_LOG_TRACE:
@@ -399,8 +460,24 @@ void ure_set_min_log_level(ure_log_level_t level) {
 }
 
 ure_engine_t* ure_engine_create(void) {
-    auto engine = RenderEngineFactory::create_gpu_renderer();
-    return reinterpret_cast<ure_engine_t*>(engine.release());
+    try {
+        auto engine = RenderEngineFactory::create_gpu_renderer();
+        return reinterpret_cast<ure_engine_t*>(engine.release());
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+ure_engine_t* ure_engine_create_backend(
+    const ure_backend_config_t* backend_config) {
+    try {
+        RenderConfig config;
+        if (!apply_backend_config(config, backend_config)) return nullptr;
+        auto engine = RenderEngineFactory::create_gpu_renderer(config);
+        return reinterpret_cast<ure_engine_t*>(engine.release());
+    } catch (...) {
+        return nullptr;
+    }
 }
 
 void ure_engine_destroy(ure_engine_t* engine) {
@@ -502,6 +579,37 @@ int ure_engine_save_hdr(const ure_engine_t* engine, const char* path) {
     }, path, true);
 }
 
+int ure_backend_adapter_count(int kind) {
+    if (kind < URE_BACKEND_AUTO || kind > URE_BACKEND_D3D12) {
+        return -1;
+    }
+    try {
+        return static_cast<int>(enumerate_backend_adapters(
+            static_cast<BackendKind>(kind)).size());
+    } catch (...) {
+        return -1;
+    }
+}
+
+int ure_backend_get_adapter_info(
+    int kind,
+    int index,
+    ure_backend_adapter_info_t* out_info) {
+    if (!out_info || index < 0 || kind < URE_BACKEND_AUTO ||
+        kind > URE_BACKEND_D3D12) {
+        return -1;
+    }
+    try {
+        const auto adapters = enumerate_backend_adapters(
+            static_cast<BackendKind>(kind));
+        if (static_cast<std::size_t>(index) >= adapters.size()) return -1;
+        fill_backend_adapter_info(adapters[index], *out_info);
+        return 0;
+    } catch (...) {
+        return -1;
+    }
+}
+
 ure_session_t* ure_session_create(void) {
     try {
         auto session = std::make_unique<RenderSession>(RenderSession::create());
@@ -569,6 +677,36 @@ ure_session_t* ure_session_create_integrator_config(const ure_spectral_config_t*
         if (!wave_optics_is_radiometric_only(config.wave_optics)) return nullptr;
         if (!make_integrator_config(integrator_config, config)) return nullptr;
         auto session = std::make_unique<RenderSession>(RenderSession::create(config));
+        return reinterpret_cast<ure_session_t*>(session.release());
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+ure_session_t* ure_session_create_backend_config(
+    const ure_spectral_config_t* spectral_config,
+    const ure_wave_optics_config_t* wave_config,
+    const ure_integrator_config_t* integrator_config,
+    const ure_backend_config_t* backend_config) {
+    try {
+        RenderConfig config;
+        if (!apply_spectral_config(config, spectral_config)) return nullptr;
+        if (wave_config) {
+            if (!make_wave_optics_config(
+                    wave_config, config.wave_optics)) {
+                return nullptr;
+            }
+            if (!wave_optics_is_radiometric_only(config.wave_optics)) {
+                return nullptr;
+            }
+        }
+        if (integrator_config &&
+            !make_integrator_config(integrator_config, config)) {
+            return nullptr;
+        }
+        if (!apply_backend_config(config, backend_config)) return nullptr;
+        auto session = std::make_unique<RenderSession>(
+            RenderSession::create(config));
         return reinterpret_cast<ure_session_t*>(session.release());
     } catch (...) {
         return nullptr;

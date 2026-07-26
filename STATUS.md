@@ -1,6 +1,6 @@
 # UltraRender Current Status
 
-Last reviewed: 2026-07-23
+Last reviewed: 2026-07-26
 
 This document summarizes the current repository state for users and integrators. `PLAN.md` remains authoritative for construction order and phase completion criteria. Source, CMake registration, and fresh test output take precedence over prose when they disagree.
 
@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `T.1`. Phase Q and Phase R are complete; Phase T has frozen the T.0 CUDA coupling ledger and regression boundary, while backend identity/capability and later runtime steps must not yet be treated as implemented.
+The authoritative construction cursor is `T.2`. Phase Q and Phase R are complete; Phase T has completed the T.0 CUDA coupling audit and T.1 backend identity/capability contract. Portable kernel compilation and additional execution backends must not yet be treated as implemented.
 
 ## Supported execution baseline
 
@@ -43,6 +43,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | Capability | Status | Boundary |
 |---|---|---|
 | CUDA wavefront path tracing | Implemented and tested | Primary runtime path |
+| Backend identity/capability selection | Implemented and tested | CUDA is the Auto/default production backend; Vulkan and D3D12 requests fail loudly |
 | Runtime spectral domain / wavelength packets | Implemented and tested | Packet cap 32; sampled lane mode supported |
 | Stokes/Mueller polarization | Implemented for covered boundary/transport paths | Not coherent field transport |
 | Lambertian/metal/dielectric/cloth | Implemented for tested paths | Material model coverage is not exhaustive |

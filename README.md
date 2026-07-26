@@ -6,8 +6,9 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- Phase Q 与 Phase R 已完成；Phase T 的 CUDA coupling audit 已冻结，当前施工游标是 `T.1`（backend identity/capability contract）。
+- Phase Q 与 Phase R 已完成；Phase T 的 backend identity/capability contract 已完成，当前施工游标是 `T.2`（portable kernel toolchain feasibility）。
 - 默认生产执行后端是 CUDA。Vulkan、D3D12/DXR 和 OptiX 路径尚未完成。
+- 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure；显式请求尚未实现的后端会失败，不会静默回退。
 - 默认积分器是 spectral/polarimetric radiometric wavefront path tracer。
 - coherent field、partial coherence、完整衍射相机和局部全波耦合仍属于 Phase W 后续工作；当前主渲染路径不会静默模拟这些能力。
 - production unbiased/spatial ReSTIR DI 与受限 ReSTIR PT suffix reuse 已完成验证。GPU specular-manifold、BDPT、VCM 和独立 PSSMLT 已通过各自统计门禁；MLT 与 bidirectional/VCM/manifold 的组合仍明确拒绝。

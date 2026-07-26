@@ -42,6 +42,59 @@ typedef struct ure_spectral_config_t {
     int max_trace_depth;
 } ure_spectral_config_t;
 
+typedef enum ure_backend_kind_t {
+    URE_BACKEND_AUTO = 0,
+    URE_BACKEND_CUDA = 1,
+    URE_BACKEND_VULKAN = 2,
+    URE_BACKEND_D3D12 = 3
+} ure_backend_kind_t;
+
+typedef uint64_t ure_backend_feature_set_t;
+
+#define URE_BACKEND_FEATURE_COMPUTE (1ull << 0)
+#define URE_BACKEND_FEATURE_SUBGROUP (1ull << 1)
+#define URE_BACKEND_FEATURE_INT64 (1ull << 2)
+#define URE_BACKEND_FEATURE_FLOAT_ATOMICS (1ull << 3)
+#define URE_BACKEND_FEATURE_TEXTURE_SAMPLING (1ull << 4)
+#define URE_BACKEND_FEATURE_MULTI_ADAPTER (1ull << 5)
+#define URE_BACKEND_FEATURE_SPECTRAL_TRANSPORT (1ull << 6)
+#define URE_BACKEND_FEATURE_POLARIZATION (1ull << 7)
+#define URE_BACKEND_FEATURE_PATH_GUIDING (1ull << 8)
+#define URE_BACKEND_FEATURE_RESTIR (1ull << 9)
+#define URE_BACKEND_FEATURE_BIDIRECTIONAL (1ull << 10)
+#define URE_BACKEND_FEATURE_MLT (1ull << 11)
+#define URE_BACKEND_FEATURE_WAVE_REFERENCE (1ull << 12)
+#define URE_BACKEND_FEATURE_SELF_COMPUTE_TRAVERSAL (1ull << 13)
+
+typedef struct ure_backend_config_t {
+    int kind;
+    const char* adapter_id;
+    uint32_t adapter_ordinal;
+    ure_backend_feature_set_t required_features;
+    uint64_t memory_budget_bytes;
+} ure_backend_config_t;
+
+typedef struct ure_backend_adapter_info_t {
+    int kind;
+    char adapter_id[64];
+    uint32_t ordinal;
+    uint32_t vendor_id;
+    uint32_t device_id;
+    char name[128];
+    ure_backend_feature_set_t features;
+    uint32_t max_workgroup_threads;
+    uint32_t subgroup_size;
+    uint32_t max_grid_dimension_x;
+    uint32_t max_grid_dimension_y;
+    uint32_t max_grid_dimension_z;
+    uint64_t max_shared_memory_per_workgroup;
+    uint32_t max_spectral_packet_lanes;
+    uint64_t total_memory_bytes;
+    uint64_t available_memory_bytes;
+    char driver_identity[64];
+    char compiler_identity[64];
+} ure_backend_adapter_info_t;
+
 typedef enum ure_wave_optics_mode_t {
     URE_WAVE_OPTICS_RADIOMETRIC = 0,
     URE_WAVE_OPTICS_CAMERA_DIFFRACTION = 1,
@@ -178,6 +231,7 @@ void ure_set_min_log_level(ure_log_level_t level);
 
 /* Create a GPU renderer. Returns NULL on failure. */
 ure_engine_t* ure_engine_create(void);
+ure_engine_t* ure_engine_create_backend(const ure_backend_config_t* config);
 
 /* Destroy the renderer. Safe to call with NULL. */
 void ure_engine_destroy(ure_engine_t* engine);
@@ -213,6 +267,10 @@ int ure_aov_channel_count(ure_aov_type_t type);
 /* Save current framebuffer to BMP/HDR file. Returns 0 on success. */
 int ure_engine_save_bmp(const ure_engine_t* engine, const char* path);
 int ure_engine_save_hdr(const ure_engine_t* engine, const char* path);
+int ure_backend_adapter_count(int kind);
+int ure_backend_get_adapter_info(int kind,
+                                 int index,
+                                 ure_backend_adapter_info_t* out_info);
 
 /* ── Session API ───────────────────────────────────────────────── */
 
@@ -226,6 +284,10 @@ ure_session_t* ure_session_create_wave_config(const ure_spectral_config_t* spect
 ure_session_t* ure_session_create_integrator_config(const ure_spectral_config_t* spectral_config,
                                                     const ure_wave_optics_config_t* wave_config,
                                                     const ure_integrator_config_t* integrator_config);
+ure_session_t* ure_session_create_backend_config(const ure_spectral_config_t* spectral_config,
+                                                 const ure_wave_optics_config_t* wave_config,
+                                                 const ure_integrator_config_t* integrator_config,
+                                                 const ure_backend_config_t* backend_config);
 void ure_session_destroy(ure_session_t* session);
 int ure_session_load_scene_file(ure_session_t* session, const char* path);
 int ure_session_start(ure_session_t* session, int progressive);

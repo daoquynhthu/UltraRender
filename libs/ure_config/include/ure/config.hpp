@@ -34,6 +34,14 @@ struct GpuConfig {
     int wavefront_capacity = 0;
 };
 
+struct BackendConfig {
+    std::string kind = "auto";
+    std::string adapter_id;
+    std::uint32_t adapter_ordinal = 0;
+    std::vector<std::string> required_features;
+    std::uint64_t memory_budget_mb = 0;
+};
+
 struct WaveOpticsConfig {
     std::string mode = "radiometric";
     bool camera_diffraction_enabled = false;
@@ -152,6 +160,7 @@ struct RenderConfig {
     RendererConfig renderer;
     OutputConfig output;
     GpuConfig gpu;
+    BackendConfig backend;
     WaveOpticsConfig wave_optics;
     PathGuidingConfig path_guiding;
     EnvironmentLightConfig environment_light;

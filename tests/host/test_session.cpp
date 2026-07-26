@@ -124,6 +124,10 @@ public:
         return estimator_metadata;
     }
 
+    const ure::BackendSelection& get_backend_selection() const override {
+        return backend_selection;
+    }
+
     bool loaded = false;
     int spp = 0;
     int scene_ir_loads = 0;
@@ -145,6 +149,7 @@ public:
     std::vector<float> uv_aov = {0.25f, 0.75f};
     std::vector<float> motion_aov = {0.1f, 0.0f};
     ure::IntegratorEstimatorMetadata estimator_metadata = {};
+    ure::BackendSelection backend_selection = {};
 };
 
 template <typename Fn>

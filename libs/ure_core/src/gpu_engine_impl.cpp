@@ -1,4 +1,5 @@
 #include "ure/render.hpp"
+#include "ure/backend.hpp"
 #include "ure/gpu_context.hpp"
 #include "ure/gpu_scene_compiler.hpp"
 #include "ure/gpu_driver.hpp"
@@ -90,7 +91,10 @@ bool validate_integrator_estimator_metadata(
 
 class GpuRenderEngine : public IRenderEngine {
 public:
-    explicit GpuRenderEngine(const RenderConfig& cfg = RenderConfig{}) : config_(cfg), initialized_(false) {}
+    explicit GpuRenderEngine(const RenderConfig& cfg = RenderConfig{})
+        : backend_selection_(select_backend(cfg)),
+          config_(cfg),
+          initialized_(false) {}
 
     ~GpuRenderEngine() {
         if (gpu_context_) {
@@ -270,6 +274,10 @@ public:
             config_, scene_epoch);
     }
 
+    const BackendSelection& get_backend_selection() const override {
+        return backend_selection_;
+    }
+
 private:
     void validate_wave_optics_support() const {
         if (wave_optics_is_radiometric_only(config_.wave_optics)) return;
@@ -370,6 +378,7 @@ private:
     int current_spp_ = 0;
     bool initialized_;
 
+    BackendSelection backend_selection_;
     RenderConfig config_;
 
     // Phase P.3: triple-buffer for transforms (writer=physics, reader=render)

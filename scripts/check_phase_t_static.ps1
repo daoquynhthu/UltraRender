@@ -63,8 +63,15 @@ try {
     }
     Assert-Contains $ledger "Contract owner" "Phase T ledger lacks contract ownership"
     Assert-Contains $ledger "Migration batch" "Phase T ledger lacks migration batches"
-    Assert-Contains "PLAN.md" "当前游标: T\.1" "PLAN cursor did not advance to T.1"
-    Assert-Contains "PLAN.md" "T\.0 已冻结.*当前游标为 T\.1" "PLAN lacks the T.0 closure and T.1 gate"
+    Assert-Contains "libs/ure_types/include/ure/backend_types.hpp" "enum class BackendKind" "T.1 backend kind contract is missing"
+    Assert-Contains "libs/ure_types/include/ure/backend_types.hpp" "BackendFeatureSet" "T.1 backend feature contract is missing"
+    Assert-Contains "libs/ure_types/include/ure/backend_types.hpp" "driver_identity" "T.1 backend identity contract is missing"
+    Assert-Contains "libs/ure_types/include/ure/render_config.hpp" "BackendSelectionConfig backend" "RenderConfig lacks backend selection"
+    Assert-Contains "libs/ure_core/include/ure/ure_c_api.h" "ure_backend_config_t" "C ABI lacks backend configuration"
+    Assert-Contains "pyure/__init__.py" "enumerate_backend_adapters" "pyure lacks backend enumeration"
+    Assert-NoMatch @("apps/ure_cli/src/main.cpp") '#include[[:space:]]*[<"]cuda' "CLI still imports the CUDA SDK directly"
+    Assert-Contains "PLAN.md" "当前游标: T\.2" "PLAN cursor did not advance to T.2"
+    Assert-Contains "PLAN.md" "T\.1.*闭环.*T\.2" "PLAN lacks the T.1 closure and T.2 gate"
     Write-Host "Phase T static audit passed"
 } finally {
     Pop-Location

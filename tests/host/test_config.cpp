@@ -573,6 +573,56 @@ static int test_integrator_runtime_cli_overrides() {
     return 0;
 }
 
+static int test_backend_json_fields() {
+    const char* path = "test_config_backend.json";
+    {
+        std::ofstream out(path);
+        out << R"({
+  "backend": {
+    "kind": "cuda",
+    "adapter_id": "cuda:0123",
+    "adapter_ordinal": 2,
+    "required_features": ["spectral_transport", "polarization"],
+    "memory_budget_mb": 4096
+  }
+})";
+    }
+    const auto cfg = ure::config::load_config(path);
+    std::remove(path);
+    CHECK(cfg.backend.kind == "cuda");
+    CHECK(cfg.backend.adapter_id == "cuda:0123");
+    CHECK(cfg.backend.adapter_ordinal == 2u);
+    CHECK(cfg.backend.required_features.size() == 2);
+    CHECK(cfg.backend.required_features[0] == "spectral_transport");
+    CHECK(cfg.backend.required_features[1] == "polarization");
+    CHECK(cfg.backend.memory_budget_mb == 4096u);
+    return 0;
+}
+
+static int test_backend_cli_overrides() {
+    const char* argv[] = {
+        "ure_cli", "render", "scene.gltf",
+        "--backend", "cuda",
+        "--backend-adapter", "cuda:abcd",
+        "--backend-adapter-ordinal", "3",
+        "--require-backend-feature", "path_guiding",
+        "--require-backend-feature", "restir",
+        "--backend-memory-budget-mb", "2048"
+    };
+    const auto result = ure::config::parse_cli(
+        static_cast<int>(sizeof(argv) / sizeof(argv[0])),
+        const_cast<char**>(argv));
+    const auto& cfg = result.config;
+    CHECK(cfg.backend.kind == "cuda");
+    CHECK(cfg.backend.adapter_id == "cuda:abcd");
+    CHECK(cfg.backend.adapter_ordinal == 3u);
+    CHECK(cfg.backend.required_features.size() == 2);
+    CHECK(cfg.backend.required_features[0] == "path_guiding");
+    CHECK(cfg.backend.required_features[1] == "restir");
+    CHECK(cfg.backend.memory_budget_mb == 2048u);
+    return 0;
+}
+
 static int test_native_tool_commands() {
     const char* pack_argv[] = {"ure_cli", "pack", "a.ure", "b.urescene", "--output", "bundle.urepkg"};
     auto pack = ure::config::parse_cli(static_cast<int>(sizeof(pack_argv) / sizeof(pack_argv[0])), const_cast<char**>(pack_argv));
@@ -617,6 +667,8 @@ int main() {
     failed += run("test_integrator_mlt_cli_overrides", test_integrator_mlt_cli_overrides);
     failed += run("test_integrator_runtime_json_fields", test_integrator_runtime_json_fields);
     failed += run("test_integrator_runtime_cli_overrides", test_integrator_runtime_cli_overrides);
+    failed += run("test_backend_json_fields", test_backend_json_fields);
+    failed += run("test_backend_cli_overrides", test_backend_cli_overrides);
     failed += run("test_native_tool_commands", test_native_tool_commands);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);

@@ -4,10 +4,13 @@
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include <ure/config.hpp>
+#include <ure/backend.hpp>
 #include <ure/gpu_structs.hpp>
 #include <ure/image_saver.hpp>
 #include <ure/log.hpp>
@@ -15,10 +18,6 @@
 #include <ure/native_scene_tooling.hpp>
 #include <ure/render.hpp>
 #include <ure/scene_frontend.hpp>
-
-#ifdef USE_CUDA
-#include <cuda_runtime.h>
-#endif
 
 namespace {
 
@@ -197,6 +196,36 @@ bool parse_integrator_quality_preset(const std::string& preset, ure::IntegratorQ
     return false;
 }
 
+bool make_backend_config(
+    const ure::config::BackendConfig& app_config,
+    ure::BackendSelectionConfig& config) {
+    const auto kind = ure::parse_backend_kind(lowercase(app_config.kind));
+    if (!kind) {
+        std::cerr << "Error: unsupported backend '" << app_config.kind << "'\n";
+        return false;
+    }
+    if (app_config.memory_budget_mb >
+        std::numeric_limits<std::uint64_t>::max() / (1024ull * 1024ull)) {
+        std::cerr << "Error: backend memory budget overflows bytes\n";
+        return false;
+    }
+    config.kind = *kind;
+    config.adapter_id = app_config.adapter_id;
+    config.adapter_ordinal = app_config.adapter_ordinal;
+    config.memory_budget_bytes =
+        app_config.memory_budget_mb * 1024ull * 1024ull;
+    config.required_features = 0;
+    for (const auto& name : app_config.required_features) {
+        const auto feature = ure::parse_backend_feature(lowercase(name));
+        if (!feature) {
+            std::cerr << "Error: unsupported backend feature '" << name << "'\n";
+            return false;
+        }
+        config.required_features |= ure::backend_feature_bit(*feature);
+    }
+    return true;
+}
+
 bool make_wave_optics_config(const ure::config::WaveOpticsConfig& app_config, ure::WaveOpticsConfig& cfg) {
     if (!parse_wave_optics_mode(app_config.mode, cfg.mode)) {
         std::cerr << "Error: unsupported wave optics mode '" << app_config.mode << "'\n";
@@ -270,6 +299,9 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.spectral_packet_lanes = packet_lanes;
     gpu_config.spectral_max_resident_mb = app_config.spectral.max_resident_mb;
     gpu_config.spectral_sampling_mode = parse_spectral_sampling_mode(app_config.spectral.sampling_mode);
+    if (!make_backend_config(app_config.backend, gpu_config.backend)) {
+        return 1;
+    }
     gpu_config.path_guiding.enabled = app_config.path_guiding.enabled;
     gpu_config.path_guiding.light_mixture = static_cast<float>(app_config.path_guiding.light_mixture);
     gpu_config.path_guiding.learning_rate = static_cast<float>(app_config.path_guiding.learning_rate);
@@ -370,7 +402,13 @@ int cmd_render(const ure::config::CliResult& cli) {
     if (scene_ir.height <= 0) scene_ir.height = app_config.height > 0 ? app_config.height : 900;
     const int spp = app_config.renderer.spp > 0 ? app_config.renderer.spp : (scene_ir.spp > 0 ? scene_ir.spp : 100);
 
-    auto engine = ure::RenderEngineFactory::create_gpu_renderer(gpu_config);
+    std::unique_ptr<ure::IRenderEngine> engine;
+    try {
+        engine = ure::RenderEngineFactory::create_gpu_renderer(gpu_config);
+    } catch (const std::exception& e) {
+        std::cerr << "Error selecting backend: " << e.what() << "\n";
+        return 1;
+    }
     engine->load_scene_ir(scene_ir);
     engine->reset_accumulation();
 
@@ -438,27 +476,28 @@ int cmd_info(const std::string& scene_path) {
 }
 
 int cmd_list_devices() {
-#ifdef USE_CUDA
-    int count = 0;
-    const cudaError_t err = cudaGetDeviceCount(&count);
-    if (err != cudaSuccess) {
-        std::cerr << "CUDA error: " << cudaGetErrorString(err) << "\n";
+    try {
+        const auto adapters = ure::enumerate_backend_adapters();
+        std::cout << "Found " << adapters.size()
+                  << " production backend adapter(s):\n";
+        for (const auto& adapter : adapters) {
+            std::cout << "  [" << adapter.ordinal << "] "
+                      << ure::backend_kind_name(adapter.kind) << " "
+                      << adapter.name << "\n"
+                      << "      id: " << adapter.adapter_id << "\n"
+                      << "      memory: "
+                      << (adapter.memory.total_bytes >> 20) << " MiB total, "
+                      << (adapter.memory.available_bytes >> 20)
+                      << " MiB available\n"
+                      << "      driver: " << adapter.driver_identity << "\n"
+                      << "      compiler: " << adapter.compiler_identity
+                      << "\n";
+        }
+        return 0;
+    } catch (const std::exception& e) {
+        std::cerr << "Backend enumeration failed: " << e.what() << "\n";
         return 1;
     }
-    std::cout << "Found " << count << " CUDA device(s):\n";
-    for (int i = 0; i < count; ++i) {
-        cudaDeviceProp props{};
-        if (cudaGetDeviceProperties(&props, i) == cudaSuccess) {
-            std::cout << "  [" << i << "] " << props.name
-                      << "  CC " << props.major << "." << props.minor
-                      << "  " << (props.totalGlobalMem >> 20) << " MB\n";
-        }
-    }
-    return 0;
-#else
-    std::cout << "CUDA not available (compiled without USE_CUDA)\n";
-    return 0;
-#endif
 }
 
 int cmd_validate(const std::string& scene_path) {
