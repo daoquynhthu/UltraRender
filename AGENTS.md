@@ -14,6 +14,7 @@ This file defines the rules, conventions, and workflow that any AI agent must fo
 
 ```
 ure_types     — Header-only type library (INTERFACE). Vec3, Mat4, Quat, Ray, SceneIR, RenderConfig, World.
+ure_runtime   — Backend-neutral GPU runtime contracts (STATIC, pure C++).
 ure_core      — GPU rendering core (STATIC, CUDA 13+). Path tracer kernel, BVH, GPU driver, scene compiler.
 ure_sceneio   — Scene I/O (STATIC, pure C++). glTF 2.0 parser, OBJ/legacy loader, stb_image, SPD loader.
 ure_diag      — Unified logging/diagnostics (INTERFACE, Phase Dx complete).
@@ -47,7 +48,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | R-P5 (PSSMLT) | Done | Independent GPU chains, production wavefront replay, normalization/diagnostics/shards, replicated disjoint-range fixed-NMSE gate |
 | R-P7 (Industrial Validation) | Done | Clean-tree eight-category Closure, farm/Nsight same-binary evidence, 37/37 CTest |
 | Q.0-Q.12 (Native Scene) | Done | Native schema/serialization, procedural/script, resources/solvers/simulation, tooling/adapters/cache/farm, validation suite |
-| T (Portable GPU Runtime) | In progress | T.0-T.2 complete; Slang toolchain selected; T.3 is the authoritative cursor |
+| T (Portable GPU Runtime) | In progress | T.0-T.3 complete; SDK-free runtime API established; T.4 is the authoritative cursor |
 | W (Wave Optics Solver) | In progress | W.0 audit + rough dielectric spectral/UV PDF/MIS fix done; W.1 WaveOpticsConfig gates done; W.2 Airy PSF oracle started |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
@@ -122,6 +123,7 @@ E:\Render Engine\
 │   ├── ure_types/                   # Header-only type library (INTERFACE)
 │   │   └── include/ure/core/        # vector, matrix, quat, ray, aabb
 │   ├── ure_core/                    # GPU rendering (STATIC, CUDA)
+│   ├── ure_runtime/                 # SDK-free runtime contracts (STATIC, pure C++)
 │   │   ├── include/ure/             # render.hpp, gpu_hardware.hpp, gpu_driver.hpp, spectral/...
 │   │   └── src/                     # path_tracer_kernel.cu, gpu_driver.cu, gpu_engine_impl.cpp, ...
 │   ├── ure_sceneio/                 # Scene I/O (STATIC, pure C++)
@@ -201,7 +203,7 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | Host core | `test_world`, `test_asset_pipeline`, `test_config`, `test_spectral_oracle`, `test_wave_optics`, `test_integrator`, `test_mie_phase` |
 | Host scene/material/session | `test_native_scene`, `test_native_scene_ir`, `test_native_procedural_graph`, `test_native_script_build`, `test_native_resource_catalog`, `test_native_solver_contract`, `test_native_simulation_contract`, `test_native_tooling`, `test_native_adapter`, `test_native_compiled_cache`, `test_native_validation_suite`, `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io` |
 | Python | `test_pyure_smoke` |
-| **CTest total** | **37 registered tests** in `build_modular_x64` |
+| **CTest total** | **38 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -395,10 +397,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 17 | 2026-07-23 T.0 | Froze the portable-runtime coupling ledger and regression boundary | Fourteen coupling categories cover build through validation with owners and migration batches; static audit prevents new CUDA SDK/native-handle leakage into backend-neutral surfaces and freezes four existing public-header debts. |
 | 18 | 2026-07-26 T.1 | Established the backend identity, capability and selection contract | Backend-neutral identity/features/limits/budgets and driver/compiler metadata now span RenderConfig, JSON, CLI, C ABI and pyure; CUDA remains Auto/default, while unavailable backends and invalid adapter/feature/budget requests fail loudly. |
 | 19 | 2026-07-26 T.2 | Selected and verified the portable kernel toolchain | Pinned Slang 2026.14 compiled spectral, Mueller, queue, BSDF, wave and traversal prototypes deterministically to PTX/SPIR-V/DXIL with reflection/debug/capability evidence; sm_120 cubins had zero spills, full measured occupancy and passed numerical execution. |
+| 20 | 2026-07-26 T.3 | Established the backend-neutral runtime API | Added pure C++ `ure_runtime` contracts for typed resources, queues, timeline synchronization, modules/pipelines, dispatch DAGs and durable device-loss errors; host mock tests cover lifetime, alignment, overflow, synchronization and loss without GPU SDK headers. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- Phase Q, Phase M, and Phase R are complete; T.0-T.2 are complete and the authoritative construction cursor is T.3.
+- Phase Q, Phase M, and Phase R are complete; T.0-T.3 are complete and the authoritative construction cursor is T.4.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 1) to avoid concurrent `ptxas` host-memory allocation failures; host and unrelated targets remain globally parallel.

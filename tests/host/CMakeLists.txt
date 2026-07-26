@@ -16,6 +16,10 @@ add_executable(test_config test_config.cpp)
 target_link_libraries(test_config PRIVATE ure_config ure_diag)
 add_test(NAME test_config COMMAND test_config)
 
+add_executable(test_runtime_contract test_runtime_contract.cpp)
+target_link_libraries(test_runtime_contract PRIVATE ure_runtime)
+add_test(NAME test_runtime_contract COMMAND test_runtime_contract)
+
 add_executable(test_spectral_oracle test_spectral_oracle.cpp)
 target_link_libraries(test_spectral_oracle PRIVATE ure_types)
 add_test(NAME test_spectral_oracle COMMAND test_spectral_oracle)

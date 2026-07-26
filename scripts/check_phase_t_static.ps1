@@ -21,6 +21,7 @@ Push-Location $RepoRoot
 try {
     $neutralRoots = @(
         "libs/ure_types",
+        "libs/ure_runtime",
         "libs/ure_sceneio",
         "libs/ure_config",
         "pyure"
@@ -79,8 +80,13 @@ try {
     Assert-Contains "scripts/run_phase_t2_kernel_toolchain_gate.ps1" "36029c50ef0c82f2616ffb02e0ed27d642cb44a2a297d531cc2ad333b85b85b6" "T.2 Slang pin is missing"
     Assert-Contains "scripts/run_phase_t2_kernel_toolchain_gate.ps1" "cuda_numerical_execution" "T.2 CUDA execution evidence is missing"
     Assert-Contains "docs/Phase_T2_Kernel_Toolchain_Decision.md" "Slang as the shared-source frontend" "T.2 decision is missing"
-    Assert-Contains "PLAN.md" "当前游标: T\.3" "PLAN cursor did not advance to T.3"
-    Assert-Contains "PLAN.md" "T\.2 closure.*权威游标进入 T\.3" "PLAN lacks the T.2 closure and T.3 gate"
+    Assert-Contains "libs/ure_runtime/include/ure/runtime/runtime.hpp" "class Device" "T.3 runtime device contract is missing"
+    Assert-Contains "libs/ure_runtime/include/ure/runtime/runtime.hpp" "DispatchGraph" "T.3 dispatch graph contract is missing"
+    Assert-Contains "libs/ure_runtime/include/ure/runtime/runtime.hpp" "DeviceLossInfo" "T.3 device-loss contract is missing"
+    Assert-Contains "tests/host/test_runtime_contract.cpp" "test_lifetime_overflow_and_sync" "T.3 lifecycle/synchronization tests are missing"
+    Assert-Contains "tests/host/test_runtime_contract.cpp" "test_graph_validation_and_device_loss" "T.3 graph/device-loss tests are missing"
+    Assert-Contains "PLAN.md" "当前游标: T\.4" "PLAN cursor did not advance to T.4"
+    Assert-Contains "PLAN.md" "T\.3 closure.*权威游标进入 T\.4" "PLAN lacks the T.3 closure and T.4 gate"
     Write-Host "Phase T static audit passed"
 } finally {
     Pop-Location

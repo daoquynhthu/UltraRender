@@ -2,8 +2,8 @@
 
 ## Status
 
-T.0 through T.2 are complete and the authoritative cursor is T.3. This document
-is the migration ledger for T.3 through T.11. CUDA remains the only production
+T.0 through T.3 are complete and the authoritative cursor is T.4. This document
+is the migration ledger for T.4 through T.11. CUDA remains the only production
 backend at this cursor; Vulkan and D3D12 identities are reserved values whose
 explicit selection fails loudly.
 
@@ -149,3 +149,24 @@ The full decision, measurements, dependency boundary, and reproduction command
 are recorded in `docs/Phase_T2_Kernel_Toolchain_Decision.md`. T.2 does not adopt
 Slang RHI and does not migrate the production CUDA executor. Those boundaries
 remain T.3-T.6.
+
+## T.3 backend-neutral runtime contract
+
+`ure_runtime` is a pure C++ library with no CUDA, Vulkan, or D3D12 SDK
+dependency. It owns typed nonzero handles, descriptor and overflow validation,
+device/queue/fence/event contracts, buffer/image/sampler/module/pipeline
+creation, resource bindings, timeline submission, dispatch DAG validation,
+structured error codes, and durable device-loss diagnostics.
+
+Resource lifetime stays explicit: handles are device-owned, stale or foreign
+handles fail, modules cannot be destroyed while pipelines depend on them, and
+all offset/size calculations use subtraction-based bounds checks. Timeline
+signals must increase monotonically. Dispatch graphs reject missing
+dependencies, cycles, duplicate binding slots, empty work, invalid handles,
+and invalid synchronization objects before backend lowering.
+
+The pure host mock contract gate covers descriptor alignment, extent and
+workgroup overflow, allocation budgets, use-after-destroy, module/pipeline
+ownership, copy/binding bounds, event ordering, timeline waits/signals, graph
+cycles, and fail-loud device loss. T.3 intentionally does not wrap
+`GpuContext`; CUDA native objects remain private until T.4/T.6 migration.

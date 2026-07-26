@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `T.3`. Phase Q and Phase R are complete; Phase T has completed the T.0 CUDA coupling audit, T.1 backend identity/capability contract, and T.2 Slang toolchain feasibility gate. The backend-neutral runtime API, production kernel migration, and additional execution backends must not yet be treated as implemented.
+The authoritative construction cursor is `T.4`. Phase Q and Phase R are complete; Phase T has completed T.0-T.3, including the Slang toolchain gate and SDK-free runtime API. Resource migration, production CUDA runtime integration, and additional execution backends must not yet be treated as implemented.
 
 ## Supported execution baseline
 
@@ -19,7 +19,7 @@ The authoritative construction cursor is `T.3`. Phase Q and Phase R are complete
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
 | Build tree | `build_modular_x64` using Ninja |
 | Primary executable | `build_modular_x64/apps/ure_cli/ure_cli.exe` |
-| Registered tests | 37 CTest entries at this snapshot |
+| Registered tests | 38 CTest entries at this snapshot |
 
 Linux, macOS, non-NVIDIA execution, and older CUDA architectures do not currently have equivalent repository-level verification evidence.
 
@@ -28,6 +28,7 @@ Linux, macOS, non-NVIDIA execution, and older CUDA architectures do not currentl
 | Module | Responsibility | Status |
 |---|---|---|
 | `ure_types` | Backend-neutral types, SceneIR, native contracts | Active |
+| `ure_runtime` | SDK-free device/resource/synchronization/dispatch contracts | Active; backend implementations not yet migrated |
 | `ure_core` | CUDA renderer, GPU scene compiler, sessions and C ABI | Active |
 | `ure_sceneio` | Native scene I/O, glTF/MaterialX adapters, image/SPD/Mie I/O | Active |
 | `ure_config` | JSON configuration and CLI parsing | Active |

@@ -36,6 +36,7 @@ include(GNUInstallDirs)
 
 add_subdirectory(libs/ure_types)
 add_subdirectory(libs/ure_diag)
+add_subdirectory(libs/ure_runtime)
 
 add_subdirectory(libs/ure_config)
 add_subdirectory(libs/ure_sceneio)
