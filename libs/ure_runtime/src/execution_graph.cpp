@@ -308,7 +308,8 @@ ExecutionGraph make_path_execution_graph(
         queue(8, QueueRole::MltPathNext, 70)};
 
     graph.regions.push_back(
-        {1, 0, RegionKind::Pass, RepeatKind::Once, 1, 1, std::nullopt});
+        {1, 0, RegionKind::Pass, RepeatKind::Once, 1, 1,
+         std::nullopt, std::nullopt, std::nullopt});
     GraphBuilder builder(std::move(graph));
     builder.add(
         1,
@@ -379,13 +380,13 @@ ExecutionGraph make_path_execution_graph(
                  RepeatKind::FixedCount,
                  bootstrap_batches,
                  static_cast<std::uint32_t>(bootstrap_batches),
-                 std::nullopt});
+                 std::nullopt, std::nullopt, std::nullopt});
             mlt_graph.regions.push_back(
                 {3, 2, RegionKind::DepthLoop,
                  RepeatKind::UntilQueueEmpty, 0,
                  static_cast<std::uint32_t>(
                      config.render.max_trace_depth),
-                 6});
+                 6, std::nullopt, std::nullopt});
         }
         if (!config.mlt_initialized &&
             mlt_config.burn_in_mutations > 0) {
@@ -395,12 +396,12 @@ ExecutionGraph make_path_execution_graph(
                      mlt_config.burn_in_mutations),
                  static_cast<std::uint32_t>(
                      mlt_config.burn_in_mutations),
-                 std::nullopt});
+                 std::nullopt, std::nullopt, std::nullopt});
         }
         mlt_graph.regions.push_back(
             {5, 1, RegionKind::MutationLoop, RepeatKind::FixedCount,
              mutations, static_cast<std::uint32_t>(mutations),
-             std::nullopt});
+             std::nullopt, std::nullopt, std::nullopt});
         if (!config.mlt_initialized &&
             mlt_config.burn_in_mutations > 0) {
             mlt_graph.regions.push_back(
@@ -408,11 +409,12 @@ ExecutionGraph make_path_execution_graph(
                  RepeatKind::UntilQueueEmpty, 0,
                  static_cast<std::uint32_t>(
                      config.render.max_trace_depth),
-                 6});
+                 6, std::nullopt, std::nullopt});
         }
         mlt_graph.regions.push_back(
             {7, 5, RegionKind::DepthLoop, RepeatKind::UntilQueueEmpty, 0,
-             static_cast<std::uint32_t>(config.render.max_trace_depth), 6});
+             static_cast<std::uint32_t>(config.render.max_trace_depth), 6,
+             std::nullopt, std::nullopt});
         GraphBuilder mlt_builder(std::move(mlt_graph));
         mlt_builder.add(
             1,
@@ -717,14 +719,16 @@ ExecutionGraph make_path_execution_graph(
     auto base_graph = builder.finish();
     base_graph.regions.push_back(
         {2, 1, RegionKind::SampleLoop, RepeatKind::FixedCount,
-         config.samples_per_pass, config.samples_per_pass, std::nullopt});
+         config.samples_per_pass, config.samples_per_pass, std::nullopt,
+         std::nullopt, std::nullopt});
     const std::uint64_t candidates = restir_pt
         ? static_cast<std::uint64_t>(
               std::max(1, config.render.restir_pt.candidate_count))
         : 1;
     base_graph.regions.push_back(
         {3, 2, RegionKind::CandidateLoop, RepeatKind::FixedCount,
-         candidates, static_cast<std::uint32_t>(candidates), std::nullopt});
+         candidates, static_cast<std::uint32_t>(candidates), std::nullopt,
+         std::nullopt, std::nullopt});
     const auto depth_limit = restir_pt
         ? std::min(
               config.render.max_trace_depth,
@@ -732,12 +736,14 @@ ExecutionGraph make_path_execution_graph(
         : config.render.max_trace_depth;
     base_graph.regions.push_back(
         {4, 3, RegionKind::DepthLoop, RepeatKind::UntilQueueEmpty, 0,
-         static_cast<std::uint32_t>(depth_limit), 1});
+         static_cast<std::uint32_t>(depth_limit), 1,
+         std::nullopt, std::nullopt});
     if (config.render.specular_manifold.enabled) {
         base_graph.regions.push_back(
             {5, 1, RegionKind::ManifoldRootLoop,
              RepeatKind::UntilQueueEmpty, 0,
-             std::numeric_limits<std::uint32_t>::max(), 7});
+             std::numeric_limits<std::uint32_t>::max(), 7,
+             std::nullopt, std::nullopt});
     }
     GraphBuilder path(std::move(base_graph));
 
@@ -1187,7 +1193,8 @@ ExecutionGraph make_wave_execution_graph(
     graph.kind = ExecutionKind::WaveOperator;
     graph.estimator.mode = IntegratorMode::Wavefront;
     graph.regions.push_back(
-        {1, 0, RegionKind::Pass, RepeatKind::Once, 1, 1, std::nullopt});
+        {1, 0, RegionKind::Pass, RepeatKind::Once, 1, 1,
+         std::nullopt, std::nullopt, std::nullopt});
     GraphBuilder builder(std::move(graph));
     builder.add(
         1,

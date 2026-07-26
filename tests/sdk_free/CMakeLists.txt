@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(URE_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
 
 add_library(ure_runtime_sdk_free STATIC
+    "${URE_ROOT}/libs/ure_runtime/src/acceleration.cpp"
     "${URE_ROOT}/libs/ure_runtime/src/execution_graph.cpp"
     "${URE_ROOT}/libs/ure_runtime/src/resource_plan.cpp"
     "${URE_ROOT}/libs/ure_runtime/src/runtime_validation.cpp"

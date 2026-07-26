@@ -198,7 +198,9 @@ void validate(const DispatchGraph& graph) {
                                             ErrorCode::InvalidArgument,
                                             "buffer binding size is zero");
                                     }
-                                } else {
+                                } else if constexpr (std::is_same_v<
+                                                         BindingType,
+                                                         ImageBinding>) {
                                     require_handle(
                                         value.image, "dispatch image");
                                     if (value.sampler) {
@@ -206,6 +208,10 @@ void validate(const DispatchGraph& graph) {
                                             *value.sampler,
                                             "dispatch sampler");
                                     }
+                                } else {
+                                    require_handle(
+                                        value.scene,
+                                        "dispatch acceleration scene");
                                 }
                                 if (!slots.insert(value.slot).second) {
                                     throw Error(

@@ -932,7 +932,10 @@ runtime::SubmissionId CudaRuntimeDevice::submit(
                                                 InvalidArgument,
                                             "CUDA dispatch buffer binding is invalid");
                                     }
-                                } else {
+                                } else if constexpr (
+                                    std::is_same_v<
+                                        Binding,
+                                        runtime::ImageBinding>) {
                                     auto& image =
                                         Impl::require(
                                             impl_->images,
@@ -953,6 +956,11 @@ runtime::SubmissionId CudaRuntimeDevice::submit(
                                         impl_->samplers,
                                         item.sampler->value,
                                         "sampler");
+                                } else {
+                                    throw runtime::Error(
+                                        runtime::ErrorCode::
+                                            Unsupported,
+                                        "CUDA runtime acceleration binding requires an acceleration provider");
                                 }
                             },
                             binding);
@@ -1133,7 +1141,10 @@ runtime::SubmissionId CudaRuntimeDevice::submit(
                                                 static_cast<std::byte*>(
                                                     buffer.pointer) +
                                                 item.offset));
-                                    } else {
+                                    } else if constexpr (
+                                        std::is_same_v<
+                                            Binding,
+                                            runtime::ImageBinding>) {
                                         Impl::require(
                                             impl_->images,
                                             item.image.value,
@@ -1148,6 +1159,11 @@ runtime::SubmissionId CudaRuntimeDevice::submit(
                                             impl_->texture(
                                                 item.image.value,
                                                 item.sampler->value));
+                                    } else {
+                                        throw runtime::Error(
+                                            runtime::ErrorCode::
+                                                Unsupported,
+                                            "CUDA runtime acceleration binding requires an acceleration provider");
                                     }
                                 },
                                 binding);
@@ -1271,7 +1287,7 @@ bool CudaRuntimeDevice::wait(
     impl_->update_fence(fence);
     if (point.value <= fence.completed) return true;
     auto* target = impl_->checkpoint(fence, point.value);
-    if (!target) return false;
+    if (!target) return point.value <= fence.completed;
     const auto event = target->event;
     if (timeout == std::chrono::nanoseconds::max()) {
         impl_->check(

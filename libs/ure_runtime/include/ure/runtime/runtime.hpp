@@ -25,7 +25,8 @@ enum class ObjectKind : std::uint8_t {
     Image,
     Sampler,
     Module,
-    Pipeline
+    Pipeline,
+    AccelerationScene
 };
 
 template <ObjectKind Kind>
@@ -45,6 +46,8 @@ using ImageHandle = Handle<ObjectKind::Image>;
 using SamplerHandle = Handle<ObjectKind::Sampler>;
 using ModuleHandle = Handle<ObjectKind::Module>;
 using PipelineHandle = Handle<ObjectKind::Pipeline>;
+using AccelerationSceneHandle =
+    Handle<ObjectKind::AccelerationScene>;
 
 enum class ErrorCode : std::uint8_t {
     InvalidArgument,
@@ -103,7 +106,8 @@ enum class BufferUsage : std::uint32_t {
     TransferSource = 1u << 2,
     TransferDestination = 1u << 3,
     Indirect = 1u << 4,
-    AccelerationInput = 1u << 5
+    AccelerationInput = 1u << 5,
+    DeviceAddress = 1u << 6
 };
 
 constexpr BufferUsage operator|(BufferUsage left, BufferUsage right) {
@@ -206,7 +210,8 @@ enum class BindingType : std::uint8_t {
     StorageBuffer,
     UniformBuffer,
     SampledImage,
-    StorageImage
+    StorageImage,
+    AccelerationStructure
 };
 
 struct PipelineBindingDesc {
@@ -242,7 +247,15 @@ struct ImageBinding {
     std::optional<SamplerHandle> sampler;
 };
 
-using ResourceBinding = std::variant<BufferBinding, ImageBinding>;
+struct AccelerationBinding {
+    std::uint32_t slot = 0;
+    AccelerationSceneHandle scene;
+};
+
+using ResourceBinding = std::variant<
+    BufferBinding,
+    ImageBinding,
+    AccelerationBinding>;
 
 struct DispatchCommand {
     PipelineHandle pipeline;

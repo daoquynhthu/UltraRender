@@ -1,0 +1,2 @@
+shaders/vulkan/generated/compute_bvh.json binary
+shaders/vulkan/generated/ray_query_native.json binary

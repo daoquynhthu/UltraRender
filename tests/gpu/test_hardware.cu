@@ -182,6 +182,12 @@ static int test_backend_identity_and_capability_contract() {
     CHECK(ure::parse_backend_kind("cuda") == ure::BackendKind::Cuda);
     CHECK(ure::parse_backend_kind("vulkan") == ure::BackendKind::Vulkan);
     CHECK(!ure::parse_backend_kind("invalid"));
+    CHECK(
+        ure::parse_backend_feature("ray_query") ==
+        ure::BackendFeature::RayQuery);
+    CHECK(
+        ure::parse_backend_feature("ray_tracing_pipeline") ==
+        ure::BackendFeature::RayTracingPipeline);
     const auto adapters = ure::enumerate_backend_adapters();
     CHECK(!adapters.empty());
     const auto& adapter = adapters.front();

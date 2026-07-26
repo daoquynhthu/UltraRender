@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "ure/backend_types.hpp"
+#include "ure/runtime/acceleration.hpp"
 #include "ure/runtime/runtime.hpp"
 
 namespace ure::vulkan {
@@ -19,7 +20,9 @@ struct ValidationMessage {
     std::string text;
 };
 
-class VulkanRuntimeDevice final : public runtime::Device {
+class VulkanRuntimeDevice final :
+    public runtime::Device,
+    public runtime::AccelerationProvider {
 public:
     VulkanRuntimeDevice(
         BackendAdapterInfo adapter,
@@ -70,6 +73,13 @@ public:
     std::uint64_t fence_value(
         runtime::FenceHandle fence) const override;
     void wait_idle() override;
+
+    runtime::AccelerationCapabilities
+    acceleration_capabilities() const noexcept override;
+    runtime::AccelerationSceneHandle create_acceleration_scene(
+        const runtime::AccelerationSceneDesc& desc) override;
+    void destroy(
+        runtime::AccelerationSceneHandle scene) override;
 
     void* host_buffer(runtime::BufferHandle buffer) const;
     std::uint64_t allocated_bytes() const;

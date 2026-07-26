@@ -6,16 +6,16 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- Phase Q 与 Phase R 已完成；Phase T 已完成 CUDA production lowering 和 Vulkan compute foundation，当前施工游标是 `T.8`（Vulkan RT/acceleration bridge）。
-- 默认完整场景渲染后端仍是 CUDA。Vulkan 已具备经过 Windows/Linux 构建与 Windows NVIDIA/Intel 实机验证的 compute runtime，但尚无 T.8 traversal bridge，因此不会被描述为完整渲染后端；D3D12/DXR 和 OptiX 路径也尚未完成。
-- 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure；Vulkan adapter 可被枚举，完整 Vulkan 渲染请求会因缺少 traversal capability 明确失败，不会静默回退。
+- Phase Q 与 Phase R 已完成；Phase T 已完成 CUDA production lowering、Vulkan compute foundation 和 Vulkan acceleration bridge，当前施工游标是 `T.9`（可选 D3D12/DXR backend）。
+- 默认完整场景渲染后端仍是 CUDA。Vulkan 已具备经过 Windows/Linux 构建、Windows NVIDIA/Intel 实机验证的 compute runtime，以及 capability-driven ray-query/compute-BVH acceleration bridge；完整 SceneIR renderer 尚未接入，因此不会被描述为完整渲染后端。D3D12/DXR 和 OptiX production provider 也尚未完成。
+- 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure；Vulkan adapter inventory 会记录硬件 ray-query/ray-pipeline 能力，T.8 provider 只公布已可执行的 native ray query 与 compute BVH fallback，并可按配置明确拒绝。完整 Vulkan 渲染请求仍会因尚未具备完整 traversal lowering 而失败，不会静默转用 CUDA。
 - Slang 2026.14 已用六类真实计算原型完成固定版本、确定性多目标编译、反射、debug mapping、CUDA 占用率及数值执行验证；Vulkan foundation 的五类 SPIR-V operator 已复用同一份共享光谱/偏振/波传播语义，现有 CUDA production kernels 仍是私有 `.cu` fast path，Slang RHI 未被引入。
-- 纯 C++ `ure_runtime` 已定义 device、queue、timeline fence、event、buffer、image、sampler、module、pipeline、资源规划、dispatch DAG、execution graph 和 device-loss 合同；CUDA production backend 已实现这些合同的私有 lowering，并覆盖 path、wave、multi-GPU、PTX pipeline 与结构化错误路径。
-- `ure_vulkan` 已实现 Vulkan 1.3 adapter、queue、timeline、buffer/image/sampler、SPIR-V module、typed descriptor、specialization、pipeline cache、validation/debug-utils 和 device-loss 映射；其公共头不暴露 Vulkan SDK 类型。
+- 纯 C++ `ure_runtime` 已定义 device、queue、timeline fence、event、buffer、image、sampler、module、pipeline、资源规划、dispatch DAG、execution graph、acceleration provider/selection/hit metadata 和 device-loss 合同；CUDA production backend 已实现这些合同的私有 lowering，并覆盖 path、wave、multi-GPU、PTX pipeline 与结构化错误路径。
+- `ure_vulkan` 已实现 Vulkan 1.3 adapter、queue、timeline、buffer/image/sampler、SPIR-V module、typed descriptor、specialization、pipeline cache、validation/debug-utils、device-loss 映射，以及私有 BLAS/TLAS build 与 ray-query descriptor lowering；其公共头不暴露 Vulkan SDK 类型。
 - 默认积分器是 spectral/polarimetric radiometric wavefront path tracer。
 - coherent field、partial coherence、完整衍射相机和局部全波耦合仍属于 Phase W 后续工作；当前主渲染路径不会静默模拟这些能力。
 - production unbiased/spatial ReSTIR DI 与受限 ReSTIR PT suffix reuse 已完成验证。GPU specular-manifold、BDPT、VCM 和独立 PSSMLT 已通过各自统计门禁；MLT 与 bidirectional/VCM/manifold 的组合仍明确拒绝。
-- 完整 CUDA 渲染基线为 Windows 11、Visual Studio 2022 Build Tools、CUDA 13.0 和 NVIDIA compute capability 12.0。Vulkan compute foundation 另有 Linux GCC/Ninja 构建执行证据及 Windows NVIDIA/Intel 跨厂商证据；这不等同于完整 Linux 或非 NVIDIA 场景渲染支持。
+- 完整 CUDA 渲染基线为 Windows 11、Visual Studio 2022 Build Tools、CUDA 13.0 和 NVIDIA compute capability 12.0。Vulkan compute/acceleration foundation 另有 Linux GCC/Ninja 构建执行证据、Windows NVIDIA native ray-query 证据及 NVIDIA/Intel compute-BVH 跨厂商证据；这不等同于完整 Linux 或非 NVIDIA 场景渲染支持。
 
 ## 已验证的能力
 
@@ -52,7 +52,7 @@ Render Engine/
 ├── apps/ure_cli/       # 离线命令行入口
 ├── libs/ure_types/     # backend-neutral 类型与 SceneIR
 ├── libs/ure_runtime/   # backend-neutral GPU runtime contracts
-├── libs/ure_vulkan/    # Vulkan 1.3 compute runtime foundation
+├── libs/ure_vulkan/    # Vulkan 1.3 compute and acceleration runtime
 ├── libs/ure_core/      # 渲染核心、会话 API 和私有 CUDA production backend
 ├── libs/ure_sceneio/   # 原生场景、glTF、MaterialX、图像和光谱资源 I/O
 ├── libs/ure_config/    # JSON/CLI 配置
@@ -92,7 +92,7 @@ Ninja 可并行构建宿主代码和独立目标；高内存 CUDA 编译由工�
 ctest --test-dir build_modular_x64 -C Release --output-on-failure
 ```
 
-当前构建树注册 42 个 CTest。这个数字是当前快照，不应用作长期固定接口；以 `ctest -N` 的输出为准。
+当前构建树注册 45 个 CTest。这个数字是当前快照，不应用作长期固定接口；以 `ctest -N` 的输出为准。
 
 仅构建不依赖 GPU SDK 的公共基础库时，可关闭 CUDA backend：
 
@@ -101,11 +101,11 @@ cmake -S . -B build_sdk_free -DUR_ENABLE_CUDA=OFF -DUR_BUILD_CLI=OFF -DUR_BUILD_
 cmake --build build_sdk_free --config Release --target ure_runtime ure_sceneio ure_config
 ```
 
-Vulkan compute foundation 可在不安装 CUDA 或 Vulkan SDK 的情况下单独构建；运行时仍需要系统 Vulkan loader：
+Vulkan compute/acceleration foundation 可在不安装 CUDA 或 Vulkan SDK 的情况下单独构建；运行时仍需要系统 Vulkan loader：
 
 ```powershell
 cmake -S . -B build_vulkan -DUR_ENABLE_CUDA=OFF -DUR_ENABLE_VULKAN=ON -DUR_BUILD_CLI=OFF
-cmake --build build_vulkan --config Release --target ure_vulkan test_vulkan_runtime
+cmake --build build_vulkan --config Release --target ure_vulkan test_vulkan_runtime test_vulkan_acceleration
 ```
 
 ## 命令行工具

@@ -272,11 +272,16 @@ private:
                                 rt::ErrorCode::Overflow,
                                 "buffer binding exceeds allocation");
                         }
-                    } else {
+                    } else if constexpr (
+                        std::is_same_v<Type, rt::ImageBinding>) {
                         require(images_, value.image.value);
                         if (value.sampler) {
                             require(samplers_, value.sampler->value);
                         }
+                    } else {
+                        throw rt::Error(
+                            rt::ErrorCode::Unsupported,
+                            "mock acceleration provider is unavailable");
                     }
                 },
                 binding);

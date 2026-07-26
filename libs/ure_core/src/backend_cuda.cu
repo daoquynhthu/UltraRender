@@ -19,7 +19,7 @@ namespace ure {
 
 namespace {
 
-constexpr std::array<BackendFeature, 14> kBackendFeatures = {
+constexpr std::array<BackendFeature, 16> kBackendFeatures = {
     BackendFeature::Compute,
     BackendFeature::Subgroup,
     BackendFeature::Int64,
@@ -33,7 +33,9 @@ constexpr std::array<BackendFeature, 14> kBackendFeatures = {
     BackendFeature::Bidirectional,
     BackendFeature::Mlt,
     BackendFeature::WaveReference,
-    BackendFeature::SelfComputeTraversal
+    BackendFeature::SelfComputeTraversal,
+    BackendFeature::RayQuery,
+    BackendFeature::RayTracingPipeline
 };
 
 std::string cuda_error_message(cudaError_t error, const char* operation) {
@@ -70,6 +72,10 @@ std::string cuda_compiler_identity() {
 BackendFeatureSet cuda_features(int device_count) {
     BackendFeatureSet features = 0;
     for (const auto feature : kBackendFeatures) {
+        if (feature == BackendFeature::RayQuery ||
+            feature == BackendFeature::RayTracingPipeline) {
+            continue;
+        }
         if (feature != BackendFeature::MultiAdapter || device_count > 1) {
             features |= backend_feature_bit(feature);
         }
@@ -169,6 +175,9 @@ const char* backend_feature_name(BackendFeature feature) {
     case BackendFeature::Mlt: return "mlt";
     case BackendFeature::WaveReference: return "wave_reference";
     case BackendFeature::SelfComputeTraversal: return "self_compute_traversal";
+    case BackendFeature::RayQuery: return "ray_query";
+    case BackendFeature::RayTracingPipeline:
+        return "ray_tracing_pipeline";
     }
     return "invalid";
 }

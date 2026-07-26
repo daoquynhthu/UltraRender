@@ -20,6 +20,15 @@ add_executable(test_runtime_contract test_runtime_contract.cpp)
 target_link_libraries(test_runtime_contract PRIVATE ure_runtime)
 add_test(NAME test_runtime_contract COMMAND test_runtime_contract)
 
+add_executable(
+    test_acceleration_contract
+    test_acceleration_contract.cpp)
+target_link_libraries(
+    test_acceleration_contract PRIVATE ure_runtime)
+add_test(
+    NAME test_acceleration_contract
+    COMMAND test_acceleration_contract)
+
 add_executable(test_resource_plan test_resource_plan.cpp)
 target_include_directories(test_resource_plan PRIVATE
     "${CMAKE_SOURCE_DIR}/libs/ure_core/include"

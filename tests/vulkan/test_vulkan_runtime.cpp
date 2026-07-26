@@ -157,21 +157,14 @@ std::vector<std::byte> run_adapter(
     require(
         device->state() == rt::DeviceState::Ready,
         "Vulkan device is not ready");
-    bool acceleration_rejected = false;
-    try {
-        static_cast<void>(device->create_buffer({
-            64,
-            16,
-            rt::BufferUsage::AccelerationInput,
-            rt::MemoryClass::DeviceLocal,
-            "unsupported.acceleration"}));
-    } catch (const rt::Error& error) {
-        acceleration_rejected =
-            error.code() == rt::ErrorCode::Unsupported;
-    }
+    const auto acceleration_capabilities =
+        device->acceleration_capabilities();
     require(
-        acceleration_rejected,
-        "Vulkan T.7 accepted acceleration input");
+        rt::acceleration_has_features(
+            acceleration_capabilities.features,
+            rt::acceleration_feature_bit(
+                rt::AccelerationFeature::ComputeBvh)),
+        "Vulkan compute BVH fallback is unavailable");
     const auto queue = device->create_queue({
         rt::QueueClass::ComputeTransfer, 0, "foundation"});
     const auto fence = device->create_fence(0);

@@ -26,7 +26,9 @@ enum class BackendFeature : std::uint64_t {
     Bidirectional = 1ull << 10,
     Mlt = 1ull << 11,
     WaveReference = 1ull << 12,
-    SelfComputeTraversal = 1ull << 13
+    SelfComputeTraversal = 1ull << 13,
+    RayQuery = 1ull << 14,
+    RayTracingPipeline = 1ull << 15
 };
 
 using BackendFeatureSet = std::uint64_t;
