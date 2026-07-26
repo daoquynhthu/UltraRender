@@ -5,6 +5,7 @@ option(UR_BUILD_TESTS "Build tests" ON)
 option(UR_BUILD_CLI "Build CLI" ON)
 option(UR_BUILD_PHYSICS "Build physics/acoustic subsystem" ON)
 option(UR_ENABLE_CUDA "Build the CUDA production backend" ON)
+option(UR_ENABLE_VULKAN "Build the Vulkan compute backend" ON)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -39,6 +40,9 @@ include(GNUInstallDirs)
 add_subdirectory(libs/ure_types)
 add_subdirectory(libs/ure_diag)
 add_subdirectory(libs/ure_runtime)
+if(UR_ENABLE_VULKAN)
+    add_subdirectory(libs/ure_vulkan)
+endif()
 
 add_subdirectory(libs/ure_config)
 add_subdirectory(libs/ure_sceneio)
@@ -57,12 +61,19 @@ elseif(UR_BUILD_CLI)
     message(STATUS "Skipping ure_cli because no production backend is enabled")
 endif()
 
-if(UR_BUILD_TESTS AND UR_ENABLE_CUDA)
+if(UR_BUILD_TESTS)
     enable_testing()
+endif()
+
+if(UR_BUILD_TESTS AND UR_ENABLE_CUDA)
     add_subdirectory(tests/gpu)
     add_subdirectory(tests/host)
 elseif(UR_BUILD_TESTS)
     message(STATUS "Skipping CUDA-coupled root tests; use tests/sdk_free")
+endif()
+
+if(UR_BUILD_TESTS AND UR_ENABLE_VULKAN)
+    add_subdirectory(tests/vulkan)
 endif()
 
 # ── Install / Export for find_package() support ──
@@ -88,5 +99,12 @@ install(
     NAMESPACE UltraRender::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/UltraRender
 )
+
+if(UR_ENABLE_VULKAN)
+    install(
+        DIRECTORY shaders/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/UltraRender/shaders
+    )
+endif()
 
 message(STATUS "UltraRender v${PROJECT_VERSION} configured.")

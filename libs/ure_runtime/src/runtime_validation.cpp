@@ -135,6 +135,30 @@ void validate(const PipelineDesc& desc) {
             ErrorCode::InvalidArgument,
             "workgroup exceeds portable limit");
     }
+    std::unordered_set<std::uint32_t> binding_slots;
+    for (const auto& binding : desc.bindings) {
+        if (!binding_slots.insert(binding.slot).second) {
+            throw Error(
+                ErrorCode::InvalidArgument,
+                "pipeline binding slot is duplicated");
+        }
+    }
+    std::unordered_set<std::uint32_t> specialization_ids;
+    for (const auto& constant : desc.specialization) {
+        if (!specialization_ids.insert(constant.id).second) {
+            throw Error(
+                ErrorCode::InvalidArgument,
+                "specialization constant id is duplicated");
+        }
+        if (constant.size_bytes != 1 &&
+            constant.size_bytes != 2 &&
+            constant.size_bytes != 4 &&
+            constant.size_bytes != 8) {
+            throw Error(
+                ErrorCode::InvalidArgument,
+                "specialization constant size is invalid");
+        }
+    }
 }
 
 void validate(const DispatchGraph& graph) {

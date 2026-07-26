@@ -1,0 +1,50 @@
+{
+  "schema": "ure.vulkan_shader_manifest.v1",
+  "source": {
+    "path": "phase_t7_foundation.slang",
+    "sha256": "10c5f15696ead3ddc17213db19b91dac4b2c151bf9af2c2f6055c05817d8d850"
+  },
+  "shared_source": {
+    "path": "../shared/portable_semantics.slang",
+    "sha256": "aabe245bf31c4eb76153df0e34023c189ac11bece60d2c3ccc7a042e64e1b676"
+  },
+  "compiler": {
+    "name": "Slang",
+    "version": "2026.14",
+    "windows_executable_sha256": "54d746d1e37bb04732c8bff07619517abf3abb657592c227b6dcf3778a3c811c"
+  },
+  "arguments": [
+    "-target",
+    "spirv",
+    "-profile",
+    "glsl_460",
+    "-emit-spirv-directly",
+    "-fvk-use-dx-layout",
+    "-O3",
+    "-g2",
+    "-warnings-as-errors",
+    "all"
+  ],
+  "entries": {
+    "film_aov": {
+      "spirv_sha256": "7dd7cca1d085e07a29b69444b84bc561bb921508069aa7abf2c8144d3459c642",
+      "reflection_sha256": "185ef023f4d57064ce5e3b79affa2b5eadaded84521425bdc5770d274cbbb2e4"
+    },
+    "queue_compaction": {
+      "spirv_sha256": "1273bcd45608d2d34d70434de7dbc84eb2b60c4492c65c1ed8d9936265b1ed4c",
+      "reflection_sha256": "3cf1b3c3b0b34cb86aec17e8c29f6d52b2d2173dcb7d909f1262cceb8e9e0e6b"
+    },
+    "raygen": {
+      "spirv_sha256": "1084fbcef6b4295007d7d1c2f3e77e70db1846483c947b6701e1d634bc15e206",
+      "reflection_sha256": "54be2ea4dee7142db786e2711f258b5cbe570b346bfcb407d64719916bbbbb50"
+    },
+    "spectral_polarization": {
+      "spirv_sha256": "779b1576f5d310f60aa0e5ce2c1e331d45e5d1c244a2aa3a6eaaded3cb6fa49b",
+      "reflection_sha256": "902397220066db61e54f92a2c33c004a0eff06273dcf20f5cc05953850658d25"
+    },
+    "wave_reference": {
+      "spirv_sha256": "fd13a9266e9f1a3b9edef310013c24de90e90c3d117ad56d06e63f2db40797f6",
+      "reflection_sha256": "9a543dc60c2117bb2124699645eeb35ce676668083e548f177d84ef90f7e2ef8"
+    }
+  }
+}

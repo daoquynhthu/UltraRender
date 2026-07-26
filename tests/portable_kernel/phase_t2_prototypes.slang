@@ -1,4 +1,4 @@
-import phase_t2_semantics;
+import portable_semantics;
 
 struct KernelParams
 {

@@ -205,6 +205,32 @@ static int test_backend_identity_and_capability_contract() {
     CHECK(adapter.memory.available_bytes > 0);
     CHECK(!adapter.driver_identity.empty());
     CHECK(!adapter.compiler_identity.empty());
+    const auto vulkan_adapters =
+        ure::enumerate_backend_adapters(
+            ure::BackendKind::Vulkan);
+    CHECK(!vulkan_adapters.empty());
+    for (const auto& vulkan_adapter : vulkan_adapters) {
+        CHECK(vulkan_adapter.kind ==
+              ure::BackendKind::Vulkan);
+        CHECK(vulkan_adapter.adapter_id.starts_with(
+            "vulkan:"));
+        CHECK(ure::backend_has_features(
+            vulkan_adapter.features,
+            ure::backend_feature_bit(
+                ure::BackendFeature::Compute) |
+            ure::backend_feature_bit(
+                ure::BackendFeature::Subgroup) |
+            ure::backend_feature_bit(
+                ure::BackendFeature::SpectralTransport) |
+            ure::backend_feature_bit(
+                ure::BackendFeature::Polarization) |
+            ure::backend_feature_bit(
+                ure::BackendFeature::WaveReference)));
+        CHECK(!ure::backend_has_features(
+            vulkan_adapter.features,
+            ure::backend_feature_bit(
+                ure::BackendFeature::SelfComputeTraversal)));
+    }
 
     ure::RenderConfig config;
     auto automatic = ure::select_backend(config);

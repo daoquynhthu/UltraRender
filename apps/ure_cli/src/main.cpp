@@ -483,7 +483,7 @@ int cmd_list_devices() {
     try {
         const auto adapters = ure::enumerate_backend_adapters();
         std::cout << "Found " << adapters.size()
-                  << " production backend adapter(s):\n";
+                  << " backend adapter(s):\n";
         for (const auto& adapter : adapters) {
             std::cout << "  [" << adapter.ordinal << "] "
                       << ure::backend_kind_name(adapter.kind) << " "

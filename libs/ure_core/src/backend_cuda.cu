@@ -5,10 +5,15 @@
 #include <algorithm>
 #include <array>
 #include <iomanip>
+#include <iterator>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+
+#if defined(UR_ENABLE_VULKAN)
+#include "ure/vulkan_runtime.hpp"
+#endif
 
 namespace ure {
 
@@ -212,11 +217,21 @@ BackendFeatureSet required_backend_features(const RenderConfig& config) {
 }
 
 std::vector<BackendAdapterInfo> enumerate_backend_adapters(BackendKind kind) {
-    if (kind == BackendKind::Vulkan || kind == BackendKind::D3D12) {
+    if (kind == BackendKind::D3D12) {
         return {};
     }
-    if (kind != BackendKind::Auto && kind != BackendKind::Cuda) {
+    if (kind != BackendKind::Auto &&
+        kind != BackendKind::Cuda &&
+        kind != BackendKind::Vulkan) {
         throw std::invalid_argument("invalid backend kind");
+    }
+    std::vector<BackendAdapterInfo> adapters;
+    if (kind == BackendKind::Vulkan) {
+#if defined(UR_ENABLE_VULKAN)
+        return vulkan::enumerate_vulkan_adapters();
+#else
+        return {};
+#endif
     }
     int count = 0;
     const auto error = cudaGetDeviceCount(&count);
@@ -224,29 +239,44 @@ std::vector<BackendAdapterInfo> enumerate_backend_adapters(BackendKind kind) {
         throw std::runtime_error(cuda_error_message(
             error, "cudaGetDeviceCount"));
     }
-    std::vector<BackendAdapterInfo> adapters;
     adapters.reserve(static_cast<std::size_t>(count));
     for (int ordinal = 0; ordinal < count; ++ordinal) {
         adapters.push_back(query_cuda_adapter(ordinal, count));
+    }
+    if (kind == BackendKind::Auto) {
+#if defined(UR_ENABLE_VULKAN)
+        auto vulkan_adapters =
+            vulkan::enumerate_vulkan_adapters();
+        adapters.insert(
+            adapters.end(),
+            std::make_move_iterator(vulkan_adapters.begin()),
+            std::make_move_iterator(vulkan_adapters.end()));
+#endif
     }
     return adapters;
 }
 
 BackendSelection select_backend(const RenderConfig& config) {
     const BackendKind requested = config.backend.kind;
-    if (requested == BackendKind::Vulkan ||
-        requested == BackendKind::D3D12) {
+    if (requested == BackendKind::D3D12) {
         throw std::invalid_argument(
             std::string("requested backend is unavailable: ") +
             backend_kind_name(requested));
     }
     if (requested != BackendKind::Auto &&
-        requested != BackendKind::Cuda) {
+        requested != BackendKind::Cuda &&
+        requested != BackendKind::Vulkan) {
         throw std::invalid_argument("invalid backend kind");
     }
-    auto adapters = enumerate_backend_adapters(BackendKind::Cuda);
+    const auto selected_kind = requested == BackendKind::Auto
+        ? BackendKind::Cuda
+        : requested;
+    auto adapters = enumerate_backend_adapters(selected_kind);
     if (adapters.empty()) {
-        throw std::runtime_error("no CUDA production adapter is available");
+        throw std::runtime_error(
+            std::string("no ") +
+            backend_kind_name(selected_kind) +
+            " adapter is available");
     }
     BackendAdapterInfo* selected = nullptr;
     if (!config.backend.adapter_id.empty()) {
@@ -287,11 +317,13 @@ BackendSelection select_backend(const RenderConfig& config) {
     }
     selected->memory.budget_bytes =
         explicit_budget > 0 ? explicit_budget : automatic_budget;
-    const auto activate_error = cudaSetDevice(
-        static_cast<int>(selected->ordinal));
-    if (activate_error != cudaSuccess) {
-        throw std::runtime_error(cuda_error_message(
-            activate_error, "cudaSetDevice selected adapter"));
+    if (selected->kind == BackendKind::Cuda) {
+        const auto activate_error = cudaSetDevice(
+            static_cast<int>(selected->ordinal));
+        if (activate_error != cudaSuccess) {
+            throw std::runtime_error(cuda_error_message(
+                activate_error, "cudaSetDevice selected adapter"));
+        }
     }
     return BackendSelection{
         *selected,

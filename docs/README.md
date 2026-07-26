@@ -18,7 +18,7 @@ This index separates current references from historical records. `PLAN.md` is th
 | [`Phase_R_P6_Mie_Volume_Resources.md`](Phase_R_P6_Mie_Volume_Resources.md) | Completed Mie resource/transport contract |
 | [`Phase_R_P5_MLT.md`](Phase_R_P5_MLT.md) | Completed production PSSMLT architecture and closure gates |
 | [`Phase_R_P7_Industrial_Validation.md`](Phase_R_P7_Industrial_Validation.md) | Completed Phase R industrial evidence schemas and Closure record |
-| [`Phase_T_Portable_GPU_Runtime.md`](Phase_T_Portable_GPU_Runtime.md) | Current portable-runtime ledger, completed T.0-T.6 contracts and T.7 Vulkan foundation boundary |
+| [`Phase_T_Portable_GPU_Runtime.md`](Phase_T_Portable_GPU_Runtime.md) | Current portable-runtime ledger, completed T.0-T.7 contracts and T.8 Vulkan acceleration boundary |
 | [`Phase_W_Wave_Optics_Audit.md`](Phase_W_Wave_Optics_Audit.md) | Current boundary between references and production wave transport |
 
 ## Completed-phase evidence records

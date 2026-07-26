@@ -2,10 +2,11 @@
 
 ## Status
 
-T.0 through T.6 are complete and the authoritative cursor is T.7. This document
-is the migration ledger for T.7 through T.11. CUDA remains the only production
-backend at this cursor; Vulkan and D3D12 identities are reserved values whose
-explicit selection fails loudly.
+T.0 through T.7 are complete and the authoritative cursor is T.8. This document
+is the migration ledger for T.8 through T.11. CUDA remains the complete scene
+rendering backend. Vulkan has a production compute-runtime foundation on
+Windows and Linux, but it deliberately lacks the T.8 acceleration bridge and
+therefore rejects a full render configuration. D3D12 remains reserved.
 
 ## Audit method and boundary
 
@@ -37,26 +38,26 @@ identity belong above it.
 
 | ID | Coupling and current evidence | Contract owner | Migration batch |
 |---|---|---|---|
-| T0-BLD | Root project is C++-only until `UR_ENABLE_CUDA` enables the production backend; CUDA toolkit discovery, architecture policy and SDK linkage are backend-local. A root SDK-free configuration builds runtime, scene I/O and config without a CUDA compiler. | Build/backend registration | T.6 complete; T.7 adds Vulkan registration |
-| T0-DEV | Backend-neutral adapter/capability identity owns public device semantics. `gpu_hardware.hpp` is SDK-free legacy auto-configuration data; CUDA queries and CLI adapter enumeration stay behind `backend.hpp`. | Adapter/capability registry | T.1/T.6 complete |
+| T0-BLD | Root project is C++-only until `UR_ENABLE_CUDA` enables the CUDA renderer. `UR_ENABLE_VULKAN` independently builds a dynamically loaded Vulkan backend from pinned vendored headers/Volk without a Vulkan SDK or CUDA compiler. | Build/backend registration | T.6/T.7 complete |
+| T0-DEV | Backend-neutral adapter/capability identity owns public device semantics. CUDA and Vulkan enumeration stay behind backend-private registration; Vulkan reports only the compute foundation features it actually implements. | Adapter/capability registry | T.1/T.6/T.7 complete |
 | T0-API | `render.hpp`, Session, installed headers, C ABI and pyure contain no CUDA SDK type. Raw CUDA driver/scene/native structs are `.cuh` files under the non-installed `detail/` boundary. | Public runtime/session API | T.1-T.6 complete |
 | T0-ABI | The C ABI is handle-opaque and carries backend identity/configuration parity; production creation selects CUDA through the neutral backend contract and unsupported backends fail loudly. | C ABI and language bindings | T.1/T.3 complete |
 | T0-CTX | `GpuContext` and `MultiGpuContext` are backend-private. Each CUDA context owns a production runtime Device, queue, timeline fence, lowered-plan metrics and durable submission identity in addition to T.4 resource registries. | Runtime context and resource lifetime | T.3-T.6 complete |
 | T0-RES | Stable ResourceId, typed buffer/image/spectral layouts, residency, sparse tiles and upload plans now own public semantics. CUDA arrays, texture objects and spectral allocations exist only in backend-private views/registry; remaining raw device views are CUDA lowering state. | Resource/descriptor model | T.4 |
-| T0-EXE | Stable execution graphs are validated and lowered against CUDA adapter limits before work. Static `.cu` estimator kernels remain a private native fast path whose completion is fenced by runtime-owned queue/timeline submissions; portable PTX pipelines execute through the generic DAG. | Dispatch graph and CUDA executor | T.5/T.6 complete |
-| T0-KRN | Estimator/PDF versions and critical stage order are backend-neutral. Existing optimized `.cu` bodies remain a private CUDA fast path; Slang shared-source modules and later Vulkan/DXR lowering continue in T.7-T.9 without changing estimator semantics. | Kernel toolchain and semantic library | T.2/T.5/T.6 complete; T.7-T.9 additional lowering |
+| T0-EXE | Stable execution graphs are validated and lowered against adapter limits before work. CUDA retains its private native fast path; Vulkan records a dependency-ordered command DAG with timeline/event synchronization and descriptor binding. | Dispatch graph and backend executors | T.5-T.7 complete |
+| T0-KRN | Estimator/PDF versions and critical stage order are backend-neutral. Existing optimized `.cu` bodies remain a private CUDA fast path; Vulkan foundation SPIR-V is generated from the same pinned Slang semantic module. | Kernel toolchain and semantic library | T.2/T.5-T.7 complete; T.8-T.9 additional lowering |
 | T0-MGPU | CUDA multi-GPU still uses private device ordinals and peer copies, but every child submits a compatible runtime schema/node/dispatch contract and fail-loud validation precedes merge. Heterogeneous negotiation remains T.10. | Multi-adapter scheduler | CUDA migration complete; T.10 heterogeneous scheduling |
-| T0-WAVE | Fraunhofer upload, device-local buffers, stream launch, readback and timeline completion are owned by the CUDA runtime Device and lower the stable wave graph. | Wave operator/runtime integration | T.2/T.5/T.6 complete; T.7-T.9 additional backends |
+| T0-WAVE | Fraunhofer CUDA execution and the Vulkan reference propagation operator consume the shared wave semantic and runtime-owned resources/timelines. | Wave operator/runtime integration | T.2/T.5-T.7 complete; T.8-T.9 additional backends |
 | T0-ACC | Production traversal is embedded in CUDA kernels and consumes `GpuScene`. `gpu_accelerator.hpp::OptixAccelerator` is a nonfunctional host stub and must not be treated as a provider. T.5 freezes traversal stage order but does not claim a BLAS/TLAS provider contract. | Acceleration-provider API | T.3/T.5 boundary complete; provider work remains Phase V |
-| T0-DIAG | Public diagnostics are SDK-free. Private CUDA checks throw structured runtime errors instead of resetting/aborting; the production Device retains loss epoch/reason/driver diagnostics and timeline completion. | Runtime error and diagnostics | T.3/T.6 complete |
+| T0-DIAG | Public diagnostics are SDK-free. CUDA and Vulkan map native failures to structured runtime errors; Vulkan also retains debug-utils/validation messages and durable device-loss identity. | Runtime error and diagnostics | T.3/T.6/T.7 complete |
 | T0-SCN | SceneIR and native serialization contain no backend handle. `CompiledGpuScene`, CUDA native resource views and lowering state are private; runtime resource and execution identities define the portable boundary. | Scene compiler/lowering | T.3/T.4/T.6 complete |
-| T0-TEST | SDK-free gates cover runtime/resources/execution and the installed public surface; CUDA tests execute PTX DAGs and native path/wave/multi-GPU lowering. Cross-backend physical parity remains T.11. | Validation architecture | T.1-T.6 complete; T.11 parity |
+| T0-TEST | SDK-free gates cover runtime/resources/execution and the installed public surface; CUDA tests cover native production lowering, while Vulkan foundation operators execute on Windows NVIDIA/Intel and Linux. Full render parity remains T.8/T.11. | Validation architecture | T.1-T.7 complete; T.11 parity |
 
 ## Migration order
 
 1. T.1 introduces backend identity, adapter capabilities, limits, memory
    budgets, and compiler/driver identity across config, CLI, ABI, and pyure.
-   CUDA remains the default and only accepted production backend.
+   CUDA remains the default complete scene-rendering backend.
 2. T.2 selected Slang using real spectral, Mueller, queue,
    scattering, wave, and traversal prototypes. No source duplication decision is
    allowed before generated-code and debugging evidence exists.
@@ -67,8 +68,9 @@ identity belong above it.
 5. T.5 freezes estimator order and dependencies as an execution graph.
 6. T.6 migrates the existing CUDA implementation behind the contracts before a
    second backend is added.
-7. T.7 through T.11 add Vulkan, acceleration bridges, optional D3D12, scheduling,
-   and parity/performance evidence.
+7. T.7 establishes Vulkan compute execution without claiming traversal.
+8. T.8 through T.11 add acceleration bridges, optional D3D12, scheduling, and
+   full parity/performance evidence.
 
 This order prevents a nominal abstraction from being designed around only
 trivial buffers while the difficult texture, queue, estimator-state, wave, and
@@ -112,8 +114,8 @@ Selection is deterministic and fail-loud:
 
 - `Auto` resolves to CUDA, the current production default.
 - `Cuda` accepts a stable UUID-derived adapter ID or an ordinal.
-- Explicit `Vulkan` and `D3D12` requests are rejected until their production
-  backends exist.
+- Vulkan adapters are discoverable, but full render selection is rejected
+  until T.8 provides the required traversal capability. D3D12 is unavailable.
 - Unknown adapters, missing required features, invalid backend values, and
   memory budgets above current availability are rejected.
 - Automatic memory budgeting reserves headroom against both current
@@ -317,3 +319,71 @@ copy/event/dispatch/barrier/copy DAG submission and also covers budget, image,
 module/pipeline lifetime, invalid handles, unsupported module format and
 timeline behavior. The Release inventory is 41 registered tests at this
 closure snapshot. The authoritative cursor is T.7.
+
+## T.7 Vulkan compute production foundation
+
+`ure_vulkan` is an independently selectable C++23 library whose installed
+header contains no Vulkan SDK type. Its private implementation dynamically
+loads Vulkan through pinned Volk and uses per-device dispatch tables, allowing
+multiple vendors to execute in one process without global device-function
+aliasing. Adapter discovery requires Vulkan 1.3, compute subgroup support,
+shader int64, timeline semaphores, and synchronization2. Reported IDs use the
+device UUID; memory, queue, workgroup, subgroup, driver, and compiler identity
+come from the physical adapter rather than caller-supplied metadata.
+The loader and instance environment is process-lifetime because the static
+library is also linked into `pyure_native.dll`; unloading Vulkan from a DLL
+process-detach callback would run under the Windows loader lock. Devices,
+allocations, synchronization objects, pipelines, and command pools still have
+deterministic ownership and teardown before that process boundary.
+
+The runtime Device owns:
+
+- compute queues with internal timeline retirement of command and descriptor
+  pools;
+- timeline fences, GPU events, typed buffers, images, views, samplers, shader
+  modules, descriptor layouts, compute pipelines, and pipeline cache;
+- device-local, upload, and readback allocations with actual Vulkan allocation
+  size budget accounting;
+- uniform, storage-buffer, sampled-image, and storage-image descriptors plus
+  1/2/4/8-byte specialization constants;
+- dependency-ordered DAG recording for copies, dispatches, buffer barriers,
+  image transitions, and set/wait events;
+- structured native-result classification, durable device-loss metadata, and
+  debug-utils messages with `VK_LAYER_KHRONOS_validation` enabled when present.
+
+Submission performs complete preflight before native command allocation. It
+rejects stale handles, incorrect usage, out-of-range copies or descriptors,
+adapter-limit overflow, duplicate timeline entries, non-monotonic signals,
+waits without a prior signal, missing event dependencies, and pipeline binding
+type mismatches. Resource destruction is completion-safe. Allocation and
+construction failure paths destroy bound objects before freeing memory.
+Pipeline cache import validates header size/version, vendor, device, and
+pipeline-cache UUID before device creation; cold export and compatible warm
+restart are tested, while corrupted and cross-adapter caches fail loudly.
+
+Vulkan-Headers 1.4.352 and Volk commit
+`13f95ecee4acd3949c5cceb56cbd43aa9ca6a451` are vendored with a complete
+SHA-256 manifest. Slang 2026.14 deterministically compiles ray generation,
+spectral Mueller/Stokes transport, atomic wavefront queue compaction, film/AOV,
+and complex wave propagation to SPIR-V. The polarization and propagation
+operators import `shaders/shared/portable_semantics.slang`, the same semantic
+module used by the T.2 PTX/SPIR-V/DXIL gate; the backend does not own a second
+math implementation. Reflection, binaries, source, compiler, and arguments
+are pinned in `shaders/vulkan/manifest.json`.
+
+`run_phase_t7_vulkan_foundation_gate.ps1` verifies every vendored dependency
+hash, performs two deterministic shader builds against committed artifacts,
+builds and executes the normal Windows targets, requires two distinct Windows
+vendor IDs, configures a separate CUDA-free Windows build, and configures a
+CUDA-free Linux GCC/Ninja build with warnings as errors. The CUDA-free Windows
+build is installed and consumed by a separate `find_package` project, including
+the SDK-neutral public header and exported Vulkan target. The closure machine
+executed every operator and the resource/synchronization/cache/lifetime gates
+on NVIDIA and Intel Windows adapters; the Linux build and execution gate also
+passed. The Release inventory is 42 registered tests at this closure snapshot.
+
+This is deliberately not described as a complete Vulkan scene renderer.
+`SelfComputeTraversal` is absent from Vulkan capabilities, acceleration-input
+buffers are rejected as T.8 work, `Auto` continues to select CUDA, and an
+explicit full Vulkan render configuration fails capability validation instead
+of dropping traversal or physical features. The authoritative cursor is T.8.

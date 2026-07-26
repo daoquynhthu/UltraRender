@@ -202,11 +202,31 @@ struct ModuleDesc {
     std::string label;
 };
 
+enum class BindingType : std::uint8_t {
+    StorageBuffer,
+    UniformBuffer,
+    SampledImage,
+    StorageImage
+};
+
+struct PipelineBindingDesc {
+    std::uint32_t slot = 0;
+    BindingType type = BindingType::StorageBuffer;
+};
+
+struct SpecializationConstant {
+    std::uint32_t id = 0;
+    std::uint32_t size_bytes = 4;
+    std::uint64_t value = 0;
+};
+
 struct PipelineDesc {
     ModuleHandle module;
     std::string entry_point;
     std::array<std::uint32_t, 3> workgroup_size = {1, 1, 1};
     std::string label;
+    std::vector<PipelineBindingDesc> bindings;
+    std::vector<SpecializationConstant> specialization;
 };
 
 struct BufferBinding {

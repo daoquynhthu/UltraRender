@@ -55,6 +55,7 @@ function Invoke-SlangCompile {
     $arguments = @(
         $script:Source,
         "-I", $script:SourceDir,
+        "-I", $script:SharedSourceDir,
         "-entry", $Entry,
         "-target", $Target,
         "-profile", $Profile,
@@ -116,6 +117,7 @@ try {
 
     $SourceDir = [IO.Path]::GetFullPath("tests/portable_kernel")
     $Source = Join-Path $SourceDir "phase_t2_prototypes.slang"
+    $SharedSourceDir = [IO.Path]::GetFullPath("shaders/shared")
     $outputPath = [IO.Path]::GetFullPath($OutputDir)
     if (-not $outputPath.StartsWith(
             $repoRootPath + [IO.Path]::DirectorySeparatorChar,
@@ -269,7 +271,7 @@ try {
     Require-Text $queuePtx "\.address_size 64" "CUDA 64-bit addressing"
 
     $spirvAsm = Join-Path $outputPath "queue_compaction.spvasm"
-    & $Slangc $Source -I $SourceDir -entry queue_compaction `
+    & $Slangc $Source -I $SourceDir -I $SharedSourceDir -entry queue_compaction `
         -target spirv-asm `
         -profile "glsl_460+spvGroupNonUniform+spvGroupNonUniformBallot" `
         -emit-spirv-directly -fvk-use-dx-layout -O3 -g2 `
@@ -281,7 +283,7 @@ try {
     Require-Text $spirvAsm "DebugLine" "SPIR-V source mapping"
 
     $spectralSpirvAsm = Join-Path $outputPath "spectral_conversion.spvasm"
-    & $Slangc $Source -I $SourceDir -entry spectral_conversion `
+    & $Slangc $Source -I $SourceDir -I $SharedSourceDir -entry spectral_conversion `
         -target spirv-asm -profile "glsl_460" `
         -emit-spirv-directly -fvk-use-dx-layout -O3 `
         -warnings-as-errors all -o $spectralSpirvAsm
@@ -290,7 +292,7 @@ try {
     Require-Text $spectralSpirvAsm "OpMemberDecorate.*2 Offset 8" "SPIR-V 64-bit layout"
 
     $dxilAsm = Join-Path $outputPath "queue_compaction.dxilasm"
-    & $Slangc $Source -I $SourceDir -entry queue_compaction `
+    & $Slangc $Source -I $SourceDir -I $SharedSourceDir -entry queue_compaction `
         -target dxil-asm -profile sm_6_6 -O3 -g2 `
         -warnings-as-errors all -o $dxilAsm
     Require-Success "DXIL debug assembly"
@@ -301,7 +303,7 @@ try {
     Require-Text $dxilAsm "DIFile" "DXIL source mapping"
 
     $debugPtx = Join-Path $outputPath "queue_compaction.debug.ptx"
-    & $Slangc $Source -I $SourceDir -entry queue_compaction `
+    & $Slangc $Source -I $SourceDir -I $SharedSourceDir -entry queue_compaction `
         -target ptx -profile sm_6_6 -O3 -g2 `
         -warnings-as-errors all -o $debugPtx
     Require-Success "CUDA debug PTX"
@@ -318,7 +320,7 @@ try {
         ptxas_version = $ptxasVersionText
         source_sha256 = (Get-FileHash $Source -Algorithm SHA256).Hash.ToLowerInvariant()
         semantics_sha256 = (
-            Get-FileHash (Join-Path $SourceDir "phase_t2_semantics.slang") `
+            Get-FileHash (Join-Path $SharedSourceDir "portable_semantics.slang") `
                 -Algorithm SHA256).Hash.ToLowerInvariant()
         entries = $Entries
         targets = @("cuda_ptx_sm120", "spirv_1_3", "dxil_sm_6_6")

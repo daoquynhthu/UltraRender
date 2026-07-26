@@ -5,6 +5,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/UltraRenderTargets.cmake")
 set_and_check(UltraRender_INCLUDE_DIR "@PACKAGE_INCLUDE_INSTALL_DIR@")
 
 set(UltraRender_CUDA_BACKEND_AVAILABLE @UR_ENABLE_CUDA@)
+set(UltraRender_VULKAN_BACKEND_AVAILABLE @UR_ENABLE_VULKAN@)
 foreach(_UltraRender_component IN LISTS UltraRender_FIND_COMPONENTS)
     if(TARGET UltraRender::${_UltraRender_component})
         set(UltraRender_${_UltraRender_component}_FOUND TRUE)

@@ -36,7 +36,7 @@ SPIR-V generation, reflection JSON, specialization, and debug information:
 
 ## Prototype scope
 
-`tests/portable_kernel/phase_t2_semantics.slang` owns shared mathematical
+`shaders/shared/portable_semantics.slang` owns shared mathematical
 helpers. `phase_t2_prototypes.slang` supplies six compute entry points:
 
 | Entry | Contract exercised | Existing production reference |

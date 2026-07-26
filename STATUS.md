@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `T.7`. Phase Q and Phase R are complete; Phase T has completed T.0-T.6, including the Slang toolchain gate, SDK-free runtime/resource/execution contracts, and the production CUDA backend lowering. Vulkan and additional execution backends must not yet be treated as implemented.
+The authoritative construction cursor is `T.8`. Phase Q and Phase R are complete; Phase T has completed T.0-T.7, including the shared Slang toolchain, SDK-free runtime/resource/execution contracts, the production CUDA lowering, and a Vulkan compute-runtime foundation. Vulkan does not yet provide the acceleration bridge required for full scene rendering.
 
 ## Supported execution baseline
 
@@ -19,16 +19,17 @@ The authoritative construction cursor is `T.7`. Phase Q and Phase R are complete
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
 | Build tree | `build_modular_x64` using Ninja |
 | Primary executable | `build_modular_x64/apps/ure_cli/ure_cli.exe` |
-| Registered tests | 41 CTest entries at this snapshot |
+| Registered tests | 42 CTest entries at this snapshot |
 
-Linux, macOS, non-NVIDIA execution, and older CUDA architectures do not currently have equivalent repository-level verification evidence.
+The full renderer baseline remains Windows/CUDA. The Vulkan compute foundation additionally has a Linux GCC/Ninja build-and-execution gate and Windows execution evidence on NVIDIA and Intel adapters. macOS, older CUDA architectures, and complete Linux/non-NVIDIA scene rendering do not have equivalent evidence.
 
 ## Current module boundaries
 
 | Module | Responsibility | Status |
 |---|---|---|
 | `ure_types` | Backend-neutral types, SceneIR, native contracts | Active |
-| `ure_runtime` | SDK-free device/resource/synchronization/dispatch/execution contracts | Active; implemented by the private CUDA production backend |
+| `ure_runtime` | SDK-free device/resource/synchronization/dispatch/execution contracts | Active; implemented by CUDA and the bounded Vulkan compute foundation |
+| `ure_vulkan` | Vulkan 1.3 adapter/resource/compute/synchronization backend | Active foundation; no T.8 acceleration bridge |
 | `ure_core` | Renderer/session/C ABI plus private CUDA backend | Active |
 | `ure_sceneio` | Native scene I/O, glTF/MaterialX adapters, image/SPD/Mie I/O | Active |
 | `ure_config` | JSON configuration and CLI parsing | Active |
@@ -44,10 +45,11 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | Capability | Status | Boundary |
 |---|---|---|
 | CUDA wavefront path tracing | Implemented and tested | Primary runtime path |
-| Backend identity/capability selection | Implemented and tested | CUDA is the Auto/default production backend; Vulkan and D3D12 requests fail loudly |
-| Portable kernel toolchain | Slang selected and feasibility-tested | Six prototypes compile deterministically to PTX/SPIR-V/DXIL; existing production kernels remain a private CUDA fast path while later backends consume the shared toolchain |
+| Backend identity/capability selection | Implemented and tested | CUDA is Auto/default; Vulkan adapters are discoverable but full render selection fails on the missing traversal capability; D3D12 is unavailable |
+| Portable kernel toolchain | Slang selected and feasibility-tested | Six prototypes compile deterministically to PTX/SPIR-V/DXIL; five Vulkan foundation operators consume the same shared semantic module; existing production kernels remain a private CUDA fast path |
 | Backend-neutral execution graph | Implemented and tested | Stable path/guiding/ReSTIR/advanced-integrator/wave graphs freeze estimator and PDF order; the CUDA backend lowers and submits the contract through runtime-owned queues and timelines |
-| CUDA runtime backend | Implemented and tested | Real stream/fence/event, buffer/image/sampler, PTX module/pipeline, DAG submission, wave resources, multi-GPU compatibility and device-loss errors; Vulkan remains T.7 |
+| CUDA runtime backend | Implemented and tested | Real stream/fence/event, buffer/image/sampler, PTX module/pipeline, DAG submission, wave resources, multi-GPU compatibility and device-loss errors |
+| Vulkan compute runtime | T.7 implemented and tested | Vulkan 1.3 adapter/queue/timeline, buffer/image/sampler, SPIR-V, uniform/storage/image descriptors, specialization, cache identity, validation/debug-utils and structured loss mapping; Windows NVIDIA/Intel plus Linux build/execution gates; no traversal or full renderer yet |
 | Runtime spectral domain / wavelength packets | Implemented and tested | Packet cap 32; sampled lane mode supported |
 | Stokes/Mueller polarization | Implemented for covered boundary/transport paths | Not coherent field transport |
 | Lambertian/metal/dielectric/cloth | Implemented for tested paths | Material model coverage is not exhaustive |
@@ -90,7 +92,7 @@ The following must not be described as production capabilities merely because en
 - MLT combined with BDPT/VCM/manifold or adaptive reuse schedulers;
 - coherent/partial-coherent production transport and film merge;
 - production diffraction camera and general propagation backend;
-- Vulkan, D3D12/DXR and OptiX render backends;
+- Vulkan full scene rendering/RT acceleration, D3D12/DXR and OptiX render backends;
 - complete USD/Hydra and plugin ecosystems;
 - production-grade general fluid or acoustic simulation.
 
@@ -112,6 +114,12 @@ CUDA runtime/reference/performance and SDK-free package gate:
 
 ```powershell
 .\scripts\run_phase_t6_cuda_backend_gate.ps1
+```
+
+Vulkan compute foundation, deterministic SPIR-V, Windows cross-vendor, and Linux/CUDA-free gate:
+
+```powershell
+.\scripts\run_phase_t7_vulkan_foundation_gate.ps1
 ```
 
 Native scene closure gate:

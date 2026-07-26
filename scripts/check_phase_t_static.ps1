@@ -75,6 +75,8 @@ try {
     Assert-Contains "scripts/run_phase_t2_kernel_toolchain_gate.ps1" "36029c50ef0c82f2616ffb02e0ed27d642cb44a2a297d531cc2ad333b85b85b6" "T.2 Slang pin is missing"
     Assert-Contains "scripts/run_phase_t2_kernel_toolchain_gate.ps1" "cuda_numerical_execution" "T.2 CUDA execution evidence is missing"
     Assert-Contains "docs/Phase_T2_Kernel_Toolchain_Decision.md" "Slang as the shared-source frontend" "T.2 decision is missing"
+    Assert-Contains "shaders/shared/portable_semantics.slang" "apply_mueller" "Shared portable polarization semantics are missing"
+    Assert-Contains "shaders/shared/portable_semantics.slang" "propagate_wave" "Shared portable wave semantics are missing"
     Assert-Contains "libs/ure_runtime/include/ure/runtime/runtime.hpp" "class Device" "T.3 runtime device contract is missing"
     Assert-Contains "libs/ure_runtime/include/ure/runtime/runtime.hpp" "DispatchGraph" "T.3 dispatch graph contract is missing"
     Assert-Contains "libs/ure_runtime/include/ure/runtime/runtime.hpp" "DeviceLossInfo" "T.3 device-loss contract is missing"
@@ -131,8 +133,33 @@ try {
     if (Test-Path "libs/ure_diag/include/ure/check_cuda.hpp") {
         throw "T.6 CUDA diagnostics remain in the installed public surface"
     }
-    Assert-Contains "PLAN.md" "当前游标: T\.7" "PLAN cursor did not advance to T.7"
-    Assert-Contains "PLAN.md" "T\.6 closure.*权威游标进入 T\.7" "PLAN lacks the T.6 closure and T.7 gate"
+    Assert-Contains "CMakeLists.txt" "option\(UR_ENABLE_VULKAN" "T.7 Vulkan-optional root build is missing"
+    Assert-Contains "libs/ure_vulkan/include/ure/vulkan_runtime.hpp" "class VulkanRuntimeDevice" "T.7 Vulkan runtime Device is missing"
+    Assert-NoMatch @(
+        "libs/ure_vulkan/include/ure/vulkan_runtime.hpp"
+    ) '#include[[:space:]]*[<"]vulkan|Vk[A-Z][A-Za-z0-9_]+' "T.7 public Vulkan surface exposes SDK types"
+    Assert-Contains "libs/ure_vulkan/src/vulkan_runtime_device.cpp" "volkLoadDeviceTable" "T.7 per-device Vulkan dispatch table is missing"
+    Assert-Contains "libs/ure_vulkan/src/vulkan_runtime_device.cpp" "vkQueueSubmit2" "T.7 Vulkan DAG submission is missing"
+    Assert-Contains "libs/ure_vulkan/src/vulkan_runtime_device.cpp" "pipeline_cache_uuid" "T.7 pipeline cache identity validation is missing"
+    Assert-Contains "libs/ure_vulkan/src/vulkan_runtime_device.cpp" "VK_ERROR_DEVICE_LOST" "T.7 device-loss mapping is missing"
+    Assert-Contains "shaders/vulkan/phase_t7_foundation.slang" "import portable_semantics" "T.7 does not reuse shared shader semantics"
+    foreach ($entry in @(
+        "raygen",
+        "spectral_polarization",
+        "queue_compaction",
+        "film_aov",
+        "wave_reference"
+    )) {
+        Assert-Contains "shaders/vulkan/phase_t7_foundation.slang" $entry "T.7 shader operator is missing: $entry"
+    }
+    Assert-Contains "tests/vulkan/test_vulkan_runtime.cpp" "UR_REQUIRE_CROSS_VENDOR_VULKAN" "T.7 cross-vendor execution gate is missing"
+    Assert-Contains "tests/vulkan/test_vulkan_runtime.cpp" "validate_cache_rejection" "T.7 cache rejection test is missing"
+    Assert-Contains "third_party/vulkan_dependencies.json" "1\.4\.352" "T.7 Vulkan dependency pin is missing"
+    Assert-Contains "scripts/run_phase_t7_vulkan_foundation_gate.ps1" "phase_t7_linux" "T.7 Linux build gate is missing"
+    Assert-Contains "scripts/run_phase_t7_vulkan_foundation_gate.ps1" "UR_REQUIRE_CROSS_VENDOR_VULKAN" "T.7 cross-vendor gate is missing"
+    Assert-Contains "tests/sdk_free/vulkan_package_consumer/CMakeLists.txt" "UltraRender::ure_vulkan" "T.7 installed package consumer is missing"
+    Assert-Contains "PLAN.md" "当前游标: T\.8" "PLAN cursor did not advance to T.8"
+    Assert-Contains "PLAN.md" "T\.7 closure.*权威游标进入 T\.8" "PLAN lacks the T.7 closure and T.8 gate"
     Write-Host "Phase T static audit passed"
 } finally {
     Pop-Location

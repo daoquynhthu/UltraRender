@@ -40,6 +40,10 @@ target_include_directories(ure_core PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/../ure_sceneio/include"
 )
 target_link_libraries(ure_core PUBLIC ure_types ure_runtime ure_diag PRIVATE ure_sceneio)
+if(UR_ENABLE_VULKAN)
+    target_link_libraries(ure_core PRIVATE ure_vulkan)
+    target_compile_definitions(ure_core PRIVATE UR_ENABLE_VULKAN=1)
+endif()
 
 if(MSVC)
     target_compile_options(ure_core PRIVATE

@@ -381,6 +381,24 @@ static int test_descriptors() {
             });
         },
         rt::ErrorCode::InvalidArgument));
+    CHECK(throws_code(
+        [] {
+            rt::PipelineDesc desc{
+                rt::ModuleHandle{1}, "entry", {64, 1, 1}, {}};
+            desc.bindings = {
+                {0, rt::BindingType::StorageBuffer},
+                {0, rt::BindingType::UniformBuffer}};
+            rt::validate(desc);
+        },
+        rt::ErrorCode::InvalidArgument));
+    CHECK(throws_code(
+        [] {
+            rt::PipelineDesc desc{
+                rt::ModuleHandle{1}, "entry", {64, 1, 1}, {}};
+            desc.specialization = {{0, 3, 1}};
+            rt::validate(desc);
+        },
+        rt::ErrorCode::InvalidArgument));
     return 0;
 }
 
