@@ -64,8 +64,11 @@ and pyure expose the complete current view. V.5 executes bounded asynchronous
 host construction, compact-only pinned-stream upload and scratch-budget
 enforcement, and adds wall/upload/temporary/compaction telemetry. The C ABI
 retains all earlier layouts and adds `ure_acceleration_stats_v4_t` plus
-versioned getters. Rebuild, clustered geometry and native RT providers remain
-later Phase V work and fail before rendering. Existing backend-only C entry points retain
+versioned getters. V.6 adds an SDK-free multi-geometry native build contract
+with compaction, transform refit/rebuild, scratch budgets and provider-owned
+statistics for Vulkan RT, DXR and optional SDK-backed OptiX. Full renderer
+selection remains fail-loud until V.7 cross-provider parity, and clustered
+geometry remains later work. Existing backend-only C entry points retain
 their original layout and behavior; the execution-config entry points add
 acceleration without requiring callers to pass a larger legacy structure.
 

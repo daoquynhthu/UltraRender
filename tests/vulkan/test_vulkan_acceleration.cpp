@@ -281,8 +281,8 @@ Result execute(
 
     std::optional<rt::AccelerationSceneHandle> scene;
     if (mode == rt::AccelerationMode::RayQuery) {
-        scene = device.create_acceleration_scene({
-            {
+        const std::array geometry{
+            rt::TriangleGeometryDesc{
                 vertices,
                 0,
                 sizeof(Float4),
@@ -293,8 +293,11 @@ Result execute(
                 static_cast<std::uint32_t>(
                     fixture.indices.size()),
                 rt::IndexFormat::Uint32,
-                0},
+                0}};
+        scene = device.create_acceleration_scene({
+            geometry,
             fixture.acceleration_instances,
+            {},
             "acceleration.fixture"});
     }
     const auto entry =
@@ -541,6 +544,123 @@ void compare_results(
     }
 }
 
+void validate_build_lifecycle(
+    ure::vulkan::VulkanRuntimeDevice& device,
+    const Fixture& fixture) {
+    const auto usage =
+        rt::BufferUsage::Storage |
+        rt::BufferUsage::AccelerationInput;
+    const auto vertices = create_buffer(
+        device,
+        sizeof(fixture.vertices),
+        usage,
+        rt::MemoryClass::Upload,
+        "lifecycle.vertices");
+    const auto indices = create_buffer(
+        device,
+        sizeof(fixture.indices),
+        usage,
+        rt::MemoryClass::Upload,
+        "lifecycle.indices");
+    upload(device, vertices, std::span{fixture.vertices});
+    upload(device, indices, std::span{fixture.indices});
+    const std::array geometries{
+        rt::TriangleGeometryDesc{
+            vertices,
+            0,
+            sizeof(Float4),
+            static_cast<std::uint32_t>(
+                fixture.vertices.size()),
+            indices,
+            0,
+            static_cast<std::uint32_t>(
+                fixture.indices.size()),
+            rt::IndexFormat::Uint32,
+            0},
+        rt::TriangleGeometryDesc{
+            vertices,
+            0,
+            sizeof(Float4),
+            static_cast<std::uint32_t>(
+                fixture.vertices.size()),
+            indices,
+            0,
+            static_cast<std::uint32_t>(
+                fixture.indices.size()),
+            rt::IndexFormat::Uint32,
+            1}};
+    auto instances = fixture.acceleration_instances;
+    instances[0].geometry_index = 0;
+    instances[1].geometry_index = 1;
+    rt::AccelerationBuildConfig build;
+    build.quality =
+        rt::AccelerationBuildQuality::HighQuality;
+    build.update_policy =
+        rt::AccelerationUpdatePolicy::Refit;
+    build.scratch_budget_bytes = 64ull << 20;
+    const auto scene =
+        device.create_acceleration_scene({
+            geometries,
+            instances,
+            build,
+            "lifecycle.refit"});
+    auto stats =
+        device.acceleration_build_stats(scene);
+    require(
+        stats.geometry_count == 2 &&
+            stats.instance_count == 2 &&
+            stats.build_nanoseconds > 0 &&
+            stats.scratch_peak_bytes > 0,
+        "Vulkan native build statistics are incomplete");
+    require(
+        stats.compacted_bytes <=
+            stats.uncompacted_bytes,
+        "Vulkan native compaction increased memory");
+    instances[1].object_to_world[3] += 1.0f;
+    device.update_acceleration_scene(
+        scene, {instances});
+    stats = device.acceleration_build_stats(scene);
+    require(
+        stats.refit_count == 1 &&
+            stats.update_nanoseconds > 0,
+        "Vulkan TLAS refit statistics are incomplete");
+    device.destroy(scene);
+    build.update_policy =
+        rt::AccelerationUpdatePolicy::Rebuild;
+    const auto rebuild_scene =
+        device.create_acceleration_scene({
+            geometries,
+            instances,
+            build,
+            "lifecycle.rebuild"});
+    instances[1].object_to_world[3] += 1.0f;
+    device.update_acceleration_scene(
+        rebuild_scene, {instances});
+    require(
+        device.acceleration_build_stats(
+            rebuild_scene).rebuild_count == 1,
+        "Vulkan TLAS rebuild policy was not executed");
+    device.destroy(rebuild_scene);
+    build.scratch_budget_bytes = 1;
+    bool rejected = false;
+    try {
+        static_cast<void>(
+            device.create_acceleration_scene({
+                geometries,
+                instances,
+                build,
+                "lifecycle.reject"}));
+    } catch (const rt::Error& error) {
+        rejected =
+            error.code() == rt::ErrorCode::OutOfMemory;
+    }
+    require(
+        rejected,
+        "Vulkan native scratch budget was not enforced");
+    device.destroy(indices);
+    device.destroy(vertices);
+}
+
 }
 
 int main() {
@@ -600,6 +720,18 @@ int main() {
             }
             if (adapter_ray_query) {
                 native_ray_query = true;
+                require(
+                    rt::acceleration_has_features(
+                        capabilities.features,
+                        rt::acceleration_feature_bit(
+                            rt::AccelerationFeature::
+                                Compaction) |
+                            rt::acceleration_feature_bit(
+                                rt::AccelerationFeature::
+                                    Refit)),
+                    "Vulkan native lifecycle capabilities are incomplete");
+                validate_build_lifecycle(
+                    *device, fixture);
                 require(
                     selection.mode ==
                         rt::AccelerationMode::RayQuery &&

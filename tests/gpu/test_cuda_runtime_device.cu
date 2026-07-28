@@ -9,6 +9,7 @@
 #include <cuda_runtime.h>
 
 #include "cuda_runtime_device.cuh"
+#include "ure/optix_acceleration.hpp"
 #include "ure/runtime/execution_graph.hpp"
 
 namespace rt = ure::runtime;
@@ -240,6 +241,129 @@ static void test_cuda_resources_and_lowering_are_bounded() {
     CHECK(device->allocated_bytes() == 0);
 }
 
+static void test_optix_provider_is_optional_and_bounded() {
+    auto device =
+        ure::gpu::make_cuda_runtime_device_for_current_adapter();
+    if (!ure::gpu::optix_acceleration_available()) {
+        CHECK(throws_code(
+            [&] {
+                static_cast<void>(
+                    ure::gpu::
+                        make_optix_acceleration_provider(
+                            *device));
+            },
+            rt::ErrorCode::Unsupported));
+        return;
+    }
+    auto provider =
+        ure::gpu::make_optix_acceleration_provider(
+            *device);
+    const std::array<float, 9> vertices = {
+        -1.0f, -1.0f, 0.0f,
+        1.0f, -1.0f, 0.0f,
+        0.0f, 1.0f, 0.0f};
+    const std::array<std::uint32_t, 3> indices = {
+        0, 1, 2};
+    const auto usage =
+        rt::BufferUsage::Storage |
+        rt::BufferUsage::AccelerationInput;
+    const auto vertex_buffer = device->create_buffer({
+        sizeof(vertices),
+        16,
+        usage,
+        rt::MemoryClass::DeviceLocal,
+        "optix.test.vertices"});
+    const auto index_buffer = device->create_buffer({
+        sizeof(indices),
+        16,
+        usage,
+        rt::MemoryClass::DeviceLocal,
+        "optix.test.indices"});
+    CHECK(cudaMemcpy(
+              device->native_buffer(vertex_buffer),
+              vertices.data(),
+              sizeof(vertices),
+              cudaMemcpyHostToDevice) == cudaSuccess);
+    CHECK(cudaMemcpy(
+              device->native_buffer(index_buffer),
+              indices.data(),
+              sizeof(indices),
+              cudaMemcpyHostToDevice) == cudaSuccess);
+    const std::array geometries{
+        rt::TriangleGeometryDesc{
+            vertex_buffer,
+            0,
+            sizeof(float) * 3,
+            3,
+            index_buffer,
+            0,
+            3,
+            rt::IndexFormat::Uint32,
+            0},
+        rt::TriangleGeometryDesc{
+            vertex_buffer,
+            0,
+            sizeof(float) * 3,
+            3,
+            index_buffer,
+            0,
+            3,
+            rt::IndexFormat::Uint32,
+            1}};
+    std::array instances{
+        rt::AccelerationInstanceDesc{},
+        rt::AccelerationInstanceDesc{}};
+    instances[0].instance_index = 1;
+    instances[0].geometry_index = 0;
+    instances[1].instance_index = 2;
+    instances[1].geometry_index = 1;
+    instances[1].object_to_world[3] = 3.0f;
+    rt::AccelerationBuildConfig build;
+    build.quality =
+        rt::AccelerationBuildQuality::HighQuality;
+    build.update_policy =
+        rt::AccelerationUpdatePolicy::Refit;
+    build.scratch_budget_bytes = 64ull << 20;
+    const auto scene =
+        provider->create_acceleration_scene({
+            geometries,
+            instances,
+            build,
+            "optix.test"});
+    auto stats =
+        provider->acceleration_build_stats(scene);
+    CHECK(stats.geometry_count == 2);
+    CHECK(stats.instance_count == 2);
+    CHECK(stats.build_nanoseconds > 0);
+    CHECK(stats.scratch_peak_bytes > 0);
+    CHECK(stats.compacted_bytes <=
+          stats.uncompacted_bytes);
+    instances[1].object_to_world[3] = 4.0f;
+    provider->update_acceleration_scene(
+        scene, {instances});
+    stats = provider->acceleration_build_stats(scene);
+    CHECK(stats.refit_count == 1);
+    CHECK(stats.update_nanoseconds > 0);
+    provider->destroy(scene);
+    build.scratch_budget_bytes = 1;
+    CHECK(throws_code(
+        [&] {
+            static_cast<void>(
+                provider->create_acceleration_scene({
+                    geometries,
+                    instances,
+                    build,
+                    "optix.scratch.reject"}));
+        },
+        rt::ErrorCode::OutOfMemory));
+    provider.reset();
+    device->destroy(index_buffer);
+    device->destroy(vertex_buffer);
+    CHECK(device->allocated_bytes() == 0);
+    std::printf(
+        "OptiX acceleration provider lifecycle passed\n");
+}
+
 int main() {
     int device_count = 0;
     const auto status = cudaGetDeviceCount(&device_count);
@@ -249,6 +373,7 @@ int main() {
     }
     test_cuda_device_executes_runtime_graph();
     test_cuda_resources_and_lowering_are_bounded();
+    test_optix_provider_is_optional_and_bounded();
     if (failures == 0) {
         std::printf("CUDA runtime device tests passed\n");
     }

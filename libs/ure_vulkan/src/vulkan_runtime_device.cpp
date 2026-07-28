@@ -236,6 +236,26 @@ VkSamplerAddressMode sampler_address(runtime::AddressMode mode) {
     return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 }
 
+VkBuildAccelerationStructureFlagsKHR acceleration_build_flags(
+    const runtime::AccelerationBuildConfig& config,
+    bool allow_compaction) {
+    VkBuildAccelerationStructureFlagsKHR flags =
+        config.quality ==
+                runtime::AccelerationBuildQuality::FastBuild
+            ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR
+            : VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    if (config.update_policy !=
+        runtime::AccelerationUpdatePolicy::Static) {
+        flags |=
+            VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+    }
+    if (config.compact && allow_compaction) {
+        flags |=
+            VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
+    }
+    return flags;
+}
+
 struct AdapterRecord {
     BackendAdapterInfo info;
     VkPhysicalDevice physical = VK_NULL_HANDLE;
@@ -247,6 +267,7 @@ struct AdapterRecord {
     bool ray_tracing_pipeline = false;
     std::uint32_t max_triangle_geometries = 0;
     std::uint32_t max_instances = 0;
+    std::uint64_t scratch_alignment = 1;
     std::array<std::uint8_t, VK_UUID_SIZE>
         pipeline_cache_uuid{};
 };
@@ -636,6 +657,11 @@ struct Environment {
                       acceleration_properties.maxInstanceCount,
                       std::numeric_limits<std::uint32_t>::max()))
                 : 0;
+            record.scratch_alignment =
+                acceleration_extension
+                ? acceleration_properties
+                      .minAccelerationStructureScratchOffsetAlignment
+                : 1;
             std::ranges::copy(
                 properties.properties.pipelineCacheUUID,
                 record.pipeline_cache_uuid.begin());
@@ -758,15 +784,17 @@ struct VulkanRuntimeDevice::Impl {
     };
 
     struct Acceleration {
-        VkAccelerationStructureKHR bottom =
-            VK_NULL_HANDLE;
+        std::vector<VkAccelerationStructureKHR> bottoms;
         VkAccelerationStructureKHR top =
             VK_NULL_HANDLE;
-        NativeBuffer bottom_storage;
+        std::vector<NativeBuffer> bottom_storage;
         NativeBuffer top_storage;
         runtime::AccelerationSceneDesc desc;
+        std::vector<runtime::TriangleGeometryDesc>
+            geometries;
         std::vector<runtime::AccelerationInstanceDesc>
             instances;
+        runtime::AccelerationBuildStats stats;
     };
 
     Impl(
@@ -794,6 +822,7 @@ struct VulkanRuntimeDevice::Impl {
         ray_query = found->ray_query;
         max_triangle_geometries = found->max_triangle_geometries;
         max_instances = found->max_instances;
+        scratch_alignment = found->scratch_alignment;
         pipeline_cache_uuid = found->pipeline_cache_uuid;
         validation_start = [&] {
             std::scoped_lock lock(env->validation_mutex);
@@ -1022,6 +1051,7 @@ struct VulkanRuntimeDevice::Impl {
     bool ray_query = false;
     std::uint32_t max_triangle_geometries = 0;
     std::uint32_t max_instances = 0;
+    std::uint64_t scratch_alignment = 1;
     std::vector<VkQueue> native_queues;
     std::vector<bool> queue_claimed;
     VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
@@ -1230,14 +1260,17 @@ struct VulkanRuntimeDevice::Impl {
             vk.vkDestroyAccelerationStructureKHR(
                 device, value.top, nullptr);
         }
-        if (value.bottom) {
+        for (const auto bottom : value.bottoms) {
             vk.vkDestroyAccelerationStructureKHR(
-                device, value.bottom, nullptr);
+                device, bottom, nullptr);
         }
         destroy_native_buffer(value.top_storage);
-        destroy_native_buffer(value.bottom_storage);
+        for (auto& storage : value.bottom_storage) {
+            destroy_native_buffer(storage);
+        }
         value.top = VK_NULL_HANDLE;
-        value.bottom = VK_NULL_HANDLE;
+        value.bottoms.clear();
+        value.bottom_storage.clear();
     }
 
     void collect(Queue& queue) {
@@ -1968,11 +2001,14 @@ void VulkanRuntimeDevice::destroy(
     for (const auto& [id, acceleration] :
          impl_->accelerations) {
         static_cast<void>(id);
-        if (acceleration.desc.geometry.vertices == handle ||
-            acceleration.desc.geometry.indices == handle) {
-            throw runtime::Error(
-                runtime::ErrorCode::InvalidArgument,
-                "Vulkan acceleration input is still in use");
+        for (const auto& geometry :
+             acceleration.geometries) {
+            if (geometry.vertices == handle ||
+                geometry.indices == handle) {
+                throw runtime::Error(
+                    runtime::ErrorCode::InvalidArgument,
+                    "Vulkan acceleration input is still in use");
+            }
         }
     }
     if (buffer.mapped) {
@@ -3008,12 +3044,17 @@ VulkanRuntimeDevice::acceleration_capabilities() const noexcept {
             runtime::AccelerationFeature::ComputeBvh);
     if (impl_->ray_query) {
         features |= runtime::acceleration_feature_bit(
-            runtime::AccelerationFeature::RayQuery);
+            runtime::AccelerationFeature::RayQuery) |
+            runtime::acceleration_feature_bit(
+                runtime::AccelerationFeature::Compaction) |
+            runtime::acceleration_feature_bit(
+                runtime::AccelerationFeature::Refit);
     }
     return {
         features,
         std::max(1u, impl_->max_triangle_geometries),
-        std::max(1u, impl_->max_instances)};
+        std::max(1u, impl_->max_instances),
+        impl_->scratch_alignment};
 }
 
 runtime::AccelerationSceneHandle
@@ -3032,149 +3073,467 @@ VulkanRuntimeDevice::create_acceleration_scene(
             runtime::ErrorCode::Unsupported,
             "Vulkan acceleration instance count exceeds adapter limit");
     }
-    auto& vertices = Impl::require(
-        impl_->buffers,
-        desc.geometry.vertices.value,
-        "vertex buffer");
-    auto& indices = Impl::require(
-        impl_->buffers,
-        desc.geometry.indices.value,
-        "index buffer");
-    if (!runtime::has_usage(
-            vertices.desc.usage,
-            runtime::BufferUsage::AccelerationInput) ||
-        !runtime::has_usage(
-            indices.desc.usage,
-            runtime::BufferUsage::AccelerationInput)) {
+    if (desc.geometries.size() >
+        impl_->max_triangle_geometries) {
         throw runtime::Error(
-            runtime::ErrorCode::InvalidArgument,
-            "Vulkan acceleration geometry requires acceleration-input buffers");
+            runtime::ErrorCode::Unsupported,
+            "Vulkan acceleration geometry count exceeds adapter limit");
     }
-    const auto vertex_bytes =
-        static_cast<std::uint64_t>(
-            desc.geometry.vertex_count - 1) *
-            desc.geometry.vertex_stride +
-        sizeof(float) * 3;
-    const auto index_bytes =
-        static_cast<std::uint64_t>(
-            desc.geometry.index_count) *
-        sizeof(std::uint32_t);
-    if (desc.geometry.vertex_offset >
-            vertices.desc.size_bytes ||
-        vertex_bytes >
-            vertices.desc.size_bytes -
-                desc.geometry.vertex_offset ||
-        desc.geometry.index_offset >
-            indices.desc.size_bytes ||
-        index_bytes >
-            indices.desc.size_bytes -
-                desc.geometry.index_offset) {
-        throw runtime::Error(
-            runtime::ErrorCode::Overflow,
-            "Vulkan acceleration geometry exceeds input buffer");
-    }
-
     Impl::Acceleration acceleration;
-    Impl::NativeBuffer bottom_scratch;
-    Impl::NativeBuffer top_scratch;
+    Impl::NativeBuffer scratch;
     Impl::NativeBuffer instance_buffer;
     VkCommandPool command_pool = VK_NULL_HANDLE;
+    VkQueryPool query_pool = VK_NULL_HANDLE;
+    const auto start = std::chrono::steady_clock::now();
     try {
-        auto triangles =
-            vk_structure<
-                VkAccelerationStructureGeometryTrianglesDataKHR>(
-                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR);
-        triangles.vertexFormat =
-            VK_FORMAT_R32G32B32_SFLOAT;
-        triangles.vertexData.deviceAddress =
-            impl_->buffer_address(vertices.buffer) +
-            desc.geometry.vertex_offset;
-        triangles.vertexStride =
-            desc.geometry.vertex_stride;
-        triangles.maxVertex =
-            desc.geometry.vertex_count - 1;
-        triangles.indexType = VK_INDEX_TYPE_UINT32;
-        triangles.indexData.deviceAddress =
-            impl_->buffer_address(indices.buffer) +
-            desc.geometry.index_offset;
-        auto bottom_geometry =
-            vk_structure<VkAccelerationStructureGeometryKHR>(
-                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
-        bottom_geometry.geometryType =
-            VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-        bottom_geometry.flags =
-            VK_GEOMETRY_OPAQUE_BIT_KHR;
-        bottom_geometry.geometry.triangles = triangles;
-        auto bottom_build =
-            vk_structure<
-                VkAccelerationStructureBuildGeometryInfoKHR>(
-                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
-        bottom_build.type =
-            VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-        bottom_build.flags =
-            VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-        bottom_build.mode =
-            VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-        bottom_build.geometryCount = 1;
-        bottom_build.pGeometries = &bottom_geometry;
-        const std::uint32_t primitive_count =
-            desc.geometry.index_count / 3;
-        auto bottom_sizes =
-            vk_structure<
-                VkAccelerationStructureBuildSizesInfoKHR>(
-                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
-        impl_->vk
-            .vkGetAccelerationStructureBuildSizesKHR(
-                impl_->device,
-                VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-                &bottom_build,
-                &primitive_count,
-                &bottom_sizes);
-        acceleration.bottom_storage =
-            impl_->create_native_buffer(
-                bottom_sizes.accelerationStructureSize,
-                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
-                    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                true);
-        auto bottom_create =
-            vk_structure<VkAccelerationStructureCreateInfoKHR>(
-                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
-        bottom_create.buffer =
-            acceleration.bottom_storage.buffer;
-        bottom_create.size =
-            bottom_sizes.accelerationStructureSize;
-        bottom_create.type =
-            VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+        auto pool_create =
+            vk_structure<VkCommandPoolCreateInfo>(
+                VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
+        pool_create.flags =
+            VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        pool_create.queueFamilyIndex =
+            impl_->queue_family;
         impl_->check(
-            impl_->vk.vkCreateAccelerationStructureKHR(
+            impl_->vk.vkCreateCommandPool(
                 impl_->device,
-                &bottom_create,
+                &pool_create,
                 nullptr,
-                &acceleration.bottom),
-            "vkCreateAccelerationStructureKHR bottom");
-        bottom_scratch = impl_->create_native_buffer(
-            bottom_sizes.buildScratchSize,
+                &command_pool),
+            "vkCreateCommandPool acceleration");
+        const auto begin_commands = [&] {
+            auto allocate =
+                vk_structure<VkCommandBufferAllocateInfo>(
+                    VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO);
+            allocate.commandPool = command_pool;
+            allocate.level =
+                VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocate.commandBufferCount = 1;
+            VkCommandBuffer command = VK_NULL_HANDLE;
+            impl_->check(
+                impl_->vk.vkAllocateCommandBuffers(
+                    impl_->device, &allocate, &command),
+                "vkAllocateCommandBuffers acceleration");
+            auto begin =
+                vk_structure<VkCommandBufferBeginInfo>(
+                    VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
+            begin.flags =
+                VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            impl_->check(
+                impl_->vk.vkBeginCommandBuffer(
+                    command, &begin),
+                "vkBeginCommandBuffer acceleration");
+            return command;
+        };
+        const auto submit_commands =
+            [&](VkCommandBuffer command) {
+                impl_->check(
+                    impl_->vk.vkEndCommandBuffer(command),
+                    "vkEndCommandBuffer acceleration");
+                auto command_info =
+                    vk_structure<VkCommandBufferSubmitInfo>(
+                        VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO);
+                command_info.commandBuffer = command;
+                auto submit =
+                    vk_structure<VkSubmitInfo2>(
+                        VK_STRUCTURE_TYPE_SUBMIT_INFO_2);
+                submit.commandBufferInfoCount = 1;
+                submit.pCommandBufferInfos = &command_info;
+                impl_->check(
+                    impl_->vk.vkQueueSubmit2(
+                        impl_->native_queues.front(),
+                        1,
+                        &submit,
+                        VK_NULL_HANDLE),
+                    "vkQueueSubmit2 acceleration");
+                impl_->check(
+                    impl_->vk.vkQueueWaitIdle(
+                        impl_->native_queues.front()),
+                    "vkQueueWaitIdle acceleration");
+                impl_->check(
+                    impl_->vk.vkResetCommandPool(
+                        impl_->device,
+                        command_pool,
+                        0),
+                    "vkResetCommandPool acceleration");
+            };
+        auto barrier =
+            vk_structure<VkMemoryBarrier2>(
+                VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
+        barrier.srcStageMask =
+            VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        barrier.srcAccessMask =
+            VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        barrier.dstStageMask =
+            VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        barrier.dstAccessMask =
+            VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+        auto dependency =
+            vk_structure<VkDependencyInfo>(
+                VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+        dependency.memoryBarrierCount = 1;
+        dependency.pMemoryBarriers = &barrier;
+
+        const auto geometry_count = desc.geometries.size();
+        std::vector<
+            VkAccelerationStructureGeometryTrianglesDataKHR>
+            triangles(geometry_count);
+        std::vector<VkAccelerationStructureGeometryKHR>
+            native_geometries(geometry_count);
+        std::vector<
+            VkAccelerationStructureBuildGeometryInfoKHR>
+            bottom_builds(geometry_count);
+        std::vector<
+            VkAccelerationStructureBuildSizesInfoKHR>
+            bottom_sizes(geometry_count);
+        std::vector<std::uint32_t>
+            primitive_counts(geometry_count);
+        acceleration.bottoms.resize(
+            geometry_count, VK_NULL_HANDLE);
+        acceleration.bottom_storage.resize(geometry_count);
+        std::uint64_t scratch_peak = 0;
+        std::uint64_t uncompacted_bytes = 0;
+        for (std::size_t index = 0;
+             index < geometry_count;
+             ++index) {
+            const auto& geometry = desc.geometries[index];
+            auto& vertices = Impl::require(
+                impl_->buffers,
+                geometry.vertices.value,
+                "vertex buffer");
+            auto& indices = Impl::require(
+                impl_->buffers,
+                geometry.indices.value,
+                "index buffer");
+            if (!runtime::has_usage(
+                    vertices.desc.usage,
+                    runtime::BufferUsage::AccelerationInput) ||
+                !runtime::has_usage(
+                    indices.desc.usage,
+                    runtime::BufferUsage::AccelerationInput)) {
+                throw runtime::Error(
+                    runtime::ErrorCode::InvalidArgument,
+                    "Vulkan acceleration geometry requires acceleration-input buffers");
+            }
+            const auto vertex_bytes =
+                static_cast<std::uint64_t>(
+                    geometry.vertex_count - 1) *
+                    geometry.vertex_stride +
+                sizeof(float) * 3;
+            const auto index_bytes =
+                static_cast<std::uint64_t>(
+                    geometry.index_count) *
+                sizeof(std::uint32_t);
+            if (geometry.vertex_offset >
+                    vertices.desc.size_bytes ||
+                vertex_bytes >
+                    vertices.desc.size_bytes -
+                        geometry.vertex_offset ||
+                geometry.index_offset >
+                    indices.desc.size_bytes ||
+                index_bytes >
+                    indices.desc.size_bytes -
+                        geometry.index_offset) {
+                throw runtime::Error(
+                    runtime::ErrorCode::Overflow,
+                    "Vulkan acceleration geometry exceeds input buffer");
+            }
+            triangles[index] =
+                vk_structure<
+                    VkAccelerationStructureGeometryTrianglesDataKHR>(
+                    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR);
+            triangles[index].vertexFormat =
+                VK_FORMAT_R32G32B32_SFLOAT;
+            triangles[index].vertexData.deviceAddress =
+                impl_->buffer_address(vertices.buffer) +
+                geometry.vertex_offset;
+            triangles[index].vertexStride =
+                geometry.vertex_stride;
+            triangles[index].maxVertex =
+                geometry.vertex_count - 1;
+            triangles[index].indexType =
+                VK_INDEX_TYPE_UINT32;
+            triangles[index].indexData.deviceAddress =
+                impl_->buffer_address(indices.buffer) +
+                geometry.index_offset;
+            native_geometries[index] =
+                vk_structure<VkAccelerationStructureGeometryKHR>(
+                    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+            native_geometries[index].geometryType =
+                VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+            native_geometries[index].flags =
+                VK_GEOMETRY_OPAQUE_BIT_KHR;
+            native_geometries[index].geometry.triangles =
+                triangles[index];
+            bottom_builds[index] =
+                vk_structure<
+                    VkAccelerationStructureBuildGeometryInfoKHR>(
+                    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+            bottom_builds[index].type =
+                VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+            bottom_builds[index].flags =
+                acceleration_build_flags(
+                    desc.build, true);
+            bottom_builds[index].mode =
+                VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+            bottom_builds[index].geometryCount = 1;
+            bottom_builds[index].pGeometries =
+                &native_geometries[index];
+            primitive_counts[index] =
+                geometry.index_count / 3;
+            bottom_sizes[index] =
+                vk_structure<
+                    VkAccelerationStructureBuildSizesInfoKHR>(
+                    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+            impl_->vk
+                .vkGetAccelerationStructureBuildSizesKHR(
+                    impl_->device,
+                    VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+                    &bottom_builds[index],
+                    &primitive_counts[index],
+                    &bottom_sizes[index]);
+            scratch_peak = std::max<std::uint64_t>(
+                scratch_peak,
+                bottom_sizes[index].buildScratchSize);
+            uncompacted_bytes +=
+                bottom_sizes[index].accelerationStructureSize;
+            acceleration.bottom_storage[index] =
+                impl_->create_native_buffer(
+                    bottom_sizes[index]
+                        .accelerationStructureSize,
+                    VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
+                        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                    true);
+            auto create =
+                vk_structure<
+                    VkAccelerationStructureCreateInfoKHR>(
+                    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
+            create.buffer =
+                acceleration.bottom_storage[index].buffer;
+            create.size =
+                bottom_sizes[index]
+                    .accelerationStructureSize;
+            create.type =
+                VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+            impl_->check(
+                impl_->vk.vkCreateAccelerationStructureKHR(
+                    impl_->device,
+                    &create,
+                    nullptr,
+                    &acceleration.bottoms[index]),
+                "vkCreateAccelerationStructureKHR bottom");
+            bottom_builds[index].dstAccelerationStructure =
+                acceleration.bottoms[index];
+        }
+        if (desc.build.scratch_budget_bytes != 0 &&
+            scratch_peak >
+                desc.build.scratch_budget_bytes) {
+            throw runtime::Error(
+                runtime::ErrorCode::OutOfMemory,
+                "Vulkan acceleration scratch budget exceeded");
+        }
+        scratch = impl_->create_native_buffer(
+            scratch_peak,
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
             true);
-        bottom_build.dstAccelerationStructure =
-            acceleration.bottom;
-        bottom_build.scratchData.deviceAddress =
-            impl_->buffer_address(bottom_scratch.buffer);
-
-        auto bottom_address_info =
-            vk_structure<
-                VkAccelerationStructureDeviceAddressInfoKHR>(
-                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
-        bottom_address_info.accelerationStructure =
-            acceleration.bottom;
-        const auto bottom_address =
-            impl_->vk
-                .vkGetAccelerationStructureDeviceAddressKHR(
+        const auto scratch_address =
+            impl_->buffer_address(scratch.buffer);
+        for (auto& build : bottom_builds) {
+            build.scratchData.deviceAddress =
+                scratch_address;
+        }
+        if (desc.build.compact) {
+            auto query =
+                vk_structure<VkQueryPoolCreateInfo>(
+                    VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO);
+            query.queryType =
+                VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
+            query.queryCount =
+                static_cast<std::uint32_t>(geometry_count);
+            impl_->check(
+                impl_->vk.vkCreateQueryPool(
                     impl_->device,
-                    &bottom_address_info);
+                    &query,
+                    nullptr,
+                    &query_pool),
+                "vkCreateQueryPool acceleration");
+        }
+        auto command = begin_commands();
+        if (query_pool) {
+            impl_->vk.vkCmdResetQueryPool(
+                command,
+                query_pool,
+                0,
+                static_cast<std::uint32_t>(geometry_count));
+        }
+        for (std::size_t index = 0;
+             index < geometry_count;
+             ++index) {
+            VkAccelerationStructureBuildRangeInfoKHR range{};
+            range.primitiveCount = primitive_counts[index];
+            const auto* range_pointer = &range;
+            impl_->vk.vkCmdBuildAccelerationStructuresKHR(
+                command,
+                1,
+                &bottom_builds[index],
+                &range_pointer);
+            impl_->vk.vkCmdPipelineBarrier2(
+                command, &dependency);
+            if (query_pool) {
+                impl_->vk
+                    .vkCmdWriteAccelerationStructuresPropertiesKHR(
+                        command,
+                        1,
+                        &acceleration.bottoms[index],
+                        VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
+                        query_pool,
+                        static_cast<std::uint32_t>(index));
+            }
+        }
+        submit_commands(command);
+        std::uint64_t compacted_bottom_bytes = 0;
+        if (query_pool) {
+            std::vector<std::uint64_t> compact_sizes(
+                geometry_count);
+            impl_->check(
+                impl_->vk.vkGetQueryPoolResults(
+                    impl_->device,
+                    query_pool,
+                    0,
+                    static_cast<std::uint32_t>(geometry_count),
+                    compact_sizes.size() *
+                        sizeof(std::uint64_t),
+                    compact_sizes.data(),
+                    sizeof(std::uint64_t),
+                    VK_QUERY_RESULT_64_BIT |
+                        VK_QUERY_RESULT_WAIT_BIT),
+                "vkGetQueryPoolResults acceleration");
+            std::vector<VkAccelerationStructureKHR>
+                compact_handles(
+                    geometry_count, VK_NULL_HANDLE);
+            std::vector<Impl::NativeBuffer>
+                compact_storage(geometry_count);
+            bool copy_required = false;
+            for (std::size_t index = 0;
+                 index < geometry_count;
+                 ++index) {
+                if (compact_sizes[index] == 0 ||
+                    compact_sizes[index] >=
+                        bottom_sizes[index]
+                            .accelerationStructureSize) {
+                    compacted_bottom_bytes +=
+                        bottom_sizes[index]
+                            .accelerationStructureSize;
+                    continue;
+                }
+                copy_required = true;
+                compacted_bottom_bytes +=
+                    compact_sizes[index];
+                compact_storage[index] =
+                    impl_->create_native_buffer(
+                        compact_sizes[index],
+                        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
+                            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        true);
+                auto create =
+                    vk_structure<
+                        VkAccelerationStructureCreateInfoKHR>(
+                        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
+                create.buffer =
+                    compact_storage[index].buffer;
+                create.size = compact_sizes[index];
+                create.type =
+                    VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+                impl_->check(
+                    impl_->vk.vkCreateAccelerationStructureKHR(
+                        impl_->device,
+                        &create,
+                        nullptr,
+                        &compact_handles[index]),
+                    "vkCreateAccelerationStructureKHR compact");
+            }
+            if (copy_required) {
+                command = begin_commands();
+                auto copy_barrier =
+                    vk_structure<VkMemoryBarrier2>(
+                        VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
+                copy_barrier.srcStageMask =
+                    VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+                copy_barrier.srcAccessMask =
+                    VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+                copy_barrier.dstStageMask =
+                    VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR;
+                copy_barrier.dstAccessMask =
+                    VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+                auto copy_dependency =
+                    vk_structure<VkDependencyInfo>(
+                        VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+                copy_dependency.memoryBarrierCount = 1;
+                copy_dependency.pMemoryBarriers =
+                    &copy_barrier;
+                impl_->vk.vkCmdPipelineBarrier2(
+                    command, &copy_dependency);
+                for (std::size_t index = 0;
+                     index < geometry_count;
+                     ++index) {
+                    if (!compact_handles[index]) continue;
+                    auto copy =
+                        vk_structure<
+                            VkCopyAccelerationStructureInfoKHR>(
+                            VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR);
+                    copy.src =
+                        acceleration.bottoms[index];
+                    copy.dst = compact_handles[index];
+                    copy.mode =
+                        VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
+                    impl_->vk
+                        .vkCmdCopyAccelerationStructureKHR(
+                            command, &copy);
+                }
+                submit_commands(command);
+                for (std::size_t index = 0;
+                     index < geometry_count;
+                     ++index) {
+                    if (!compact_handles[index]) continue;
+                    impl_->vk
+                        .vkDestroyAccelerationStructureKHR(
+                            impl_->device,
+                            acceleration.bottoms[index],
+                            nullptr);
+                    impl_->destroy_native_buffer(
+                        acceleration.bottom_storage[index]);
+                    acceleration.bottoms[index] =
+                        compact_handles[index];
+                    acceleration.bottom_storage[index] =
+                        std::move(compact_storage[index]);
+                }
+            }
+        } else {
+            for (const auto& size : bottom_sizes) {
+                compacted_bottom_bytes +=
+                    size.accelerationStructureSize;
+            }
+        }
+
+        std::vector<VkDeviceAddress> bottom_addresses(
+            geometry_count);
+        for (std::size_t index = 0;
+             index < geometry_count;
+             ++index) {
+            auto address =
+                vk_structure<
+                    VkAccelerationStructureDeviceAddressInfoKHR>(
+                    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
+            address.accelerationStructure =
+                acceleration.bottoms[index];
+            bottom_addresses[index] =
+                impl_->vk
+                    .vkGetAccelerationStructureDeviceAddressKHR(
+                        impl_->device, &address);
+        }
         const auto instance_bytes =
             static_cast<VkDeviceSize>(
                 desc.instances.size() *
@@ -3213,12 +3572,12 @@ VulkanRuntimeDevice::create_acceleration_scene(
             value.flags =
                 VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
             value.accelerationStructureReference =
-                bottom_address;
+                bottom_addresses[
+                    desc.instances[index].geometry_index];
             native_instances[index] = value;
         }
         impl_->vk.vkUnmapMemory(
             impl_->device, instance_buffer.memory);
-
         auto instance_data =
             vk_structure<
                 VkAccelerationStructureGeometryInstancesDataKHR>(
@@ -3238,7 +3597,7 @@ VulkanRuntimeDevice::create_acceleration_scene(
         top_build.type =
             VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
         top_build.flags =
-            VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+            acceleration_build_flags(desc.build, false);
         top_build.mode =
             VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
         top_build.geometryCount = 1;
@@ -3257,6 +3616,27 @@ VulkanRuntimeDevice::create_acceleration_scene(
                 &top_build,
                 &instance_count,
                 &top_sizes);
+        scratch_peak = std::max<std::uint64_t>(
+            scratch_peak,
+            std::max(
+                top_sizes.buildScratchSize,
+                top_sizes.updateScratchSize));
+        if (desc.build.scratch_budget_bytes != 0 &&
+            scratch_peak >
+                desc.build.scratch_budget_bytes) {
+            throw runtime::Error(
+                runtime::ErrorCode::OutOfMemory,
+                "Vulkan acceleration scratch budget exceeded");
+        }
+        if (scratch_peak > scratch.allocation_size) {
+            impl_->destroy_native_buffer(scratch);
+            scratch = impl_->create_native_buffer(
+                scratch_peak,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                true);
+        }
         acceleration.top_storage =
             impl_->create_native_buffer(
                 top_sizes.accelerationStructureSize,
@@ -3280,17 +3660,263 @@ VulkanRuntimeDevice::create_acceleration_scene(
                 nullptr,
                 &acceleration.top),
             "vkCreateAccelerationStructureKHR top");
-        top_scratch = impl_->create_native_buffer(
-            top_sizes.buildScratchSize,
+        top_build.dstAccelerationStructure =
+            acceleration.top;
+        top_build.scratchData.deviceAddress =
+            impl_->buffer_address(scratch.buffer);
+        command = begin_commands();
+        auto input_barrier =
+            vk_structure<VkMemoryBarrier2>(
+                VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
+        input_barrier.srcStageMask =
+            VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR |
+            VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR;
+        input_barrier.srcAccessMask =
+            VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        input_barrier.dstStageMask =
+            VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        input_barrier.dstAccessMask =
+            VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+        auto input_dependency =
+            vk_structure<VkDependencyInfo>(
+                VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+        input_dependency.memoryBarrierCount = 1;
+        input_dependency.pMemoryBarriers =
+            &input_barrier;
+        impl_->vk.vkCmdPipelineBarrier2(
+            command, &input_dependency);
+        VkAccelerationStructureBuildRangeInfoKHR top_range{};
+        top_range.primitiveCount = instance_count;
+        const auto* top_range_pointer = &top_range;
+        impl_->vk.vkCmdBuildAccelerationStructuresKHR(
+            command,
+            1,
+            &top_build,
+            &top_range_pointer);
+        barrier.dstStageMask =
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        barrier.dstAccessMask =
+            VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+        impl_->vk.vkCmdPipelineBarrier2(
+            command, &dependency);
+        submit_commands(command);
+        impl_->vk.vkDestroyCommandPool(
+            impl_->device,
+            command_pool,
+            nullptr);
+        command_pool = VK_NULL_HANDLE;
+        if (query_pool) {
+            impl_->vk.vkDestroyQueryPool(
+                impl_->device,
+                query_pool,
+                nullptr);
+            query_pool = VK_NULL_HANDLE;
+        }
+        impl_->destroy_native_buffer(scratch);
+        impl_->destroy_native_buffer(instance_buffer);
+
+        const auto id = impl_->handle();
+        acceleration.desc = desc;
+        acceleration.geometries.assign(
+            desc.geometries.begin(),
+            desc.geometries.end());
+        acceleration.desc.geometries =
+            acceleration.geometries;
+        acceleration.instances.assign(
+            desc.instances.begin(),
+            desc.instances.end());
+        acceleration.desc.instances =
+            acceleration.instances;
+        acceleration.stats.geometry_count =
+            static_cast<std::uint32_t>(
+                acceleration.geometries.size());
+        acceleration.stats.instance_count =
+            static_cast<std::uint32_t>(
+                acceleration.instances.size());
+        acceleration.stats.build_nanoseconds =
+            static_cast<std::uint64_t>(
+                std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() -
+                    start)
+                    .count());
+        acceleration.stats.scratch_peak_bytes =
+            scratch_peak;
+        acceleration.stats.uncompacted_bytes =
+            uncompacted_bytes +
+            top_sizes.accelerationStructureSize;
+        acceleration.stats.compacted_bytes =
+            compacted_bottom_bytes +
+            top_sizes.accelerationStructureSize;
+        impl_->accelerations.emplace(
+            id, std::move(acceleration));
+        return runtime::AccelerationSceneHandle{id};
+    } catch (...) {
+        if (command_pool) {
+            impl_->vk.vkDestroyCommandPool(
+                impl_->device,
+                command_pool,
+                nullptr);
+        }
+        if (query_pool) {
+            impl_->vk.vkDestroyQueryPool(
+                impl_->device,
+                query_pool,
+                nullptr);
+        }
+        impl_->destroy_native_buffer(scratch);
+        impl_->destroy_native_buffer(instance_buffer);
+        impl_->destroy_acceleration(acceleration);
+        throw;
+    }
+}
+
+void VulkanRuntimeDevice::update_acceleration_scene(
+    runtime::AccelerationSceneHandle scene,
+    const runtime::AccelerationUpdateDesc& desc) {
+    std::scoped_lock lock(impl_->mutex);
+    impl_->ready();
+    auto& acceleration = Impl::require(
+        impl_->accelerations,
+        scene.value,
+        "acceleration scene");
+    runtime::validate(acceleration.desc, desc);
+    if (acceleration.desc.build.update_policy ==
+        runtime::AccelerationUpdatePolicy::Static) {
+        throw runtime::Error(
+            runtime::ErrorCode::Unsupported,
+            "static Vulkan acceleration rejects updates");
+    }
+    const auto start = std::chrono::steady_clock::now();
+    Impl::NativeBuffer instance_buffer;
+    Impl::NativeBuffer scratch;
+    VkCommandPool command_pool = VK_NULL_HANDLE;
+    try {
+        std::vector<VkDeviceAddress> bottom_addresses(
+            acceleration.bottoms.size());
+        for (std::size_t index = 0;
+             index < acceleration.bottoms.size();
+             ++index) {
+            auto address =
+                vk_structure<
+                    VkAccelerationStructureDeviceAddressInfoKHR>(
+                    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
+            address.accelerationStructure =
+                acceleration.bottoms[index];
+            bottom_addresses[index] =
+                impl_->vk
+                    .vkGetAccelerationStructureDeviceAddressKHR(
+                        impl_->device, &address);
+        }
+        const auto instance_bytes =
+            static_cast<VkDeviceSize>(
+                desc.instances.size() *
+                sizeof(VkAccelerationStructureInstanceKHR));
+        instance_buffer = impl_->create_native_buffer(
+            instance_bytes,
+            VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            true);
+        void* mapped = nullptr;
+        impl_->check(
+            impl_->vk.vkMapMemory(
+                impl_->device,
+                instance_buffer.memory,
+                0,
+                instance_bytes,
+                0,
+                &mapped),
+            "vkMapMemory acceleration update");
+        auto* native_instances =
+            static_cast<VkAccelerationStructureInstanceKHR*>(
+                mapped);
+        for (std::size_t index = 0;
+             index < desc.instances.size();
+             ++index) {
+            VkAccelerationStructureInstanceKHR value{};
+            std::ranges::copy(
+                desc.instances[index].object_to_world,
+                &value.transform.matrix[0][0]);
+            value.instanceCustomIndex =
+                desc.instances[index].instance_index;
+            value.mask =
+                desc.instances[index].visibility_mask;
+            value.flags =
+                VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+            value.accelerationStructureReference =
+                bottom_addresses[
+                    desc.instances[index].geometry_index];
+            native_instances[index] = value;
+        }
+        impl_->vk.vkUnmapMemory(
+            impl_->device, instance_buffer.memory);
+        auto instance_data =
+            vk_structure<
+                VkAccelerationStructureGeometryInstancesDataKHR>(
+                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR);
+        instance_data.data.deviceAddress =
+            impl_->buffer_address(instance_buffer.buffer);
+        auto top_geometry =
+            vk_structure<VkAccelerationStructureGeometryKHR>(
+                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+        top_geometry.geometryType =
+            VK_GEOMETRY_TYPE_INSTANCES_KHR;
+        top_geometry.geometry.instances = instance_data;
+        auto build =
+            vk_structure<
+                VkAccelerationStructureBuildGeometryInfoKHR>(
+                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+        build.type =
+            VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+        build.flags = acceleration_build_flags(
+            acceleration.desc.build, false);
+        const bool refit =
+            acceleration.desc.build.update_policy ==
+            runtime::AccelerationUpdatePolicy::Refit;
+        build.mode = refit
+            ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR
+            : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        build.srcAccelerationStructure =
+            refit ? acceleration.top : VK_NULL_HANDLE;
+        build.dstAccelerationStructure =
+            acceleration.top;
+        build.geometryCount = 1;
+        build.pGeometries = &top_geometry;
+        const auto instance_count =
+            static_cast<std::uint32_t>(
+                desc.instances.size());
+        auto sizes =
+            vk_structure<
+                VkAccelerationStructureBuildSizesInfoKHR>(
+                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+        impl_->vk
+            .vkGetAccelerationStructureBuildSizesKHR(
+                impl_->device,
+                VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+                &build,
+                &instance_count,
+                &sizes);
+        const auto scratch_bytes = refit
+            ? sizes.updateScratchSize
+            : sizes.buildScratchSize;
+        if (acceleration.desc.build.scratch_budget_bytes != 0 &&
+            scratch_bytes >
+                acceleration.desc.build
+                    .scratch_budget_bytes) {
+            throw runtime::Error(
+                runtime::ErrorCode::OutOfMemory,
+                "Vulkan acceleration update scratch budget exceeded");
+        }
+        scratch = impl_->create_native_buffer(
+            scratch_bytes,
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
             true);
-        top_build.dstAccelerationStructure =
-            acceleration.top;
-        top_build.scratchData.deviceAddress =
-            impl_->buffer_address(top_scratch.buffer);
-
+        build.scratchData.deviceAddress =
+            impl_->buffer_address(scratch.buffer);
         auto pool_create =
             vk_structure<VkCommandPoolCreateInfo>(
                 VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
@@ -3304,22 +3930,21 @@ VulkanRuntimeDevice::create_acceleration_scene(
                 &pool_create,
                 nullptr,
                 &command_pool),
-            "vkCreateCommandPool acceleration");
-        auto command_allocate =
+            "vkCreateCommandPool acceleration update");
+        auto allocate =
             vk_structure<VkCommandBufferAllocateInfo>(
                 VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO);
-        command_allocate.commandPool = command_pool;
-        command_allocate.level =
+        allocate.commandPool = command_pool;
+        allocate.level =
             VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        command_allocate.commandBufferCount = 1;
-        VkCommandBuffer command_buffer =
-            VK_NULL_HANDLE;
+        allocate.commandBufferCount = 1;
+        VkCommandBuffer command = VK_NULL_HANDLE;
         impl_->check(
             impl_->vk.vkAllocateCommandBuffers(
                 impl_->device,
-                &command_allocate,
-                &command_buffer),
-            "vkAllocateCommandBuffers acceleration");
+                &allocate,
+                &command),
+            "vkAllocateCommandBuffers acceleration update");
         auto begin =
             vk_structure<VkCommandBufferBeginInfo>(
                 VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
@@ -3327,19 +3952,16 @@ VulkanRuntimeDevice::create_acceleration_scene(
             VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         impl_->check(
             impl_->vk.vkBeginCommandBuffer(
-                command_buffer, &begin),
-            "vkBeginCommandBuffer acceleration");
-        VkAccelerationStructureBuildRangeInfoKHR
-            bottom_range{};
-        bottom_range.primitiveCount =
-            primitive_count;
-        const auto* bottom_range_pointer =
-            &bottom_range;
+                command, &begin),
+            "vkBeginCommandBuffer acceleration update");
+        VkAccelerationStructureBuildRangeInfoKHR range{};
+        range.primitiveCount = instance_count;
+        const auto* range_pointer = &range;
         impl_->vk.vkCmdBuildAccelerationStructuresKHR(
-            command_buffer,
+            command,
             1,
-            &bottom_build,
-            &bottom_range_pointer);
+            &build,
+            &range_pointer);
         auto barrier =
             vk_structure<VkMemoryBarrier2>(
                 VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
@@ -3348,7 +3970,7 @@ VulkanRuntimeDevice::create_acceleration_scene(
         barrier.srcAccessMask =
             VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
         barrier.dstStageMask =
-            VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
         barrier.dstAccessMask =
             VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
         auto dependency =
@@ -3357,35 +3979,14 @@ VulkanRuntimeDevice::create_acceleration_scene(
         dependency.memoryBarrierCount = 1;
         dependency.pMemoryBarriers = &barrier;
         impl_->vk.vkCmdPipelineBarrier2(
-            command_buffer, &dependency);
-        VkAccelerationStructureBuildRangeInfoKHR
-            top_range{};
-        top_range.primitiveCount = instance_count;
-        const auto* top_range_pointer = &top_range;
-        impl_->vk.vkCmdBuildAccelerationStructuresKHR(
-            command_buffer,
-            1,
-            &top_build,
-            &top_range_pointer);
-        barrier.srcStageMask =
-            VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
-        barrier.srcAccessMask =
-            VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-        barrier.dstStageMask =
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        barrier.dstAccessMask =
-            VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-        impl_->vk.vkCmdPipelineBarrier2(
-            command_buffer, &dependency);
+            command, &dependency);
         impl_->check(
-            impl_->vk.vkEndCommandBuffer(
-                command_buffer),
-            "vkEndCommandBuffer acceleration");
+            impl_->vk.vkEndCommandBuffer(command),
+            "vkEndCommandBuffer acceleration update");
         auto command_info =
             vk_structure<VkCommandBufferSubmitInfo>(
                 VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO);
-        command_info.commandBuffer =
-            command_buffer;
+        command_info.commandBuffer = command;
         auto submit =
             vk_structure<VkSubmitInfo2>(
                 VK_STRUCTURE_TYPE_SUBMIT_INFO_2);
@@ -3397,30 +3998,38 @@ VulkanRuntimeDevice::create_acceleration_scene(
                 1,
                 &submit,
                 VK_NULL_HANDLE),
-            "vkQueueSubmit2 acceleration");
+            "vkQueueSubmit2 acceleration update");
         impl_->check(
             impl_->vk.vkQueueWaitIdle(
                 impl_->native_queues.front()),
-            "vkQueueWaitIdle acceleration");
+            "vkQueueWaitIdle acceleration update");
         impl_->vk.vkDestroyCommandPool(
-            impl_->device,
-            command_pool,
-            nullptr);
+            impl_->device, command_pool, nullptr);
         command_pool = VK_NULL_HANDLE;
-        impl_->destroy_native_buffer(top_scratch);
-        impl_->destroy_native_buffer(bottom_scratch);
+        impl_->destroy_native_buffer(scratch);
         impl_->destroy_native_buffer(instance_buffer);
-
-        const auto id = impl_->handle();
-        acceleration.desc = desc;
         acceleration.instances.assign(
             desc.instances.begin(),
             desc.instances.end());
         acceleration.desc.instances =
             acceleration.instances;
-        impl_->accelerations.emplace(
-            id, std::move(acceleration));
-        return runtime::AccelerationSceneHandle{id};
+        acceleration.stats.update_nanoseconds =
+            static_cast<std::uint64_t>(
+                std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() -
+                    start)
+                    .count());
+        acceleration.stats.scratch_peak_bytes =
+            std::max(
+                acceleration.stats.scratch_peak_bytes,
+                static_cast<std::uint64_t>(
+                    scratch_bytes));
+        if (refit) {
+            ++acceleration.stats.refit_count;
+        } else {
+            ++acceleration.stats.rebuild_count;
+        }
     } catch (...) {
         if (command_pool) {
             impl_->vk.vkDestroyCommandPool(
@@ -3428,12 +4037,21 @@ VulkanRuntimeDevice::create_acceleration_scene(
                 command_pool,
                 nullptr);
         }
-        impl_->destroy_native_buffer(top_scratch);
-        impl_->destroy_native_buffer(bottom_scratch);
+        impl_->destroy_native_buffer(scratch);
         impl_->destroy_native_buffer(instance_buffer);
-        impl_->destroy_acceleration(acceleration);
         throw;
     }
+}
+
+runtime::AccelerationBuildStats
+VulkanRuntimeDevice::acceleration_build_stats(
+    runtime::AccelerationSceneHandle scene) const {
+    std::scoped_lock lock(impl_->mutex);
+    const auto& acceleration = Impl::require(
+        impl_->accelerations,
+        scene.value,
+        "acceleration scene");
+    return acceleration.stats;
 }
 
 void VulkanRuntimeDevice::destroy(

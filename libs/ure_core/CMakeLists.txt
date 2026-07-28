@@ -27,6 +27,7 @@ add_library(ure_core STATIC
     src/session.cpp
     src/acceleration_build_pipeline.cpp
     src/acceleration_upload.cu
+    src/optix_acceleration_provider.cpp
     src/bvh_builder.cpp
     src/bvh_accelerator.cpp
     src/render_api.cpp
@@ -55,6 +56,31 @@ endif()
 
 target_link_libraries(ure_core PRIVATE CUDA::cudart CUDA::cuda_driver)
 target_compile_definitions(ure_core PRIVATE USE_CUDA)
+if(UR_ENABLE_OPTIX)
+    find_path(UR_OPTIX_INCLUDE_DIR
+        NAMES optix.h
+        HINTS
+            "${UR_OPTIX_ROOT}"
+            "$ENV{OPTIX_ROOT}"
+            "$ENV{OptiX_INSTALL_DIR}"
+        PATH_SUFFIXES include
+        NO_CACHE)
+endif()
+if(UR_ENABLE_OPTIX AND UR_OPTIX_INCLUDE_DIR)
+    set_source_files_properties(
+        src/optix_acceleration_provider.cpp
+        PROPERTIES
+            COMPILE_DEFINITIONS UR_HAS_OPTIX=1
+            INCLUDE_DIRECTORIES "${UR_OPTIX_INCLUDE_DIR}")
+    message(STATUS "OptiX acceleration provider enabled: ${UR_OPTIX_INCLUDE_DIR}")
+else()
+    set_source_files_properties(
+        src/optix_acceleration_provider.cpp
+        PROPERTIES COMPILE_DEFINITIONS UR_HAS_OPTIX=0)
+    if(UR_ENABLE_OPTIX)
+        message(STATUS "OptiX SDK not found; OptiX provider disabled without affecting other backends")
+    endif()
+endif()
 
 set_target_properties(ure_core PROPERTIES
     CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"

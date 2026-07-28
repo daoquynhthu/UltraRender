@@ -75,6 +75,11 @@ public:
     acceleration_capabilities() const noexcept override;
     runtime::AccelerationSceneHandle create_acceleration_scene(
         const runtime::AccelerationSceneDesc& desc) override;
+    void update_acceleration_scene(
+        runtime::AccelerationSceneHandle scene,
+        const runtime::AccelerationUpdateDesc& desc) override;
+    runtime::AccelerationBuildStats acceleration_build_stats(
+        runtime::AccelerationSceneHandle scene) const override;
     void destroy(
         runtime::AccelerationSceneHandle scene) override;
 

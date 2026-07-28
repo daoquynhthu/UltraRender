@@ -30,6 +30,33 @@ namespace {
 
 using Microsoft::WRL::ComPtr;
 
+D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS
+acceleration_build_flags(
+    const runtime::AccelerationBuildConfig& config,
+    bool allow_compaction) {
+    auto flags =
+        config.quality ==
+                runtime::AccelerationBuildQuality::FastBuild
+            ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD
+            : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    if (config.update_policy !=
+        runtime::AccelerationUpdatePolicy::Static) {
+        flags =
+            static_cast<
+                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS>(
+                flags |
+                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE);
+    }
+    if (config.compact && allow_compaction) {
+        flags =
+            static_cast<
+                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS>(
+                flags |
+                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION);
+    }
+    return flags;
+}
+
 struct AdapterRecord {
     BackendAdapterInfo info;
     LUID luid{};
@@ -380,11 +407,14 @@ struct D3D12RuntimeDevice::Impl {
     };
 
     struct Acceleration {
-        NativeBuffer bottom;
+        std::vector<NativeBuffer> bottoms;
         NativeBuffer top;
         runtime::AccelerationSceneDesc desc;
+        std::vector<runtime::TriangleGeometryDesc>
+            geometries;
         std::vector<runtime::AccelerationInstanceDesc>
             instances;
+        runtime::AccelerationBuildStats stats;
     };
 
     Impl(
@@ -1186,11 +1216,14 @@ void D3D12RuntimeDevice::destroy(
     for (const auto& [id, acceleration] :
          impl_->accelerations) {
         static_cast<void>(id);
-        if (acceleration.desc.geometry.vertices == handle ||
-            acceleration.desc.geometry.indices == handle) {
-            throw runtime::Error(
-                runtime::ErrorCode::InvalidArgument,
-                "D3D12 acceleration input is still in use");
+        for (const auto& geometry :
+             acceleration.geometries) {
+            if (geometry.vertices == handle ||
+                geometry.indices == handle) {
+                throw runtime::Error(
+                    runtime::ErrorCode::InvalidArgument,
+                    "D3D12 acceleration input is still in use");
+            }
         }
     }
     if (buffer.mapped) {
@@ -2270,9 +2303,13 @@ D3D12RuntimeDevice::acceleration_capabilities() const noexcept {
             D3D12_RAYTRACING_TIER_1_1 &&
         impl_->shader_model >= D3D_SHADER_MODEL_6_5) {
         features |= runtime::acceleration_feature_bit(
-            runtime::AccelerationFeature::RayQuery);
+            runtime::AccelerationFeature::RayQuery) |
+            runtime::acceleration_feature_bit(
+                runtime::AccelerationFeature::Compaction) |
+            runtime::acceleration_feature_bit(
+                runtime::AccelerationFeature::Refit);
     }
-    return {features, 1, 0x00ffffffu};
+    return {features, 0x00ffffffu, 0x00ffffffu, 256};
 }
 
 runtime::AccelerationSceneHandle
@@ -2293,99 +2330,370 @@ D3D12RuntimeDevice::create_acceleration_scene(
             runtime::ErrorCode::Unsupported,
             "D3D12 acceleration instance count exceeds DXR limit");
     }
-    auto& vertices = Impl::require(
-        impl_->buffers,
-        desc.geometry.vertices.value,
-        "vertex buffer");
-    auto& indices = Impl::require(
-        impl_->buffers,
-        desc.geometry.indices.value,
-        "index buffer");
-    if (!runtime::has_usage(
-            vertices.desc.usage,
-            runtime::BufferUsage::AccelerationInput) ||
-        !runtime::has_usage(
-            indices.desc.usage,
-            runtime::BufferUsage::AccelerationInput)) {
+    if (desc.geometries.size() > 0x00ffffffu) {
         throw runtime::Error(
-            runtime::ErrorCode::InvalidArgument,
-            "D3D12 acceleration requires acceleration-input buffers");
+            runtime::ErrorCode::Unsupported,
+            "D3D12 acceleration geometry count exceeds DXR limit");
     }
-    const auto vertex_bytes =
-        static_cast<std::uint64_t>(
-            desc.geometry.vertex_count - 1) *
-            desc.geometry.vertex_stride +
-        sizeof(float) * 3;
-    const auto index_bytes =
-        static_cast<std::uint64_t>(
-            desc.geometry.index_count) *
-        sizeof(std::uint32_t);
-    if (desc.geometry.vertex_offset >
-            vertices.desc.size_bytes ||
-        vertex_bytes >
-            vertices.desc.size_bytes -
-                desc.geometry.vertex_offset ||
-        desc.geometry.index_offset >
-            indices.desc.size_bytes ||
-        index_bytes >
-            indices.desc.size_bytes -
-                desc.geometry.index_offset) {
-        throw runtime::Error(
-            runtime::ErrorCode::Overflow,
-            "D3D12 acceleration geometry exceeds input buffer");
-    }
-    D3D12_RAYTRACING_GEOMETRY_DESC geometry{};
-    geometry.Type =
-        D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-    geometry.Flags =
-        D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-    geometry.Triangles.Transform3x4 = 0;
-    geometry.Triangles.IndexFormat =
-        DXGI_FORMAT_R32_UINT;
-    geometry.Triangles.VertexFormat =
-        DXGI_FORMAT_R32G32B32_FLOAT;
-    geometry.Triangles.IndexCount =
-        desc.geometry.index_count;
-    geometry.Triangles.VertexCount =
-        desc.geometry.vertex_count;
-    geometry.Triangles.IndexBuffer =
-        indices.resource->GetGPUVirtualAddress() +
-        desc.geometry.index_offset;
-    geometry.Triangles.VertexBuffer.StartAddress =
-        vertices.resource->GetGPUVirtualAddress() +
-        desc.geometry.vertex_offset;
-    geometry.Triangles.VertexBuffer.StrideInBytes =
-        desc.geometry.vertex_stride;
-    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS
-        bottom_inputs{};
-    bottom_inputs.Type =
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-    bottom_inputs.Flags =
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-    bottom_inputs.NumDescs = 1;
-    bottom_inputs.DescsLayout =
-        D3D12_ELEMENTS_LAYOUT_ARRAY;
-    bottom_inputs.pGeometryDescs = &geometry;
-    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO
-        bottom_info{};
-    impl_->device
-        ->GetRaytracingAccelerationStructurePrebuildInfo(
-            &bottom_inputs, &bottom_info);
     Impl::Acceleration acceleration;
-    Impl::NativeBuffer bottom_scratch;
-    Impl::NativeBuffer top_scratch;
+    Impl::NativeBuffer scratch;
     Impl::NativeBuffer instance_buffer;
+    Impl::NativeBuffer postbuild_buffer;
+    Impl::NativeBuffer postbuild_readback;
+    HANDLE event = nullptr;
+    const auto start = std::chrono::steady_clock::now();
     try {
-        acceleration.bottom =
-            impl_->create_native_buffer(
-                bottom_info.ResultDataMaxSizeInBytes,
-                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-                D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE);
-        bottom_scratch =
-            impl_->create_native_buffer(
-                bottom_info.ScratchDataSizeInBytes,
-                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-                D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        ComPtr<ID3D12CommandQueue> queue;
+        D3D12_COMMAND_QUEUE_DESC queue_desc{};
+        queue_desc.Type =
+            D3D12_COMMAND_LIST_TYPE_COMPUTE;
+        impl_->check(
+            impl_->device->CreateCommandQueue(
+                &queue_desc,
+                IID_PPV_ARGS(&queue)),
+            "CreateCommandQueue DXR");
+        ComPtr<ID3D12CommandAllocator> allocator;
+        impl_->check(
+            impl_->device->CreateCommandAllocator(
+                D3D12_COMMAND_LIST_TYPE_COMPUTE,
+                IID_PPV_ARGS(&allocator)),
+            "CreateCommandAllocator DXR");
+        ComPtr<ID3D12GraphicsCommandList4> list;
+        impl_->check(
+            impl_->device->CreateCommandList(
+                0,
+                D3D12_COMMAND_LIST_TYPE_COMPUTE,
+                allocator.Get(),
+                nullptr,
+                IID_PPV_ARGS(&list)),
+            "CreateCommandList DXR");
+        ComPtr<ID3D12Fence> fence;
+        impl_->check(
+            impl_->device->CreateFence(
+                0,
+                D3D12_FENCE_FLAG_NONE,
+                IID_PPV_ARGS(&fence)),
+            "CreateFence DXR");
+        event = CreateEventW(
+            nullptr, FALSE, FALSE, nullptr);
+        if (!event) {
+            throw runtime::Error(
+                runtime::ErrorCode::BackendFailure,
+                "CreateEventW failed");
+        }
+        std::uint64_t fence_value = 0;
+        const auto execute = [&] {
+            impl_->check(
+                list->Close(), "Close DXR build list");
+            ID3D12CommandList* lists[] = {list.Get()};
+            queue->ExecuteCommandLists(1, lists);
+            ++fence_value;
+            impl_->check(
+                queue->Signal(
+                    fence.Get(), fence_value),
+                "Signal DXR build");
+            impl_->check(
+                fence->SetEventOnCompletion(
+                    fence_value, event),
+                "SetEventOnCompletion DXR");
+            if (WaitForSingleObject(
+                    event, INFINITE) != WAIT_OBJECT_0) {
+                throw runtime::Error(
+                    runtime::ErrorCode::BackendFailure,
+                    "WaitForSingleObject failed");
+            }
+        };
+        const auto reset_list = [&] {
+            impl_->check(
+                allocator->Reset(),
+                "Reset DXR allocator");
+            impl_->check(
+                list->Reset(
+                    allocator.Get(), nullptr),
+                "Reset DXR build list");
+        };
+
+        const auto geometry_count =
+            desc.geometries.size();
+        std::vector<D3D12_RAYTRACING_GEOMETRY_DESC>
+            geometries(geometry_count);
+        std::vector<
+            D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS>
+            bottom_inputs(geometry_count);
+        std::vector<
+            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO>
+            bottom_info(geometry_count);
+        acceleration.bottoms.resize(geometry_count);
+        std::uint64_t scratch_peak = 0;
+        std::uint64_t uncompacted_bytes = 0;
+        for (std::size_t index = 0;
+             index < geometry_count;
+             ++index) {
+            const auto& geometry_desc =
+                desc.geometries[index];
+            auto& vertices = Impl::require(
+                impl_->buffers,
+                geometry_desc.vertices.value,
+                "vertex buffer");
+            auto& indices = Impl::require(
+                impl_->buffers,
+                geometry_desc.indices.value,
+                "index buffer");
+            if (!runtime::has_usage(
+                    vertices.desc.usage,
+                    runtime::BufferUsage::AccelerationInput) ||
+                !runtime::has_usage(
+                    indices.desc.usage,
+                    runtime::BufferUsage::AccelerationInput)) {
+                throw runtime::Error(
+                    runtime::ErrorCode::InvalidArgument,
+                    "D3D12 acceleration requires acceleration-input buffers");
+            }
+            const auto vertex_bytes =
+                static_cast<std::uint64_t>(
+                    geometry_desc.vertex_count - 1) *
+                    geometry_desc.vertex_stride +
+                sizeof(float) * 3;
+            const auto index_bytes =
+                static_cast<std::uint64_t>(
+                    geometry_desc.index_count) *
+                sizeof(std::uint32_t);
+            if (geometry_desc.vertex_offset >
+                    vertices.desc.size_bytes ||
+                vertex_bytes >
+                    vertices.desc.size_bytes -
+                        geometry_desc.vertex_offset ||
+                geometry_desc.index_offset >
+                    indices.desc.size_bytes ||
+                index_bytes >
+                    indices.desc.size_bytes -
+                        geometry_desc.index_offset) {
+                throw runtime::Error(
+                    runtime::ErrorCode::Overflow,
+                    "D3D12 acceleration geometry exceeds input buffer");
+            }
+            auto& geometry = geometries[index];
+            geometry.Type =
+                D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+            geometry.Flags =
+                D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+            geometry.Triangles.Transform3x4 = 0;
+            geometry.Triangles.IndexFormat =
+                DXGI_FORMAT_R32_UINT;
+            geometry.Triangles.VertexFormat =
+                DXGI_FORMAT_R32G32B32_FLOAT;
+            geometry.Triangles.IndexCount =
+                geometry_desc.index_count;
+            geometry.Triangles.VertexCount =
+                geometry_desc.vertex_count;
+            geometry.Triangles.IndexBuffer =
+                indices.resource->GetGPUVirtualAddress() +
+                geometry_desc.index_offset;
+            geometry.Triangles.VertexBuffer.StartAddress =
+                vertices.resource->GetGPUVirtualAddress() +
+                geometry_desc.vertex_offset;
+            geometry.Triangles.VertexBuffer.StrideInBytes =
+                geometry_desc.vertex_stride;
+            auto& inputs = bottom_inputs[index];
+            inputs.Type =
+                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+            inputs.Flags =
+                acceleration_build_flags(
+                    desc.build, true);
+            inputs.NumDescs = 1;
+            inputs.DescsLayout =
+                D3D12_ELEMENTS_LAYOUT_ARRAY;
+            inputs.pGeometryDescs = &geometry;
+            impl_->device
+                ->GetRaytracingAccelerationStructurePrebuildInfo(
+                    &inputs, &bottom_info[index]);
+            if (bottom_info[index]
+                    .ResultDataMaxSizeInBytes == 0 ||
+                bottom_info[index]
+                    .ScratchDataSizeInBytes == 0) {
+                throw runtime::Error(
+                    runtime::ErrorCode::BackendFailure,
+                    "DXR returned invalid BLAS prebuild sizes");
+            }
+            scratch_peak = std::max(
+                scratch_peak,
+                bottom_info[index]
+                    .ScratchDataSizeInBytes);
+            uncompacted_bytes +=
+                bottom_info[index]
+                    .ResultDataMaxSizeInBytes;
+            acceleration.bottoms[index] =
+                impl_->create_native_buffer(
+                    bottom_info[index]
+                        .ResultDataMaxSizeInBytes,
+                    D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                    D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE);
+        }
+        if (desc.build.scratch_budget_bytes != 0 &&
+            scratch_peak >
+                desc.build.scratch_budget_bytes) {
+            throw runtime::Error(
+                runtime::ErrorCode::OutOfMemory,
+                "D3D12 acceleration scratch budget exceeded");
+        }
+        scratch = impl_->create_native_buffer(
+            scratch_peak,
+            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        if (desc.build.compact) {
+            const auto postbuild_bytes =
+                geometry_count * sizeof(
+                    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC);
+            postbuild_buffer =
+                impl_->create_native_buffer(
+                    postbuild_bytes,
+                    D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            postbuild_readback =
+                impl_->create_native_buffer(
+                    postbuild_bytes,
+                    D3D12_RESOURCE_FLAG_NONE,
+                    D3D12_RESOURCE_STATE_COPY_DEST,
+                    D3D12_HEAP_TYPE_READBACK);
+        }
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type =
+            D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        for (std::size_t index = 0;
+             index < geometry_count;
+             ++index) {
+            D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC
+                build{};
+            build.Inputs = bottom_inputs[index];
+            build.DestAccelerationStructureData =
+                acceleration.bottoms[index].resource
+                    ->GetGPUVirtualAddress();
+            build.ScratchAccelerationStructureData =
+                scratch.resource
+                    ->GetGPUVirtualAddress();
+            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC
+                postbuild{};
+            postbuild.DestBuffer =
+                desc.build.compact
+                ? postbuild_buffer.resource
+                      ->GetGPUVirtualAddress() +
+                      index * sizeof(
+                          D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC)
+                : 0;
+            postbuild.InfoType =
+                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE;
+            list->BuildRaytracingAccelerationStructure(
+                &build,
+                desc.build.compact ? 1 : 0,
+                desc.build.compact ? &postbuild : nullptr);
+            barrier.UAV.pResource =
+                acceleration.bottoms[index]
+                    .resource.Get();
+            list->ResourceBarrier(1, &barrier);
+        }
+        if (desc.build.compact) {
+            barrier.UAV.pResource =
+                postbuild_buffer.resource.Get();
+            list->ResourceBarrier(1, &barrier);
+            D3D12_RESOURCE_BARRIER transition{};
+            transition.Type =
+                D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            transition.Transition.pResource =
+                postbuild_buffer.resource.Get();
+            transition.Transition.StateBefore =
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+            transition.Transition.StateAfter =
+                D3D12_RESOURCE_STATE_COPY_SOURCE;
+            transition.Transition.Subresource =
+                D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            list->ResourceBarrier(1, &transition);
+            list->CopyResource(
+                postbuild_readback.resource.Get(),
+                postbuild_buffer.resource.Get());
+        }
+        execute();
+        std::uint64_t compacted_bottom_bytes = 0;
+        if (desc.build.compact) {
+            void* mapped = nullptr;
+            D3D12_RANGE range{
+                0,
+                geometry_count * sizeof(
+                    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC)};
+            impl_->check(
+                postbuild_readback.resource->Map(
+                    0, &range, &mapped),
+                "Map DXR compact sizes");
+            const auto* compact_sizes =
+                static_cast<const
+                    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC*>(
+                        mapped);
+            std::vector<Impl::NativeBuffer>
+                compacted(geometry_count);
+            bool copy_required = false;
+            for (std::size_t index = 0;
+                 index < geometry_count;
+                 ++index) {
+                const auto size =
+                    compact_sizes[index]
+                        .CompactedSizeInBytes;
+                if (size == 0 ||
+                    size >= bottom_info[index]
+                        .ResultDataMaxSizeInBytes) {
+                    compacted_bottom_bytes +=
+                        bottom_info[index]
+                            .ResultDataMaxSizeInBytes;
+                    continue;
+                }
+                copy_required = true;
+                compacted_bottom_bytes += size;
+                compacted[index] =
+                    impl_->create_native_buffer(
+                        size,
+                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                        D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE);
+            }
+            postbuild_readback.resource->Unmap(
+                0, nullptr);
+            if (copy_required) {
+                reset_list();
+                for (std::size_t index = 0;
+                     index < geometry_count;
+                     ++index) {
+                    if (!compacted[index].resource) continue;
+                    list->CopyRaytracingAccelerationStructure(
+                        compacted[index].resource
+                            ->GetGPUVirtualAddress(),
+                        acceleration.bottoms[index]
+                            .resource->GetGPUVirtualAddress(),
+                        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
+                    D3D12_RESOURCE_BARRIER compact_barrier{};
+                    compact_barrier.Type =
+                        D3D12_RESOURCE_BARRIER_TYPE_UAV;
+                    compact_barrier.UAV.pResource =
+                        compacted[index].resource.Get();
+                    list->ResourceBarrier(
+                        1, &compact_barrier);
+                }
+                execute();
+                for (std::size_t index = 0;
+                     index < geometry_count;
+                     ++index) {
+                    if (!compacted[index].resource) continue;
+                    impl_->destroy_native_buffer(
+                        acceleration.bottoms[index]);
+                    acceleration.bottoms[index] =
+                        std::move(compacted[index]);
+                }
+            }
+        } else {
+            for (const auto& info : bottom_info) {
+                compacted_bottom_bytes +=
+                    info.ResultDataMaxSizeInBytes;
+            }
+        }
+        impl_->destroy_native_buffer(postbuild_readback);
+        impl_->destroy_native_buffer(postbuild_buffer);
+
         const auto instance_bytes =
             desc.instances.size() *
             sizeof(D3D12_RAYTRACING_INSTANCE_DESC);
@@ -2419,8 +2727,9 @@ D3D12RuntimeDevice::create_acceleration_scene(
             value.Flags =
                 D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
             value.AccelerationStructure =
-                acceleration.bottom.resource
-                    ->GetGPUVirtualAddress();
+                acceleration.bottoms[
+                    desc.instances[index].geometry_index]
+                    .resource->GetGPUVirtualAddress();
             native_instances[index] = value;
         }
         instance_buffer.resource->Unmap(0, nullptr);
@@ -2429,7 +2738,8 @@ D3D12RuntimeDevice::create_acceleration_scene(
         top_inputs.Type =
             D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
         top_inputs.Flags =
-            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+            acceleration_build_flags(
+                desc.build, false);
         top_inputs.NumDescs =
             static_cast<UINT>(desc.instances.size());
         top_inputs.DescsLayout =
@@ -2442,16 +2752,208 @@ D3D12RuntimeDevice::create_acceleration_scene(
         impl_->device
             ->GetRaytracingAccelerationStructurePrebuildInfo(
                 &top_inputs, &top_info);
+        scratch_peak = std::max(
+            scratch_peak,
+            std::max(
+                top_info.ScratchDataSizeInBytes,
+                top_info.UpdateScratchDataSizeInBytes));
+        if (desc.build.scratch_budget_bytes != 0 &&
+            scratch_peak >
+                desc.build.scratch_budget_bytes) {
+            throw runtime::Error(
+                runtime::ErrorCode::OutOfMemory,
+                "D3D12 acceleration scratch budget exceeded");
+        }
+        if (scratch_peak > scratch.allocation_size) {
+            impl_->destroy_native_buffer(scratch);
+            scratch = impl_->create_native_buffer(
+                scratch_peak,
+                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        }
         acceleration.top =
             impl_->create_native_buffer(
                 top_info.ResultDataMaxSizeInBytes,
                 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
                 D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE);
-        top_scratch =
+        reset_list();
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC
+            top_build{};
+        top_build.Inputs = top_inputs;
+        top_build.DestAccelerationStructureData =
+            acceleration.top.resource
+                ->GetGPUVirtualAddress();
+        top_build.ScratchAccelerationStructureData =
+            scratch.resource
+                ->GetGPUVirtualAddress();
+        list->BuildRaytracingAccelerationStructure(
+            &top_build, 0, nullptr);
+        barrier.UAV.pResource =
+            acceleration.top.resource.Get();
+        list->ResourceBarrier(1, &barrier);
+        execute();
+        CloseHandle(event);
+        event = nullptr;
+        impl_->destroy_native_buffer(scratch);
+        impl_->destroy_native_buffer(instance_buffer);
+        const auto id = impl_->handle();
+        acceleration.desc = desc;
+        acceleration.geometries.assign(
+            desc.geometries.begin(),
+            desc.geometries.end());
+        acceleration.desc.geometries =
+            acceleration.geometries;
+        acceleration.instances.assign(
+            desc.instances.begin(),
+            desc.instances.end());
+        acceleration.desc.instances =
+            acceleration.instances;
+        acceleration.stats.geometry_count =
+            static_cast<std::uint32_t>(
+                acceleration.geometries.size());
+        acceleration.stats.instance_count =
+            static_cast<std::uint32_t>(
+                acceleration.instances.size());
+        acceleration.stats.build_nanoseconds =
+            static_cast<std::uint64_t>(
+                std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() -
+                    start)
+                    .count());
+        acceleration.stats.scratch_peak_bytes =
+            scratch_peak;
+        acceleration.stats.uncompacted_bytes =
+            uncompacted_bytes +
+            top_info.ResultDataMaxSizeInBytes;
+        acceleration.stats.compacted_bytes =
+            compacted_bottom_bytes +
+            top_info.ResultDataMaxSizeInBytes;
+        impl_->accelerations.emplace(
+            id, std::move(acceleration));
+        return runtime::AccelerationSceneHandle{id};
+    } catch (...) {
+        if (event) CloseHandle(event);
+        impl_->destroy_native_buffer(postbuild_readback);
+        impl_->destroy_native_buffer(postbuild_buffer);
+        impl_->destroy_native_buffer(scratch);
+        impl_->destroy_native_buffer(instance_buffer);
+        impl_->destroy_native_buffer(acceleration.top);
+        for (auto& bottom : acceleration.bottoms) {
+            impl_->destroy_native_buffer(bottom);
+        }
+        throw;
+    }
+}
+
+void D3D12RuntimeDevice::update_acceleration_scene(
+    runtime::AccelerationSceneHandle scene,
+    const runtime::AccelerationUpdateDesc& desc) {
+    std::scoped_lock lock(impl_->mutex);
+    impl_->ready();
+    auto& acceleration = Impl::require(
+        impl_->accelerations,
+        scene.value,
+        "acceleration scene");
+    runtime::validate(acceleration.desc, desc);
+    if (acceleration.desc.build.update_policy ==
+        runtime::AccelerationUpdatePolicy::Static) {
+        throw runtime::Error(
+            runtime::ErrorCode::Unsupported,
+            "static D3D12 acceleration rejects updates");
+    }
+    const auto start = std::chrono::steady_clock::now();
+    Impl::NativeBuffer instance_buffer;
+    Impl::NativeBuffer scratch;
+    HANDLE event = nullptr;
+    try {
+        const auto instance_bytes =
+            desc.instances.size() *
+            sizeof(D3D12_RAYTRACING_INSTANCE_DESC);
+        instance_buffer =
             impl_->create_native_buffer(
-                top_info.ScratchDataSizeInBytes,
-                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-                D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                instance_bytes,
+                D3D12_RESOURCE_FLAG_NONE,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                D3D12_HEAP_TYPE_UPLOAD);
+        void* mapped = nullptr;
+        D3D12_RANGE read_range{};
+        impl_->check(
+            instance_buffer.resource->Map(
+                0, &read_range, &mapped),
+            "Map DXR acceleration update");
+        auto* native_instances =
+            static_cast<
+                D3D12_RAYTRACING_INSTANCE_DESC*>(mapped);
+        for (std::size_t index = 0;
+             index < desc.instances.size();
+             ++index) {
+            D3D12_RAYTRACING_INSTANCE_DESC value{};
+            std::ranges::copy(
+                desc.instances[index].object_to_world,
+                &value.Transform[0][0]);
+            value.InstanceID =
+                desc.instances[index].instance_index;
+            value.InstanceMask =
+                desc.instances[index].visibility_mask;
+            value.Flags =
+                D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
+            value.AccelerationStructure =
+                acceleration.bottoms[
+                    desc.instances[index].geometry_index]
+                    .resource->GetGPUVirtualAddress();
+            native_instances[index] = value;
+        }
+        instance_buffer.resource->Unmap(0, nullptr);
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS
+            inputs{};
+        inputs.Type =
+            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+        inputs.Flags =
+            acceleration_build_flags(
+                acceleration.desc.build, false);
+        inputs.NumDescs =
+            static_cast<UINT>(desc.instances.size());
+        inputs.DescsLayout =
+            D3D12_ELEMENTS_LAYOUT_ARRAY;
+        inputs.InstanceDescs =
+            instance_buffer.resource
+                ->GetGPUVirtualAddress();
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO
+            info{};
+        impl_->device
+            ->GetRaytracingAccelerationStructurePrebuildInfo(
+                &inputs, &info);
+        const bool refit =
+            acceleration.desc.build.update_policy ==
+            runtime::AccelerationUpdatePolicy::Refit;
+        const auto scratch_bytes = refit
+            ? info.UpdateScratchDataSizeInBytes
+            : info.ScratchDataSizeInBytes;
+        if (scratch_bytes == 0) {
+            throw runtime::Error(
+                runtime::ErrorCode::BackendFailure,
+                "DXR returned invalid update scratch size");
+        }
+        if (acceleration.desc.build.scratch_budget_bytes != 0 &&
+            scratch_bytes >
+                acceleration.desc.build
+                    .scratch_budget_bytes) {
+            throw runtime::Error(
+                runtime::ErrorCode::OutOfMemory,
+                "D3D12 acceleration update scratch budget exceeded");
+        }
+        scratch = impl_->create_native_buffer(
+            scratch_bytes,
+            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        if (refit) {
+            inputs.Flags =
+                static_cast<
+                    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS>(
+                    inputs.Flags |
+                    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE);
+        }
         ComPtr<ID3D12CommandQueue> queue;
         D3D12_COMMAND_QUEUE_DESC queue_desc{};
         queue_desc.Type =
@@ -2460,13 +2962,13 @@ D3D12RuntimeDevice::create_acceleration_scene(
             impl_->device->CreateCommandQueue(
                 &queue_desc,
                 IID_PPV_ARGS(&queue)),
-            "CreateCommandQueue DXR");
+            "CreateCommandQueue DXR update");
         ComPtr<ID3D12CommandAllocator> allocator;
         impl_->check(
             impl_->device->CreateCommandAllocator(
                 D3D12_COMMAND_LIST_TYPE_COMPUTE,
                 IID_PPV_ARGS(&allocator)),
-            "CreateCommandAllocator DXR");
+            "CreateCommandAllocator DXR update");
         ComPtr<ID3D12GraphicsCommandList4> list;
         impl_->check(
             impl_->device->CreateCommandList(
@@ -2475,40 +2977,31 @@ D3D12RuntimeDevice::create_acceleration_scene(
                 allocator.Get(),
                 nullptr,
                 IID_PPV_ARGS(&list)),
-            "CreateCommandList DXR");
+            "CreateCommandList DXR update");
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC
-            bottom_build{};
-        bottom_build.Inputs = bottom_inputs;
-        bottom_build.DestAccelerationStructureData =
-            acceleration.bottom.resource
+            build{};
+        build.Inputs = inputs;
+        build.SourceAccelerationStructureData =
+            refit
+            ? acceleration.top.resource
+                  ->GetGPUVirtualAddress()
+            : 0;
+        build.DestAccelerationStructureData =
+            acceleration.top.resource
                 ->GetGPUVirtualAddress();
-        bottom_build.ScratchAccelerationStructureData =
-            bottom_scratch.resource
-                ->GetGPUVirtualAddress();
+        build.ScratchAccelerationStructureData =
+            scratch.resource->GetGPUVirtualAddress();
         list->BuildRaytracingAccelerationStructure(
-            &bottom_build, 0, nullptr);
+            &build, 0, nullptr);
         D3D12_RESOURCE_BARRIER barrier{};
         barrier.Type =
             D3D12_RESOURCE_BARRIER_TYPE_UAV;
         barrier.UAV.pResource =
-            acceleration.bottom.resource.Get();
-        list->ResourceBarrier(1, &barrier);
-        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC
-            top_build{};
-        top_build.Inputs = top_inputs;
-        top_build.DestAccelerationStructureData =
-            acceleration.top.resource
-                ->GetGPUVirtualAddress();
-        top_build.ScratchAccelerationStructureData =
-            top_scratch.resource
-                ->GetGPUVirtualAddress();
-        list->BuildRaytracingAccelerationStructure(
-            &top_build, 0, nullptr);
-        barrier.UAV.pResource =
             acceleration.top.resource.Get();
         list->ResourceBarrier(1, &barrier);
         impl_->check(
-            list->Close(), "Close DXR build list");
+            list->Close(),
+            "Close DXR update list");
         ID3D12CommandList* lists[] = {list.Get()};
         queue->ExecuteCommandLists(1, lists);
         ComPtr<ID3D12Fence> fence;
@@ -2517,54 +3010,68 @@ D3D12RuntimeDevice::create_acceleration_scene(
                 0,
                 D3D12_FENCE_FLAG_NONE,
                 IID_PPV_ARGS(&fence)),
-            "CreateFence DXR");
+            "CreateFence DXR update");
         impl_->check(
             queue->Signal(fence.Get(), 1),
-            "Signal DXR build");
-        HANDLE event = CreateEventW(
+            "Signal DXR update");
+        event = CreateEventW(
             nullptr, FALSE, FALSE, nullptr);
         if (!event) {
             throw runtime::Error(
                 runtime::ErrorCode::BackendFailure,
                 "CreateEventW failed");
         }
-        const auto event_result =
-            fence->SetEventOnCompletion(1, event);
-        if (FAILED(event_result)) {
-            CloseHandle(event);
-            impl_->check(
-                event_result,
-                "SetEventOnCompletion DXR");
-        }
-        const auto wait_result =
-            WaitForSingleObject(event, INFINITE);
-        CloseHandle(event);
-        if (wait_result != WAIT_OBJECT_0) {
+        impl_->check(
+            fence->SetEventOnCompletion(1, event),
+            "SetEventOnCompletion DXR update");
+        if (WaitForSingleObject(
+                event, INFINITE) != WAIT_OBJECT_0) {
             throw runtime::Error(
                 runtime::ErrorCode::BackendFailure,
                 "WaitForSingleObject failed");
         }
-        impl_->destroy_native_buffer(top_scratch);
-        impl_->destroy_native_buffer(bottom_scratch);
+        CloseHandle(event);
+        event = nullptr;
+        impl_->destroy_native_buffer(scratch);
         impl_->destroy_native_buffer(instance_buffer);
-        const auto id = impl_->handle();
-        acceleration.desc = desc;
         acceleration.instances.assign(
             desc.instances.begin(),
             desc.instances.end());
         acceleration.desc.instances =
             acceleration.instances;
-        impl_->accelerations.emplace(
-            id, std::move(acceleration));
-        return runtime::AccelerationSceneHandle{id};
+        acceleration.stats.update_nanoseconds =
+            static_cast<std::uint64_t>(
+                std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() -
+                    start)
+                    .count());
+        acceleration.stats.scratch_peak_bytes =
+            std::max(
+                acceleration.stats.scratch_peak_bytes,
+                scratch_bytes);
+        if (refit) {
+            ++acceleration.stats.refit_count;
+        } else {
+            ++acceleration.stats.rebuild_count;
+        }
     } catch (...) {
-        impl_->destroy_native_buffer(top_scratch);
-        impl_->destroy_native_buffer(bottom_scratch);
+        if (event) CloseHandle(event);
+        impl_->destroy_native_buffer(scratch);
         impl_->destroy_native_buffer(instance_buffer);
-        impl_->destroy_native_buffer(acceleration.top);
-        impl_->destroy_native_buffer(acceleration.bottom);
         throw;
     }
+}
+
+runtime::AccelerationBuildStats
+D3D12RuntimeDevice::acceleration_build_stats(
+    runtime::AccelerationSceneHandle scene) const {
+    std::scoped_lock lock(impl_->mutex);
+    const auto& acceleration = Impl::require(
+        impl_->accelerations,
+        scene.value,
+        "acceleration scene");
+    return acceleration.stats;
 }
 
 void D3D12RuntimeDevice::destroy(
@@ -2577,7 +3084,9 @@ void D3D12RuntimeDevice::destroy(
         scene.value,
         "acceleration scene");
     impl_->destroy_native_buffer(acceleration.top);
-    impl_->destroy_native_buffer(acceleration.bottom);
+    for (auto& bottom : acceleration.bottoms) {
+        impl_->destroy_native_buffer(bottom);
+    }
     impl_->accelerations.erase(scene.value);
 }
 

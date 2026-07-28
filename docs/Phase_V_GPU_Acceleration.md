@@ -2,11 +2,10 @@
 
 ## Status
 
-V.0 through V.4 are complete and the authoritative cursor is V.5. This
+V.0 through V.6 are complete and the authoritative cursor is V.7. This
 document records the initial acceleration audit, configuration contract,
-self-compute correctness baseline, TLAS/BLAS split and measured quality presets.
-It does not describe the current OptiX, Vulkan RT or DXR bridges as general
-production acceleration providers.
+self-compute construction and the optional native-provider build lifecycle.
+Cross-provider renderer parity remains V.7.
 
 ## Current production path
 
@@ -21,12 +20,12 @@ and production shadow traversal visit it before transforming candidate rays
 into the referenced mesh BLAS. Instance transforms can refit the retained TLAS
 topology without rebuilding or uploading static mesh BLAS data.
 
-The Phase T `AccelerationProvider` contract is the forward boundary. Vulkan and
-D3D12 implement bounded triangle/instance fixtures through native ray query or
-compute fallback, but the current public renderer does not lower arbitrary
-SceneIR to either backend. Phase V must extend the common provider contract; it
-must not make the CUDA layout, a legacy host accelerator or an SDK-native handle
-the new public model.
+The Phase T `AccelerationProvider` contract is the forward boundary. Vulkan RT
+and DXR now implement multi-BLAS/TLAS construction, compaction, transform
+refit/rebuild, scratch budgets and build statistics. OptiX implements the same
+construction contract when its separately installed SDK is available. The
+current public renderer still does not lower arbitrary SceneIR traversal and
+hit shading to native providers; that parity boundary remains V.7.
 
 ## Audit ledger
 
@@ -39,7 +38,7 @@ the new public model.
 | V0-LIN | A mesh with no BVH nodes falls back to a full triangle scan in closest-hit and shadow paths. | Missing or invalid acceleration can silently become O(N); fallback policy has no explicit configuration, reason or telemetry. | V.2 |
 | V0-UPD | V.0 found transform hot updates without top-level acceleration maintenance; V.3 now refits retained TLAS topology and uploads only transforms and TLAS nodes. | Rigid transform refit is closed; deformation and topology classification remain V.10. | V.3/V.10 |
 | V0-HOST | `BVHAccelerator` is a recursive host traversal compiled into `ure_core`; `SimpleAccelerator` and an Embree placeholder remain in installed `ure_types` headers. Repository search finds no renderer/session/CLI consumer. | Extending these classes would create the forbidden second host production traversal path and split hit semantics from GPU providers. | Remove or quarantine in V.2 |
-| V0-OPT | Identical installed `OptixAccelerator` placeholders exist in `ure_types` and `ure_core`; build/update are empty, closest-hit always misses and occlusion always returns false. No OptiX SDK target or pipeline exists. | The class name can be mistaken for a functional provider even though using it would produce incorrect visibility. | Freeze until replacement/removal in V.6 |
+| V0-OPT | V.0 found two installed `OptixAccelerator` placeholders whose build/update were empty and whose queries always missed. V.6 removed both and added one optional SDK-backed provider. | Closed for native construction; traversal/hit parity remains V.7. | V.6/V.7 |
 | V0-API | Phase T exposes SDK-free bounded geometry, instance, ray/hit and capability contracts, but no `AccelerationConfig`, quality preset, update policy, build statistics or scratch/compaction budget. | Provider selection and operational policy cannot yet be expressed consistently through config, ABI, Session or pyure. | V.1 |
 | V0-VAL | V.2-V.4 now cover robust/deep traversal, transformed instances, dynamic TLAS refit and a fixed large-mesh build/trace/memory benchmark. | Native-provider parity, dense geometry and full-suite aggregation remain later work. | V.2-V.11 |
 
@@ -48,10 +47,9 @@ the new public model.
 - CUDA `GpuBvhNode`, raw device pointers and traversal functions remain private.
 - `runtime::AccelerationProvider`, stable descriptors and hit metadata own the
   portable boundary.
-- The host `BVHAccelerator`, `SimpleAccelerator`, Embree placeholder and
-  `OptixAccelerator` placeholders are legacy or nonfunctional inventory. They
-  may be removed or replaced by their assigned Phase V steps, but may not gain
-  production consumers.
+- The host `BVHAccelerator`, `SimpleAccelerator` and Embree placeholder remain
+  legacy inventory and may not gain production consumers. The false OptiX
+  placeholders have been removed.
 - Linear triangle or instance fallback is prohibited in the self-compute
   production path.
 - Phase V may change acceleration construction and traversal, but not
@@ -99,7 +97,7 @@ axes:
 
 | Field | Vocabulary | V.1 executable boundary |
 |---|---|---|
-| provider | `auto`, `self_compute`, `optix`, `vulkan_rt`, `dxr` | `auto` resolves to CUDA `self_compute`; explicit `self_compute` is accepted; native providers reject until V.6 |
+| provider | `auto`, `self_compute`, `optix`, `vulkan_rt`, `dxr` | `auto` resolves to CUDA `self_compute`; native build providers exist after V.6, while full renderer selection remains fail-loud until V.7 parity |
 | quality | `auto`, `fast_build`, `balanced`, `high_quality` | all four execute on CUDA self-compute since V.4 |
 | update policy | `auto`, `static`, `refit`, `rebuild` | `auto` and `static`; refit/rebuild become executable with V.3/V.6/V.10 |
 | clustered geometry | enabled/disabled | disabled until V.8 |
@@ -245,3 +243,40 @@ concurrency. pyure consumes v4. The reproducible
 `tools/benchmarks/run_phase_v_build_telemetry.ps1` report records fixed-mesh
 build/trace/compact-memory/VRAM data together with async pipeline telemetry and
 the scratch-budget rejection gate.
+
+## V.6 native RT provider construction
+
+The SDK-free runtime contract now accepts multiple indexed-triangle geometries,
+maps every instance to a stable geometry index and carries build quality,
+static/refit/rebuild policy, compaction and scratch budget. Provider-owned
+statistics report geometry and instance counts, wall-clock build/update time,
+scratch peak, uncompacted and compact bytes, and refit/rebuild counts. Instance
+updates preserve topology: count, instance identity, material binding and
+geometry binding cannot change through the transform-only update entry point.
+
+Vulkan RT builds one BLAS per geometry, reuses a bounded scratch allocation,
+queries compact sizes, copies beneficial compact BLAS results and only then
+builds the TLAS against final BLAS addresses. TLAS construction retains update
+capacity and executes either `UPDATE` refit or an explicit rebuild. DXR follows
+the same lifecycle with post-build compact-size data, compact AS copies,
+`ALLOW_UPDATE`/`PERFORM_UPDATE`, and a shared peak scratch allocation.
+
+OptiX is an optional CUDA-side construction provider. CMake enables it only
+when `optix.h` is found under `UR_OPTIX_ROOT`, `OPTIX_ROOT` or
+`OptiX_INSTALL_DIR`; an absent SDK leaves CUDA self-compute, Vulkan and D3D12
+unchanged and produces a deterministic `Unsupported` boundary. Its source uses
+`optixAccelBuild`, compact-size emission, `optixAccelCompact` and IAS
+update/rebuild. The implementation was also configured and executed against
+the official NVIDIA `optix-dev` v8.1.0 headers at commit
+`50021ea0af6d41609a97777ceebbdf1e1d34efe7`: the registered CUDA runtime gate
+passed two-GAS compaction, IAS refit, memory cleanup and one-byte scratch
+rejection on the closure GPU.
+
+Vulkan and D3D12 lifecycle tests execute two BLAS, compact memory accounting,
+TLAS refit, TLAS rebuild, input lifetime and one-byte scratch rejection on
+available native adapters. Compute-only adapters retain the explicit compute
+fallback, while a native request with fallback disabled remains fail-loud.
+V.6 does not claim framebuffer or complete hit-attribute parity; that is the
+V.7 gate. `scripts/run_phase_v6_native_provider_gate.ps1` can accept an
+`-OptixRoot`, requires physical Vulkan RT and DXR on the closure machine, and
+writes `ure.phase_v.native_provider.v1` evidence.

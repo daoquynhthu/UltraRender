@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-28 (V.5 closure and V.6 cursor)
+最后更新: 2026-07-28 (V.6 closure and V.7 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -57,7 +57,7 @@ R-P4 specular manifold + BDPT/VCM [done]
 Phase T complete [done]
    │
    ▼
-当前游标: V.6
+当前游标: V.7
    │
    ▼
 Phase V complete
@@ -80,7 +80,7 @@ Phase X complete
 - **Phase Q 已闭环**: URE native schema、serialization、programmatic graph、feature declaration、tooling/adapter、compiled cache/farm 与 validation suite 已冻结为后续阶段的权威 authoring contract。
 - **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
 - **Phase T 已闭环**: T.0-T.11 已冻结 coupling、backend identity、共享 Slang 工具链、SDK-free runtime/resource/execution/acceleration/scheduling contract、CUDA production lowering、Vulkan compute/acceleration foundation、Windows optional D3D12/DXR backend、heterogeneous sample-shard negotiation 和 cross-backend validation/performance suite。
-- **当前唯一施工项 — Phase V**: V.0-V.5 已闭环；当前游标为 V.6 native RT provider productionization。Phase W 现有 reference/oracle 成果保留，新增 W production work 继续冻结。
+- **当前唯一施工项 — Phase V**: V.0-V.6 已闭环；当前游标为 V.7 cross-provider parity。Phase W 现有 reference/oracle 成果保留，新增 W production work 继续冻结。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
 - 文档中的“进行中”表示已有未闭环成果，不等于允许并行施工。发生冲突时，以本节当前游标为准。
@@ -2076,7 +2076,7 @@ T.11 closure（2026-07-28）：新增 `run_phase_t_validation_suite.ps1` 与 `ur
 
 ### Phase V — GPU 几何加速结构 / BVH / OptiX / Clustered Geometry
 
-**状态**: 进行中，V.0-V.5 已完成，当前游标 V.6。
+**状态**: 进行中，V.0-V.6 已完成，当前游标 V.7。
 
 **目标**: 将当前 mesh-local BVH 和线性 fallback traversal 升级为适配 UltraRender 光谱、偏振、材质图、动态场景和未来波动光学的 GPU 几何加速栈。Phase V 的核心不是复制外部引擎的可见性系统，而是在 Phase T 的 acceleration-provider contract 上建立自己的 `AccelerationScene`：同一份 SceneIR/resource graph 能选择自研 compute BVH、OptiX、Vulkan RT 或 DXR provider，并在能力不满足时 fail-loud。
 
@@ -2131,6 +2131,8 @@ V.3 closure（2026-07-28）：CUDA self-compute 现在为静态 mesh 保留 obje
 V.4 closure（2026-07-28）：CUDA self-compute 的默认 `auto` 与显式 `fast_build` 保留 reference-compatible midpoint/median BVH2；`balanced` 以 16-bin object SAH 构建并 collapse 为 72-byte conservative-quantized BVH4，`high_quality` 同时评估 object/spatial SAH，在最多 50% duplicate-reference budget 内执行真实 reference-bound clipping，并 collapse 为 116-byte BVH8。wide leaf 通过不可变 original-triangle reference array 保留 primitive/material/UV/normal/light identity；device closest/shadow traversal 对 layout、node、child、reference 与 stack 全部 checked，默认 BVH2 reference path 不变。固定 96×96 wavy grid 含 18,432 triangles/4,096 deterministic rays，逐 ray 与 median BVH2 reference hit distance 一致；resident node/reference bytes 为 BVH2 393,184、BVH4 305,136、BVH8 368,948，wide presets 同时降低 node visits 与 triangle tests。独立 crossed-sliver gate 强制产生 spatial split 与 duplicated reference；benchmark 输出 build ms、CUDA trace ms、bytes 与 traversal work，不把当前 scalar-wide timing 虚报为普遍加速。`AccelerationStats` 新增 BLAS build nanoseconds、reference/spatial-split/pre-collapse node counts 与 selected arity；C ABI v3 保留 v2 layout，pyure 消费 v3。实际 high-quality RenderSession/TLAS refit、JSON/CLI/C/C++/pyure selection 与 statistics gates 均覆盖；Release 48/48 CTest、Phase T/V static、documentation、SDK-free package consumer 与 T.6 exact CUDA reference/VRAM gate 通过，最终 T.6 large render 为 12,869.44 ms、VRAM delta 1753 MiB；权威游标进入 V.5。
 
 V.5 closure（2026-07-28）：self-compute mesh BLAS 进入 bounded host batch；automatic 以 2 个并发任务限制无显式预算时的 host memory pressure，显式 scratch budget 则按 conservative per-quality temporary reservation 与 hardware concurrency 做 deterministic batch packing，单 mesh 超预算会在 renderer allocation 前拒绝。advanced builder 记录 canonical binary pre-collapse bytes、final wide node/reference bytes 与 compaction time，device 仅分配 final compact representation；exact BLAS compact bytes 加 conservative TLAS bound 在 acceleration allocation 前同时校验 selected backend budget 与当前 device availability。BLAS/TLAS 通过 runtime-owned CUDA transfer stream 和 two-entry pinned staging queue 异步上传，staging retirement 受同一 scratch budget 约束并在任何 traversal consumer 前同步。`AccelerationStats` 新增 parallel build wall time/concurrency、GPU upload time/bytes、temporary peak、uncompacted/compact bytes 与 compaction time；C ABI v4 保留 v3 hierarchy，pyure 消费 v4。固定 telemetry report 同时记录 18,432-triangle build/trace/compact bytes、2 MiB benchmark VRAM delta、two-mesh async pipeline 与 1-byte fail-loud scratch rejection；Release 48/48 CTest、Phase T/V static、documentation 与 build telemetry gate 通过；权威游标进入 V.6。
+
+V.6 closure（2026-07-28）：Phase T 的 SDK-free acceleration contract 已从单 geometry bounded fixture 扩展为 multi-geometry scene、stable instance-to-geometry binding、build quality、static/refit/rebuild policy、compaction、scratch budget、transform-only topology validation 与 provider-owned build/update/memory statistics。Vulkan RT 为每个 geometry 建 BLAS，复用 peak scratch，查询并复制有效 compact result，再以最终 BLAS address 建可更新 TLAS；DXR 以 post-build compact size、compact AS copy 和 `ALLOW_UPDATE`/`PERFORM_UPDATE` 实现同一生命周期。两者的实际 NVIDIA adapter gate 均执行 two-BLAS compaction、TLAS refit/rebuild、1-byte scratch rejection、input lifetime 与 allocation cleanup。OptiX 移除两份始终 miss 的 installed placeholder，新增只在独立 SDK 可发现时编译的 CUDA-side GAS/IAS build、compaction、refit/rebuild provider；无 SDK configure 验证其他 backend 不受影响，随后以 NVIDIA 官方 `optix-dev` v8.1.0 commit `50021ea...` 实际编译并在 closure GPU 通过 two-GAS/IAS refit/scratch/memory gate。`run_phase_v6_native_provider_gate.ps1` 输出 `ure.phase_v.native_provider.v1`。Compute-only adapter 继续使用显式 fallback，禁止 fallback 的 native request 继续 fail-loud。Release build、48/48 CTest、Phase T/V static 与文档一致性通过；完整 SceneIR framebuffer/AOV/hit metadata parity 不在 V.6 虚报，权威游标进入 V.7。
 
 #### 完成标准
 

@@ -1,6 +1,7 @@
 #include "ure/runtime/acceleration.hpp"
 
 #include <cmath>
+#include <limits>
 #include <unordered_set>
 
 namespace ure::runtime {
@@ -73,7 +74,35 @@ void validate(const TriangleGeometryDesc& desc) {
 }
 
 void validate(const AccelerationSceneDesc& desc) {
-    validate(desc.geometry);
+    if (desc.geometries.empty()) {
+        throw Error(
+            ErrorCode::InvalidArgument,
+            "acceleration scene has no geometries");
+    }
+    if (desc.geometries.size() >
+        std::numeric_limits<std::uint32_t>::max()) {
+        throw Error(
+            ErrorCode::Overflow,
+            "acceleration geometry count exceeds contract limit");
+    }
+    if (desc.build.quality >
+            AccelerationBuildQuality::HighQuality ||
+        desc.build.update_policy >
+            AccelerationUpdatePolicy::Rebuild) {
+        throw Error(
+            ErrorCode::InvalidArgument,
+            "acceleration build policy is invalid");
+    }
+    std::unordered_set<std::uint32_t> geometry_indices;
+    for (const auto& geometry : desc.geometries) {
+        validate(geometry);
+        if (!geometry_indices.insert(
+                geometry.geometry_index).second) {
+            throw Error(
+                ErrorCode::InvalidArgument,
+                "acceleration geometry index is duplicated");
+        }
+    }
     if (desc.instances.empty()) {
         throw Error(
             ErrorCode::InvalidArgument,
@@ -81,6 +110,11 @@ void validate(const AccelerationSceneDesc& desc) {
     }
     std::unordered_set<std::uint32_t> instance_indices;
     for (const auto& instance : desc.instances) {
+        if (instance.geometry_index >= desc.geometries.size()) {
+            throw Error(
+                ErrorCode::InvalidArgument,
+                "acceleration instance geometry index is invalid");
+        }
         if (instance.visibility_mask == 0) {
             throw Error(
                 ErrorCode::InvalidArgument,
@@ -113,6 +147,32 @@ void validate(const AccelerationSceneDesc& desc) {
             throw Error(
                 ErrorCode::InvalidArgument,
                 "acceleration instance transform is singular");
+        }
+    }
+}
+
+void validate(
+    const AccelerationSceneDesc& scene,
+    const AccelerationUpdateDesc& update) {
+    if (update.instances.size() != scene.instances.size()) {
+        throw Error(
+            ErrorCode::InvalidArgument,
+            "acceleration update changes instance count");
+    }
+    AccelerationSceneDesc updated = scene;
+    updated.instances = update.instances;
+    validate(updated);
+    for (std::size_t index = 0;
+         index < update.instances.size();
+         ++index) {
+        const auto& before = scene.instances[index];
+        const auto& after = update.instances[index];
+        if (before.instance_index != after.instance_index ||
+            before.material_index != after.material_index ||
+            before.geometry_index != after.geometry_index) {
+            throw Error(
+                ErrorCode::InvalidArgument,
+                "acceleration update changes instance topology");
         }
     }
 }

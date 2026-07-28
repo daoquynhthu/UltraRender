@@ -67,14 +67,15 @@ try {
     }
     Assert-Contains $ledger "This is a" "V.0 gate lacks its regression-boundary qualification"
     Assert-Contains $ledger "regression boundary" "V.0 gate overstates audited correctness"
-    Assert-Contains "PLAN.md" "当前游标: V\.6" "PLAN cursor did not advance to V.6"
+    Assert-Contains "PLAN.md" "当前游标: V\.7" "PLAN cursor did not advance to V.7"
     Assert-Contains "PLAN.md" "V\.0 closure.*权威游标进入 V\.1" "PLAN lacks the V.0 closure and V.1 gate"
     Assert-Contains "PLAN.md" "V\.1 closure.*权威游标进入 V\.2" "PLAN lacks the V.1 closure and V.2 gate"
     Assert-Contains "PLAN.md" "V\.2 closure.*权威游标进入 V\.3" "PLAN lacks the V.2 closure and V.3 gate"
     Assert-Contains "PLAN.md" "V\.3 closure.*权威游标进入 V\.4" "PLAN lacks the V.3 closure and V.4 gate"
     Assert-Contains "PLAN.md" "V\.4 closure.*权威游标进入 V\.5" "PLAN lacks the V.4 closure and V.5 gate"
     Assert-Contains "PLAN.md" "V\.5 closure.*权威游标进入 V\.6" "PLAN lacks the V.5 closure and V.6 gate"
-    Assert-Contains "README.md" "OptiX production provider.*尚未完成" "README misstates OptiX production status"
+    Assert-Contains "PLAN.md" "V\.6 closure.*权威游标进入 V\.7" "PLAN lacks the V.6 closure and V.7 gate"
+    Assert-Contains "README.md" "OptiX SDK.*可选" "README misstates OptiX optionality"
     Assert-Contains "STATUS.md" "full SceneIR renderer remains unavailable" "STATUS misstates the portable acceleration boundary"
     Assert-Contains "libs/ure_types/include/ure/render_config.hpp" "struct AccelerationConfig" "V.1 C++ acceleration config is missing"
     Assert-Contains "libs/ure_types/include/ure/render_config.hpp" "AccelerationProviderKind::Automatic" "V.1 default provider changed"
@@ -104,6 +105,17 @@ try {
     Assert-Contains "libs/ure_core/include/ure/ure_c_api.h" "ure_acceleration_stats_v4_t" "V.5 versioned C statistics are missing"
     Assert-Contains "pyure/__init__.py" "_AccelerationStatsV4" "V.5 versioned pyure statistics are missing"
     Assert-Contains "tools/benchmarks/run_phase_v_build_telemetry.ps1" "benchmark_vram_bytes" "V.5 build telemetry report is missing"
+    Assert-Contains "libs/ure_runtime/include/ure/runtime/acceleration.hpp" "struct AccelerationBuildConfig" "V.6 native build policy is missing"
+    Assert-Contains "libs/ure_runtime/include/ure/runtime/acceleration.hpp" "update_acceleration_scene" "V.6 native update contract is missing"
+    Assert-Contains "libs/ure_runtime/include/ure/runtime/acceleration.hpp" "struct AccelerationBuildStats" "V.6 native build statistics are missing"
+    Assert-Contains "libs/ure_vulkan/src/vulkan_runtime_device.cpp" "VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR" "V.6 Vulkan compaction is missing"
+    Assert-Contains "libs/ure_vulkan/src/vulkan_runtime_device.cpp" "VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR" "V.6 Vulkan refit is missing"
+    Assert-Contains "libs/ure_d3d12/src/d3d12_runtime_device.cpp" "COPY_MODE_COMPACT" "V.6 DXR compaction is missing"
+    Assert-Contains "libs/ure_d3d12/src/d3d12_runtime_device.cpp" "BUILD_FLAG_PERFORM_UPDATE" "V.6 DXR refit is missing"
+    Assert-Contains "libs/ure_core/src/optix_acceleration_provider.cpp" "optixAccelCompact" "V.6 OptiX compaction source is missing"
+    Assert-Contains "libs/ure_core/src/optix_acceleration_provider.cpp" "OPTIX_BUILD_OPERATION_UPDATE" "V.6 OptiX refit source is missing"
+    Assert-Contains "libs/ure_core/CMakeLists.txt" "OptiX SDK not found; OptiX provider disabled" "V.6 OptiX SDK isolation is missing"
+    Assert-Contains "scripts/run_phase_v6_native_provider_gate.ps1" "ure\.phase_v\.native_provider\.v1" "V.6 native provider report gate is missing"
 
     Assert-Contains "libs/ure_core/src/bvh_builder.cpp" "count <= 4" "CUDA BVH leaf-size audit signature changed"
     Assert-Contains "libs/ure_core/src/bvh_builder.cpp" "std::nth_element" "CUDA BVH split fallback audit signature changed"
@@ -137,11 +149,9 @@ try {
     )
     $expectedConsumers = @(
         "libs/ure_core/include/ure/bvh_accelerator.hpp",
-        "libs/ure_core/include/ure/gpu_accelerator.hpp",
         "libs/ure_core/src/bvh_accelerator.cpp",
         "libs/ure_types/include/ure/accelerators/bvh_accelerator.hpp",
-        "libs/ure_types/include/ure/accelerators/cpu_accelerator.hpp",
-        "libs/ure_types/include/ure/accelerators/gpu_accelerator.hpp"
+        "libs/ure_types/include/ure/accelerators/cpu_accelerator.hpp"
     ) | Sort-Object
     if (($actualConsumers -join "`n") -ne
         ($expectedConsumers -join "`n")) {
@@ -155,10 +165,17 @@ try {
     Assert-Hash "libs/ure_core/src/bvh_accelerator.cpp" "df466a88134cdc8295017732c33643de3bcf40d21331324f5cc62913ab0b2ca4" "legacy host BVH implementation"
     Assert-Hash "libs/ure_core/include/ure/bvh_accelerator.hpp" "f147dae958cd96597ec459a1d06dbc6fb3337bd6305d51e4afb46afa8c92f8de" "legacy core BVH header"
     Assert-Hash "libs/ure_types/include/ure/accelerators/bvh_accelerator.hpp" "f147dae958cd96597ec459a1d06dbc6fb3337bd6305d51e4afb46afa8c92f8de" "legacy types BVH header"
-    Assert-Hash "libs/ure_core/include/ure/gpu_accelerator.hpp" "cf793494c24a22a3b781377b6ea382cf9cb94ad5fcc4314d8a70a372ecf5cab4" "legacy core OptiX placeholder"
-    Assert-Hash "libs/ure_types/include/ure/accelerators/gpu_accelerator.hpp" "cf793494c24a22a3b781377b6ea382cf9cb94ad5fcc4314d8a70a372ecf5cab4" "legacy types OptiX placeholder"
     Assert-Hash "libs/ure_types/include/ure/accelerators/cpu_accelerator.hpp" "dead9f2e533a4c87893e4e9f7b19dddc71da44517deeeb1386c6a79e9b899034" "legacy CPU accelerator placeholders"
-    Assert-NoMatch @("libs", "apps") '#include[[:space:]]*[<"]optix' "OptiX SDK entered the tree before V.6"
+    $optixIncludes = @(
+        & rg -l '#include[[:space:]]*[<"]optix' libs apps |
+            ForEach-Object { $_ -replace "\\", "/" } |
+            Sort-Object
+    )
+    if (($optixIncludes -join "`n") -ne
+        "libs/ure_core/src/optix_acceleration_provider.cpp") {
+        $optixIncludes | Write-Host
+        throw "OptiX SDK includes escaped the optional provider implementation"
+    }
 
     Write-Host "Phase V static audit passed"
 } finally {

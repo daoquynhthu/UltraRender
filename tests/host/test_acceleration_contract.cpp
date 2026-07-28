@@ -24,8 +24,8 @@ bool throws_code(Function&& function, rt::ErrorCode code) {
 
 rt::AccelerationSceneDesc valid_scene(
     std::span<const rt::AccelerationInstanceDesc> instances) {
-    return {
-        {
+    static const std::array geometries{
+        rt::TriangleGeometryDesc{
             rt::BufferHandle{1},
             0,
             16,
@@ -34,8 +34,11 @@ rt::AccelerationSceneDesc valid_scene(
             0,
             3,
             rt::IndexFormat::Uint32,
-            7},
+            7}};
+    return {
+        geometries,
         instances,
+        {},
         "contract"};
 }
 
@@ -92,14 +95,19 @@ int main() {
         rt::validate(scene);
 
         auto invalid_geometry = scene;
-        invalid_geometry.geometry.index_count = 4;
+        auto invalid_geometries =
+            std::array{scene.geometries.front()};
+        invalid_geometries[0].index_count = 4;
+        invalid_geometry.geometries = invalid_geometries;
         require(
             throws_code(
                 [&] { rt::validate(invalid_geometry); },
                 rt::ErrorCode::InvalidArgument),
             "non-triangle index count was accepted");
         invalid_geometry = scene;
-        invalid_geometry.geometry.index_offset = 2;
+        invalid_geometries[0] = scene.geometries.front();
+        invalid_geometries[0].index_offset = 2;
+        invalid_geometry.geometries = invalid_geometries;
         require(
             throws_code(
                 [&] { rt::validate(invalid_geometry); },
@@ -123,6 +131,42 @@ int main() {
                 [&] { rt::validate(valid_scene(instances)); },
                 rt::ErrorCode::InvalidArgument),
             "singular instance transform was accepted");
+
+        instances[0] = {};
+        instances[0].instance_index = 3;
+        instances[0].material_index = 11;
+        auto update_scene = valid_scene(instances);
+        auto updated_instances = instances;
+        updated_instances[0].object_to_world[3] = 2.0f;
+        rt::validate(
+            update_scene,
+            rt::AccelerationUpdateDesc{updated_instances});
+        updated_instances[0].material_index = 12;
+        require(
+            throws_code(
+                [&] {
+                    rt::validate(
+                        update_scene,
+                        rt::AccelerationUpdateDesc{
+                            updated_instances});
+                },
+                rt::ErrorCode::InvalidArgument),
+            "acceleration update topology change was accepted");
+
+        const std::array duplicate_geometries{
+            scene.geometries.front(),
+            scene.geometries.front()};
+        auto duplicate_geometry_scene = scene;
+        duplicate_geometry_scene.geometries =
+            duplicate_geometries;
+        require(
+            throws_code(
+                [&] {
+                    rt::validate(
+                        duplicate_geometry_scene);
+                },
+                rt::ErrorCode::InvalidArgument),
+            "duplicate acceleration geometry index was accepted");
 
         rt::DispatchGraph graph{{
             {

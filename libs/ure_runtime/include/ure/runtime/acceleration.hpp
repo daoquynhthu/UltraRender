@@ -12,7 +12,9 @@ namespace ure::runtime {
 enum class AccelerationFeature : std::uint32_t {
     ComputeBvh = 1u << 0,
     RayQuery = 1u << 1,
-    RayTracingPipeline = 1u << 2
+    RayTracingPipeline = 1u << 2,
+    Compaction = 1u << 3,
+    Refit = 1u << 4
 };
 
 using AccelerationFeatureSet = std::uint32_t;
@@ -43,6 +45,7 @@ struct AccelerationCapabilities {
     AccelerationFeatureSet features = 0;
     std::uint32_t max_triangle_geometries = 0;
     std::uint32_t max_instances = 0;
+    std::uint64_t scratch_alignment = 1;
 };
 
 struct AccelerationRequest {
@@ -79,13 +82,52 @@ struct AccelerationInstanceDesc {
         0.0f, 0.0f, 1.0f, 0.0f};
     std::uint32_t instance_index = 0;
     std::uint32_t material_index = 0;
+    std::uint32_t geometry_index = 0;
     std::uint8_t visibility_mask = 0xff;
 };
 
+enum class AccelerationBuildQuality : std::uint8_t {
+    FastBuild,
+    Balanced,
+    HighQuality
+};
+
+enum class AccelerationUpdatePolicy : std::uint8_t {
+    Static,
+    Refit,
+    Rebuild
+};
+
+struct AccelerationBuildConfig {
+    AccelerationBuildQuality quality =
+        AccelerationBuildQuality::Balanced;
+    AccelerationUpdatePolicy update_policy =
+        AccelerationUpdatePolicy::Static;
+    bool compact = true;
+    std::uint64_t scratch_budget_bytes = 0;
+};
+
 struct AccelerationSceneDesc {
-    TriangleGeometryDesc geometry;
+    std::span<const TriangleGeometryDesc> geometries;
     std::span<const AccelerationInstanceDesc> instances;
+    AccelerationBuildConfig build;
     std::string label;
+};
+
+struct AccelerationUpdateDesc {
+    std::span<const AccelerationInstanceDesc> instances;
+};
+
+struct AccelerationBuildStats {
+    std::uint32_t geometry_count = 0;
+    std::uint32_t instance_count = 0;
+    std::uint64_t build_nanoseconds = 0;
+    std::uint64_t update_nanoseconds = 0;
+    std::uint64_t rebuild_count = 0;
+    std::uint64_t refit_count = 0;
+    std::uint64_t scratch_peak_bytes = 0;
+    std::uint64_t uncompacted_bytes = 0;
+    std::uint64_t compacted_bytes = 0;
 };
 
 struct alignas(16) AccelerationRay {
@@ -112,6 +154,9 @@ AccelerationSelection select_acceleration(
     const AccelerationRequest& request);
 void validate(const TriangleGeometryDesc& desc);
 void validate(const AccelerationSceneDesc& desc);
+void validate(
+    const AccelerationSceneDesc& scene,
+    const AccelerationUpdateDesc& update);
 
 class AccelerationProvider {
 public:
@@ -121,6 +166,11 @@ public:
     acceleration_capabilities() const noexcept = 0;
     virtual AccelerationSceneHandle create_acceleration_scene(
         const AccelerationSceneDesc& desc) = 0;
+    virtual void update_acceleration_scene(
+        AccelerationSceneHandle scene,
+        const AccelerationUpdateDesc& desc) = 0;
+    virtual AccelerationBuildStats acceleration_build_stats(
+        AccelerationSceneHandle scene) const = 0;
     virtual void destroy(AccelerationSceneHandle scene) = 0;
 };
 
