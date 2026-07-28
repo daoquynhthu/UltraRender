@@ -81,6 +81,20 @@ struct AccelerationConfig {
     std::uint64_t scratch_budget_bytes = 0;
 };
 
+struct AccelerationStats {
+    std::uint64_t mesh_count = 0;
+    std::uint64_t triangle_count = 0;
+    std::uint64_t node_count = 0;
+    std::uint64_t leaf_count = 0;
+    std::uint32_t max_depth = 0;
+    std::uint64_t closest_node_visits = 0;
+    std::uint64_t closest_triangle_tests = 0;
+    std::uint64_t shadow_node_visits = 0;
+    std::uint64_t shadow_triangle_tests = 0;
+    std::uint64_t stack_overflow_count = 0;
+    std::uint64_t invalid_acceleration_count = 0;
+};
+
 struct WaveOpticsConfig {
     WaveOpticsMode mode = WaveOpticsMode::Radiometric;
     bool camera_diffraction_enabled = false;

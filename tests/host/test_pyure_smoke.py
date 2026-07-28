@@ -43,8 +43,12 @@ def main() -> int:
         backend=pyure.BackendKind.CUDA,
         acceleration_provider=pyure.AccelerationProvider.SELF_COMPUTE,
         acceleration_update_policy=pyure.AccelerationUpdatePolicy.STATIC,
+        acceleration_collect_stats=True,
     ) as session:
         assert session.progress().state == pyure.SessionState.EMPTY
+        acceleration_stats = session.acceleration_stats()
+        assert acceleration_stats.node_count == 0
+        assert acceleration_stats.stack_overflow_count == 0
     try:
         pyure.create_session(acceleration_quality="high_quality")
     except RuntimeError:

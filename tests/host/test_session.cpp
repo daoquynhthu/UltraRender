@@ -125,6 +125,10 @@ public:
         return backend_selection;
     }
 
+    ure::AccelerationStats get_acceleration_stats() const override {
+        return acceleration_stats;
+    }
+
     bool loaded = false;
     int spp = 0;
     int scene_ir_loads = 0;
@@ -138,6 +142,7 @@ public:
     int width = 1;
     int height = 1;
     ure::scene_ir::SceneIR last_scene;
+    ure::AccelerationStats acceleration_stats;
     std::vector<ure::scene_ir::MaterialNode> last_materials;
     std::vector<float> framebuffer = {0.1f, 0.2f, 0.3f};
     std::vector<float> normal_aov = {0.0f, 1.0f, 0.0f};
@@ -728,6 +733,7 @@ static int test_scene_diff_topology_real_gpu_reload_smoke() {
     ure::RenderConfig config;
     config.num_wavelengths = 8;
     config.max_trace_depth = 2;
+    config.acceleration.collect_stats = true;
     ure::RenderSession session = ure::RenderSession::create(config);
     ure::scene_ir::SceneIR scene_ir = make_scene_ir_with_instance();
     scene_ir.width = 4;
@@ -737,8 +743,18 @@ static int test_scene_diff_topology_real_gpu_reload_smoke() {
     scene_ir.camera.fov = 45.0f;
 
     session.load_scene(scene_ir);
+    const auto build_stats = session.get_acceleration_stats();
+    CHECK(build_stats.mesh_count == 1);
+    CHECK(build_stats.triangle_count > 0);
+    CHECK(build_stats.node_count > 0);
+    CHECK(build_stats.leaf_count > 0);
+    CHECK(build_stats.max_depth > 0);
     session.start_render();
     CHECK(session.render_pass() >= 1);
+    const auto traversal_stats =
+        session.get_acceleration_stats();
+    CHECK(traversal_stats.stack_overflow_count == 0);
+    CHECK(traversal_stats.invalid_acceleration_count == 0);
 
     session.mutate_scene(ure::SceneDiff::add_scene_ir_instance(make_scene_ir_instance(scene_ir.meshes[0], scene_ir.materials[0], 1.5f)));
     CHECK(session.state() == ure::RenderSessionState::Ready);
@@ -950,6 +966,12 @@ static int test_c_session_lifecycle() {
             &backend_config,
             &acceleration_config);
     CHECK(execution_session != nullptr);
+    ure_acceleration_stats_t c_acceleration_stats{};
+    CHECK(
+        ure_session_get_acceleration_stats(
+            execution_session,
+            &c_acceleration_stats) == 0);
+    CHECK(c_acceleration_stats.node_count == 0);
     ure_session_destroy(execution_session);
     acceleration_config.quality =
         URE_ACCELERATION_QUALITY_HIGH;
@@ -1012,10 +1034,16 @@ static int test_restir_estimator_metadata_contract() {
 
     auto engine = std::make_unique<FakeRenderEngine>();
     engine->estimator_metadata = production_metadata;
+    engine->acceleration_stats.node_count = 17;
+    engine->acceleration_stats.max_depth = 4;
     ure::RenderSession session(std::move(engine), production);
     const auto session_metadata = session.get_estimator_metadata();
     CHECK(ure::compatible_integrator_estimator_metadata(
         session_metadata, production_metadata));
+    const auto acceleration_stats =
+        session.get_acceleration_stats();
+    CHECK(acceleration_stats.node_count == 17);
+    CHECK(acceleration_stats.max_depth == 4);
     return 0;
 }
 

@@ -215,6 +215,8 @@ struct GpuContext {
     int instance_count = 0;
     int texture_count = 0;
     int light_count = 0;
+    GpuAccelerationTelemetry* d_acceleration_telemetry = nullptr;
+    ure::AccelerationStats acceleration_stats = {};
 
     GpuCamera camera;
     GpuCamera previous_camera;

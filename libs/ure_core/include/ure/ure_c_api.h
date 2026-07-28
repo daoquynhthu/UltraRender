@@ -105,6 +105,20 @@ typedef struct ure_acceleration_config_t {
     uint64_t scratch_budget_bytes;
 } ure_acceleration_config_t;
 
+typedef struct ure_acceleration_stats_t {
+    uint64_t mesh_count;
+    uint64_t triangle_count;
+    uint64_t node_count;
+    uint64_t leaf_count;
+    uint32_t max_depth;
+    uint64_t closest_node_visits;
+    uint64_t closest_triangle_tests;
+    uint64_t shadow_node_visits;
+    uint64_t shadow_triangle_tests;
+    uint64_t stack_overflow_count;
+    uint64_t invalid_acceleration_count;
+} ure_acceleration_stats_t;
+
 typedef struct ure_backend_adapter_info_t {
     int kind;
     char adapter_id[64];
@@ -301,6 +315,9 @@ int ure_aov_channel_count(ure_aov_type_t type);
 /* Save current framebuffer to BMP/HDR file. Returns 0 on success. */
 int ure_engine_save_bmp(const ure_engine_t* engine, const char* path);
 int ure_engine_save_hdr(const ure_engine_t* engine, const char* path);
+int ure_engine_get_acceleration_stats(
+    const ure_engine_t* engine,
+    ure_acceleration_stats_t* out_stats);
 int ure_backend_adapter_count(int kind);
 int ure_backend_get_adapter_info(int kind,
                                  int index,
@@ -360,6 +377,9 @@ int ure_session_update_material_texture(ure_session_t* session,
 ure_session_progress_t ure_session_get_progress(const ure_session_t* session);
 ure_integrator_estimator_metadata_t ure_session_get_estimator_metadata(
     const ure_session_t* session);
+int ure_session_get_acceleration_stats(
+    const ure_session_t* session,
+    ure_acceleration_stats_t* out_stats);
 void ure_session_get_framebuffer_size(const ure_session_t* session,
                                       int* out_width,
                                       int* out_height);

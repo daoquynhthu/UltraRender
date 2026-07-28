@@ -304,6 +304,11 @@ public:
         return backend_selection_;
     }
 
+    AccelerationStats get_acceleration_stats() const override {
+        if (!gpu_context_) return {};
+        return ure::gpu::get_acceleration_stats(gpu_context_);
+    }
+
 private:
     void validate_wave_optics_support() const {
         if (wave_optics_is_radiometric_only(config_.wave_optics)) return;

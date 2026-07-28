@@ -53,13 +53,15 @@ backend selection. Its provider vocabulary is `auto`, `self_compute`, `optix`,
 Clustered geometry, statistics collection and scratch-memory budgeting are
 explicit requests.
 
-At the V.1 boundary, default selection resolves to CUDA `self_compute`.
+Default selection resolves to CUDA `self_compute`.
 Explicit `self_compute` with automatic quality and auto/static update is also
-accepted. Quality presets, refit/rebuild, clustered geometry, statistics,
-scratch budgets and native RT providers remain later Phase V work and fail
-before rendering. Existing backend-only C entry points retain their original
-layout and behavior; the execution-config entry points add acceleration without
-requiring callers to pass a larger legacy structure.
+accepted. V.2 makes statistics executable for that provider and exposes
+`AccelerationStats` through C++, C ABI and pyure. Quality presets,
+refit/rebuild, clustered geometry, scratch budgets and native RT providers
+remain later Phase V work and fail before rendering. Existing backend-only C
+entry points retain their original layout and behavior; the execution-config
+entry points add acceleration without requiring callers to pass a larger legacy
+structure.
 
 ## Threading and ownership
 

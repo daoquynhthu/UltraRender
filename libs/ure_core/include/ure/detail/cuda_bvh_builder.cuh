@@ -1,13 +1,21 @@
 #pragma once
-#include "ure/detail/cuda_structs.cuh"
+#include <cstdint>
 #include <vector>
+
+#include "ure/detail/cuda_structs.cuh"
 
 namespace ure::gpu {
 
+struct BvhBuildStats {
+    std::uint64_t triangle_count = 0;
+    std::uint64_t node_count = 0;
+    std::uint64_t leaf_count = 0;
+    std::uint32_t max_depth = 0;
+};
+
 class MeshBvhBuilder {
 public:
-    // Builds BVH for a mesh. Returns nodes and reorders indices to match leaf nodes.
-    static void build(
+    static BvhBuildStats build(
         const std::vector<float>& vertices,
         std::vector<int>& indices,
         std::vector<GpuBvhNode>& nodes

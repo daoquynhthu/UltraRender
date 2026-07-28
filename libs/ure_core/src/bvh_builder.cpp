@@ -1,8 +1,9 @@
 #include "ure/detail/cuda_bvh_builder.cuh"
 #include <algorithm>
-#include <numeric>
 #include <memory>
 #include <cmath>
+#include <limits>
+#include <stdexcept>
 
 namespace ure::gpu {
 
@@ -13,17 +14,15 @@ struct BvhBuildNode {
     std::unique_ptr<BvhBuildNode> right;
     int first_prim_offset;
     int prim_count;
-    int axis; // Split axis
 };
 
 struct PrimitiveInfo {
-    int index_offset; // Index into the indices array (multiple of 3)
+    int source_index_offset;
     GpuVec3 centroid;
     GpuVec3 min_pt;
     GpuVec3 max_pt;
 };
 
-// Helper to compute bounds of a triangle
 void get_triangle_bounds(
     const std::vector<float>& vertices,
     const std::vector<int>& indices,
@@ -56,12 +55,19 @@ std::unique_ptr<BvhBuildNode> recursive_build(
     int start,
     int end,
     int& total_nodes,
-    std::vector<PrimitiveInfo>& ordered_prims
+    std::vector<PrimitiveInfo>& ordered_prims,
+    std::uint32_t depth,
+    BvhBuildStats& stats
 ) {
+    if (depth > static_cast<std::uint32_t>(
+            kBvhTraversalStackCapacity)) {
+        throw std::runtime_error(
+            "self-compute BVH exceeds traversal stack capacity");
+    }
     auto node = std::make_unique<BvhBuildNode>();
     total_nodes++;
+    stats.max_depth = std::max(stats.max_depth, depth);
 
-    // Compute bounds of all primitives in this node
     GpuVec3 min_pt(1e30f, 1e30f, 1e30f);
     GpuVec3 max_pt(-1e30f, -1e30f, -1e30f);
     
@@ -90,15 +96,16 @@ std::unique_ptr<BvhBuildNode> recursive_build(
 
     int count = end - start;
     if (count <= 4) {
-        node->first_prim_offset = (int)ordered_prims.size(); // This is the *triangle index*, not vertex index
+        node->first_prim_offset =
+            static_cast<int>(ordered_prims.size());
         node->prim_count = count;
+        ++stats.leaf_count;
         for (int i = start; i < end; ++i) {
             ordered_prims.push_back(primitive_info[i]);
         }
         return node;
     }
 
-    // Split
     int axis = 0;
     float extent_x = centroid_max.x - centroid_min.x;
     float extent_y = centroid_max.y - centroid_min.y;
@@ -111,9 +118,7 @@ std::unique_ptr<BvhBuildNode> recursive_build(
                 (axis == 1) ? (centroid_min.y + centroid_max.y) * 0.5f :
                               (centroid_min.z + centroid_max.z) * 0.5f;
                               
-    // Partition
     int mid_ptr = start;
-    // Use std::partition logic manually to avoid lambda capture issues or just simplicity
     int i = start;
     int j = end - 1;
     while(i <= j) {
@@ -129,7 +134,6 @@ std::unique_ptr<BvhBuildNode> recursive_build(
     }
     mid_ptr = i;
     
-    // Fallback if split failed (all on one side)
     if (mid_ptr == start || mid_ptr == end) {
         mid_ptr = start + count / 2;
         std::nth_element(primitive_info.begin() + start, primitive_info.begin() + mid_ptr, primitive_info.begin() + end,
@@ -140,8 +144,12 @@ std::unique_ptr<BvhBuildNode> recursive_build(
             });
     }
 
-    node->left = recursive_build(primitive_info, start, mid_ptr, total_nodes, ordered_prims);
-    node->right = recursive_build(primitive_info, mid_ptr, end, total_nodes, ordered_prims);
+    node->left = recursive_build(
+        primitive_info, start, mid_ptr, total_nodes, ordered_prims,
+        depth + 1, stats);
+    node->right = recursive_build(
+        primitive_info, mid_ptr, end, total_nodes, ordered_prims,
+        depth + 1, stats);
     node->prim_count = 0;
     
     return node;
@@ -158,27 +166,52 @@ int flatten_bvh(const std::unique_ptr<BvhBuildNode>& node, std::vector<GpuBvhNod
         linear_node.child_or_primitive_index = node->first_prim_offset;
     } else {
         flatten_bvh(node->left, linear_nodes, offset);
-        // Right child index is returned by the call
         int right_child_index = flatten_bvh(node->right, linear_nodes, offset);
-        
-        // Update current node with right child index
-        // Re-fetch reference in case of vector resize (though we pre-allocated)
         linear_nodes[my_offset].child_or_primitive_index = right_child_index;
     }
     return my_offset;
 }
 
-void MeshBvhBuilder::build(
+BvhBuildStats MeshBvhBuilder::build(
     const std::vector<float>& vertices,
     std::vector<int>& indices,
     std::vector<GpuBvhNode>& nodes
 ) {
-    int triangle_count = (int)indices.size() / 3;
-    if (triangle_count == 0) return;
+    if (vertices.size() % 3 != 0 || indices.size() % 3 != 0) {
+        throw std::invalid_argument(
+            "self-compute BVH requires packed xyz vertices and triangle indices");
+    }
+    const std::size_t vertex_count = vertices.size() / 3;
+    for (float value : vertices) {
+        if (!std::isfinite(value)) {
+            throw std::invalid_argument(
+                "self-compute BVH vertices must be finite");
+        }
+    }
+    for (int index : indices) {
+        if (index < 0 ||
+            static_cast<std::size_t>(index) >= vertex_count) {
+            throw std::invalid_argument(
+                "self-compute BVH index is out of range");
+        }
+    }
+    BvhBuildStats stats;
+    if (indices.size() / 3 >
+        static_cast<std::size_t>(
+            std::numeric_limits<int>::max())) {
+        throw std::overflow_error(
+            "self-compute BVH triangle count exceeds device indexing");
+    }
+    const int triangle_count =
+        static_cast<int>(indices.size() / 3);
+    stats.triangle_count =
+        static_cast<std::uint64_t>(triangle_count);
+    nodes.clear();
+    if (triangle_count == 0) return stats;
 
     std::vector<PrimitiveInfo> prim_info(triangle_count);
     for (int i = 0; i < triangle_count; ++i) {
-        prim_info[i].index_offset = i * 3;
+        prim_info[i].source_index_offset = i * 3;
         get_triangle_bounds(vertices, indices, i * 3, prim_info[i].min_pt, prim_info[i].max_pt, prim_info[i].centroid);
     }
 
@@ -186,21 +219,24 @@ void MeshBvhBuilder::build(
     std::vector<PrimitiveInfo> ordered_prims;
     ordered_prims.reserve(triangle_count);
     
-    auto root = recursive_build(prim_info, 0, triangle_count, total_nodes, ordered_prims);
+    auto root = recursive_build(
+        prim_info, 0, triangle_count, total_nodes, ordered_prims,
+        1, stats);
 
     nodes.resize(total_nodes);
+    stats.node_count = static_cast<std::uint64_t>(total_nodes);
     int offset = 0;
     flatten_bvh(root, nodes, offset);
 
-    // Reorder indices
     std::vector<int> new_indices(indices.size());
     for (size_t i = 0; i < ordered_prims.size(); ++i) {
-        int old_offset = ordered_prims[i].index_offset;
+        int old_offset = ordered_prims[i].source_index_offset;
         new_indices[i * 3 + 0] = indices[old_offset + 0];
         new_indices[i * 3 + 1] = indices[old_offset + 1];
         new_indices[i * 3 + 2] = indices[old_offset + 2];
     }
     indices = std::move(new_indices);
+    return stats;
 }
 
 }

@@ -131,6 +131,7 @@ $ConsumerBuild = Join-Path $RepoRoot ".build\phase_t6_package_consumer"
     -G "Visual Studio 17 2022" -A x64 `
     -DUR_ENABLE_CUDA=OFF `
     -DUR_ENABLE_VULKAN=OFF `
+    -DUR_ENABLE_D3D12=OFF `
     -DUR_BUILD_TESTS=OFF `
     -DUR_BUILD_CLI=OFF `
     -DUR_BUILD_PHYSICS=OFF

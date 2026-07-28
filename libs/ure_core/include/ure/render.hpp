@@ -105,6 +105,7 @@ public:
 
     virtual IntegratorEstimatorMetadata get_estimator_metadata() const = 0;
     virtual const BackendSelection& get_backend_selection() const = 0;
+    virtual AccelerationStats get_acceleration_stats() const = 0;
 
     // Backward compatibility alias
     const std::vector<float>& get_frame_buffer() const { return get_framebuffer(); }

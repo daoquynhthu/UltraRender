@@ -317,6 +317,28 @@ bool apply_acceleration_config(
     return true;
 }
 
+void write_acceleration_stats(
+    const AccelerationStats& source,
+    ure_acceleration_stats_t& destination) {
+    destination.mesh_count = source.mesh_count;
+    destination.triangle_count = source.triangle_count;
+    destination.node_count = source.node_count;
+    destination.leaf_count = source.leaf_count;
+    destination.max_depth = source.max_depth;
+    destination.closest_node_visits =
+        source.closest_node_visits;
+    destination.closest_triangle_tests =
+        source.closest_triangle_tests;
+    destination.shadow_node_visits =
+        source.shadow_node_visits;
+    destination.shadow_triangle_tests =
+        source.shadow_triangle_tests;
+    destination.stack_overflow_count =
+        source.stack_overflow_count;
+    destination.invalid_acceleration_count =
+        source.invalid_acceleration_count;
+}
+
 template <std::size_t N>
 void copy_c_string(char (&destination)[N], const std::string& source) {
     const auto count = std::min(source.size(), N - 1);
@@ -626,6 +648,21 @@ int ure_engine_save_hdr(const ure_engine_t* engine, const char* path) {
         renderer->get_framebuffer_size(width, height);
         return renderer->get_framebuffer();
     }, path, true);
+}
+
+int ure_engine_get_acceleration_stats(
+    const ure_engine_t* engine,
+    ure_acceleration_stats_t* out_stats) {
+    if (!engine || !out_stats) return -1;
+    try {
+        write_acceleration_stats(
+            reinterpret_cast<const IRenderEngine*>(engine)
+                ->get_acceleration_stats(),
+            *out_stats);
+        return 0;
+    } catch (...) {
+        return -1;
+    }
 }
 
 int ure_backend_adapter_count(int kind) {
@@ -959,6 +996,21 @@ ure_integrator_estimator_metadata_t ure_session_get_estimator_metadata(
     } catch (...) {
     }
     return out;
+}
+
+int ure_session_get_acceleration_stats(
+    const ure_session_t* session,
+    ure_acceleration_stats_t* out_stats) {
+    if (!session || !out_stats) return -1;
+    try {
+        write_acceleration_stats(
+            reinterpret_cast<const RenderSession*>(session)
+                ->get_acceleration_stats(),
+            *out_stats);
+        return 0;
+    } catch (...) {
+        return -1;
+    }
 }
 
 void ure_session_get_framebuffer_size(const ure_session_t* session,

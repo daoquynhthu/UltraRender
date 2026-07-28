@@ -494,6 +494,8 @@ struct GpuSphere {
     int material_index;
 };
 
+inline constexpr int kBvhTraversalStackCapacity = 64;
+
 // Compact BVH Node for GPU (32 bytes)
 struct GpuBvhNode {
     GpuVec3 min_pt;
@@ -524,6 +526,15 @@ struct GpuMesh {
     int bvh_node_count;
 };
 
+struct GpuAccelerationTelemetry {
+    unsigned long long closest_node_visits;
+    unsigned long long closest_triangle_tests;
+    unsigned long long shadow_node_visits;
+    unsigned long long shadow_triangle_tests;
+    unsigned long long stack_overflow_count;
+    unsigned long long invalid_acceleration_count;
+};
+
 // Phase P.1: Independent desc and transform files (referenced from GpuScene below)
 #include "ure/detail/cuda_instance_desc.cuh"
 #include "ure/detail/cuda_instance_transform.cuh"
@@ -552,6 +563,8 @@ struct GpuScene {
     GpuInstanceTransform* instance_transforms; // Phase P.1: dynamic transforms (updated per frame)
     GpuInstanceTransform* previous_instance_transforms;
     int instance_count;
+    GpuAccelerationTelemetry* acceleration_telemetry;
+    int acceleration_collect_stats;
 
     GpuMaterial* materials;
     int material_count;

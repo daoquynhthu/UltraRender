@@ -37,8 +37,13 @@ static __device__ bool hit_triangle(const GpuRay& r, const GpuVec3& v0, const Gp
     GpuVec3 v0v2 = v2 - v0;
     GpuVec3 pvec = r.direction.cross(v0v2);
     float det = v0v1.dot(pvec);
-
-    if (fabsf(det) < 1e-8f) return false;
+    float determinant_scale = sqrtf(fmaxf(
+        0.0f, v0v1.dot(v0v1) * pvec.dot(pvec)));
+    if (!isfinite(det) || determinant_scale == 0.0f ||
+        fabsf(det) <
+            1e-8f * fminf(determinant_scale, 1.0f)) {
+        return false;
+    }
 
     float invDet = 1.0f / det;
     GpuVec3 tvec = r.origin - v0;
@@ -53,15 +58,28 @@ static __device__ bool hit_triangle(const GpuRay& r, const GpuVec3& v0, const Gp
 
     float temp_t = v0v2.dot(qvec) * invDet;
 
-    if (temp_t < t_max && temp_t > t_min) {
+    if (isfinite(temp_t) && temp_t < t_max && temp_t > t_min) {
         t = temp_t;
-        ng = v0v1.cross(v0v2).normalize();
+        GpuVec3 geometric = v0v1.cross(v0v2);
+        float geometric_length_squared = geometric.dot(geometric);
+        if (!(geometric_length_squared > 0.0f) ||
+            !isfinite(geometric_length_squared)) {
+            return false;
+        }
+        ng = geometric.normalize();
 
         if (n0 && n1 && n2) {
-             float w = 1.0f - u - v;
-             ns = (*n0 * w + *n1 * u + *n2 * v).normalize();
+            float w = 1.0f - u - v;
+            GpuVec3 interpolated =
+                *n0 * w + *n1 * u + *n2 * v;
+            float length_squared =
+                interpolated.dot(interpolated);
+            ns = length_squared > 0.0f &&
+                    isfinite(length_squared)
+                ? interpolated.normalize()
+                : ng;
         } else {
-             ns = ng;
+            ns = ng;
         }
 
         u_out = u;
@@ -71,28 +89,121 @@ static __device__ bool hit_triangle(const GpuRay& r, const GpuVec3& v0, const Gp
     return false;
 }
 
-static __device__ bool hit_aabb(const GpuRay& r, const GpuVec3& min_pt, const GpuVec3& max_pt, float t_min, float t_max) {
-    float3 invD = make_float3(1.0f / r.direction.x, 1.0f / r.direction.y, 1.0f / r.direction.z);
-    float3 t0 = make_float3((min_pt.x - r.origin.x) * invD.x, (min_pt.y - r.origin.y) * invD.y, (min_pt.z - r.origin.z) * invD.z);
-    float3 t1 = make_float3((max_pt.x - r.origin.x) * invD.x, (max_pt.y - r.origin.y) * invD.y, (max_pt.z - r.origin.z) * invD.z);
-    float3 tsmall = make_float3(fminf(t0.x, t1.x), fminf(t0.y, t1.y), fminf(t0.z, t1.z));
-    float3 tbig = make_float3(fmaxf(t0.x, t1.x), fmaxf(t0.y, t1.y), fmaxf(t0.z, t1.z));
-    float tmin = fmaxf(t_min, fmaxf(tsmall.x, fmaxf(tsmall.y, tsmall.z)));
-    float tmax = fminf(t_max, fminf(tbig.x, fminf(tbig.y, tbig.z)));
-    return tmin <= tmax;
+static __device__ bool update_aabb_slab(
+    float origin,
+    float direction,
+    float minimum,
+    float maximum,
+    float& near_t,
+    float& far_t) {
+    if (!isfinite(origin) || !isfinite(direction) ||
+        !isfinite(minimum) || !isfinite(maximum) ||
+        minimum > maximum) {
+        return false;
+    }
+    if (fabsf(direction) <= 1e-30f) {
+        return origin >= minimum && origin <= maximum;
+    }
+    float inverse_direction = 1.0f / direction;
+    float first = (minimum - origin) * inverse_direction;
+    float second = (maximum - origin) * inverse_direction;
+    if (first > second) {
+        float temp = first;
+        first = second;
+        second = temp;
+    }
+    near_t = fmaxf(near_t, first);
+    far_t = fminf(far_t, second);
+    return near_t <= far_t;
 }
 
-static __device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& ng_out, GpuVec3& ns_out, GpuVec2& uv_out, int& primitive_index_out) {
+static __device__ bool hit_aabb(const GpuRay& r, const GpuVec3& min_pt, const GpuVec3& max_pt, float t_min, float t_max) {
+    float near_t = t_min;
+    float far_t = t_max;
+    return update_aabb_slab(
+               r.origin.x, r.direction.x,
+               min_pt.x, max_pt.x, near_t, far_t) &&
+           update_aabb_slab(
+               r.origin.y, r.direction.y,
+               min_pt.y, max_pt.y, near_t, far_t) &&
+           update_aabb_slab(
+               r.origin.z, r.direction.z,
+               min_pt.z, max_pt.z, near_t, far_t);
+}
+
+enum class BvhTraversalResult : int {
+    Miss = 0,
+    Hit = 1,
+    StackOverflow = 2,
+    InvalidAcceleration = 3
+};
+
+static __device__ void record_acceleration_count(
+    unsigned long long* counter) {
+    if (counter) atomicAdd(counter, 1ull);
+}
+
+static __device__ BvhTraversalResult hit_bvh(
+    const GpuMesh& mesh,
+    const GpuRay& r,
+    float t_min,
+    float t_max,
+    float& t_out,
+    GpuVec3& ng_out,
+    GpuVec3& ns_out,
+    GpuVec2& uv_out,
+    int& primitive_index_out,
+    GpuAccelerationTelemetry* telemetry = nullptr,
+    bool shadow = false,
+    bool collect_stats = false) {
+    if (!mesh.bvh_nodes || mesh.bvh_node_count <= 0 ||
+        !mesh.vertices || !mesh.indices ||
+        mesh.triangle_count <= 0) {
+        if (telemetry) {
+            record_acceleration_count(
+                &telemetry->invalid_acceleration_count);
+        }
+        return BvhTraversalResult::InvalidAcceleration;
+    }
     bool hit_anything = false;
     float t_closest = t_max;
 
-    int stack[64];
+    int stack[kBvhTraversalStackCapacity];
     int stack_ptr = 0;
     stack[stack_ptr++] = 0;
 
     while (stack_ptr > 0) {
         int node_idx = stack[--stack_ptr];
+        if (node_idx < 0 || node_idx >= mesh.bvh_node_count) {
+            if (telemetry) {
+                record_acceleration_count(
+                    &telemetry->invalid_acceleration_count);
+            }
+            return BvhTraversalResult::InvalidAcceleration;
+        }
+        if (collect_stats && telemetry) {
+            record_acceleration_count(
+                shadow
+                    ? &telemetry->shadow_node_visits
+                    : &telemetry->closest_node_visits);
+        }
         const GpuBvhNode& node = mesh.bvh_nodes[node_idx];
+        if (node.primitive_count < 0 ||
+            !isfinite(node.min_pt.x) ||
+            !isfinite(node.min_pt.y) ||
+            !isfinite(node.min_pt.z) ||
+            !isfinite(node.max_pt.x) ||
+            !isfinite(node.max_pt.y) ||
+            !isfinite(node.max_pt.z) ||
+            node.min_pt.x > node.max_pt.x ||
+            node.min_pt.y > node.max_pt.y ||
+            node.min_pt.z > node.max_pt.z) {
+            if (telemetry) {
+                record_acceleration_count(
+                    &telemetry->invalid_acceleration_count);
+            }
+            return BvhTraversalResult::InvalidAcceleration;
+        }
 
         if (!hit_aabb(r, node.min_pt, node.max_pt, t_min, t_closest)) {
             continue;
@@ -100,9 +211,25 @@ static __device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min
 
         if (node.primitive_count > 0) {
             int start_idx = node.child_or_primitive_index;
+            if (start_idx < 0 ||
+                start_idx > mesh.triangle_count ||
+                node.primitive_count >
+                    mesh.triangle_count - start_idx) {
+                if (telemetry) {
+                    record_acceleration_count(
+                        &telemetry->invalid_acceleration_count);
+                }
+                return BvhTraversalResult::InvalidAcceleration;
+            }
             int end_idx = start_idx + node.primitive_count;
 
             for (int i = start_idx; i < end_idx; ++i) {
+                if (collect_stats && telemetry) {
+                    record_acceleration_count(
+                        shadow
+                            ? &telemetry->shadow_triangle_tests
+                            : &telemetry->closest_triangle_tests);
+                }
                 int i0 = mesh.indices[i * 3 + 0];
                 int i1 = mesh.indices[i * 3 + 1];
                 int i2 = mesh.indices[i * 3 + 2];
@@ -148,14 +275,31 @@ static __device__ bool hit_bvh(const GpuMesh& mesh, const GpuRay& r, float t_min
             int left_child = node_idx + 1;
             int right_child = node.child_or_primitive_index;
 
-            if (stack_ptr < 64) {
-                stack[stack_ptr++] = right_child;
-                stack[stack_ptr++] = left_child;
+            if (left_child >= mesh.bvh_node_count ||
+                right_child <= node_idx ||
+                right_child >= mesh.bvh_node_count) {
+                if (telemetry) {
+                    record_acceleration_count(
+                        &telemetry->invalid_acceleration_count);
+                }
+                return BvhTraversalResult::InvalidAcceleration;
             }
+            if (stack_ptr >
+                kBvhTraversalStackCapacity - 2) {
+                if (telemetry) {
+                    record_acceleration_count(
+                        &telemetry->stack_overflow_count);
+                }
+                return BvhTraversalResult::StackOverflow;
+            }
+            stack[stack_ptr++] = right_child;
+            stack[stack_ptr++] = left_child;
         }
     }
 
-    return hit_anything;
+    return hit_anything
+        ? BvhTraversalResult::Hit
+        : BvhTraversalResult::Miss;
 }
 
 static __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& p_out, GpuVec3& n_out, GpuVec3& ng_out, GpuVec2& uv_out, int& mat_idx_out, int& type_out, int& index_out, int& primitive_index_out, bool ignore_lights = false) {
@@ -209,42 +353,13 @@ static __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t
         bool hit_mesh = false;
         int primitive_index_mesh = -1;
 
-        if (mesh.bvh_node_count > 0) {
-             hit_mesh = hit_bvh(mesh, r_obj, t_min, t_closest, t_mesh, ng_mesh, ns_mesh, uv_mesh, primitive_index_mesh);
-        } else {
-             for (int j = 0; j < mesh.triangle_count; ++j) {
-                int i0 = mesh.indices[j * 3 + 0];
-                int i1 = mesh.indices[j * 3 + 1];
-                int i2 = mesh.indices[j * 3 + 2];
-                GpuVec3 v0 = mesh.vertices[i0];
-                GpuVec3 v1 = mesh.vertices[i1];
-                GpuVec3 v2 = mesh.vertices[i2];
-
-                const GpuVec3* n0_ptr = mesh.normals ? &mesh.normals[i0] : nullptr;
-                const GpuVec3* n1_ptr = mesh.normals ? &mesh.normals[i1] : nullptr;
-                const GpuVec3* n2_ptr = mesh.normals ? &mesh.normals[i2] : nullptr;
-
-                float t_tri, u_tri, v_tri;
-                GpuVec3 ng_tri, ns_tri;
-                if (hit_triangle(r_obj, v0, v1, v2, n0_ptr, n1_ptr, n2_ptr, t_min, t_closest, t_tri, ng_tri, ns_tri, u_tri, v_tri)) {
-                    hit_mesh = true;
-                    t_closest = t_tri;
-                    t_mesh = t_tri;
-                    ng_mesh = ng_tri;
-                    ns_mesh = ns_tri;
-                    primitive_index_mesh = j;
-
-                    if (mesh.uvs) {
-                        GpuVec2 uv0 = mesh.uvs[i0];
-                        GpuVec2 uv1 = mesh.uvs[i1];
-                        GpuVec2 uv2 = mesh.uvs[i2];
-                        float w_tri = 1.0f - u_tri - v_tri;
-                        uv_mesh = uv0 * w_tri + uv1 * u_tri + uv2 * v_tri;
-                    } else {
-                        uv_mesh = GpuVec2(0.0f, 0.0f);
-                    }
-                }
-             }
+        if (mesh.triangle_count > 0) {
+            const auto traversal = hit_bvh(
+                mesh, r_obj, t_min, t_closest, t_mesh,
+                ng_mesh, ns_mesh, uv_mesh, primitive_index_mesh,
+                scene.acceleration_telemetry, ignore_lights,
+                scene.acceleration_collect_stats != 0);
+            hit_mesh = traversal == BvhTraversalResult::Hit;
         }
 
         if (hit_mesh) {
@@ -287,12 +402,17 @@ static __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t
             continue;
         }
 
-        if (mesh.bvh_node_count > 0) {
+        if (mesh.triangle_count > 0) {
             float t_mesh;
             GpuVec3 ng_mesh, ns_mesh;
             GpuVec2 uv_mesh;
             int primitive_index_mesh = -1;
-            if (hit_bvh(mesh, r, t_min, t_closest, t_mesh, ng_mesh, ns_mesh, uv_mesh, primitive_index_mesh)) {
+            const auto traversal = hit_bvh(
+                mesh, r, t_min, t_closest, t_mesh,
+                ng_mesh, ns_mesh, uv_mesh, primitive_index_mesh,
+                scene.acceleration_telemetry, ignore_lights,
+                scene.acceleration_collect_stats != 0);
+            if (traversal == BvhTraversalResult::Hit) {
                 hit_anything = true;
                 t_closest = t_mesh;
                 t_out = t_mesh;
@@ -304,51 +424,6 @@ static __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t
                 type_out = 1;
                 index_out = i;
                 primitive_index_out = primitive_index_mesh;
-            }
-        } else {
-            for (int j = 0; j < mesh.triangle_count; ++j) {
-                int i0 = mesh.indices[j * 3 + 0];
-                int i1 = mesh.indices[j * 3 + 1];
-                int i2 = mesh.indices[j * 3 + 2];
-
-                GpuVec3 v0 = mesh.vertices[i0];
-                GpuVec3 v1 = mesh.vertices[i1];
-                GpuVec3 v2 = mesh.vertices[i2];
-
-                const GpuVec3* n0_ptr = nullptr;
-                const GpuVec3* n1_ptr = nullptr;
-                const GpuVec3* n2_ptr = nullptr;
-
-                if (mesh.normals) {
-                    n0_ptr = &mesh.normals[i0];
-                    n1_ptr = &mesh.normals[i1];
-                    n2_ptr = &mesh.normals[i2];
-                }
-
-                GpuVec3 ng_tri, ns_tri;
-                float t_tri;
-                float u_b, v_b;
-
-                if (hit_triangle(r, v0, v1, v2, n0_ptr, n1_ptr, n2_ptr, t_min, t_closest, t_tri, ng_tri, ns_tri, u_b, v_b)) {
-                    hit_anything = true;
-                    t_closest = t_tri;
-                    t_out = t_tri;
-                    p_out = r.at(t_tri);
-                    n_out = ns_tri;
-                    ng_out = ng_tri;
-                    mat_idx_out = mesh.material_index;
-                    primitive_index_out = j;
-
-                    if (mesh.uvs) {
-                        GpuVec2 uv0 = mesh.uvs[i0];
-                        GpuVec2 uv1 = mesh.uvs[i1];
-                        GpuVec2 uv2 = mesh.uvs[i2];
-                        float w_b = 1.0f - u_b - v_b;
-                        uv_out = uv0 * w_b + uv1 * u_b + uv2 * v_b;
-                    } else {
-                        uv_out = GpuVec2(0.0f, 0.0f);
-                    }
-                }
             }
         }
     }

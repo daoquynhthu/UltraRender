@@ -145,6 +145,22 @@ class _AccelerationConfig(ctypes.Structure):
     ]
 
 
+class _AccelerationStats(ctypes.Structure):
+    _fields_ = [
+        ("mesh_count", ctypes.c_uint64),
+        ("triangle_count", ctypes.c_uint64),
+        ("node_count", ctypes.c_uint64),
+        ("leaf_count", ctypes.c_uint64),
+        ("max_depth", ctypes.c_uint32),
+        ("closest_node_visits", ctypes.c_uint64),
+        ("closest_triangle_tests", ctypes.c_uint64),
+        ("shadow_node_visits", ctypes.c_uint64),
+        ("shadow_triangle_tests", ctypes.c_uint64),
+        ("stack_overflow_count", ctypes.c_uint64),
+        ("invalid_acceleration_count", ctypes.c_uint64),
+    ]
+
+
 class _BackendAdapterInfo(ctypes.Structure):
     _fields_ = [
         ("kind", ctypes.c_int),
@@ -282,6 +298,21 @@ class BackendAdapter:
     compiler_identity: str
 
 
+@dataclass(frozen=True)
+class AccelerationStats:
+    mesh_count: int
+    triangle_count: int
+    node_count: int
+    leaf_count: int
+    max_depth: int
+    closest_node_visits: int
+    closest_triangle_tests: int
+    shadow_node_visits: int
+    shadow_triangle_tests: int
+    stack_overflow_count: int
+    invalid_acceleration_count: int
+
+
 def _candidate_library_paths() -> list[Path]:
     here = Path(__file__).resolve().parent
     env_path = os.environ.get("PYURE_NATIVE")
@@ -395,6 +426,11 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
     lib.ure_session_get_progress.restype = _Progress
     lib.ure_session_get_estimator_metadata.argtypes = [ctypes.c_void_p]
     lib.ure_session_get_estimator_metadata.restype = _EstimatorMetadata
+    lib.ure_session_get_acceleration_stats.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(_AccelerationStats),
+    ]
+    lib.ure_session_get_acceleration_stats.restype = ctypes.c_int
     lib.ure_session_get_framebuffer_size.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_int),
@@ -1045,6 +1081,26 @@ class RenderSession:
             bool(raw.spatial_reuse),
             raw.sample_space_version,
             raw.scene_epoch,
+        )
+
+    def acceleration_stats(self) -> AccelerationStats:
+        raw = _AccelerationStats()
+        if native().ure_session_get_acceleration_stats(
+            self.handle, ctypes.byref(raw)
+        ) != 0:
+            raise RuntimeError("acceleration statistics unavailable")
+        return AccelerationStats(
+            raw.mesh_count,
+            raw.triangle_count,
+            raw.node_count,
+            raw.leaf_count,
+            raw.max_depth,
+            raw.closest_node_visits,
+            raw.closest_triangle_tests,
+            raw.shadow_node_visits,
+            raw.shadow_triangle_tests,
+            raw.stack_overflow_count,
+            raw.invalid_acceleration_count,
         )
 
     def framebuffer_size(self) -> tuple[int, int]:

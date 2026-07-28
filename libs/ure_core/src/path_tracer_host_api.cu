@@ -2727,10 +2727,19 @@ GpuContext* init_gpu_renderer(int width, int height,
     ctx->execution_fence = execution_fence;
     ctx->execution_stream = execution_stream;
     ctx->resources = std::make_unique<CudaResourceRegistry>();
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_acceleration_telemetry,
+        sizeof(GpuAccelerationTelemetry)));
+    ctx->resources->retain_allocation(
+        ctx->d_acceleration_telemetry);
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_acceleration_telemetry, 0,
+        sizeof(GpuAccelerationTelemetry)));
     ctx->width = width;
     ctx->height = height;
     ctx->current_spp = 0;
     ctx->render_config = config;
+    ctx->acceleration_stats = {};
     if (ctx->render_config.integrator.mode == ure::IntegratorMode::BDPT) {
         ctx->render_config.bidirectional.enabled = true;
     } else if (ctx->render_config.integrator.mode == ure::IntegratorMode::VCM) {
@@ -2932,7 +2941,18 @@ GpuContext* init_gpu_renderer(int width, int height,
 
         std::vector<int> temp_indices = input_mesh.indices;
         std::vector<GpuBvhNode> build_nodes;
-        MeshBvhBuilder::build(input_mesh.vertices, temp_indices, build_nodes);
+        const auto build_stats = MeshBvhBuilder::build(
+            input_mesh.vertices, temp_indices, build_nodes);
+        ++ctx->acceleration_stats.mesh_count;
+        ctx->acceleration_stats.triangle_count +=
+            build_stats.triangle_count;
+        ctx->acceleration_stats.node_count +=
+            build_stats.node_count;
+        ctx->acceleration_stats.leaf_count +=
+            build_stats.leaf_count;
+        ctx->acceleration_stats.max_depth = std::max(
+            ctx->acceleration_stats.max_depth,
+            build_stats.max_depth);
 
         if (!build_nodes.empty()) {
              size_t bvh_size = build_nodes.size() * sizeof(GpuBvhNode);
@@ -2970,7 +2990,18 @@ GpuContext* init_gpu_renderer(int width, int height,
         mesh.material_index = hm.material_index;
         compute_aabb(hm.vertices, mesh.min_pt, mesh.max_pt);
         std::vector<GpuBvhNode> build_nodes;
-        MeshBvhBuilder::build(hm.vertices, hm.indices, build_nodes);
+        const auto build_stats = MeshBvhBuilder::build(
+            hm.vertices, hm.indices, build_nodes);
+        ++ctx->acceleration_stats.mesh_count;
+        ctx->acceleration_stats.triangle_count +=
+            build_stats.triangle_count;
+        ctx->acceleration_stats.node_count +=
+            build_stats.node_count;
+        ctx->acceleration_stats.leaf_count +=
+            build_stats.leaf_count;
+        ctx->acceleration_stats.max_depth = std::max(
+            ctx->acceleration_stats.max_depth,
+            build_stats.max_depth);
         if (!build_nodes.empty()) {
              size_t bvh_size = build_nodes.size() * sizeof(GpuBvhNode);
              GpuBvhNode* d_nodes;
@@ -3703,6 +3734,10 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.instance_transforms = ctx->d_instance_transforms;
     scene.previous_instance_transforms = ctx->d_previous_instance_transforms;
     scene.instance_count = ctx->instance_count;
+    scene.acceleration_telemetry =
+        ctx->d_acceleration_telemetry;
+    scene.acceleration_collect_stats =
+        ctx->render_config.acceleration.collect_stats ? 1 : 0;
     scene.materials = ctx->d_materials;
     scene.material_count = ctx->material_count;
     scene.mat_albedo_vals = ctx->d_mat_albedo;
@@ -3984,6 +4019,15 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     ctx->last_integrator_early_terminated_samples = 0;
     ctx->last_integrator_ray_queue_overflow_count = 0;
     ctx->last_integrator_shadow_queue_overflow_count = 0;
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_acceleration_telemetry, 0,
+        sizeof(GpuAccelerationTelemetry)));
+    ctx->acceleration_stats.closest_node_visits = 0;
+    ctx->acceleration_stats.closest_triangle_tests = 0;
+    ctx->acceleration_stats.shadow_node_visits = 0;
+    ctx->acceleration_stats.shadow_triangle_tests = 0;
+    ctx->acceleration_stats.stack_overflow_count = 0;
+    ctx->acceleration_stats.invalid_acceleration_count = 0;
     if (ctx->d_restir_di_telemetry) {
         UR_CUDA_CHECK(cudaMemset(ctx->d_restir_di_telemetry, 0, sizeof(GpuRestirDITelemetry)));
         ctx->last_restir_di_telemetry = {};
@@ -4349,6 +4393,32 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             ctx->d_accum_buffer, primary_ray_count);
         UR_CUDA_CHECK(cudaGetLastError());
     }
+    GpuAccelerationTelemetry acceleration_telemetry{};
+    UR_CUDA_CHECK(cudaMemcpy(
+        &acceleration_telemetry,
+        ctx->d_acceleration_telemetry,
+        sizeof(GpuAccelerationTelemetry),
+        cudaMemcpyDeviceToHost));
+    ctx->acceleration_stats.closest_node_visits =
+        acceleration_telemetry.closest_node_visits;
+    ctx->acceleration_stats.closest_triangle_tests =
+        acceleration_telemetry.closest_triangle_tests;
+    ctx->acceleration_stats.shadow_node_visits =
+        acceleration_telemetry.shadow_node_visits;
+    ctx->acceleration_stats.shadow_triangle_tests =
+        acceleration_telemetry.shadow_triangle_tests;
+    ctx->acceleration_stats.stack_overflow_count =
+        acceleration_telemetry.stack_overflow_count;
+    ctx->acceleration_stats.invalid_acceleration_count =
+        acceleration_telemetry.invalid_acceleration_count;
+    if (acceleration_telemetry.stack_overflow_count > 0) {
+        throw std::runtime_error(
+            "self-compute BVH traversal stack overflow");
+    }
+    if (acceleration_telemetry.invalid_acceleration_count > 0) {
+        throw std::runtime_error(
+            "self-compute BVH traversal encountered invalid acceleration data");
+    }
     if (ctx->d_restir_di_telemetry) {
         UR_CUDA_CHECK(cudaMemcpy(
             &ctx->last_restir_di_telemetry, ctx->d_restir_di_telemetry,
@@ -4391,6 +4461,14 @@ MltDiagnostics get_mlt_diagnostics(const GpuContext* ctx) {
         throw std::invalid_argument("MLT diagnostics require a valid GPU context");
     }
     return ctx->last_mlt_diagnostics;
+}
+
+AccelerationStats get_acceleration_stats(const GpuContext* ctx) {
+    if (!ctx) {
+        throw std::invalid_argument(
+            "acceleration statistics require a valid GPU context");
+    }
+    return ctx->acceleration_stats;
 }
 
 void copy_frame_buffer_gpu(GpuContext* ctx, float* host_buffer) {

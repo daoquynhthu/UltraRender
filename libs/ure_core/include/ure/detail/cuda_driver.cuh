@@ -76,6 +76,7 @@ void reset_accumulation_gpu(GpuContext* ctx);
 int render_pass_gpu(GpuContext* ctx, int samples_per_pass = 1);
 
 MltDiagnostics get_mlt_diagnostics(const GpuContext* ctx);
+AccelerationStats get_acceleration_stats(const GpuContext* ctx);
 
 // Phase P.1: Hot-update instance transforms (replaces full load_scene for transform changes)
 void update_instance_transforms_gpu(GpuContext* ctx,

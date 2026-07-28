@@ -52,6 +52,7 @@ public:
     const std::vector<float>& get_framebuffer() const;
     const std::vector<float>& get_aov(AovType type) const;
     IntegratorEstimatorMetadata get_estimator_metadata() const;
+    AccelerationStats get_acceleration_stats() const;
     RenderSessionState state() const;
     bool has_scene() const;
 

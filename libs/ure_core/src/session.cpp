@@ -321,6 +321,12 @@ IntegratorEstimatorMetadata RenderSession::get_estimator_metadata() const {
     return engine_->get_estimator_metadata();
 }
 
+AccelerationStats RenderSession::get_acceleration_stats() const {
+    std::scoped_lock lock(state_mutex_, engine_mutex_);
+    require_engine();
+    return engine_->get_acceleration_stats();
+}
+
 const std::vector<float>& RenderSession::get_aov(AovType type) const {
     std::scoped_lock lock(state_mutex_, engine_mutex_);
     require_scene();

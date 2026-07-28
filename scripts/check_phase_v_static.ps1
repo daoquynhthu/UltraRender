@@ -67,9 +67,10 @@ try {
     }
     Assert-Contains $ledger "This is a" "V.0 gate lacks its regression-boundary qualification"
     Assert-Contains $ledger "regression boundary" "V.0 gate overstates audited correctness"
-    Assert-Contains "PLAN.md" "当前游标: V\.2" "PLAN cursor did not advance to V.2"
+    Assert-Contains "PLAN.md" "当前游标: V\.3" "PLAN cursor did not advance to V.3"
     Assert-Contains "PLAN.md" "V\.0 closure.*权威游标进入 V\.1" "PLAN lacks the V.0 closure and V.1 gate"
     Assert-Contains "PLAN.md" "V\.1 closure.*权威游标进入 V\.2" "PLAN lacks the V.1 closure and V.2 gate"
+    Assert-Contains "PLAN.md" "V\.2 closure.*权威游标进入 V\.3" "PLAN lacks the V.2 closure and V.3 gate"
     Assert-Contains "README.md" "OptiX production provider.*尚未完成" "README misstates OptiX production status"
     Assert-Contains "STATUS.md" "full SceneIR renderer remains unavailable" "STATUS misstates the portable acceleration boundary"
     Assert-Contains "libs/ure_types/include/ure/render_config.hpp" "struct AccelerationConfig" "V.1 C++ acceleration config is missing"
@@ -78,16 +79,26 @@ try {
     Assert-Contains "libs/ure_core/include/ure/ure_c_api.h" "ure_session_create_execution_config" "V.1 version-safe session entry point is missing"
     Assert-Contains "pyure/__init__.py" "class AccelerationProvider" "V.1 pyure provider enum is missing"
     Assert-Contains "libs/ure_core/src/backend_cuda.cu" "requested acceleration provider is unavailable" "V.1 provider rejection is missing"
+    Assert-Contains "libs/ure_types/include/ure/render_config.hpp" "struct AccelerationStats" "V.2 C++ acceleration stats are missing"
+    Assert-Contains "libs/ure_core/include/ure/ure_c_api.h" "ure_session_get_acceleration_stats" "V.2 C acceleration stats are missing"
+    Assert-Contains "pyure/__init__.py" "class AccelerationStats" "V.2 pyure acceleration stats are missing"
 
     Assert-Contains "libs/ure_core/src/bvh_builder.cpp" "count <= 4" "CUDA BVH leaf-size audit signature changed"
     Assert-Contains "libs/ure_core/src/bvh_builder.cpp" "std::nth_element" "CUDA BVH split fallback audit signature changed"
     Assert-Contains "libs/ure_core/include/ure/detail/cuda_structs.cuh" "Compact BVH Node for GPU \(32 bytes\)" "CUDA BVH node-layout audit signature changed"
-    Assert-Contains "libs/ure_core/src/path_tracer_intersect.cuh" "int stack\[64\]" "closest-hit fixed-stack audit signature changed"
-    Assert-Contains "libs/ure_core/src/path_tracer_intersect.cuh" "stack_ptr < 64" "closest-hit overflow audit signature changed"
+    Assert-Contains "libs/ure_core/include/ure/detail/cuda_structs.cuh" "kBvhTraversalStackCapacity" "V.2 stack contract is missing"
+    Assert-Contains "libs/ure_core/src/path_tracer_intersect.cuh" "int stack\[kBvhTraversalStackCapacity\]" "V.2 checked traversal stack is missing"
+    Assert-Contains "libs/ure_core/src/path_tracer_intersect.cuh" "BvhTraversalResult::StackOverflow" "V.2 stack overflow result is missing"
+    Assert-Contains "libs/ure_core/src/path_tracer_intersect.cuh" "BvhTraversalResult::InvalidAcceleration" "V.2 invalid acceleration result is missing"
     Assert-Contains "libs/ure_core/src/path_tracer_intersect.cuh" "scene\.instance_count" "closest-hit instance scan audit signature changed"
-    Assert-Contains "libs/ure_core/src/path_tracer_intersect.cuh" "mesh\.bvh_node_count > 0" "closest-hit linear fallback audit signature changed"
-    Assert-Contains "libs/ure_core/src/path_tracer_wavefront.cuh" "int stack\[64\]" "shadow fixed-stack audit signature changed"
-    Assert-Contains "libs/ure_core/src/path_tracer_wavefront.cuh" "for \(int i = 0; i < scene\.mesh_count" "shadow mesh scan audit signature changed"
+    Assert-NoMatch @(
+        "libs/ure_core/src/path_tracer_intersect.cuh",
+        "libs/ure_core/src/path_tracer_wavefront.cuh"
+    ) "for \(int j = 0; j < mesh\.triangle_count" "silent linear triangle fallback returned"
+    Assert-NoMatch @(
+        "libs/ure_core/src/path_tracer_intersect.cuh",
+        "libs/ure_core/src/path_tracer_wavefront.cuh"
+    ) "\bany_hit_bvh\b" "duplicate any-hit BVH traversal returned"
     Assert-Contains "libs/ure_runtime/include/ure/runtime/acceleration.hpp" "class AccelerationProvider" "Phase T acceleration-provider boundary is missing"
     Assert-Contains "libs/ure_runtime/include/ure/runtime/acceleration.hpp" "struct AccelerationSceneDesc" "Phase T acceleration-scene descriptor is missing"
 
