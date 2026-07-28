@@ -4,6 +4,8 @@
 #include <fstream>
 #include <limits>
 #include <stdexcept>
+#include <string>
+#include <utility>
 
 namespace ure::gpu {
 
@@ -11,7 +13,11 @@ namespace {
 
 constexpr std::array<char, 8> kRangeMagic = {'U', 'R', 'D', 'R', 'A', 'N', 'G', 'E'};
 constexpr std::array<char, 8> kFrameMagic = {'U', 'R', 'D', 'F', 'R', 'A', 'M', 'E'};
-constexpr int kVersion = 4;
+constexpr int kVersion = 5;
+constexpr int kLegacyVersion = 4;
+constexpr std::uint64_t kMaximumProvenanceRecords = 65536;
+constexpr std::uint32_t kMaximumIdentityLength = 4096;
+constexpr std::uint64_t kMaximumIdentityBytes = 16ull << 20;
 
 int pixel_value_count(int width, int height) {
     if (width <= 0 || height <= 0) {
@@ -76,6 +82,188 @@ std::ifstream open_input(const std::filesystem::path& path) {
     return in;
 }
 
+void write_string(
+    std::ofstream& out,
+    const std::string& value) {
+    if (value.size() > kMaximumIdentityLength) {
+        throw std::invalid_argument(
+            "distributed execution identity is too long");
+    }
+    write_value(
+        out, static_cast<std::uint32_t>(value.size()));
+    out.write(
+        value.data(),
+        static_cast<std::streamsize>(value.size()));
+    if (!out) {
+        throw std::runtime_error(
+            "failed to write distributed execution identity");
+    }
+}
+
+std::string read_string(
+    std::ifstream& in,
+    std::uint64_t& total_bytes) {
+    const auto size = read_value<std::uint32_t>(in);
+    if (size > kMaximumIdentityLength ||
+        total_bytes >
+            kMaximumIdentityBytes - size) {
+        throw std::runtime_error(
+            "distributed execution identity budget exceeded");
+    }
+    total_bytes += size;
+    std::string value(size, '\0');
+    in.read(
+        value.data(),
+        static_cast<std::streamsize>(size));
+    if (!in) {
+        throw std::runtime_error(
+            "truncated distributed execution identity");
+    }
+    return value;
+}
+
+void write_execution_identity(
+    std::ofstream& out,
+    const runtime::BackendExecutionIdentity& identity) {
+    write_value(
+        out,
+        static_cast<std::uint32_t>(identity.backend));
+    write_value(out, identity.vendor_id);
+    write_value(out, identity.device_id);
+    write_string(out, identity.adapter_id);
+    write_string(out, identity.driver_identity);
+    write_string(out, identity.compiler_identity);
+    write_value(out, identity.executable_identity);
+}
+
+runtime::BackendExecutionIdentity read_execution_identity(
+    std::ifstream& in,
+    std::uint64_t& identity_bytes) {
+    runtime::BackendExecutionIdentity identity;
+    identity.backend = static_cast<BackendKind>(
+        read_value<std::uint32_t>(in));
+    identity.vendor_id =
+        read_value<std::uint32_t>(in);
+    identity.device_id =
+        read_value<std::uint32_t>(in);
+    identity.adapter_id =
+        read_string(in, identity_bytes);
+    identity.driver_identity =
+        read_string(in, identity_bytes);
+    identity.compiler_identity =
+        read_string(in, identity_bytes);
+    identity.executable_identity =
+        read_value<runtime::IdentityDigest>(in);
+    return identity;
+}
+
+void write_execution_metadata(
+    std::ofstream& out,
+    const runtime::MergeExecutionMetadata& metadata) {
+    write_value(
+        out,
+        metadata.compatibility.schedule_version);
+    write_value(
+        out,
+        metadata.compatibility.required_features);
+    write_value(
+        out,
+        static_cast<std::uint8_t>(
+            metadata.compatibility.precision));
+    write_value(
+        out,
+        static_cast<std::uint8_t>(
+            metadata.compatibility.coherence));
+    write_value(
+        out,
+        metadata.compatibility.semantic_identity);
+    write_value(
+        out,
+        metadata.compatibility.resource_schema_version);
+    if (metadata.shards.size() >
+        kMaximumProvenanceRecords) {
+        throw std::invalid_argument(
+            "distributed provenance record budget exceeded");
+    }
+    write_value(
+        out,
+        static_cast<std::uint64_t>(
+            metadata.shards.size()));
+    for (const auto& shard : metadata.shards) {
+        write_value(out, shard.sample_start);
+        write_value(out, shard.sample_count);
+        write_value(
+            out, shard.spectral_domain_start);
+        write_value(
+            out, shard.spectral_domain_count);
+        write_value(out, shard.frame_index);
+        write_execution_identity(out, shard.worker);
+        write_value(
+            out, shard.resource_cache.schema_version);
+        write_value(
+            out,
+            static_cast<std::uint32_t>(
+                shard.resource_cache.backend));
+        write_value(
+            out, shard.resource_cache.digest);
+    }
+}
+
+runtime::MergeExecutionMetadata read_execution_metadata(
+    std::ifstream& in) {
+    runtime::MergeExecutionMetadata metadata;
+    metadata.compatibility.schedule_version =
+        read_value<std::uint32_t>(in);
+    metadata.compatibility.required_features =
+        read_value<BackendFeatureSet>(in);
+    metadata.compatibility.precision =
+        static_cast<runtime::NumericPrecision>(
+            read_value<std::uint8_t>(in));
+    metadata.compatibility.coherence =
+        static_cast<runtime::CoherenceMode>(
+            read_value<std::uint8_t>(in));
+    metadata.compatibility.semantic_identity =
+        read_value<runtime::IdentityDigest>(in);
+    metadata.compatibility.resource_schema_version =
+        read_value<std::uint32_t>(in);
+    const auto count =
+        read_value<std::uint64_t>(in);
+    if (count > kMaximumProvenanceRecords) {
+        throw std::runtime_error(
+            "distributed provenance record budget exceeded");
+    }
+    metadata.shards.reserve(
+        static_cast<std::size_t>(count));
+    std::uint64_t identity_bytes = 0;
+    for (std::uint64_t index = 0;
+         index < count;
+         ++index) {
+        runtime::SampleShardProvenance shard;
+        shard.sample_start =
+            read_value<std::uint64_t>(in);
+        shard.sample_count =
+            read_value<std::uint64_t>(in);
+        shard.spectral_domain_start =
+            read_value<std::uint64_t>(in);
+        shard.spectral_domain_count =
+            read_value<std::uint64_t>(in);
+        shard.frame_index =
+            read_value<std::uint32_t>(in);
+        shard.worker =
+            read_execution_identity(
+                in, identity_bytes);
+        shard.resource_cache.schema_version =
+            read_value<std::uint32_t>(in);
+        shard.resource_cache.backend =
+            static_cast<BackendKind>(
+                read_value<std::uint32_t>(in));
+        shard.resource_cache.digest =
+            read_value<runtime::IdentityDigest>(in);
+        metadata.shards.push_back(std::move(shard));
+    }
+    return metadata;
+}
+
 void write_shard_metadata(std::ofstream& out, const DistributedShardMetadata& metadata) {
     if (!validate_shard_metadata(metadata)) {
         throw std::invalid_argument("invalid distributed shard metadata");
@@ -94,9 +282,13 @@ void write_shard_metadata(std::ofstream& out, const DistributedShardMetadata& me
     write_value(out, metadata.resources.descriptor_count);
     write_value(out, metadata.resources.logical_bytes);
     write_value(out, metadata.resources.minimum_resident_bytes);
+    write_execution_metadata(
+        out, metadata.execution);
 }
 
-DistributedShardMetadata read_shard_metadata(std::ifstream& in) {
+DistributedShardMetadata read_shard_metadata(
+    std::ifstream& in,
+    int version) {
     DistributedShardMetadata metadata{};
     metadata.spectral.shard_id = read_value<int>(in);
     metadata.spectral.shard_count = read_value<int>(in);
@@ -114,6 +306,10 @@ DistributedShardMetadata read_shard_metadata(std::ifstream& in) {
     metadata.resources.logical_bytes = read_value<std::uint64_t>(in);
     metadata.resources.minimum_resident_bytes =
         read_value<std::uint64_t>(in);
+    if (version >= kVersion) {
+        metadata.execution =
+            read_execution_metadata(in);
+    }
     if (!validate_shard_metadata(metadata)) {
         throw std::runtime_error("invalid distributed shard metadata payload");
     }
@@ -179,7 +375,8 @@ DistributedSampleRange read_sample_range_file(const std::filesystem::path& path)
     auto in = open_input(path);
     read_magic(in, kRangeMagic);
     const int version = read_value<int>(in);
-    if (version != kVersion) {
+    if (version != kVersion &&
+        version != kLegacyVersion) {
         throw std::runtime_error("unsupported distributed range file version");
     }
     DistributedSampleRange range{};
@@ -190,7 +387,7 @@ DistributedSampleRange read_sample_range_file(const std::filesystem::path& path)
     range.total_samples = read_value<int>(in);
     range.width = read_value<int>(in);
     range.height = read_value<int>(in);
-    range.shard = read_shard_metadata(in);
+    range.shard = read_shard_metadata(in, version);
     range.estimator = read_estimator_metadata(in);
     if (!validate_sample_range(range)) {
         throw std::runtime_error("invalid distributed range file payload");
@@ -205,6 +402,20 @@ void write_framebuffer_file(const std::filesystem::path& path,
     }
     if (framebuffer.total_samples < 0) {
         throw std::invalid_argument("distributed framebuffer sample count must be non-negative");
+    }
+    if (!validate_framebuffer_sample_provenance(
+            framebuffer.shard,
+            framebuffer.total_samples)) {
+        throw std::invalid_argument(
+            "distributed framebuffer sample provenance is invalid");
+    }
+    if (!runtime::is_legacy_merge_metadata(
+            framebuffer.shard.execution) &&
+        framebuffer.shard.execution
+                .compatibility.coherence ==
+            runtime::CoherenceMode::CoherentField) {
+        throw std::invalid_argument(
+            "RGB distributed framebuffer cannot store coherent fields");
     }
     const int count = pixel_value_count(framebuffer.width, framebuffer.height);
     auto out = open_output(path);
@@ -226,17 +437,24 @@ DistributedFrameBufferStorage read_framebuffer_file(const std::filesystem::path&
     auto in = open_input(path);
     read_magic(in, kFrameMagic);
     const int version = read_value<int>(in);
-    if (version != kVersion) {
+    if (version != kVersion &&
+        version != kLegacyVersion) {
         throw std::runtime_error("unsupported distributed framebuffer file version");
     }
     DistributedFrameBufferStorage storage;
     storage.width = read_value<int>(in);
     storage.height = read_value<int>(in);
     storage.total_samples = read_value<int>(in);
-    storage.shard = read_shard_metadata(in);
+    storage.shard = read_shard_metadata(in, version);
     storage.estimator = read_estimator_metadata(in);
     if (storage.total_samples < 0) {
         throw std::runtime_error("invalid distributed framebuffer sample count");
+    }
+    if (!validate_framebuffer_sample_provenance(
+            storage.shard,
+            storage.total_samples)) {
+        throw std::runtime_error(
+            "invalid distributed framebuffer sample provenance");
     }
     const int count = pixel_value_count(storage.width, storage.height);
     storage.data.resize(static_cast<size_t>(count));

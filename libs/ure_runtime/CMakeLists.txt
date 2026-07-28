@@ -1,6 +1,7 @@
 add_library(ure_runtime STATIC
     src/acceleration.cpp
     src/execution_graph.cpp
+    src/multi_backend.cpp
     src/resource_plan.cpp
     src/runtime_validation.cpp
 )

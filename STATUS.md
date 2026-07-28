@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `T.10`. Phase Q and Phase R are complete; Phase T has completed T.0-T.9, including the shared Slang toolchain, SDK-free runtime/resource/execution/acceleration contracts, production CUDA lowering, Vulkan compute/acceleration foundations, and the optional Windows D3D12/DXR runtime. Full SceneIR rendering is not yet lowered to Vulkan or D3D12.
+The authoritative construction cursor is `T.11`. Phase Q and Phase R are complete; Phase T has completed T.0-T.10, including the shared Slang toolchain, SDK-free runtime/resource/execution/acceleration/scheduling contracts, production CUDA lowering, Vulkan compute/acceleration foundations, the optional Windows D3D12/DXR runtime, and heterogeneous sample-shard negotiation. Full SceneIR rendering is not yet lowered to Vulkan or D3D12.
 
 ## Supported execution baseline
 
@@ -19,7 +19,7 @@ The authoritative construction cursor is `T.10`. Phase Q and Phase R are complet
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
 | Build tree | `build_modular_x64` using Ninja |
 | Primary executable | `build_modular_x64/apps/ure_cli/ure_cli.exe` |
-| Registered tests | 46 CTest entries at this snapshot |
+| Registered tests | 48 CTest entries at this snapshot |
 
 The full renderer baseline remains Windows/CUDA. Vulkan additionally has a Linux GCC/Ninja gate, Windows NVIDIA native ray-query evidence, and Windows NVIDIA/Intel compute-BVH evidence. D3D12 additionally has Windows NVIDIA DXR 1.1, compute fallback, typed texture/descriptor and cross-queue fence evidence. macOS, older CUDA architectures, and complete Linux/non-NVIDIA/D3D12 scene rendering do not have equivalent evidence.
 
@@ -28,7 +28,7 @@ The full renderer baseline remains Windows/CUDA. Vulkan additionally has a Linux
 | Module | Responsibility | Status |
 |---|---|---|
 | `ure_types` | Backend-neutral types, SceneIR, native contracts | Active |
-| `ure_runtime` | SDK-free device/resource/synchronization/dispatch/execution/acceleration contracts | Active; implemented by CUDA and bounded Vulkan/D3D12 foundations |
+| `ure_runtime` | SDK-free device/resource/synchronization/dispatch/execution/acceleration/scheduling contracts | Active; implemented by CUDA and bounded Vulkan/D3D12 foundations |
 | `ure_vulkan` | Vulkan 1.3 adapter/resource/compute/synchronization/acceleration backend | Active foundation; full SceneIR renderer not yet lowered |
 | `ure_d3d12` | Windows D3D12/DXR adapter/resource/compute/synchronization/acceleration backend | Active optional foundation; full SceneIR renderer not yet lowered |
 | `ure_core` | Renderer/session/C ABI plus private CUDA backend | Active |
@@ -53,6 +53,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | Vulkan compute runtime | T.7 implemented and tested | Vulkan 1.3 adapter/queue/timeline, buffer/image/sampler, SPIR-V, uniform/storage/image descriptors, specialization, cache identity, validation/debug-utils and structured loss mapping; Windows NVIDIA/Intel plus Linux build/execution gates |
 | Vulkan acceleration bridge | T.8 implemented and tested | SDK-free provider/selection/hit contract; private BLAS/TLAS build and ray-query descriptor lowering; compute-BVH fallback/reject policy; CUDA/Vulkan hit, visibility, non-uniform instance-transform and framebuffer parity fixtures; full production acceleration construction remains Phase V |
 | D3D12/DXR optional runtime | T.9 implemented and tested | Windows-only SDK-neutral public surface; buffer/image/sampler, DXIL, typed descriptor heaps, compute/copy queues, cross-queue fences, DRED, bounded DXR 1.1 BLAS/TLAS and compute fallback; CUDA/Vulkan/D3D12 parity fixtures and no-D3D12 isolation; full SceneIR renderer remains unavailable |
+| Multi-backend scheduling | T.10 implemented and tested | Canonical weighted sample partition, feature/precision/coherence/budget/semantic negotiation, backend-native resource cache identity, versioned distributed provenance and overlap rejection; actual CUDA, NVIDIA/Intel Vulkan and NVIDIA/Intel D3D12 inventory plus SDK-free gate |
 | Runtime spectral domain / wavelength packets | Implemented and tested | Packet cap 32; sampled lane mode supported |
 | Stokes/Mueller polarization | Implemented for covered boundary/transport paths | Not coherent field transport |
 | Lambertian/metal/dielectric/cloth | Implemented for tested paths | Material model coverage is not exhaustive |
@@ -66,7 +67,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | Specular-manifold estimator | Implemented for the exact R-P4 support partition with up to four smooth-delta events | Independent technique AOV and four-scene statistical gate; unsupported paths remain wavefront-owned |
 | Primary-sample-space MLT | Implemented under R-P5 | GPU chains, production wavefront replay, symmetric Laplace mutation, stratified bootstrap seeding, normalization, diagnostics and shard identities; replicated disjoint-range validation retains SDS small light as the positive time-to-error workload and records the remaining difficult scenes as boundaries. MLT+BDPT is rejected until both subpaths share one spectral primary sample |
 | Industrial validation | R-P7 complete | Clean-tree versioned eight-category report, artifact hashes, runtime boundaries, independent BDPT/VCM and MLT benefit/boundary evidence, disjoint 4,096-SPP farm merge, measured Nsight/VRAM evidence, and strict Closure validator passed |
-| Multi-GPU sample partition/merge | Implemented | Not a complete distributed render-farm runtime |
+| Multi-GPU/farm sample scheduling and merge | Implemented contract | CUDA private multi-GPU uses the shared scheduler; heterogeneous compatible sample shards preserve backend/compiler/cache provenance. Cross-machine transport and worker orchestration remain outside this closure |
 | Denoising | A tested GPU target exists | No general quality or production guarantee is claimed |
 | Wave-optics host/CUDA references | Partially implemented | Main production path remains radiometric |
 

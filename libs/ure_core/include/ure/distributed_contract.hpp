@@ -5,6 +5,7 @@
 
 #include "ure/render.hpp"
 #include "ure/resource_types.hpp"
+#include "ure/runtime/multi_backend.hpp"
 
 namespace ure::gpu {
 
@@ -30,6 +31,7 @@ struct DistributedShardMetadata {
     DistributedSpectralDomainShard spectral;
     DistributedFrameShard frame;
     resource::ResourceSetMetadata resources;
+    runtime::MergeExecutionMetadata execution;
 };
 
 // Describes which sample range a node should render.
@@ -74,10 +76,20 @@ DistributedSpectralDomainShard make_aggregate_spectral_domain(std::uint64_t doma
 
 DistributedFrameShard make_frame_shard(int frame_index, int frame_count);
 
+DistributedShardMetadata make_scheduled_shard_metadata(
+    const DistributedSpectralDomainShard& spectral,
+    const DistributedFrameShard& frame,
+    const resource::ResourceSetMetadata& resources,
+    const runtime::MultiBackendSchedule& schedule,
+    std::size_t schedule_shard_index);
+
 bool validate_sample_range(const DistributedSampleRange& range);
 bool validate_spectral_domain_shard(const DistributedSpectralDomainShard& shard);
 bool validate_frame_shard(const DistributedFrameShard& shard);
 bool validate_shard_metadata(const DistributedShardMetadata& metadata);
+bool validate_framebuffer_sample_provenance(
+    const DistributedShardMetadata& metadata,
+    int total_samples);
 bool compatible_shard_metadata_for_merge(const DistributedShardMetadata& accum,
                                          const DistributedShardMetadata& incoming);
 

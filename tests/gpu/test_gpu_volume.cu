@@ -670,6 +670,12 @@ static int test_mie_upload_offsets_and_lifecycle() {
     CHECK(multi->lowered_dispatch_count > 0);
     CHECK(multi->lowered_indirect_dispatch_count > 0);
     CHECK(multi->completed_submissions == 1);
+    CHECK(multi->last_schedule.shards.size() == 1);
+    CHECK(multi->last_schedule.shards[0].sample_start == 0);
+    CHECK(multi->last_schedule.shards[0].sample_count == 1);
+    CHECK(!ure::runtime::identity_digest_empty(
+        multi->last_schedule.shards[0]
+            .resource_cache.digest));
     free_multi_gpu_renderer(multi);
     config.spectral_max_resident_mb = 1;
     bool budget_rejected = false;

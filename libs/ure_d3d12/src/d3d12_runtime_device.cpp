@@ -167,8 +167,11 @@ std::vector<AdapterRecord> adapter_records() {
                     &memory));
         }
         LARGE_INTEGER driver{};
-        static_cast<void>(adapter->CheckInterfaceSupport(
-            __uuidof(ID3D12Device), &driver));
+        if (FAILED(adapter->CheckInterfaceSupport(
+                __uuidof(IDXGIDevice), &driver)) ||
+            driver.QuadPart == 0) {
+            continue;
+        }
         AdapterRecord record;
         record.luid = desc.AdapterLuid;
         record.raytracing_tier = options5.RaytracingTier;
@@ -231,11 +234,13 @@ std::vector<AdapterRecord> adapter_records() {
             ? memory.Budget - memory.CurrentUsage
             : record.info.memory.budget_bytes;
         record.info.driver_identity = std::format(
-            "D3D12 {:04x}.{:04x} driver {}.{}",
+            "D3D12 {:04x}.{:04x} driver {}.{}.{}.{}",
             desc.VendorId,
             desc.DeviceId,
             HIWORD(driver.HighPart),
-            LOWORD(driver.HighPart));
+            LOWORD(driver.HighPart),
+            HIWORD(driver.LowPart),
+            LOWORD(driver.LowPart));
         record.info.compiler_identity = std::format(
             "Slang 2026.14 DXIL SM {}.{}",
             (static_cast<unsigned>(shader_model) >> 4) & 0xf,

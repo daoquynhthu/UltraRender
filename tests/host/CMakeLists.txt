@@ -40,6 +40,15 @@ add_executable(test_execution_graph test_execution_graph.cpp)
 target_link_libraries(test_execution_graph PRIVATE ure_runtime)
 add_test(NAME test_execution_graph COMMAND test_execution_graph)
 
+add_executable(
+    test_multi_backend_schedule
+    test_multi_backend_schedule.cpp)
+target_link_libraries(
+    test_multi_backend_schedule PRIVATE ure_runtime)
+add_test(
+    NAME test_multi_backend_schedule
+    COMMAND test_multi_backend_schedule)
+
 add_executable(test_spectral_oracle test_spectral_oracle.cpp)
 target_link_libraries(test_spectral_oracle PRIVATE ure_types)
 add_test(NAME test_spectral_oracle COMMAND test_spectral_oracle)

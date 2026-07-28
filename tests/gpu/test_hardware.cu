@@ -192,6 +192,8 @@ static int test_backend_identity_and_capability_contract() {
     CHECK(!adapters.empty());
     const auto& adapter = adapters.front();
     CHECK(adapter.kind == ure::BackendKind::Cuda);
+    CHECK(adapter.vendor_id != 0);
+    CHECK(adapter.device_id != 0);
     CHECK(adapter.adapter_id.starts_with("cuda:"));
     CHECK(!adapter.name.empty());
     CHECK(adapter.vendor_id == 0x10de);

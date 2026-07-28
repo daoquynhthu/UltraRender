@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 namespace ure::gpu {
 
@@ -95,6 +96,39 @@ DistributedFrameShard make_frame_shard(int frame_index, int frame_count) {
     return {frame_index, frame_count};
 }
 
+DistributedShardMetadata make_scheduled_shard_metadata(
+    const DistributedSpectralDomainShard& spectral,
+    const DistributedFrameShard& frame,
+    const resource::ResourceSetMetadata& resources,
+    const runtime::MultiBackendSchedule& schedule,
+    std::size_t schedule_shard_index) {
+    if (schedule_shard_index >= schedule.shards.size()) {
+        throw std::out_of_range(
+            "distributed schedule shard index out of range");
+    }
+    const auto& scheduled =
+        schedule.shards[schedule_shard_index];
+    DistributedShardMetadata metadata;
+    metadata.spectral = spectral;
+    metadata.frame = frame;
+    metadata.resources = resources;
+    metadata.execution.compatibility =
+        schedule.compatibility;
+    metadata.execution.shards.push_back({
+        scheduled.sample_start,
+        scheduled.sample_count,
+        spectral.domain_start,
+        spectral.domain_count,
+        static_cast<std::uint32_t>(frame.frame_index),
+        scheduled.worker,
+        scheduled.resource_cache});
+    if (!validate_shard_metadata(metadata)) {
+        throw std::invalid_argument(
+            "scheduled distributed shard metadata is invalid");
+    }
+    return metadata;
+}
+
 DistributedSampleRange make_sample_range(int node_id,
                                           int node_count,
                                           int total_samples,
@@ -172,9 +206,38 @@ static bool validate_resource_set_metadata(
 }
 
 bool validate_shard_metadata(const DistributedShardMetadata& metadata) {
-    return validate_spectral_domain_shard(metadata.spectral) &&
-           validate_frame_shard(metadata.frame) &&
-           validate_resource_set_metadata(metadata.resources);
+    if (!validate_spectral_domain_shard(metadata.spectral) ||
+        !validate_frame_shard(metadata.frame) ||
+        !validate_resource_set_metadata(metadata.resources)) {
+        return false;
+    }
+    try {
+        runtime::validate_merge_execution_metadata(
+            metadata.execution, metadata.resources);
+    } catch (...) {
+        return false;
+    }
+    for (const auto& shard : metadata.execution.shards) {
+        if (shard.frame_index !=
+                static_cast<std::uint32_t>(
+                    metadata.frame.frame_index) ||
+            shard.spectral_domain_start >
+                metadata.spectral.domain_bins ||
+            shard.spectral_domain_count >
+                metadata.spectral.domain_bins -
+                    shard.spectral_domain_start) {
+            return false;
+        }
+        if (metadata.spectral.shard_id !=
+                kDistributedAggregateShardId &&
+            (shard.spectral_domain_start !=
+                 metadata.spectral.domain_start ||
+             shard.spectral_domain_count !=
+                 metadata.spectral.domain_count)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool compatible_shard_metadata_for_merge(const DistributedShardMetadata& accum,
@@ -189,7 +252,35 @@ bool compatible_shard_metadata_for_merge(const DistributedShardMetadata& accum,
            a.lambda_max == b.lambda_max &&
            accum.frame.frame_index == incoming.frame.frame_index &&
            accum.frame.frame_count == incoming.frame.frame_count &&
-           accum.resources == incoming.resources;
+           accum.resources == incoming.resources &&
+           runtime::compatible_merge_execution_metadata(
+               accum.execution, incoming.execution);
+}
+
+bool validate_framebuffer_sample_provenance(
+    const DistributedShardMetadata& metadata,
+    int total_samples) {
+    if (total_samples < 0 ||
+        !validate_shard_metadata(metadata)) {
+        return false;
+    }
+    if (runtime::is_legacy_merge_metadata(
+            metadata.execution)) {
+        return true;
+    }
+    std::uint64_t count = 0;
+    for (const auto& shard :
+         metadata.execution.shards) {
+        if (shard.sample_count >
+            static_cast<std::uint64_t>(
+                std::numeric_limits<int>::max()) -
+                count) {
+            return false;
+        }
+        count += shard.sample_count;
+    }
+    return count ==
+        static_cast<std::uint64_t>(total_samples);
 }
 
 bool validate_sample_range(const DistributedSampleRange& range) {
@@ -214,8 +305,22 @@ bool validate_sample_range(const DistributedSampleRange& range) {
     } catch (...) {
         return false;
     }
-    return validate_shard_metadata(range.shard) &&
-           validate_integrator_estimator_metadata(range.estimator);
+    if (!validate_shard_metadata(range.shard) ||
+        !validate_integrator_estimator_metadata(
+            range.estimator)) {
+        return false;
+    }
+    if (runtime::is_legacy_merge_metadata(
+            range.shard.execution)) {
+        return true;
+    }
+    return range.shard.execution.shards.size() == 1 &&
+           range.shard.execution.shards[0].sample_start ==
+               static_cast<std::uint64_t>(
+                   range.sample_start) &&
+           range.shard.execution.shards[0].sample_count ==
+               static_cast<std::uint64_t>(
+                   range.sample_count);
 }
 
 void merge_partial_framebuffer(DistributedFrameBuffer& accum,
@@ -232,20 +337,53 @@ void merge_partial_framebuffer(DistributedFrameBuffer& accum,
     if (incoming.total_samples > std::numeric_limits<int>::max() - accum.total_samples) {
         throw std::overflow_error("distributed framebuffer sample count overflow");
     }
-    if (!compatible_shard_metadata_for_merge(accum.shard, incoming.shard)) {
+    if (!validate_framebuffer_sample_provenance(
+            accum.shard, accum.total_samples) ||
+        !validate_framebuffer_sample_provenance(
+            incoming.shard, incoming.total_samples)) {
+        throw std::invalid_argument(
+            "distributed framebuffer sample provenance is invalid");
+    }
+    auto merged_execution = accum.shard.execution;
+    if (accum.total_samples == 0 &&
+        runtime::is_legacy_merge_metadata(
+            merged_execution) &&
+        !runtime::is_legacy_merge_metadata(
+            incoming.shard.execution)) {
+        merged_execution.compatibility =
+            incoming.shard.execution.compatibility;
+    }
+    auto effective_accumulator_shard = accum.shard;
+    effective_accumulator_shard.execution =
+        merged_execution;
+    if (!compatible_shard_metadata_for_merge(
+            effective_accumulator_shard,
+            incoming.shard)) {
         throw std::invalid_argument("distributed framebuffer shard metadata must be compatible");
+    }
+    if (!runtime::is_legacy_merge_metadata(
+            merged_execution) &&
+        merged_execution.compatibility.coherence ==
+            runtime::CoherenceMode::CoherentField) {
+        throw std::invalid_argument(
+            "RGB distributed framebuffer cannot merge coherent fields");
     }
     if (!validate_integrator_estimator_metadata(accum.estimator) ||
         !validate_integrator_estimator_metadata(incoming.estimator) ||
         !compatible_integrator_estimator_metadata(accum.estimator, incoming.estimator)) {
         throw std::invalid_argument("distributed framebuffer estimator metadata must be compatible");
     }
+    runtime::merge_execution_metadata(
+        merged_execution,
+        incoming.shard.execution,
+        accum.shard.resources);
 
     int count = checked_pixel_value_count(accum.width, accum.height);
     for (int i = 0; i < count; ++i) {
         accum.data[i] += incoming.data[i];
     }
     accum.total_samples += incoming.total_samples;
+    accum.shard.execution = std::move(merged_execution);
     accum.shard.spectral = make_aggregate_spectral_domain(
         accum.shard.spectral.domain_bins,
         accum.shard.spectral.lambda_min,

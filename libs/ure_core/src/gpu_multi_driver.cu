@@ -3,11 +3,14 @@
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+#include <string>
+#include <utility>
 
 #include <cuda_runtime.h>
 
 #include "cuda_check.cuh"
 #include "cuda_runtime_device.cuh"
+#include "ure/backend.hpp"
 #include "ure/detail/cuda_context.cuh"
 #include "ure/detail/cuda_multi_context.cuh"
 #include "ure/detail/cuda_multi_driver.cuh"
@@ -134,6 +137,16 @@ MultiGpuContext* init_multi_gpu_renderer(int width, int height,
                                          const std::vector<scene_ir::MiePhaseResource>& mie_phase_resources) {
     int device_count = 0;
     UR_CUDA_CHECK(cudaGetDeviceCount(&device_count));
+    if (config.num_gpus_to_use <= 0) {
+        throw runtime::Error(
+            runtime::ErrorCode::InvalidArgument,
+            "requested CUDA worker count must be positive");
+    }
+    if (config.num_gpus_to_use > device_count) {
+        throw runtime::Error(
+            runtime::ErrorCode::Unsupported,
+            "requested CUDA worker count exceeds available adapters");
+    }
     int num_gpus = std::min(device_count, config.num_gpus_to_use);
     if (num_gpus < 1) num_gpus = 1;
 
@@ -142,6 +155,17 @@ MultiGpuContext* init_multi_gpu_renderer(int width, int height,
     ctx->width = width;
     ctx->height = height;
     ctx->contexts = new GpuContext*[num_gpus];
+    ctx->schedule_requirements.required_features =
+        required_backend_features(config);
+    ctx->schedule_requirements.coherence =
+        config.wave_optics.coherent_field_enabled
+        ? runtime::CoherenceMode::CoherentField
+        : runtime::CoherenceMode::IncoherentRadiance;
+    ctx->schedule_requirements.semantic_identity =
+        runtime::identity_digest(
+            std::string{"ure.cuda.execution-graph.v"} +
+            std::to_string(
+                runtime::kExecutionGraphSchemaVersion));
 
     UR_LOG_INFO(GPU, "Initializing {} GPU(s) for multi-GPU rendering ({}x{})", num_gpus, width, height);
 
@@ -159,6 +183,18 @@ MultiGpuContext* init_multi_gpu_renderer(int width, int height,
         }
         ctx->contexts[i] = init_gpu_renderer(width, height, meshes, instances, spheres, materials,
                                              textures, device_config, mie_phase_resources);
+        const auto& adapter =
+            ctx->contexts[i]->runtime_device->adapter();
+        runtime::WorkerCapability worker;
+        worker.adapter = adapter;
+        worker.semantic_identity =
+            ctx->schedule_requirements.semantic_identity;
+        worker.executable_identity =
+            runtime::identity_digest(
+                std::string{"ure.cuda.static-path.v1|"} +
+                adapter.compiler_identity);
+        ctx->schedule_workers.push_back(
+            std::move(worker));
     }
 
     UR_CUDA_CHECK(cudaSetDevice(0));
@@ -203,6 +239,26 @@ int render_pass_multi_gpu(MultiGpuContext* ctx, int samples_per_pass) {
     // GPU i: samples [base + i*spp, base + (i+1)*spp)
     // After the pass, all GPUs share the same new base.
     int current_base = ctx->contexts[0]->current_spp;
+    if (samples_per_pass <= 0) {
+        throw runtime::Error(
+            runtime::ErrorCode::InvalidArgument,
+            "multi-GPU samples per pass must be positive");
+    }
+    const auto total_samples =
+        static_cast<std::uint64_t>(ctx->num_gpus) *
+        static_cast<std::uint64_t>(samples_per_pass);
+    ctx->last_schedule =
+        runtime::negotiate_sample_shards(
+            ctx->schedule_requirements,
+            ctx->schedule_resources,
+            ctx->schedule_workers,
+            total_samples);
+    if (ctx->last_schedule.shards.size() !=
+        static_cast<std::size_t>(ctx->num_gpus)) {
+        throw runtime::Error(
+            runtime::ErrorCode::BackendFailure,
+            "multi-GPU scheduler omitted a CUDA worker");
+    }
     const bool mlt_mode =
         ctx->contexts[0]->render_config.integrator.mode ==
         ure::IntegratorMode::MLT;
@@ -226,10 +282,46 @@ int render_pass_multi_gpu(MultiGpuContext* ctx, int samples_per_pass) {
 
     for (int i = 0; i < ctx->num_gpus; ++i) {
         UR_CUDA_CHECK(cudaSetDevice(i));
-        if (!mlt_mode) {
-            ctx->contexts[i]->current_spp = current_base + i * samples_per_pass;
+        const auto& adapter =
+            ctx->contexts[i]->runtime_device->adapter();
+        const auto scheduled =
+            std::ranges::find_if(
+                ctx->last_schedule.shards,
+                [&adapter](
+                    const runtime::ScheduledSampleShard& shard) {
+                    return shard.worker.backend ==
+                               adapter.kind &&
+                           shard.worker.adapter_id ==
+                               adapter.adapter_id;
+                });
+        if (scheduled ==
+                ctx->last_schedule.shards.end() ||
+            scheduled->sample_count >
+                static_cast<std::uint64_t>(
+                    std::numeric_limits<int>::max())) {
+            throw runtime::Error(
+                runtime::ErrorCode::BackendFailure,
+                "multi-GPU sample shard is invalid");
         }
-        render_pass_gpu(ctx->contexts[i], samples_per_pass);
+        if (!mlt_mode) {
+            const auto sample_start =
+                static_cast<std::uint64_t>(
+                    current_base) +
+                scheduled->sample_start;
+            if (sample_start >
+                static_cast<std::uint64_t>(
+                    std::numeric_limits<int>::max())) {
+                throw runtime::Error(
+                    runtime::ErrorCode::Overflow,
+                    "multi-GPU sample start overflows");
+            }
+            ctx->contexts[i]->current_spp =
+                static_cast<int>(sample_start);
+        }
+        render_pass_gpu(
+            ctx->contexts[i],
+            static_cast<int>(
+                scheduled->sample_count));
         const auto* current = ctx->contexts[i];
         if (current->last_runtime_submission == 0 ||
             current->last_execution_graph_schema !=
@@ -277,11 +369,21 @@ int render_pass_multi_gpu(MultiGpuContext* ctx, int samples_per_pass) {
 
     merge_and_broadcast_path_guiding(ctx, path_guiding_baseline_factor);
 
+    if (!mlt_mode &&
+        total_samples >
+            static_cast<std::uint64_t>(
+                std::numeric_limits<int>::max() -
+                current_base)) {
+        throw runtime::Error(
+            runtime::ErrorCode::Overflow,
+            "multi-GPU accumulated sample count overflows");
+    }
     int new_base = mlt_mode
         ? current_base +
             ctx->contexts[0]->render_config.mlt.mutations_per_chain *
                 samples_per_pass
-        : current_base + ctx->num_gpus * samples_per_pass;
+        : current_base +
+            static_cast<int>(total_samples);
     for (int i = 0; i < ctx->num_gpus; ++i) {
         ctx->contexts[i]->current_spp = new_base;
     }

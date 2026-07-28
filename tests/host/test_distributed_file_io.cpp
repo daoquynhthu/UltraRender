@@ -1,9 +1,12 @@
 #include <ure/distributed_file_io.hpp>
 
+#include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -331,6 +334,250 @@ static int test_estimator_metadata_roundtrip_and_merge_rejection() {
     return 0;
 }
 
+static ure::runtime::WorkerCapability make_worker(
+    ure::BackendKind backend,
+    const std::string& adapter_id,
+    const ure::runtime::IdentityDigest& semantics) {
+    ure::runtime::WorkerCapability worker;
+    worker.adapter.kind = backend;
+    worker.adapter.vendor_id =
+        backend == ure::BackendKind::Cuda
+        ? 0x10deu
+        : 0x8086u;
+    worker.adapter.device_id =
+        0x2000u +
+        static_cast<std::uint32_t>(backend);
+    worker.adapter.adapter_id = adapter_id;
+    worker.adapter.name = adapter_id;
+    worker.adapter.features =
+        ure::backend_feature_bit(
+            ure::BackendFeature::Compute) |
+        ure::backend_feature_bit(
+            ure::BackendFeature::SpectralTransport) |
+        ure::backend_feature_bit(
+            ure::BackendFeature::Polarization);
+    worker.adapter.memory.total_bytes = 8192;
+    worker.adapter.memory.available_bytes = 6144;
+    worker.adapter.memory.budget_bytes = 4096;
+    worker.adapter.driver_identity =
+        "driver:" + adapter_id;
+    worker.adapter.compiler_identity =
+        "compiler:" + adapter_id;
+    worker.semantic_identity = semantics;
+    worker.executable_identity =
+        ure::runtime::identity_digest(
+            "executable:" + adapter_id);
+    return worker;
+}
+
+static int test_multi_backend_metadata_roundtrip_and_merge() {
+    const auto frame_path =
+        temp_path("ure_multi_backend_roundtrip.urf");
+    const auto range_path =
+        temp_path("ure_multi_backend_roundtrip.urd");
+    remove_if_exists(frame_path);
+    remove_if_exists(range_path);
+    ure::resource::ResourceSetMetadata resources;
+    resources.content_hash =
+        ure::runtime::identity_digest(
+            "phase-t10-distributed-resource");
+    resources.descriptor_count = 3;
+    resources.logical_bytes = 4096;
+    resources.minimum_resident_bytes = 2048;
+    const auto semantics =
+        ure::runtime::identity_digest(
+            "phase-t10-distributed-semantics");
+    std::vector workers{
+        make_worker(
+            ure::BackendKind::Vulkan,
+            "vulkan:0",
+            semantics),
+        make_worker(
+            ure::BackendKind::Cuda,
+            "cuda:0",
+            semantics)};
+    ure::runtime::ExecutionRequirements requirements;
+    requirements.required_features =
+        ure::backend_feature_bit(
+            ure::BackendFeature::Compute) |
+        ure::backend_feature_bit(
+            ure::BackendFeature::SpectralTransport) |
+        ure::backend_feature_bit(
+            ure::BackendFeature::Polarization);
+    requirements.minimum_resident_bytes =
+        resources.minimum_resident_bytes;
+    requirements.semantic_identity = semantics;
+    const auto schedule =
+        ure::runtime::negotiate_sample_shards(
+            requirements,
+            resources,
+            workers,
+            8);
+    CHECK(schedule.heterogeneous);
+    const auto spectral =
+        ure::gpu::make_aggregate_spectral_domain(
+            1024, 360.0f, 830.0f);
+    const auto frame =
+        ure::gpu::make_frame_shard(3, 10);
+    const auto first_metadata =
+        ure::gpu::make_scheduled_shard_metadata(
+            spectral, frame, resources, schedule, 0);
+    const auto second_metadata =
+        ure::gpu::make_scheduled_shard_metadata(
+            spectral, frame, resources, schedule, 1);
+    ure::gpu::DistributedSampleRange range =
+        ure::gpu::make_sample_range(0, 2, 8, 2, 1);
+    range.shard = first_metadata;
+    ure::gpu::write_sample_range_file(
+        range_path, range);
+    const auto loaded_range =
+        ure::gpu::read_sample_range_file(range_path);
+    CHECK(loaded_range.shard.execution ==
+          first_metadata.execution);
+    std::vector<float> first_data;
+    std::vector<float> second_data;
+    auto first = make_view(2, 1, 4, first_data);
+    auto second = make_view(2, 1, 4, second_data);
+    first.shard = first_metadata;
+    second.shard = second_metadata;
+    std::ranges::fill(first_data, 1.0f);
+    std::ranges::fill(second_data, 2.0f);
+    ure::gpu::write_framebuffer_file(
+        frame_path, first);
+    const auto loaded =
+        ure::gpu::read_framebuffer_file(frame_path);
+    CHECK(loaded.shard.execution ==
+          first_metadata.execution);
+    ure::gpu::merge_partial_framebuffer(
+        first, second);
+    CHECK(first.total_samples == 8);
+    CHECK(first.shard.execution.shards.size() == 2);
+    CHECK(first.shard.execution.shards[0]
+              .worker.backend ==
+          ure::BackendKind::Cuda);
+    CHECK(first.shard.execution.shards[1]
+              .worker.backend ==
+          ure::BackendKind::Vulkan);
+    for (const float value : first_data) {
+        CHECK_FLOAT_EQ(value, 3.0f, 1e-6f);
+    }
+    auto incompatible = second;
+    incompatible.shard.execution
+        .compatibility.precision =
+        ure::runtime::NumericPrecision::Float64;
+    CHECK(throws_exception([&] {
+        ure::gpu::merge_partial_framebuffer(
+            first, incompatible);
+    }));
+    auto forged = second;
+    forged.shard.execution.shards[0]
+        .resource_cache.digest[0] ^= 1;
+    CHECK(throws_exception([&] {
+        ure::gpu::write_framebuffer_file(
+            frame_path, forged);
+    }));
+    auto wrong_sample_count = second;
+    wrong_sample_count.total_samples = 5;
+    CHECK(throws_exception([&] {
+        ure::gpu::write_framebuffer_file(
+            frame_path, wrong_sample_count);
+    }));
+    auto coherent_workers = workers;
+    for (auto& worker : coherent_workers) {
+        worker.coherence_modes |=
+            ure::runtime::coherence_mode_bit(
+                ure::runtime::CoherenceMode::
+                    CoherentField);
+    }
+    requirements.coherence =
+        ure::runtime::CoherenceMode::CoherentField;
+    const auto coherent_schedule =
+        ure::runtime::negotiate_sample_shards(
+            requirements,
+            resources,
+            coherent_workers,
+            8);
+    auto coherent = second;
+    coherent.shard =
+        ure::gpu::make_scheduled_shard_metadata(
+            spectral,
+            frame,
+            resources,
+            coherent_schedule,
+            0);
+    CHECK(throws_exception([&] {
+        ure::gpu::write_framebuffer_file(
+            frame_path, coherent);
+    }));
+    remove_if_exists(frame_path);
+    remove_if_exists(range_path);
+    return 0;
+}
+
+static int test_legacy_v4_framebuffer_read() {
+    const auto path =
+        temp_path("ure_legacy_v4_frame.urf");
+    remove_if_exists(path);
+    std::ofstream out(
+        path,
+        std::ios::binary |
+            std::ios::trunc);
+    const auto write =
+        [&out]<typename Value>(const Value& value) {
+            out.write(
+                reinterpret_cast<const char*>(&value),
+                sizeof(Value));
+        };
+    const std::array<char, 8> magic{
+        'U', 'R', 'D', 'F', 'R', 'A', 'M', 'E'};
+    out.write(
+        magic.data(),
+        static_cast<std::streamsize>(magic.size()));
+    write(4);
+    write(1);
+    write(1);
+    write(2);
+    write(ure::gpu::kDistributedAggregateShardId);
+    write(1);
+    write(std::uint64_t{1});
+    write(std::uint64_t{0});
+    write(std::uint64_t{1});
+    write(360.0f);
+    write(830.0f);
+    write(1.0f);
+    write(0);
+    write(1);
+    write(std::array<std::uint8_t, 32>{});
+    write(std::uint64_t{0});
+    write(std::uint64_t{0});
+    write(std::uint64_t{0});
+    write(static_cast<std::uint32_t>(
+        ure::IntegratorMode::Wavefront));
+    write(static_cast<std::uint32_t>(
+        ure::IntegratorEstimatorPolicy::Standard));
+    write(std::uint8_t{0});
+    write(std::uint8_t{0});
+    write(std::uint8_t{0});
+    write(std::uint32_t{0});
+    write(std::uint32_t{0});
+    write(1.0f);
+    write(2.0f);
+    write(3.0f);
+    out.close();
+    CHECK(static_cast<bool>(out));
+    const auto loaded =
+        ure::gpu::read_framebuffer_file(path);
+    CHECK(loaded.total_samples == 2);
+    CHECK(loaded.data.size() == 3);
+    CHECK_FLOAT_EQ(loaded.data[0], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(loaded.data[1], 2.0f, 1e-6f);
+    CHECK_FLOAT_EQ(loaded.data[2], 3.0f, 1e-6f);
+    CHECK(ure::runtime::is_legacy_merge_metadata(
+        loaded.shard.execution));
+    remove_if_exists(path);
+    return 0;
+}
+
 static int test_invalid_range_file_inputs() {
     const auto path = temp_path("ure_invalid_range.urd");
     remove_if_exists(path);
@@ -389,6 +636,8 @@ int main() {
     failed += run("test_framebuffer_file_merge", test_framebuffer_file_merge);
     failed += run("test_framebuffer_file_merge_rejects_bad_shard_metadata", test_framebuffer_file_merge_rejects_bad_shard_metadata);
     failed += run("test_estimator_metadata_roundtrip_and_merge_rejection", test_estimator_metadata_roundtrip_and_merge_rejection);
+    failed += run("test_multi_backend_metadata_roundtrip_and_merge", test_multi_backend_metadata_roundtrip_and_merge);
+    failed += run("test_legacy_v4_framebuffer_read", test_legacy_v4_framebuffer_read);
     failed += run("test_invalid_range_file_inputs", test_invalid_range_file_inputs);
     failed += run("test_invalid_framebuffer_file_inputs", test_invalid_framebuffer_file_inputs);
 

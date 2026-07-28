@@ -86,6 +86,9 @@ endif()
 if(UR_BUILD_TESTS AND UR_ENABLE_D3D12)
     add_subdirectory(tests/d3d12)
 endif()
+if(UR_BUILD_TESTS AND UR_ENABLE_CUDA AND UR_ENABLE_VULKAN)
+    add_subdirectory(tests/multi_backend)
+endif()
 
 # ── Install / Export for find_package() support ──
 include(CMakePackageConfigHelpers)

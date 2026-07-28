@@ -112,11 +112,30 @@ BackendAdapterInfo query_cuda_adapter(int ordinal, int device_count) {
     }
 
     BackendAdapterInfo info;
+    int gpu_pci_identity = 0;
+    error = cudaDeviceGetAttribute(
+        &gpu_pci_identity,
+        cudaDevAttrGpuPciDeviceId,
+        ordinal);
+    if (error != cudaSuccess) {
+        throw std::runtime_error(cuda_error_message(
+            error, "cudaDevAttrGpuPciDeviceId"));
+    }
+    if (gpu_pci_identity == 0) {
+        throw std::runtime_error(
+            "cudaDevAttrGpuPciDeviceId returned zero");
+    }
     info.kind = BackendKind::Cuda;
     info.adapter_id = cuda_adapter_id(properties);
     info.ordinal = static_cast<std::uint32_t>(ordinal);
-    info.vendor_id = 0x10de;
-    info.device_id = static_cast<std::uint32_t>(properties.pciDeviceID);
+    info.vendor_id =
+        static_cast<std::uint32_t>(
+            gpu_pci_identity) &
+        0xffffu;
+    info.device_id =
+        static_cast<std::uint32_t>(
+            gpu_pci_identity) >>
+        16u;
     info.name = properties.name;
     info.features = cuda_features(device_count);
     info.limits.max_workgroup_threads =

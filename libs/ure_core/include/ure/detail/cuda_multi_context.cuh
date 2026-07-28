@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 #include "ure/detail/cuda_multi_driver.cuh"
+#include "ure/runtime/multi_backend.hpp"
 #include "ure/runtime/runtime.hpp"
 
 namespace ure::gpu {
@@ -25,6 +27,10 @@ struct MultiGpuContext {
     std::uint32_t lowered_dispatch_count = 0;
     std::uint32_t lowered_indirect_dispatch_count = 0;
     runtime::SubmissionId completed_submissions = 0;
+    runtime::ExecutionRequirements schedule_requirements;
+    resource::ResourceSetMetadata schedule_resources;
+    std::vector<runtime::WorkerCapability> schedule_workers;
+    runtime::MultiBackendSchedule last_schedule;
 };
 
 }

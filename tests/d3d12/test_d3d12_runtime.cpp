@@ -915,6 +915,11 @@ int main() {
         std::optional<AccelerationResult>
             cross_adapter_compute;
         for (const auto& adapter : adapters) {
+            require(
+                adapter.driver_identity.find(
+                    "driver 0.0") ==
+                    std::string::npos,
+                "D3D12 driver identity is not versioned");
             try {
                 auto device =
                     ure::d3d12::make_d3d12_runtime_device(

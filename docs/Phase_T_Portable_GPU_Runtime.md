@@ -2,8 +2,8 @@
 
 ## Status
 
-T.0 through T.9 are complete and the authoritative cursor is T.10. This
-document is the migration ledger for T.10 and T.11. CUDA remains the complete
+T.0 through T.10 are complete and the authoritative cursor is T.11. This
+document is the migration ledger for T.11. CUDA remains the complete
 scene rendering backend. Vulkan has a production compute-runtime foundation and
 a bounded acceleration bridge on Windows and Linux. D3D12/DXR has an optional
 Windows runtime and bounded acceleration bridge. Full SceneIR rendering is not
@@ -47,12 +47,12 @@ identity belong above it.
 | T0-RES | Stable ResourceId, typed buffer/image/spectral layouts, residency, sparse tiles and upload plans own public semantics. CUDA native resources remain private; Vulkan and D3D12 implement typed buffer/image/sampler descriptors behind SDK-neutral headers. | Resource/descriptor model | T.4/T.7/T.9 complete |
 | T0-EXE | Stable execution graphs are validated and lowered against adapter limits before work. CUDA retains its private fast path; Vulkan and D3D12 record dependency-ordered command DAGs with native timelines/fences, transitions and typed descriptor binding. | Dispatch graph and backend executors | T.5-T.7/T.9 complete |
 | T0-KRN | Estimator/PDF versions and critical stage order are backend-neutral. Existing optimized `.cu` bodies remain a private CUDA fast path; pinned Slang emits Vulkan SPIR-V directly and normalized HLSL consumed by pinned DXC for D3D12 DXIL. | Kernel toolchain and semantic library | T.2/T.5-T.9 complete |
-| T0-MGPU | CUDA multi-GPU still uses private device ordinals and peer copies, but every child submits a compatible runtime schema/node/dispatch contract and fail-loud validation precedes merge. Heterogeneous negotiation remains T.10. | Multi-adapter scheduler | CUDA migration complete; T.10 heterogeneous scheduling |
+| T0-MGPU | CUDA multi-GPU keeps private device ordinals and peer copies but obtains sample ranges from the SDK-free scheduler. Homogeneous and heterogeneous workers negotiate executable feature, precision, coherence, resident budget and shared semantic identity; distributed v5 provenance preserves backend/compiler/cache identity through merge. | Multi-adapter scheduler | T.10 complete |
 | T0-WAVE | Fraunhofer CUDA execution and the Vulkan reference propagation operator consume shared wave semantics and runtime-owned resources/timelines; D3D12 foundation validates the same Mueller/Stokes semantic module. | Wave operator/runtime integration | T.2/T.5-T.7/T.9 complete |
 | T0-ACC | SDK-free acceleration descriptors, selection policy, stable ray/hit layout and provider lifetime bridge bounded triangle BLAS/TLAS fixtures to Vulkan ray query and DXR inline ray query. Compute fallback and rejection are explicit. CUDA `world_hit` remains the production reference. | Acceleration-provider API | T.8/T.9 bridges complete; production construction/refit/compaction remains Phase V |
 | T0-DIAG | Public diagnostics are SDK-free. CUDA, Vulkan and D3D12 map native failures to structured runtime errors; Vulkan retains validation messages and D3D12 retains DRED breadcrumbs/page-fault diagnostics. | Runtime error and diagnostics | T.3/T.6/T.7/T.9 complete |
 | T0-SCN | SceneIR and native serialization contain no backend handle. `CompiledGpuScene`, CUDA native resource views and lowering state are private; runtime resource and execution identities define the portable boundary. | Scene compiler/lowering | T.3/T.4/T.6 complete |
-| T0-TEST | SDK-free gates cover runtime/resources/execution/acceleration and installed public surfaces. CUDA production traversal, Vulkan native/fallback and D3D12 native/fallback share exact hit fixtures; no-D3D12 isolation preserves Vulkan execution. Full renderer parity remains T.11. | Validation architecture | T.1-T.9 complete; T.11 full parity |
+| T0-TEST | SDK-free gates cover runtime/resources/execution/acceleration/scheduling and installed public surfaces. CUDA production traversal, Vulkan native/fallback and D3D12 native/fallback share exact hit fixtures; actual multi-API inventory and versioned distributed provenance cover T.10. Full renderer parity remains T.11. | Validation architecture | T.1-T.10 complete; T.11 full parity |
 
 ## Migration order
 
@@ -75,8 +75,8 @@ identity belong above it.
    Phase V production acceleration construction.
 9. T.9 adds the optional Windows D3D12/DXR runtime without claiming complete
    SceneIR rendering.
-10. T.10 and T.11 add heterogeneous scheduling and full parity/performance
-    evidence.
+10. T.10 adds heterogeneous scheduling and versioned merge provenance.
+11. T.11 adds full parity/performance evidence.
 
 This order prevents a nominal abstraction from being designed around only
 trivial buffers while the difficult texture, queue, estimator-state, wave, and
@@ -503,4 +503,54 @@ audit. The Release inventory is 46 registered tests at this closure snapshot.
 
 This closure does not claim complete D3D12 SceneIR lowering, DispatchRays, or
 production acceleration construction/refit/compaction. Those remain T.11 and
-Phase V responsibilities. The authoritative cursor is T.10.
+Phase V responsibilities.
+
+## T.10 multi-backend scheduling closure
+
+`ure_runtime` now owns a pure C++ scheduling contract rather than leaving
+sample assignment to backend-specific loops. A worker advertises stable
+backend, adapter, vendor/device, driver/compiler, executable artifact,
+supported precision/coherence modes, executable features, memory budget and a
+shared kernel-semantic digest. Negotiation rejects any worker that cannot
+execute the requested contract. It uses integer capacity weights, canonical
+worker ordering and largest-remainder apportionment, so the same worker set and
+request produces the same complete, non-overlapping sample ranges regardless
+of discovery order.
+
+Resource cache identity is intentionally narrower than worker identity. The
+cache key includes resource content and layout metadata, backend kind,
+vendor/device, driver/compiler and executable digest, but excludes the unique
+adapter instance ID. Identical devices using the same backend artifact may
+reuse native cache entries; different APIs, device models, drivers, compilers
+or artifacts cannot alias. The worker instance ID remains in provenance.
+
+Distributed range and framebuffer files use version 5 for execution metadata.
+Each contribution retains sample, spectral-domain and frame coverage together
+with worker and cache identity. Provenance is canonicalized before merge;
+overlapping samples or spectral partitions, forged cache keys, inaccurate
+sample counts and feature/precision/coherence/semantic mismatches are rejected.
+Version 4 remains readable as legacy metadata, but a non-empty legacy
+accumulator cannot silently mix with versioned contributions. The RGB
+framebuffer explicitly rejects coherent-field metadata because complex field
+addition is a Phase W contract, not an intensity merge.
+
+The existing CUDA private multi-GPU pass now calls the same scheduler before
+launch and maps its assigned ranges back to runtime-owned CUDA contexts. It
+continues to validate the lowered execution-graph schema and estimator order
+before merging. Explicitly requesting more CUDA workers than available now
+fails instead of silently reducing the request.
+
+`multi_backend_inventory` hashes the actual CUDA library, Vulkan SPIR-V and
+D3D12 DXIL artifacts and schedules every enumerated closure-machine adapter.
+The resulting five-worker inventory contains CUDA and NVIDIA/Intel Vulkan and
+D3D12 identities, distinct backend cache keys, exact driver/compiler versions
+and contiguous sample ranges. `run_phase_t10_multi_backend_gate.ps1` combines
+that evidence with pure contract rejection tests, distributed v4/v5
+roundtrip/merge tests, the production CUDA scheduler path and an independent
+SDK-free MSVC warnings-as-errors build. The closure snapshot contains 48
+registered Release tests; the independent SDK-free gate contains 4 tests.
+
+This closure provides scheduling and merge contracts, not a cross-machine
+worker service or full Vulkan/D3D12 SceneIR renderer. T.11 owns complete
+cross-backend physical/statistical/performance evidence. The authoritative
+cursor is T.11.
