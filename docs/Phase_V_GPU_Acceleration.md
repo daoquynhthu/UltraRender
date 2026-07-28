@@ -2,10 +2,11 @@
 
 ## Status
 
-V.0 is complete and the authoritative cursor is V.1. This document records the
-initial acceleration audit and the boundaries that later Phase V work must
-preserve. It does not describe the current OptiX, Vulkan RT or DXR bridges as
-general production acceleration providers.
+V.0 and V.1 are complete and the authoritative cursor is V.2. This document
+records the initial acceleration audit, the frozen configuration contract and
+the boundaries that later Phase V work must preserve. It does not describe the
+current OptiX, Vulkan RT or DXR bridges as general production acceleration
+providers.
 
 ## Current production path
 
@@ -87,3 +88,34 @@ OptiX placeholders from being described as production and verifies that Phase
 V documentation and the authoritative cursor remain aligned. This is a
 regression boundary, not evidence that the diagnosed implementation is already
 correct.
+
+## V.1 configuration contract
+
+The backend-neutral C++ `AccelerationConfig` contains three independent policy
+axes:
+
+| Field | Vocabulary | V.1 executable boundary |
+|---|---|---|
+| provider | `auto`, `self_compute`, `optix`, `vulkan_rt`, `dxr` | `auto` resolves to CUDA `self_compute`; explicit `self_compute` is accepted; native providers reject until V.6 |
+| quality | `auto`, `fast_build`, `balanced`, `high_quality` | only `auto`; presets become executable in V.4 |
+| update policy | `auto`, `static`, `refit`, `rebuild` | `auto` and `static`; refit/rebuild become executable with V.3/V.6/V.10 |
+| clustered geometry | enabled/disabled | disabled until V.8 |
+| statistics | enabled/disabled | disabled until V.2 supplies real counters |
+| scratch budget | bytes or MiB at input surfaces | zero/derived until V.5 |
+
+JSON uses an `acceleration` object. CLI exposes provider, quality, update,
+cluster, stats and scratch-budget flags. The C ABI adds separate
+`ure_acceleration_config_t` and execution-config creation functions instead of
+growing the existing backend structure, so callers compiled against the prior
+layout remain safe. Pyure mirrors the enums and creation arguments.
+
+Selection validates provider/backend/capability compatibility before the
+renderer or session is created. Vocabulary reserved for later Phase V steps is
+therefore representable but never silently downgraded. Default construction
+continues to select the existing CUDA self-compute renderer.
+
+Host config tests cover JSON/CLI propagation, CUDA tests cover vocabulary and
+selection rejection, and C ABI/pyure tests cover versioned entry points plus
+unsupported requests. The V.1 closure passed the Release build and all 48
+registered CTest entries without changing traversal kernels or estimator
+behavior.

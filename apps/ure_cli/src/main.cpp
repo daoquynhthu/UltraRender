@@ -226,6 +226,35 @@ bool make_backend_config(
     return true;
 }
 
+bool make_acceleration_config(
+    const ure::config::AccelerationConfig& app_config,
+    ure::AccelerationConfig& config) {
+    const auto provider =
+        ure::parse_acceleration_provider(lowercase(app_config.provider));
+    const auto quality =
+        ure::parse_acceleration_quality(lowercase(app_config.quality));
+    const auto update_policy = ure::parse_acceleration_update_policy(
+        lowercase(app_config.update_policy));
+    if (!provider || !quality || !update_policy) {
+        std::cerr << "Error: invalid acceleration configuration\n";
+        return false;
+    }
+    if (app_config.scratch_budget_mb >
+        std::numeric_limits<std::uint64_t>::max() / (1024ull * 1024ull)) {
+        std::cerr << "Error: acceleration scratch budget overflows bytes\n";
+        return false;
+    }
+    config.provider = *provider;
+    config.quality = *quality;
+    config.update_policy = *update_policy;
+    config.clustered_geometry_enabled =
+        app_config.clustered_geometry_enabled;
+    config.collect_stats = app_config.collect_stats;
+    config.scratch_budget_bytes =
+        app_config.scratch_budget_mb * 1024ull * 1024ull;
+    return true;
+}
+
 bool make_wave_optics_config(const ure::config::WaveOpticsConfig& app_config, ure::WaveOpticsConfig& cfg) {
     if (!parse_wave_optics_mode(app_config.mode, cfg.mode)) {
         std::cerr << "Error: unsupported wave optics mode '" << app_config.mode << "'\n";
@@ -303,6 +332,10 @@ int cmd_render(const ure::config::CliResult& cli) {
     gpu_config.spectral_max_resident_mb = app_config.spectral.max_resident_mb;
     gpu_config.spectral_sampling_mode = parse_spectral_sampling_mode(app_config.spectral.sampling_mode);
     if (!make_backend_config(app_config.backend, gpu_config.backend)) {
+        return 1;
+    }
+    if (!make_acceleration_config(
+            app_config.acceleration, gpu_config.acceleration)) {
         return 1;
     }
     gpu_config.path_guiding.enabled = app_config.path_guiding.enabled;

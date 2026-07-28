@@ -72,6 +72,28 @@ class BackendFeature(IntFlag):
     SELF_COMPUTE_TRAVERSAL = 1 << 13
 
 
+class AccelerationProvider(IntEnum):
+    AUTO = 0
+    SELF_COMPUTE = 1
+    OPTIX = 2
+    VULKAN_RT = 3
+    DXR = 4
+
+
+class AccelerationBuildQuality(IntEnum):
+    AUTO = 0
+    FAST_BUILD = 1
+    BALANCED = 2
+    HIGH_QUALITY = 3
+
+
+class AccelerationUpdatePolicy(IntEnum):
+    AUTO = 0
+    STATIC = 1
+    REFIT = 2
+    REBUILD = 3
+
+
 class _Progress(ctypes.Structure):
     _fields_ = [
         ("spp", ctypes.c_int),
@@ -109,6 +131,17 @@ class _BackendConfig(ctypes.Structure):
         ("adapter_ordinal", ctypes.c_uint32),
         ("required_features", ctypes.c_uint64),
         ("memory_budget_bytes", ctypes.c_uint64),
+    ]
+
+
+class _AccelerationConfig(ctypes.Structure):
+    _fields_ = [
+        ("provider", ctypes.c_int),
+        ("quality", ctypes.c_int),
+        ("update_policy", ctypes.c_int),
+        ("clustered_geometry_enabled", ctypes.c_int),
+        ("collect_stats", ctypes.c_int),
+        ("scratch_budget_bytes", ctypes.c_uint64),
     ]
 
 
@@ -298,6 +331,14 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(_BackendConfig),
     ]
     lib.ure_session_create_backend_config.restype = ctypes.c_void_p
+    lib.ure_session_create_execution_config.argtypes = [
+        ctypes.POINTER(_SpectralConfig),
+        ctypes.POINTER(_WaveOpticsConfig),
+        ctypes.POINTER(_IntegratorConfig),
+        ctypes.POINTER(_BackendConfig),
+        ctypes.POINTER(_AccelerationConfig),
+    ]
+    lib.ure_session_create_execution_config.restype = ctypes.c_void_p
     lib.ure_backend_adapter_count.argtypes = [ctypes.c_int]
     lib.ure_backend_adapter_count.restype = ctypes.c_int
     lib.ure_backend_get_adapter_info.argtypes = [
@@ -455,6 +496,64 @@ def _backend_kind_id(kind: str | BackendKind) -> int:
         raise ValueError(f"unsupported backend: {kind}") from exc
 
 
+def _acceleration_provider_id(
+    provider: str | AccelerationProvider,
+) -> int:
+    if isinstance(provider, AccelerationProvider):
+        return int(provider)
+    providers = {
+        "auto": AccelerationProvider.AUTO,
+        "self_compute": AccelerationProvider.SELF_COMPUTE,
+        "optix": AccelerationProvider.OPTIX,
+        "vulkan_rt": AccelerationProvider.VULKAN_RT,
+        "dxr": AccelerationProvider.DXR,
+    }
+    try:
+        return int(providers[provider.lower()])
+    except KeyError as exc:
+        raise ValueError(
+            f"unsupported acceleration provider: {provider}"
+        ) from exc
+
+
+def _acceleration_quality_id(
+    quality: str | AccelerationBuildQuality,
+) -> int:
+    if isinstance(quality, AccelerationBuildQuality):
+        return int(quality)
+    qualities = {
+        "auto": AccelerationBuildQuality.AUTO,
+        "fast_build": AccelerationBuildQuality.FAST_BUILD,
+        "balanced": AccelerationBuildQuality.BALANCED,
+        "high_quality": AccelerationBuildQuality.HIGH_QUALITY,
+    }
+    try:
+        return int(qualities[quality.lower()])
+    except KeyError as exc:
+        raise ValueError(
+            f"unsupported acceleration quality: {quality}"
+        ) from exc
+
+
+def _acceleration_update_policy_id(
+    policy: str | AccelerationUpdatePolicy,
+) -> int:
+    if isinstance(policy, AccelerationUpdatePolicy):
+        return int(policy)
+    policies = {
+        "auto": AccelerationUpdatePolicy.AUTO,
+        "static": AccelerationUpdatePolicy.STATIC,
+        "refit": AccelerationUpdatePolicy.REFIT,
+        "rebuild": AccelerationUpdatePolicy.REBUILD,
+    }
+    try:
+        return int(policies[policy.lower()])
+    except KeyError as exc:
+        raise ValueError(
+            f"unsupported acceleration update policy: {policy}"
+        ) from exc
+
+
 def enumerate_backend_adapters(
     kind: str | BackendKind = BackendKind.AUTO,
 ) -> list[BackendAdapter]:
@@ -549,6 +648,12 @@ class RenderSession:
         backend_adapter_ordinal: int = 0,
         backend_required_features: BackendFeature | int = 0,
         backend_memory_budget_bytes: int = 0,
+        acceleration_provider: str | AccelerationProvider = AccelerationProvider.AUTO,
+        acceleration_quality: str | AccelerationBuildQuality = AccelerationBuildQuality.AUTO,
+        acceleration_update_policy: str | AccelerationUpdatePolicy = AccelerationUpdatePolicy.AUTO,
+        acceleration_clustered_geometry: bool = False,
+        acceleration_collect_stats: bool = False,
+        acceleration_scratch_budget_bytes: int = 0,
     ):
         self._handle: Optional[int] = None
         wave_requested = (
@@ -583,7 +688,20 @@ class RenderSession:
             or int(backend_required_features) != 0
             or backend_memory_budget_bytes != 0
         )
-        if backend_requested:
+        acceleration_requested = (
+            _acceleration_provider_id(acceleration_provider)
+            != int(AccelerationProvider.AUTO)
+            or _acceleration_quality_id(acceleration_quality)
+            != int(AccelerationBuildQuality.AUTO)
+            or _acceleration_update_policy_id(
+                acceleration_update_policy
+            )
+            != int(AccelerationUpdatePolicy.AUTO)
+            or acceleration_clustered_geometry
+            or acceleration_collect_stats
+            or acceleration_scratch_budget_bytes != 0
+        )
+        if backend_requested or acceleration_requested:
             cfg = _SpectralConfig(
                 int(domain_bins),
                 int(packet_lanes if packet_lanes > 0 else num_wavelengths),
@@ -611,6 +729,16 @@ class RenderSession:
                 int(backend_adapter_ordinal),
                 int(backend_required_features),
                 int(backend_memory_budget_bytes),
+            )
+            acceleration_config = _AccelerationConfig(
+                _acceleration_provider_id(acceleration_provider),
+                _acceleration_quality_id(acceleration_quality),
+                _acceleration_update_policy_id(
+                    acceleration_update_policy
+                ),
+                int(acceleration_clustered_geometry),
+                int(acceleration_collect_stats),
+                int(acceleration_scratch_budget_bytes),
             )
             integrator_ptr = None
             if integrator_requested:
@@ -664,11 +792,12 @@ class RenderSession:
                     0.9,
                 )
                 integrator_ptr = ctypes.byref(integrator)
-            handle = native().ure_session_create_backend_config(
+            handle = native().ure_session_create_execution_config(
                 ctypes.byref(cfg),
                 ctypes.byref(wave),
                 integrator_ptr,
                 ctypes.byref(backend_config),
+                ctypes.byref(acceleration_config),
             )
         elif integrator_requested:
             cfg = _SpectralConfig(
@@ -1013,6 +1142,12 @@ def create_session(
     backend_adapter_ordinal: int = 0,
     backend_required_features: BackendFeature | int = 0,
     backend_memory_budget_bytes: int = 0,
+    acceleration_provider: str | AccelerationProvider = AccelerationProvider.AUTO,
+    acceleration_quality: str | AccelerationBuildQuality = AccelerationBuildQuality.AUTO,
+    acceleration_update_policy: str | AccelerationUpdatePolicy = AccelerationUpdatePolicy.AUTO,
+    acceleration_clustered_geometry: bool = False,
+    acceleration_collect_stats: bool = False,
+    acceleration_scratch_budget_bytes: int = 0,
 ) -> RenderSession:
     return RenderSession(
         num_wavelengths,
@@ -1064,6 +1199,12 @@ def create_session(
         backend_adapter_ordinal=backend_adapter_ordinal,
         backend_required_features=backend_required_features,
         backend_memory_budget_bytes=backend_memory_budget_bytes,
+        acceleration_provider=acceleration_provider,
+        acceleration_quality=acceleration_quality,
+        acceleration_update_policy=acceleration_update_policy,
+        acceleration_clustered_geometry=acceleration_clustered_geometry,
+        acceleration_collect_stats=acceleration_collect_stats,
+        acceleration_scratch_budget_bytes=acceleration_scratch_budget_bytes,
     )
 
 

@@ -74,6 +74,37 @@ typedef struct ure_backend_config_t {
     uint64_t memory_budget_bytes;
 } ure_backend_config_t;
 
+typedef enum ure_acceleration_provider_t {
+    URE_ACCELERATION_PROVIDER_AUTO = 0,
+    URE_ACCELERATION_PROVIDER_SELF_COMPUTE = 1,
+    URE_ACCELERATION_PROVIDER_OPTIX = 2,
+    URE_ACCELERATION_PROVIDER_VULKAN_RT = 3,
+    URE_ACCELERATION_PROVIDER_DXR = 4
+} ure_acceleration_provider_t;
+
+typedef enum ure_acceleration_build_quality_t {
+    URE_ACCELERATION_QUALITY_AUTO = 0,
+    URE_ACCELERATION_QUALITY_FAST_BUILD = 1,
+    URE_ACCELERATION_QUALITY_BALANCED = 2,
+    URE_ACCELERATION_QUALITY_HIGH = 3
+} ure_acceleration_build_quality_t;
+
+typedef enum ure_acceleration_update_policy_t {
+    URE_ACCELERATION_UPDATE_AUTO = 0,
+    URE_ACCELERATION_UPDATE_STATIC = 1,
+    URE_ACCELERATION_UPDATE_REFIT = 2,
+    URE_ACCELERATION_UPDATE_REBUILD = 3
+} ure_acceleration_update_policy_t;
+
+typedef struct ure_acceleration_config_t {
+    int provider;
+    int quality;
+    int update_policy;
+    int clustered_geometry_enabled;
+    int collect_stats;
+    uint64_t scratch_budget_bytes;
+} ure_acceleration_config_t;
+
 typedef struct ure_backend_adapter_info_t {
     int kind;
     char adapter_id[64];
@@ -232,6 +263,9 @@ void ure_set_min_log_level(ure_log_level_t level);
 /* Create a GPU renderer. Returns NULL on failure. */
 ure_engine_t* ure_engine_create(void);
 ure_engine_t* ure_engine_create_backend(const ure_backend_config_t* config);
+ure_engine_t* ure_engine_create_execution_config(
+    const ure_backend_config_t* backend_config,
+    const ure_acceleration_config_t* acceleration_config);
 
 /* Destroy the renderer. Safe to call with NULL. */
 void ure_engine_destroy(ure_engine_t* engine);
@@ -288,6 +322,12 @@ ure_session_t* ure_session_create_backend_config(const ure_spectral_config_t* sp
                                                  const ure_wave_optics_config_t* wave_config,
                                                  const ure_integrator_config_t* integrator_config,
                                                  const ure_backend_config_t* backend_config);
+ure_session_t* ure_session_create_execution_config(
+    const ure_spectral_config_t* spectral_config,
+    const ure_wave_optics_config_t* wave_config,
+    const ure_integrator_config_t* integrator_config,
+    const ure_backend_config_t* backend_config,
+    const ure_acceleration_config_t* acceleration_config);
 void ure_session_destroy(ure_session_t* session);
 int ure_session_load_scene_file(ure_session_t* session, const char* path);
 int ure_session_start(ure_session_t* session, int progressive);

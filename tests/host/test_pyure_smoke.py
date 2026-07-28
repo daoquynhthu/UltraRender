@@ -39,6 +39,26 @@ def main() -> int:
         backend_memory_budget_bytes=64 * 1024 * 1024,
     ) as session:
         assert session.progress().state == pyure.SessionState.EMPTY
+    with pyure.create_session(
+        backend=pyure.BackendKind.CUDA,
+        acceleration_provider=pyure.AccelerationProvider.SELF_COMPUTE,
+        acceleration_update_policy=pyure.AccelerationUpdatePolicy.STATIC,
+    ) as session:
+        assert session.progress().state == pyure.SessionState.EMPTY
+    try:
+        pyure.create_session(acceleration_quality="high_quality")
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError(
+            "unimplemented acceleration quality must fail"
+        )
+    try:
+        pyure.create_session(acceleration_provider="invalid")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unknown acceleration provider must fail")
 
     for unavailable_backend in ("vulkan", "d3d12"):
         try:

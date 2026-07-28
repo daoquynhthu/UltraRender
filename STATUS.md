@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `V.1`. Phase Q, Phase R and Phase T are complete. Phase V has completed the V.0 acceleration audit, which freezes the current mesh-local BVH, fixed-stack traversal, linear fallback, missing TLAS/BLAS and legacy host/OptiX placeholder risks before configuration and provider work begins. Full SceneIR rendering is not yet lowered to Vulkan or D3D12 and remains dependent on the Phase V production acceleration stack.
+The authoritative construction cursor is `V.2`. Phase Q, Phase R and Phase T are complete. Phase V has completed the V.0 acceleration audit and V.1 configuration/API contract. Provider, quality, update, clustering, statistics and scratch-budget requests now have JSON, CLI, C ABI and pyure parity; only the current CUDA self-compute defaults and static update declaration execute, while unimplemented combinations fail before rendering. Full SceneIR rendering is not yet lowered to Vulkan or D3D12 and remains dependent on the Phase V production acceleration stack.
 
 ## Supported execution baseline
 
@@ -55,7 +55,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | D3D12/DXR optional runtime | T.9 implemented and tested | Windows-only SDK-neutral public surface; buffer/image/sampler, DXIL, typed descriptor heaps, compute/copy queues, cross-queue fences, DRED, bounded DXR 1.1 BLAS/TLAS and compute fallback; CUDA/Vulkan/D3D12 parity fixtures and no-D3D12 isolation; full SceneIR renderer remains unavailable |
 | Multi-backend scheduling | T.10 implemented and tested | Canonical weighted sample partition, feature/precision/coherence/budget/semantic negotiation, backend-native resource cache identity, versioned distributed provenance and overlap rejection; actual CUDA, NVIDIA/Intel Vulkan and NVIDIA/Intel D3D12 inventory plus SDK-free gate |
 | Cross-backend validation | T.11 implemented and tested | Machine-readable physical-unit, hit/framebuffer, CUDA reference, variance/MSE, loss, budget, cache, cold/warm launch, VRAM and throughput report; CUDA/Vulkan required, DXR capability-driven, all differences thresholded and classified |
-| GPU geometry acceleration audit | V.0 complete | Current CUDA per-mesh binary BVH and instance scan, fixed stack, silent linear fallback, shadow-instance gap, no TLAS/refit/stats, legacy host traversal and nonfunctional OptiX placeholders are documented and statically frozen; V.1 owns configuration/API |
+| GPU geometry acceleration configuration | V.0-V.1 complete | Current CUDA per-mesh binary BVH risks are documented and statically frozen. `AccelerationConfig` spans C++/JSON/CLI/C ABI/pyure with version-safe C entry points and fail-loud provider/policy gates; V.2 owns baseline traversal correctness and statistics |
 | Runtime spectral domain / wavelength packets | Implemented and tested | Packet cap 32; sampled lane mode supported |
 | Stokes/Mueller polarization | Implemented for covered boundary/transport paths | Not coherent field transport |
 | Lambertian/metal/dielectric/cloth | Implemented for tested paths | Material model coverage is not exhaustive |

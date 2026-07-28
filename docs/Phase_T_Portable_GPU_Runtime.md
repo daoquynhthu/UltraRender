@@ -2,7 +2,7 @@
 
 ## Status
 
-T.0 through T.11 are complete and the authoritative cursor is V.0. This
+T.0 through T.11 are complete and the current project cursor is V.2. This
 document records the closed Phase T contract. CUDA remains the complete
 scene rendering backend. Vulkan has a production compute-runtime foundation and
 a bounded acceleration bridge on Windows and Linux. D3D12/DXR has an optional
@@ -597,4 +597,5 @@ Phase T therefore closes the backend-neutral runtime and bounded core execution
 contract. It does not claim that Vulkan or D3D12 can render arbitrary SceneIR
 through the public renderer. Production BLAS/TLAS policy, refit/compaction,
 native provider completion and the general portable SceneIR rendering path
-remain Phase V. The authoritative cursor is V.0.
+remain Phase V. Phase T closed by advancing to V.0; the current project cursor
+is V.2.

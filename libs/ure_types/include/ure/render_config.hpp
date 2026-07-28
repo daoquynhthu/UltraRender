@@ -47,6 +47,40 @@ enum class IntegratorQualityPreset {
     Research
 };
 
+enum class AccelerationProviderKind {
+    Automatic,
+    SelfCompute,
+    Optix,
+    VulkanRT,
+    DXR
+};
+
+enum class AccelerationBuildQuality {
+    Automatic,
+    FastBuild,
+    Balanced,
+    HighQuality
+};
+
+enum class AccelerationUpdatePolicy {
+    Automatic,
+    Static,
+    Refit,
+    Rebuild
+};
+
+struct AccelerationConfig {
+    AccelerationProviderKind provider =
+        AccelerationProviderKind::Automatic;
+    AccelerationBuildQuality quality =
+        AccelerationBuildQuality::Automatic;
+    AccelerationUpdatePolicy update_policy =
+        AccelerationUpdatePolicy::Automatic;
+    bool clustered_geometry_enabled = false;
+    bool collect_stats = false;
+    std::uint64_t scratch_budget_bytes = 0;
+};
+
 struct WaveOpticsConfig {
     WaveOpticsMode mode = WaveOpticsMode::Radiometric;
     bool camera_diffraction_enabled = false;
@@ -147,6 +181,7 @@ struct IntegratorRuntimeConfig {
 
 struct RenderConfig {
     BackendSelectionConfig backend;
+    AccelerationConfig acceleration;
     int queue_capacity = 0;       // 0 = auto (width * height)
     int max_trace_depth = 50;
     int num_wavelengths = 8;      // Legacy alias for spectral_packet_lanes.

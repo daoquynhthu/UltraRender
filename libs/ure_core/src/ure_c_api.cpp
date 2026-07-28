@@ -277,6 +277,46 @@ bool apply_backend_config(
     return true;
 }
 
+bool apply_acceleration_config(
+    RenderConfig& config,
+    const ure_acceleration_config_t* acceleration_config) {
+    if (!acceleration_config) return true;
+    if (acceleration_config->provider <
+            URE_ACCELERATION_PROVIDER_AUTO ||
+        acceleration_config->provider >
+            URE_ACCELERATION_PROVIDER_DXR ||
+        acceleration_config->quality <
+            URE_ACCELERATION_QUALITY_AUTO ||
+        acceleration_config->quality >
+            URE_ACCELERATION_QUALITY_HIGH ||
+        acceleration_config->update_policy <
+            URE_ACCELERATION_UPDATE_AUTO ||
+        acceleration_config->update_policy >
+            URE_ACCELERATION_UPDATE_REBUILD ||
+        (acceleration_config->clustered_geometry_enabled != 0 &&
+         acceleration_config->clustered_geometry_enabled != 1) ||
+        (acceleration_config->collect_stats != 0 &&
+         acceleration_config->collect_stats != 1)) {
+        return false;
+    }
+    config.acceleration.provider =
+        static_cast<AccelerationProviderKind>(
+            acceleration_config->provider);
+    config.acceleration.quality =
+        static_cast<AccelerationBuildQuality>(
+            acceleration_config->quality);
+    config.acceleration.update_policy =
+        static_cast<AccelerationUpdatePolicy>(
+            acceleration_config->update_policy);
+    config.acceleration.clustered_geometry_enabled =
+        acceleration_config->clustered_geometry_enabled != 0;
+    config.acceleration.collect_stats =
+        acceleration_config->collect_stats != 0;
+    config.acceleration.scratch_budget_bytes =
+        acceleration_config->scratch_budget_bytes;
+    return true;
+}
+
 template <std::size_t N>
 void copy_c_string(char (&destination)[N], const std::string& source) {
     const auto count = std::min(source.size(), N - 1);
@@ -470,9 +510,18 @@ ure_engine_t* ure_engine_create(void) {
 
 ure_engine_t* ure_engine_create_backend(
     const ure_backend_config_t* backend_config) {
+    return ure_engine_create_execution_config(backend_config, nullptr);
+}
+
+ure_engine_t* ure_engine_create_execution_config(
+    const ure_backend_config_t* backend_config,
+    const ure_acceleration_config_t* acceleration_config) {
     try {
         RenderConfig config;
         if (!apply_backend_config(config, backend_config)) return nullptr;
+        if (!apply_acceleration_config(config, acceleration_config)) {
+            return nullptr;
+        }
         auto engine = RenderEngineFactory::create_gpu_renderer(config);
         return reinterpret_cast<ure_engine_t*>(engine.release());
     } catch (...) {
@@ -688,6 +737,20 @@ ure_session_t* ure_session_create_backend_config(
     const ure_wave_optics_config_t* wave_config,
     const ure_integrator_config_t* integrator_config,
     const ure_backend_config_t* backend_config) {
+    return ure_session_create_execution_config(
+        spectral_config,
+        wave_config,
+        integrator_config,
+        backend_config,
+        nullptr);
+}
+
+ure_session_t* ure_session_create_execution_config(
+    const ure_spectral_config_t* spectral_config,
+    const ure_wave_optics_config_t* wave_config,
+    const ure_integrator_config_t* integrator_config,
+    const ure_backend_config_t* backend_config,
+    const ure_acceleration_config_t* acceleration_config) {
     try {
         RenderConfig config;
         if (!apply_spectral_config(config, spectral_config)) return nullptr;
@@ -705,6 +768,9 @@ ure_session_t* ure_session_create_backend_config(
             return nullptr;
         }
         if (!apply_backend_config(config, backend_config)) return nullptr;
+        if (!apply_acceleration_config(config, acceleration_config)) {
+            return nullptr;
+        }
         auto session = std::make_unique<RenderSession>(
             RenderSession::create(config));
         return reinterpret_cast<ure_session_t*>(session.release());

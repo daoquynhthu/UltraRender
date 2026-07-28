@@ -208,6 +208,74 @@ std::optional<BackendFeature> parse_backend_feature(std::string_view name) {
     return std::nullopt;
 }
 
+const char* acceleration_provider_name(
+    AccelerationProviderKind provider) {
+    switch (provider) {
+    case AccelerationProviderKind::Automatic: return "auto";
+    case AccelerationProviderKind::SelfCompute: return "self_compute";
+    case AccelerationProviderKind::Optix: return "optix";
+    case AccelerationProviderKind::VulkanRT: return "vulkan_rt";
+    case AccelerationProviderKind::DXR: return "dxr";
+    }
+    return "invalid";
+}
+
+std::optional<AccelerationProviderKind> parse_acceleration_provider(
+    std::string_view name) {
+    if (name == "auto") return AccelerationProviderKind::Automatic;
+    if (name == "self_compute") {
+        return AccelerationProviderKind::SelfCompute;
+    }
+    if (name == "optix") return AccelerationProviderKind::Optix;
+    if (name == "vulkan_rt") return AccelerationProviderKind::VulkanRT;
+    if (name == "dxr") return AccelerationProviderKind::DXR;
+    return std::nullopt;
+}
+
+const char* acceleration_quality_name(
+    AccelerationBuildQuality quality) {
+    switch (quality) {
+    case AccelerationBuildQuality::Automatic: return "auto";
+    case AccelerationBuildQuality::FastBuild: return "fast_build";
+    case AccelerationBuildQuality::Balanced: return "balanced";
+    case AccelerationBuildQuality::HighQuality: return "high_quality";
+    }
+    return "invalid";
+}
+
+std::optional<AccelerationBuildQuality> parse_acceleration_quality(
+    std::string_view name) {
+    if (name == "auto") return AccelerationBuildQuality::Automatic;
+    if (name == "fast_build") {
+        return AccelerationBuildQuality::FastBuild;
+    }
+    if (name == "balanced") return AccelerationBuildQuality::Balanced;
+    if (name == "high_quality") {
+        return AccelerationBuildQuality::HighQuality;
+    }
+    return std::nullopt;
+}
+
+const char* acceleration_update_policy_name(
+    AccelerationUpdatePolicy policy) {
+    switch (policy) {
+    case AccelerationUpdatePolicy::Automatic: return "auto";
+    case AccelerationUpdatePolicy::Static: return "static";
+    case AccelerationUpdatePolicy::Refit: return "refit";
+    case AccelerationUpdatePolicy::Rebuild: return "rebuild";
+    }
+    return "invalid";
+}
+
+std::optional<AccelerationUpdatePolicy>
+parse_acceleration_update_policy(std::string_view name) {
+    if (name == "auto") return AccelerationUpdatePolicy::Automatic;
+    if (name == "static") return AccelerationUpdatePolicy::Static;
+    if (name == "refit") return AccelerationUpdatePolicy::Refit;
+    if (name == "rebuild") return AccelerationUpdatePolicy::Rebuild;
+    return std::nullopt;
+}
+
 BackendFeatureSet required_backend_features(const RenderConfig& config) {
     BackendFeatureSet features =
         backend_feature_bit(BackendFeature::Compute) |
@@ -328,6 +396,45 @@ BackendSelection select_backend(const RenderConfig& config) {
     if (!backend_has_features(selected->features, required)) {
         throw std::invalid_argument(
             "selected backend adapter lacks required features");
+    }
+    const auto& acceleration = config.acceleration;
+    const auto provider = acceleration.provider ==
+            AccelerationProviderKind::Automatic
+        ? AccelerationProviderKind::SelfCompute
+        : acceleration.provider;
+    if (provider != AccelerationProviderKind::SelfCompute ||
+        selected->kind != BackendKind::Cuda ||
+        !backend_has_features(
+            selected->features,
+            backend_feature_bit(
+                BackendFeature::SelfComputeTraversal))) {
+        throw std::invalid_argument(
+            std::string("requested acceleration provider is unavailable: ") +
+            acceleration_provider_name(provider));
+    }
+    if (acceleration.quality !=
+        AccelerationBuildQuality::Automatic) {
+        throw std::invalid_argument(
+            "explicit acceleration build quality is not implemented");
+    }
+    if (acceleration.update_policy !=
+            AccelerationUpdatePolicy::Automatic &&
+        acceleration.update_policy !=
+            AccelerationUpdatePolicy::Static) {
+        throw std::invalid_argument(
+            "requested acceleration update policy is not implemented");
+    }
+    if (acceleration.clustered_geometry_enabled) {
+        throw std::invalid_argument(
+            "clustered geometry acceleration is not implemented");
+    }
+    if (acceleration.collect_stats) {
+        throw std::invalid_argument(
+            "acceleration statistics are not implemented");
+    }
+    if (acceleration.scratch_budget_bytes != 0) {
+        throw std::invalid_argument(
+            "acceleration scratch budgeting is not implemented");
     }
     const auto explicit_budget = config.backend.memory_budget_bytes;
     if (explicit_budget > selected->memory.available_bytes) {

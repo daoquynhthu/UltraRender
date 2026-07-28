@@ -42,6 +42,15 @@ struct BackendConfig {
     std::uint64_t memory_budget_mb = 0;
 };
 
+struct AccelerationConfig {
+    std::string provider = "auto";
+    std::string quality = "auto";
+    std::string update_policy = "auto";
+    bool clustered_geometry_enabled = false;
+    bool collect_stats = false;
+    std::uint64_t scratch_budget_mb = 0;
+};
+
 struct WaveOpticsConfig {
     std::string mode = "radiometric";
     bool camera_diffraction_enabled = false;
@@ -161,6 +170,7 @@ struct RenderConfig {
     OutputConfig output;
     GpuConfig gpu;
     BackendConfig backend;
+    AccelerationConfig acceleration;
     WaveOpticsConfig wave_optics;
     PathGuidingConfig path_guiding;
     EnvironmentLightConfig environment_light;

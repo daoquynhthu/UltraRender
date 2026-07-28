@@ -2,7 +2,7 @@
 
 Document status: current interface summary
 
-Last reviewed: 2026-07-15
+Last reviewed: 2026-07-28
 
 This document describes the implemented API boundary. It is not a promise of long-term ABI stability. `PLAN.md` controls future API work.
 
@@ -40,6 +40,26 @@ The session owns a renderer instance and retained SceneIR state. Scene replaceme
 - BMP/HDR output helpers;
 - `.ure`, `.urescene`, `.urepkg`, glTF and GLB loading through native validation/adapter boundaries;
 - pyure package guard through `RenderSession.load_package()`.
+- backend and acceleration-aware creation through `RenderConfig`,
+  `ure_engine_create_execution_config()`,
+  `ure_session_create_execution_config()` and matching pyure arguments.
+
+## Acceleration configuration
+
+`AccelerationConfig` separates geometry acceleration policy from execution
+backend selection. Its provider vocabulary is `auto`, `self_compute`, `optix`,
+`vulkan_rt` and `dxr`; build quality is `auto`, `fast_build`, `balanced` or
+`high_quality`; update policy is `auto`, `static`, `refit` or `rebuild`.
+Clustered geometry, statistics collection and scratch-memory budgeting are
+explicit requests.
+
+At the V.1 boundary, default selection resolves to CUDA `self_compute`.
+Explicit `self_compute` with automatic quality and auto/static update is also
+accepted. Quality presets, refit/rebuild, clustered geometry, statistics,
+scratch budgets and native RT providers remain later Phase V work and fail
+before rendering. Existing backend-only C entry points retain their original
+layout and behavior; the execution-config entry points add acceleration without
+requiring callers to pass a larger legacy structure.
 
 ## Threading and ownership
 
@@ -50,7 +70,7 @@ The session owns a renderer instance and retained SceneIR state. Scene replaceme
 
 ## Error behavior
 
-C functions generally return `0` on success and a negative value or null handle on failure. Unsupported wave/integrator modes, invalid native capability requirements, malformed resources and insufficient queue/budget configurations fail before rendering where possible. The C ABI does not yet expose a complete structured error object; callers should also route `ure_diag` logs.
+C functions generally return `0` on success and a negative value or null handle on failure. Unsupported wave/integrator modes, invalid backend/acceleration combinations, malformed resources and insufficient queue/budget configurations fail before rendering where possible. The C ABI does not yet expose a complete structured error object; callers should also route `ure_diag` logs.
 
 ## Stability boundary
 

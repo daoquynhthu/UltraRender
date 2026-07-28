@@ -67,10 +67,17 @@ try {
     }
     Assert-Contains $ledger "This is a" "V.0 gate lacks its regression-boundary qualification"
     Assert-Contains $ledger "regression boundary" "V.0 gate overstates audited correctness"
-    Assert-Contains "PLAN.md" "当前游标: V\.1" "PLAN cursor did not advance to V.1"
+    Assert-Contains "PLAN.md" "当前游标: V\.2" "PLAN cursor did not advance to V.2"
     Assert-Contains "PLAN.md" "V\.0 closure.*权威游标进入 V\.1" "PLAN lacks the V.0 closure and V.1 gate"
+    Assert-Contains "PLAN.md" "V\.1 closure.*权威游标进入 V\.2" "PLAN lacks the V.1 closure and V.2 gate"
     Assert-Contains "README.md" "OptiX production provider.*尚未完成" "README misstates OptiX production status"
     Assert-Contains "STATUS.md" "full SceneIR renderer remains unavailable" "STATUS misstates the portable acceleration boundary"
+    Assert-Contains "libs/ure_types/include/ure/render_config.hpp" "struct AccelerationConfig" "V.1 C++ acceleration config is missing"
+    Assert-Contains "libs/ure_types/include/ure/render_config.hpp" "AccelerationProviderKind::Automatic" "V.1 default provider changed"
+    Assert-Contains "libs/ure_core/include/ure/ure_c_api.h" "ure_acceleration_config_t" "V.1 C acceleration config is missing"
+    Assert-Contains "libs/ure_core/include/ure/ure_c_api.h" "ure_session_create_execution_config" "V.1 version-safe session entry point is missing"
+    Assert-Contains "pyure/__init__.py" "class AccelerationProvider" "V.1 pyure provider enum is missing"
+    Assert-Contains "libs/ure_core/src/backend_cuda.cu" "requested acceleration provider is unavailable" "V.1 provider rejection is missing"
 
     Assert-Contains "libs/ure_core/src/bvh_builder.cpp" "count <= 4" "CUDA BVH leaf-size audit signature changed"
     Assert-Contains "libs/ure_core/src/bvh_builder.cpp" "std::nth_element" "CUDA BVH split fallback audit signature changed"

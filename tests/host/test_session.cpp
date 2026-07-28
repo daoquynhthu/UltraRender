@@ -933,6 +933,50 @@ static int test_c_session_lifecycle() {
     invalid_integrator.sampler = URE_INTEGRATOR_SAMPLER_DEFAULT;
     invalid_integrator.quality_preset = URE_INTEGRATOR_QUALITY_DEFAULT;
     CHECK(ure_session_create_integrator_config(&spectral_config, &radiometric_wave_config, &invalid_integrator) == nullptr);
+
+    ure_backend_config_t backend_config{};
+    backend_config.kind = URE_BACKEND_CUDA;
+    ure_acceleration_config_t acceleration_config{};
+    acceleration_config.provider =
+        URE_ACCELERATION_PROVIDER_SELF_COMPUTE;
+    acceleration_config.quality = URE_ACCELERATION_QUALITY_AUTO;
+    acceleration_config.update_policy =
+        URE_ACCELERATION_UPDATE_STATIC;
+    ure_session_t* execution_session =
+        ure_session_create_execution_config(
+            &spectral_config,
+            &radiometric_wave_config,
+            nullptr,
+            &backend_config,
+            &acceleration_config);
+    CHECK(execution_session != nullptr);
+    ure_session_destroy(execution_session);
+    acceleration_config.quality =
+        URE_ACCELERATION_QUALITY_HIGH;
+    CHECK(
+        ure_session_create_execution_config(
+            &spectral_config,
+            &radiometric_wave_config,
+            nullptr,
+            &backend_config,
+            &acceleration_config) == nullptr);
+    acceleration_config.quality = 99;
+    CHECK(
+        ure_session_create_execution_config(
+            &spectral_config,
+            &radiometric_wave_config,
+            nullptr,
+            &backend_config,
+            &acceleration_config) == nullptr);
+    acceleration_config.quality = URE_ACCELERATION_QUALITY_AUTO;
+    acceleration_config.collect_stats = 2;
+    CHECK(
+        ure_session_create_execution_config(
+            &spectral_config,
+            &radiometric_wave_config,
+            nullptr,
+            &backend_config,
+            &acceleration_config) == nullptr);
     return 0;
 }
 

@@ -183,6 +183,19 @@ static int test_backend_identity_and_capability_contract() {
     CHECK(ure::parse_backend_kind("vulkan") == ure::BackendKind::Vulkan);
     CHECK(!ure::parse_backend_kind("invalid"));
     CHECK(
+        ure::parse_acceleration_provider("self_compute") ==
+        ure::AccelerationProviderKind::SelfCompute);
+    CHECK(
+        ure::parse_acceleration_provider("optix") ==
+        ure::AccelerationProviderKind::Optix);
+    CHECK(
+        ure::parse_acceleration_quality("high_quality") ==
+        ure::AccelerationBuildQuality::HighQuality);
+    CHECK(
+        ure::parse_acceleration_update_policy("refit") ==
+        ure::AccelerationUpdatePolicy::Refit);
+    CHECK(!ure::parse_acceleration_provider("invalid"));
+    CHECK(
         ure::parse_backend_feature("ray_query") ==
         ure::BackendFeature::RayQuery);
     CHECK(
@@ -256,6 +269,37 @@ static int test_backend_identity_and_capability_contract() {
     CHECK(explicit_selection.adapter.adapter_id == adapter.adapter_id);
     CHECK(explicit_selection.memory_budget_bytes ==
           config.backend.memory_budget_bytes);
+    config.acceleration.provider =
+        ure::AccelerationProviderKind::SelfCompute;
+    config.acceleration.update_policy =
+        ure::AccelerationUpdatePolicy::Static;
+    CHECK(
+        ure::select_backend(config).adapter.kind ==
+        ure::BackendKind::Cuda);
+    config.acceleration.quality =
+        ure::AccelerationBuildQuality::FastBuild;
+    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    config.acceleration.quality =
+        ure::AccelerationBuildQuality::Automatic;
+    config.acceleration.update_policy =
+        ure::AccelerationUpdatePolicy::Refit;
+    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    config.acceleration.update_policy =
+        ure::AccelerationUpdatePolicy::Automatic;
+    config.acceleration.clustered_geometry_enabled = true;
+    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    config.acceleration.clustered_geometry_enabled = false;
+    config.acceleration.collect_stats = true;
+    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    config.acceleration.collect_stats = false;
+    config.acceleration.scratch_budget_bytes = 1024;
+    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    config.acceleration.scratch_budget_bytes = 0;
+    config.acceleration.provider =
+        ure::AccelerationProviderKind::Optix;
+    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    config.acceleration.provider =
+        ure::AccelerationProviderKind::Automatic;
 
     config.backend.adapter_id = "cuda:missing";
     CHECK(throws_exception([&] { (void)ure::select_backend(config); }));

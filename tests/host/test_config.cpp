@@ -623,6 +623,55 @@ static int test_backend_cli_overrides() {
     return 0;
 }
 
+static int test_acceleration_json_fields() {
+    const char* path = "test_config_acceleration.json";
+    {
+        std::ofstream out(path);
+        out << R"({
+  "acceleration": {
+    "provider": "self_compute",
+    "quality": "high_quality",
+    "update_policy": "refit",
+    "clustered_geometry": true,
+    "collect_stats": true,
+    "scratch_budget_mb": 512
+  }
+})";
+    }
+    const auto cfg = ure::config::load_config(path);
+    std::remove(path);
+    CHECK(cfg.acceleration.provider == "self_compute");
+    CHECK(cfg.acceleration.quality == "high_quality");
+    CHECK(cfg.acceleration.update_policy == "refit");
+    CHECK(cfg.acceleration.clustered_geometry_enabled);
+    CHECK(cfg.acceleration.collect_stats);
+    CHECK(cfg.acceleration.scratch_budget_mb == 512u);
+    return 0;
+}
+
+static int test_acceleration_cli_overrides() {
+    const char* argv[] = {
+        "ure_cli", "render", "scene.gltf",
+        "--acceleration-provider", "optix",
+        "--acceleration-quality", "balanced",
+        "--acceleration-update", "rebuild",
+        "--enable-clustered-geometry",
+        "--acceleration-stats",
+        "--acceleration-scratch-budget-mb", "768"
+    };
+    const auto result = ure::config::parse_cli(
+        static_cast<int>(sizeof(argv) / sizeof(argv[0])),
+        const_cast<char**>(argv));
+    const auto& cfg = result.config;
+    CHECK(cfg.acceleration.provider == "optix");
+    CHECK(cfg.acceleration.quality == "balanced");
+    CHECK(cfg.acceleration.update_policy == "rebuild");
+    CHECK(cfg.acceleration.clustered_geometry_enabled);
+    CHECK(cfg.acceleration.collect_stats);
+    CHECK(cfg.acceleration.scratch_budget_mb == 768u);
+    return 0;
+}
+
 static int test_native_tool_commands() {
     const char* pack_argv[] = {"ure_cli", "pack", "a.ure", "b.urescene", "--output", "bundle.urepkg"};
     auto pack = ure::config::parse_cli(static_cast<int>(sizeof(pack_argv) / sizeof(pack_argv[0])), const_cast<char**>(pack_argv));
@@ -669,6 +718,8 @@ int main() {
     failed += run("test_integrator_runtime_cli_overrides", test_integrator_runtime_cli_overrides);
     failed += run("test_backend_json_fields", test_backend_json_fields);
     failed += run("test_backend_cli_overrides", test_backend_cli_overrides);
+    failed += run("test_acceleration_json_fields", test_acceleration_json_fields);
+    failed += run("test_acceleration_cli_overrides", test_acceleration_cli_overrides);
     failed += run("test_native_tool_commands", test_native_tool_commands);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);

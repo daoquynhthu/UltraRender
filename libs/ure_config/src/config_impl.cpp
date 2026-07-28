@@ -63,6 +63,27 @@ RenderConfig load_config(const std::string& path) {
                 cfg.backend.memory_budget_mb =
                     b["memory_budget_mb"].get<std::uint64_t>();
         }
+        if (j.contains("acceleration")) {
+            auto& a = j["acceleration"];
+            if (a.contains("provider"))
+                cfg.acceleration.provider =
+                    a["provider"].get<std::string>();
+            if (a.contains("quality"))
+                cfg.acceleration.quality =
+                    a["quality"].get<std::string>();
+            if (a.contains("update_policy"))
+                cfg.acceleration.update_policy =
+                    a["update_policy"].get<std::string>();
+            if (a.contains("clustered_geometry"))
+                cfg.acceleration.clustered_geometry_enabled =
+                    a["clustered_geometry"].get<bool>();
+            if (a.contains("collect_stats"))
+                cfg.acceleration.collect_stats =
+                    a["collect_stats"].get<bool>();
+            if (a.contains("scratch_budget_mb"))
+                cfg.acceleration.scratch_budget_mb =
+                    a["scratch_budget_mb"].get<std::uint64_t>();
+        }
         if (j.contains("wave_optics")) {
             auto& w = j["wave_optics"];
             if (w.contains("mode")) cfg.wave_optics.mode = w["mode"].get<std::string>();
@@ -196,6 +217,12 @@ CliResult parse_cli(int argc, char** argv) {
     std::uint32_t backend_adapter_ordinal = 0;
     std::vector<std::string> backend_required_features;
     std::uint64_t backend_memory_budget_mb = 0;
+    std::string acceleration_provider;
+    std::string acceleration_quality;
+    std::string acceleration_update_policy;
+    bool acceleration_clustered_geometry = false;
+    bool acceleration_collect_stats = false;
+    std::uint64_t acceleration_scratch_budget_mb = 0;
     std::string wave_optics_mode;
     bool wave_camera_diffraction = false;
     bool wave_coherent_field = false;
@@ -280,6 +307,26 @@ CliResult parse_cli(int argc, char** argv) {
     auto* backend_memory_budget_option = render_cmd->add_option(
         "--backend-memory-budget-mb", backend_memory_budget_mb,
         "Backend memory budget in MiB; zero derives a device budget");
+    render_cmd->add_option(
+        "--acceleration-provider", acceleration_provider,
+        "Acceleration provider: auto, self_compute, optix, vulkan_rt, dxr");
+    render_cmd->add_option(
+        "--acceleration-quality", acceleration_quality,
+        "Acceleration build quality: auto, fast_build, balanced, high_quality");
+    render_cmd->add_option(
+        "--acceleration-update", acceleration_update_policy,
+        "Acceleration update policy: auto, static, refit, rebuild");
+    auto* acceleration_clustered_option = render_cmd->add_flag(
+        "--enable-clustered-geometry,!--disable-clustered-geometry",
+        acceleration_clustered_geometry,
+        "Enable clustered geometry acceleration");
+    auto* acceleration_stats_option = render_cmd->add_flag(
+        "--acceleration-stats,!--no-acceleration-stats",
+        acceleration_collect_stats,
+        "Collect acceleration build and traversal statistics");
+    auto* acceleration_scratch_budget_option = render_cmd->add_option(
+        "--acceleration-scratch-budget-mb", acceleration_scratch_budget_mb,
+        "Acceleration scratch budget in MiB; zero derives a provider budget");
     render_cmd->add_option("--wave-optics-mode", wave_optics_mode, "Wave optics mode: radiometric, camera_diffraction, coherent_field, partial_coherence");
     render_cmd->add_flag("--enable-camera-diffraction", wave_camera_diffraction, "Enable wave-optics camera diffraction");
     render_cmd->add_flag("--enable-coherent-field", wave_coherent_field, "Enable coherent complex-field transport");
@@ -415,6 +462,21 @@ CliResult parse_cli(int argc, char** argv) {
             cfg.backend.required_features = backend_required_features;
         if (backend_memory_budget_option->count() > 0)
             cfg.backend.memory_budget_mb = backend_memory_budget_mb;
+        if (!acceleration_provider.empty())
+            cfg.acceleration.provider = acceleration_provider;
+        if (!acceleration_quality.empty())
+            cfg.acceleration.quality = acceleration_quality;
+        if (!acceleration_update_policy.empty())
+            cfg.acceleration.update_policy = acceleration_update_policy;
+        if (acceleration_clustered_option->count() > 0)
+            cfg.acceleration.clustered_geometry_enabled =
+                acceleration_clustered_geometry;
+        if (acceleration_stats_option->count() > 0)
+            cfg.acceleration.collect_stats =
+                acceleration_collect_stats;
+        if (acceleration_scratch_budget_option->count() > 0)
+            cfg.acceleration.scratch_budget_mb =
+                acceleration_scratch_budget_mb;
         if (!wave_optics_mode.empty()) cfg.wave_optics.mode = wave_optics_mode;
         if (wave_camera_diffraction) cfg.wave_optics.camera_diffraction_enabled = true;
         if (wave_coherent_field) cfg.wave_optics.coherent_field_enabled = true;
