@@ -18,7 +18,7 @@ if(UR_ENABLE_CUDA)
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 20)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    set(UR_CUDA_HEAVY_COMPILE_JOBS 1 CACHE STRING
+    set(UR_CUDA_HEAVY_COMPILE_JOBS 2 CACHE STRING
         "Maximum concurrent high-memory CUDA target compilations under Ninja")
     if(CMAKE_GENERATOR MATCHES "Ninja")
         if(NOT UR_CUDA_HEAVY_COMPILE_JOBS MATCHES "^[1-9][0-9]*$")

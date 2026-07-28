@@ -88,9 +88,11 @@ Render Engine/
 ```
 
 Ninja 可并行构建宿主代码和独立目标；高内存 CUDA 编译由工程内的
-`ur_cuda_heavy_compile` job pool 单独限流，默认同一时刻运行一个。不要为常规构建
-全局指定 `--parallel 1`。只有在确认设备具备足够 host memory 后，才可在配置时通过
-`-DUR_CUDA_HEAVY_COMPILE_JOBS=<N>` 调高该池容量。
+`ur_cuda_heavy_compile` job pool 单独限流。当前 16 GiB Windows/CUDA 13 开发机的
+实测稳定最优深度为 2：三个最重 CUDA translation units 的重编译关键路径由约
+602 秒降至 362 秒，深度 3 未继续缩短关键路径。不要为常规构建全局指定
+`--parallel 1`。低内存或不同工具链环境可通过
+`.\scripts\build_x64.ps1 -CudaHeavyCompileJobs <N>` 显式覆盖并重新配置。
 
 运行完整注册测试：
 
