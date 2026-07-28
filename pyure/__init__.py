@@ -188,6 +188,20 @@ class _AccelerationStatsV3(ctypes.Structure):
     ]
 
 
+class _AccelerationStatsV4(ctypes.Structure):
+    _fields_ = [
+        ("quality", _AccelerationStatsV3),
+        ("blas_build_wall_nanoseconds", ctypes.c_uint64),
+        ("acceleration_upload_nanoseconds", ctypes.c_uint64),
+        ("acceleration_upload_bytes", ctypes.c_uint64),
+        ("build_temporary_bytes_peak", ctypes.c_uint64),
+        ("uncompacted_bytes", ctypes.c_uint64),
+        ("compacted_bytes", ctypes.c_uint64),
+        ("compaction_nanoseconds", ctypes.c_uint64),
+        ("blas_build_peak_concurrency", ctypes.c_uint32),
+    ]
+
+
 class _BackendAdapterInfo(ctypes.Structure):
     _fields_ = [
         ("kind", ctypes.c_int),
@@ -353,6 +367,14 @@ class AccelerationStats:
     blas_spatial_split_count: int
     blas_binary_node_count: int
     blas_node_arity: int
+    blas_build_wall_nanoseconds: int
+    acceleration_upload_nanoseconds: int
+    acceleration_upload_bytes: int
+    build_temporary_bytes_peak: int
+    uncompacted_bytes: int
+    compacted_bytes: int
+    compaction_nanoseconds: int
+    blas_build_peak_concurrency: int
 
 
 def _candidate_library_paths() -> list[Path]:
@@ -483,6 +505,11 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(_AccelerationStatsV3),
     ]
     lib.ure_session_get_acceleration_stats_v3.restype = ctypes.c_int
+    lib.ure_session_get_acceleration_stats_v4.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(_AccelerationStatsV4),
+    ]
+    lib.ure_session_get_acceleration_stats_v4.restype = ctypes.c_int
     lib.ure_session_get_framebuffer_size.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_int),
@@ -1136,12 +1163,13 @@ class RenderSession:
         )
 
     def acceleration_stats(self) -> AccelerationStats:
-        raw = _AccelerationStatsV3()
-        if native().ure_session_get_acceleration_stats_v3(
+        raw = _AccelerationStatsV4()
+        if native().ure_session_get_acceleration_stats_v4(
             self.handle, ctypes.byref(raw)
         ) != 0:
             raise RuntimeError("acceleration statistics unavailable")
-        hierarchy = raw.hierarchy
+        quality = raw.quality
+        hierarchy = quality.hierarchy
         baseline = hierarchy.baseline
         return AccelerationStats(
             baseline.mesh_count,
@@ -1165,11 +1193,19 @@ class RenderSession:
             hierarchy.tlas_build_nanoseconds,
             hierarchy.tlas_update_nanoseconds,
             hierarchy.tlas_update_count,
-            raw.blas_build_nanoseconds,
-            raw.blas_primitive_reference_count,
-            raw.blas_spatial_split_count,
-            raw.blas_binary_node_count,
-            raw.blas_node_arity,
+            quality.blas_build_nanoseconds,
+            quality.blas_primitive_reference_count,
+            quality.blas_spatial_split_count,
+            quality.blas_binary_node_count,
+            quality.blas_node_arity,
+            raw.blas_build_wall_nanoseconds,
+            raw.acceleration_upload_nanoseconds,
+            raw.acceleration_upload_bytes,
+            raw.build_temporary_bytes_peak,
+            raw.uncompacted_bytes,
+            raw.compacted_bytes,
+            raw.compaction_nanoseconds,
+            raw.blas_build_peak_concurrency,
         )
 
     def framebuffer_size(self) -> tuple[int, int]:

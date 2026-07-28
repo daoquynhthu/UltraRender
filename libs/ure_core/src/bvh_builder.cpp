@@ -325,6 +325,35 @@ static int validate_mesh_input(
     return static_cast<int>(indices.size() / 3);
 }
 
+std::uint64_t MeshBvhBuilder::estimate_temporary_bytes(
+    std::uint64_t triangle_count,
+    AccelerationBuildQuality quality) {
+    if (triangle_count == 0) return 0;
+    std::uint64_t fixed_bytes = 0;
+    std::uint64_t bytes_per_triangle = 0;
+    if (quality == AccelerationBuildQuality::Automatic ||
+        quality == AccelerationBuildQuality::FastBuild) {
+        fixed_bytes = 64ull * 1024ull;
+        bytes_per_triangle = 256;
+    } else if (quality == AccelerationBuildQuality::Balanced) {
+        fixed_bytes = 1024ull * 1024ull;
+        bytes_per_triangle = 512;
+    } else if (quality == AccelerationBuildQuality::HighQuality) {
+        fixed_bytes = 1024ull * 1024ull;
+        bytes_per_triangle = 768;
+    } else {
+        throw std::invalid_argument(
+            "self-compute BVH build quality is invalid");
+    }
+    if (triangle_count >
+        (std::numeric_limits<std::uint64_t>::max() - fixed_bytes) /
+            bytes_per_triangle) {
+        throw std::overflow_error(
+            "self-compute BVH temporary memory estimate overflow");
+    }
+    return fixed_bytes + triangle_count * bytes_per_triangle;
+}
+
 BvhBuildStats MeshBvhBuilder::build(
     const std::vector<float>& vertices,
     std::vector<int>& indices,
@@ -922,6 +951,12 @@ BvhBuildStats MeshBvhBuilder::build(
         stats.binary_node_count = stats.node_count;
         stats.primitive_reference_count = stats.triangle_count;
         stats.layout = GpuBvhLayout::Binary;
+        stats.temporary_bytes = estimate_temporary_bytes(
+            stats.triangle_count, quality);
+        stats.uncompacted_bytes =
+            static_cast<std::uint64_t>(binary_nodes.size()) *
+            sizeof(GpuBvhNode);
+        stats.compacted_bytes = stats.uncompacted_bytes;
         stats.build_nanoseconds =
             static_cast<std::uint64_t>(
                 std::chrono::duration_cast<
@@ -971,6 +1006,8 @@ BvhBuildStats MeshBvhBuilder::build(
         stats.spatial_split_count, primitive_references, 1);
     const int arity =
         quality == AccelerationBuildQuality::Balanced ? 4 : 8;
+    const auto compaction_start =
+        std::chrono::steady_clock::now();
     if (arity == 4) {
         emit_wide_node(
             *root, arity, bvh4_nodes, 1, stats.max_depth);
@@ -994,6 +1031,25 @@ BvhBuildStats MeshBvhBuilder::build(
             primitive_references.size());
     stats.layout =
         arity == 4 ? GpuBvhLayout::Wide4 : GpuBvhLayout::Wide8;
+    stats.temporary_bytes = estimate_temporary_bytes(
+        stats.triangle_count, quality);
+    const auto reference_bytes =
+        stats.primitive_reference_count * sizeof(int);
+    stats.uncompacted_bytes =
+        stats.binary_node_count * sizeof(GpuBvhNode) +
+        reference_bytes;
+    stats.compacted_bytes =
+        stats.node_count *
+            static_cast<std::uint64_t>(
+                arity == 4
+                    ? sizeof(GpuBvh4Node)
+                    : sizeof(GpuWideBvhNode)) +
+        reference_bytes;
+    stats.compaction_nanoseconds =
+        static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() -
+                compaction_start).count());
     stats.build_nanoseconds =
         static_cast<std::uint64_t>(
             std::chrono::duration_cast<

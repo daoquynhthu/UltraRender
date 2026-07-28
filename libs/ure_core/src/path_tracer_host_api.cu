@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <span>
 #include <string>
 #include <vector>
@@ -36,6 +37,8 @@
 #include "ure/detail/cuda_bvh_builder.cuh"
 
 #include "path_tracer_api_decl.cuh"
+#include "acceleration_build_pipeline.hpp"
+#include "acceleration_upload.hpp"
 #include "cuda_resource_registry.cuh"
 
 // ===== Diagnostic Logging Pipeline (host side) =====
@@ -2799,6 +2802,20 @@ GpuContext* init_gpu_renderer(int width, int height,
     validate_specular_manifold_config(config);
     validate_bidirectional_config(config);
     validate_mlt_config(config);
+    if (config.acceleration.scratch_budget_bytes != 0) {
+        for (const auto& mesh : meshes) {
+            const auto required =
+                MeshBvhBuilder::estimate_temporary_bytes(
+                    static_cast<std::uint64_t>(
+                        mesh.indices.size() / 3),
+                    config.acceleration.quality);
+            if (required >
+                config.acceleration.scratch_budget_bytes) {
+                throw std::runtime_error(
+                    "acceleration build exceeds scratch budget");
+            }
+        }
+    }
     for (const auto& resource : mie_phase_resources) {
         auto canonical = resource;
         scene_ir::validate_mie_phase_resource(canonical);
@@ -2825,6 +2842,14 @@ GpuContext* init_gpu_renderer(int width, int height,
     ctx->execution_queue = execution_queue;
     ctx->execution_fence = execution_fence;
     ctx->execution_stream = execution_stream;
+    const auto cleanup_context = [](GpuContext* context) noexcept {
+        try {
+            free_gpu_renderer(context);
+        } catch (...) {
+        }
+    };
+    std::unique_ptr<GpuContext, decltype(cleanup_context)>
+        context_guard(ctx, cleanup_context);
     ctx->resources = std::make_unique<CudaResourceRegistry>();
     UR_CUDA_CHECK(cudaMalloc(
         &ctx->d_acceleration_telemetry,
@@ -3003,45 +3028,98 @@ GpuContext* init_gpu_renderer(int width, int height,
 
     std::vector<GpuMesh> host_gpu_meshes;
     std::vector<HostLightMeshData> host_light_meshes;
-    const auto build_and_upload_blas =
-        [&](const std::vector<float>& vertices,
-            std::vector<int>& indices,
+    std::vector<BlasBuildInput> blas_inputs;
+    blas_inputs.reserve(meshes.size() + host_scene.meshes.size());
+    for (const auto& mesh : meshes) {
+        blas_inputs.push_back({&mesh.vertices, &mesh.indices});
+    }
+    for (const auto& mesh : host_scene.meshes) {
+        blas_inputs.push_back({&mesh.vertices, &mesh.indices});
+    }
+    BlasBuildBatch blas_batch = build_blas_batch(
+        blas_inputs,
+        ctx->render_config.acceleration.quality,
+        ctx->render_config.acceleration.scratch_budget_bytes);
+    ctx->acceleration_stats.blas_build_wall_nanoseconds =
+        blas_batch.wall_nanoseconds;
+    ctx->acceleration_stats.build_temporary_bytes_peak =
+        blas_batch.temporary_bytes_peak;
+    ctx->acceleration_stats.blas_build_peak_concurrency =
+        blas_batch.peak_concurrency;
+    for (const auto& prepared : blas_batch.meshes) {
+        const auto& build_stats = prepared.stats;
+        ++ctx->acceleration_stats.mesh_count;
+        ctx->acceleration_stats.triangle_count +=
+            build_stats.triangle_count;
+        ctx->acceleration_stats.node_count +=
+            build_stats.node_count;
+        ctx->acceleration_stats.leaf_count +=
+            build_stats.leaf_count;
+        ctx->acceleration_stats.max_depth = std::max(
+            ctx->acceleration_stats.max_depth,
+            build_stats.max_depth);
+        ctx->acceleration_stats.blas_build_nanoseconds +=
+            build_stats.build_nanoseconds;
+        ctx->acceleration_stats
+            .blas_primitive_reference_count +=
+            build_stats.primitive_reference_count;
+        ctx->acceleration_stats.blas_spatial_split_count +=
+            build_stats.spatial_split_count;
+        ctx->acceleration_stats.blas_binary_node_count +=
+            build_stats.binary_node_count;
+        ctx->acceleration_stats.uncompacted_bytes +=
+            build_stats.uncompacted_bytes;
+        ctx->acceleration_stats.compacted_bytes +=
+            build_stats.compacted_bytes;
+        ctx->acceleration_stats.compaction_nanoseconds +=
+            build_stats.compaction_nanoseconds;
+        ctx->acceleration_stats.blas_node_arity = std::max(
+            ctx->acceleration_stats.blas_node_arity,
+            build_stats.layout == GpuBvhLayout::Wide8
+                ? 8u
+                : build_stats.layout == GpuBvhLayout::Wide4
+                    ? 4u
+                    : 2u);
+    }
+    ctx->acceleration_stats.blas_node_bytes =
+        ctx->acceleration_stats.compacted_bytes;
+    const std::uint64_t estimated_tlas_bytes =
+        instances.empty()
+            ? 0
+            : (static_cast<std::uint64_t>(instances.size()) * 2 - 1) *
+                    sizeof(GpuBvhNode) +
+                static_cast<std::uint64_t>(instances.size()) *
+                    sizeof(int);
+    if (estimated_tlas_bytes >
+        std::numeric_limits<std::uint64_t>::max() -
+            ctx->acceleration_stats.compacted_bytes) {
+        throw std::overflow_error(
+            "acceleration resident memory estimate overflow");
+    }
+    const std::uint64_t estimated_resident_bytes =
+        ctx->acceleration_stats.compacted_bytes +
+        estimated_tlas_bytes;
+    if (backend_adapter &&
+        estimated_resident_bytes >
+            backend_adapter->memory.budget_bytes) {
+        throw std::runtime_error(
+            "acceleration compact memory exceeds backend budget");
+    }
+    std::size_t free_device_bytes = 0;
+    std::size_t total_device_bytes = 0;
+    UR_CUDA_CHECK(cudaMemGetInfo(
+        &free_device_bytes, &total_device_bytes));
+    if (estimated_resident_bytes >
+        static_cast<std::uint64_t>(free_device_bytes) -
+            static_cast<std::uint64_t>(free_device_bytes / 20)) {
+        throw std::runtime_error(
+            "acceleration compact memory exceeds available device memory");
+    }
+
+    const auto bind_blas =
+        [&](const PreparedBlas& prepared,
             GpuMesh& mesh) {
-            std::vector<GpuBvhNode> binary_nodes;
-            std::vector<GpuBvh4Node> bvh4_nodes;
-            std::vector<GpuWideBvhNode> wide_nodes;
-            std::vector<int> primitive_references;
-            const auto build_stats = MeshBvhBuilder::build(
-                vertices, indices,
-                ctx->render_config.acceleration.quality,
-                binary_nodes, bvh4_nodes, wide_nodes,
-                primitive_references);
-            ++ctx->acceleration_stats.mesh_count;
-            ctx->acceleration_stats.triangle_count +=
-                build_stats.triangle_count;
-            ctx->acceleration_stats.node_count +=
-                build_stats.node_count;
-            ctx->acceleration_stats.leaf_count +=
-                build_stats.leaf_count;
-            ctx->acceleration_stats.max_depth = std::max(
-                ctx->acceleration_stats.max_depth,
-                build_stats.max_depth);
-            ctx->acceleration_stats.blas_build_nanoseconds +=
-                build_stats.build_nanoseconds;
-            ctx->acceleration_stats
-                .blas_primitive_reference_count +=
-                build_stats.primitive_reference_count;
-            ctx->acceleration_stats.blas_spatial_split_count +=
-                build_stats.spatial_split_count;
-            ctx->acceleration_stats.blas_binary_node_count +=
-                build_stats.binary_node_count;
-            ctx->acceleration_stats.blas_node_arity = std::max(
-                ctx->acceleration_stats.blas_node_arity,
-                build_stats.layout == GpuBvhLayout::Wide8
-                    ? 8u
-                    : build_stats.layout == GpuBvhLayout::Wide4
-                        ? 4u
-                        : 2u);
+            const auto& build_stats = prepared.stats;
             mesh.bvh_layout = build_stats.layout;
             mesh.bvh_nodes = nullptr;
             mesh.bvh_node_count = 0;
@@ -3051,87 +3129,65 @@ GpuContext* init_gpu_renderer(int width, int height,
             mesh.wide_bvh_node_count = 0;
             mesh.primitive_references = nullptr;
             mesh.primitive_reference_count = 0;
-            if (!binary_nodes.empty()) {
+            if (!prepared.binary_nodes.empty()) {
                 const size_t bytes =
-                    binary_nodes.size() * sizeof(GpuBvhNode);
+                    prepared.binary_nodes.size() * sizeof(GpuBvhNode);
                 UR_CUDA_CHECK(cudaMalloc(
                     &mesh.bvh_nodes, bytes));
-                UR_CUDA_CHECK(cudaMemcpy(
-                    mesh.bvh_nodes, binary_nodes.data(), bytes,
-                    cudaMemcpyHostToDevice));
                 mesh.bvh_node_count =
-                    static_cast<int>(binary_nodes.size());
+                    static_cast<int>(prepared.binary_nodes.size());
                 ctx->resources->retain_allocation(
                     mesh.bvh_nodes);
-                ctx->acceleration_stats.blas_node_bytes +=
-                    static_cast<std::uint64_t>(bytes);
             }
-            if (!wide_nodes.empty()) {
+            if (!prepared.wide_nodes.empty()) {
                 const size_t node_bytes =
-                    wide_nodes.size() *
+                    prepared.wide_nodes.size() *
                     sizeof(GpuWideBvhNode);
                 const size_t reference_bytes =
-                    primitive_references.size() * sizeof(int);
+                    prepared.primitive_references.size() * sizeof(int);
                 UR_CUDA_CHECK(cudaMalloc(
                     &mesh.wide_bvh_nodes, node_bytes));
-                UR_CUDA_CHECK(cudaMemcpy(
-                    mesh.wide_bvh_nodes, wide_nodes.data(),
-                    node_bytes, cudaMemcpyHostToDevice));
                 UR_CUDA_CHECK(cudaMalloc(
                     &mesh.primitive_references,
                     reference_bytes));
-                UR_CUDA_CHECK(cudaMemcpy(
-                    mesh.primitive_references,
-                    primitive_references.data(),
-                    reference_bytes, cudaMemcpyHostToDevice));
                 mesh.wide_bvh_node_count =
-                    static_cast<int>(wide_nodes.size());
+                    static_cast<int>(prepared.wide_nodes.size());
                 mesh.primitive_reference_count =
                     static_cast<int>(
-                        primitive_references.size());
+                        prepared.primitive_references.size());
                 ctx->resources->retain_allocation(
                     mesh.wide_bvh_nodes);
                 ctx->resources->retain_allocation(
                     mesh.primitive_references);
-                ctx->acceleration_stats.blas_node_bytes +=
-                    static_cast<std::uint64_t>(
-                        node_bytes + reference_bytes);
             }
-            if (!bvh4_nodes.empty()) {
+            if (!prepared.bvh4_nodes.empty()) {
                 const size_t node_bytes =
-                    bvh4_nodes.size() * sizeof(GpuBvh4Node);
+                    prepared.bvh4_nodes.size() * sizeof(GpuBvh4Node);
                 const size_t reference_bytes =
-                    primitive_references.size() * sizeof(int);
+                    prepared.primitive_references.size() * sizeof(int);
                 UR_CUDA_CHECK(cudaMalloc(
                     &mesh.bvh4_nodes, node_bytes));
-                UR_CUDA_CHECK(cudaMemcpy(
-                    mesh.bvh4_nodes, bvh4_nodes.data(),
-                    node_bytes, cudaMemcpyHostToDevice));
                 UR_CUDA_CHECK(cudaMalloc(
                     &mesh.primitive_references,
                     reference_bytes));
-                UR_CUDA_CHECK(cudaMemcpy(
-                    mesh.primitive_references,
-                    primitive_references.data(),
-                    reference_bytes, cudaMemcpyHostToDevice));
                 mesh.bvh4_node_count =
-                    static_cast<int>(bvh4_nodes.size());
+                    static_cast<int>(prepared.bvh4_nodes.size());
                 mesh.primitive_reference_count =
                     static_cast<int>(
-                        primitive_references.size());
+                        prepared.primitive_references.size());
                 ctx->resources->retain_allocation(
                     mesh.bvh4_nodes);
                 ctx->resources->retain_allocation(
                     mesh.primitive_references);
-                ctx->acceleration_stats.blas_node_bytes +=
-                    static_cast<std::uint64_t>(
-                        node_bytes + reference_bytes);
             }
         };
 
+    std::size_t prepared_mesh_index = 0;
     for (const auto& input_mesh : meshes) {
+        const PreparedBlas& prepared =
+            blas_batch.meshes[prepared_mesh_index++];
         GpuMesh mesh{};
-        mesh.triangle_count = (int)input_mesh.indices.size() / 3;
+        mesh.triangle_count = (int)prepared.indices.size() / 3;
         mesh.material_index = input_mesh.material_index;
 
         if (!input_mesh.uvs.empty()) {
@@ -3163,9 +3219,7 @@ GpuContext* init_gpu_renderer(int width, int height,
 
         compute_aabb(input_mesh.vertices, mesh.min_pt, mesh.max_pt);
 
-        std::vector<int> temp_indices = input_mesh.indices;
-        build_and_upload_blas(
-            input_mesh.vertices, temp_indices, mesh);
+        bind_blas(prepared, mesh);
 
         size_t v_size = input_mesh.vertices.size() * sizeof(float);
         GpuVec3* d_v;
@@ -3174,25 +3228,29 @@ GpuContext* init_gpu_renderer(int width, int height,
         mesh.vertices = d_v;
         ctx->resources->retain_allocation(d_v);
 
-        size_t i_size = temp_indices.size() * sizeof(int);
+        size_t i_size = prepared.indices.size() * sizeof(int);
         int* d_i;
         cudaMalloc(&d_i, i_size);
-        cudaMemcpy(d_i, temp_indices.data(), i_size, cudaMemcpyHostToDevice);
+        cudaMemcpy(
+            d_i, prepared.indices.data(), i_size,
+            cudaMemcpyHostToDevice);
         mesh.indices = d_i;
         ctx->resources->retain_allocation(d_i);
 
         host_gpu_meshes.push_back(mesh);
         host_light_meshes.push_back(HostLightMeshData{
-            input_mesh.vertices, input_mesh.uvs, temp_indices,
+            input_mesh.vertices, input_mesh.uvs, prepared.indices,
             input_mesh.material_index});
     }
 
     for (auto& hm : host_scene.meshes) {
+        const PreparedBlas& prepared =
+            blas_batch.meshes[prepared_mesh_index++];
         GpuMesh mesh{};
-        mesh.triangle_count = (int)hm.indices.size() / 3;
+        mesh.triangle_count = (int)prepared.indices.size() / 3;
         mesh.material_index = hm.material_index;
         compute_aabb(hm.vertices, mesh.min_pt, mesh.max_pt);
-        build_and_upload_blas(hm.vertices, hm.indices, mesh);
+        bind_blas(prepared, mesh);
         size_t v_size = hm.vertices.size() * sizeof(float);
         GpuVec3* d_v;
         cudaMalloc(&d_v, v_size);
@@ -3223,15 +3281,18 @@ GpuContext* init_gpu_renderer(int width, int height,
             mesh.uvs = d_uv;
             ctx->resources->retain_allocation(d_uv);
         } else { mesh.uvs = nullptr; }
-        size_t i_size = hm.indices.size() * sizeof(int);
+        size_t i_size = prepared.indices.size() * sizeof(int);
         int* d_i;
         cudaMalloc(&d_i, i_size);
-        cudaMemcpy(d_i, hm.indices.data(), i_size, cudaMemcpyHostToDevice);
+        cudaMemcpy(
+            d_i, prepared.indices.data(), i_size,
+            cudaMemcpyHostToDevice);
         mesh.indices = d_i;
         ctx->resources->retain_allocation(d_i);
         host_gpu_meshes.push_back(mesh);
         host_light_meshes.push_back(HostLightMeshData{
-            hm.vertices, hm.uvs, hm.indices, hm.material_index});
+            hm.vertices, hm.uvs, prepared.indices,
+            hm.material_index});
     }
 
     {
@@ -3364,6 +3425,57 @@ GpuContext* init_gpu_renderer(int width, int height,
                 node_bytes + index_bytes);
     }
 
+    AccelerationUploadBatch acceleration_upload(
+        ctx->execution_stream,
+        ctx->render_config.acceleration.scratch_budget_bytes);
+    for (std::size_t mesh_index = 0;
+         mesh_index < blas_batch.meshes.size();
+         ++mesh_index) {
+        const PreparedBlas& prepared =
+            blas_batch.meshes[mesh_index];
+        const GpuMesh& mesh = host_gpu_meshes[mesh_index];
+        acceleration_upload.enqueue(
+            mesh.bvh_nodes,
+            prepared.binary_nodes.data(),
+            prepared.binary_nodes.size() *
+                sizeof(GpuBvhNode));
+        acceleration_upload.enqueue(
+            mesh.bvh4_nodes,
+            prepared.bvh4_nodes.data(),
+            prepared.bvh4_nodes.size() *
+                sizeof(GpuBvh4Node));
+        acceleration_upload.enqueue(
+            mesh.wide_bvh_nodes,
+            prepared.wide_nodes.data(),
+            prepared.wide_nodes.size() *
+                sizeof(GpuWideBvhNode));
+        acceleration_upload.enqueue(
+            mesh.primitive_references,
+            prepared.primitive_references.data(),
+            prepared.primitive_references.size() *
+                sizeof(int));
+    }
+    acceleration_upload.enqueue(
+        ctx->d_tlas_nodes,
+        ctx->host_tlas_nodes.data(),
+        ctx->host_tlas_nodes.size() * sizeof(GpuBvhNode));
+    acceleration_upload.enqueue(
+        ctx->d_tlas_instance_indices,
+        ctx->host_tlas_instance_indices.data(),
+        ctx->host_tlas_instance_indices.size() * sizeof(int));
+    ctx->acceleration_stats.acceleration_upload_nanoseconds =
+        acceleration_upload.finish();
+    ctx->acceleration_stats.acceleration_upload_bytes =
+        acceleration_upload.total_bytes();
+    ctx->acceleration_stats.build_temporary_bytes_peak =
+        std::max(
+            ctx->acceleration_stats.build_temporary_bytes_peak,
+            acceleration_upload.peak_bytes());
+    ctx->acceleration_stats.uncompacted_bytes +=
+        ctx->acceleration_stats.tlas_bytes;
+    ctx->acceleration_stats.compacted_bytes +=
+        ctx->acceleration_stats.tlas_bytes;
+
     const std::vector<GpuManifoldSeedPrimitive> manifold_seed_catalog =
         build_manifold_seed_catalog(
             host_spheres, host_light_meshes, host_instances);
@@ -3460,7 +3572,7 @@ GpuContext* init_gpu_renderer(int width, int height,
     rebuild_wavelength_proposal(ctx);
     rebuild_light_distribution(ctx);
 
-    return ctx;
+    return context_guard.release();
 }
 
 void update_camera_gpu(GpuContext* ctx, const float* cam_pos, const float* cam_look, float fov) {

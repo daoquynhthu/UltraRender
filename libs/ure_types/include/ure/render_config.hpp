@@ -108,6 +108,14 @@ struct AccelerationStats {
     std::uint64_t blas_spatial_split_count = 0;
     std::uint64_t blas_binary_node_count = 0;
     std::uint32_t blas_node_arity = 2;
+    std::uint64_t blas_build_wall_nanoseconds = 0;
+    std::uint64_t acceleration_upload_nanoseconds = 0;
+    std::uint64_t acceleration_upload_bytes = 0;
+    std::uint64_t build_temporary_bytes_peak = 0;
+    std::uint64_t uncompacted_bytes = 0;
+    std::uint64_t compacted_bytes = 0;
+    std::uint64_t compaction_nanoseconds = 0;
+    std::uint32_t blas_build_peak_concurrency = 0;
 };
 
 struct WaveOpticsConfig {

@@ -252,6 +252,11 @@ def main() -> int:
             progress = session.progress()
             assert progress.has_scene
             assert progress.state == pyure.SessionState.READY
+            acceleration = session.acceleration_stats()
+            assert acceleration.blas_build_wall_nanoseconds > 0
+            assert acceleration.acceleration_upload_nanoseconds > 0
+            assert acceleration.acceleration_upload_bytes == acceleration.compacted_bytes
+            assert acceleration.build_temporary_bytes_peak > 0
             assert session.framebuffer_size() == (8, 8)
             session.start(progressive=True)
             assert session.progress().state == pyure.SessionState.RUNNING

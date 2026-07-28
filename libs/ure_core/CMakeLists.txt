@@ -25,6 +25,8 @@ add_library(ure_core STATIC
     src/distributed_contract.cpp
     src/distributed_file_io.cpp
     src/session.cpp
+    src/acceleration_build_pipeline.cpp
+    src/acceleration_upload.cu
     src/bvh_builder.cpp
     src/bvh_accelerator.cpp
     src/render_api.cpp

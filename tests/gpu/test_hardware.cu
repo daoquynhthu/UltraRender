@@ -312,7 +312,9 @@ static int test_backend_identity_and_capability_contract() {
         ure::BackendKind::Cuda);
     config.acceleration.collect_stats = false;
     config.acceleration.scratch_budget_bytes = 1024;
-    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    CHECK(
+        ure::select_backend(config).adapter.kind ==
+        ure::BackendKind::Cuda);
     config.acceleration.scratch_budget_bytes = 0;
     config.acceleration.provider =
         ure::AccelerationProviderKind::Optix;

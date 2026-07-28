@@ -215,3 +215,33 @@ claim; later occupancy and traversal tuning belongs to Phase K.
 `AccelerationStats` now includes BLAS build time, primitive-reference count,
 spatial-split count, pre-collapse binary-node count and selected arity. C ABI
 v3 extends the frozen v2 hierarchy layout, and pyure consumes v3.
+
+## V.5 asynchronous construction and memory budgets
+
+Mesh BLAS construction now runs through a bounded host batch. The automatic
+policy permits two concurrent builds; an explicit scratch budget permits up to
+the host hardware concurrency while deterministic batch packing keeps the sum
+of conservative per-build temporary reservations within that budget. A mesh
+whose individual reservation exceeds the request is rejected before renderer
+allocation. The reservation includes builder topology, primitive working sets
+and SAH/SBVH working storage; it is telemetry and a fail-loud upper bound, not
+resident acceleration memory.
+
+The builder records canonical binary bytes before wide collapse, final compact
+node/reference bytes and compaction time. Only final nodes and immutable
+primitive references receive device allocations. Final compact BLAS bytes plus
+a conservative TLAS bound are checked against the selected backend budget and
+current device availability before acceleration allocation.
+
+BLAS and TLAS transfers use the runtime-owned CUDA transfer stream. A two-entry
+pinned staging queue overlaps host staging with H2D work, retires completed
+events before reusing its scratch allowance and synchronizes before any
+acceleration consumer can execute. Upload bytes, GPU elapsed upload time and
+peak pinned/build temporary memory are part of `AccelerationStats`.
+
+C ABI v4 preserves the v3 hierarchy and adds build wall time, upload time and
+bytes, temporary peak, uncompacted/compact bytes, compaction time and peak build
+concurrency. pyure consumes v4. The reproducible
+`tools/benchmarks/run_phase_v_build_telemetry.ps1` report records fixed-mesh
+build/trace/compact-memory/VRAM data together with async pipeline telemetry and
+the scratch-budget rejection gate.

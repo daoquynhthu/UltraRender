@@ -16,6 +16,10 @@ struct BvhBuildStats {
     std::uint64_t primitive_reference_count = 0;
     std::uint64_t spatial_split_count = 0;
     std::uint64_t build_nanoseconds = 0;
+    std::uint64_t temporary_bytes = 0;
+    std::uint64_t uncompacted_bytes = 0;
+    std::uint64_t compacted_bytes = 0;
+    std::uint64_t compaction_nanoseconds = 0;
     GpuBvhLayout layout = GpuBvhLayout::Binary;
 };
 
@@ -28,6 +32,10 @@ struct TlasBuildStats {
 
 class MeshBvhBuilder {
 public:
+    static std::uint64_t estimate_temporary_bytes(
+        std::uint64_t triangle_count,
+        AccelerationBuildQuality quality);
+
     static BvhBuildStats build(
         const std::vector<float>& vertices,
         std::vector<int>& indices,

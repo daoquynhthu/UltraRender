@@ -425,10 +425,6 @@ BackendSelection select_backend(const RenderConfig& config) {
         throw std::invalid_argument(
             "clustered geometry acceleration is not implemented");
     }
-    if (acceleration.scratch_budget_bytes != 0) {
-        throw std::invalid_argument(
-            "acceleration scratch budgeting is not implemented");
-    }
     const auto explicit_budget = config.backend.memory_budget_bytes;
     if (explicit_budget > selected->memory.available_bytes) {
         throw std::invalid_argument(

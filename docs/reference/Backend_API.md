@@ -60,10 +60,12 @@ compatible median BVH2; balanced selects binned SAH/BVH4 and high-quality
 selects bounded spatial SAH/SBVH/BVH8. V.2 makes statistics executable, V.3
 adds BLAS/TLAS hierarchy fields and V.4 adds BLAS build time, primitive
 references, spatial splits, binary construction nodes and selected arity. C++
-and pyure expose the complete current view. The C ABI retains the V.2 layouts
-and adds `ure_acceleration_stats_v3_t` plus versioned getters. Rebuild,
-clustered geometry, scratch budgets and native RT providers remain later Phase
-V work and fail before rendering. Existing backend-only C entry points retain
+and pyure expose the complete current view. V.5 executes bounded asynchronous
+host construction, compact-only pinned-stream upload and scratch-budget
+enforcement, and adds wall/upload/temporary/compaction telemetry. The C ABI
+retains all earlier layouts and adds `ure_acceleration_stats_v4_t` plus
+versioned getters. Rebuild, clustered geometry and native RT providers remain
+later Phase V work and fail before rendering. Existing backend-only C entry points retain
 their original layout and behavior; the execution-config entry points add
 acceleration without requiring callers to pass a larger legacy structure.
 

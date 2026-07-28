@@ -777,6 +777,70 @@ static int test_scene_diff_topology_real_gpu_reload_smoke() {
     return 0;
 }
 
+static int test_acceleration_async_budget_real_gpu() {
+    ure::RenderConfig config;
+    config.num_wavelengths = 8;
+    config.max_trace_depth = 2;
+    config.acceleration.collect_stats = true;
+    config.acceleration.scratch_budget_bytes =
+        1024ull * 1024ull;
+    ure::scene_ir::SceneIR scene_ir =
+        make_scene_ir_with_instance();
+    scene_ir.width = 4;
+    scene_ir.height = 4;
+    auto second_mesh =
+        std::make_shared<ure::scene_ir::MeshResource>();
+    second_mesh->name = "tri_second";
+    second_mesh->mesh = make_triangle_mesh();
+    scene_ir.meshes.push_back(second_mesh);
+    scene_ir.instances.push_back(make_scene_ir_instance(
+        second_mesh, scene_ir.materials[0], 1.5f));
+
+    ure::RenderSession session =
+        ure::RenderSession::create(config);
+    session.load_scene(scene_ir);
+    const auto stats = session.get_acceleration_stats();
+    CHECK(stats.mesh_count == 2);
+    CHECK(stats.blas_build_peak_concurrency == 2);
+    CHECK(stats.blas_build_wall_nanoseconds > 0);
+    CHECK(stats.acceleration_upload_nanoseconds > 0);
+    CHECK(stats.acceleration_upload_bytes ==
+          stats.compacted_bytes);
+    CHECK(stats.build_temporary_bytes_peak > 0);
+    CHECK(stats.build_temporary_bytes_peak <=
+          config.acceleration.scratch_budget_bytes);
+    CHECK(stats.uncompacted_bytes >= stats.compacted_bytes);
+    CHECK(stats.compacted_bytes ==
+          stats.blas_node_bytes + stats.tlas_bytes);
+    std::fprintf(
+        stderr,
+        "V.5 async build: build_ms=%.3f upload_ms=%.3f "
+        "temporary_bytes=%llu uncompacted_bytes=%llu "
+        "compacted_bytes=%llu upload_bytes=%llu concurrency=%u\n",
+        static_cast<double>(
+            stats.blas_build_wall_nanoseconds) / 1.0e6,
+        static_cast<double>(
+            stats.acceleration_upload_nanoseconds) / 1.0e6,
+        static_cast<unsigned long long>(
+            stats.build_temporary_bytes_peak),
+        static_cast<unsigned long long>(
+            stats.uncompacted_bytes),
+        static_cast<unsigned long long>(
+            stats.compacted_bytes),
+        static_cast<unsigned long long>(
+            stats.acceleration_upload_bytes),
+        stats.blas_build_peak_concurrency);
+
+    ure::RenderConfig rejected = config;
+    rejected.acceleration.scratch_budget_bytes = 1;
+    ure::RenderSession rejected_session =
+        ure::RenderSession::create(rejected);
+    CHECK(throws_exception([&] {
+        rejected_session.load_scene(scene_ir);
+    }));
+    return 0;
+}
+
 static int test_scene_diff_texture_material_real_gpu_reload_smoke() {
     struct LogLevelGuard {
         ure::log::Level previous;
@@ -1003,6 +1067,14 @@ static int test_c_session_lifecycle() {
             execution_session,
             &c_acceleration_stats_v3) == 0);
     CHECK(c_acceleration_stats_v3.blas_node_arity == 2);
+    ure_acceleration_stats_v4_t c_acceleration_stats_v4{};
+    CHECK(
+        ure_session_get_acceleration_stats_v4(
+            execution_session,
+            &c_acceleration_stats_v4) == 0);
+    CHECK(
+        c_acceleration_stats_v4
+            .quality.blas_node_arity == 2);
     ure_session_destroy(execution_session);
     acceleration_config.quality = 99;
     CHECK(
@@ -1100,6 +1172,7 @@ int main() {
     failed += run("test_scene_diff_topology_update_ir_full_reload", test_scene_diff_topology_update_ir_full_reload);
     failed += run("test_scene_diff_topology_errors", test_scene_diff_topology_errors);
     failed += run("test_scene_diff_topology_real_gpu_reload_smoke", test_scene_diff_topology_real_gpu_reload_smoke);
+    failed += run("test_acceleration_async_budget_real_gpu", test_acceleration_async_budget_real_gpu);
     failed += run("test_scene_diff_texture_material_real_gpu_reload_smoke", test_scene_diff_texture_material_real_gpu_reload_smoke);
     failed += run("test_c_session_lifecycle", test_c_session_lifecycle);
     failed += run("test_restir_estimator_metadata_contract", test_restir_estimator_metadata_contract);

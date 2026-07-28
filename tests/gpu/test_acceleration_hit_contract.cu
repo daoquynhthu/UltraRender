@@ -645,7 +645,23 @@ int main() {
             balanced_bytes < fast_bytes &&
                 high_quality_bytes < fast_bytes &&
                 balanced_stats.build_nanoseconds > 0 &&
-                high_quality_stats.build_nanoseconds > 0,
+                high_quality_stats.build_nanoseconds > 0 &&
+                fast_stats.temporary_bytes > 0 &&
+                balanced_stats.temporary_bytes >
+                    fast_stats.temporary_bytes &&
+                high_quality_stats.temporary_bytes >
+                    balanced_stats.temporary_bytes &&
+                fast_stats.compacted_bytes == fast_bytes &&
+                balanced_stats.compacted_bytes ==
+                    balanced_bytes &&
+                high_quality_stats.compacted_bytes ==
+                    high_quality_bytes &&
+                balanced_stats.uncompacted_bytes >
+                    balanced_stats.compacted_bytes &&
+                high_quality_stats.uncompacted_bytes >
+                    high_quality_stats.compacted_bytes &&
+                balanced_stats.compaction_nanoseconds > 0 &&
+                high_quality_stats.compaction_nanoseconds > 0,
             "wide BVH build did not produce compact measured output");
         std::vector<float> spatial_vertices;
         std::vector<int> spatial_indices;
@@ -687,6 +703,13 @@ int main() {
                     spatial_stats.triangle_count,
             "high-quality SBVH did not retain spatial references");
 
+        std::size_t benchmark_free_before = 0;
+        std::size_t benchmark_total_memory = 0;
+        require(
+            cudaMemGetInfo(
+                &benchmark_free_before,
+                &benchmark_total_memory) == cudaSuccess,
+            "wide BVH benchmark VRAM baseline failed");
         const std::size_t large_vertex_count =
             large_vertices.size() / 3;
         DeviceArray<GpuVec3> device_large_vertices(
@@ -817,6 +840,16 @@ int main() {
             device_benchmark_telemetry[index].upload(
                 &benchmark_telemetry[index], 1);
         }
+        std::size_t benchmark_free_after = 0;
+        require(
+            cudaMemGetInfo(
+                &benchmark_free_after,
+                &benchmark_total_memory) == cudaSuccess &&
+                benchmark_free_before >= benchmark_free_after,
+            "wide BVH benchmark VRAM measurement failed");
+        const std::uint64_t benchmark_vram_bytes =
+            static_cast<std::uint64_t>(
+                benchmark_free_before - benchmark_free_after);
         const int blocks =
             (benchmark_ray_count + 255) / 256;
         const auto measure_traversal =
@@ -941,7 +974,8 @@ int main() {
             "node_bytes=[%llu,%llu,%llu] "
             "node_visits=[%llu,%llu,%llu] "
             "triangle_tests=[%llu,%llu,%llu] "
-            "sbvh_stress_splits=%llu\n",
+            "sbvh_stress_splits=%llu "
+            "vram_bytes=%llu\n",
             static_cast<unsigned long long>(
                 fast_stats.triangle_count),
             static_cast<double>(
@@ -963,7 +997,9 @@ int main() {
             benchmark_telemetry[1].closest_triangle_tests,
             benchmark_telemetry[2].closest_triangle_tests,
             static_cast<unsigned long long>(
-                spatial_stats.spatial_split_count));
+                spatial_stats.spatial_split_count),
+            static_cast<unsigned long long>(
+                benchmark_vram_bytes));
 
         DeviceArray<int> robust_results(4);
         robust_intersection_kernel<<<1, 1>>>(

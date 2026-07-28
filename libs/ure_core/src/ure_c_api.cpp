@@ -377,6 +377,28 @@ void write_acceleration_stats_v3(
         source.blas_node_arity;
 }
 
+void write_acceleration_stats_v4(
+    const AccelerationStats& source,
+    ure_acceleration_stats_v4_t& destination) {
+    write_acceleration_stats_v3(source, destination.quality);
+    destination.blas_build_wall_nanoseconds =
+        source.blas_build_wall_nanoseconds;
+    destination.acceleration_upload_nanoseconds =
+        source.acceleration_upload_nanoseconds;
+    destination.acceleration_upload_bytes =
+        source.acceleration_upload_bytes;
+    destination.build_temporary_bytes_peak =
+        source.build_temporary_bytes_peak;
+    destination.uncompacted_bytes =
+        source.uncompacted_bytes;
+    destination.compacted_bytes =
+        source.compacted_bytes;
+    destination.compaction_nanoseconds =
+        source.compaction_nanoseconds;
+    destination.blas_build_peak_concurrency =
+        source.blas_build_peak_concurrency;
+}
+
 template <std::size_t N>
 void copy_c_string(char (&destination)[N], const std::string& source) {
     const auto count = std::min(source.size(), N - 1);
@@ -724,6 +746,21 @@ int ure_engine_get_acceleration_stats_v3(
     if (!engine || !out_stats) return -1;
     try {
         write_acceleration_stats_v3(
+            reinterpret_cast<const IRenderEngine*>(engine)
+                ->get_acceleration_stats(),
+            *out_stats);
+        return 0;
+    } catch (...) {
+        return -1;
+    }
+}
+
+int ure_engine_get_acceleration_stats_v4(
+    const ure_engine_t* engine,
+    ure_acceleration_stats_v4_t* out_stats) {
+    if (!engine || !out_stats) return -1;
+    try {
+        write_acceleration_stats_v4(
             reinterpret_cast<const IRenderEngine*>(engine)
                 ->get_acceleration_stats(),
             *out_stats);
@@ -1102,6 +1139,21 @@ int ure_session_get_acceleration_stats_v3(
     if (!session || !out_stats) return -1;
     try {
         write_acceleration_stats_v3(
+            reinterpret_cast<const RenderSession*>(session)
+                ->get_acceleration_stats(),
+            *out_stats);
+        return 0;
+    } catch (...) {
+        return -1;
+    }
+}
+
+int ure_session_get_acceleration_stats_v4(
+    const ure_session_t* session,
+    ure_acceleration_stats_v4_t* out_stats) {
+    if (!session || !out_stats) return -1;
+    try {
+        write_acceleration_stats_v4(
             reinterpret_cast<const RenderSession*>(session)
                 ->get_acceleration_stats(),
             *out_stats);

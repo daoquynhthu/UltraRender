@@ -142,6 +142,18 @@ typedef struct ure_acceleration_stats_v3_t {
     uint32_t blas_node_arity;
 } ure_acceleration_stats_v3_t;
 
+typedef struct ure_acceleration_stats_v4_t {
+    ure_acceleration_stats_v3_t quality;
+    uint64_t blas_build_wall_nanoseconds;
+    uint64_t acceleration_upload_nanoseconds;
+    uint64_t acceleration_upload_bytes;
+    uint64_t build_temporary_bytes_peak;
+    uint64_t uncompacted_bytes;
+    uint64_t compacted_bytes;
+    uint64_t compaction_nanoseconds;
+    uint32_t blas_build_peak_concurrency;
+} ure_acceleration_stats_v4_t;
+
 typedef struct ure_backend_adapter_info_t {
     int kind;
     char adapter_id[64];
@@ -347,6 +359,9 @@ int ure_engine_get_acceleration_stats_v2(
 int ure_engine_get_acceleration_stats_v3(
     const ure_engine_t* engine,
     ure_acceleration_stats_v3_t* out_stats);
+int ure_engine_get_acceleration_stats_v4(
+    const ure_engine_t* engine,
+    ure_acceleration_stats_v4_t* out_stats);
 int ure_backend_adapter_count(int kind);
 int ure_backend_get_adapter_info(int kind,
                                  int index,
@@ -415,6 +430,9 @@ int ure_session_get_acceleration_stats_v2(
 int ure_session_get_acceleration_stats_v3(
     const ure_session_t* session,
     ure_acceleration_stats_v3_t* out_stats);
+int ure_session_get_acceleration_stats_v4(
+    const ure_session_t* session,
+    ure_acceleration_stats_v4_t* out_stats);
 void ure_session_get_framebuffer_size(const ure_session_t* session,
                                       int* out_width,
                                       int* out_height);
