@@ -50,7 +50,8 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | R-P5 (PSSMLT) | Done | Independent GPU chains, production wavefront replay, normalization/diagnostics/shards, replicated disjoint-range fixed-NMSE gate |
 | R-P7 (Industrial Validation) | Done | Clean-tree eight-category Closure, farm/Nsight same-binary evidence, 37/37 CTest |
 | Q.0-Q.12 (Native Scene) | Done | Native schema/serialization, procedural/script, resources/solvers/simulation, tooling/adapters/cache/farm, validation suite |
-| T (Portable GPU Runtime) | In progress | T.0-T.10 complete; portable runtime, optional backends and multi-backend scheduling closed; T.11 is the authoritative cursor |
+| T (Portable GPU Runtime) | Done | T.0-T.11 complete; portable runtime, optional backends, multi-backend scheduling and unified validation closed |
+| V (GPU Acceleration) | In progress | V.0 acceleration audit is the authoritative cursor |
 | W (Wave Optics Solver) | In progress | W.0 audit + rough dielectric spectral/UV PDF/MIS fix done; W.1 WaveOpticsConfig gates done; W.2 Airy PSF oracle started |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
@@ -418,10 +419,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 25 | 2026-07-26 T.8 | Established the bounded Vulkan acceleration bridge | SDK-free provider/selection/hit contracts now drive private Vulkan BLAS/TLAS and real ray query with explicit compute fallback or rejection; CUDA production hit metadata, Windows NVIDIA/Intel, Linux CUDA-free, deterministic shader, lifetime/budget, and 45/45 CTest gates passed. Full verification also fixed a CUDA timeline wait race where a checkpoint could complete between two probes. Production acceleration construction remains Phase V and full Vulkan SceneIR rendering remains fail-loud. |
 | 26 | 2026-07-28 T.9 | Established the optional Windows D3D12/DXR runtime | SDK-neutral public surface and private D3D12/DXGI implementation now cover adapter budgets, buffer/image/sampler resources, deterministic DXIL, typed descriptor heaps, compute/copy queues, cross-queue fences, DRED and bounded DXR 1.1 BLAS/TLAS with compute fallback. CUDA/Vulkan/D3D12 parity, native DXR, no-D3D12 isolation, deterministic shader and 46/46 CTest gates passed; full D3D12 SceneIR rendering and production acceleration remain later work. |
 | 27 | 2026-07-28 T.10 | Established portable homogeneous and heterogeneous sample scheduling | SDK-free feature/precision/coherence/budget/semantic negotiation, canonical weighted ranges, backend-native resource cache identity and distributed v5 worker provenance now reject incompatible or overlapping contributions. CUDA private multi-GPU uses the shared scheduler; actual CUDA plus NVIDIA/Intel Vulkan/D3D12 inventory, v4 compatibility, SDK-free 4/4 and Release 48/48 gates passed. |
+| 28 | 2026-07-28 T.11 | Closed Phase T with a unified cross-backend validation and performance gate | The machine-readable suite aggregates physical oracles, shared acceleration/framebuffer parity, CUDA exact reference and VRAM/throughput guards, variance/MSE convergence, device loss, budgets, caches and cold/warm launch evidence. CUDA/Vulkan are required, native RT/DXR is capability-driven, five actual workers and Release 48/48 passed; cursor advanced to V.0. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- Phase Q, Phase M, and Phase R are complete; T.0-T.10 are complete and the authoritative construction cursor is T.11.
+- Phase Q, Phase M, Phase R, and Phase T are complete; the authoritative construction cursor is V.0.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 1) to avoid concurrent `ptxas` host-memory allocation failures; host and unrelated targets remain globally parallel.

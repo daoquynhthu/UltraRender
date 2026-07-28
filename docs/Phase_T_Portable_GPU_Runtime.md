@@ -2,12 +2,13 @@
 
 ## Status
 
-T.0 through T.10 are complete and the authoritative cursor is T.11. This
-document is the migration ledger for T.11. CUDA remains the complete
+T.0 through T.11 are complete and the authoritative cursor is V.0. This
+document records the closed Phase T contract. CUDA remains the complete
 scene rendering backend. Vulkan has a production compute-runtime foundation and
 a bounded acceleration bridge on Windows and Linux. D3D12/DXR has an optional
 Windows runtime and bounded acceleration bridge. Full SceneIR rendering is not
-yet lowered to either portable backend.
+yet lowered to either portable backend and depends on the Phase V production
+acceleration stack.
 
 ## Audit method and boundary
 
@@ -52,7 +53,7 @@ identity belong above it.
 | T0-ACC | SDK-free acceleration descriptors, selection policy, stable ray/hit layout and provider lifetime bridge bounded triangle BLAS/TLAS fixtures to Vulkan ray query and DXR inline ray query. Compute fallback and rejection are explicit. CUDA `world_hit` remains the production reference. | Acceleration-provider API | T.8/T.9 bridges complete; production construction/refit/compaction remains Phase V |
 | T0-DIAG | Public diagnostics are SDK-free. CUDA, Vulkan and D3D12 map native failures to structured runtime errors; Vulkan retains validation messages and D3D12 retains DRED breadcrumbs/page-fault diagnostics. | Runtime error and diagnostics | T.3/T.6/T.7/T.9 complete |
 | T0-SCN | SceneIR and native serialization contain no backend handle. `CompiledGpuScene`, CUDA native resource views and lowering state are private; runtime resource and execution identities define the portable boundary. | Scene compiler/lowering | T.3/T.4/T.6 complete |
-| T0-TEST | SDK-free gates cover runtime/resources/execution/acceleration/scheduling and installed public surfaces. CUDA production traversal, Vulkan native/fallback and D3D12 native/fallback share exact hit fixtures; actual multi-API inventory and versioned distributed provenance cover T.10. Full renderer parity remains T.11. | Validation architecture | T.1-T.10 complete; T.11 full parity |
+| T0-TEST | SDK-free gates cover runtime/resources/execution/acceleration/scheduling and installed public surfaces. CUDA production traversal, Vulkan native/fallback and D3D12 native/fallback share exact hit fixtures; actual multi-API inventory, versioned distributed provenance and the unified physical/statistical/performance report cover T.10-T.11. | Validation architecture | T.1-T.11 complete |
 
 ## Migration order
 
@@ -76,7 +77,8 @@ identity belong above it.
 9. T.9 adds the optional Windows D3D12/DXR runtime without claiming complete
    SceneIR rendering.
 10. T.10 adds heterogeneous scheduling and versioned merge provenance.
-11. T.11 adds full parity/performance evidence.
+11. T.11 aggregates bounded core parity and production CUDA performance
+    evidence with explicit thresholds and cause classifications.
 
 This order prevents a nominal abstraction from being designed around only
 trivial buffers while the difficult texture, queue, estimator-state, wave, and
@@ -502,8 +504,8 @@ native DXR, executes the no-D3D12 isolation build, and runs the Phase T static
 audit. The Release inventory is 46 registered tests at this closure snapshot.
 
 This closure does not claim complete D3D12 SceneIR lowering, DispatchRays, or
-production acceleration construction/refit/compaction. Those remain T.11 and
-Phase V responsibilities.
+production acceleration construction/refit/compaction. Those remain Phase V
+responsibilities.
 
 ## T.10 multi-backend scheduling closure
 
@@ -551,6 +553,48 @@ SDK-free MSVC warnings-as-errors build. The closure snapshot contains 48
 registered Release tests; the independent SDK-free gate contains 4 tests.
 
 This closure provides scheduling and merge contracts, not a cross-machine
-worker service or full Vulkan/D3D12 SceneIR renderer. T.11 owns complete
-cross-backend physical/statistical/performance evidence. The authoritative
-cursor is T.11.
+worker service or full Vulkan/D3D12 SceneIR renderer. T.11 owns the unified
+cross-backend physical/statistical/performance evidence.
+
+## T.11 cross-backend validation closure
+
+`scripts/run_phase_t_validation_suite.ps1` is the authoritative local closure
+gate and writes `.build/phase_t_validation/report.json` using the stable
+`ure.phase_t.validation.v1` schema. CUDA and Vulkan are required. D3D12 is
+optional, while Vulkan native ray query and DXR are required only when the
+enumerated adapter advertises the corresponding executable capability;
+compute-BVH fallback remains part of the required evidence.
+
+The report covers the requested dimensions without treating unlike workloads
+as directly comparable:
+
+- analytic spectral, Stokes/Mueller and wave operators use a `1e-4` maximum
+  absolute-error contract;
+- CUDA production traversal, Vulkan native/fallback traversal and D3D12
+  native/fallback traversal use the shared hit, visibility, instance-transform
+  and four-pixel framebuffer fixture with a `2e-5` bound;
+- the CUDA Cornell 512×512×64 reference remains exact by SHA-256 and is guarded
+  against more than 20% elapsed-time regression and more than 64 MiB above the
+  retained VRAM baseline;
+- the retained Phase R light-sampling suite supplies independent radiance
+  variance and MSE convergence evidence rather than inferring statistics from
+  deterministic repeated frames;
+- host loss injection plus native Vulkan loss mapping and D3D12
+  removal/DRED retention cover durable device-loss diagnostics;
+- actual adapter memory inventory, runtime budget rejection, incremental
+  no-work builds, Vulkan restart cache identity, cold/warm process launch and
+  workload-specific throughput are recorded with thresholds and cause
+  classifications.
+
+The closure machine executed five workers: CUDA, NVIDIA/Intel Vulkan and
+NVIDIA/Intel D3D12. Repeated closure runs placed the CUDA production reference
+between 12.5 and 13.3 seconds, or 1.27-1.34 million samples/second, with a
+1752 MiB measured VRAM delta. All statistical convergence checks, the Phase T
+static audit, the full 48-test Release CTest inventory and documentation
+consistency passed.
+
+Phase T therefore closes the backend-neutral runtime and bounded core execution
+contract. It does not claim that Vulkan or D3D12 can render arbitrary SceneIR
+through the public renderer. Production BLAS/TLAS policy, refit/compaction,
+native provider completion and the general portable SceneIR rendering path
+remain Phase V. The authoritative cursor is V.0.

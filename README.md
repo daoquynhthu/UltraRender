@@ -6,7 +6,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- Phase Q 与 Phase R 已完成；Phase T 已完成 T.0-T.10，包括 CUDA production lowering、Vulkan compute/acceleration foundation、Windows 可选 D3D12/DXR runtime 和 multi-backend sample-shard scheduling，当前施工游标是 `T.11`（cross-backend validation/performance suite）。
+- Phase Q、Phase R 与 Phase T 已完成。Phase T 闭环了 CUDA production lowering、Vulkan compute/acceleration foundation、Windows 可选 D3D12/DXR runtime、multi-backend sample-shard scheduling 以及统一的 cross-backend validation/performance suite；当前施工游标是 `V.0`（GPU geometry acceleration audit）。
 - 默认完整场景渲染后端仍是 CUDA。Vulkan 已具备 Windows/Linux compute runtime 和 capability-driven ray-query/compute-BVH bridge；D3D12 已具备 Windows adapter/resource/descriptor/queue/fence/DRED runtime、DXR inline ray query 和 compute fallback。两者都尚未接入完整 SceneIR renderer，因此不会被描述为完整渲染后端；OptiX production provider 也尚未完成。
 - 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure。Vulkan 与 D3D12 adapter inventory 记录硬件能力，各自 provider 只公布已可执行的 native ray query 与 compute fallback，并可按配置明确拒绝。完整 portable-backend 渲染请求仍会因尚未完成 SceneIR lowering 而失败，不会静默转用 CUDA。
 - Slang 2026.14 已完成固定版本、多目标编译、反射、debug mapping、CUDA 占用率及数值执行验证。Vulkan SPIR-V 与 D3D12 DXIL 复用共享光谱/偏振及加速语义；D3D12 release DXIL 由固定 Windows SDK DXC 确定性生成，debug artifact 单独生成。现有 CUDA production kernels 仍是私有 `.cu` fast path，Slang RHI 未被引入。
@@ -14,6 +14,8 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 - `ure_vulkan` 已实现 Vulkan 1.3 adapter、queue、timeline、buffer/image/sampler、SPIR-V module、typed descriptor、specialization、pipeline cache、validation/debug-utils、device-loss 映射，以及私有 BLAS/TLAS build 与 ray-query descriptor lowering；其公共头不暴露 Vulkan SDK 类型。
 - `ure_d3d12` 已实现 Windows D3D12 adapter、buffer/image/sampler、DXIL pipeline、descriptor heap、queue/fence、DRED，以及私有 DXR BLAS/TLAS 与 inline ray-query lowering；其公共头不暴露 Windows、D3D12 或 DXGI 类型。
 - SDK-free scheduler 会在执行前校验 worker feature、float precision、coherence mode、显存下限和共享 kernel semantics，以稳定整数权重划分 sample ranges；distributed file v5 保存 backend/adapter、driver/compiler、executable digest 和 resource-cache provenance。兼容 CUDA/Vulkan/D3D12 sample shards 可合并，不兼容或重叠分片会拒绝。
+- `run_phase_t_validation_suite.ps1` 以机器可读报告统一检查物理 unit oracle、hit/framebuffer fixture、CUDA reference render、variance/MSE、device loss、budget、cache、cold/warm launch、VRAM 和 throughput。CUDA/Vulkan 必测，DXR 按实际 capability 执行；不同后端或工作负载的差异必须带阈值和原因分类。
+- 当前 Release 构建注册 48 个 CTest；测试数量只表示已登记门禁规模，不等同于功能覆盖率或发布成熟度。
 - 默认积分器是 spectral/polarimetric radiometric wavefront path tracer。
 - coherent field、partial coherence、完整衍射相机和局部全波耦合仍属于 Phase W 后续工作；当前主渲染路径不会静默模拟这些能力。
 - production unbiased/spatial ReSTIR DI 与受限 ReSTIR PT suffix reuse 已完成验证。GPU specular-manifold、BDPT、VCM 和独立 PSSMLT 已通过各自统计门禁；MLT 与 bidirectional/VCM/manifold 的组合仍明确拒绝。

@@ -264,6 +264,18 @@ int main() {
                  ++index) {
                 const auto& shard =
                     schedule.shards[index];
+                const auto capability = std::ranges::find_if(
+                    workers,
+                    [&](const rt::WorkerCapability& worker) {
+                        return worker.adapter.adapter_id ==
+                            shard.worker.adapter_id &&
+                            worker.adapter.kind ==
+                            shard.worker.backend;
+                    });
+                if (capability == workers.end()) {
+                    throw std::runtime_error(
+                        "scheduled worker capability is missing");
+                }
                 report
                     << "    {\"backend\": \""
                     << backend_name(
@@ -275,6 +287,14 @@ int main() {
                     << shard.worker.vendor_id
                     << ", \"device_id\": "
                     << shard.worker.device_id
+                    << ", \"features\": "
+                    << capability->adapter.features
+                    << ", \"total_memory_bytes\": "
+                    << capability->adapter.memory.total_bytes
+                    << ", \"available_memory_bytes\": "
+                    << capability->adapter.memory.available_bytes
+                    << ", \"budget_bytes\": "
+                    << capability->adapter.memory.budget_bytes
                     << ", \"driver\": \""
                     << json_escape(
                            shard.worker.driver_identity)
