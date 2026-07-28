@@ -91,8 +91,18 @@ struct AccelerationStats {
     std::uint64_t closest_triangle_tests = 0;
     std::uint64_t shadow_node_visits = 0;
     std::uint64_t shadow_triangle_tests = 0;
+    std::uint64_t closest_tlas_node_visits = 0;
+    std::uint64_t shadow_tlas_node_visits = 0;
     std::uint64_t stack_overflow_count = 0;
     std::uint64_t invalid_acceleration_count = 0;
+    std::uint64_t blas_node_bytes = 0;
+    std::uint64_t tlas_node_count = 0;
+    std::uint64_t tlas_leaf_count = 0;
+    std::uint32_t tlas_max_depth = 0;
+    std::uint64_t tlas_bytes = 0;
+    std::uint64_t tlas_build_nanoseconds = 0;
+    std::uint64_t tlas_update_nanoseconds = 0;
+    std::uint64_t tlas_update_count = 0;
 };
 
 struct WaveOpticsConfig {

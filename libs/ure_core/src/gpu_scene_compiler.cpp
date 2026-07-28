@@ -1056,7 +1056,8 @@ void compile_instance_transform(const core::Vec3f& position,
                                 const core::Vec3f& scale,
                                 const core::Quat& rotation,
                                 ure::gpu::GpuInstanceTransform& out) {
-    core::Matrix4x4f rot_mat = rotation.to_matrix();
+    core::Matrix4x4f rot_mat =
+        rotation.normalized().to_matrix();
     ure::gpu::GpuVec3 r0 = {rot_mat.m[0][0], rot_mat.m[1][0], rot_mat.m[2][0]};
     ure::gpu::GpuVec3 r1 = {rot_mat.m[0][1], rot_mat.m[1][1], rot_mat.m[2][1]};
     ure::gpu::GpuVec3 r2 = {rot_mat.m[0][2], rot_mat.m[1][2], rot_mat.m[2][2]};
@@ -1127,7 +1128,8 @@ void compile_transform(const core::Vec3f& position,
                        const core::Vec3f& scale,
                        const core::Quat& rotation,
                        ure::gpu::GpuInstance& inst) {
-    core::Matrix4x4f rot_mat = rotation.to_matrix();
+    core::Matrix4x4f rot_mat =
+        rotation.normalized().to_matrix();
 
     ure::gpu::GpuVec3 r0 = {rot_mat.m[0][0], rot_mat.m[1][0], rot_mat.m[2][0]};
     ure::gpu::GpuVec3 r1 = {rot_mat.m[0][1], rot_mat.m[1][1], rot_mat.m[2][1]};

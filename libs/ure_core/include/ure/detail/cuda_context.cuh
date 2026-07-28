@@ -87,6 +87,13 @@ struct GpuContext {
     GpuInstanceDesc* d_instance_descs = nullptr;
     GpuInstanceTransform* d_instance_transforms = nullptr;
     GpuInstanceTransform* d_previous_instance_transforms = nullptr;
+    GpuBvhNode* d_tlas_nodes = nullptr;
+    int* d_tlas_instance_indices = nullptr;
+    std::vector<GpuBvhNode> host_tlas_nodes;
+    std::vector<int> host_tlas_instance_indices;
+    std::vector<GpuInstanceDesc> host_instance_descs;
+    std::vector<GpuVec3> host_mesh_bounds_min;
+    std::vector<GpuVec3> host_mesh_bounds_max;
     GpuTexture* d_textures = nullptr;
     GpuLightRecord* d_lights = nullptr;
     int* d_light_indices = nullptr;
@@ -213,6 +220,7 @@ struct GpuContext {
     int sphere_count = 0;
     int mesh_count = 0;
     int instance_count = 0;
+    int tlas_node_count = 0;
     int texture_count = 0;
     int light_count = 0;
     GpuAccelerationTelemetry* d_acceleration_telemetry = nullptr;

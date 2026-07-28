@@ -2,7 +2,7 @@
 
 ## Status
 
-V.0 through V.2 are complete and the authoritative cursor is V.3. This
+V.0 through V.3 are complete and the authoritative cursor is V.4. This
 document records the initial acceleration audit, configuration contract,
 self-compute correctness baseline and the boundaries that later Phase V work
 must preserve. It does not describe the current OptiX, Vulkan RT or DXR bridges
@@ -13,10 +13,11 @@ as general production acceleration providers.
 The complete renderer still uses the private CUDA self-compute path.
 `MeshBvhBuilder` builds one object-space binary BVH per mesh during scene
 upload. The loader uploads the reordered triangle index buffer and a 32-byte
-`GpuBvhNode` array. Closest-hit and any-hit CUDA routines traverse that array
-directly. Instances are scanned linearly, tested against their world-space
-bounds and then transformed into the referenced mesh BVH. There is no
-production TLAS.
+`GpuBvhNode` array. A separate world-space TLAS stores stable instance ordinals
+and bounds; closest-hit and production shadow traversal visit it before
+transforming candidate rays into the referenced mesh BLAS. Instance transforms
+can refit the retained TLAS topology without rebuilding or uploading static
+mesh BLAS data.
 
 The Phase T `AccelerationProvider` contract is the forward boundary. Vulkan and
 D3D12 implement bounded triangle/instance fixtures through native ray query or
@@ -32,9 +33,9 @@ the new public model.
 | V0-PROD | Scene upload calls `MeshBvhBuilder` separately for each mesh and retains raw CUDA vertex/index/node allocations in the private resource registry. | Build policy, statistics and native ownership are CUDA-private and cannot define the portable API. | V.1-V.5 |
 | V0-BLD | The builder chooses the largest centroid extent, partitions at its midpoint, falls back to `nth_element` when one side is empty, emits binary preorder nodes and uses leaves of at most four triangles. | This is not SAH/SBVH/LBVH despite a legacy public header claiming “SAH or midpoint”; build quality and degeneracy behavior are unmeasured. | V.2/V.4 |
 | V0-TRV | Closest-hit and an unused duplicate any-hit helper each used `int stack[64]`, pushed both children without near/far ordering and exposed no overflow metric. The production shadow kernel actually called `world_hit`, so it shared closest traversal; the duplicate helper made the boundary easy to mis-audit or misuse. | The active traversal could write past the stack or drop work; duplicate visibility code invited future semantic divergence. | V.2 |
-| V0-INS | Closest-hit and the production shadow kernel scan every instance and then traverse its mesh BVH. A dead `any_hit` helper omitted `scene.instance_count`. | No TLAS exists and instance cost remains linear; the dead divergent path needed removal before it could become a consumer. | V.2/V.3 |
+| V0-INS | V.0 found a linear instance scan and a dead divergent `any_hit`; V.3 replaced the active scan with a shared checked instance TLAS and V.2 removed the dead helper. | Closed for the self-compute baseline; quality and wide-node optimization remain V.4. | V.2/V.3 |
 | V0-LIN | A mesh with no BVH nodes falls back to a full triangle scan in closest-hit and shadow paths. | Missing or invalid acceleration can silently become O(N); fallback policy has no explicit configuration, reason or telemetry. | V.2 |
-| V0-UPD | Retained instance descriptors/transforms support hot updates, but no top-level structure is refitted or rebuilt. | Dynamic transforms cannot provide predictable acceleration update cost. | V.3/V.10 |
+| V0-UPD | V.0 found transform hot updates without top-level acceleration maintenance; V.3 now refits retained TLAS topology and uploads only transforms and TLAS nodes. | Rigid transform refit is closed; deformation and topology classification remain V.10. | V.3/V.10 |
 | V0-HOST | `BVHAccelerator` is a recursive host traversal compiled into `ure_core`; `SimpleAccelerator` and an Embree placeholder remain in installed `ure_types` headers. Repository search finds no renderer/session/CLI consumer. | Extending these classes would create the forbidden second host production traversal path and split hit semantics from GPU providers. | Remove or quarantine in V.2 |
 | V0-OPT | Identical installed `OptixAccelerator` placeholders exist in `ure_types` and `ure_core`; build/update are empty, closest-hit always misses and occlusion always returns false. No OptiX SDK target or pipeline exists. | The class name can be mistaken for a functional provider even though using it would produce incorrect visibility. | Freeze until replacement/removal in V.6 |
 | V0-API | Phase T exposes SDK-free bounded geometry, instance, ray/hit and capability contracts, but no `AccelerationConfig`, quality preset, update policy, build statistics or scratch/compaction budget. | Provider selection and operational policy cannot yet be expressed consistently through config, ABI, Session or pyure. | V.1 |
@@ -49,8 +50,8 @@ the new public model.
   `OptixAccelerator` placeholders are legacy or nonfunctional inventory. They
   may be removed or replaced by their assigned Phase V steps, but may not gain
   production consumers.
-- Linear triangle traversal is a diagnosed compatibility path, not an accepted
-  silent fallback policy.
+- Linear triangle or instance fallback is prohibited in the self-compute
+  production path.
 - Phase V may change acceleration construction and traversal, but not
   radiometric, spectral, polarization, BSDF, phase-function or estimator
   semantics.
@@ -148,3 +149,34 @@ requested, while overflow and invalid-acceleration detection remain mandatory
 and abort the pass regardless of that setting. GPU gates cover builder
 validation, transformed-instance closest/shadow parity, robust AABB and triangle
 cases, stack overflow and missing acceleration.
+
+## V.3 TLAS and BLAS separation
+
+Each static mesh retains its object-space BLAS. `InstanceTlasBuilder` constructs
+a separate world-space binary TLAS over validated instance transforms and
+bounds, with leaves referring through a stable instance-index permutation
+rather than reordering public instance identity. The active closest-hit and
+production shadow paths share checked TLAS traversal before entering the
+selected mesh BLAS; there is no linear instance fallback.
+
+Transform mutation validates finite affine matrices and inverse consistency,
+derives conservative world bounds from the referenced BLAS bounds and all eight
+transformed corners, refits the retained TLAS topology on the host construction
+path, and uploads only the new transform array and TLAS nodes. Caller-supplied
+bounds therefore cannot create false-negative culling. The device BLAS
+allocations and TLAS allocation remain stable. Automatic and explicit `refit`
+policy execute this path; `static` rejects mutation and the not-yet-implemented
+`rebuild` policy remains fail-loud.
+
+Scene compilation normalizes input quaternions before producing the paired
+forward/inverse matrices. This closes a pre-existing case where a non-unit
+authoring quaternion could produce an internally inconsistent inverse and is
+covered by the instance update gate.
+
+The C++ `AccelerationStats` now distinguishes BLAS bytes, TLAS nodes, leaves,
+depth, resident bytes, construction/update time and TLAS traversal visits.
+Versioned C ABI v2 getters extend telemetry without enlarging the V.2 output
+structure, and pyure consumes that versioned surface. Multi-instance gates
+exercise a multi-level TLAS, closest/shadow transformed hit parity, stable
+instance identity, topology-preserving refit, root-bound updates and unchanged
+BLAS pointers.

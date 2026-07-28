@@ -365,6 +365,105 @@ static void compute_aabb(const std::vector<float>& vertices, GpuVec3& min_pt, Gp
     max_pt = max_pt + GpuVec3(padding, padding, padding);
 }
 
+static void derive_instance_bounds(
+    GpuInstanceTransform& instance,
+    const GpuVec3& mesh_minimum,
+    const GpuVec3& mesh_maximum) {
+    for (int row = 0; row < 4; ++row) {
+        for (int column = 0; column < 4; ++column) {
+            if (!std::isfinite(
+                    instance.transform.m[row][column]) ||
+                !std::isfinite(
+                    instance.inverse_transform.m[row][column])) {
+                throw std::invalid_argument(
+                    "instance transform matrices must be finite");
+            }
+        }
+    }
+    if (std::fabs(instance.transform.m[3][0]) > 1e-6f ||
+        std::fabs(instance.transform.m[3][1]) > 1e-6f ||
+        std::fabs(instance.transform.m[3][2]) > 1e-6f ||
+        std::fabs(instance.transform.m[3][3] - 1.0f) >
+            1e-6f ||
+        std::fabs(instance.inverse_transform.m[3][0]) >
+            1e-6f ||
+        std::fabs(instance.inverse_transform.m[3][1]) >
+            1e-6f ||
+        std::fabs(instance.inverse_transform.m[3][2]) >
+            1e-6f ||
+        std::fabs(
+            instance.inverse_transform.m[3][3] - 1.0f) >
+            1e-6f) {
+        throw std::invalid_argument(
+            "instance transforms must be affine");
+    }
+    for (int row = 0; row < 4; ++row) {
+        for (int column = 0; column < 4; ++column) {
+            float product = 0.0f;
+            float scale = 0.0f;
+            for (int inner = 0; inner < 4; ++inner) {
+                const float term =
+                    instance.transform.m[row][inner] *
+                    instance.inverse_transform.m[inner][column];
+                product += term;
+                scale += std::fabs(term);
+            }
+            const float expected =
+                row == column ? 1.0f : 0.0f;
+            if (std::fabs(product - expected) >
+                1e-4f * std::max(1.0f, scale)) {
+                throw std::invalid_argument(
+                    "instance transform and inverse are inconsistent");
+            }
+        }
+    }
+    if (!std::isfinite(mesh_minimum.x) ||
+        !std::isfinite(mesh_minimum.y) ||
+        !std::isfinite(mesh_minimum.z) ||
+        !std::isfinite(mesh_maximum.x) ||
+        !std::isfinite(mesh_maximum.y) ||
+        !std::isfinite(mesh_maximum.z) ||
+        mesh_minimum.x > mesh_maximum.x ||
+        mesh_minimum.y > mesh_maximum.y ||
+        mesh_minimum.z > mesh_maximum.z) {
+        throw std::invalid_argument(
+            "instance references invalid mesh bounds");
+    }
+    GpuVec3 minimum(
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max());
+    GpuVec3 maximum(
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest());
+    for (int corner = 0; corner < 8; ++corner) {
+        const GpuVec3 point(
+            (corner & 1) != 0
+                ? mesh_maximum.x : mesh_minimum.x,
+            (corner & 2) != 0
+                ? mesh_maximum.y : mesh_minimum.y,
+            (corner & 4) != 0
+                ? mesh_maximum.z : mesh_minimum.z);
+        const GpuVec3 transformed =
+            instance.transform.transform_point(point);
+        if (!std::isfinite(transformed.x) ||
+            !std::isfinite(transformed.y) ||
+            !std::isfinite(transformed.z)) {
+            throw std::invalid_argument(
+                "instance transform produces invalid bounds");
+        }
+        minimum.x = std::min(minimum.x, transformed.x);
+        minimum.y = std::min(minimum.y, transformed.y);
+        minimum.z = std::min(minimum.z, transformed.z);
+        maximum.x = std::max(maximum.x, transformed.x);
+        maximum.y = std::max(maximum.y, transformed.y);
+        maximum.z = std::max(maximum.z, transformed.z);
+    }
+    instance.min_pt = minimum;
+    instance.max_pt = maximum;
+}
+
 static void build_material_soa(std::vector<float>& host_soa,
                                const GpuMaterialData* data,
                                int count,
@@ -1223,7 +1322,7 @@ static void include_static_scene_bounds_point(GpuContext* ctx, const GpuVec3& p)
 static void configure_scene_bounds(
     GpuContext* ctx,
     const std::vector<RenderMesh>& meshes,
-    const std::vector<GpuInstance>& instances,
+    const std::vector<GpuInstanceTransform>& instance_transforms,
     const std::vector<GpuSphere>& spheres
 ) {
     ctx->has_static_scene_bounds = false;
@@ -1240,9 +1339,9 @@ static void configure_scene_bounds(
     ctx->has_scene_bounds = ctx->has_static_scene_bounds;
     ctx->scene_bounds_min = ctx->static_scene_bounds_min;
     ctx->scene_bounds_max = ctx->static_scene_bounds_max;
-    for (const auto& instance : instances) {
-        include_scene_bounds_point(ctx, instance.min_pt);
-        include_scene_bounds_point(ctx, instance.max_pt);
+    for (const auto& transform : instance_transforms) {
+        include_scene_bounds_point(ctx, transform.min_pt);
+        include_scene_bounds_point(ctx, transform.max_pt);
     }
 }
 
@@ -2962,6 +3061,8 @@ GpuContext* init_gpu_renderer(int width, int height,
              mesh.bvh_nodes = d_nodes;
              mesh.bvh_node_count = (int)build_nodes.size();
              ctx->resources->retain_allocation(d_nodes);
+             ctx->acceleration_stats.blas_node_bytes +=
+                 static_cast<std::uint64_t>(bvh_size);
         } else { mesh.bvh_nodes = nullptr; mesh.bvh_node_count = 0; }
 
         size_t v_size = input_mesh.vertices.size() * sizeof(float);
@@ -3010,6 +3111,8 @@ GpuContext* init_gpu_renderer(int width, int height,
              mesh.bvh_nodes = d_nodes;
              mesh.bvh_node_count = (int)build_nodes.size();
              ctx->resources->retain_allocation(d_nodes);
+             ctx->acceleration_stats.blas_node_bytes +=
+                 static_cast<std::uint64_t>(bvh_size);
         } else { mesh.bvh_nodes = nullptr; mesh.bvh_node_count = 0; }
         size_t v_size = hm.vertices.size() * sizeof(float);
         GpuVec3* d_v;
@@ -3060,6 +3163,14 @@ GpuContext* init_gpu_renderer(int width, int height,
             cudaMemcpy(ctx->d_meshes, host_gpu_meshes.data(), host_gpu_meshes.size() * sizeof(GpuMesh), cudaMemcpyHostToDevice);
     }
     ctx->mesh_count = (int)host_gpu_meshes.size();
+    ctx->host_mesh_bounds_min.reserve(
+        host_gpu_meshes.size());
+    ctx->host_mesh_bounds_max.reserve(
+        host_gpu_meshes.size());
+    for (const auto& mesh : host_gpu_meshes) {
+        ctx->host_mesh_bounds_min.push_back(mesh.min_pt);
+        ctx->host_mesh_bounds_max.push_back(mesh.max_pt);
+    }
 
     std::vector<GpuInstance> host_instances = instances;
 
@@ -3075,23 +3186,43 @@ GpuContext* init_gpu_renderer(int width, int height,
         if (desc_bytes == 0) desc_bytes = sizeof(GpuInstanceDesc);
         cudaMalloc(&ctx->d_instance_descs, desc_bytes);
         if (!host_instances.empty()) {
-            std::vector<GpuInstanceDesc> host_descs(host_instances.size());
+            ctx->host_instance_descs.resize(
+                host_instances.size());
             for (size_t i = 0; i < host_instances.size(); ++i) {
-                host_descs[i].mesh_index = host_instances[i].mesh_index;
-                host_descs[i].material_index = host_instances[i].material_index;
+                ctx->host_instance_descs[i].mesh_index =
+                    host_instances[i].mesh_index;
+                ctx->host_instance_descs[i].material_index =
+                    host_instances[i].material_index;
             }
-            cudaMemcpy(ctx->d_instance_descs, host_descs.data(), desc_bytes, cudaMemcpyHostToDevice);
+            cudaMemcpy(
+                ctx->d_instance_descs,
+                ctx->host_instance_descs.data(), desc_bytes,
+                cudaMemcpyHostToDevice);
         }
         ctx->resources->retain_allocation(ctx->d_instance_descs);
     }
-    {
-        std::vector<GpuInstanceTransform> host_transforms(host_instances.size());
-        for (size_t i = 0; i < host_instances.size(); ++i) {
-            host_transforms[i].transform = host_instances[i].transform;
-            host_transforms[i].inverse_transform = host_instances[i].inverse_transform;
-            host_transforms[i].min_pt = host_instances[i].min_pt;
-            host_transforms[i].max_pt = host_instances[i].max_pt;
+    std::vector<GpuInstanceTransform> host_transforms(
+        host_instances.size());
+    for (size_t i = 0; i < host_instances.size(); ++i) {
+        host_transforms[i].transform = host_instances[i].transform;
+        host_transforms[i].inverse_transform =
+            host_instances[i].inverse_transform;
+        host_transforms[i].min_pt = host_instances[i].min_pt;
+        host_transforms[i].max_pt = host_instances[i].max_pt;
+        const int mesh_index = host_instances[i].mesh_index;
+        if (mesh_index < 0 ||
+            mesh_index >= ctx->mesh_count) {
+            throw std::invalid_argument(
+                "instance mesh index is out of range");
         }
+        derive_instance_bounds(
+            host_transforms[i],
+            ctx->host_mesh_bounds_min[
+                static_cast<std::size_t>(mesh_index)],
+            ctx->host_mesh_bounds_max[
+                static_cast<std::size_t>(mesh_index)]);
+    }
+    {
         size_t xform_bytes = host_transforms.size() * sizeof(GpuInstanceTransform);
         if (xform_bytes == 0) xform_bytes = sizeof(GpuInstanceTransform);
         cudaMalloc(&ctx->d_instance_transforms, xform_bytes);
@@ -3105,6 +3236,54 @@ GpuContext* init_gpu_renderer(int width, int height,
             ctx->d_previous_instance_transforms);
     }
     ctx->instance_count = (int)host_instances.size();
+    const auto tlas_build_start =
+        std::chrono::steady_clock::now();
+    const auto tlas_build_stats = InstanceTlasBuilder::build(
+        host_transforms, ctx->host_tlas_instance_indices,
+        ctx->host_tlas_nodes);
+    const auto tlas_build_end =
+        std::chrono::steady_clock::now();
+    ctx->acceleration_stats.tlas_build_nanoseconds =
+        static_cast<std::uint64_t>(
+            std::chrono::duration_cast<
+                std::chrono::nanoseconds>(
+                tlas_build_end - tlas_build_start).count());
+    ctx->acceleration_stats.tlas_node_count =
+        tlas_build_stats.node_count;
+    ctx->acceleration_stats.tlas_leaf_count =
+        tlas_build_stats.leaf_count;
+    ctx->acceleration_stats.tlas_max_depth =
+        tlas_build_stats.max_depth;
+    ctx->tlas_node_count =
+        static_cast<int>(ctx->host_tlas_nodes.size());
+    if (!ctx->host_tlas_nodes.empty()) {
+        const size_t node_bytes =
+            ctx->host_tlas_nodes.size() *
+            sizeof(GpuBvhNode);
+        const size_t index_bytes =
+            ctx->host_tlas_instance_indices.size() *
+            sizeof(int);
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_tlas_nodes, node_bytes));
+        ctx->resources->retain_allocation(
+            ctx->d_tlas_nodes);
+        UR_CUDA_CHECK(cudaMemcpy(
+            ctx->d_tlas_nodes,
+            ctx->host_tlas_nodes.data(), node_bytes,
+            cudaMemcpyHostToDevice));
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_tlas_instance_indices,
+            index_bytes));
+        ctx->resources->retain_allocation(
+            ctx->d_tlas_instance_indices);
+        UR_CUDA_CHECK(cudaMemcpy(
+            ctx->d_tlas_instance_indices,
+            ctx->host_tlas_instance_indices.data(),
+            index_bytes, cudaMemcpyHostToDevice));
+        ctx->acceleration_stats.tlas_bytes =
+            static_cast<std::uint64_t>(
+                node_bytes + index_bytes);
+    }
 
     const std::vector<GpuManifoldSeedPrimitive> manifold_seed_catalog =
         build_manifold_seed_catalog(
@@ -3188,7 +3367,8 @@ GpuContext* init_gpu_renderer(int width, int height,
     }
     ctx->texture_count = (int)host_gpu_textures.size();
 
-    configure_scene_bounds(ctx, meshes, instances, spheres);
+    configure_scene_bounds(
+        ctx, meshes, host_transforms, spheres);
     std::vector<GpuLightRecord> host_light_records;
     add_sphere_light_records(host_light_records, host_spheres);
     add_direct_mesh_light_records(host_light_records, host_light_meshes, host_instances);
@@ -3734,6 +3914,13 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.instance_transforms = ctx->d_instance_transforms;
     scene.previous_instance_transforms = ctx->d_previous_instance_transforms;
     scene.instance_count = ctx->instance_count;
+    scene.tlas_nodes = ctx->d_tlas_nodes;
+    scene.tlas_node_count = ctx->tlas_node_count;
+    scene.tlas_instance_indices =
+        ctx->d_tlas_instance_indices;
+    scene.tlas_instance_index_count =
+        static_cast<int>(
+            ctx->host_tlas_instance_indices.size());
     scene.acceleration_telemetry =
         ctx->d_acceleration_telemetry;
     scene.acceleration_collect_stats =
@@ -4026,6 +4213,8 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     ctx->acceleration_stats.closest_triangle_tests = 0;
     ctx->acceleration_stats.shadow_node_visits = 0;
     ctx->acceleration_stats.shadow_triangle_tests = 0;
+    ctx->acceleration_stats.closest_tlas_node_visits = 0;
+    ctx->acceleration_stats.shadow_tlas_node_visits = 0;
     ctx->acceleration_stats.stack_overflow_count = 0;
     ctx->acceleration_stats.invalid_acceleration_count = 0;
     if (ctx->d_restir_di_telemetry) {
@@ -4407,6 +4596,10 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         acceleration_telemetry.shadow_node_visits;
     ctx->acceleration_stats.shadow_triangle_tests =
         acceleration_telemetry.shadow_triangle_tests;
+    ctx->acceleration_stats.closest_tlas_node_visits =
+        acceleration_telemetry.closest_tlas_node_visits;
+    ctx->acceleration_stats.shadow_tlas_node_visits =
+        acceleration_telemetry.shadow_tlas_node_visits;
     ctx->acceleration_stats.stack_overflow_count =
         acceleration_telemetry.stack_overflow_count;
     ctx->acceleration_stats.invalid_acceleration_count =
@@ -4518,10 +4711,19 @@ void update_instance_transforms_gpu(GpuContext* ctx,
                                     const GpuInstanceTransform* transforms,
                                     int count) {
     if (!ctx || count <= 0) return;
-    assert(ctx->d_instance_transforms != nullptr && "update_instance_transforms: no GPU transform buffer");
-    assert(ctx->d_previous_instance_transforms != nullptr && "update_instance_transforms: no GPU previous transform buffer");
-    assert(count == ctx->instance_count && "update_instance_transforms: count must match scene instance_count");
-    assert(transforms != nullptr && "update_instance_transforms: null transforms pointer");
+    if (!ctx->d_instance_transforms ||
+        !ctx->d_previous_instance_transforms ||
+        !ctx->d_tlas_nodes ||
+        count != ctx->instance_count ||
+        !transforms) {
+        throw std::invalid_argument(
+            "instance transform update does not match the resident TLAS");
+    }
+    if (ctx->render_config.acceleration.update_policy ==
+        AccelerationUpdatePolicy::Static) {
+        throw std::runtime_error(
+            "static acceleration policy rejects instance transform updates");
+    }
     for (const auto& light : ctx->host_light_records_for_distribution) {
         const bool emissive_material =
             light.material_index >= 0 &&
@@ -4532,15 +4734,56 @@ void update_instance_transforms_gpu(GpuContext* ctx,
                 "emissive instance transform hot-update requires full scene reload to rebuild light geometry/tree");
         }
     }
+    std::vector<GpuInstanceTransform> next_transforms(
+        transforms, transforms + count);
+    for (int index = 0; index < count; ++index) {
+        const int mesh_index =
+            ctx->host_instance_descs[
+                static_cast<std::size_t>(index)].mesh_index;
+        derive_instance_bounds(
+            next_transforms[static_cast<std::size_t>(index)],
+            ctx->host_mesh_bounds_min[
+                static_cast<std::size_t>(mesh_index)],
+            ctx->host_mesh_bounds_max[
+                static_cast<std::size_t>(mesh_index)]);
+    }
+    std::vector<GpuBvhNode> next_tlas_nodes =
+        ctx->host_tlas_nodes;
+    const auto update_start =
+        std::chrono::steady_clock::now();
+    InstanceTlasBuilder::refit(
+        next_transforms,
+        ctx->host_tlas_instance_indices,
+        next_tlas_nodes);
     size_t bytes = count * sizeof(GpuInstanceTransform);
     UR_CUDA_CHECK(cudaMemcpy(ctx->d_previous_instance_transforms, ctx->d_instance_transforms, bytes, cudaMemcpyDeviceToDevice));
-    UR_CUDA_CHECK(cudaMemcpy(ctx->d_instance_transforms, transforms, bytes, cudaMemcpyHostToDevice));
+    UR_CUDA_CHECK(cudaMemcpy(
+        ctx->d_instance_transforms,
+        next_transforms.data(), bytes,
+        cudaMemcpyHostToDevice));
+    UR_CUDA_CHECK(cudaMemcpy(
+        ctx->d_tlas_nodes, next_tlas_nodes.data(),
+        next_tlas_nodes.size() * sizeof(GpuBvhNode),
+        cudaMemcpyHostToDevice));
+    const auto update_end =
+        std::chrono::steady_clock::now();
+    ctx->host_tlas_nodes = std::move(next_tlas_nodes);
+    ctx->acceleration_stats.tlas_update_nanoseconds =
+        static_cast<std::uint64_t>(
+            std::chrono::duration_cast<
+                std::chrono::nanoseconds>(
+                update_end - update_start).count());
+    ++ctx->acceleration_stats.tlas_update_count;
     ctx->has_scene_bounds = ctx->has_static_scene_bounds;
     ctx->scene_bounds_min = ctx->static_scene_bounds_min;
     ctx->scene_bounds_max = ctx->static_scene_bounds_max;
     for (int i = 0; i < count; ++i) {
-        include_scene_bounds_point(ctx, transforms[i].min_pt);
-        include_scene_bounds_point(ctx, transforms[i].max_pt);
+        include_scene_bounds_point(
+            ctx, next_transforms[
+                static_cast<std::size_t>(i)].min_pt);
+        include_scene_bounds_point(
+            ctx, next_transforms[
+                static_cast<std::size_t>(i)].max_pt);
     }
     if (ctx->d_path_guiding_spatial_directional_weights) {
         configure_path_guiding_domain(ctx, ctx->host_light_records_for_distribution);

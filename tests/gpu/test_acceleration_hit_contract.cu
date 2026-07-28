@@ -279,6 +279,42 @@ int main() {
         require(
             invalid_index_rejected,
             "self-compute BVH accepted an out-of-range index");
+        std::vector<GpuInstanceTransform>
+            builder_instance_transforms(9);
+        for (std::size_t index = 0;
+             index < builder_instance_transforms.size();
+             ++index) {
+            const float x = static_cast<float>(index) * 3.0f;
+            builder_instance_transforms[index].min_pt =
+                {x, -1.0f, -1.0f};
+            builder_instance_transforms[index].max_pt =
+                {x + 1.0f, 1.0f, 1.0f};
+        }
+        std::vector<int> builder_instance_indices;
+        std::vector<GpuBvhNode> builder_tlas_nodes;
+        const auto builder_tlas_stats =
+            InstanceTlasBuilder::build(
+                builder_instance_transforms,
+                builder_instance_indices,
+                builder_tlas_nodes);
+        require(
+            builder_tlas_stats.instance_count == 9 &&
+                builder_tlas_stats.node_count > 1 &&
+                builder_tlas_stats.leaf_count > 1 &&
+                builder_tlas_stats.max_depth > 1,
+            "multi-instance TLAS build statistics mismatch");
+        const std::vector<int> original_instance_order =
+            builder_instance_indices;
+        builder_instance_transforms[8].min_pt.x = 100.0f;
+        builder_instance_transforms[8].max_pt.x = 101.0f;
+        InstanceTlasBuilder::refit(
+            builder_instance_transforms,
+            builder_instance_indices,
+            builder_tlas_nodes);
+        require(
+            builder_instance_indices == original_instance_order &&
+                builder_tlas_nodes[0].max_pt.x == 101.0f,
+            "TLAS refit changed topology or retained stale bounds");
 
         const std::array vertices = {
             GpuVec3{-1.0f, -1.0f, 0.0f},
@@ -326,10 +362,9 @@ int main() {
         DeviceArray<GpuAccelerationTelemetry> device_telemetry(1);
         device_telemetry.upload(&telemetry, 1);
 
-        std::array<GpuInstanceDesc, 2> descs = {{
-            {0, 5},
-            {0, 7}}};
-        std::array<GpuInstanceTransform, 2> transforms;
+        std::vector<GpuInstanceDesc> descs(9, {0, 5});
+        descs[1].material_index = 7;
+        std::vector<GpuInstanceTransform> transforms(9);
         transforms[0].transform.m[0][0] = 1.5f;
         transforms[0].transform.m[0][3] = -2.0f;
         transforms[0].transform.m[1][1] = 0.75f;
@@ -356,19 +391,58 @@ int main() {
             {1.25f, -1.5f, -0.001f};
         transforms[1].max_pt =
             {2.75f, 1.5f, 0.001f};
+        for (std::size_t index = 2;
+             index < transforms.size();
+             ++index) {
+            const float x =
+                20.0f + static_cast<float>(index) * 3.0f;
+            transforms[index].transform.m[0][3] = x;
+            transforms[index].inverse_transform.m[0][3] = -x;
+            transforms[index].min_pt =
+                {x - 1.0f, -1.0f, -0.001f};
+            transforms[index].max_pt =
+                {x + 1.0f, 1.0f, 0.001f};
+        }
         DeviceArray<GpuInstanceDesc> device_descs(descs.size());
         DeviceArray<GpuInstanceTransform> device_transforms(
             transforms.size());
         device_descs.upload(descs.data(), descs.size());
         device_transforms.upload(
             transforms.data(), transforms.size());
+        std::vector<int> tlas_instance_indices;
+        std::vector<GpuBvhNode> tlas_nodes;
+        const auto tlas_stats = InstanceTlasBuilder::build(
+            transforms, tlas_instance_indices,
+            tlas_nodes);
+        require(
+            tlas_stats.instance_count == transforms.size() &&
+                tlas_stats.node_count > 1 &&
+                tlas_stats.leaf_count > 1,
+            "self-compute TLAS build statistics mismatch");
+        DeviceArray<GpuBvhNode> device_tlas_nodes(
+            tlas_nodes.size());
+        DeviceArray<int> device_tlas_instance_indices(
+            tlas_instance_indices.size());
+        device_tlas_nodes.upload(
+            tlas_nodes.data(), tlas_nodes.size());
+        device_tlas_instance_indices.upload(
+            tlas_instance_indices.data(),
+            tlas_instance_indices.size());
 
         GpuScene scene{};
         scene.meshes = device_meshes.get();
         scene.mesh_count = 1;
         scene.instance_descs = device_descs.get();
         scene.instance_transforms = device_transforms.get();
-        scene.instance_count = 2;
+        scene.instance_count =
+            static_cast<int>(transforms.size());
+        scene.tlas_nodes = device_tlas_nodes.get();
+        scene.tlas_node_count =
+            static_cast<int>(tlas_nodes.size());
+        scene.tlas_instance_indices =
+            device_tlas_instance_indices.get();
+        scene.tlas_instance_index_count =
+            static_cast<int>(tlas_instance_indices.size());
         scene.acceleration_telemetry = device_telemetry.get();
         scene.acceleration_collect_stats = 1;
         std::array<GpuRay, 3> rays;
@@ -446,6 +520,8 @@ int main() {
                 telemetry.closest_triangle_tests > 0 &&
                 telemetry.shadow_node_visits > 0 &&
                 telemetry.shadow_triangle_tests > 0 &&
+                telemetry.closest_tlas_node_visits > 0 &&
+                telemetry.shadow_tlas_node_visits > 0 &&
                 telemetry.stack_overflow_count == 0 &&
                 telemetry.invalid_acceleration_count == 0,
             "CUDA acceleration telemetry mismatch");

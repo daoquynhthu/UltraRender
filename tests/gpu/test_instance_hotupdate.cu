@@ -1,6 +1,7 @@
 #include "test_framework.cuh"
 #include <ure/detail/cuda_context.cuh>
 #include <ure/detail/cuda_driver.cuh>
+#include <ure/detail/cuda_scene_compiler.hpp>
 #include <ure/detail/cuda_structs.cuh>
 #include <ure/log.hpp>
 #include <ure/detail/cuda_transform_ring_buffer.cuh>
@@ -38,6 +39,31 @@ static int test_instance_layout() {
         CHECK(desc->material_index == 7);
     }
     
+    return 0;
+}
+
+static int test_instance_transform_normalizes_rotation() {
+    ure::gpu::GpuInstanceTransform transform;
+    ure::GpuSceneCompiler::build_instance_transform(
+        {1.0f, -2.0f, 3.0f},
+        {2.0f, 3.0f, 4.0f},
+        {2.0f, 1.0f, 0.0f, 0.0f},
+        nullptr,
+        transform);
+    for (int row = 0; row < 4; ++row) {
+        for (int column = 0; column < 4; ++column) {
+            float product = 0.0f;
+            for (int inner = 0; inner < 4; ++inner) {
+                product +=
+                    transform.transform.m[row][inner] *
+                    transform.inverse_transform.m[inner][column];
+            }
+            CHECK_FLOAT_EQ(
+                product,
+                row == column ? 1.0f : 0.0f,
+                1e-5f);
+        }
+    }
     return 0;
 }
 
@@ -80,10 +106,30 @@ static int test_gpu_hot_update_identity() {
     std::vector<ure::gpu::HostTexture> textures;
     
     // Initialize GPU context
+    ure::RenderConfig config;
+    config.acceleration.collect_stats = true;
+    config.acceleration.update_policy =
+        ure::AccelerationUpdatePolicy::Refit;
     ure::gpu::GpuContext* ctx = ure::gpu::init_gpu_renderer(
-        64, 64, meshes, instances, spheres, materials, textures
-    );
+        64, 64, meshes, instances, spheres, materials, textures,
+        config);
     CHECK(ctx != nullptr);
+    CHECK(ctx->d_tlas_nodes != nullptr);
+    CHECK(ctx->tlas_node_count == 1);
+    const auto initial_stats =
+        ure::gpu::get_acceleration_stats(ctx);
+    CHECK(initial_stats.tlas_node_count == 1);
+    CHECK(initial_stats.tlas_leaf_count == 1);
+    CHECK(initial_stats.tlas_bytes > 0);
+    ure::gpu::GpuMesh resident_mesh_before = {};
+    CHECK_CUDA(cudaMemcpy(
+        &resident_mesh_before, ctx->d_meshes,
+        sizeof(resident_mesh_before),
+        cudaMemcpyDeviceToHost));
+    auto* const resident_blas_before =
+        resident_mesh_before.bvh_nodes;
+    auto* const resident_tlas_before =
+        ctx->d_tlas_nodes;
     
     // Render a pass to warm up
     ure::gpu::render_pass_gpu(ctx, 1);
@@ -97,13 +143,61 @@ static int test_gpu_hot_update_identity() {
     new_transforms[0].min_pt = {99, -1, -1};
     new_transforms[0].max_pt = {101, 1, 1};
     
-    ure::gpu::update_instance_transforms_gpu(ctx, new_transforms.data(), 1);
+    ctx->render_config.acceleration.update_policy =
+        ure::AccelerationUpdatePolicy::Static;
+    bool static_update_rejected = false;
+    try {
+        ure::gpu::update_instance_transforms_gpu(
+            ctx, new_transforms.data(), 1);
+    } catch (const std::runtime_error&) {
+        static_update_rejected = true;
+    }
+    CHECK(static_update_rejected);
+    ctx->render_config.acceleration.update_policy =
+        ure::AccelerationUpdatePolicy::Refit;
+    auto invalid_transform = new_transforms[0];
+    invalid_transform.inverse_transform.m[0][3] = 0.0f;
+    bool inconsistent_inverse_rejected = false;
+    try {
+        ure::gpu::update_instance_transforms_gpu(
+            ctx, &invalid_transform, 1);
+    } catch (const std::invalid_argument&) {
+        inconsistent_inverse_rejected = true;
+    }
+    CHECK(inconsistent_inverse_rejected);
+    ure::gpu::update_instance_transforms_gpu(
+        ctx, new_transforms.data(), 1);
     CHECK(ctx->has_scene_bounds);
-    CHECK(ctx->scene_bounds_max.x >= 101.0f);
+    CHECK(ctx->scene_bounds_max.x >= 100.5f);
+    ure::gpu::GpuMesh resident_mesh_after = {};
+    CHECK_CUDA(cudaMemcpy(
+        &resident_mesh_after, ctx->d_meshes,
+        sizeof(resident_mesh_after),
+        cudaMemcpyDeviceToHost));
+    CHECK(resident_mesh_after.bvh_nodes ==
+          resident_blas_before);
+    CHECK(ctx->d_tlas_nodes == resident_tlas_before);
+    ure::gpu::GpuBvhNode refitted_root = {};
+    CHECK_CUDA(cudaMemcpy(
+        &refitted_root, ctx->d_tlas_nodes,
+        sizeof(refitted_root),
+        cudaMemcpyDeviceToHost));
+    CHECK_FLOAT_EQ(
+        refitted_root.min_pt.x, 99.499f, 1e-5f);
+    CHECK_FLOAT_EQ(
+        refitted_root.max_pt.x, 100.501f, 1e-5f);
+    const auto update_stats =
+        ure::gpu::get_acceleration_stats(ctx);
+    CHECK(update_stats.tlas_update_count == 1);
+    CHECK(update_stats.tlas_update_nanoseconds > 0);
     
     // Render another pass (should use updated transform, no crash)
     int spp = ure::gpu::render_pass_gpu(ctx, 1);
     CHECK(spp == 2);
+    const auto traversal_stats =
+        ure::gpu::get_acceleration_stats(ctx);
+    CHECK(traversal_stats.closest_tlas_node_visits > 0);
+    CHECK(traversal_stats.invalid_acceleration_count == 0);
     
     // Copy frame buffer to host (should not crash with translated instance)
     std::vector<float> fb(64 * 64 * 3);
@@ -164,16 +258,117 @@ static int test_gpu_hot_update_resets_spatial_guiding_epoch() {
     ure::gpu::GpuInstanceTransform transform = {};
     transform.transform = ure::gpu::GpuMat4::identity();
     transform.inverse_transform = ure::gpu::GpuMat4::identity();
+    transform.transform.m[0][3] = 10.0f;
+    transform.inverse_transform.m[0][3] = -10.0f;
     transform.min_pt = {9.0f, -1.0f, -1.0f};
     transform.max_pt = {11.0f, 1.0f, 1.0f};
     ure::gpu::update_instance_transforms_gpu(ctx, &transform, 1);
 
-    CHECK(ctx->scene_bounds_max.x >= 11.0f);
+    CHECK(ctx->scene_bounds_max.x >= 10.5f);
     CHECK(ctx->path_guiding_epoch == epoch_before + 1);
     CHECK_CUDA(cudaMemcpy(&weight, ctx->d_path_guiding_light_weights, sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(weight, 0.0f, 1e-6f);
     CHECK_CUDA(cudaMemcpy(&weight, ctx->d_path_guiding_spatial_directional_weights, sizeof(float), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(weight, 0.0f, 1e-6f);
+
+    ure::gpu::free_gpu_renderer(ctx);
+    return 0;
+}
+
+static int test_multi_instance_tlas_stats_and_refit() {
+    REQUIRE_GPU();
+
+    ure::gpu::RenderMesh mesh;
+    mesh.vertices = {
+        -0.5f, -0.5f, 0.0f,
+         0.5f, -0.5f, 0.0f,
+         0.0f,  0.5f, 0.0f};
+    mesh.indices = {0, 1, 2};
+    mesh.material_index = 0;
+    std::vector<ure::gpu::GpuMaterialData> materials(1);
+    materials[0].header.type =
+        ure::gpu::MaterialType::Lambertian;
+    materials[0].albedo =
+        ure::gpu::SpectralPacket(0.5f);
+    std::vector<ure::gpu::GpuInstance> instances(9);
+    for (std::size_t index = 0;
+         index < instances.size();
+         ++index) {
+        const float x =
+            static_cast<float>(index) * 2.0f;
+        auto& instance = instances[index];
+        instance.mesh_index = 0;
+        instance.material_index = 0;
+        instance.transform =
+            ure::gpu::GpuMat4::identity();
+        instance.transform.m[0][3] = x;
+        instance.inverse_transform =
+            ure::gpu::GpuMat4::identity();
+        instance.inverse_transform.m[0][3] = -x;
+        instance.min_pt = {
+            x - 0.5f, -0.5f, -0.001f};
+        instance.max_pt = {
+            x + 0.5f, 0.5f, 0.001f};
+    }
+    ure::RenderConfig config;
+    config.acceleration.collect_stats = true;
+    config.acceleration.update_policy =
+        ure::AccelerationUpdatePolicy::Refit;
+    ure::gpu::GpuContext* ctx =
+        ure::gpu::init_gpu_renderer(
+            4, 4, {mesh}, instances, {},
+            materials, {}, config);
+    CHECK(ctx != nullptr);
+    const auto build_stats =
+        ure::gpu::get_acceleration_stats(ctx);
+    CHECK(build_stats.tlas_node_count > 1);
+    CHECK(build_stats.tlas_leaf_count > 1);
+    CHECK(build_stats.tlas_max_depth > 1);
+    CHECK(build_stats.tlas_build_nanoseconds > 0);
+    CHECK(
+        build_stats.tlas_bytes ==
+        build_stats.tlas_node_count *
+                sizeof(ure::gpu::GpuBvhNode) +
+            instances.size() * sizeof(int));
+    CHECK(build_stats.blas_node_bytes > 0);
+    ure::gpu::GpuMesh resident_before = {};
+    CHECK_CUDA(cudaMemcpy(
+        &resident_before, ctx->d_meshes,
+        sizeof(resident_before),
+        cudaMemcpyDeviceToHost));
+    auto* const blas_nodes =
+        resident_before.bvh_nodes;
+    std::vector<ure::gpu::GpuInstanceTransform>
+        updates(instances.size());
+    for (std::size_t index = 0;
+         index < instances.size();
+         ++index) {
+        updates[index].transform =
+            instances[index].transform;
+        updates[index].inverse_transform =
+            instances[index].inverse_transform;
+        updates[index].transform.m[1][3] = 1.0f;
+        updates[index].inverse_transform.m[1][3] = -1.0f;
+        updates[index].min_pt =
+            instances[index].min_pt +
+            ure::gpu::GpuVec3(0.0f, 1.0f, 0.0f);
+        updates[index].max_pt =
+            instances[index].max_pt +
+            ure::gpu::GpuVec3(0.0f, 1.0f, 0.0f);
+    }
+    ure::gpu::update_instance_transforms_gpu(
+        ctx, updates.data(),
+        static_cast<int>(updates.size()));
+    const auto update_stats =
+        ure::gpu::get_acceleration_stats(ctx);
+    CHECK(update_stats.tlas_update_count == 1);
+    CHECK(update_stats.tlas_update_nanoseconds > 0);
+    ure::gpu::GpuMesh resident_after = {};
+    CHECK_CUDA(cudaMemcpy(
+        &resident_after, ctx->d_meshes,
+        sizeof(resident_after),
+        cudaMemcpyDeviceToHost));
+    CHECK(resident_after.bvh_nodes == blas_nodes);
 
     ure::gpu::free_gpu_renderer(ctx);
     return 0;
@@ -254,14 +449,14 @@ static int test_gpu_transform_readback() {
     CHECK_CUDA(cudaMemcpy(&h_previous, ctx->d_previous_instance_transforms, sizeof(ure::gpu::GpuInstanceTransform), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(h_previous.transform.m[0][0], 1.0f, 1e-6f);
     CHECK_FLOAT_EQ(h_previous.inverse_transform.m[0][0], 1.0f, 1e-6f);
-    CHECK_FLOAT_EQ(h_previous.min_pt.x, -1.0f, 1e-6f);
-    CHECK_FLOAT_EQ(h_previous.max_pt.x, 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_previous.min_pt.x, -0.001f, 1e-6f);
+    CHECK_FLOAT_EQ(h_previous.max_pt.x, 1.001f, 1e-6f);
 
     CHECK_CUDA(cudaMemcpy(&h_readback, ctx->d_instance_transforms, sizeof(ure::gpu::GpuInstanceTransform), cudaMemcpyDeviceToHost));
     CHECK_FLOAT_EQ(h_readback.transform.m[0][0], 2.0f, 1e-6f);
     CHECK_FLOAT_EQ(h_readback.inverse_transform.m[0][0], 0.5f, 1e-6f);
-    CHECK_FLOAT_EQ(h_readback.min_pt.x, -2.0f, 1e-6f);
-    CHECK_FLOAT_EQ(h_readback.max_pt.x, 2.0f, 1e-6f);
+    CHECK_FLOAT_EQ(h_readback.min_pt.x, -0.002f, 1e-6f);
+    CHECK_FLOAT_EQ(h_readback.max_pt.x, 2.002f, 1e-6f);
     
     // Render and verify no CUDA error
     int spp = ure::gpu::render_pass_gpu(ctx, 1);
@@ -414,8 +609,10 @@ int main() {
     ure::log::set_min_level(ure::log::Level::Warn);
     printf("[GPU Instance Hot-Update Test]\n");
     RUN_TEST(test_instance_layout);
+    RUN_TEST(test_instance_transform_normalizes_rotation);
     RUN_TEST(test_gpu_hot_update_identity);
     RUN_TEST(test_gpu_hot_update_resets_spatial_guiding_epoch);
+    RUN_TEST(test_multi_instance_tlas_stats_and_refit);
     RUN_TEST(test_gpu_transform_readback);
     RUN_TEST(test_ring_buffer_basic);
     RUN_TEST(test_ring_buffer_init_from_instances);

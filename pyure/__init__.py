@@ -161,6 +161,22 @@ class _AccelerationStats(ctypes.Structure):
     ]
 
 
+class _AccelerationStatsV2(ctypes.Structure):
+    _fields_ = [
+        ("baseline", _AccelerationStats),
+        ("closest_tlas_node_visits", ctypes.c_uint64),
+        ("shadow_tlas_node_visits", ctypes.c_uint64),
+        ("blas_node_bytes", ctypes.c_uint64),
+        ("tlas_node_count", ctypes.c_uint64),
+        ("tlas_leaf_count", ctypes.c_uint64),
+        ("tlas_max_depth", ctypes.c_uint32),
+        ("tlas_bytes", ctypes.c_uint64),
+        ("tlas_build_nanoseconds", ctypes.c_uint64),
+        ("tlas_update_nanoseconds", ctypes.c_uint64),
+        ("tlas_update_count", ctypes.c_uint64),
+    ]
+
+
 class _BackendAdapterInfo(ctypes.Structure):
     _fields_ = [
         ("kind", ctypes.c_int),
@@ -311,6 +327,16 @@ class AccelerationStats:
     shadow_triangle_tests: int
     stack_overflow_count: int
     invalid_acceleration_count: int
+    closest_tlas_node_visits: int
+    shadow_tlas_node_visits: int
+    blas_node_bytes: int
+    tlas_node_count: int
+    tlas_leaf_count: int
+    tlas_max_depth: int
+    tlas_bytes: int
+    tlas_build_nanoseconds: int
+    tlas_update_nanoseconds: int
+    tlas_update_count: int
 
 
 def _candidate_library_paths() -> list[Path]:
@@ -431,6 +457,11 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(_AccelerationStats),
     ]
     lib.ure_session_get_acceleration_stats.restype = ctypes.c_int
+    lib.ure_session_get_acceleration_stats_v2.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(_AccelerationStatsV2),
+    ]
+    lib.ure_session_get_acceleration_stats_v2.restype = ctypes.c_int
     lib.ure_session_get_framebuffer_size.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_int),
@@ -1084,23 +1115,34 @@ class RenderSession:
         )
 
     def acceleration_stats(self) -> AccelerationStats:
-        raw = _AccelerationStats()
-        if native().ure_session_get_acceleration_stats(
+        raw = _AccelerationStatsV2()
+        if native().ure_session_get_acceleration_stats_v2(
             self.handle, ctypes.byref(raw)
         ) != 0:
             raise RuntimeError("acceleration statistics unavailable")
+        baseline = raw.baseline
         return AccelerationStats(
-            raw.mesh_count,
-            raw.triangle_count,
-            raw.node_count,
-            raw.leaf_count,
-            raw.max_depth,
-            raw.closest_node_visits,
-            raw.closest_triangle_tests,
-            raw.shadow_node_visits,
-            raw.shadow_triangle_tests,
-            raw.stack_overflow_count,
-            raw.invalid_acceleration_count,
+            baseline.mesh_count,
+            baseline.triangle_count,
+            baseline.node_count,
+            baseline.leaf_count,
+            baseline.max_depth,
+            baseline.closest_node_visits,
+            baseline.closest_triangle_tests,
+            baseline.shadow_node_visits,
+            baseline.shadow_triangle_tests,
+            baseline.stack_overflow_count,
+            baseline.invalid_acceleration_count,
+            raw.closest_tlas_node_visits,
+            raw.shadow_tlas_node_visits,
+            raw.blas_node_bytes,
+            raw.tlas_node_count,
+            raw.tlas_leaf_count,
+            raw.tlas_max_depth,
+            raw.tlas_bytes,
+            raw.tlas_build_nanoseconds,
+            raw.tlas_update_nanoseconds,
+            raw.tlas_update_count,
         )
 
     def framebuffer_size(self) -> tuple[int, int]:

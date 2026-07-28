@@ -749,6 +749,11 @@ static int test_scene_diff_topology_real_gpu_reload_smoke() {
     CHECK(build_stats.node_count > 0);
     CHECK(build_stats.leaf_count > 0);
     CHECK(build_stats.max_depth > 0);
+    CHECK(build_stats.blas_node_bytes > 0);
+    CHECK(build_stats.tlas_node_count > 0);
+    CHECK(build_stats.tlas_leaf_count > 0);
+    CHECK(build_stats.tlas_max_depth > 0);
+    CHECK(build_stats.tlas_bytes > 0);
     session.start_render();
     CHECK(session.render_pass() >= 1);
     const auto traversal_stats =
@@ -972,6 +977,15 @@ static int test_c_session_lifecycle() {
             execution_session,
             &c_acceleration_stats) == 0);
     CHECK(c_acceleration_stats.node_count == 0);
+    ure_acceleration_stats_v2_t
+        c_acceleration_stats_v2{};
+    CHECK(
+        ure_session_get_acceleration_stats_v2(
+            execution_session,
+            &c_acceleration_stats_v2) == 0);
+    CHECK(
+        c_acceleration_stats_v2.baseline.node_count == 0);
+    CHECK(c_acceleration_stats_v2.tlas_node_count == 0);
     ure_session_destroy(execution_session);
     acceleration_config.quality =
         URE_ACCELERATION_QUALITY_HIGH;

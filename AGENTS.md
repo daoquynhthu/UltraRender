@@ -51,7 +51,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | R-P7 (Industrial Validation) | Done | Clean-tree eight-category Closure, farm/Nsight same-binary evidence, 37/37 CTest |
 | Q.0-Q.12 (Native Scene) | Done | Native schema/serialization, procedural/script, resources/solvers/simulation, tooling/adapters/cache/farm, validation suite |
 | T (Portable GPU Runtime) | Done | T.0-T.11 complete; portable runtime, optional backends, multi-backend scheduling and unified validation closed |
-| V (GPU Acceleration) | In progress | V.0-V.2 complete; V.3 TLAS/BLAS split is the authoritative cursor |
+| V (GPU Acceleration) | In progress | V.0-V.3 complete; V.4 SAH/SBVH/wide BVH is the authoritative cursor |
 | W (Wave Optics Solver) | In progress | W.0 audit + rough dielectric spectral/UV PDF/MIS fix done; W.1 WaveOpticsConfig gates done; W.2 Airy PSF oracle started |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
@@ -423,10 +423,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 29 | 2026-07-28 V.0 | Audited and froze the current GPU geometry acceleration boundary | The ledger identifies per-mesh midpoint BVH construction, fixed-stack overflow/drop risk, linear instance and triangle fallback, missing shadow-instance traversal/TLAS/refit/stats, unused host traversal and nonfunctional duplicated OptiX placeholders. Static hashes and a consumer allowlist prevent legacy paths from becoming production; cursor advanced to V.1. |
 | 30 | 2026-07-28 V.1 | Established the acceleration configuration and fail-loud API boundary | Provider, build quality, update policy, clustered geometry, statistics and scratch budget now span C++/JSON/CLI/C ABI/pyure. Version-safe execution-config entry points preserve the old C struct layout; CUDA self-compute defaults remain unchanged and all not-yet-implemented provider/policy requests reject before rendering. Release 48/48 passed; cursor advanced to V.2. |
 | 31 | 2026-07-28 V.2 | Hardened the CUDA self-compute BVH correctness baseline | Builder input/depth validation, checked shared closest/shadow traversal, mandatory stack/invalid fail-loud handling, robust AABB/tiny-triangle coverage and C++/C ABI/pyure acceleration statistics replaced silent fallback behavior. Exact Cornell hashes, Release 48/48 and Phase T/V gates passed; cursor advanced to V.3. |
+| 32 | 2026-07-28 V.3 | Separated mesh BLAS from the instance TLAS | A checked world-space TLAS now replaces linear instance traversal for closest and shadow rays. Transform updates validate and refit retained topology while preserving BLAS allocations; versioned stats expose BLAS/TLAS memory, timing and visits. Multi-level instance, hot-update and exact CUDA reference gates passed; cursor advanced to V.4. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- Phase Q, Phase M, Phase R, and Phase T are complete; V.0-V.2 are complete and the authoritative construction cursor is V.3.
+- Phase Q, Phase M, Phase R, and Phase T are complete; V.0-V.3 are complete and the authoritative construction cursor is V.4.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 1) to avoid concurrent `ptxas` host-memory allocation failures; host and unrelated targets remain globally parallel.

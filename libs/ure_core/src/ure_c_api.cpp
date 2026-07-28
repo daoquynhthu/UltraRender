@@ -339,6 +339,28 @@ void write_acceleration_stats(
         source.invalid_acceleration_count;
 }
 
+void write_acceleration_stats_v2(
+    const AccelerationStats& source,
+    ure_acceleration_stats_v2_t& destination) {
+    write_acceleration_stats(source, destination.baseline);
+    destination.closest_tlas_node_visits =
+        source.closest_tlas_node_visits;
+    destination.shadow_tlas_node_visits =
+        source.shadow_tlas_node_visits;
+    destination.blas_node_bytes =
+        source.blas_node_bytes;
+    destination.tlas_node_count = source.tlas_node_count;
+    destination.tlas_leaf_count = source.tlas_leaf_count;
+    destination.tlas_max_depth = source.tlas_max_depth;
+    destination.tlas_bytes = source.tlas_bytes;
+    destination.tlas_build_nanoseconds =
+        source.tlas_build_nanoseconds;
+    destination.tlas_update_nanoseconds =
+        source.tlas_update_nanoseconds;
+    destination.tlas_update_count =
+        source.tlas_update_count;
+}
+
 template <std::size_t N>
 void copy_c_string(char (&destination)[N], const std::string& source) {
     const auto count = std::min(source.size(), N - 1);
@@ -656,6 +678,21 @@ int ure_engine_get_acceleration_stats(
     if (!engine || !out_stats) return -1;
     try {
         write_acceleration_stats(
+            reinterpret_cast<const IRenderEngine*>(engine)
+                ->get_acceleration_stats(),
+            *out_stats);
+        return 0;
+    } catch (...) {
+        return -1;
+    }
+}
+
+int ure_engine_get_acceleration_stats_v2(
+    const ure_engine_t* engine,
+    ure_acceleration_stats_v2_t* out_stats) {
+    if (!engine || !out_stats) return -1;
+    try {
+        write_acceleration_stats_v2(
             reinterpret_cast<const IRenderEngine*>(engine)
                 ->get_acceleration_stats(),
             *out_stats);
@@ -1004,6 +1041,21 @@ int ure_session_get_acceleration_stats(
     if (!session || !out_stats) return -1;
     try {
         write_acceleration_stats(
+            reinterpret_cast<const RenderSession*>(session)
+                ->get_acceleration_stats(),
+            *out_stats);
+        return 0;
+    } catch (...) {
+        return -1;
+    }
+}
+
+int ure_session_get_acceleration_stats_v2(
+    const ure_session_t* session,
+    ure_acceleration_stats_v2_t* out_stats) {
+    if (!session || !out_stats) return -1;
+    try {
+        write_acceleration_stats_v2(
             reinterpret_cast<const RenderSession*>(session)
                 ->get_acceleration_stats(),
             *out_stats);

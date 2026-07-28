@@ -54,14 +54,15 @@ Clustered geometry, statistics collection and scratch-memory budgeting are
 explicit requests.
 
 Default selection resolves to CUDA `self_compute`.
-Explicit `self_compute` with automatic quality and auto/static update is also
-accepted. V.2 makes statistics executable for that provider and exposes
-`AccelerationStats` through C++, C ABI and pyure. Quality presets,
-refit/rebuild, clustered geometry, scratch budgets and native RT providers
-remain later Phase V work and fail before rendering. Existing backend-only C
-entry points retain their original layout and behavior; the execution-config
-entry points add acceleration without requiring callers to pass a larger legacy
-structure.
+Explicit `self_compute` with automatic quality and auto/static/refit update is
+also accepted. V.2 makes statistics executable for that provider; V.3 adds
+BLAS/TLAS memory, timing, update and traversal fields. C++ and pyure expose the
+complete current view. The C ABI retains the V.2 output layout and adds
+`ure_acceleration_stats_v2_t` plus versioned getters. Quality presets, rebuild,
+clustered geometry, scratch budgets and native RT providers remain later Phase
+V work and fail before rendering. Existing backend-only C entry points retain
+their original layout and behavior; the execution-config entry points add
+acceleration without requiring callers to pass a larger legacy structure.
 
 ## Threading and ownership
 

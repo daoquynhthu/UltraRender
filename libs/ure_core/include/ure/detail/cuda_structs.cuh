@@ -531,6 +531,8 @@ struct GpuAccelerationTelemetry {
     unsigned long long closest_triangle_tests;
     unsigned long long shadow_node_visits;
     unsigned long long shadow_triangle_tests;
+    unsigned long long closest_tlas_node_visits;
+    unsigned long long shadow_tlas_node_visits;
     unsigned long long stack_overflow_count;
     unsigned long long invalid_acceleration_count;
 };
@@ -563,6 +565,10 @@ struct GpuScene {
     GpuInstanceTransform* instance_transforms; // Phase P.1: dynamic transforms (updated per frame)
     GpuInstanceTransform* previous_instance_transforms;
     int instance_count;
+    GpuBvhNode* tlas_nodes;
+    int tlas_node_count;
+    int* tlas_instance_indices;
+    int tlas_instance_index_count;
     GpuAccelerationTelemetry* acceleration_telemetry;
     int acceleration_collect_stats;
 

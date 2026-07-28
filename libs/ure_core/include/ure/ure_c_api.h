@@ -119,6 +119,20 @@ typedef struct ure_acceleration_stats_t {
     uint64_t invalid_acceleration_count;
 } ure_acceleration_stats_t;
 
+typedef struct ure_acceleration_stats_v2_t {
+    ure_acceleration_stats_t baseline;
+    uint64_t closest_tlas_node_visits;
+    uint64_t shadow_tlas_node_visits;
+    uint64_t blas_node_bytes;
+    uint64_t tlas_node_count;
+    uint64_t tlas_leaf_count;
+    uint32_t tlas_max_depth;
+    uint64_t tlas_bytes;
+    uint64_t tlas_build_nanoseconds;
+    uint64_t tlas_update_nanoseconds;
+    uint64_t tlas_update_count;
+} ure_acceleration_stats_v2_t;
+
 typedef struct ure_backend_adapter_info_t {
     int kind;
     char adapter_id[64];
@@ -318,6 +332,9 @@ int ure_engine_save_hdr(const ure_engine_t* engine, const char* path);
 int ure_engine_get_acceleration_stats(
     const ure_engine_t* engine,
     ure_acceleration_stats_t* out_stats);
+int ure_engine_get_acceleration_stats_v2(
+    const ure_engine_t* engine,
+    ure_acceleration_stats_v2_t* out_stats);
 int ure_backend_adapter_count(int kind);
 int ure_backend_get_adapter_info(int kind,
                                  int index,
@@ -380,6 +397,9 @@ ure_integrator_estimator_metadata_t ure_session_get_estimator_metadata(
 int ure_session_get_acceleration_stats(
     const ure_session_t* session,
     ure_acceleration_stats_t* out_stats);
+int ure_session_get_acceleration_stats_v2(
+    const ure_session_t* session,
+    ure_acceleration_stats_v2_t* out_stats);
 void ure_session_get_framebuffer_size(const ure_session_t* session,
                                       int* out_width,
                                       int* out_height);

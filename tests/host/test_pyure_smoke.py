@@ -48,6 +48,8 @@ def main() -> int:
         assert session.progress().state == pyure.SessionState.EMPTY
         acceleration_stats = session.acceleration_stats()
         assert acceleration_stats.node_count == 0
+        assert acceleration_stats.tlas_node_count == 0
+        assert acceleration_stats.tlas_bytes == 0
         assert acceleration_stats.stack_overflow_count == 0
     try:
         pyure.create_session(acceleration_quality="high_quality")
