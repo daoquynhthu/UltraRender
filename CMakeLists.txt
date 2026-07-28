@@ -6,6 +6,11 @@ option(UR_BUILD_CLI "Build CLI" ON)
 option(UR_BUILD_PHYSICS "Build physics/acoustic subsystem" ON)
 option(UR_ENABLE_CUDA "Build the CUDA production backend" ON)
 option(UR_ENABLE_VULKAN "Build the Vulkan compute backend" ON)
+if(WIN32)
+    option(UR_ENABLE_D3D12 "Build the D3D12/DXR backend" ON)
+else()
+    option(UR_ENABLE_D3D12 "Build the D3D12/DXR backend" OFF)
+endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -43,6 +48,9 @@ add_subdirectory(libs/ure_runtime)
 if(UR_ENABLE_VULKAN)
     add_subdirectory(libs/ure_vulkan)
 endif()
+if(UR_ENABLE_D3D12)
+    add_subdirectory(libs/ure_d3d12)
+endif()
 
 add_subdirectory(libs/ure_config)
 add_subdirectory(libs/ure_sceneio)
@@ -75,6 +83,9 @@ endif()
 if(UR_BUILD_TESTS AND UR_ENABLE_VULKAN)
     add_subdirectory(tests/vulkan)
 endif()
+if(UR_BUILD_TESTS AND UR_ENABLE_D3D12)
+    add_subdirectory(tests/d3d12)
+endif()
 
 # ── Install / Export for find_package() support ──
 include(CMakePackageConfigHelpers)
@@ -102,8 +113,20 @@ install(
 
 if(UR_ENABLE_VULKAN)
     install(
-        DIRECTORY shaders/
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/UltraRender/shaders
+        DIRECTORY shaders/vulkan/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/UltraRender/shaders/vulkan
+    )
+endif()
+if(UR_ENABLE_D3D12)
+    install(
+        DIRECTORY shaders/d3d12/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/UltraRender/shaders/d3d12
+    )
+endif()
+if(UR_ENABLE_VULKAN OR UR_ENABLE_D3D12)
+    install(
+        DIRECTORY shaders/shared/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/UltraRender/shaders/shared
     )
 endif()
 

@@ -1,0 +1,82 @@
+{
+  "schema": "ure.d3d12_shader_manifest.v1",
+  "compiler": {
+    "slang": {
+      "name": "Slang",
+      "version": "2026.14",
+      "windows_executable_sha256": "54d746d1e37bb04732c8bff07619517abf3abb657592c227b6dcf3778a3c811c"
+    },
+    "dxc": {
+      "windows_sdk": "10.0.26100.0",
+      "version": "1.8.2502.11",
+      "executable_sha256": "d24bf1e16f104b26bd3e38e8b138cdaee0fdfc1fd7375366a083f89629b18d15",
+      "dxcompiler_sha256": "c56309c84bc59540b1087ad4ea1930752fa37d10d730919fc7676749a4653ed0",
+      "dxil_sha256": "39dbd950f39f75f5c37bcd224c524accba76686adaa372b8287facfc46892b1c"
+    }
+  },
+  "sources": {
+    "foundation": {
+      "path": "phase_t9_foundation.slang",
+      "sha256": "b1335ac64d69515929628e470e3dd16ed404d27bc86bc2a73ed22db2d5301331"
+    },
+    "acceleration": {
+      "path": "../vulkan/phase_t8_acceleration.slang",
+      "sha256": "d639010356903dc1061afd4f59e1dbcd191c3d701f461839f22771e15ab307a0"
+    },
+    "portable_semantics": {
+      "path": "../shared/portable_semantics.slang",
+      "sha256": "aabe245bf31c4eb76153df0e34023c189ac11bece60d2c3ccc7a042e64e1b676"
+    }
+  },
+  "arguments": {
+    "slang": [
+      "-target",
+      "hlsl",
+      "-O3",
+      "-warnings-as-errors",
+      "all"
+    ],
+    "dxc_release": [
+      "-O3",
+      "-WX"
+    ],
+    "dxc_debug": [
+      "-O3",
+      "-Zi",
+      "-Qembed_debug",
+      "-WX"
+    ]
+  },
+  "entries": {
+    "foundation": {
+      "profile": "sm_6_0",
+      "hlsl_sha256": "e7d5e39c00c83b9560bd022426becc21a11a9e19985ea68e92e8ea3afdc87dd6",
+      "dxil_sha256": "5da88477b5e0b82b697de541921ca3e65301b52ca89a0b58884f13a6d3760b4f",
+      "reflection_sha256": "0f8b8e9893deb60904b51ecca08d2af588ff142064a985440f46f8c6ebac819c"
+    },
+    "image_write": {
+      "profile": "sm_6_0",
+      "hlsl_sha256": "eb4dbcea602ad2cd95aa3362664069390bceb6d5515cd03000265c59eb476a6e",
+      "dxil_sha256": "e223068dfdfc4cbb9c172268748c4415c51a3e15349642bc47c6f3777b4b4d18",
+      "reflection_sha256": "480c659c742bbc5cbe2a2eaa4c28570e30328615513adf41a6b7e87706e250a0"
+    },
+    "image_sample": {
+      "profile": "sm_6_0",
+      "hlsl_sha256": "f02297866144ab428a61f0c4bf7c826109ac9391041c8ab472394790c0d88f4f",
+      "dxil_sha256": "59bd1d179463d982e22373dd6394f0ba39abe9a6937b9cd00bcc95ea4a845ec0",
+      "reflection_sha256": "5daf9fe3744e010797edd6773872cee6762831a3cc06ec5a2a3cd94caf75cdb1"
+    },
+    "compute_bvh": {
+      "profile": "sm_6_0",
+      "hlsl_sha256": "14844a27000df6d50d510deae6f263b6a040aba1d7e90a8002fc0ba1014ad1d9",
+      "dxil_sha256": "d8ac9837dd6be503d188e4219c8acccdccf0e186e3216b301072e3fe5af19338",
+      "reflection_sha256": "401df0d6702fdb179e3cc670bb2ae95c547c4d60178bbaf9aba806e84a38f305"
+    },
+    "ray_query_native": {
+      "profile": "sm_6_5",
+      "hlsl_sha256": "fd97874c3b2d03b92d7c68430660c9bfd2e51986b73196f41277d5d42960d3e5",
+      "dxil_sha256": "1d44cf9e1c8cca01f1277c5d2a8677b6c3802936f1be165fc4287e6a27dfad42",
+      "reflection_sha256": "01ce94a93697caf184d03f3fe73f15ae77af4505db636e63eef7ca48e3b7cee8"
+    }
+  }
+}

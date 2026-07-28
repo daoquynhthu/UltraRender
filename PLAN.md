@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-26 (T.8 closure and T.9 cursor)
+最后更新: 2026-07-28 (T.9 closure and T.10 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -27,7 +27,7 @@
 远期 Phase L:   百万级光谱域 / packet-resolution 解耦                已完成 (L.0-L.12)
 远期 Phase Q:   URE 原生场景系统 / 程序化工业格式                    已完成
 远期 Phase R:   工业级/科研级积分器升级                              已完成
-远期 Phase T:   可移植 GPU 运行时 / 多后端执行                        进行中 (T.0-T.8 完成)
+远期 Phase T:   可移植 GPU 运行时 / 多后端执行                        进行中 (T.0-T.9 完成)
 远期 Phase V:   GPU 几何加速结构 / BVH / OptiX / Clustered Geometry   计划中
 远期 Phase W:   波动光学求解器 / 相干场输运                          进行中
 ```
@@ -54,7 +54,7 @@ Phase Q complete [done]
 R-P4 specular manifold + BDPT/VCM [done]
    │
    ▼
-当前游标: T.9
+当前游标: T.10
    │
    ▼
 Phase T complete
@@ -79,7 +79,7 @@ Phase X complete
 - **R-P6 已闭环**: deterministic Lorenz-Mie generator、严格 table adapter、不可变 SceneIR resource、GPU spectral eval/pdf/sample、NEE/continuation、scalar-depolarizing Stokes、Session rebuild 和端到端生命周期均已进入生产与验证路径。
 - **Phase Q 已闭环**: URE native schema、serialization、programmatic graph、feature declaration、tooling/adapter、compiled cache/farm 与 validation suite 已冻结为后续阶段的权威 authoring contract。
 - **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
-- **当前唯一施工项 — Phase T**: Phase R 已通过 clean-tree R-P7 Closure；T.0-T.8 已冻结 coupling、backend identity、共享 Slang 工具链、SDK-free runtime/resource/execution/acceleration contract、CUDA production lowering、Vulkan compute foundation 和 bounded ray-query/compute-BVH bridge，当前游标为 T.9 D3D12/DXR optional backend。
+- **当前唯一施工项 — Phase T**: Phase R 已通过 clean-tree R-P7 Closure；T.0-T.9 已冻结 coupling、backend identity、共享 Slang 工具链、SDK-free runtime/resource/execution/acceleration contract、CUDA production lowering、Vulkan compute/acceleration foundation 和 Windows optional D3D12/DXR backend，当前游标为 T.10 multi-backend scheduling。
 - **Phase T → V → W**: T 先稳定 backend-neutral runtime 并迁移 CUDA/Vulkan/DXR；V 再建设统一 acceleration provider；W 最后把已有 reference/oracle 工作接入稳定执行与加速合同。现有 W 成果保留，新增 W production work 冻结。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
@@ -1994,7 +1994,7 @@ R-P1 必须先于 R-P2/R-P3/R-P4，因为 path guiding、ReSTIR、BDPT/VCM 都�
 
 ### Phase T — 可移植 GPU 运行时 / Portable Multi-Backend Execution
 
-**状态**: 进行中，T.0-T.8 已完成，当前游标 T.9。Phase R 已闭环；Phase V 的正式实现必须建立在 Phase T 合同之上。
+**状态**: 进行中，T.0-T.9 已完成，当前游标 T.10。Phase R 已闭环；Phase V 的正式实现必须建立在 Phase T 合同之上。
 
 **目标**: 把 UltraRender 从“核心语义由 CUDA 实现细节定义”升级为“同一套物理、资源、调度和加速合同可由多个 GPU backend 执行”。CUDA 保留为当前生产后端、物理参考实现和 NVIDIA 性能路径，但不再拥有公共架构；Vulkan 是 Windows/Linux 跨厂商生产后端；D3D12/DXR 是 Windows 可选后端。各 backend 可以使用专有优化，不要求退化到最低公分母。
 
@@ -2056,6 +2056,8 @@ T.6 closure（2026-07-26）：新增 backend-private `CudaRuntimeDevice : runtim
 T.7 closure（2026-07-26）：新增 SDK-neutral public surface 与 private Vulkan 1.3 `VulkanRuntimeDevice : runtime::Device`，以动态加载的 adapter/device table 实现 compute queue、timeline semaphore、event、buffer/image/sampler、SPIR-V module、typed descriptor、specialization、pipeline cache、submission DAG 和 validation/debug-utils/device-loss 映射。完整提交 preflight 在创建 command pool 前拒绝非法 handle/usage/bounds/grid、重复 timeline、无 dependency 的 event wait 和 descriptor mismatch；native allocation、cache UUID/vendor/device identity、command/descriptor pool retirement 与异常清理均由 device 独占。Vulkan-Headers 1.4.352、Volk 固定 commit 和所有 vendored hash 进入 manifest；Slang 2026.14 从同一 `shaders/shared/portable_semantics.slang` 确定性生成五类 foundation operator。Windows MSVC CUDA-free build、Linux GCC warnings-as-errors build，以及 Windows NVIDIA/Intel 两厂商实际执行均通过 raygen、spectral Mueller/Stokes、wavefront queue compaction、film/AOV、wave reference、uniform/storage/image descriptor、specialization、timeline、cold/warm cache 和 lifetime/budget 门禁；Release 全量 42/42 CTest 通过。Vulkan 尚未宣称完整 scene renderer：adapter 不暴露 `SelfComputeTraversal`，显式完整渲染请求在 T.8 acceleration bridge 前继续 fail-loud；权威游标进入 T.8。
 
 T.8 closure（2026-07-26）：新增 SDK-free acceleration capability/provider、automatic/compute/ray-query selection、明确 compute fallback/reject、indexed-triangle/instance validation、stable aligned ray/hit records、opaque acceleration handle 和 descriptor binding；CUDA 不虚报 native RT capability。Vulkan adapter inventory 按实际 extension/feature chain 记录 ray query/ray tracing pipeline 硬件能力，provider 只公布已经可执行的 compute BVH 与 ray query，compute-only adapter 仍可初始化；native bridge 以预算计费的私有 storage/scratch/input resource 构建单 indexed-triangle BLAS 与 instanced TLAS，覆盖 non-uniform transform、visibility mask、opaque double-sided semantics、input lifetime、build/query synchronization 和异常清理。固定 Slang 2026.14 从同一 T.8 source 确定性生成 real ray-query 与 bounded compute-BVH fallback SPIR-V；独立 CUDA production `world_hit`、Windows NVIDIA native ray query、NVIDIA/Intel compute fallback 和 Linux CUDA-free execution 对 hit distance/type、primitive/instance/material、UV/barycentric、normal、visibility、transform 和 4-pixel framebuffer 达成一致，显式禁止 fallback 时 fail-loud。全量门禁还修复了 CUDA timeline checkpoint 在两次 probe 之间完成时 `wait()` 误报 false 的竞争。正式 SAH/wide/TLAS construction policy、refit/compact/stats/clustered geometry 与 ray-tracing-pipeline production dispatch 仍归 Phase V；Vulkan 完整 SceneIR renderer 尚未 lowering，继续不暴露 `SelfComputeTraversal`。Release 全量 45/45 CTest、Windows/Linux CUDA-free build、确定性 shader hash 和 Phase T 静态审计通过；权威游标进入 T.9。
+
+T.9 closure（2026-07-28）：新增 Windows-only、可独立关闭且公共头保持 SDK-neutral 的 `ure_d3d12`，实现 DXGI adapter/LUID 与 memory-budget inventory、D3D12 buffer/image/sampler resource、typed CBV/SRV/UAV/sampler descriptor heap、compute/copy queue、cross-queue fence/timeline、submission DAG、structured device-loss 和 DRED breadcrumb/page-fault retrieval。固定 Slang 2026.14 继续消费共享 portable semantics 与 T.8 acceleration source，经确定性 HLSL ABI normalization 后由 Windows SDK 10.0.26100.0 DXC 1.8 生成可复现 DXIL、reflection 和独立 debug artifact；root-signature/register lowering 与 descriptor heap 顺序由 runtime pipeline contract 校验。DXR 1.1 provider 构建 bounded triangle BLAS/TLAS 并执行 inline ray query，compute-BVH fallback 与显式 rejection 保留；NVIDIA closure machine 上 foundation spectral/polarization、storage/sampled image、cross-queue fence、compute/native hit metadata、visibility、instance transform 和 framebuffer parity 均通过，未实现的 ray-tracing-pipeline capability 不对外公布。`UR_ENABLE_D3D12=OFF` 且 CUDA disabled 的独立 Vulkan build/execution 证明 D3D12/DXR 缺失不影响其他 backend；完整 D3D12 SceneIR renderer、production acceleration construction/refit/compaction 与 DispatchRays 仍分别属于后续 T.11/Phase V，当前不作虚假宣称。Release 全量 46/46 CTest、确定性 shader gate、DXR-required gate、no-D3D12 isolation 和 Phase T 静态审计通过；权威游标进入 T.10。
 
 #### 完成标准
 

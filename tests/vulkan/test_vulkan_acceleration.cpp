@@ -325,7 +325,11 @@ Result execute(
     }
     pipeline_desc.bindings.push_back({
         1, rt::BindingType::UniformBuffer});
-    for (std::uint32_t slot = 2; slot <= 9; ++slot) {
+    for (std::uint32_t slot = 2; slot <= 7; ++slot) {
+        pipeline_desc.bindings.push_back({
+            slot, rt::BindingType::ReadOnlyStorageBuffer});
+    }
+    for (std::uint32_t slot = 8; slot <= 9; ++slot) {
         pipeline_desc.bindings.push_back({
             slot, rt::BindingType::StorageBuffer});
     }

@@ -206,6 +206,7 @@ VkImageUsageFlags image_usage(runtime::ImageUsage usage) {
 VkDescriptorType descriptor_type(runtime::BindingType type) {
     switch (type) {
     case runtime::BindingType::StorageBuffer:
+    case runtime::BindingType::ReadOnlyStorageBuffer:
         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     case runtime::BindingType::UniformBuffer:
         return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -2196,6 +2197,9 @@ runtime::SubmissionId VulkanRuntimeDevice::submit(
                                     if (type->second !=
                                             runtime::BindingType::
                                                 StorageBuffer &&
+                                        type->second !=
+                                            runtime::BindingType::
+                                                ReadOnlyStorageBuffer &&
                                         type->second !=
                                             runtime::BindingType::
                                                 UniformBuffer) {

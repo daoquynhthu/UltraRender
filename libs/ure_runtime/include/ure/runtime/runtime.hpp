@@ -208,6 +208,7 @@ struct ModuleDesc {
 
 enum class BindingType : std::uint8_t {
     StorageBuffer,
+    ReadOnlyStorageBuffer,
     UniformBuffer,
     SampledImage,
     StorageImage,
@@ -217,6 +218,16 @@ enum class BindingType : std::uint8_t {
 struct PipelineBindingDesc {
     std::uint32_t slot = 0;
     BindingType type = BindingType::StorageBuffer;
+    std::uint32_t element_stride = 0;
+
+    constexpr PipelineBindingDesc() = default;
+    constexpr PipelineBindingDesc(
+        std::uint32_t binding_slot,
+        BindingType binding_type,
+        std::uint32_t stride = 0)
+        : slot(binding_slot),
+          type(binding_type),
+          element_stride(stride) {}
 };
 
 struct SpecializationConstant {

@@ -16,6 +16,7 @@ This file defines the rules, conventions, and workflow that any AI agent must fo
 ure_types     — Header-only type library (INTERFACE). Vec3, Mat4, Quat, Ray, SceneIR, RenderConfig, World.
 ure_runtime   — Backend-neutral GPU runtime contracts (STATIC, pure C++).
 ure_vulkan    — Vulkan 1.3 compute/acceleration runtime (STATIC, SDK-neutral public surface).
+ure_d3d12     — Windows D3D12/DXR compute/acceleration runtime (STATIC, SDK-neutral public surface).
 ure_core      — GPU rendering core (STATIC, CUDA 13+). Path tracer kernel, BVH, GPU driver, scene compiler.
 ure_sceneio   — Scene I/O (STATIC, pure C++). glTF 2.0 parser, OBJ/legacy loader, stb_image, SPD loader.
 ure_diag      — Unified logging/diagnostics (INTERFACE, Phase Dx complete).
@@ -49,7 +50,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | R-P5 (PSSMLT) | Done | Independent GPU chains, production wavefront replay, normalization/diagnostics/shards, replicated disjoint-range fixed-NMSE gate |
 | R-P7 (Industrial Validation) | Done | Clean-tree eight-category Closure, farm/Nsight same-binary evidence, 37/37 CTest |
 | Q.0-Q.12 (Native Scene) | Done | Native schema/serialization, procedural/script, resources/solvers/simulation, tooling/adapters/cache/farm, validation suite |
-| T (Portable GPU Runtime) | In progress | T.0-T.8 complete; Vulkan compute/acceleration foundation closed; T.9 is the authoritative cursor |
+| T (Portable GPU Runtime) | In progress | T.0-T.9 complete; Vulkan and optional D3D12/DXR foundations closed; T.10 is the authoritative cursor |
 | W (Wave Optics Solver) | In progress | W.0 audit + rough dielectric spectral/UV PDF/MIS fix done; W.1 WaveOpticsConfig gates done; W.2 Airy PSF oracle started |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
@@ -132,6 +133,9 @@ E:\Render Engine\
 │   ├── ure_vulkan/                  # Vulkan 1.3 compute/acceleration runtime (STATIC)
 │   │   ├── include/ure/             # SDK-neutral Vulkan runtime factory
 │   │   └── src/                     # private Volk/Vulkan implementation
+│   ├── ure_d3d12/                   # Windows D3D12/DXR runtime (STATIC)
+│   │   ├── include/ure/             # SDK-neutral D3D12 runtime factory
+│   │   └── src/                     # private D3D12/DXGI implementation
 │   ├── ure_sceneio/                 # Scene I/O (STATIC, pure C++)
 │   │   ├── include/ure/             # scene_io.hpp, spd_loader.hpp, image_loader.hpp
 │   │   └── src/                     # gltf_scene_frontend.cpp, spd_loader.cpp, image_loader.cpp
@@ -210,7 +214,8 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | Host scene/material/session | `test_native_scene`, `test_native_scene_ir`, `test_native_procedural_graph`, `test_native_script_build`, `test_native_resource_catalog`, `test_native_solver_contract`, `test_native_simulation_contract`, `test_native_tooling`, `test_native_adapter`, `test_native_compiled_cache`, `test_native_validation_suite`, `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io` |
 | Python | `test_pyure_smoke` |
 | Vulkan | `vulkan_runtime`, `vulkan_acceleration` |
-| **CTest total** | **45 registered tests** in `build_modular_x64` |
+| D3D12 | `d3d12_runtime` |
+| **CTest total** | **46 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -410,10 +415,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 23 | 2026-07-26 T.6 | Migrated the CUDA production backend behind runtime contracts | A private CUDA Device implements queues/timelines/resources/PTX DAG execution and structured failures; path, wave and multi-GPU lower stable execution graphs, public headers and root SDK-free builds no longer require CUDA, reference hashes and VRAM are unchanged, and measured render time remains inside the fail-loud regression gate. |
 | 24 | 2026-07-26 T.7 | Established the Vulkan compute production foundation | A Vulkan 1.3 Device implements adapter/resource/descriptor/pipeline/cache/DAG/timeline and validation/loss contracts behind an SDK-neutral header; deterministic shared-semantic SPIR-V passed Windows NVIDIA/Intel and Linux CUDA-free execution gates. Full Vulkan rendering remains fail-loud until T.8 acceleration. |
 | 25 | 2026-07-26 T.8 | Established the bounded Vulkan acceleration bridge | SDK-free provider/selection/hit contracts now drive private Vulkan BLAS/TLAS and real ray query with explicit compute fallback or rejection; CUDA production hit metadata, Windows NVIDIA/Intel, Linux CUDA-free, deterministic shader, lifetime/budget, and 45/45 CTest gates passed. Full verification also fixed a CUDA timeline wait race where a checkpoint could complete between two probes. Production acceleration construction remains Phase V and full Vulkan SceneIR rendering remains fail-loud. |
+| 26 | 2026-07-28 T.9 | Established the optional Windows D3D12/DXR runtime | SDK-neutral public surface and private D3D12/DXGI implementation now cover adapter budgets, buffer/image/sampler resources, deterministic DXIL, typed descriptor heaps, compute/copy queues, cross-queue fences, DRED and bounded DXR 1.1 BLAS/TLAS with compute fallback. CUDA/Vulkan/D3D12 parity, native DXR, no-D3D12 isolation, deterministic shader and 46/46 CTest gates passed; full D3D12 SceneIR rendering and production acceleration remain later work. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- Phase Q, Phase M, and Phase R are complete; T.0-T.8 are complete and the authoritative construction cursor is T.9.
+- Phase Q, Phase M, and Phase R are complete; T.0-T.9 are complete and the authoritative construction cursor is T.10.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 1) to avoid concurrent `ptxas` host-memory allocation failures; host and unrelated targets remain globally parallel.

@@ -1,2 +1,3 @@
 shaders/vulkan/generated/compute_bvh.json binary
 shaders/vulkan/generated/ray_query_native.json binary
+shaders/d3d12/generated/*.json binary
