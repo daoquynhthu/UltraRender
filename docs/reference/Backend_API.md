@@ -54,11 +54,14 @@ Clustered geometry, statistics collection and scratch-memory budgeting are
 explicit requests.
 
 Default selection resolves to CUDA `self_compute`.
-Explicit `self_compute` with automatic quality and auto/static/refit update is
-also accepted. V.2 makes statistics executable for that provider; V.3 adds
-BLAS/TLAS memory, timing, update and traversal fields. C++ and pyure expose the
-complete current view. The C ABI retains the V.2 output layout and adds
-`ure_acceleration_stats_v2_t` plus versioned getters. Quality presets, rebuild,
+Explicit `self_compute` accepts automatic, fast-build, balanced and high-quality
+construction with auto/static/refit update. Automatic and fast-build retain the
+compatible median BVH2; balanced selects binned SAH/BVH4 and high-quality
+selects bounded spatial SAH/SBVH/BVH8. V.2 makes statistics executable, V.3
+adds BLAS/TLAS hierarchy fields and V.4 adds BLAS build time, primitive
+references, spatial splits, binary construction nodes and selected arity. C++
+and pyure expose the complete current view. The C ABI retains the V.2 layouts
+and adds `ure_acceleration_stats_v3_t` plus versioned getters. Rebuild,
 clustered geometry, scratch budgets and native RT providers remain later Phase
 V work and fail before rendering. Existing backend-only C entry points retain
 their original layout and behavior; the execution-config entry points add

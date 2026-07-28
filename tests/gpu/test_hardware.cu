@@ -278,7 +278,19 @@ static int test_backend_identity_and_capability_contract() {
         ure::BackendKind::Cuda);
     config.acceleration.quality =
         ure::AccelerationBuildQuality::FastBuild;
-    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    CHECK(
+        ure::select_backend(config).adapter.kind ==
+        ure::BackendKind::Cuda);
+    config.acceleration.quality =
+        ure::AccelerationBuildQuality::Balanced;
+    CHECK(
+        ure::select_backend(config).adapter.kind ==
+        ure::BackendKind::Cuda);
+    config.acceleration.quality =
+        ure::AccelerationBuildQuality::HighQuality;
+    CHECK(
+        ure::select_backend(config).adapter.kind ==
+        ure::BackendKind::Cuda);
     config.acceleration.quality =
         ure::AccelerationBuildQuality::Automatic;
     config.acceleration.update_policy =

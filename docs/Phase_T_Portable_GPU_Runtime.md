@@ -2,7 +2,7 @@
 
 ## Status
 
-T.0 through T.11 are complete and the current project cursor is V.4. This
+T.0 through T.11 are complete and the current project cursor is V.5. This
 document records the closed Phase T contract. CUDA remains the complete
 scene rendering backend. Vulkan has a production compute-runtime foundation and
 a bounded acceleration bridge on Windows and Linux. D3D12/DXR has an optional

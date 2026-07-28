@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -293,11 +295,9 @@ GpuBvhNode refit_node(
     return node;
 }
 
-BvhBuildStats MeshBvhBuilder::build(
+static int validate_mesh_input(
     const std::vector<float>& vertices,
-    std::vector<int>& indices,
-    std::vector<GpuBvhNode>& nodes
-) {
+    const std::vector<int>& indices) {
     if (vertices.size() % 3 != 0 || indices.size() % 3 != 0) {
         throw std::invalid_argument(
             "self-compute BVH requires packed xyz vertices and triangle indices");
@@ -316,15 +316,23 @@ BvhBuildStats MeshBvhBuilder::build(
                 "self-compute BVH index is out of range");
         }
     }
-    BvhBuildStats stats;
     if (indices.size() / 3 >
         static_cast<std::size_t>(
             std::numeric_limits<int>::max())) {
         throw std::overflow_error(
             "self-compute BVH triangle count exceeds device indexing");
     }
+    return static_cast<int>(indices.size() / 3);
+}
+
+BvhBuildStats MeshBvhBuilder::build(
+    const std::vector<float>& vertices,
+    std::vector<int>& indices,
+    std::vector<GpuBvhNode>& nodes
+) {
     const int triangle_count =
-        static_cast<int>(indices.size() / 3);
+        validate_mesh_input(vertices, indices);
+    BvhBuildStats stats;
     stats.triangle_count =
         static_cast<std::uint64_t>(triangle_count);
     nodes.clear();
@@ -358,6 +366,640 @@ BvhBuildStats MeshBvhBuilder::build(
         new_indices[i * 3 + 2] = indices[old_offset + 2];
     }
     indices = std::move(new_indices);
+    return stats;
+}
+
+namespace {
+
+constexpr int kSahBinCount = 16;
+constexpr int kAdvancedLeafSize = 4;
+
+struct AdvancedPrimitive {
+    int source_primitive_index = 0;
+    GpuVec3 centroid;
+    GpuVec3 min_pt;
+    GpuVec3 max_pt;
+};
+
+struct AdvancedBuildNode {
+    GpuVec3 min_pt;
+    GpuVec3 max_pt;
+    std::unique_ptr<AdvancedBuildNode> left;
+    std::unique_ptr<AdvancedBuildNode> right;
+    int first_primitive_offset = 0;
+    int primitive_count = 0;
+};
+
+struct BoundsAccumulator {
+    GpuVec3 minimum{
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max()};
+    GpuVec3 maximum{
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest()};
+    bool valid = false;
+};
+
+struct SahBin {
+    BoundsAccumulator bounds;
+    int count = 0;
+};
+
+struct SplitCandidate {
+    float cost = std::numeric_limits<float>::max();
+    float position = 0.0f;
+    int axis = 0;
+    bool valid = false;
+    bool spatial = false;
+};
+
+float component(const GpuVec3& value, int axis) {
+    if (axis == 0) return value.x;
+    if (axis == 1) return value.y;
+    return value.z;
+}
+
+void set_component(GpuVec3& value, int axis, float component_value) {
+    if (axis == 0) {
+        value.x = component_value;
+    } else if (axis == 1) {
+        value.y = component_value;
+    } else {
+        value.z = component_value;
+    }
+}
+
+void include_bounds(
+    BoundsAccumulator& destination,
+    const GpuVec3& minimum,
+    const GpuVec3& maximum) {
+    destination.minimum.x =
+        std::min(destination.minimum.x, minimum.x);
+    destination.minimum.y =
+        std::min(destination.minimum.y, minimum.y);
+    destination.minimum.z =
+        std::min(destination.minimum.z, minimum.z);
+    destination.maximum.x =
+        std::max(destination.maximum.x, maximum.x);
+    destination.maximum.y =
+        std::max(destination.maximum.y, maximum.y);
+    destination.maximum.z =
+        std::max(destination.maximum.z, maximum.z);
+    destination.valid = true;
+}
+
+void include_bounds(
+    BoundsAccumulator& destination,
+    const BoundsAccumulator& source) {
+    if (source.valid) {
+        include_bounds(
+            destination, source.minimum, source.maximum);
+    }
+}
+
+BoundsAccumulator primitive_bounds(
+    const std::vector<AdvancedPrimitive>& primitives) {
+    BoundsAccumulator result;
+    for (const auto& primitive : primitives) {
+        include_bounds(
+            result, primitive.min_pt, primitive.max_pt);
+    }
+    return result;
+}
+
+float surface_area(const BoundsAccumulator& bounds) {
+    if (!bounds.valid) return 0.0f;
+    const float x =
+        std::max(0.0f, bounds.maximum.x - bounds.minimum.x);
+    const float y =
+        std::max(0.0f, bounds.maximum.y - bounds.minimum.y);
+    const float z =
+        std::max(0.0f, bounds.maximum.z - bounds.minimum.z);
+    return 2.0f * (x * y + y * z + z * x);
+}
+
+SplitCandidate object_sah_split(
+    const std::vector<AdvancedPrimitive>& primitives) {
+    SplitCandidate best;
+    BoundsAccumulator centroid_bounds;
+    for (const auto& primitive : primitives) {
+        include_bounds(
+            centroid_bounds, primitive.centroid,
+            primitive.centroid);
+    }
+    for (int axis = 0; axis < 3; ++axis) {
+        const float minimum =
+            component(centroid_bounds.minimum, axis);
+        const float maximum =
+            component(centroid_bounds.maximum, axis);
+        const float extent = maximum - minimum;
+        if (!(extent > 0.0f)) continue;
+        std::array<SahBin, kSahBinCount> bins;
+        for (const auto& primitive : primitives) {
+            int bin = static_cast<int>(
+                kSahBinCount *
+                ((component(primitive.centroid, axis) - minimum) /
+                 extent));
+            bin = std::clamp(bin, 0, kSahBinCount - 1);
+            ++bins[static_cast<std::size_t>(bin)].count;
+            include_bounds(
+                bins[static_cast<std::size_t>(bin)].bounds,
+                primitive.min_pt, primitive.max_pt);
+        }
+        std::array<BoundsAccumulator, kSahBinCount> left_bounds;
+        std::array<BoundsAccumulator, kSahBinCount> right_bounds;
+        std::array<int, kSahBinCount> left_counts{};
+        std::array<int, kSahBinCount> right_counts{};
+        BoundsAccumulator left;
+        int left_count = 0;
+        for (int bin = 0; bin < kSahBinCount; ++bin) {
+            include_bounds(
+                left, bins[static_cast<std::size_t>(bin)].bounds);
+            left_count += bins[static_cast<std::size_t>(bin)].count;
+            left_bounds[static_cast<std::size_t>(bin)] = left;
+            left_counts[static_cast<std::size_t>(bin)] = left_count;
+        }
+        BoundsAccumulator right;
+        int right_count = 0;
+        for (int bin = kSahBinCount - 1; bin >= 0; --bin) {
+            include_bounds(
+                right, bins[static_cast<std::size_t>(bin)].bounds);
+            right_count += bins[static_cast<std::size_t>(bin)].count;
+            right_bounds[static_cast<std::size_t>(bin)] = right;
+            right_counts[static_cast<std::size_t>(bin)] = right_count;
+        }
+        for (int bin = 0; bin < kSahBinCount - 1; ++bin) {
+            const int count_left =
+                left_counts[static_cast<std::size_t>(bin)];
+            const int count_right =
+                right_counts[static_cast<std::size_t>(bin + 1)];
+            if (count_left == 0 || count_right == 0) continue;
+            const float cost =
+                surface_area(
+                    left_bounds[static_cast<std::size_t>(bin)]) *
+                    static_cast<float>(count_left) +
+                surface_area(
+                    right_bounds[static_cast<std::size_t>(bin + 1)]) *
+                    static_cast<float>(count_right);
+            if (cost < best.cost) {
+                best.cost = cost;
+                best.position =
+                    minimum + extent *
+                        (static_cast<float>(bin + 1) /
+                         static_cast<float>(kSahBinCount));
+                best.axis = axis;
+                best.valid = true;
+            }
+        }
+    }
+    return best;
+}
+
+SplitCandidate spatial_sah_split(
+    const std::vector<AdvancedPrimitive>& primitives,
+    const BoundsAccumulator& node_bounds,
+    std::size_t maximum_duplicates) {
+    SplitCandidate best;
+    best.spatial = true;
+    for (int axis = 0; axis < 3; ++axis) {
+        const float minimum = component(node_bounds.minimum, axis);
+        const float maximum = component(node_bounds.maximum, axis);
+        const float extent = maximum - minimum;
+        if (!(extent > 0.0f)) continue;
+        for (int bin = 1; bin < kSahBinCount; ++bin) {
+            const float plane =
+                minimum + extent *
+                    (static_cast<float>(bin) /
+                     static_cast<float>(kSahBinCount));
+            BoundsAccumulator left;
+            BoundsAccumulator right;
+            int left_count = 0;
+            int right_count = 0;
+            for (const auto& primitive : primitives) {
+                if (component(primitive.min_pt, axis) < plane) {
+                    GpuVec3 clipped_maximum = primitive.max_pt;
+                    set_component(
+                        clipped_maximum, axis,
+                        std::min(
+                            component(clipped_maximum, axis),
+                            plane));
+                    include_bounds(
+                        left, primitive.min_pt, clipped_maximum);
+                    ++left_count;
+                }
+                if (component(primitive.max_pt, axis) > plane) {
+                    GpuVec3 clipped_minimum = primitive.min_pt;
+                    set_component(
+                        clipped_minimum, axis,
+                        std::max(
+                            component(clipped_minimum, axis),
+                            plane));
+                    include_bounds(
+                        right, clipped_minimum, primitive.max_pt);
+                    ++right_count;
+                }
+            }
+            if (left_count == 0 || right_count == 0) continue;
+            const std::size_t duplicates =
+                static_cast<std::size_t>(
+                    left_count + right_count) -
+                primitives.size();
+            if (duplicates > maximum_duplicates) continue;
+            const float cost =
+                surface_area(left) * static_cast<float>(left_count) +
+                surface_area(right) * static_cast<float>(right_count);
+            if (cost < best.cost) {
+                best.cost = cost;
+                best.position = plane;
+                best.axis = axis;
+                best.valid = true;
+            }
+        }
+    }
+    return best;
+}
+
+void median_partition(
+    std::vector<AdvancedPrimitive> primitives,
+    std::vector<AdvancedPrimitive>& left,
+    std::vector<AdvancedPrimitive>& right) {
+    BoundsAccumulator centroid_bounds;
+    for (const auto& primitive : primitives) {
+        include_bounds(
+            centroid_bounds, primitive.centroid,
+            primitive.centroid);
+    }
+    const GpuVec3 extent =
+        centroid_bounds.maximum - centroid_bounds.minimum;
+    int axis = 0;
+    if (extent.y > extent.x) axis = 1;
+    if (extent.z > component(extent, axis)) axis = 2;
+    const auto middle =
+        primitives.begin() +
+        static_cast<std::ptrdiff_t>(primitives.size() / 2);
+    std::nth_element(
+        primitives.begin(), middle, primitives.end(),
+        [axis](const AdvancedPrimitive& first,
+               const AdvancedPrimitive& second) {
+            return component(first.centroid, axis) <
+                component(second.centroid, axis);
+        });
+    left.assign(primitives.begin(), middle);
+    right.assign(middle, primitives.end());
+}
+
+void object_partition(
+    const std::vector<AdvancedPrimitive>& primitives,
+    const SplitCandidate& split,
+    std::vector<AdvancedPrimitive>& left,
+    std::vector<AdvancedPrimitive>& right) {
+    for (const auto& primitive : primitives) {
+        if (component(primitive.centroid, split.axis) <
+            split.position) {
+            left.push_back(primitive);
+        } else {
+            right.push_back(primitive);
+        }
+    }
+}
+
+void spatial_partition(
+    const std::vector<AdvancedPrimitive>& primitives,
+    const SplitCandidate& split,
+    std::vector<AdvancedPrimitive>& left,
+    std::vector<AdvancedPrimitive>& right) {
+    for (const auto& primitive : primitives) {
+        if (component(primitive.min_pt, split.axis) <
+            split.position) {
+            AdvancedPrimitive clipped = primitive;
+            set_component(
+                clipped.max_pt, split.axis,
+                std::min(
+                    component(clipped.max_pt, split.axis),
+                    split.position));
+            clipped.centroid =
+                (clipped.min_pt + clipped.max_pt) * 0.5f;
+            left.push_back(clipped);
+        }
+        if (component(primitive.max_pt, split.axis) >
+            split.position) {
+            AdvancedPrimitive clipped = primitive;
+            set_component(
+                clipped.min_pt, split.axis,
+                std::max(
+                    component(clipped.min_pt, split.axis),
+                    split.position));
+            clipped.centroid =
+                (clipped.min_pt + clipped.max_pt) * 0.5f;
+            right.push_back(clipped);
+        }
+    }
+}
+
+std::unique_ptr<AdvancedBuildNode> build_advanced_node(
+    std::vector<AdvancedPrimitive> primitives,
+    bool allow_spatial_splits,
+    std::size_t duplicate_budget,
+    std::size_t& duplicate_count,
+    std::uint64_t& binary_node_count,
+    std::uint64_t& leaf_count,
+    std::uint64_t& spatial_split_count,
+    std::vector<int>& ordered_references,
+    std::uint32_t depth) {
+    if (depth >
+        static_cast<std::uint32_t>(kBvhTraversalStackCapacity)) {
+        throw std::runtime_error(
+            "self-compute advanced BVH exceeds traversal stack capacity");
+    }
+    auto node = std::make_unique<AdvancedBuildNode>();
+    ++binary_node_count;
+    const BoundsAccumulator bounds = primitive_bounds(primitives);
+    node->min_pt = bounds.minimum;
+    node->max_pt = bounds.maximum;
+    if (primitives.size() <= kAdvancedLeafSize) {
+        node->first_primitive_offset =
+            static_cast<int>(ordered_references.size());
+        node->primitive_count =
+            static_cast<int>(primitives.size());
+        ++leaf_count;
+        for (const auto& primitive : primitives) {
+            ordered_references.push_back(
+                primitive.source_primitive_index);
+        }
+        return node;
+    }
+
+    const SplitCandidate object_split =
+        object_sah_split(primitives);
+    SplitCandidate selected = object_split;
+    if (allow_spatial_splits) {
+        const SplitCandidate spatial_split =
+            spatial_sah_split(
+                primitives, bounds,
+                duplicate_budget - duplicate_count);
+        if (spatial_split.valid &&
+            (!selected.valid ||
+             spatial_split.cost < selected.cost * 0.98f)) {
+            selected = spatial_split;
+        }
+    }
+
+    std::vector<AdvancedPrimitive> left;
+    std::vector<AdvancedPrimitive> right;
+    left.reserve(primitives.size());
+    right.reserve(primitives.size());
+    if (selected.valid && selected.spatial) {
+        spatial_partition(primitives, selected, left, right);
+        const std::size_t duplicates =
+            left.size() + right.size() - primitives.size();
+        if (left.empty() || right.empty() ||
+            duplicate_count + duplicates > duplicate_budget) {
+            left.clear();
+            right.clear();
+            selected = object_split;
+        } else {
+            duplicate_count += duplicates;
+            ++spatial_split_count;
+        }
+    }
+    if (left.empty() && right.empty() && selected.valid) {
+        object_partition(primitives, selected, left, right);
+    }
+    if (left.empty() || right.empty()) {
+        left.clear();
+        right.clear();
+        median_partition(std::move(primitives), left, right);
+    }
+
+    node->left = build_advanced_node(
+        std::move(left), allow_spatial_splits,
+        duplicate_budget, duplicate_count,
+        binary_node_count, leaf_count, spatial_split_count,
+        ordered_references, depth + 1);
+    node->right = build_advanced_node(
+        std::move(right), allow_spatial_splits,
+        duplicate_budget, duplicate_count,
+        binary_node_count, leaf_count, spatial_split_count,
+        ordered_references, depth + 1);
+    return node;
+}
+
+unsigned char quantize_minimum(
+    float value,
+    float minimum,
+    float maximum) {
+    const float extent = maximum - minimum;
+    if (!(extent > 0.0f)) return 0;
+    const float normalized =
+        255.0f * (value - minimum) / extent;
+    return static_cast<unsigned char>(
+        std::clamp(
+            static_cast<int>(std::floor(normalized)),
+            0, 255));
+}
+
+unsigned char quantize_maximum(
+    float value,
+    float minimum,
+    float maximum) {
+    const float extent = maximum - minimum;
+    if (!(extent > 0.0f)) return 255;
+    const float normalized =
+        255.0f * (value - minimum) / extent;
+    return static_cast<unsigned char>(
+        std::clamp(
+            static_cast<int>(std::ceil(normalized)),
+            0, 255));
+}
+
+template <typename Node>
+void encode_child_bounds(
+    Node& destination,
+    int child_index,
+    const AdvancedBuildNode& child) {
+    for (int axis = 0; axis < 3; ++axis) {
+        destination.child_bounds[child_index][axis] =
+            quantize_minimum(
+                component(child.min_pt, axis),
+                component(destination.min_pt, axis),
+                component(destination.max_pt, axis));
+        destination.child_bounds[child_index][axis + 3] =
+            quantize_maximum(
+                component(child.max_pt, axis),
+                component(destination.min_pt, axis),
+                component(destination.max_pt, axis));
+    }
+}
+
+template <typename Node>
+int emit_wide_node(
+    const AdvancedBuildNode& source,
+    int arity,
+    std::vector<Node>& wide_nodes,
+    std::uint32_t depth,
+    std::uint32_t& max_depth) {
+    const int output_index =
+        static_cast<int>(wide_nodes.size());
+    wide_nodes.emplace_back();
+    std::vector<const AdvancedBuildNode*> frontier{&source};
+    while (static_cast<int>(frontier.size()) < arity) {
+        std::size_t selected_index = frontier.size();
+        float selected_area = -1.0f;
+        for (std::size_t index = 0;
+             index < frontier.size();
+             ++index) {
+            const auto* candidate = frontier[index];
+            if (!candidate->left || !candidate->right) continue;
+            BoundsAccumulator candidate_bounds;
+            include_bounds(
+                candidate_bounds,
+                candidate->min_pt, candidate->max_pt);
+            const float area = surface_area(candidate_bounds);
+            if (area > selected_area) {
+                selected_area = area;
+                selected_index = index;
+            }
+        }
+        if (selected_index == frontier.size()) break;
+        const AdvancedBuildNode* selected =
+            frontier[selected_index];
+        frontier[selected_index] = selected->left.get();
+        frontier.insert(
+            frontier.begin() +
+                static_cast<std::ptrdiff_t>(selected_index + 1),
+            selected->right.get());
+    }
+
+    Node node{};
+    node.min_pt = source.min_pt;
+    node.max_pt = source.max_pt;
+    node.child_count = static_cast<int>(frontier.size());
+    max_depth = std::max(max_depth, depth);
+    for (std::size_t child_index = 0;
+         child_index < frontier.size();
+         ++child_index) {
+        const AdvancedBuildNode& child = *frontier[child_index];
+        encode_child_bounds(
+            node, static_cast<int>(child_index), child);
+        if (child.primitive_count > 0) {
+            node.child_indices[child_index] =
+                child.first_primitive_offset;
+            node.child_primitive_counts[child_index] =
+                static_cast<unsigned char>(
+                    child.primitive_count);
+        } else {
+            node.child_indices[child_index] =
+                emit_wide_node(
+                    child, arity, wide_nodes,
+                    depth + 1, max_depth);
+        }
+    }
+    wide_nodes[static_cast<std::size_t>(output_index)] = node;
+    return output_index;
+}
+
+}
+
+BvhBuildStats MeshBvhBuilder::build(
+    const std::vector<float>& vertices,
+    std::vector<int>& indices,
+    AccelerationBuildQuality quality,
+    std::vector<GpuBvhNode>& binary_nodes,
+    std::vector<GpuBvh4Node>& bvh4_nodes,
+    std::vector<GpuWideBvhNode>& wide_nodes,
+    std::vector<int>& primitive_references) {
+    const auto build_start = std::chrono::steady_clock::now();
+    binary_nodes.clear();
+    bvh4_nodes.clear();
+    wide_nodes.clear();
+    primitive_references.clear();
+    if (quality == AccelerationBuildQuality::Automatic ||
+        quality == AccelerationBuildQuality::FastBuild) {
+        BvhBuildStats stats =
+            build(vertices, indices, binary_nodes);
+        stats.binary_node_count = stats.node_count;
+        stats.primitive_reference_count = stats.triangle_count;
+        stats.layout = GpuBvhLayout::Binary;
+        stats.build_nanoseconds =
+            static_cast<std::uint64_t>(
+                std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() -
+                    build_start).count());
+        return stats;
+    }
+    if (quality != AccelerationBuildQuality::Balanced &&
+        quality != AccelerationBuildQuality::HighQuality) {
+        throw std::invalid_argument(
+            "self-compute BVH build quality is invalid");
+    }
+    BvhBuildStats stats;
+    stats.triangle_count = static_cast<std::uint64_t>(
+        validate_mesh_input(vertices, indices));
+    if (stats.triangle_count == 0) return stats;
+
+    std::vector<AdvancedPrimitive> primitives(
+        static_cast<std::size_t>(stats.triangle_count));
+    for (std::size_t index = 0;
+         index < primitives.size();
+         ++index) {
+        GpuVec3 minimum;
+        GpuVec3 maximum;
+        GpuVec3 centroid;
+        get_triangle_bounds(
+            vertices, indices,
+            static_cast<int>(index * 3),
+            minimum, maximum, centroid);
+        primitives[index] = {
+            static_cast<int>(index),
+            centroid,
+            minimum,
+            maximum};
+    }
+    std::size_t duplicate_count = 0;
+    const std::size_t duplicate_budget =
+        quality == AccelerationBuildQuality::HighQuality
+        ? primitives.size() / 2
+        : 0;
+    auto root = build_advanced_node(
+        std::move(primitives),
+        quality == AccelerationBuildQuality::HighQuality,
+        duplicate_budget, duplicate_count,
+        stats.binary_node_count, stats.leaf_count,
+        stats.spatial_split_count, primitive_references, 1);
+    const int arity =
+        quality == AccelerationBuildQuality::Balanced ? 4 : 8;
+    if (arity == 4) {
+        emit_wide_node(
+            *root, arity, bvh4_nodes, 1, stats.max_depth);
+    } else {
+        emit_wide_node(
+            *root, arity, wide_nodes, 1, stats.max_depth);
+    }
+    if (1u +
+            static_cast<std::uint32_t>(arity - 1) *
+                stats.max_depth >
+        static_cast<std::uint32_t>(
+            kWideBvhTraversalStackCapacity)) {
+        throw std::runtime_error(
+            "self-compute wide BVH exceeds traversal stack capacity");
+    }
+    stats.node_count =
+        static_cast<std::uint64_t>(
+            arity == 4 ? bvh4_nodes.size() : wide_nodes.size());
+    stats.primitive_reference_count =
+        static_cast<std::uint64_t>(
+            primitive_references.size());
+    stats.layout =
+        arity == 4 ? GpuBvhLayout::Wide4 : GpuBvhLayout::Wide8;
+    stats.build_nanoseconds =
+        static_cast<std::uint64_t>(
+            std::chrono::duration_cast<
+                std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() -
+                build_start).count());
     return stats;
 }
 

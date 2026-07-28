@@ -177,6 +177,17 @@ class _AccelerationStatsV2(ctypes.Structure):
     ]
 
 
+class _AccelerationStatsV3(ctypes.Structure):
+    _fields_ = [
+        ("hierarchy", _AccelerationStatsV2),
+        ("blas_build_nanoseconds", ctypes.c_uint64),
+        ("blas_primitive_reference_count", ctypes.c_uint64),
+        ("blas_spatial_split_count", ctypes.c_uint64),
+        ("blas_binary_node_count", ctypes.c_uint64),
+        ("blas_node_arity", ctypes.c_uint32),
+    ]
+
+
 class _BackendAdapterInfo(ctypes.Structure):
     _fields_ = [
         ("kind", ctypes.c_int),
@@ -337,6 +348,11 @@ class AccelerationStats:
     tlas_build_nanoseconds: int
     tlas_update_nanoseconds: int
     tlas_update_count: int
+    blas_build_nanoseconds: int
+    blas_primitive_reference_count: int
+    blas_spatial_split_count: int
+    blas_binary_node_count: int
+    blas_node_arity: int
 
 
 def _candidate_library_paths() -> list[Path]:
@@ -462,6 +478,11 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(_AccelerationStatsV2),
     ]
     lib.ure_session_get_acceleration_stats_v2.restype = ctypes.c_int
+    lib.ure_session_get_acceleration_stats_v3.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(_AccelerationStatsV3),
+    ]
+    lib.ure_session_get_acceleration_stats_v3.restype = ctypes.c_int
     lib.ure_session_get_framebuffer_size.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(ctypes.c_int),
@@ -1115,12 +1136,13 @@ class RenderSession:
         )
 
     def acceleration_stats(self) -> AccelerationStats:
-        raw = _AccelerationStatsV2()
-        if native().ure_session_get_acceleration_stats_v2(
+        raw = _AccelerationStatsV3()
+        if native().ure_session_get_acceleration_stats_v3(
             self.handle, ctypes.byref(raw)
         ) != 0:
             raise RuntimeError("acceleration statistics unavailable")
-        baseline = raw.baseline
+        hierarchy = raw.hierarchy
+        baseline = hierarchy.baseline
         return AccelerationStats(
             baseline.mesh_count,
             baseline.triangle_count,
@@ -1133,16 +1155,21 @@ class RenderSession:
             baseline.shadow_triangle_tests,
             baseline.stack_overflow_count,
             baseline.invalid_acceleration_count,
-            raw.closest_tlas_node_visits,
-            raw.shadow_tlas_node_visits,
-            raw.blas_node_bytes,
-            raw.tlas_node_count,
-            raw.tlas_leaf_count,
-            raw.tlas_max_depth,
-            raw.tlas_bytes,
-            raw.tlas_build_nanoseconds,
-            raw.tlas_update_nanoseconds,
-            raw.tlas_update_count,
+            hierarchy.closest_tlas_node_visits,
+            hierarchy.shadow_tlas_node_visits,
+            hierarchy.blas_node_bytes,
+            hierarchy.tlas_node_count,
+            hierarchy.tlas_leaf_count,
+            hierarchy.tlas_max_depth,
+            hierarchy.tlas_bytes,
+            hierarchy.tlas_build_nanoseconds,
+            hierarchy.tlas_update_nanoseconds,
+            hierarchy.tlas_update_count,
+            raw.blas_build_nanoseconds,
+            raw.blas_primitive_reference_count,
+            raw.blas_spatial_split_count,
+            raw.blas_binary_node_count,
+            raw.blas_node_arity,
         )
 
     def framebuffer_size(self) -> tuple[int, int]:

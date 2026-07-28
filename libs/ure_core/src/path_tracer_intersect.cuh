@@ -143,6 +143,307 @@ static __device__ void record_acceleration_count(
     if (counter) atomicAdd(counter, 1ull);
 }
 
+static __device__ bool hit_mesh_primitive(
+    const GpuMesh& mesh,
+    int primitive_index,
+    const GpuRay& ray,
+    float t_min,
+    float& closest,
+    float& t_out,
+    GpuVec3& geometric_normal_out,
+    GpuVec3& shading_normal_out,
+    GpuVec2& uv_out,
+    int& primitive_index_out) {
+    if (primitive_index < 0 ||
+        primitive_index >= mesh.triangle_count) {
+        return false;
+    }
+    const int i0 = mesh.indices[primitive_index * 3 + 0];
+    const int i1 = mesh.indices[primitive_index * 3 + 1];
+    const int i2 = mesh.indices[primitive_index * 3 + 2];
+    const GpuVec3 v0 = mesh.vertices[i0];
+    const GpuVec3 v1 = mesh.vertices[i1];
+    const GpuVec3 v2 = mesh.vertices[i2];
+    const GpuVec3* n0 = mesh.normals ? &mesh.normals[i0] : nullptr;
+    const GpuVec3* n1 = mesh.normals ? &mesh.normals[i1] : nullptr;
+    const GpuVec3* n2 = mesh.normals ? &mesh.normals[i2] : nullptr;
+    float triangle_t;
+    GpuVec3 geometric_normal;
+    GpuVec3 shading_normal;
+    float u;
+    float v;
+    if (!hit_triangle(
+            ray, v0, v1, v2, n0, n1, n2,
+            t_min, closest, triangle_t,
+            geometric_normal, shading_normal, u, v)) {
+        return false;
+    }
+    closest = triangle_t;
+    t_out = triangle_t;
+    geometric_normal_out = geometric_normal;
+    shading_normal_out = shading_normal;
+    primitive_index_out = primitive_index;
+    if (mesh.uvs) {
+        const float w = 1.0f - u - v;
+        uv_out =
+            mesh.uvs[i0] * w +
+            mesh.uvs[i1] * u +
+            mesh.uvs[i2] * v;
+    } else {
+        uv_out = GpuVec2(0.0f, 0.0f);
+    }
+    return true;
+}
+
+template <typename Node>
+static __device__ GpuVec3 decode_wide_child_minimum(
+    const Node& node,
+    const GpuVec3& scale,
+    int child) {
+    GpuVec3 result;
+    for (int axis = 0; axis < 3; ++axis) {
+        const float minimum =
+            axis == 0 ? node.min_pt.x :
+            axis == 1 ? node.min_pt.y : node.min_pt.z;
+        const float axis_scale =
+            axis == 0 ? scale.x :
+            axis == 1 ? scale.y : scale.z;
+        const float value =
+            fmaf(
+                axis_scale,
+                static_cast<float>(
+                    node.child_bounds[child][axis]),
+                minimum);
+        const float outward =
+            nextafterf(value, -FLT_MAX);
+        if (axis == 0) result.x = outward;
+        else if (axis == 1) result.y = outward;
+        else result.z = outward;
+    }
+    return result;
+}
+
+template <typename Node>
+static __device__ GpuVec3 decode_wide_child_maximum(
+    const Node& node,
+    const GpuVec3& scale,
+    int child) {
+    GpuVec3 result;
+    for (int axis = 0; axis < 3; ++axis) {
+        const float minimum =
+            axis == 0 ? node.min_pt.x :
+            axis == 1 ? node.min_pt.y : node.min_pt.z;
+        const float axis_scale =
+            axis == 0 ? scale.x :
+            axis == 1 ? scale.y : scale.z;
+        const float value =
+            fmaf(
+                axis_scale,
+                static_cast<float>(
+                    node.child_bounds[child][axis + 3]),
+                minimum);
+        const float outward =
+            nextafterf(value, FLT_MAX);
+        if (axis == 0) result.x = outward;
+        else if (axis == 1) result.y = outward;
+        else result.z = outward;
+    }
+    return result;
+}
+
+template <typename Node, int MaximumChildren>
+static __device__ BvhTraversalResult hit_wide_bvh_nodes(
+    const GpuMesh& mesh,
+    const Node* nodes,
+    int node_count,
+    const GpuRay& ray,
+    float t_min,
+    float t_max,
+    float& t_out,
+    GpuVec3& geometric_normal_out,
+    GpuVec3& shading_normal_out,
+    GpuVec2& uv_out,
+    int& primitive_index_out,
+    GpuAccelerationTelemetry* telemetry,
+    bool shadow,
+    bool collect_stats) {
+    if (!nodes || node_count <= 0 ||
+        !mesh.primitive_references ||
+        mesh.primitive_reference_count <= 0) {
+        if (telemetry) {
+            record_acceleration_count(
+                &telemetry->invalid_acceleration_count);
+        }
+        return BvhTraversalResult::InvalidAcceleration;
+    }
+    int stack[kWideBvhTraversalStackCapacity];
+    int stack_pointer = 0;
+    stack[stack_pointer++] = 0;
+    bool hit_anything = false;
+    float closest = t_max;
+    while (stack_pointer > 0) {
+        const int node_index = stack[--stack_pointer];
+        if (node_index < 0 ||
+            node_index >= node_count) {
+            if (telemetry) {
+                record_acceleration_count(
+                    &telemetry->invalid_acceleration_count);
+            }
+            return BvhTraversalResult::InvalidAcceleration;
+        }
+        if (collect_stats && telemetry) {
+            record_acceleration_count(
+                shadow
+                    ? &telemetry->shadow_node_visits
+                    : &telemetry->closest_node_visits);
+        }
+        const Node& node = nodes[node_index];
+        if (node.child_count <= 0 ||
+            node.child_count > MaximumChildren ||
+            !isfinite(node.min_pt.x) ||
+            !isfinite(node.min_pt.y) ||
+            !isfinite(node.min_pt.z) ||
+            !isfinite(node.max_pt.x) ||
+            !isfinite(node.max_pt.y) ||
+            !isfinite(node.max_pt.z) ||
+            node.min_pt.x > node.max_pt.x ||
+            node.min_pt.y > node.max_pt.y ||
+            node.min_pt.z > node.max_pt.z) {
+            if (telemetry) {
+                record_acceleration_count(
+                    &telemetry->invalid_acceleration_count);
+            }
+            return BvhTraversalResult::InvalidAcceleration;
+        }
+        int internal_children[MaximumChildren];
+        int internal_count = 0;
+        const GpuVec3 quantization_scale =
+            (node.max_pt - node.min_pt) *
+            (1.0f / 255.0f);
+        for (int child = 0;
+             child < node.child_count;
+             ++child) {
+            const GpuVec3 child_minimum =
+                decode_wide_child_minimum(
+                    node, quantization_scale, child);
+            const GpuVec3 child_maximum =
+                decode_wide_child_maximum(
+                    node, quantization_scale, child);
+            if (!hit_aabb(
+                    ray, child_minimum, child_maximum,
+                    t_min, closest)) {
+                continue;
+            }
+            const int child_index = node.child_indices[child];
+            const int count = static_cast<int>(
+                node.child_primitive_counts[child]);
+            if (count > 0) {
+                if (count <= 0 || child_index < 0 ||
+                    child_index >
+                        mesh.primitive_reference_count ||
+                    count >
+                        mesh.primitive_reference_count -
+                            child_index) {
+                    if (telemetry) {
+                        record_acceleration_count(
+                            &telemetry
+                                ->invalid_acceleration_count);
+                    }
+                    return BvhTraversalResult::InvalidAcceleration;
+                }
+                for (int offset = 0; offset < count; ++offset) {
+                    if (collect_stats && telemetry) {
+                        record_acceleration_count(
+                            shadow
+                                ? &telemetry
+                                       ->shadow_triangle_tests
+                                : &telemetry
+                                       ->closest_triangle_tests);
+                    }
+                    const int primitive_index =
+                        mesh.primitive_references[
+                            child_index + offset];
+                    if (primitive_index < 0 ||
+                        primitive_index >= mesh.triangle_count) {
+                        if (telemetry) {
+                            record_acceleration_count(
+                                &telemetry
+                                    ->invalid_acceleration_count);
+                        }
+                        return BvhTraversalResult::
+                            InvalidAcceleration;
+                    }
+                    if (hit_mesh_primitive(
+                            mesh, primitive_index, ray, t_min,
+                            closest, t_out,
+                            geometric_normal_out,
+                            shading_normal_out, uv_out,
+                            primitive_index_out)) {
+                        hit_anything = true;
+                    }
+                }
+            } else {
+                if (child_index < 0 ||
+                    child_index >= node_count) {
+                    if (telemetry) {
+                        record_acceleration_count(
+                            &telemetry
+                                ->invalid_acceleration_count);
+                    }
+                    return BvhTraversalResult::InvalidAcceleration;
+                }
+                internal_children[internal_count++] = child_index;
+            }
+        }
+        if (stack_pointer >
+            kWideBvhTraversalStackCapacity - internal_count) {
+            if (telemetry) {
+                record_acceleration_count(
+                    &telemetry->stack_overflow_count);
+            }
+            return BvhTraversalResult::StackOverflow;
+        }
+        for (int index = internal_count - 1;
+             index >= 0;
+             --index) {
+            stack[stack_pointer++] = internal_children[index];
+        }
+    }
+    return hit_anything
+        ? BvhTraversalResult::Hit
+        : BvhTraversalResult::Miss;
+}
+
+static __device__ BvhTraversalResult hit_wide_bvh(
+    const GpuMesh& mesh,
+    const GpuRay& ray,
+    float t_min,
+    float t_max,
+    float& t_out,
+    GpuVec3& geometric_normal_out,
+    GpuVec3& shading_normal_out,
+    GpuVec2& uv_out,
+    int& primitive_index_out,
+    GpuAccelerationTelemetry* telemetry,
+    bool shadow,
+    bool collect_stats) {
+    if (mesh.bvh_layout == GpuBvhLayout::Wide4) {
+        return hit_wide_bvh_nodes<GpuBvh4Node, 4>(
+            mesh, mesh.bvh4_nodes, mesh.bvh4_node_count,
+            ray, t_min, t_max, t_out,
+            geometric_normal_out, shading_normal_out,
+            uv_out, primitive_index_out, telemetry,
+            shadow, collect_stats);
+    }
+    return hit_wide_bvh_nodes<GpuWideBvhNode, 8>(
+        mesh, mesh.wide_bvh_nodes,
+        mesh.wide_bvh_node_count,
+        ray, t_min, t_max, t_out,
+        geometric_normal_out, shading_normal_out,
+        uv_out, primitive_index_out, telemetry,
+        shadow, collect_stats);
+}
+
 static __device__ BvhTraversalResult hit_bvh(
     const GpuMesh& mesh,
     const GpuRay& r,
@@ -156,9 +457,24 @@ static __device__ BvhTraversalResult hit_bvh(
     GpuAccelerationTelemetry* telemetry = nullptr,
     bool shadow = false,
     bool collect_stats = false) {
-    if (!mesh.bvh_nodes || mesh.bvh_node_count <= 0 ||
-        !mesh.vertices || !mesh.indices ||
+    if (!mesh.vertices || !mesh.indices ||
         mesh.triangle_count <= 0) {
+        if (telemetry) {
+            record_acceleration_count(
+                &telemetry->invalid_acceleration_count);
+        }
+        return BvhTraversalResult::InvalidAcceleration;
+    }
+    if (mesh.bvh_layout == GpuBvhLayout::Wide4 ||
+        mesh.bvh_layout == GpuBvhLayout::Wide8) {
+        return hit_wide_bvh(
+            mesh, r, t_min, t_max, t_out,
+            ng_out, ns_out, uv_out,
+            primitive_index_out, telemetry,
+            shadow, collect_stats);
+    }
+    if (mesh.bvh_layout != GpuBvhLayout::Binary ||
+        !mesh.bvh_nodes || mesh.bvh_node_count <= 0) {
         if (telemetry) {
             record_acceleration_count(
                 &telemetry->invalid_acceleration_count);
@@ -230,45 +546,11 @@ static __device__ BvhTraversalResult hit_bvh(
                             ? &telemetry->shadow_triangle_tests
                             : &telemetry->closest_triangle_tests);
                 }
-                int i0 = mesh.indices[i * 3 + 0];
-                int i1 = mesh.indices[i * 3 + 1];
-                int i2 = mesh.indices[i * 3 + 2];
-
-                GpuVec3 v0 = mesh.vertices[i0];
-                GpuVec3 v1 = mesh.vertices[i1];
-                GpuVec3 v2 = mesh.vertices[i2];
-
-                const GpuVec3* n0_ptr = nullptr;
-                const GpuVec3* n1_ptr = nullptr;
-                const GpuVec3* n2_ptr = nullptr;
-
-                if (mesh.normals) {
-                    n0_ptr = &mesh.normals[i0];
-                    n1_ptr = &mesh.normals[i1];
-                    n2_ptr = &mesh.normals[i2];
-                }
-
-                float t_tri;
-                GpuVec3 ng_tri, ns_tri;
-                float u_tri, v_tri;
-
-                if (hit_triangle(r, v0, v1, v2, n0_ptr, n1_ptr, n2_ptr, t_min, t_closest, t_tri, ng_tri, ns_tri, u_tri, v_tri)) {
+                if (hit_mesh_primitive(
+                        mesh, i, r, t_min, t_closest,
+                        t_out, ng_out, ns_out, uv_out,
+                        primitive_index_out)) {
                     hit_anything = true;
-                    t_closest = t_tri;
-                    t_out = t_tri;
-                    ng_out = ng_tri;
-                    ns_out = ns_tri;
-                    primitive_index_out = i;
-
-                    if (mesh.uvs) {
-                        GpuVec2 uv0 = mesh.uvs[i0];
-                        GpuVec2 uv1 = mesh.uvs[i1];
-                        GpuVec2 uv2 = mesh.uvs[i2];
-                        float w_tri = 1.0f - u_tri - v_tri;
-                        uv_out = uv0 * w_tri + uv1 * u_tri + uv2 * v_tri;
-                    } else {
-                        uv_out = GpuVec2(0.0f, 0.0f);
-                    }
                 }
             }
         } else {

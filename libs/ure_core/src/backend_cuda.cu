@@ -412,11 +412,6 @@ BackendSelection select_backend(const RenderConfig& config) {
             std::string("requested acceleration provider is unavailable: ") +
             acceleration_provider_name(provider));
     }
-    if (acceleration.quality !=
-        AccelerationBuildQuality::Automatic) {
-        throw std::invalid_argument(
-            "explicit acceleration build quality is not implemented");
-    }
     if (acceleration.update_policy !=
             AccelerationUpdatePolicy::Automatic &&
         acceleration.update_policy !=

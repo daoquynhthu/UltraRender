@@ -103,6 +103,11 @@ struct AccelerationStats {
     std::uint64_t tlas_build_nanoseconds = 0;
     std::uint64_t tlas_update_nanoseconds = 0;
     std::uint64_t tlas_update_count = 0;
+    std::uint64_t blas_build_nanoseconds = 0;
+    std::uint64_t blas_primitive_reference_count = 0;
+    std::uint64_t blas_spatial_split_count = 0;
+    std::uint64_t blas_binary_node_count = 0;
+    std::uint32_t blas_node_arity = 2;
 };
 
 struct WaveOpticsConfig {

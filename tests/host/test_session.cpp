@@ -989,13 +989,21 @@ static int test_c_session_lifecycle() {
     ure_session_destroy(execution_session);
     acceleration_config.quality =
         URE_ACCELERATION_QUALITY_HIGH;
-    CHECK(
+    execution_session =
         ure_session_create_execution_config(
             &spectral_config,
             &radiometric_wave_config,
             nullptr,
             &backend_config,
-            &acceleration_config) == nullptr);
+            &acceleration_config);
+    CHECK(execution_session != nullptr);
+    ure_acceleration_stats_v3_t c_acceleration_stats_v3{};
+    CHECK(
+        ure_session_get_acceleration_stats_v3(
+            execution_session,
+            &c_acceleration_stats_v3) == 0);
+    CHECK(c_acceleration_stats_v3.blas_node_arity == 2);
+    ure_session_destroy(execution_session);
     acceleration_config.quality = 99;
     CHECK(
         ure_session_create_execution_config(

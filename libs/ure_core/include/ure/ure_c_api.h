@@ -133,6 +133,15 @@ typedef struct ure_acceleration_stats_v2_t {
     uint64_t tlas_update_count;
 } ure_acceleration_stats_v2_t;
 
+typedef struct ure_acceleration_stats_v3_t {
+    ure_acceleration_stats_v2_t hierarchy;
+    uint64_t blas_build_nanoseconds;
+    uint64_t blas_primitive_reference_count;
+    uint64_t blas_spatial_split_count;
+    uint64_t blas_binary_node_count;
+    uint32_t blas_node_arity;
+} ure_acceleration_stats_v3_t;
+
 typedef struct ure_backend_adapter_info_t {
     int kind;
     char adapter_id[64];
@@ -335,6 +344,9 @@ int ure_engine_get_acceleration_stats(
 int ure_engine_get_acceleration_stats_v2(
     const ure_engine_t* engine,
     ure_acceleration_stats_v2_t* out_stats);
+int ure_engine_get_acceleration_stats_v3(
+    const ure_engine_t* engine,
+    ure_acceleration_stats_v3_t* out_stats);
 int ure_backend_adapter_count(int kind);
 int ure_backend_get_adapter_info(int kind,
                                  int index,
@@ -400,6 +412,9 @@ int ure_session_get_acceleration_stats(
 int ure_session_get_acceleration_stats_v2(
     const ure_session_t* session,
     ure_acceleration_stats_v2_t* out_stats);
+int ure_session_get_acceleration_stats_v3(
+    const ure_session_t* session,
+    ure_acceleration_stats_v3_t* out_stats);
 void ure_session_get_framebuffer_size(const ure_session_t* session,
                                       int* out_width,
                                       int* out_height);

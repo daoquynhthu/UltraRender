@@ -108,6 +108,8 @@ static int test_gpu_hot_update_identity() {
     // Initialize GPU context
     ure::RenderConfig config;
     config.acceleration.collect_stats = true;
+    config.acceleration.quality =
+        ure::AccelerationBuildQuality::HighQuality;
     config.acceleration.update_policy =
         ure::AccelerationUpdatePolicy::Refit;
     ure::gpu::GpuContext* ctx = ure::gpu::init_gpu_renderer(
@@ -121,13 +123,17 @@ static int test_gpu_hot_update_identity() {
     CHECK(initial_stats.tlas_node_count == 1);
     CHECK(initial_stats.tlas_leaf_count == 1);
     CHECK(initial_stats.tlas_bytes > 0);
+    CHECK(initial_stats.blas_node_arity == 8);
+    CHECK(initial_stats.blas_build_nanoseconds > 0);
+    CHECK(initial_stats.blas_primitive_reference_count == 1);
     ure::gpu::GpuMesh resident_mesh_before = {};
     CHECK_CUDA(cudaMemcpy(
         &resident_mesh_before, ctx->d_meshes,
         sizeof(resident_mesh_before),
         cudaMemcpyDeviceToHost));
     auto* const resident_blas_before =
-        resident_mesh_before.bvh_nodes;
+        resident_mesh_before.wide_bvh_nodes;
+    CHECK(resident_blas_before != nullptr);
     auto* const resident_tlas_before =
         ctx->d_tlas_nodes;
     
@@ -174,7 +180,7 @@ static int test_gpu_hot_update_identity() {
         &resident_mesh_after, ctx->d_meshes,
         sizeof(resident_mesh_after),
         cudaMemcpyDeviceToHost));
-    CHECK(resident_mesh_after.bvh_nodes ==
+    CHECK(resident_mesh_after.wide_bvh_nodes ==
           resident_blas_before);
     CHECK(ctx->d_tlas_nodes == resident_tlas_before);
     ure::gpu::GpuBvhNode refitted_root = {};

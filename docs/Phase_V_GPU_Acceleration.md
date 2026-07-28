@@ -2,22 +2,24 @@
 
 ## Status
 
-V.0 through V.3 are complete and the authoritative cursor is V.4. This
+V.0 through V.4 are complete and the authoritative cursor is V.5. This
 document records the initial acceleration audit, configuration contract,
-self-compute correctness baseline and the boundaries that later Phase V work
-must preserve. It does not describe the current OptiX, Vulkan RT or DXR bridges
-as general production acceleration providers.
+self-compute correctness baseline, TLAS/BLAS split and measured quality presets.
+It does not describe the current OptiX, Vulkan RT or DXR bridges as general
+production acceleration providers.
 
 ## Current production path
 
 The complete renderer still uses the private CUDA self-compute path.
-`MeshBvhBuilder` builds one object-space binary BVH per mesh during scene
-upload. The loader uploads the reordered triangle index buffer and a 32-byte
-`GpuBvhNode` array. A separate world-space TLAS stores stable instance ordinals
-and bounds; closest-hit and production shadow traversal visit it before
-transforming candidate rays into the referenced mesh BLAS. Instance transforms
-can refit the retained TLAS topology without rebuilding or uploading static
-mesh BLAS data.
+`MeshBvhBuilder` builds one object-space BLAS per mesh during scene upload.
+Automatic and fast-build quality retain the compatible reordered median BVH2.
+Balanced builds binned object SAH and a quantized compact BVH4; high-quality
+adds budgeted spatial splits and emits quantized BVH8 while leaves preserve
+original primitive identity through an immutable reference array. A separate
+world-space binary TLAS stores stable instance ordinals and bounds; closest-hit
+and production shadow traversal visit it before transforming candidate rays
+into the referenced mesh BLAS. Instance transforms can refit the retained TLAS
+topology without rebuilding or uploading static mesh BLAS data.
 
 The Phase T `AccelerationProvider` contract is the forward boundary. Vulkan and
 D3D12 implement bounded triangle/instance fixtures through native ray query or
@@ -31,7 +33,7 @@ the new public model.
 | ID | Observed implementation | Risk | Owner |
 |---|---|---|---|
 | V0-PROD | Scene upload calls `MeshBvhBuilder` separately for each mesh and retains raw CUDA vertex/index/node allocations in the private resource registry. | Build policy, statistics and native ownership are CUDA-private and cannot define the portable API. | V.1-V.5 |
-| V0-BLD | The builder chooses the largest centroid extent, partitions at its midpoint, falls back to `nth_element` when one side is empty, emits binary preorder nodes and uses leaves of at most four triangles. | This is not SAH/SBVH/LBVH despite a legacy public header claiming “SAH or midpoint”; build quality and degeneracy behavior are unmeasured. | V.2/V.4 |
+| V0-BLD | The original builder chooses the largest centroid extent, partitions at its midpoint, falls back to `nth_element` when one side is empty, emits binary preorder nodes and uses leaves of at most four triangles. V.4 retains it as auto/fast-build and adds measured SAH/SBVH wide presets. | Closed for V.4 quality construction; async construction memory and compaction remain separate. | V.2/V.4/V.5 |
 | V0-TRV | Closest-hit and an unused duplicate any-hit helper each used `int stack[64]`, pushed both children without near/far ordering and exposed no overflow metric. The production shadow kernel actually called `world_hit`, so it shared closest traversal; the duplicate helper made the boundary easy to mis-audit or misuse. | The active traversal could write past the stack or drop work; duplicate visibility code invited future semantic divergence. | V.2 |
 | V0-INS | V.0 found a linear instance scan and a dead divergent `any_hit`; V.3 replaced the active scan with a shared checked instance TLAS and V.2 removed the dead helper. | Closed for the self-compute baseline; quality and wide-node optimization remain V.4. | V.2/V.3 |
 | V0-LIN | A mesh with no BVH nodes falls back to a full triangle scan in closest-hit and shadow paths. | Missing or invalid acceleration can silently become O(N); fallback policy has no explicit configuration, reason or telemetry. | V.2 |
@@ -39,7 +41,7 @@ the new public model.
 | V0-HOST | `BVHAccelerator` is a recursive host traversal compiled into `ure_core`; `SimpleAccelerator` and an Embree placeholder remain in installed `ure_types` headers. Repository search finds no renderer/session/CLI consumer. | Extending these classes would create the forbidden second host production traversal path and split hit semantics from GPU providers. | Remove or quarantine in V.2 |
 | V0-OPT | Identical installed `OptixAccelerator` placeholders exist in `ure_types` and `ure_core`; build/update are empty, closest-hit always misses and occlusion always returns false. No OptiX SDK target or pipeline exists. | The class name can be mistaken for a functional provider even though using it would produce incorrect visibility. | Freeze until replacement/removal in V.6 |
 | V0-API | Phase T exposes SDK-free bounded geometry, instance, ray/hit and capability contracts, but no `AccelerationConfig`, quality preset, update policy, build statistics or scratch/compaction budget. | Provider selection and operational policy cannot yet be expressed consistently through config, ABI, Session or pyure. | V.1 |
-| V0-VAL | Existing gates cover a small indexed quad, two transformed instances and native/compute hit metadata parity. | Deep stack, degenerate triangles, shadow instances, dynamic updates, large meshes, build time, trace rate and peak memory are not yet covered. | V.2-V.11 |
+| V0-VAL | V.2-V.4 now cover robust/deep traversal, transformed instances, dynamic TLAS refit and a fixed large-mesh build/trace/memory benchmark. | Native-provider parity, dense geometry and full-suite aggregation remain later work. | V.2-V.11 |
 
 ## Frozen boundaries
 
@@ -98,7 +100,7 @@ axes:
 | Field | Vocabulary | V.1 executable boundary |
 |---|---|---|
 | provider | `auto`, `self_compute`, `optix`, `vulkan_rt`, `dxr` | `auto` resolves to CUDA `self_compute`; explicit `self_compute` is accepted; native providers reject until V.6 |
-| quality | `auto`, `fast_build`, `balanced`, `high_quality` | only `auto`; presets become executable in V.4 |
+| quality | `auto`, `fast_build`, `balanced`, `high_quality` | all four execute on CUDA self-compute since V.4 |
 | update policy | `auto`, `static`, `refit`, `rebuild` | `auto` and `static`; refit/rebuild become executable with V.3/V.6/V.10 |
 | clustered geometry | enabled/disabled | disabled until V.8 |
 | statistics | enabled/disabled | executable on CUDA self-compute since V.2 |
@@ -180,3 +182,36 @@ structure, and pyure consumes that versioned surface. Multi-instance gates
 exercise a multi-level TLAS, closest/shadow transformed hit parity, stable
 instance identity, topology-preserving refit, root-bound updates and unchanged
 BLAS pointers.
+
+## V.4 measured quality presets
+
+Automatic keeps the V.2 reference path unchanged. Fast-build names the same
+midpoint/median BVH2 construction explicitly. Balanced performs 16-bin object
+SAH construction and collapses the binary build topology into a 72-byte BVH4.
+High-quality evaluates object and spatial SAH candidates, clips reference
+bounds at selected planes, limits duplicated primitive references to 50% of the
+source primitive count and collapses the result into a 116-byte BVH8. Wide
+leaves carry stable original triangle ordinals, so spatial duplication does not
+alter SceneIR geometry, material, UV, normal or light identity.
+
+Child bounds use conservative 8-bit quantization relative to each wide node.
+Host construction verifies the conservative traversal-stack bound before
+upload. Device traversal checks node, child and primitive-reference ranges,
+uses the same closest/shadow hit implementation as BVH2 and reports typed stack
+or invalid-data failures. The default automatic layout and reference render
+remain unchanged.
+
+The fixed 96-by-96 wavy grid gate contains 18,432 triangles and 4,096
+deterministic rays. It records host build milliseconds, CUDA traversal
+milliseconds, resident node/reference bytes, node visits and triangle tests for
+fast BVH2, balanced BVH4 and high-quality BVH8, then compares every hit distance
+against the BVH2 reference. A separate crossed-sliver fixture requires an
+actual spatial split and duplicated reference. The invariant memory results are
+393,184 bytes for BVH2, 305,136 bytes for BVH4 and 368,948 bytes for BVH8;
+wide traversal reduces node visits and triangle tests on the fixed large mesh.
+Timing is reported rather than hidden or converted into a universal speed
+claim; later occupancy and traversal tuning belongs to Phase K.
+
+`AccelerationStats` now includes BLAS build time, primitive-reference count,
+spatial-split count, pre-collapse binary-node count and selected arity. C ABI
+v3 extends the frozen v2 hierarchy layout, and pyure consumes v3.

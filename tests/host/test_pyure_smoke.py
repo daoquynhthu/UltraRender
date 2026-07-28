@@ -51,14 +51,11 @@ def main() -> int:
         assert acceleration_stats.tlas_node_count == 0
         assert acceleration_stats.tlas_bytes == 0
         assert acceleration_stats.stack_overflow_count == 0
-    try:
-        pyure.create_session(acceleration_quality="high_quality")
-    except RuntimeError:
-        pass
-    else:
-        raise AssertionError(
-            "unimplemented acceleration quality must fail"
-        )
+    high_quality_session = pyure.create_session(
+        acceleration_quality="high_quality"
+    )
+    assert high_quality_session.acceleration_stats().blas_node_arity == 2
+    high_quality_session.close()
     try:
         pyure.create_session(acceleration_provider="invalid")
     except ValueError:

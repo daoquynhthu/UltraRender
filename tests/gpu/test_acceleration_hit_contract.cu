@@ -188,6 +188,33 @@ __global__ void traversal_failure_kernel(
         true));
 }
 
+__global__ void wide_bvh_benchmark_kernel(
+    GpuMesh mesh,
+    const GpuRay* rays,
+    int ray_count,
+    ContractHit* hits,
+    GpuAccelerationTelemetry* telemetry,
+    bool collect_stats) {
+    const int index =
+        static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+    if (index >= ray_count) return;
+    ContractHit result{};
+    result.t = -1.0f;
+    result.primitive_index = -1;
+    const BvhTraversalResult traversal = hit_bvh(
+        mesh, rays[index],
+        rays[index].t_min, rays[index].t_max,
+        result.t, result.geometric_normal,
+        result.shading_normal, result.uv,
+        result.primitive_index, telemetry,
+        false, collect_stats);
+    result.hit_type =
+        traversal == BvhTraversalResult::Hit ? 1 :
+        traversal == BvhTraversalResult::Miss ? 0 :
+        -1;
+    hits[index] = result;
+}
+
 }
 
 namespace {
@@ -525,6 +552,418 @@ int main() {
                 telemetry.stack_overflow_count == 0 &&
                 telemetry.invalid_acceleration_count == 0,
             "CUDA acceleration telemetry mismatch");
+
+        constexpr int grid_size = 96;
+        std::vector<float> large_vertices;
+        large_vertices.reserve(
+            static_cast<std::size_t>(
+                (grid_size + 1) * (grid_size + 1) * 3));
+        for (int y = 0; y <= grid_size; ++y) {
+            for (int x = 0; x <= grid_size; ++x) {
+                const float z =
+                    0.15f * std::sin(
+                        static_cast<float>(x) * 0.17f) *
+                    std::cos(
+                        static_cast<float>(y) * 0.13f);
+                large_vertices.push_back(
+                    static_cast<float>(x));
+                large_vertices.push_back(
+                    static_cast<float>(y));
+                large_vertices.push_back(z);
+            }
+        }
+        std::vector<int> large_indices;
+        large_indices.reserve(
+            static_cast<std::size_t>(
+                grid_size * grid_size * 6));
+        for (int y = 0; y < grid_size; ++y) {
+            for (int x = 0; x < grid_size; ++x) {
+                const int row = grid_size + 1;
+                const int v00 = y * row + x;
+                const int v10 = v00 + 1;
+                const int v01 = v00 + row;
+                const int v11 = v01 + 1;
+                large_indices.insert(
+                    large_indices.end(),
+                    {v00, v10, v11, v00, v11, v01});
+            }
+        }
+        std::vector<int> fast_indices = large_indices;
+        std::vector<int> balanced_indices = large_indices;
+        std::vector<int> high_quality_indices = large_indices;
+        std::vector<GpuBvhNode> fast_binary;
+        std::vector<GpuBvhNode> unused_binary;
+        std::vector<GpuBvh4Node> unused_bvh4;
+        std::vector<GpuBvh4Node> balanced_bvh4;
+        std::vector<GpuWideBvhNode> unused_wide;
+        std::vector<GpuWideBvhNode> high_quality_wide;
+        std::vector<int> unused_references;
+        std::vector<int> balanced_references;
+        std::vector<int> high_quality_references;
+        const auto fast_stats = MeshBvhBuilder::build(
+            large_vertices, fast_indices,
+            ure::AccelerationBuildQuality::FastBuild,
+            fast_binary, unused_bvh4,
+            unused_wide, unused_references);
+        const auto balanced_stats = MeshBvhBuilder::build(
+            large_vertices, balanced_indices,
+            ure::AccelerationBuildQuality::Balanced,
+            unused_binary, balanced_bvh4, unused_wide,
+            balanced_references);
+        const auto high_quality_stats = MeshBvhBuilder::build(
+            large_vertices, high_quality_indices,
+            ure::AccelerationBuildQuality::HighQuality,
+            unused_binary, unused_bvh4, high_quality_wide,
+            high_quality_references);
+        const std::uint64_t fast_bytes =
+            fast_binary.size() * sizeof(GpuBvhNode);
+        const std::uint64_t balanced_bytes =
+            balanced_bvh4.size() * sizeof(GpuBvh4Node) +
+            balanced_references.size() * sizeof(int);
+        const std::uint64_t high_quality_bytes =
+            high_quality_wide.size() * sizeof(GpuWideBvhNode) +
+            high_quality_references.size() * sizeof(int);
+        require(
+            fast_stats.layout == GpuBvhLayout::Binary &&
+                balanced_stats.layout == GpuBvhLayout::Wide4 &&
+                high_quality_stats.layout ==
+                    GpuBvhLayout::Wide8,
+            "acceleration quality did not select the required layout");
+        std::printf(
+            "V.4 layout bytes: node_size=%zu/%zu "
+            "fast=%llu balanced=%llu high=%llu "
+            "nodes=%zu/%zu/%zu refs=%zu/%zu\n",
+            sizeof(GpuBvh4Node), sizeof(GpuWideBvhNode),
+            static_cast<unsigned long long>(fast_bytes),
+            static_cast<unsigned long long>(balanced_bytes),
+            static_cast<unsigned long long>(high_quality_bytes),
+            fast_binary.size(), balanced_bvh4.size(),
+            high_quality_wide.size(),
+            balanced_references.size(),
+            high_quality_references.size());
+        require(
+            balanced_bytes < fast_bytes &&
+                high_quality_bytes < fast_bytes &&
+                balanced_stats.build_nanoseconds > 0 &&
+                high_quality_stats.build_nanoseconds > 0,
+            "wide BVH build did not produce compact measured output");
+        std::vector<float> spatial_vertices;
+        std::vector<int> spatial_indices;
+        for (int index = 0; index < 64; ++index) {
+            const float extent =
+                1.0f + static_cast<float>(index);
+            const float thickness = 0.01f;
+            const int first =
+                static_cast<int>(spatial_vertices.size() / 3);
+            spatial_vertices.insert(
+                spatial_vertices.end(),
+                {-extent, -thickness, 0.0f,
+                 extent, -thickness, 0.0f,
+                 0.0f, 2.0f * thickness, 0.0f});
+            spatial_indices.insert(
+                spatial_indices.end(),
+                {first, first + 1, first + 2});
+            const int second =
+                static_cast<int>(spatial_vertices.size() / 3);
+            spatial_vertices.insert(
+                spatial_vertices.end(),
+                {-thickness, -extent, 0.0f,
+                 -thickness, extent, 0.0f,
+                 2.0f * thickness, 0.0f, 0.0f});
+            spatial_indices.insert(
+                spatial_indices.end(),
+                {second, second + 1, second + 2});
+        }
+        std::vector<GpuWideBvhNode> spatial_wide;
+        std::vector<int> spatial_references;
+        const auto spatial_stats = MeshBvhBuilder::build(
+            spatial_vertices, spatial_indices,
+            ure::AccelerationBuildQuality::HighQuality,
+            unused_binary, unused_bvh4,
+            spatial_wide, spatial_references);
+        require(
+            spatial_stats.spatial_split_count > 0 &&
+                spatial_stats.primitive_reference_count >
+                    spatial_stats.triangle_count,
+            "high-quality SBVH did not retain spatial references");
+
+        const std::size_t large_vertex_count =
+            large_vertices.size() / 3;
+        DeviceArray<GpuVec3> device_large_vertices(
+            large_vertex_count);
+        device_large_vertices.upload(
+            reinterpret_cast<const GpuVec3*>(
+                large_vertices.data()),
+            large_vertex_count);
+        DeviceArray<int> device_fast_indices(
+            fast_indices.size());
+        DeviceArray<int> device_balanced_indices(
+            balanced_indices.size());
+        DeviceArray<int> device_high_quality_indices(
+            high_quality_indices.size());
+        device_fast_indices.upload(
+            fast_indices.data(), fast_indices.size());
+        device_balanced_indices.upload(
+            balanced_indices.data(), balanced_indices.size());
+        device_high_quality_indices.upload(
+            high_quality_indices.data(),
+            high_quality_indices.size());
+        DeviceArray<GpuBvhNode> device_fast_binary(
+            fast_binary.size());
+        DeviceArray<GpuBvh4Node> device_balanced_bvh4(
+            balanced_bvh4.size());
+        DeviceArray<GpuWideBvhNode> device_high_quality_wide(
+            high_quality_wide.size());
+        DeviceArray<int> device_balanced_references(
+            balanced_references.size());
+        DeviceArray<int> device_high_quality_references(
+            high_quality_references.size());
+        device_fast_binary.upload(
+            fast_binary.data(), fast_binary.size());
+        device_balanced_bvh4.upload(
+            balanced_bvh4.data(), balanced_bvh4.size());
+        device_high_quality_wide.upload(
+            high_quality_wide.data(),
+            high_quality_wide.size());
+        device_balanced_references.upload(
+            balanced_references.data(),
+            balanced_references.size());
+        device_high_quality_references.upload(
+            high_quality_references.data(),
+            high_quality_references.size());
+
+        GpuMesh fast_mesh{};
+        fast_mesh.vertices = device_large_vertices.get();
+        fast_mesh.indices = device_fast_indices.get();
+        fast_mesh.triangle_count =
+            static_cast<int>(fast_indices.size() / 3);
+        fast_mesh.bvh_nodes = device_fast_binary.get();
+        fast_mesh.bvh_node_count =
+            static_cast<int>(fast_binary.size());
+        fast_mesh.bvh_layout = GpuBvhLayout::Binary;
+        GpuMesh balanced_mesh{};
+        balanced_mesh.vertices = device_large_vertices.get();
+        balanced_mesh.indices = device_balanced_indices.get();
+        balanced_mesh.triangle_count =
+            static_cast<int>(balanced_indices.size() / 3);
+        balanced_mesh.bvh4_nodes =
+            device_balanced_bvh4.get();
+        balanced_mesh.bvh4_node_count =
+            static_cast<int>(balanced_bvh4.size());
+        balanced_mesh.primitive_references =
+            device_balanced_references.get();
+        balanced_mesh.primitive_reference_count =
+            static_cast<int>(balanced_references.size());
+        balanced_mesh.bvh_layout = GpuBvhLayout::Wide4;
+        GpuMesh high_quality_mesh{};
+        high_quality_mesh.vertices =
+            device_large_vertices.get();
+        high_quality_mesh.indices =
+            device_high_quality_indices.get();
+        high_quality_mesh.triangle_count =
+            static_cast<int>(high_quality_indices.size() / 3);
+        high_quality_mesh.wide_bvh_nodes =
+            device_high_quality_wide.get();
+        high_quality_mesh.wide_bvh_node_count =
+            static_cast<int>(high_quality_wide.size());
+        high_quality_mesh.primitive_references =
+            device_high_quality_references.get();
+        high_quality_mesh.primitive_reference_count =
+            static_cast<int>(high_quality_references.size());
+        high_quality_mesh.bvh_layout = GpuBvhLayout::Wide8;
+
+        constexpr int benchmark_ray_count = 4096;
+        std::vector<GpuRay> benchmark_rays;
+        benchmark_rays.reserve(benchmark_ray_count);
+        for (int index = 0;
+             index < benchmark_ray_count;
+             ++index) {
+            const int x = index % 64;
+            const int y = index / 64;
+            GpuRay ray;
+            ray.origin = {
+                0.37f +
+                    static_cast<float>(
+                        x * (grid_size - 1)) / 63.0f,
+                0.43f +
+                    static_cast<float>(
+                        y * (grid_size - 1)) / 63.0f,
+                4.0f};
+            ray.direction = {0.0f, 0.0f, -1.0f};
+            ray.t_min = 0.001f;
+            ray.t_max = 10.0f;
+            benchmark_rays.push_back(ray);
+        }
+        DeviceArray<GpuRay> device_benchmark_rays(
+            benchmark_rays.size());
+        device_benchmark_rays.upload(
+            benchmark_rays.data(), benchmark_rays.size());
+        DeviceArray<ContractHit> device_fast_hits(
+            benchmark_rays.size());
+        DeviceArray<ContractHit> device_balanced_hits(
+            benchmark_rays.size());
+        DeviceArray<ContractHit> device_high_quality_hits(
+            benchmark_rays.size());
+        std::array<GpuAccelerationTelemetry, 3>
+            benchmark_telemetry{};
+        std::array<DeviceArray<GpuAccelerationTelemetry>, 3>
+            device_benchmark_telemetry = {
+                DeviceArray<GpuAccelerationTelemetry>(1),
+                DeviceArray<GpuAccelerationTelemetry>(1),
+                DeviceArray<GpuAccelerationTelemetry>(1)};
+        for (std::size_t index = 0;
+             index < benchmark_telemetry.size();
+             ++index) {
+            device_benchmark_telemetry[index].upload(
+                &benchmark_telemetry[index], 1);
+        }
+        const int blocks =
+            (benchmark_ray_count + 255) / 256;
+        const auto measure_traversal =
+            [&](GpuMesh benchmark_mesh,
+                ContractHit* output,
+                GpuAccelerationTelemetry* output_telemetry) {
+                constexpr int repetitions = 32;
+                cudaEvent_t start;
+                cudaEvent_t finish;
+                require(
+                    cudaEventCreate(&start) == cudaSuccess &&
+                        cudaEventCreate(&finish) == cudaSuccess,
+                    "wide BVH benchmark event creation failed");
+                require(
+                    cudaEventRecord(start) == cudaSuccess,
+                    "wide BVH benchmark start failed");
+                for (int repetition = 0;
+                     repetition < repetitions;
+                     ++repetition) {
+                    wide_bvh_benchmark_kernel<<<blocks, 256>>>(
+                        benchmark_mesh,
+                        device_benchmark_rays.get(),
+                        benchmark_ray_count, output,
+                        output_telemetry, false);
+                }
+                require(
+                    cudaEventRecord(finish) == cudaSuccess &&
+                        cudaEventSynchronize(finish) ==
+                            cudaSuccess,
+                    "wide BVH benchmark traversal failed");
+                float milliseconds = 0.0f;
+                require(
+                    cudaEventElapsedTime(
+                        &milliseconds, start, finish) ==
+                        cudaSuccess,
+                    "wide BVH benchmark timing failed");
+                cudaEventDestroy(start);
+                cudaEventDestroy(finish);
+                return milliseconds /
+                    static_cast<float>(repetitions);
+            };
+        const float fast_trace_ms = measure_traversal(
+            fast_mesh, device_fast_hits.get(),
+            device_benchmark_telemetry[0].get());
+        const float balanced_trace_ms = measure_traversal(
+            balanced_mesh, device_balanced_hits.get(),
+            device_benchmark_telemetry[1].get());
+        const float high_quality_trace_ms = measure_traversal(
+            high_quality_mesh, device_high_quality_hits.get(),
+            device_benchmark_telemetry[2].get());
+        wide_bvh_benchmark_kernel<<<blocks, 256>>>(
+            fast_mesh, device_benchmark_rays.get(),
+            benchmark_ray_count, device_fast_hits.get(),
+            device_benchmark_telemetry[0].get(), true);
+        wide_bvh_benchmark_kernel<<<blocks, 256>>>(
+            balanced_mesh, device_benchmark_rays.get(),
+            benchmark_ray_count, device_balanced_hits.get(),
+            device_benchmark_telemetry[1].get(), true);
+        wide_bvh_benchmark_kernel<<<blocks, 256>>>(
+            high_quality_mesh, device_benchmark_rays.get(),
+            benchmark_ray_count, device_high_quality_hits.get(),
+            device_benchmark_telemetry[2].get(), true);
+        require(
+            cudaDeviceSynchronize() == cudaSuccess,
+            "wide BVH telemetry traversal failed");
+        std::vector<ContractHit> fast_hits(
+            benchmark_rays.size());
+        std::vector<ContractHit> balanced_hits(
+            benchmark_rays.size());
+        std::vector<ContractHit> high_quality_hits(
+            benchmark_rays.size());
+        device_fast_hits.download(
+            fast_hits.data(), fast_hits.size());
+        device_balanced_hits.download(
+            balanced_hits.data(), balanced_hits.size());
+        device_high_quality_hits.download(
+            high_quality_hits.data(), high_quality_hits.size());
+        for (std::size_t index = 0;
+             index < fast_hits.size();
+             ++index) {
+            require(
+                fast_hits[index].hit_type == 1 &&
+                    balanced_hits[index].hit_type == 1 &&
+                    high_quality_hits[index].hit_type == 1 &&
+                    close(
+                        fast_hits[index].t,
+                        balanced_hits[index].t) &&
+                    close(
+                        fast_hits[index].t,
+                        high_quality_hits[index].t),
+                "wide BVH result diverged from reference traversal");
+        }
+        for (std::size_t index = 0;
+             index < benchmark_telemetry.size();
+             ++index) {
+            device_benchmark_telemetry[index].download(
+                &benchmark_telemetry[index], 1);
+            require(
+                benchmark_telemetry[index]
+                        .stack_overflow_count == 0 &&
+                    benchmark_telemetry[index]
+                        .invalid_acceleration_count == 0,
+                "wide BVH benchmark reported traversal failure");
+        }
+        require(
+            benchmark_telemetry[1].closest_node_visits <
+                benchmark_telemetry[0].closest_node_visits &&
+                benchmark_telemetry[2].closest_node_visits <
+                    benchmark_telemetry[0]
+                        .closest_node_visits &&
+                std::isfinite(fast_trace_ms) &&
+                std::isfinite(balanced_trace_ms) &&
+                std::isfinite(high_quality_trace_ms) &&
+                fast_trace_ms > 0.0f &&
+                balanced_trace_ms > 0.0f &&
+                high_quality_trace_ms > 0.0f,
+            "wide BVH did not reduce large-mesh traversal visits");
+        std::printf(
+            "V.4 large mesh: triangles=%llu "
+            "build_ms=[%.3f,%.3f,%.3f] "
+            "trace_ms=[%.3f,%.3f,%.3f] "
+            "node_bytes=[%llu,%llu,%llu] "
+            "node_visits=[%llu,%llu,%llu] "
+            "triangle_tests=[%llu,%llu,%llu] "
+            "sbvh_stress_splits=%llu\n",
+            static_cast<unsigned long long>(
+                fast_stats.triangle_count),
+            static_cast<double>(
+                fast_stats.build_nanoseconds) / 1.0e6,
+            static_cast<double>(
+                balanced_stats.build_nanoseconds) / 1.0e6,
+            static_cast<double>(
+                high_quality_stats.build_nanoseconds) / 1.0e6,
+            static_cast<double>(fast_trace_ms),
+            static_cast<double>(balanced_trace_ms),
+            static_cast<double>(high_quality_trace_ms),
+            static_cast<unsigned long long>(fast_bytes),
+            static_cast<unsigned long long>(balanced_bytes),
+            static_cast<unsigned long long>(high_quality_bytes),
+            benchmark_telemetry[0].closest_node_visits,
+            benchmark_telemetry[1].closest_node_visits,
+            benchmark_telemetry[2].closest_node_visits,
+            benchmark_telemetry[0].closest_triangle_tests,
+            benchmark_telemetry[1].closest_triangle_tests,
+            benchmark_telemetry[2].closest_triangle_tests,
+            static_cast<unsigned long long>(
+                spatial_stats.spatial_split_count));
 
         DeviceArray<int> robust_results(4);
         robust_intersection_kernel<<<1, 1>>>(

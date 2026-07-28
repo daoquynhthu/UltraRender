@@ -495,6 +495,7 @@ struct GpuSphere {
 };
 
 inline constexpr int kBvhTraversalStackCapacity = 64;
+inline constexpr int kWideBvhTraversalStackCapacity = 64;
 
 // Compact BVH Node for GPU (32 bytes)
 struct GpuBvhNode {
@@ -507,6 +508,35 @@ struct GpuBvhNode {
     // If 0, Internal Node. If > 0, Leaf Node with this many primitives.
     int primitive_count;
 };
+
+inline constexpr int kWideBvhMaxChildren = 8;
+
+enum class GpuBvhLayout : int {
+    Binary = 0,
+    Wide4 = 1,
+    Wide8 = 2
+};
+
+struct GpuWideBvhNode {
+    GpuVec3 min_pt;
+    GpuVec3 max_pt;
+    int child_indices[kWideBvhMaxChildren];
+    unsigned char child_primitive_counts[kWideBvhMaxChildren];
+    unsigned char child_bounds[kWideBvhMaxChildren][6];
+    int child_count;
+};
+
+struct GpuBvh4Node {
+    GpuVec3 min_pt;
+    GpuVec3 max_pt;
+    int child_indices[4];
+    unsigned char child_primitive_counts[4];
+    unsigned char child_bounds[4][6];
+    int child_count;
+};
+
+static_assert(sizeof(GpuBvh4Node) == 72);
+static_assert(sizeof(GpuWideBvhNode) == 116);
 
 struct GpuMesh {
     GpuVec3* vertices;
@@ -524,6 +554,13 @@ struct GpuMesh {
     // BVH Data (Object Space)
     GpuBvhNode* bvh_nodes;
     int bvh_node_count;
+    GpuBvh4Node* bvh4_nodes;
+    int bvh4_node_count;
+    GpuWideBvhNode* wide_bvh_nodes;
+    int wide_bvh_node_count;
+    int* primitive_references;
+    int primitive_reference_count;
+    GpuBvhLayout bvh_layout;
 };
 
 struct GpuAccelerationTelemetry {
