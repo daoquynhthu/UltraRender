@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-28 (Phase T closure and V.0 cursor)
+最后更新: 2026-07-28 (V.0 closure and V.1 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -57,7 +57,7 @@ R-P4 specular manifold + BDPT/VCM [done]
 Phase T complete [done]
    │
    ▼
-当前游标: V.0
+当前游标: V.1
    │
    ▼
 Phase V complete
@@ -80,7 +80,7 @@ Phase X complete
 - **Phase Q 已闭环**: URE native schema、serialization、programmatic graph、feature declaration、tooling/adapter、compiled cache/farm 与 validation suite 已冻结为后续阶段的权威 authoring contract。
 - **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
 - **Phase T 已闭环**: T.0-T.11 已冻结 coupling、backend identity、共享 Slang 工具链、SDK-free runtime/resource/execution/acceleration/scheduling contract、CUDA production lowering、Vulkan compute/acceleration foundation、Windows optional D3D12/DXR backend、heterogeneous sample-shard negotiation 和 cross-backend validation/performance suite。
-- **当前唯一施工项 — Phase V**: 当前游标为 V.0 acceleration audit；V 在 Phase T acceleration-provider contract 上建设统一 GPU geometry acceleration stack。Phase W 现有 reference/oracle 成果保留，新增 W production work 继续冻结。
+- **当前唯一施工项 — Phase V**: V.0 acceleration audit 已冻结现有 mesh-local BVH、linear fallback、fixed stack、legacy host/OptiX stub 与无 TLAS/BLAS 风险；当前游标为 V.1 `AccelerationConfig` API。Phase W 现有 reference/oracle 成果保留，新增 W production work 继续冻结。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
 - 文档中的“进行中”表示已有未闭环成果，不等于允许并行施工。发生冲突时，以本节当前游标为准。
@@ -2076,7 +2076,7 @@ T.11 closure（2026-07-28）：新增 `run_phase_t_validation_suite.ps1` 与 `ur
 
 ### Phase V — GPU 几何加速结构 / BVH / OptiX / Clustered Geometry
 
-**状态**: 进行中，当前游标 V.0。
+**状态**: 进行中，V.0 已完成，当前游标 V.1。
 
 **目标**: 将当前 mesh-local BVH 和线性 fallback traversal 升级为适配 UltraRender 光谱、偏振、材质图、动态场景和未来波动光学的 GPU 几何加速栈。Phase V 的核心不是复制外部引擎的可见性系统，而是在 Phase T 的 acceleration-provider contract 上建立自己的 `AccelerationScene`：同一份 SceneIR/resource graph 能选择自研 compute BVH、OptiX、Vulkan RT 或 DXR provider，并在能力不满足时 fail-loud。
 
@@ -2119,6 +2119,8 @@ T.11 closure（2026-07-28）：新增 `run_phase_t_validation_suite.ps1` 与 `ur
 | V.9 | Physical error LoD：按 ray differential/path class/material/displacement/spectral resource 选择 cluster LoD，避免 shadow/reflection/caustic 使用错误低精代理 | shadow/reflection-heavy benchmark 证明 visibility 不被预览 LoD 静默破坏 |
 | V.10 | Dynamic/deforming geometry：按 rigid/deforming/topology-change 分类执行 TLAS refit、BLAS refit/rebuild 或 recluster；与 SceneDiff 资源变更对齐 | dynamic benchmark 输出 update ms 与 correctness gate；unsupported topology path fail-loud |
 | V.11 | Phase V validation suite：整合 build time、trace throughput、VRAM、backend parity、dynamic update、dense geometry 和 distributed shard metadata | `run_phase_v_validation_suite.ps1` 本地可跑；farm 长跑入口和 JSON schema 稳定 |
+
+V.0 closure（2026-07-28）：新增 `docs/Phase_V_GPU_Acceleration.md`，以十项审计台账冻结当前生产路径和迁移 owner：CUDA scene upload 为每个 mesh 构建 midpoint/median fallback binary BVH、4-triangle leaf 和 32-byte preorder node；closest/shadow traversal 各自使用无 near/far ordering 的固定 `int stack[64]`，现有 push guard 在只剩一个 slot 时仍可能越界且深树会静默丢 work；closest-hit 线性扫描 instances 后进入 object-space mesh BVH，没有 TLAS，独立 shadow `any_hit` 不遍历 instance list；缺少 BVH 时会静默 O(N) triangle scan；transform hot update 没有 top-level refit。递归 host `BVHAccelerator`、`SimpleAccelerator`、Embree placeholder 和两份 installed `OptixAccelerator` miss/no-occlusion stub 均无 production consumer，并由 `check_phase_v_static.ps1` 的 consumer allowlist 与 file hash 冻结，禁止扩展为第二套 host traversal 或误称 production。Phase T SDK-free provider 是唯一前向边界；V.1-V.11 分别接管 config/stats、correctness、TLAS/BLAS、quality/wide build、async/compaction、native providers、parity、cluster/LoD/dynamic 和 validation。文档一致性、Phase T/V 静态审计和 Release 48/48 CTest 通过；权威游标进入 V.1。
 
 #### 完成标准
 

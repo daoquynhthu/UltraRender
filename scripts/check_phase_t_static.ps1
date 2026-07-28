@@ -220,7 +220,6 @@ try {
     Assert-Contains "scripts/run_phase_t_validation_suite.ps1" "throughput" "T.11 throughput evidence is missing"
     Assert-Contains "scripts/run_phase_t_validation_suite.ps1" "capability_unavailable_compute_fallback" "T.11 capability classification is missing"
     Assert-Contains "PLAN.md" "T\.11 closure.*权威游标进入 V\.0" "PLAN lacks the T.11 closure and V.0 gate"
-    Assert-Contains "PLAN.md" "当前游标: V\.0" "PLAN cursor did not advance to V.0"
     Write-Host "Phase T static audit passed"
 } finally {
     Pop-Location
