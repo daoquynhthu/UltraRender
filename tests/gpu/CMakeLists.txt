@@ -93,6 +93,14 @@ if(CMAKE_CUDA_COMPILER)
     target_link_libraries(gpu_test_cuda_runtime PRIVATE
         ure_core CUDA::cudart CUDA::cuda_driver
     )
+    if(TARGET ure_optix_v7_shader)
+        add_dependencies(
+            gpu_test_cuda_runtime
+            ure_optix_v7_shader)
+        target_compile_definitions(
+            gpu_test_cuda_runtime PRIVATE
+            "UR_OPTIX_TRACE_MODULE_PATH=\"${UR_OPTIX_TRACE_MODULE}\"")
+    endif()
 
     add_executable(gpu_test_acceleration_contract
         test_acceleration_hit_contract.cu

@@ -146,8 +146,24 @@
             }
         },
         {
-            "name": "indices",
+            "name": "tangents",
             "binding": {"kind": "descriptorTableSlot", "index": 5},
+            "type": {
+                "kind": "resource",
+                "baseShape": "structuredBuffer",
+                "resultType": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                        "kind": "scalar",
+                        "scalarType": "float32"
+                    }
+                }
+            }
+        },
+        {
+            "name": "indices",
+            "binding": {"kind": "descriptorTableSlot", "index": 6},
             "type": {
                 "kind": "resource",
                 "baseShape": "structuredBuffer",
@@ -159,7 +175,7 @@
         },
         {
             "name": "instances",
-            "binding": {"kind": "descriptorTableSlot", "index": 6},
+            "binding": {"kind": "descriptorTableSlot", "index": 7},
             "type": {
                 "kind": "resource",
                 "baseShape": "structuredBuffer",
@@ -317,7 +333,7 @@
         },
         {
             "name": "rays",
-            "binding": {"kind": "descriptorTableSlot", "index": 7},
+            "binding": {"kind": "descriptorTableSlot", "index": 8},
             "type": {
                 "kind": "resource",
                 "baseShape": "structuredBuffer",
@@ -367,7 +383,7 @@
         },
         {
             "name": "hits",
-            "binding": {"kind": "descriptorTableSlot", "index": 8},
+            "binding": {"kind": "descriptorTableSlot", "index": 9},
             "type": {
                 "kind": "resource",
                 "baseShape": "structuredBuffer",
@@ -413,7 +429,7 @@
                             "binding": {"kind": "uniform", "offset": 32, "size": 16, "elementStride": 4}
                         },
                         {
-                            "name": "uvBarycentrics",
+                            "name": "tangentHandedness",
                             "type": {
                                 "kind": "vector",
                                 "elementCount": 4,
@@ -425,6 +441,18 @@
                             "binding": {"kind": "uniform", "offset": 48, "size": 16, "elementStride": 4}
                         },
                         {
+                            "name": "uvBarycentrics",
+                            "type": {
+                                "kind": "vector",
+                                "elementCount": 4,
+                                "elementType": {
+                                    "kind": "scalar",
+                                    "scalarType": "float32"
+                                }
+                            },
+                            "binding": {"kind": "uniform", "offset": 64, "size": 16, "elementStride": 4}
+                        },
+                        {
                             "name": "ids",
                             "type": {
                                 "kind": "vector",
@@ -434,7 +462,7 @@
                                     "scalarType": "uint32"
                                 }
                             },
-                            "binding": {"kind": "uniform", "offset": 64, "size": 16, "elementStride": 4}
+                            "binding": {"kind": "uniform", "offset": 80, "size": 16, "elementStride": 4}
                         }
                     ]
                 }
@@ -442,7 +470,7 @@
         },
         {
             "name": "framebuffer",
-            "binding": {"kind": "descriptorTableSlot", "index": 9},
+            "binding": {"kind": "descriptorTableSlot", "index": 10},
             "type": {
                 "kind": "resource",
                 "baseShape": "structuredBuffer",
@@ -499,24 +527,28 @@
                     "binding": {"kind": "descriptorTableSlot", "index": 4, "used": 1}
                 },
                 {
-                    "name": "indices",
+                    "name": "tangents",
                     "binding": {"kind": "descriptorTableSlot", "index": 5, "used": 1}
                 },
                 {
-                    "name": "instances",
+                    "name": "indices",
                     "binding": {"kind": "descriptorTableSlot", "index": 6, "used": 1}
                 },
                 {
-                    "name": "rays",
+                    "name": "instances",
                     "binding": {"kind": "descriptorTableSlot", "index": 7, "used": 1}
                 },
                 {
-                    "name": "hits",
+                    "name": "rays",
                     "binding": {"kind": "descriptorTableSlot", "index": 8, "used": 1}
                 },
                 {
-                    "name": "framebuffer",
+                    "name": "hits",
                     "binding": {"kind": "descriptorTableSlot", "index": 9, "used": 1}
+                },
+                {
+                    "name": "framebuffer",
+                    "binding": {"kind": "descriptorTableSlot", "index": 10, "used": 1}
                 }
             ]
         }

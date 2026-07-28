@@ -19,41 +19,21 @@
 #include <vector>
 
 #include "ure/d3d12_runtime.hpp"
+#include "../shared/acceleration_parity_fixture.hpp"
 
 namespace rt = ure::runtime;
 
 namespace {
 
-struct Float4 {
-    float x;
-    float y;
-    float z;
-    float w;
-};
-
-struct InstanceData {
-    std::array<Float4, 3> object_to_world;
-    std::array<Float4, 3> world_to_object;
-    std::array<Float4, 3> normal_transform;
-    Float4 bounds_min;
-    Float4 bounds_max;
-    std::array<std::uint32_t, 4> ids;
-};
-
-struct Fixture {
-    std::array<Float4, 4> vertices;
-    std::array<Float4, 4> normals;
-    std::array<Float4, 4> texcoords;
-    std::array<std::uint32_t, 6> indices;
-    std::array<InstanceData, 2> instances;
-    std::array<rt::AccelerationInstanceDesc, 2>
-        acceleration_instances;
-    std::array<rt::AccelerationRay, 4> rays;
-};
+using Float4 = ure::test::Float4;
+using InstanceData =
+    ure::test::AccelerationInstanceData;
+using Fixture =
+    ure::test::AccelerationParityFixture;
 
 struct AccelerationResult {
-    std::array<rt::AccelerationHit, 4> hits;
-    std::array<Float4, 4> framebuffer;
+    std::array<rt::AccelerationHit, 5> hits;
+    std::array<Float4, 5> framebuffer;
 };
 
 void require(bool condition, const char* message) {
@@ -124,87 +104,6 @@ rt::ModuleHandle create_module(
         "Slang 2026.14 DXIL SM 6.6";
     desc.label = entry;
     return device.create_module(desc, code);
-}
-
-Fixture make_fixture() {
-    Fixture value;
-    value.vertices = {{
-        {-1.0f, -1.0f, 0.0f, 1.0f},
-        {1.0f, -1.0f, 0.0f, 1.0f},
-        {1.0f, 1.0f, 0.0f, 1.0f},
-        {-1.0f, 1.0f, 0.0f, 1.0f}}};
-    value.normals.fill({0.0f, 0.0f, 1.0f, 0.0f});
-    value.texcoords = {{
-        {0.0f, 0.0f, 0.0f, 0.0f},
-        {1.0f, 0.0f, 0.0f, 0.0f},
-        {1.0f, 1.0f, 0.0f, 0.0f},
-        {0.0f, 1.0f, 0.0f, 0.0f}}};
-    value.indices = {0, 1, 2, 0, 2, 3};
-    value.instances[0] = {
-        {{
-            {1.5f, 0.0f, 0.0f, -2.0f},
-            {0.0f, 0.75f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 0.0f}}},
-        {{
-            {2.0f / 3.0f, 0.0f, 0.0f, 4.0f / 3.0f},
-            {0.0f, 4.0f / 3.0f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 0.0f}}},
-        {{
-            {2.0f / 3.0f, 0.0f, 0.0f, 0.0f},
-            {0.0f, 4.0f / 3.0f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 0.0f}}},
-        {-3.5f, -0.75f, -0.001f, 0.0f},
-        {-0.5f, 0.75f, 0.001f, 0.0f},
-        {0, 5, 1, 0}};
-    value.instances[1] = {
-        {{
-            {0.75f, 0.0f, 0.0f, 2.0f},
-            {0.0f, 1.5f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 0.0f}}},
-        {{
-            {4.0f / 3.0f, 0.0f, 0.0f, -8.0f / 3.0f},
-            {0.0f, 2.0f / 3.0f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 0.0f}}},
-        {{
-            {4.0f / 3.0f, 0.0f, 0.0f, 0.0f},
-            {0.0f, 2.0f / 3.0f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 0.0f}}},
-        {1.25f, -1.5f, -0.001f, 0.0f},
-        {2.75f, 1.5f, 0.001f, 0.0f},
-        {1, 7, 2, 0}};
-    value.acceleration_instances[0].object_to_world = {
-        1.5f, 0.0f, 0.0f, -2.0f,
-        0.0f, 0.75f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f};
-    value.acceleration_instances[0].instance_index = 0;
-    value.acceleration_instances[0].material_index = 5;
-    value.acceleration_instances[0].visibility_mask = 0x1;
-    value.acceleration_instances[1].object_to_world = {
-        0.75f, 0.0f, 0.0f, 2.0f,
-        0.0f, 1.5f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f};
-    value.acceleration_instances[1].instance_index = 1;
-    value.acceleration_instances[1].material_index = 7;
-    value.acceleration_instances[1].visibility_mask = 0x2;
-    const std::array origins = {
-        Float4{-2.75f, 0.1875f, 4.0f, 0.001f},
-        Float4{2.3f, -0.45f, 4.0f, 0.001f},
-        Float4{0.5f, 0.0f, 4.0f, 0.001f},
-        Float4{2.3f, -0.45f, 4.0f, 0.001f}};
-    const std::array masks = {1u, 2u, 0xffu, 1u};
-    for (std::size_t index = 0;
-         index < value.rays.size();
-         ++index) {
-        value.rays[index].origin_tmin = {
-            origins[index].x,
-            origins[index].y,
-            origins[index].z,
-            origins[index].w};
-        value.rays[index].direction_tmax =
-            {0.0f, 0.0f, -1.0f, 100.0f};
-        value.rays[index].mask_flags[0] = masks[index];
-    }
-    return value;
 }
 
 void run_foundation(
@@ -600,6 +499,12 @@ AccelerationResult run_acceleration(
         rt::BufferUsage::Storage,
         rt::MemoryClass::Upload,
         "d3d12.acceleration.texcoords");
+    const auto tangents = create_buffer(
+        device,
+        sizeof(fixture.tangents),
+        rt::BufferUsage::Storage,
+        rt::MemoryClass::Upload,
+        "d3d12.acceleration.tangents");
     const auto indices = create_buffer(
         device,
         sizeof(fixture.indices),
@@ -659,6 +564,7 @@ AccelerationResult run_acceleration(
     upload(device, vertices, std::span{fixture.vertices});
     upload(device, normals, std::span{fixture.normals});
     upload(device, texcoords, std::span{fixture.texcoords});
+    upload(device, tangents, std::span{fixture.tangents});
     upload(device, indices, std::span{fixture.indices});
     upload(device, instances, std::span{fixture.instances});
     upload(device, rays, std::span{fixture.rays});
@@ -712,15 +618,17 @@ AccelerationResult run_acceleration(
     pipeline_desc.bindings.push_back({
         4, rt::BindingType::ReadOnlyStorageBuffer, sizeof(Float4)});
     pipeline_desc.bindings.push_back({
-        5, rt::BindingType::ReadOnlyStorageBuffer, sizeof(std::uint32_t)});
+        5, rt::BindingType::ReadOnlyStorageBuffer, sizeof(Float4)});
     pipeline_desc.bindings.push_back({
-        6, rt::BindingType::ReadOnlyStorageBuffer, sizeof(InstanceData)});
+        6, rt::BindingType::ReadOnlyStorageBuffer, sizeof(std::uint32_t)});
     pipeline_desc.bindings.push_back({
-        7, rt::BindingType::ReadOnlyStorageBuffer, sizeof(rt::AccelerationRay)});
+        7, rt::BindingType::ReadOnlyStorageBuffer, sizeof(InstanceData)});
     pipeline_desc.bindings.push_back({
-        8, rt::BindingType::StorageBuffer, sizeof(rt::AccelerationHit)});
+        8, rt::BindingType::ReadOnlyStorageBuffer, sizeof(rt::AccelerationRay)});
     pipeline_desc.bindings.push_back({
-        9, rt::BindingType::StorageBuffer, sizeof(Float4)});
+        9, rt::BindingType::StorageBuffer, sizeof(rt::AccelerationHit)});
+    pipeline_desc.bindings.push_back({
+        10, rt::BindingType::StorageBuffer, sizeof(Float4)});
     const auto pipeline =
         device.create_pipeline(pipeline_desc);
     std::vector<rt::ResourceBinding> bindings;
@@ -738,15 +646,20 @@ AccelerationResult run_acceleration(
              rt::BufferBinding{
                  4, texcoords, 0, sizeof(fixture.texcoords)},
              rt::BufferBinding{
-                 5, indices, 0, sizeof(fixture.indices)},
+                 5, tangents, 0, sizeof(fixture.tangents)},
              rt::BufferBinding{
-                 6, instances, 0, sizeof(fixture.instances)},
+                 6, indices, 0, sizeof(fixture.indices)},
              rt::BufferBinding{
-                 7, rays, 0, sizeof(fixture.rays)},
+                 7, instances, 0, sizeof(fixture.instances)},
              rt::BufferBinding{
-                 8, hits, 0, sizeof(AccelerationResult::hits)},
+                 8, rays, 0, sizeof(fixture.rays)},
              rt::BufferBinding{
                  9,
+                 hits,
+                 0,
+                 sizeof(AccelerationResult::hits)},
+             rt::BufferBinding{
+                 10,
                  framebuffer,
                  0,
                  sizeof(AccelerationResult::framebuffer)}}) {
@@ -827,6 +740,7 @@ AccelerationResult run_acceleration(
              rays,
              instances,
              indices,
+             tangents,
              texcoords,
              normals,
              vertices}) {
@@ -852,6 +766,24 @@ void validate_acceleration(
         require(
             result.hits[index].ids[1] == 2,
             "D3D12 acceleration hit type mismatch");
+        const auto& tangent =
+            result.hits[index].tangent_handedness;
+        const float tangent_length = std::sqrt(
+            tangent[0] * tangent[0] +
+            tangent[1] * tangent[1] +
+            tangent[2] * tangent[2]);
+        const float tangent_normal_dot =
+            tangent[0] *
+                result.hits[index].shading_normal[0] +
+            tangent[1] *
+                result.hits[index].shading_normal[1] +
+            tangent[2] *
+                result.hits[index].shading_normal[2];
+        require(
+            close(tangent_length, 1.0f) &&
+                close(tangent_normal_dot, 0.0f) &&
+                close(tangent[3], 1.0f),
+            "D3D12 acceleration tangent mismatch");
     }
     require(
         result.hits[0].ids[0] == 5 &&
@@ -875,6 +807,10 @@ void validate_acceleration(
                 close(result.framebuffer[index].w, 0.0f),
             "D3D12 visibility miss mismatch");
     }
+    require(
+        result.hits[4].position_t[3] >= 0.0f &&
+            close(result.framebuffer[4].w, 1.0f),
+        "D3D12 shadow visibility hit mismatch");
 }
 
 void compare_acceleration(
@@ -883,13 +819,23 @@ void compare_acceleration(
     for (std::size_t hit_index = 0;
          hit_index < left.hits.size();
          ++hit_index) {
+        if (hit_index == 4) {
+            require(
+                (left.hits[hit_index].position_t[3] >= 0.0f) ==
+                    (right.hits[hit_index].position_t[3] >= 0.0f) &&
+                    close(
+                        left.framebuffer[hit_index].w,
+                        right.framebuffer[hit_index].w),
+                "D3D12 native/compute shadow parity mismatch");
+            continue;
+        }
         const auto* left_values =
             reinterpret_cast<const float*>(
                 &left.hits[hit_index]);
         const auto* right_values =
             reinterpret_cast<const float*>(
                 &right.hits[hit_index]);
-        for (std::size_t index = 0; index < 16; ++index) {
+        for (std::size_t index = 0; index < 20; ++index) {
             require(
                 close(
                     left_values[index],
@@ -1030,7 +976,9 @@ int main() {
         require(
             !adapters.empty(),
             "no D3D12 adapter is available");
-        const auto fixture = make_fixture();
+        const auto fixture =
+            ure::test::
+                make_acceleration_parity_fixture();
         bool native_dxr = false;
         std::optional<AccelerationResult>
             cross_adapter_compute;

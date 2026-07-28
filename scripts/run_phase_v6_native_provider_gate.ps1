@@ -65,7 +65,7 @@ try {
         config = $Config
         optix_available =
             $CudaOutput.Contains(
-                "OptiX acceleration provider lifecycle passed")
+                "OptiX acceleration provider traversal and lifecycle passed")
         vulkan_rt_required = $true
         dxr_required = $true
         assertions = [ordered]@{

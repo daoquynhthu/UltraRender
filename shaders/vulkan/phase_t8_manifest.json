@@ -2,7 +2,7 @@
   "schema": "ure.vulkan_acceleration_shader_manifest.v1",
   "source": {
     "path": "phase_t8_acceleration.slang",
-    "sha256": "d639010356903dc1061afd4f59e1dbcd191c3d701f461839f22771e15ab307a0"
+    "sha256": "2a3db9c51a7faf37462da07b0817040101cbb49b70a8f3c99186af1b2ea405f8"
   },
   "compiler": {
     "name": "Slang",
@@ -22,13 +22,13 @@
   "entries": {
     "compute_bvh": {
       "profile": "glsl_460",
-      "spirv_sha256": "2dc569fcd029508fb1e141a3de929c543c7f8416524fd59ced984063bb8a7d48",
-      "reflection_sha256": "d55f61ae17215b170fa66c02c12a1514b1f28a324ce86c9ecb3b520922a9ff6d"
+      "spirv_sha256": "ce540fde16987c209bb6e816e4b651201f745b77d2c07073988e80baf5899ae0",
+      "reflection_sha256": "e0170009d4553705b4d4c7ae442a71c17d7f98b71d356785f9611faf9e7dc7eb"
     },
     "ray_query_native": {
       "profile": "glsl_460+spvRayQueryKHR",
-      "spirv_sha256": "57ddd2c7fda66177dbb41a8262dcc501b65ace70daa9f59adf454ee6f3317180",
-      "reflection_sha256": "b6a4bd17e098573e7a95f2118ba5e7d74e9e0581d9cc6878730f6187bfbaceec"
+      "spirv_sha256": "a6763c5b03da73c5bfc58dec3d0c8fb717aa416107a85bf776d35fd7522dc40a",
+      "reflection_sha256": "732c8ecb2a6fe80caf15e7bf8cf9a80eba15abc2cbbb677afa4e3df34fd9a349"
     }
   }
 }

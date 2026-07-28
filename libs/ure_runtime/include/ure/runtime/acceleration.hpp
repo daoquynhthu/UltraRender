@@ -141,6 +141,7 @@ struct alignas(16) AccelerationHit {
     std::array<float, 4> position_t = {};
     std::array<float, 4> shading_normal = {};
     std::array<float, 4> geometric_normal = {};
+    std::array<float, 4> tangent_handedness = {};
     std::array<float, 4> uv_barycentrics = {};
     std::array<std::uint32_t, 4> ids = {
         0xffffffffu,
@@ -175,6 +176,6 @@ public:
 };
 
 static_assert(sizeof(AccelerationRay) == 48);
-static_assert(sizeof(AccelerationHit) == 80);
+static_assert(sizeof(AccelerationHit) == 96);
 
 }

@@ -114,7 +114,7 @@ try {
             name = "compute_bvh"
             source = $accelerationSource
             profile = "sm_6_0"
-            root = "DescriptorTable(CBV(b0)), DescriptorTable(SRV(t0)), DescriptorTable(SRV(t1)), DescriptorTable(SRV(t2)), DescriptorTable(SRV(t3)), DescriptorTable(SRV(t4)), DescriptorTable(SRV(t5)), DescriptorTable(UAV(u0)), DescriptorTable(UAV(u1))"
+            root = "DescriptorTable(CBV(b0)), DescriptorTable(SRV(t0)), DescriptorTable(SRV(t1)), DescriptorTable(SRV(t2)), DescriptorTable(SRV(t3)), DescriptorTable(SRV(t4)), DescriptorTable(SRV(t5)), DescriptorTable(SRV(t6)), DescriptorTable(UAV(u0)), DescriptorTable(UAV(u1))"
             registers = @{
                 "t1" = "t0"
                 "t2" = "t1"
@@ -122,13 +122,14 @@ try {
                 "t4" = "t3"
                 "t5" = "t4"
                 "t6" = "t5"
+                "t7" = "t6"
             }
         },
         [ordered]@{
             name = "ray_query_native"
             source = $accelerationSource
             profile = "sm_6_5"
-            root = "DescriptorTable(SRV(t0)), DescriptorTable(CBV(b0)), DescriptorTable(SRV(t1)), DescriptorTable(SRV(t2)), DescriptorTable(SRV(t3)), DescriptorTable(SRV(t4)), DescriptorTable(SRV(t5)), DescriptorTable(SRV(t6)), DescriptorTable(UAV(u0)), DescriptorTable(UAV(u1))"
+            root = "DescriptorTable(SRV(t0)), DescriptorTable(CBV(b0)), DescriptorTable(SRV(t1)), DescriptorTable(SRV(t2)), DescriptorTable(SRV(t3)), DescriptorTable(SRV(t4)), DescriptorTable(SRV(t5)), DescriptorTable(SRV(t6)), DescriptorTable(SRV(t7)), DescriptorTable(UAV(u0)), DescriptorTable(UAV(u1))"
             registers = @{}
         }
     )

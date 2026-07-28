@@ -1,20 +1,27 @@
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <span>
+#include <vector>
 
 #include <cuda_runtime.h>
 
 #include "cuda_runtime_device.cuh"
 #include "ure/optix_acceleration.hpp"
 #include "ure/runtime/execution_graph.hpp"
+#include "../shared/acceleration_parity_fixture.hpp"
 
 namespace rt = ure::runtime;
 
 static int failures = 0;
+
+using Float4 = ure::test::Float4;
 
 #define CHECK(condition) \
     do { \
@@ -258,12 +265,19 @@ static void test_optix_provider_is_optional_and_bounded() {
     auto provider =
         ure::gpu::make_optix_acceleration_provider(
             *device);
-    const std::array<float, 9> vertices = {
-        -1.0f, -1.0f, 0.0f,
-        1.0f, -1.0f, 0.0f,
-        0.0f, 1.0f, 0.0f};
-    const std::array<std::uint32_t, 3> indices = {
-        0, 1, 2};
+    const auto parity_fixture =
+        ure::test::
+            make_acceleration_parity_fixture();
+    const auto& vertices =
+        parity_fixture.vertices;
+    const auto& normals =
+        parity_fixture.normals;
+    const auto& texcoords =
+        parity_fixture.texcoords;
+    const auto& tangents =
+        parity_fixture.tangents;
+    const auto& indices =
+        parity_fixture.indices;
     const auto usage =
         rt::BufferUsage::Storage |
         rt::BufferUsage::AccelerationInput;
@@ -279,6 +293,24 @@ static void test_optix_provider_is_optional_and_bounded() {
         usage,
         rt::MemoryClass::DeviceLocal,
         "optix.test.indices"});
+    const auto normal_buffer = device->create_buffer({
+        sizeof(normals),
+        16,
+        rt::BufferUsage::Storage,
+        rt::MemoryClass::DeviceLocal,
+        "optix.test.normals"});
+    const auto texcoord_buffer = device->create_buffer({
+        sizeof(texcoords),
+        16,
+        rt::BufferUsage::Storage,
+        rt::MemoryClass::DeviceLocal,
+        "optix.test.texcoords"});
+    const auto tangent_buffer = device->create_buffer({
+        sizeof(tangents),
+        16,
+        rt::BufferUsage::Storage,
+        rt::MemoryClass::DeviceLocal,
+        "optix.test.tangents"});
     CHECK(cudaMemcpy(
               device->native_buffer(vertex_buffer),
               vertices.data(),
@@ -289,35 +321,45 @@ static void test_optix_provider_is_optional_and_bounded() {
               indices.data(),
               sizeof(indices),
               cudaMemcpyHostToDevice) == cudaSuccess);
+    CHECK(cudaMemcpy(
+              device->native_buffer(normal_buffer),
+              normals.data(),
+              sizeof(normals),
+              cudaMemcpyHostToDevice) == cudaSuccess);
+    CHECK(cudaMemcpy(
+              device->native_buffer(texcoord_buffer),
+              texcoords.data(),
+              sizeof(texcoords),
+              cudaMemcpyHostToDevice) == cudaSuccess);
+    CHECK(cudaMemcpy(
+              device->native_buffer(tangent_buffer),
+              tangents.data(),
+              sizeof(tangents),
+              cudaMemcpyHostToDevice) == cudaSuccess);
     const std::array geometries{
         rt::TriangleGeometryDesc{
             vertex_buffer,
             0,
-            sizeof(float) * 3,
-            3,
+            sizeof(Float4),
+            4,
             index_buffer,
             0,
-            3,
+            6,
             rt::IndexFormat::Uint32,
             0},
         rt::TriangleGeometryDesc{
             vertex_buffer,
             0,
-            sizeof(float) * 3,
-            3,
+            sizeof(Float4),
+            4,
             index_buffer,
             0,
-            3,
+            6,
             rt::IndexFormat::Uint32,
             1}};
-    std::array instances{
-        rt::AccelerationInstanceDesc{},
-        rt::AccelerationInstanceDesc{}};
-    instances[0].instance_index = 1;
-    instances[0].geometry_index = 0;
-    instances[1].instance_index = 2;
+    auto instances =
+        parity_fixture.acceleration_instances;
     instances[1].geometry_index = 1;
-    instances[1].object_to_world[3] = 3.0f;
     rt::AccelerationBuildConfig build;
     build.quality =
         rt::AccelerationBuildQuality::HighQuality;
@@ -338,7 +380,145 @@ static void test_optix_provider_is_optional_and_bounded() {
     CHECK(stats.scratch_peak_bytes > 0);
     CHECK(stats.compacted_bytes <=
           stats.uncompacted_bytes);
-    instances[1].object_to_world[3] = 4.0f;
+#if defined(UR_OPTIX_TRACE_MODULE_PATH)
+    auto parity_instances =
+        parity_fixture.acceleration_instances;
+    const std::span parity_geometries{
+        geometries.data(),
+        std::size_t{1}};
+    const auto parity_scene =
+        provider->create_acceleration_scene({
+            parity_geometries,
+            parity_instances,
+            build,
+            "optix.parity"});
+    std::ifstream module_input(
+        std::filesystem::path{
+            UR_OPTIX_TRACE_MODULE_PATH},
+        std::ios::binary | std::ios::ate);
+    CHECK(static_cast<bool>(module_input));
+    const auto module_size = module_input.tellg();
+    CHECK(module_size > 0);
+    std::vector<std::byte> module_code(
+        static_cast<std::size_t>(module_size));
+    module_input.seekg(0);
+    module_input.read(
+        reinterpret_cast<char*>(module_code.data()),
+        static_cast<std::streamsize>(
+            module_code.size()));
+    CHECK(static_cast<bool>(module_input));
+    const auto& rays = parity_fixture.rays;
+    std::array<rt::AccelerationHit, 5> hits;
+    std::array<Float4, 5> framebuffer;
+    const auto ray_buffer = device->create_buffer({
+        sizeof(rays),
+        16,
+        rt::BufferUsage::Storage,
+        rt::MemoryClass::DeviceLocal,
+        "optix.test.rays"});
+    const auto hit_buffer = device->create_buffer({
+        sizeof(hits),
+        16,
+        rt::BufferUsage::Storage,
+        rt::MemoryClass::DeviceLocal,
+        "optix.test.hits"});
+    const auto framebuffer_buffer =
+        device->create_buffer({
+            sizeof(framebuffer),
+            16,
+            rt::BufferUsage::Storage,
+            rt::MemoryClass::DeviceLocal,
+            "optix.test.framebuffer"});
+    CHECK(cudaMemcpy(
+              device->native_buffer(ray_buffer),
+              rays.data(),
+              sizeof(rays),
+              cudaMemcpyHostToDevice) == cudaSuccess);
+    const std::array attributes{
+        ure::gpu::OptixGeometryTraceDesc{
+            normal_buffer,
+            texcoord_buffer,
+            tangent_buffer}};
+    ure::gpu::trace_optix_acceleration_scene(
+        *provider,
+        parity_scene,
+        {
+            attributes,
+            ray_buffer,
+            hit_buffer,
+            framebuffer_buffer,
+            static_cast<std::uint32_t>(
+                rays.size()),
+            module_code});
+    CHECK(cudaMemcpy(
+              hits.data(),
+              device->native_buffer(hit_buffer),
+              sizeof(hits),
+              cudaMemcpyDeviceToHost) == cudaSuccess);
+    CHECK(cudaMemcpy(
+              framebuffer.data(),
+              device->native_buffer(framebuffer_buffer),
+              sizeof(framebuffer),
+              cudaMemcpyDeviceToHost) == cudaSuccess);
+    for (std::size_t index = 0; index < 2; ++index) {
+        CHECK(std::abs(
+                  hits[index].position_t[3] -
+                  4.0f) <= 1.0e-5f);
+        CHECK(std::abs(
+                  hits[index].shading_normal[2] -
+                  1.0f) <= 1.0e-5f);
+        CHECK(std::abs(
+                  hits[index].tangent_handedness[3] -
+                  1.0f) <= 1.0e-5f);
+        const float tangent_length = std::sqrt(
+            hits[index].tangent_handedness[0] *
+                hits[index].tangent_handedness[0] +
+            hits[index].tangent_handedness[1] *
+                hits[index].tangent_handedness[1] +
+            hits[index].tangent_handedness[2] *
+                hits[index].tangent_handedness[2]);
+        const float tangent_normal_dot =
+            hits[index].tangent_handedness[0] *
+                hits[index].shading_normal[0] +
+            hits[index].tangent_handedness[1] *
+                hits[index].shading_normal[1] +
+            hits[index].tangent_handedness[2] *
+                hits[index].shading_normal[2];
+        CHECK(std::abs(tangent_length - 1.0f) <=
+              1.0e-5f);
+        CHECK(std::abs(tangent_normal_dot) <=
+              1.0e-5f);
+        CHECK(hits[index].ids[1] == 2);
+    }
+    CHECK(hits[0].ids[0] == 5);
+    CHECK(hits[0].ids[2] == 0);
+    CHECK(hits[0].ids[3] == 1);
+    CHECK(std::abs(
+              hits[0].uv_barycentrics[0] -
+              0.25f) <= 1.0e-5f);
+    CHECK(std::abs(
+              hits[0].uv_barycentrics[1] -
+              0.625f) <= 1.0e-5f);
+    CHECK(hits[1].ids[0] == 7);
+    CHECK(hits[1].ids[2] == 1);
+    CHECK(hits[1].ids[3] == 0);
+    CHECK(std::abs(
+              hits[1].uv_barycentrics[0] -
+              0.7f) <= 1.0e-5f);
+    CHECK(std::abs(
+              hits[1].uv_barycentrics[1] -
+              0.35f) <= 1.0e-5f);
+    CHECK(hits[2].position_t[3] < 0.0f);
+    CHECK(hits[3].position_t[3] < 0.0f);
+    CHECK(hits[4].position_t[3] >= 0.0f);
+    CHECK(std::abs(framebuffer[4].w - 1.0f) <=
+          1.0e-5f);
+    device->destroy(framebuffer_buffer);
+    device->destroy(hit_buffer);
+    device->destroy(ray_buffer);
+    provider->destroy(parity_scene);
+#endif
+    instances[1].object_to_world[3] = 3.0f;
     provider->update_acceleration_scene(
         scene, {instances});
     stats = provider->acceleration_build_stats(scene);
@@ -357,11 +537,14 @@ static void test_optix_provider_is_optional_and_bounded() {
         },
         rt::ErrorCode::OutOfMemory));
     provider.reset();
+    device->destroy(tangent_buffer);
+    device->destroy(texcoord_buffer);
+    device->destroy(normal_buffer);
     device->destroy(index_buffer);
     device->destroy(vertex_buffer);
     CHECK(device->allocated_bytes() == 0);
     std::printf(
-        "OptiX acceleration provider lifecycle passed\n");
+        "OptiX acceleration provider traversal and lifecycle passed\n");
 }
 
 int main() {

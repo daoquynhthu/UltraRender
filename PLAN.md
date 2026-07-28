@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-28 (V.6 closure and V.7 cursor)
+最后更新: 2026-07-29 (V.7 closure and V.8 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -57,7 +57,7 @@ R-P4 specular manifold + BDPT/VCM [done]
 Phase T complete [done]
    │
    ▼
-当前游标: V.7
+当前游标: V.8
    │
    ▼
 Phase V complete
@@ -80,7 +80,7 @@ Phase X complete
 - **Phase Q 已闭环**: URE native schema、serialization、programmatic graph、feature declaration、tooling/adapter、compiled cache/farm 与 validation suite 已冻结为后续阶段的权威 authoring contract。
 - **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
 - **Phase T 已闭环**: T.0-T.11 已冻结 coupling、backend identity、共享 Slang 工具链、SDK-free runtime/resource/execution/acceleration/scheduling contract、CUDA production lowering、Vulkan compute/acceleration foundation、Windows optional D3D12/DXR backend、heterogeneous sample-shard negotiation 和 cross-backend validation/performance suite。
-- **当前唯一施工项 — Phase V**: V.0-V.6 已闭环；当前游标为 V.7 cross-provider parity。Phase W 现有 reference/oracle 成果保留，新增 W production work 继续冻结。
+- **当前唯一施工项 — Phase V**: V.0-V.7 已闭环；当前游标为 V.8 clustered geometry resource。Phase W 现有 reference/oracle 成果保留，新增 W production work 继续冻结。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
 - 文档中的“进行中”表示已有未闭环成果，不等于允许并行施工。发生冲突时，以本节当前游标为准。
@@ -2076,7 +2076,7 @@ T.11 closure（2026-07-28）：新增 `run_phase_t_validation_suite.ps1` 与 `ur
 
 ### Phase V — GPU 几何加速结构 / BVH / OptiX / Clustered Geometry
 
-**状态**: 进行中，V.0-V.6 已完成，当前游标 V.7。
+**状态**: 进行中，V.0-V.7 已完成，当前游标 V.8。
 
 **目标**: 将当前 mesh-local BVH 和线性 fallback traversal 升级为适配 UltraRender 光谱、偏振、材质图、动态场景和未来波动光学的 GPU 几何加速栈。Phase V 的核心不是复制外部引擎的可见性系统，而是在 Phase T 的 acceleration-provider contract 上建立自己的 `AccelerationScene`：同一份 SceneIR/resource graph 能选择自研 compute BVH、OptiX、Vulkan RT 或 DXR provider，并在能力不满足时 fail-loud。
 
@@ -2133,6 +2133,8 @@ V.4 closure（2026-07-28）：CUDA self-compute 的默认 `auto` 与显式 `fast
 V.5 closure（2026-07-28）：self-compute mesh BLAS 进入 bounded host batch；automatic 以 2 个并发任务限制无显式预算时的 host memory pressure，显式 scratch budget 则按 conservative per-quality temporary reservation 与 hardware concurrency 做 deterministic batch packing，单 mesh 超预算会在 renderer allocation 前拒绝。advanced builder 记录 canonical binary pre-collapse bytes、final wide node/reference bytes 与 compaction time，device 仅分配 final compact representation；exact BLAS compact bytes 加 conservative TLAS bound 在 acceleration allocation 前同时校验 selected backend budget 与当前 device availability。BLAS/TLAS 通过 runtime-owned CUDA transfer stream 和 two-entry pinned staging queue 异步上传，staging retirement 受同一 scratch budget 约束并在任何 traversal consumer 前同步。`AccelerationStats` 新增 parallel build wall time/concurrency、GPU upload time/bytes、temporary peak、uncompacted/compact bytes 与 compaction time；C ABI v4 保留 v3 hierarchy，pyure 消费 v4。固定 telemetry report 同时记录 18,432-triangle build/trace/compact bytes、2 MiB benchmark VRAM delta、two-mesh async pipeline 与 1-byte fail-loud scratch rejection；Release 48/48 CTest、Phase T/V static、documentation 与 build telemetry gate 通过；权威游标进入 V.6。
 
 V.6 closure（2026-07-28）：Phase T 的 SDK-free acceleration contract 已从单 geometry bounded fixture 扩展为 multi-geometry scene、stable instance-to-geometry binding、build quality、static/refit/rebuild policy、compaction、scratch budget、transform-only topology validation 与 provider-owned build/update/memory statistics。Vulkan RT 为每个 geometry 建 BLAS，复用 peak scratch，查询并复制有效 compact result，再以最终 BLAS address 建可更新 TLAS；DXR 以 post-build compact size、compact AS copy 和 `ALLOW_UPDATE`/`PERFORM_UPDATE` 实现同一生命周期。两者的实际 NVIDIA adapter gate 均执行 two-BLAS compaction、TLAS refit/rebuild、1-byte scratch rejection、input lifetime 与 allocation cleanup。OptiX 移除两份始终 miss 的 installed placeholder，新增只在独立 SDK 可发现时编译的 CUDA-side GAS/IAS build、compaction、refit/rebuild provider；无 SDK configure 验证其他 backend 不受影响，随后以 NVIDIA 官方 `optix-dev` v8.1.0 commit `50021ea...` 实际编译并在 closure GPU 通过 two-GAS/IAS refit/scratch/memory gate。`run_phase_v6_native_provider_gate.ps1` 输出 `ure.phase_v.native_provider.v1`。Compute-only adapter 继续使用显式 fallback，禁止 fallback 的 native request 继续 fail-loud。Release build、48/48 CTest、Phase T/V static 与文档一致性通过；完整 SceneIR framebuffer/AOV/hit metadata parity 不在 V.6 虚报，权威游标进入 V.7。
+
+V.7 closure（2026-07-29）：新增由单一 `SceneIR` 构造并 lower 的跨 provider fixture，以两个非均匀缩放实例、稳定 material/instance/primitive identity、四条 closest-hit/miss ray 与一条 shadow ray 统一 CUDA self-compute、OptiX、Vulkan RT 和 DXR 的输入语义。SDK-free `AccelerationHit` 增加 16-byte tangent/handedness record；共享 Slang compute/ray-query shader 与 OptiX closest-hit pipeline 对 position/distance、geometric/shading normal、Gram-Schmidt tangent、UV/barycentrics、material/instance/primitive、shadow visibility 和 `uv/|Nz|/visibility` AOV 执行同一合同，退化 tangent 使用确定性正交 fallback。OptiX 从固定 CUDA 13 OptiX IR 构建真实 raygen/miss/closest-hit pipeline，并保留 V.6 two-GAS/IAS lifecycle；SDK 与 native capability 缺失仍只跳过对应可选 provider。`run_phase_v7_cross_provider_parity.ps1` 输出 `ure.phase_v.cross_provider_parity.v1`，记录 fixture/artifact hash、数值阈值以及实际 CUDA 13.3、OptiX 8.1、NVIDIA Vulkan RT 和 DXR 的 adapter/compiler/driver identity。Release build、48/48 CTest、shader determinism、Phase T/V static 与文档一致性通过；通用 Vulkan/D3D12/OptiX radiometric integrator lowering 仍不虚报，权威游标进入 V.8。
 
 #### 完成标准
 

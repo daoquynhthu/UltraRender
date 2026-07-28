@@ -19,41 +19,21 @@
 #include <vector>
 
 #include "ure/vulkan_runtime.hpp"
+#include "../shared/acceleration_parity_fixture.hpp"
 
 namespace rt = ure::runtime;
 
 namespace {
 
-struct Float4 {
-    float x;
-    float y;
-    float z;
-    float w;
-};
-
-struct InstanceData {
-    std::array<Float4, 3> object_to_world;
-    std::array<Float4, 3> world_to_object;
-    std::array<Float4, 3> normal_transform;
-    Float4 bounds_min;
-    Float4 bounds_max;
-    std::array<std::uint32_t, 4> ids;
-};
-
-struct Fixture {
-    std::array<Float4, 4> vertices;
-    std::array<Float4, 4> normals;
-    std::array<Float4, 4> texcoords;
-    std::array<std::uint32_t, 6> indices;
-    std::array<InstanceData, 2> instances;
-    std::array<rt::AccelerationInstanceDesc, 2>
-        acceleration_instances;
-    std::array<rt::AccelerationRay, 4> rays;
-};
+using Float4 = ure::test::Float4;
+using InstanceData =
+    ure::test::AccelerationInstanceData;
+using Fixture =
+    ure::test::AccelerationParityFixture;
 
 struct Result {
-    std::array<rt::AccelerationHit, 4> hits;
-    std::array<Float4, 4> framebuffer;
+    std::array<rt::AccelerationHit, 5> hits;
+    std::array<Float4, 5> framebuffer;
 };
 
 void require(bool condition, const char* message) {
@@ -108,88 +88,6 @@ void upload(
         static_cast<T*>(device.host_buffer(buffer)));
 }
 
-Fixture make_fixture() {
-    Fixture value;
-    value.vertices = {{
-        {-1.0f, -1.0f, 0.0f, 1.0f},
-        {1.0f, -1.0f, 0.0f, 1.0f},
-        {1.0f, 1.0f, 0.0f, 1.0f},
-        {-1.0f, 1.0f, 0.0f, 1.0f}}};
-    value.normals.fill({0.0f, 0.0f, 1.0f, 0.0f});
-    value.texcoords = {{
-        {0.0f, 0.0f, 0.0f, 0.0f},
-        {1.0f, 0.0f, 0.0f, 0.0f},
-        {1.0f, 1.0f, 0.0f, 0.0f},
-        {0.0f, 1.0f, 0.0f, 0.0f}}};
-    value.indices = {0, 1, 2, 0, 2, 3};
-    value.instances[0] = {
-        {{
-            {1.5f, 0.0f, 0.0f, -2.0f},
-            {0.0f, 0.75f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 0.0f}}},
-        {{
-            {2.0f / 3.0f, 0.0f, 0.0f, 4.0f / 3.0f},
-            {0.0f, 4.0f / 3.0f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 0.0f}}},
-        {{
-            {2.0f / 3.0f, 0.0f, 0.0f, 0.0f},
-            {0.0f, 4.0f / 3.0f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 0.0f}}},
-        {-3.5f, -0.75f, -0.001f, 0.0f},
-        {-0.5f, 0.75f, 0.001f, 0.0f},
-        {0, 5, 1, 0}};
-    value.instances[1] = {
-        {{
-            {0.75f, 0.0f, 0.0f, 2.0f},
-            {0.0f, 1.5f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 0.0f}}},
-        {{
-            {4.0f / 3.0f, 0.0f, 0.0f, -8.0f / 3.0f},
-            {0.0f, 2.0f / 3.0f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 0.0f}}},
-        {{
-            {4.0f / 3.0f, 0.0f, 0.0f, 0.0f},
-            {0.0f, 2.0f / 3.0f, 0.0f, 0.0f},
-            {0.0f, 0.0f, 1.0f, 0.0f}}},
-        {1.25f, -1.5f, -0.001f, 0.0f},
-        {2.75f, 1.5f, 0.001f, 0.0f},
-        {1, 7, 2, 0}};
-    value.acceleration_instances[0].object_to_world = {
-        1.5f, 0.0f, 0.0f, -2.0f,
-        0.0f, 0.75f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f};
-    value.acceleration_instances[0].instance_index = 0;
-    value.acceleration_instances[0].material_index = 5;
-    value.acceleration_instances[0].visibility_mask = 0x1;
-    value.acceleration_instances[1].object_to_world = {
-        0.75f, 0.0f, 0.0f, 2.0f,
-        0.0f, 1.5f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f};
-    value.acceleration_instances[1].instance_index = 1;
-    value.acceleration_instances[1].material_index = 7;
-    value.acceleration_instances[1].visibility_mask = 0x2;
-    const std::array origins = {
-        Float4{-2.75f, 0.1875f, 4.0f, 0.001f},
-        Float4{2.3f, -0.45f, 4.0f, 0.001f},
-        Float4{0.5f, 0.0f, 4.0f, 0.001f},
-        Float4{2.3f, -0.45f, 4.0f, 0.001f}};
-    const std::array masks = {1u, 2u, 0xffu, 1u};
-    for (std::size_t index = 0;
-         index < value.rays.size();
-         ++index) {
-        value.rays[index].origin_tmin = {
-            origins[index].x,
-            origins[index].y,
-            origins[index].z,
-            origins[index].w};
-        value.rays[index].direction_tmax =
-            {0.0f, 0.0f, -1.0f, 100.0f};
-        value.rays[index].mask_flags[0] =
-            masks[index];
-    }
-    return value;
-}
-
 Result execute(
     ure::vulkan::VulkanRuntimeDevice& device,
     const Fixture& fixture,
@@ -215,6 +113,12 @@ Result execute(
         rt::BufferUsage::Storage,
         rt::MemoryClass::Upload,
         "acceleration.texcoords");
+    const auto tangents = create_buffer(
+        device,
+        sizeof(fixture.tangents),
+        rt::BufferUsage::Storage,
+        rt::MemoryClass::Upload,
+        "acceleration.tangents");
     const auto indices = create_buffer(
         device,
         sizeof(fixture.indices),
@@ -274,6 +178,7 @@ Result execute(
     upload(device, vertices, std::span{fixture.vertices});
     upload(device, normals, std::span{fixture.normals});
     upload(device, texcoords, std::span{fixture.texcoords});
+    upload(device, tangents, std::span{fixture.tangents});
     upload(device, indices, std::span{fixture.indices});
     upload(device, instances, std::span{fixture.instances});
     upload(device, rays, std::span{fixture.rays});
@@ -328,11 +233,11 @@ Result execute(
     }
     pipeline_desc.bindings.push_back({
         1, rt::BindingType::UniformBuffer});
-    for (std::uint32_t slot = 2; slot <= 7; ++slot) {
+    for (std::uint32_t slot = 2; slot <= 8; ++slot) {
         pipeline_desc.bindings.push_back({
             slot, rt::BindingType::ReadOnlyStorageBuffer});
     }
-    for (std::uint32_t slot = 8; slot <= 9; ++slot) {
+    for (std::uint32_t slot = 9; slot <= 10; ++slot) {
         pipeline_desc.bindings.push_back({
             slot, rt::BindingType::StorageBuffer});
     }
@@ -354,15 +259,17 @@ Result execute(
              rt::BufferBinding{
                  4, texcoords, 0, sizeof(fixture.texcoords)},
              rt::BufferBinding{
-                 5, indices, 0, sizeof(fixture.indices)},
+                 5, tangents, 0, sizeof(fixture.tangents)},
              rt::BufferBinding{
-                 6, instances, 0, sizeof(fixture.instances)},
+                 6, indices, 0, sizeof(fixture.indices)},
              rt::BufferBinding{
-                 7, rays, 0, sizeof(fixture.rays)},
+                 7, instances, 0, sizeof(fixture.instances)},
              rt::BufferBinding{
-                 8, hits, 0, sizeof(Result::hits)},
+                 8, rays, 0, sizeof(fixture.rays)},
              rt::BufferBinding{
-                 9,
+                 9, hits, 0, sizeof(Result::hits)},
+             rt::BufferBinding{
+                 10,
                  framebuffer,
                  0,
                  sizeof(Result::framebuffer)}}) {
@@ -443,6 +350,7 @@ Result execute(
              rays,
              instances,
              indices,
+             tangents,
              texcoords,
              normals,
              vertices}) {
@@ -495,6 +403,29 @@ void validate_oracle(const Result& result) {
                 close(result.framebuffer[index].w, 0.0f),
             "acceleration visibility miss mismatch");
     }
+    require(
+        result.hits[4].position_t[3] >= 0.0f &&
+            close(result.framebuffer[4].w, 1.0f),
+        "acceleration shadow visibility mismatch");
+    for (std::size_t index = 0; index < 2; ++index) {
+        const auto& tangent =
+            result.hits[index].tangent_handedness;
+        const auto& normal =
+            result.hits[index].shading_normal;
+        require(
+            close(
+                tangent[0] * normal[0] +
+                    tangent[1] * normal[1] +
+                    tangent[2] * normal[2],
+                0.0f) &&
+                close(
+                    tangent[0] * tangent[0] +
+                        tangent[1] * tangent[1] +
+                        tangent[2] * tangent[2],
+                    1.0f) &&
+                close(tangent[3], 1.0f),
+            "acceleration tangent frame mismatch");
+    }
 }
 
 void compare_results(
@@ -509,8 +440,15 @@ void compare_results(
         const auto* right_values =
             reinterpret_cast<const float*>(
                 &right.hits[hit_index]);
+        if (hit_index == 4) {
+            require(
+                (left.hits[hit_index].position_t[3] >= 0.0f) ==
+                    (right.hits[hit_index].position_t[3] >= 0.0f),
+                "native/compute shadow parity mismatch");
+            continue;
+        }
         for (std::size_t value_index = 0;
-             value_index < 16;
+             value_index < 20;
              ++value_index) {
             require(
                 close(
@@ -665,7 +603,9 @@ void validate_build_lifecycle(
 
 int main() {
     try {
-        const auto fixture = make_fixture();
+        const auto fixture =
+            ure::test::
+                make_acceleration_parity_fixture();
         const auto adapters =
             ure::vulkan::enumerate_vulkan_adapters();
         require(

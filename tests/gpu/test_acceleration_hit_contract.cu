@@ -8,6 +8,7 @@
 
 #include "ure/detail/cuda_bvh_builder.cuh"
 #include "ure/detail/cuda_structs.cuh"
+#include "../shared/acceleration_parity_fixture.hpp"
 
 namespace ure::gpu {
 
@@ -19,11 +20,13 @@ struct ContractHit {
     GpuVec3 position;
     GpuVec3 shading_normal;
     GpuVec3 geometric_normal;
+    GpuVec3 tangent;
     GpuVec2 uv;
     int material_index;
     int hit_type;
     int hit_index;
     int primitive_index;
+    float aov[4];
 };
 
 __global__ void acceleration_contract_kernel(
@@ -33,7 +36,7 @@ __global__ void acceleration_contract_kernel(
     int* shadow_hits) {
     const int index =
         static_cast<int>(threadIdx.x);
-    if (index >= 3) return;
+    if (index >= 5) return;
     ContractHit result{};
     result.t = -1.0f;
     result.material_index = -1;
@@ -54,6 +57,76 @@ __global__ void acceleration_contract_kernel(
         result.hit_type,
         result.hit_index,
         result.primitive_index);
+    if (result.hit_type == 2 &&
+        result.hit_index >= 0 &&
+        result.primitive_index >= 0) {
+        const auto& descriptor =
+            scene.instance_descs[result.hit_index];
+        const auto& transform =
+            scene.instance_transforms[result.hit_index];
+        const auto& mesh =
+            scene.meshes[descriptor.mesh_index];
+        GpuRay object_ray = rays[index];
+        object_ray.origin =
+            transform.inverse_transform.transform_point(
+                rays[index].origin);
+        object_ray.direction =
+            transform.inverse_transform.transform_vector(
+                rays[index].direction);
+        const int i0 =
+            mesh.indices[result.primitive_index * 3 + 0];
+        const int i1 =
+            mesh.indices[result.primitive_index * 3 + 1];
+        const int i2 =
+            mesh.indices[result.primitive_index * 3 + 2];
+        float tangent_t;
+        GpuVec3 tangent_geometric;
+        GpuVec3 tangent_shading;
+        float barycentric_u;
+        float barycentric_v;
+        if (mesh.tangents &&
+            hit_triangle(
+                object_ray,
+                mesh.vertices[i0],
+                mesh.vertices[i1],
+                mesh.vertices[i2],
+                nullptr,
+                nullptr,
+                nullptr,
+                object_ray.t_min,
+                object_ray.t_max,
+                tangent_t,
+                tangent_geometric,
+                tangent_shading,
+                barycentric_u,
+                barycentric_v)) {
+            const float weight =
+                1.0f -
+                barycentric_u -
+                barycentric_v;
+            const GpuVec3 object_tangent =
+                mesh.tangents[i0] * weight +
+                mesh.tangents[i1] * barycentric_u +
+                mesh.tangents[i2] * barycentric_v;
+            GpuVec3 world_tangent =
+                transform.transform.transform_vector(
+                    object_tangent);
+            world_tangent =
+                world_tangent -
+                result.shading_normal *
+                    world_tangent.dot(
+                        result.shading_normal);
+            result.tangent =
+                world_tangent.normalize();
+        }
+    }
+    if (result.t >= 0.0f) {
+        result.aov[0] = result.uv.u;
+        result.aov[1] = result.uv.v;
+        result.aov[2] =
+            fabsf(result.shading_normal.z);
+        result.aov[3] = 1.0f;
+    }
     hits[index] = result;
     float shadow_t;
     GpuVec3 shadow_position;
@@ -278,13 +351,26 @@ void require(bool condition, const char* message) {
 int main() {
     try {
         using namespace ure::gpu;
-        std::vector<float> builder_vertices = {
-            -1.0f, -1.0f, 0.0f,
-             1.0f, -1.0f, 0.0f,
-             1.0f,  1.0f, 0.0f,
-            -1.0f,  1.0f, 0.0f};
-        std::vector<int> builder_indices = {
-            0, 1, 2, 0, 2, 3};
+        const auto parity_fixture =
+            ure::test::
+                make_acceleration_parity_fixture();
+        std::vector<float> builder_vertices;
+        builder_vertices.reserve(
+            parity_fixture.vertices.size() * 3);
+        for (const auto& vertex :
+             parity_fixture.vertices) {
+            builder_vertices.insert(
+                builder_vertices.end(),
+                {vertex.x, vertex.y, vertex.z});
+        }
+        std::vector<int> builder_indices;
+        builder_indices.reserve(
+            parity_fixture.indices.size());
+        for (const auto index :
+             parity_fixture.indices) {
+            builder_indices.push_back(
+                static_cast<int>(index));
+        }
         std::vector<GpuBvhNode> builder_nodes;
         const auto builder_stats = MeshBvhBuilder::build(
             builder_vertices, builder_indices, builder_nodes);
@@ -343,19 +429,37 @@ int main() {
                 builder_tlas_nodes[0].max_pt.x == 101.0f,
             "TLAS refit changed topology or retained stale bounds");
 
-        const std::array vertices = {
-            GpuVec3{-1.0f, -1.0f, 0.0f},
-            GpuVec3{1.0f, -1.0f, 0.0f},
-            GpuVec3{1.0f, 1.0f, 0.0f},
-            GpuVec3{-1.0f, 1.0f, 0.0f}};
+        std::array<GpuVec3, 4> vertices;
         std::array<GpuVec3, 4> normals;
-        normals.fill({0.0f, 0.0f, 1.0f});
-        const std::array texcoords = {
-            GpuVec2{0.0f, 0.0f},
-            GpuVec2{1.0f, 0.0f},
-            GpuVec2{1.0f, 1.0f},
-            GpuVec2{0.0f, 1.0f}};
-        const std::array indices = {0, 1, 2, 0, 2, 3};
+        std::array<GpuVec2, 4> texcoords;
+        std::array<GpuVec3, 4> tangents;
+        for (std::size_t index = 0;
+             index < vertices.size();
+             ++index) {
+            vertices[index] = {
+                parity_fixture.vertices[index].x,
+                parity_fixture.vertices[index].y,
+                parity_fixture.vertices[index].z};
+            normals[index] = {
+                parity_fixture.normals[index].x,
+                parity_fixture.normals[index].y,
+                parity_fixture.normals[index].z};
+            texcoords[index] = {
+                parity_fixture.texcoords[index].x,
+                parity_fixture.texcoords[index].y};
+            tangents[index] = {
+                parity_fixture.tangents[index].x,
+                parity_fixture.tangents[index].y,
+                parity_fixture.tangents[index].z};
+        }
+        std::array<int, 6> indices;
+        for (std::size_t index = 0;
+             index < indices.size();
+             ++index) {
+            indices[index] =
+                static_cast<int>(
+                    parity_fixture.indices[index]);
+        }
         const std::array bvh = {
             GpuBvhNode{
                 {-1.0f, -1.0f, -0.001f},
@@ -366,16 +470,19 @@ int main() {
         DeviceArray<GpuVec3> device_vertices(vertices.size());
         DeviceArray<GpuVec3> device_normals(normals.size());
         DeviceArray<GpuVec2> device_texcoords(texcoords.size());
+        DeviceArray<GpuVec3> device_tangents(tangents.size());
         DeviceArray<int> device_indices(indices.size());
         DeviceArray<GpuBvhNode> device_bvh(bvh.size());
         device_vertices.upload(vertices.data(), vertices.size());
         device_normals.upload(normals.data(), normals.size());
         device_texcoords.upload(texcoords.data(), texcoords.size());
+        device_tangents.upload(tangents.data(), tangents.size());
         device_indices.upload(indices.data(), indices.size());
         device_bvh.upload(bvh.data(), bvh.size());
         mesh.vertices = device_vertices.get();
         mesh.normals = device_normals.get();
         mesh.uvs = device_texcoords.get();
+        mesh.tangents = device_tangents.get();
         mesh.indices = device_indices.get();
         mesh.triangle_count = 2;
         mesh.material_index = -1;
@@ -389,35 +496,59 @@ int main() {
         DeviceArray<GpuAccelerationTelemetry> device_telemetry(1);
         device_telemetry.upload(&telemetry, 1);
 
-        std::vector<GpuInstanceDesc> descs(9, {0, 5});
-        descs[1].material_index = 7;
+        std::vector<GpuInstanceDesc> descs(
+            9,
+            {0,
+             static_cast<int>(
+                 parity_fixture.acceleration_instances[0].
+                     material_index)});
+        descs[1].material_index =
+            static_cast<int>(
+                parity_fixture.acceleration_instances[1].
+                    material_index);
         std::vector<GpuInstanceTransform> transforms(9);
-        transforms[0].transform.m[0][0] = 1.5f;
-        transforms[0].transform.m[0][3] = -2.0f;
-        transforms[0].transform.m[1][1] = 0.75f;
-        transforms[0].inverse_transform.m[0][0] =
-            2.0f / 3.0f;
-        transforms[0].inverse_transform.m[0][3] =
-            4.0f / 3.0f;
-        transforms[0].inverse_transform.m[1][1] =
-            4.0f / 3.0f;
-        transforms[0].min_pt =
-            {-3.5f, -0.75f, -0.001f};
-        transforms[0].max_pt =
-            {-0.5f, 0.75f, 0.001f};
-        transforms[1].transform.m[0][0] = 0.75f;
-        transforms[1].transform.m[0][3] = 2.0f;
-        transforms[1].transform.m[1][1] = 1.5f;
-        transforms[1].inverse_transform.m[0][0] =
-            4.0f / 3.0f;
-        transforms[1].inverse_transform.m[0][3] =
-            -8.0f / 3.0f;
-        transforms[1].inverse_transform.m[1][1] =
-            2.0f / 3.0f;
-        transforms[1].min_pt =
-            {1.25f, -1.5f, -0.001f};
-        transforms[1].max_pt =
-            {2.75f, 1.5f, 0.001f};
+        for (std::size_t index = 0;
+             index < 2;
+             ++index) {
+            const auto& source =
+                parity_fixture.instances[index];
+            for (int row = 0; row < 3; ++row) {
+                const auto& forward =
+                    source.object_to_world[
+                        static_cast<std::size_t>(row)];
+                const auto& inverse =
+                    source.world_to_object[
+                        static_cast<std::size_t>(row)];
+                transforms[index].transform.m[row][0] =
+                    forward.x;
+                transforms[index].transform.m[row][1] =
+                    forward.y;
+                transforms[index].transform.m[row][2] =
+                    forward.z;
+                transforms[index].transform.m[row][3] =
+                    forward.w;
+                transforms[index].
+                    inverse_transform.m[row][0] =
+                        inverse.x;
+                transforms[index].
+                    inverse_transform.m[row][1] =
+                        inverse.y;
+                transforms[index].
+                    inverse_transform.m[row][2] =
+                        inverse.z;
+                transforms[index].
+                    inverse_transform.m[row][3] =
+                        inverse.w;
+            }
+            transforms[index].min_pt = {
+                source.bounds_min.x,
+                source.bounds_min.y,
+                source.bounds_min.z};
+            transforms[index].max_pt = {
+                source.bounds_max.x,
+                source.bounds_max.y,
+                source.bounds_max.z};
+        }
         for (std::size_t index = 2;
              index < transforms.size();
              ++index) {
@@ -472,17 +603,24 @@ int main() {
             static_cast<int>(tlas_instance_indices.size());
         scene.acceleration_telemetry = device_telemetry.get();
         scene.acceleration_collect_stats = 1;
-        std::array<GpuRay, 3> rays;
-        rays[0].origin =
-            {-2.75f, 0.1875f, 4.0f};
-        rays[1].origin =
-            {2.3f, -0.45f, 4.0f};
-        rays[2].origin =
-            {0.5f, 0.0f, 4.0f};
-        for (auto& ray : rays) {
-            ray.direction = {0.0f, 0.0f, -1.0f};
-            ray.t_min = 0.001f;
-            ray.t_max = 100.0f;
+        std::array<GpuRay, 5> rays;
+        for (std::size_t index = 0;
+             index < rays.size();
+             ++index) {
+            const auto& source =
+                parity_fixture.rays[index];
+            rays[index].origin = {
+                source.origin_tmin[0],
+                source.origin_tmin[1],
+                source.origin_tmin[2]};
+            rays[index].direction = {
+                source.direction_tmax[0],
+                source.direction_tmax[1],
+                source.direction_tmax[2]};
+            rays[index].t_min =
+                source.origin_tmin[3];
+            rays[index].t_max =
+                source.direction_tmax[3];
         }
         DeviceArray<GpuRay> device_rays(rays.size());
         DeviceArray<ContractHit> device_hits(rays.size());
@@ -499,8 +637,8 @@ int main() {
         require(
             cudaDeviceSynchronize() == cudaSuccess,
             "CUDA acceleration kernel failed");
-        std::array<ContractHit, 3> hits;
-        std::array<int, 3> shadow_hits;
+        std::array<ContractHit, 5> hits;
+        std::array<int, 5> shadow_hits;
         device_hits.download(hits.data(), hits.size());
         device_shadow_hits.download(
             shadow_hits.data(), shadow_hits.size());
@@ -517,6 +655,21 @@ int main() {
             require(
                 hits[index].hit_type == 2,
                 "CUDA hit type mismatch");
+            require(
+                close(hits[index].tangent.length(), 1.0f) &&
+                    close(
+                        hits[index].tangent.dot(
+                            hits[index].shading_normal),
+                        0.0f),
+                "CUDA hit tangent mismatch");
+            require(
+                close(hits[index].aov[0], hits[index].uv.u) &&
+                    close(
+                        hits[index].aov[1],
+                        hits[index].uv.v) &&
+                    close(hits[index].aov[2], 1.0f) &&
+                    close(hits[index].aov[3], 1.0f),
+                "CUDA acceleration AOV mismatch");
         }
         require(
             hits[0].material_index == 5 &&
@@ -537,9 +690,21 @@ int main() {
                 hits[2].material_index == -1,
             "CUDA visibility miss mismatch");
         require(
+            hits[3].t < 0.0f &&
+                hits[3].material_index == -1 &&
+                close(hits[3].aov[3], 0.0f),
+            "CUDA second visibility miss mismatch");
+        require(
+            hits[4].t >= 0.0f &&
+                hits[4].material_index == 5 &&
+                close(hits[4].aov[3], 1.0f),
+            "CUDA shadow fixture hit mismatch");
+        require(
             shadow_hits[0] == 1 &&
                 shadow_hits[1] == 1 &&
-                shadow_hits[2] == 0,
+                shadow_hits[2] == 0 &&
+                shadow_hits[3] == 0 &&
+                shadow_hits[4] == 1,
             "CUDA closest/shadow instance parity mismatch");
         device_telemetry.download(&telemetry, 1);
         require(

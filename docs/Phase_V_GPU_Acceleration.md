@@ -2,10 +2,10 @@
 
 ## Status
 
-V.0 through V.6 are complete and the authoritative cursor is V.7. This
+V.0 through V.7 are complete and the authoritative cursor is V.8. This
 document records the initial acceleration audit, configuration contract,
-self-compute construction and the optional native-provider build lifecycle.
-Cross-provider renderer parity remains V.7.
+self-compute construction, optional native-provider lifecycle and the
+cross-provider traversal contract. Clustered geometry resources are V.8.
 
 ## Current production path
 
@@ -23,9 +23,11 @@ topology without rebuilding or uploading static mesh BLAS data.
 The Phase T `AccelerationProvider` contract is the forward boundary. Vulkan RT
 and DXR now implement multi-BLAS/TLAS construction, compaction, transform
 refit/rebuild, scratch budgets and build statistics. OptiX implements the same
-construction contract when its separately installed SDK is available. The
-current public renderer still does not lower arbitrary SceneIR traversal and
-hit shading to native providers; that parity boundary remains V.7.
+construction contract when its separately installed SDK is available. A
+canonical SceneIR fixture now lowers to CUDA self-compute, OptiX, Vulkan RT and
+DXR and freezes traversal/hit/AOV semantics. The current public renderer still
+does not lower an arbitrary SceneIR radiometric integrator to native providers;
+V.7 does not claim that broader renderer migration.
 
 ## Audit ledger
 
@@ -38,7 +40,7 @@ hit shading to native providers; that parity boundary remains V.7.
 | V0-LIN | A mesh with no BVH nodes falls back to a full triangle scan in closest-hit and shadow paths. | Missing or invalid acceleration can silently become O(N); fallback policy has no explicit configuration, reason or telemetry. | V.2 |
 | V0-UPD | V.0 found transform hot updates without top-level acceleration maintenance; V.3 now refits retained TLAS topology and uploads only transforms and TLAS nodes. | Rigid transform refit is closed; deformation and topology classification remain V.10. | V.3/V.10 |
 | V0-HOST | `BVHAccelerator` is a recursive host traversal compiled into `ure_core`; `SimpleAccelerator` and an Embree placeholder remain in installed `ure_types` headers. Repository search finds no renderer/session/CLI consumer. | Extending these classes would create the forbidden second host production traversal path and split hit semantics from GPU providers. | Remove or quarantine in V.2 |
-| V0-OPT | V.0 found two installed `OptixAccelerator` placeholders whose build/update were empty and whose queries always missed. V.6 removed both and added one optional SDK-backed provider. | Closed for native construction; traversal/hit parity remains V.7. | V.6/V.7 |
+| V0-OPT | V.0 found two installed `OptixAccelerator` placeholders whose build/update were empty and whose queries always missed. V.6 removed both and added one optional SDK-backed provider; V.7 adds an actual OptiX IR raygen/miss/closest-hit pipeline. | Closed for native construction and the canonical parity fixture; arbitrary-scene integrator lowering remains separate. | V.6/V.7 |
 | V0-API | Phase T exposes SDK-free bounded geometry, instance, ray/hit and capability contracts, but no `AccelerationConfig`, quality preset, update policy, build statistics or scratch/compaction budget. | Provider selection and operational policy cannot yet be expressed consistently through config, ABI, Session or pyure. | V.1 |
 | V0-VAL | V.2-V.4 now cover robust/deep traversal, transformed instances, dynamic TLAS refit and a fixed large-mesh build/trace/memory benchmark. | Native-provider parity, dense geometry and full-suite aggregation remain later work. | V.2-V.11 |
 
@@ -97,7 +99,7 @@ axes:
 
 | Field | Vocabulary | V.1 executable boundary |
 |---|---|---|
-| provider | `auto`, `self_compute`, `optix`, `vulkan_rt`, `dxr` | `auto` resolves to CUDA `self_compute`; native build providers exist after V.6, while full renderer selection remains fail-loud until V.7 parity |
+| provider | `auto`, `self_compute`, `optix`, `vulkan_rt`, `dxr` | `auto` resolves to CUDA `self_compute`; native construction and canonical traversal parity are complete, while arbitrary-scene native integrator selection remains fail-loud |
 | quality | `auto`, `fast_build`, `balanced`, `high_quality` | all four execute on CUDA self-compute since V.4 |
 | update policy | `auto`, `static`, `refit`, `rebuild` | `auto` and `static`; refit/rebuild become executable with V.3/V.6/V.10 |
 | clustered geometry | enabled/disabled | disabled until V.8 |
@@ -280,3 +282,39 @@ V.6 does not claim framebuffer or complete hit-attribute parity; that is the
 V.7 gate. `scripts/run_phase_v6_native_provider_gate.ps1` can accept an
 `-OptixRoot`, requires physical Vulkan RT and DXR on the closure machine, and
 writes `ure.phase_v.native_provider.v1` evidence.
+
+## V.7 cross-provider traversal parity
+
+`tests/shared/acceleration_parity_fixture.hpp` owns one canonical SceneIR
+fixture and its deterministic lowering. It contains one indexed quad, two
+instances with different material identities and non-uniform transforms, four
+closest-hit or miss queries and one shadow query. CUDA self-compute, OptiX,
+Vulkan RT and DXR consume that same source instead of maintaining independent
+hand-authored fixtures.
+
+The SDK-free `AccelerationHit` record now carries a 16-byte
+tangent/handedness field in addition to position/distance, geometric and
+shading normals, UV/barycentrics and material/instance/primitive identity.
+Shared Slang compute and inline-ray-query kernels interpolate all attributes.
+Tangents are transformed as vectors and Gram-Schmidt orthonormalized against
+the shading normal; a deterministic axis fallback handles a degenerate input.
+The compact validation AOV is `(u, v, abs(Nz), visibility)`. Shadow parity is
+defined as first-hit visibility, so providers need not return an identical
+primitive when more than one valid occluder exists.
+
+OptiX now compiles `shaders/optix/phase_v7_acceleration.cu` to CUDA 13 OptiX
+IR and creates actual raygen, miss and closest-hit program groups, pipeline,
+stack contract and shader binding table without exposing an OptiX handle in an
+installed header. Geometry SBT records retain per-geometry attributes while
+instance metadata preserves stable material and instance identity. The V.6
+two-GAS construction/refit/scratch test remains separate from the one-geometry
+SceneIR parity scene.
+
+`scripts/run_phase_v7_cross_provider_parity.ps1` writes
+`ure.phase_v.cross_provider_parity.v1`. It records the fixture and executable
+artifact hashes, absolute numerical thresholds and actual provider adapter,
+driver and compiler identity. CUDA and Vulkan remain required on the closure
+machine; OptiX and DXR become mandatory only when the configured SDK or
+advertised hardware capability is available. This gate closes acceleration
+traversal semantics, not arbitrary-scene BSDF, spectral, polarization or
+integrator lowering on the native backends.

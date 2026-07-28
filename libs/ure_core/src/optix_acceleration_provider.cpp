@@ -19,6 +19,7 @@
 #if UR_HAS_OPTIX
 #include <optix.h>
 #include <optix_function_table_definition.h>
+#include <optix_stack_size.h>
 #include <optix_stubs.h>
 #endif
 
@@ -51,6 +52,40 @@ void check_optix(
         throw optix_error(result, operation);
     }
 }
+
+struct OptixTraceGeometryData {
+    CUdeviceptr vertices = 0;
+    std::uint64_t vertex_stride = 0;
+    CUdeviceptr normals = 0;
+    CUdeviceptr texcoords = 0;
+    CUdeviceptr tangents = 0;
+    CUdeviceptr indices = 0;
+};
+
+struct OptixTraceInstanceData {
+    std::uint32_t stable_index = 0;
+    std::uint32_t material_index = 0;
+};
+
+struct OptixTraceLaunchParams {
+    OptixTraversableHandle scene = 0;
+    CUdeviceptr rays = 0;
+    CUdeviceptr hits = 0;
+    CUdeviceptr framebuffer = 0;
+    CUdeviceptr instances = 0;
+    std::uint32_t ray_count = 0;
+};
+
+template <typename Data>
+struct alignas(OPTIX_SBT_RECORD_ALIGNMENT) OptixSbtRecord {
+    std::array<char, OPTIX_SBT_RECORD_HEADER_SIZE> header{};
+    Data data{};
+};
+
+struct alignas(OPTIX_SBT_RECORD_ALIGNMENT)
+OptixSbtHeaderRecord {
+    std::array<char, OPTIX_SBT_RECORD_HEADER_SIZE> header{};
+};
 
 class OptixAccelerationProvider final :
     public runtime::AccelerationProvider {
@@ -247,6 +282,313 @@ public:
         scenes_.erase(found);
     }
 
+    void trace(
+        runtime::AccelerationSceneHandle handle,
+        const OptixAccelerationTraceDesc& desc) {
+        std::scoped_lock lock(mutex_);
+        auto& scene = require(handle);
+        if (desc.geometries.size() !=
+                scene.geometries.size() ||
+            desc.ray_count == 0 ||
+            !desc.rays ||
+            !desc.hits ||
+            !desc.framebuffer ||
+            desc.module_code.empty()) {
+            throw runtime::Error(
+                runtime::ErrorCode::InvalidArgument,
+                "invalid OptiX acceleration trace description");
+        }
+        OptixModule module = nullptr;
+        OptixProgramGroup raygen_group = nullptr;
+        OptixProgramGroup miss_group = nullptr;
+        OptixProgramGroup hit_group = nullptr;
+        OptixPipeline pipeline = nullptr;
+        runtime::BufferHandle raygen_record_buffer;
+        runtime::BufferHandle miss_record_buffer;
+        runtime::BufferHandle hit_record_buffer;
+        runtime::BufferHandle instance_data_buffer;
+        runtime::BufferHandle launch_params_buffer;
+        auto cleanup = [&] {
+            static_cast<void>(
+                cudaStreamSynchronize(stream_));
+            destroy_noexcept(launch_params_buffer);
+            destroy_noexcept(instance_data_buffer);
+            destroy_noexcept(hit_record_buffer);
+            destroy_noexcept(miss_record_buffer);
+            destroy_noexcept(raygen_record_buffer);
+            if (pipeline) {
+                static_cast<void>(
+                    optixPipelineDestroy(pipeline));
+            }
+            if (hit_group) {
+                static_cast<void>(
+                    optixProgramGroupDestroy(hit_group));
+            }
+            if (miss_group) {
+                static_cast<void>(
+                    optixProgramGroupDestroy(miss_group));
+            }
+            if (raygen_group) {
+                static_cast<void>(
+                    optixProgramGroupDestroy(raygen_group));
+            }
+            if (module) {
+                static_cast<void>(
+                    optixModuleDestroy(module));
+            }
+        };
+        try {
+            OptixModuleCompileOptions module_options{};
+            module_options.optLevel =
+                OPTIX_COMPILE_OPTIMIZATION_LEVEL_3;
+            module_options.debugLevel =
+                OPTIX_COMPILE_DEBUG_LEVEL_NONE;
+            OptixPipelineCompileOptions compile_options{};
+            compile_options.traversableGraphFlags =
+                OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
+            compile_options.numPayloadValues = 1;
+            compile_options.numAttributeValues = 2;
+            compile_options.exceptionFlags =
+                OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
+                OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
+            compile_options.pipelineLaunchParamsVariableName =
+                "params";
+            std::array<char, 4096> log{};
+            std::size_t log_size = log.size();
+            check_optix(
+                optixModuleCreate(
+                    context_,
+                    &module_options,
+                    &compile_options,
+                    reinterpret_cast<const char*>(
+                        desc.module_code.data()),
+                    desc.module_code.size(),
+                    log.data(),
+                    &log_size,
+                    &module),
+                "optixModuleCreate trace");
+            OptixProgramGroupOptions group_options{};
+            OptixProgramGroupDesc group_desc{};
+            group_desc.kind =
+                OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
+            group_desc.raygen.module = module;
+            group_desc.raygen.entryFunctionName =
+                "__raygen__main";
+            log_size = log.size();
+            check_optix(
+                optixProgramGroupCreate(
+                    context_,
+                    &group_desc,
+                    1,
+                    &group_options,
+                    log.data(),
+                    &log_size,
+                    &raygen_group),
+                "optixProgramGroupCreate raygen");
+            group_desc = {};
+            group_desc.kind =
+                OPTIX_PROGRAM_GROUP_KIND_MISS;
+            group_desc.miss.module = module;
+            group_desc.miss.entryFunctionName =
+                "__miss__main";
+            log_size = log.size();
+            check_optix(
+                optixProgramGroupCreate(
+                    context_,
+                    &group_desc,
+                    1,
+                    &group_options,
+                    log.data(),
+                    &log_size,
+                    &miss_group),
+                "optixProgramGroupCreate miss");
+            group_desc = {};
+            group_desc.kind =
+                OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+            group_desc.hitgroup.moduleCH = module;
+            group_desc.hitgroup.entryFunctionNameCH =
+                "__closesthit__main";
+            log_size = log.size();
+            check_optix(
+                optixProgramGroupCreate(
+                    context_,
+                    &group_desc,
+                    1,
+                    &group_options,
+                    log.data(),
+                    &log_size,
+                    &hit_group),
+                "optixProgramGroupCreate hit");
+            const std::array groups = {
+                raygen_group,
+                miss_group,
+                hit_group};
+            OptixPipelineLinkOptions link_options{};
+            link_options.maxTraceDepth = 1;
+            log_size = log.size();
+            check_optix(
+                optixPipelineCreate(
+                    context_,
+                    &compile_options,
+                    &link_options,
+                    groups.data(),
+                    static_cast<unsigned int>(
+                        groups.size()),
+                    log.data(),
+                    &log_size,
+                    &pipeline),
+                "optixPipelineCreate");
+            OptixStackSizes stack_sizes{};
+            for (const auto group : groups) {
+                check_optix(
+                    optixUtilAccumulateStackSizes(
+                        group,
+                        &stack_sizes,
+                        pipeline),
+                    "optixUtilAccumulateStackSizes");
+            }
+            unsigned int direct_traversal = 0;
+            unsigned int direct_state = 0;
+            unsigned int continuation = 0;
+            check_optix(
+                optixUtilComputeStackSizes(
+                    &stack_sizes,
+                    1,
+                    0,
+                    0,
+                    &direct_traversal,
+                    &direct_state,
+                    &continuation),
+                "optixUtilComputeStackSizes");
+            check_optix(
+                optixPipelineSetStackSize(
+                    pipeline,
+                    direct_traversal,
+                    direct_state,
+                    continuation,
+                    2),
+                "optixPipelineSetStackSize");
+            using HeaderRecord =
+                OptixSbtHeaderRecord;
+            HeaderRecord raygen_record;
+            HeaderRecord miss_record;
+            check_optix(
+                optixSbtRecordPackHeader(
+                    raygen_group,
+                    &raygen_record),
+                "optixSbtRecordPackHeader raygen");
+            check_optix(
+                optixSbtRecordPackHeader(
+                    miss_group,
+                    &miss_record),
+                "optixSbtRecordPackHeader miss");
+            using HitRecord =
+                OptixSbtRecord<OptixTraceGeometryData>;
+            std::vector<HitRecord> hit_records(
+                scene.geometries.size());
+            for (std::size_t index = 0;
+                 index < hit_records.size();
+                 ++index) {
+                check_optix(
+                    optixSbtRecordPackHeader(
+                        hit_group,
+                        &hit_records[index]),
+                    "optixSbtRecordPackHeader hit");
+                const auto& geometry =
+                    scene.geometries[index];
+                const auto& attributes =
+                    desc.geometries[index];
+                if (!attributes.normals ||
+                    !attributes.texcoords ||
+                    !attributes.tangents) {
+                    throw runtime::Error(
+                        runtime::ErrorCode::InvalidArgument,
+                        "OptiX trace geometry attributes are incomplete");
+                }
+                hit_records[index].data = {
+                    address(geometry.vertices) +
+                        geometry.vertex_offset,
+                    geometry.vertex_stride,
+                    address(attributes.normals),
+                    address(attributes.texcoords),
+                    address(attributes.tangents),
+                    address(geometry.indices) +
+                        geometry.index_offset};
+            }
+            std::vector<OptixTraceInstanceData>
+                instance_data(scene.instances.size());
+            for (std::size_t index = 0;
+                 index < scene.instances.size();
+                 ++index) {
+                instance_data[index] = {
+                    scene.instances[index].instance_index,
+                    scene.instances[index].material_index};
+            }
+            raygen_record_buffer = upload_trace_data(
+                std::span<const HeaderRecord>{
+                    &raygen_record, 1},
+                "optix.trace.raygen_record");
+            miss_record_buffer = upload_trace_data(
+                std::span<const HeaderRecord>{
+                    &miss_record, 1},
+                "optix.trace.miss_record");
+            hit_record_buffer = upload_trace_data(
+                std::span<const HitRecord>{
+                    hit_records},
+                "optix.trace.hit_records");
+            instance_data_buffer = upload_trace_data(
+                std::span<
+                    const OptixTraceInstanceData>{
+                    instance_data},
+                "optix.trace.instances");
+            const OptixTraceLaunchParams launch_params{
+                scene.ias.handle,
+                address(desc.rays),
+                address(desc.hits),
+                address(desc.framebuffer),
+                address(instance_data_buffer),
+                desc.ray_count};
+            launch_params_buffer = upload_trace_data(
+                std::span<
+                    const OptixTraceLaunchParams>{
+                    &launch_params, 1},
+                "optix.trace.params");
+            OptixShaderBindingTable sbt{};
+            sbt.raygenRecord =
+                address(raygen_record_buffer);
+            sbt.missRecordBase =
+                address(miss_record_buffer);
+            sbt.missRecordStrideInBytes =
+                sizeof(HeaderRecord);
+            sbt.missRecordCount = 1;
+            sbt.hitgroupRecordBase =
+                address(hit_record_buffer);
+            sbt.hitgroupRecordStrideInBytes =
+                sizeof(HitRecord);
+            sbt.hitgroupRecordCount =
+                static_cast<unsigned int>(
+                    hit_records.size());
+            check_optix(
+                optixLaunch(
+                    pipeline,
+                    stream_,
+                    address(launch_params_buffer),
+                    sizeof(launch_params),
+                    &sbt,
+                    desc.ray_count,
+                    1,
+                    1),
+                "optixLaunch acceleration trace");
+            detail::check_cuda(
+                cudaStreamSynchronize(stream_),
+                "cudaStreamSynchronize OptiX trace");
+            cleanup();
+        } catch (...) {
+            cleanup();
+            throw;
+        }
+    }
+
 private:
     struct Built {
         runtime::BufferHandle storage;
@@ -282,6 +624,29 @@ private:
         runtime::BufferHandle buffer) const {
         return reinterpret_cast<CUdeviceptr>(
             device_.native_buffer(buffer));
+    }
+
+    template <typename T>
+    runtime::BufferHandle upload_trace_data(
+        std::span<const T> data,
+        const char* label) {
+        const auto bytes =
+            data.size_bytes();
+        const auto buffer = allocate(bytes, label);
+        try {
+            detail::check_cuda(
+                cudaMemcpyAsync(
+                    reinterpret_cast<void*>(address(buffer)),
+                    data.data(),
+                    bytes,
+                    cudaMemcpyHostToDevice,
+                    stream_),
+                "cudaMemcpyAsync OptiX trace data");
+            return buffer;
+        } catch (...) {
+            destroy_noexcept(buffer);
+            throw;
+        }
     }
 
     static unsigned int build_flags(
@@ -481,7 +846,8 @@ private:
                 sizeof(destination.transform));
             destination.instanceId =
                 source.instance_index;
-            destination.sbtOffset = 0;
+            destination.sbtOffset =
+                source.geometry_index;
             destination.visibilityMask =
                 source.visibility_mask;
             destination.flags =
@@ -677,6 +1043,21 @@ make_optix_acceleration_provider(runtime::Device& device) {
         OptixAccelerationProvider>(*cuda);
 }
 
+void trace_optix_acceleration_scene(
+    runtime::AccelerationProvider& provider,
+    runtime::AccelerationSceneHandle scene,
+    const OptixAccelerationTraceDesc& desc) {
+    auto* optix =
+        dynamic_cast<OptixAccelerationProvider*>(
+            &provider);
+    if (!optix) {
+        throw runtime::Error(
+            runtime::ErrorCode::Unsupported,
+            "OptiX trace requires the OptiX acceleration provider");
+    }
+    optix->trace(scene, desc);
+}
+
 #else
 
 bool optix_acceleration_available() noexcept {
@@ -688,6 +1069,15 @@ make_optix_acceleration_provider(runtime::Device&) {
     throw runtime::Error(
         runtime::ErrorCode::Unsupported,
         "OptiX acceleration provider is unavailable because the SDK was not found");
+}
+
+void trace_optix_acceleration_scene(
+    runtime::AccelerationProvider&,
+    runtime::AccelerationSceneHandle,
+    const OptixAccelerationTraceDesc&) {
+    throw runtime::Error(
+        runtime::ErrorCode::Unsupported,
+        "OptiX acceleration trace is unavailable because the SDK was not found");
 }
 
 #endif

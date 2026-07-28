@@ -72,8 +72,31 @@ if(UR_ENABLE_OPTIX AND UR_OPTIX_INCLUDE_DIR)
         PROPERTIES
             COMPILE_DEFINITIONS UR_HAS_OPTIX=1
             INCLUDE_DIRECTORIES "${UR_OPTIX_INCLUDE_DIR}")
+    list(GET CMAKE_CUDA_ARCHITECTURES 0 UR_OPTIX_PTX_ARCH)
+    set(UR_OPTIX_TRACE_MODULE
+        "${CMAKE_BINARY_DIR}/shaders/optix/phase_v7_acceleration.optixir"
+        CACHE INTERNAL "Phase V.7 OptiX traversal module" FORCE)
+    add_custom_command(
+        OUTPUT "${UR_OPTIX_TRACE_MODULE}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+            "${CMAKE_BINARY_DIR}/shaders/optix"
+        COMMAND "${CMAKE_CUDA_COMPILER}"
+            --optix-ir
+            --std=c++17
+            "--gpu-architecture=compute_${UR_OPTIX_PTX_ARCH}"
+            "-I${UR_OPTIX_INCLUDE_DIR}"
+            "${CMAKE_SOURCE_DIR}/shaders/optix/phase_v7_acceleration.cu"
+            -o "${UR_OPTIX_TRACE_MODULE}"
+        DEPENDS
+            "${CMAKE_SOURCE_DIR}/shaders/optix/phase_v7_acceleration.cu"
+        VERBATIM)
+    add_custom_target(
+        ure_optix_v7_shader
+        DEPENDS "${UR_OPTIX_TRACE_MODULE}")
     message(STATUS "OptiX acceleration provider enabled: ${UR_OPTIX_INCLUDE_DIR}")
 else()
+    set(UR_OPTIX_TRACE_MODULE ""
+        CACHE INTERNAL "Phase V.7 OptiX traversal module" FORCE)
     set_source_files_properties(
         src/optix_acceleration_provider.cpp
         PROPERTIES COMPILE_DEFINITIONS UR_HAS_OPTIX=0)

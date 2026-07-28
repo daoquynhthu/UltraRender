@@ -67,8 +67,11 @@ retains all earlier layouts and adds `ure_acceleration_stats_v4_t` plus
 versioned getters. V.6 adds an SDK-free multi-geometry native build contract
 with compaction, transform refit/rebuild, scratch budgets and provider-owned
 statistics for Vulkan RT, DXR and optional SDK-backed OptiX. Full renderer
-selection remains fail-loud until V.7 cross-provider parity, and clustered
-geometry remains later work. Existing backend-only C entry points retain
+selection remains fail-loud for arbitrary SceneIR on native providers. V.7
+adds tangent/handedness to the SDK-free hit record and validates one shared
+SceneIR closest/shadow, transform, material, interpolation and AOV contract
+across CUDA self-compute, optional OptiX, Vulkan RT and DXR. Clustered geometry
+remains V.8 work. Existing backend-only C entry points retain
 their original layout and behavior; the execution-config entry points add
 acceleration without requiring callers to pass a larger legacy structure.
 

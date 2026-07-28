@@ -18,6 +18,7 @@ struct AccelerationHit
     float4 positionT;
     float4 shadingNormal;
     float4 geometricNormal;
+    float4 tangentHandedness;
     float4 uvBarycentrics;
     uint4 ids;
 };
@@ -54,18 +55,21 @@ StructuredBuffer<float4> normals;
 StructuredBuffer<float4> texcoords;
 
 [[vk::binding(5, 0)]]
-StructuredBuffer<uint> indices;
+StructuredBuffer<float4> tangents;
 
 [[vk::binding(6, 0)]]
-StructuredBuffer<InstanceData> instances;
+StructuredBuffer<uint> indices;
 
 [[vk::binding(7, 0)]]
-StructuredBuffer<AccelerationRay> rays;
+StructuredBuffer<InstanceData> instances;
 
 [[vk::binding(8, 0)]]
-RWStructuredBuffer<AccelerationHit> hits;
+StructuredBuffer<AccelerationRay> rays;
 
 [[vk::binding(9, 0)]]
+RWStructuredBuffer<AccelerationHit> hits;
+
+[[vk::binding(10, 0)]]
 RWStructuredBuffer<float4> framebuffer;
 
 float3 transformPoint(
@@ -94,12 +98,31 @@ float3 transformVector(
         dot(row2, homogeneous));
 }
 
+float3 orthonormalTangent(
+    float3 tangent,
+    float3 normal)
+{
+    float3 projected =
+        tangent - normal * dot(tangent, normal);
+    float lengthSquared = dot(projected, projected);
+    if (lengthSquared <= 1.0e-12)
+    {
+        float3 axis =
+            abs(normal.z) < 0.999
+                ? float3(0.0, 0.0, 1.0)
+                : float3(0.0, 1.0, 0.0);
+        return normalize(cross(axis, normal));
+    }
+    return projected * rsqrt(lengthSquared);
+}
+
 AccelerationHit missHit()
 {
     AccelerationHit result;
     result.positionT = float4(0.0, 0.0, 0.0, -1.0);
     result.shadingNormal = float4(0.0);
     result.geometricNormal = float4(0.0);
+    result.tangentHandedness = float4(0.0);
     result.uvBarycentrics = float4(0.0);
     result.ids = uint4(0xffffffff);
     return result;
@@ -134,6 +157,17 @@ AccelerationHit makeHit(
         instance.normalTransform1,
         instance.normalTransform2,
         objectShading));
+    float4 objectTangent =
+        tangents[i0] * weight +
+        tangents[i1] * barycentrics.x +
+        tangents[i2] * barycentrics.y;
+    float3 tangent = transformVector(
+        instance.objectToWorld0,
+        instance.objectToWorld1,
+        instance.objectToWorld2,
+        objectTangent.xyz);
+    tangent = orthonormalTangent(
+        tangent, shading);
     float2 uv =
         texcoords[i0].xy * weight +
         texcoords[i1].xy * barycentrics.x +
@@ -145,6 +179,8 @@ AccelerationHit makeHit(
         rayT);
     result.shadingNormal = float4(shading, 0.0);
     result.geometricNormal = float4(geometric, 0.0);
+    result.tangentHandedness =
+        float4(tangent, objectTangent.w < 0.0 ? -1.0 : 1.0);
     result.uvBarycentrics =
         float4(uv, barycentrics);
     result.ids = uint4(
@@ -169,9 +205,13 @@ void ray_query_native(uint3 threadId : SV_DispatchThreadID)
     ray.Direction = input.directionTMax.xyz;
     ray.TMax = input.directionTMax.w;
     RayQuery<RAY_FLAG_NONE> query;
+    uint rayFlags =
+        input.maskFlags.y != 0
+            ? RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH
+            : RAY_FLAG_NONE;
     query.TraceRayInline(
         accelerationScene,
-        RAY_FLAG_NONE,
+        rayFlags,
         input.maskFlags.x,
         ray);
     while (query.Proceed())
@@ -268,6 +308,7 @@ void compute_bvh(uint3 threadId : SV_DispatchThreadID)
     uint closestInstance = 0xffffffff;
     uint closestPrimitive = 0xffffffff;
     float2 closestBarycentrics = float2(0.0);
+    bool shadow = input.maskFlags.y != 0;
     for (uint instanceIndex = 0;
          instanceIndex < params.instanceCount;
         ++instanceIndex)
@@ -307,8 +348,12 @@ void compute_bvh(uint3 threadId : SV_DispatchThreadID)
                 closestInstance = instanceIndex;
                 closestPrimitive = primitive;
                 closestBarycentrics = barycentrics;
+                if (shadow)
+                    break;
             }
         }
+        if (shadow && closestInstance != 0xffffffff)
+            break;
     }
     if (closestInstance == 0xffffffff)
     {

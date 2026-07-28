@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `V.7`. Phase Q, Phase R and Phase T are complete. Phase V has completed V.0 through V.6: the acceleration audit, configuration/API contract, checked CUDA self-compute baseline, TLAS/BLAS split, measured SAH/SBVH wide-node quality presets, bounded asynchronous construction/upload, and optional native RT provider construction. Vulkan RT and DXR execute multi-BLAS/TLAS build, compaction, refit/rebuild, scratch budgets and telemetry. OptiX uses the same construction contract when its separately installed SDK is present and rejects deterministically when absent. The full SceneIR renderer remains unavailable on native providers until V.7 parity closes.
+The authoritative construction cursor is `V.8`. Phase Q, Phase R and Phase T are complete. Phase V has completed V.0 through V.7: the acceleration audit, configuration/API contract, checked CUDA self-compute baseline, TLAS/BLAS split, measured SAH/SBVH wide-node quality presets, bounded asynchronous construction/upload, optional native RT provider construction, and one canonical SceneIR cross-provider traversal-parity contract. Vulkan RT and DXR execute multi-BLAS/TLAS build, compaction, refit/rebuild, scratch budgets and telemetry. OptiX uses the same construction contract and a real OptiX IR raygen/miss/closest-hit pipeline when its separately installed SDK is present, and rejects deterministically when absent. The full SceneIR renderer remains unavailable on native providers: V.7 closes the acceleration hit/AOV fixture, not arbitrary-scene radiometric integrator lowering.
 
 ## Supported execution baseline
 
@@ -51,11 +51,11 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | Backend-neutral execution graph | Implemented and tested | Stable path/guiding/ReSTIR/advanced-integrator/wave graphs freeze estimator and PDF order; the CUDA backend lowers and submits the contract through runtime-owned queues and timelines |
 | CUDA runtime backend | Implemented and tested | Real stream/fence/event, buffer/image/sampler, PTX module/pipeline, DAG submission, wave resources, multi-GPU compatibility and device-loss errors |
 | Vulkan compute runtime | T.7 implemented and tested | Vulkan 1.3 adapter/queue/timeline, buffer/image/sampler, SPIR-V, uniform/storage/image descriptors, specialization, cache identity, validation/debug-utils and structured loss mapping; Windows NVIDIA/Intel plus Linux build/execution gates |
-| Vulkan acceleration bridge | V.6 native construction complete | SDK-free provider/selection/hit contract; multi-BLAS/TLAS build, compaction, refit/rebuild, scratch budgets, ray-query descriptor lowering and compute fallback; full SceneIR renderer parity remains V.7 |
-| D3D12/DXR optional runtime | V.6 native construction complete | Windows-only SDK-neutral public surface; DXR multi-BLAS/TLAS build, compaction, refit/rebuild, scratch budgets, inline ray query and compute fallback; full SceneIR renderer parity remains V.7 |
+| Vulkan acceleration bridge | V.7 traversal parity complete | SDK-free provider/selection/hit contract; multi-BLAS/TLAS lifecycle plus shared SceneIR closest/shadow, transform, material, UV/normal/tangent and AOV parity; arbitrary-scene integrator lowering remains unavailable |
+| D3D12/DXR optional runtime | V.7 traversal parity complete | Windows-only SDK-neutral public surface; DXR lifecycle plus shared SceneIR inline-ray-query/compute parity; arbitrary-scene integrator lowering remains unavailable |
 | Multi-backend scheduling | T.10 implemented and tested | Canonical weighted sample partition, feature/precision/coherence/budget/semantic negotiation, backend-native resource cache identity, versioned distributed provenance and overlap rejection; actual CUDA, NVIDIA/Intel Vulkan and NVIDIA/Intel D3D12 inventory plus SDK-free gate |
 | Cross-backend validation | T.11 implemented and tested | Machine-readable physical-unit, hit/framebuffer, CUDA reference, variance/MSE, loss, budget, cache, cold/warm launch, VRAM and throughput report; CUDA/Vulkan required, DXR capability-driven, all differences thresholded and classified |
-| GPU geometry acceleration | V.0-V.6 complete | CUDA self-compute uses object-space BLAS and checked TLAS with measured quality presets and bounded async construction. Vulkan RT/DXR and optional SDK-backed OptiX implement native build/compaction/refit/rebuild/scratch/statistics. V.7 owns framebuffer, AOV and hit-metadata parity |
+| GPU geometry acceleration | V.0-V.7 complete | CUDA self-compute, optional OptiX, Vulkan RT and DXR consume one canonical SceneIR fixture and agree on closest/shadow visibility, non-uniform transforms, material/instance/primitive identity, UV/barycentric, normal/tangent metadata and a compact framebuffer AOV within explicit thresholds. V.8 owns clustered geometry resources |
 | Runtime spectral domain / wavelength packets | Implemented and tested | Packet cap 32; sampled lane mode supported |
 | Stokes/Mueller polarization | Implemented for covered boundary/transport paths | Not coherent field transport |
 | Lambertian/metal/dielectric/cloth | Implemented for tested paths | Material model coverage is not exhaustive |
@@ -98,7 +98,7 @@ The following must not be described as production capabilities merely because en
 - MLT combined with BDPT/VCM/manifold or adaptive reuse schedulers;
 - coherent/partial-coherent production transport and film merge;
 - production diffraction camera and general propagation backend;
-- Vulkan/D3D12/OptiX full scene renderers, cross-provider shading parity and DispatchRays;
+- Vulkan/D3D12/OptiX arbitrary-scene radiometric integrator lowering and DispatchRays;
 - complete USD/Hydra and plugin ecosystems;
 - production-grade general fluid or acoustic simulation.
 
@@ -144,6 +144,12 @@ Native RT multi-BLAS build, compaction, refit/rebuild, scratch rejection and opt
 
 ```powershell
 .\scripts\run_phase_v6_native_provider_gate.ps1 -OptixRoot <optix-sdk-or-optix-dev-root>
+```
+
+Cross-provider SceneIR shadow/closest-hit, transform, material, interpolation and AOV parity gate:
+
+```powershell
+.\scripts\run_phase_v7_cross_provider_parity.ps1
 ```
 
 Native scene closure gate:
