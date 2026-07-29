@@ -38,8 +38,30 @@ struct SpectralTableLayout {
     std::uint64_t row_pitch_bytes = 0;
 };
 
+struct ClusterPageLayout {
+    std::uint32_t first_cluster = 0;
+    std::uint32_t cluster_count = 0;
+    std::uint64_t offset_bytes = 0;
+    std::uint64_t size_bytes = 0;
+    bool required = false;
+
+    bool operator==(const ClusterPageLayout&) const = default;
+};
+
+struct ClusteredGeometryLayout {
+    std::uint64_t metadata_bytes = 0;
+    std::uint32_t cluster_count = 0;
+    std::vector<ClusterPageLayout> pages;
+
+    bool operator==(const ClusteredGeometryLayout&) const = default;
+};
+
 using ResourceLayout =
-    std::variant<BufferLayout, ImageLayout, SpectralTableLayout>;
+    std::variant<
+        BufferLayout,
+        ImageLayout,
+        SpectralTableLayout,
+        ClusteredGeometryLayout>;
 
 struct ResidencyDesc {
     resource::ResidencyMode mode = resource::ResidencyMode::Resident;

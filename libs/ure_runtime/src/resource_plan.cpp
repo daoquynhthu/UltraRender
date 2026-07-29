@@ -154,7 +154,8 @@ std::uint64_t resource_size_bytes(const ResourceLayout& layout) {
                     }
                 }
                 return previous_end;
-            } else {
+            } else if constexpr (
+                std::is_same_v<Type, SpectralTableLayout>) {
                 if (value.texel_count == 0 ||
                     value.source_sample_count == 0 ||
                     value.domain_bins == 0 ||
@@ -176,6 +177,47 @@ std::uint64_t resource_size_bytes(const ResourceLayout& layout) {
                 return checked_multiply(
                     value.texel_count,
                     value.row_pitch_bytes);
+            } else {
+                if (value.metadata_bytes == 0 ||
+                    value.metadata_bytes % 16 != 0 ||
+                    value.cluster_count == 0 ||
+                    value.pages.empty()) {
+                    throw Error(
+                        ErrorCode::InvalidArgument,
+                        "clustered geometry layout is empty");
+                }
+                std::uint64_t previous_end =
+                    value.metadata_bytes;
+                std::uint64_t previous_cluster = 0;
+                bool found_streamed_page = false;
+                for (const auto& page : value.pages) {
+                    if (page.cluster_count == 0 ||
+                        page.size_bytes == 0 ||
+                        page.first_cluster != previous_cluster ||
+                        page.offset_bytes != previous_end ||
+                        page.offset_bytes % 16 != 0 ||
+                        page.size_bytes % 16 != 0 ||
+                        (page.required && found_streamed_page)) {
+                        throw Error(
+                            ErrorCode::InvalidArgument,
+                            "clustered geometry page layout is invalid");
+                    }
+                    found_streamed_page =
+                        found_streamed_page ||
+                        !page.required;
+                    previous_cluster = checked_add(
+                        previous_cluster,
+                        page.cluster_count);
+                    previous_end = checked_add(
+                        previous_end,
+                        page.size_bytes);
+                }
+                if (previous_cluster != value.cluster_count) {
+                    throw Error(
+                        ErrorCode::InvalidArgument,
+                        "clustered geometry pages do not cover clusters");
+                }
+                return previous_end;
             }
         },
         layout);

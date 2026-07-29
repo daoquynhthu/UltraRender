@@ -1,6 +1,6 @@
 # UltraRender Current Status
 
-Last reviewed: 2026-07-28
+Last reviewed: 2026-07-29
 
 This document summarizes the current repository state for users and integrators. `PLAN.md` remains authoritative for construction order and phase completion criteria. Source, CMake registration, and fresh test output take precedence over prose when they disagree.
 
@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `V.8`. Phase Q, Phase R and Phase T are complete. Phase V has completed V.0 through V.7: the acceleration audit, configuration/API contract, checked CUDA self-compute baseline, TLAS/BLAS split, measured SAH/SBVH wide-node quality presets, bounded asynchronous construction/upload, optional native RT provider construction, and one canonical SceneIR cross-provider traversal-parity contract. Vulkan RT and DXR execute multi-BLAS/TLAS build, compaction, refit/rebuild, scratch budgets and telemetry. OptiX uses the same construction contract and a real OptiX IR raygen/miss/closest-hit pipeline when its separately installed SDK is present, and rejects deterministically when absent. The full SceneIR renderer remains unavailable on native providers: V.7 closes the acceleration hit/AOV fixture, not arbitrary-scene radiometric integrator lowering.
+The authoritative construction cursor is `V.9`. Phase Q, Phase R and Phase T are complete. Phase V has completed V.0 through V.8: the acceleration audit, configuration/API contract, checked CUDA self-compute baseline, TLAS/BLAS split, measured SAH/SBVH wide-node quality presets, bounded asynchronous construction/upload, optional native RT provider construction, one canonical SceneIR cross-provider traversal-parity contract, and an SDK-free clustered geometry resource/streaming contract. Vulkan RT and DXR execute multi-BLAS/TLAS build, compaction, refit/rebuild, scratch budgets and telemetry. OptiX uses the same construction contract and a real OptiX IR raygen/miss/closest-hit pipeline when its separately installed SDK is present, and rejects deterministically when absent. The full SceneIR renderer remains unavailable on native providers. V.8 provides derived meshlet resources, conservative bounds, material/spectral resource boundaries, multi-component physical LoD error and page residency; production clustered traversal and LoD selection remain fail-loud until V.9.
 
 ## Supported execution baseline
 
@@ -19,7 +19,7 @@ The authoritative construction cursor is `V.8`. Phase Q, Phase R and Phase T are
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
 | Build tree | `build_modular_x64` using Ninja |
 | Primary executable | `build_modular_x64/apps/ure_cli/ure_cli.exe` |
-| Registered tests | 48 CTest entries at this snapshot |
+| Registered tests | 50 CTest entries at this snapshot |
 
 The full renderer baseline remains Windows/CUDA. Vulkan additionally has a Linux GCC/Ninja gate, Windows NVIDIA native ray-query evidence, and Windows NVIDIA/Intel compute-BVH evidence. D3D12 additionally has Windows NVIDIA DXR 1.1, compute fallback, typed texture/descriptor and cross-queue fence evidence. macOS, older CUDA architectures, and complete Linux/non-NVIDIA/D3D12 scene rendering do not have equivalent evidence.
 
@@ -55,7 +55,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | D3D12/DXR optional runtime | V.7 traversal parity complete | Windows-only SDK-neutral public surface; DXR lifecycle plus shared SceneIR inline-ray-query/compute parity; arbitrary-scene integrator lowering remains unavailable |
 | Multi-backend scheduling | T.10 implemented and tested | Canonical weighted sample partition, feature/precision/coherence/budget/semantic negotiation, backend-native resource cache identity, versioned distributed provenance and overlap rejection; actual CUDA, NVIDIA/Intel Vulkan and NVIDIA/Intel D3D12 inventory plus SDK-free gate |
 | Cross-backend validation | T.11 implemented and tested | Machine-readable physical-unit, hit/framebuffer, CUDA reference, variance/MSE, loss, budget, cache, cold/warm launch, VRAM and throughput report; CUDA/Vulkan required, DXR capability-driven, all differences thresholded and classified |
-| GPU geometry acceleration | V.0-V.7 complete | CUDA self-compute, optional OptiX, Vulkan RT and DXR consume one canonical SceneIR fixture and agree on closest/shadow visibility, non-uniform transforms, material/instance/primitive identity, UV/barycentric, normal/tangent metadata and a compact framebuffer AOV within explicit thresholds. V.8 owns clustered geometry resources |
+| GPU geometry acceleration | V.0-V.8 complete | CUDA self-compute, optional OptiX, Vulkan RT and DXR share one canonical traversal fixture. SDK-free clustered geometry now defines deterministic meshlets, conservative bounds, material/spectral/displacement/opacity/normal-field boundaries, physical LoD error, page residency and GPU upload ABI. V.9 owns production physical-error LoD selection |
 | Runtime spectral domain / wavelength packets | Implemented and tested | Packet cap 32; sampled lane mode supported |
 | Stokes/Mueller polarization | Implemented for covered boundary/transport paths | Not coherent field transport |
 | Lambertian/metal/dielectric/cloth | Implemented for tested paths | Material model coverage is not exhaustive |

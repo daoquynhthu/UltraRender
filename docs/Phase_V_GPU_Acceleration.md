@@ -2,10 +2,11 @@
 
 ## Status
 
-V.0 through V.7 are complete and the authoritative cursor is V.8. This
+V.0 through V.8 are complete and the authoritative cursor is V.9. This
 document records the initial acceleration audit, configuration contract,
 self-compute construction, optional native-provider lifecycle and the
-cross-provider traversal contract. Clustered geometry resources are V.8.
+cross-provider traversal contract. V.8 establishes clustered geometry
+resources; physical-error LoD selection is V.9.
 
 ## Current production path
 
@@ -102,7 +103,7 @@ axes:
 | provider | `auto`, `self_compute`, `optix`, `vulkan_rt`, `dxr` | `auto` resolves to CUDA `self_compute`; native construction and canonical traversal parity are complete, while arbitrary-scene native integrator selection remains fail-loud |
 | quality | `auto`, `fast_build`, `balanced`, `high_quality` | all four execute on CUDA self-compute since V.4 |
 | update policy | `auto`, `static`, `refit`, `rebuild` | `auto` and `static`; refit/rebuild become executable with V.3/V.6/V.10 |
-| clustered geometry | enabled/disabled | disabled until V.8 |
+| clustered geometry | enabled/disabled | resource/streaming contract complete in V.8; production selection remains fail-loud until V.9 |
 | statistics | enabled/disabled | executable on CUDA self-compute since V.2 |
 | scratch budget | bytes or MiB at input surfaces | zero/derived until V.5 |
 
@@ -318,3 +319,36 @@ machine; OptiX and DXR become mandatory only when the configured SDK or
 advertised hardware capability is available. This gate closes acceleration
 traversal semantics, not arbitrary-scene BSDF, spectral, polarization or
 integrator lowering on the native backends.
+
+## V.8 clustered geometry resource
+
+`ure/runtime/clustered_geometry.hpp` defines clustered geometry as an
+SDK-free derived runtime resource. It is linked to stable source-geometry and
+resource IDs but is not written back into the authoritative SceneIR authoring
+schema. This keeps backend construction and streaming cache artifacts out of
+source-scene semantics.
+
+The deterministic builder emits local 16-bit index meshlets with default
+limits of 64 vertices and 124 triangles. A cluster may not cross its material
+slot, material graph, spectral, displacement, opacity or normal-field resource
+boundary. Original primitive identity is retained independently of packed
+local indices. Every cluster carries conservative AABB and bounding-sphere
+bounds plus position, displacement, normal-angle, opacity and spectral-relative
+LoD error components. Parent links must stay in one LoD group, point to a
+strictly coarser level and never report less error than the child.
+
+The packed GPU ABI separates an always-resident 16-byte-aligned metadata prefix
+from contiguous page payloads. Required pages form a prefix; generation-tagged
+residency bitsets reject missing required or explicitly requested clusters.
+Canonical packing feeds the Phase T `UploadPlan`, including partial residency,
+exact destination offsets and fail-loud budget checks. Malformed local indices,
+duplicate primitive identities, non-conservative bounds, invalid boundaries,
+page gaps and illegal LoD hierarchy are rejected before upload.
+
+`test_clustered_geometry` covers host construction, validation, partial/full
+residency and upload planning. `gpu_clustered_geometry` uploads the same
+three-cluster/two-page fixture to CUDA, verifies material and spectral resource
+identity from the packed ABI, refuses a nonresident cluster and reads its
+payload only after the second page becomes resident. V.8 does not enable the
+renderer cluster flag; V.9 must connect path/ray physical-error policy to
+cluster LoD selection before production traversal can use this resource.
