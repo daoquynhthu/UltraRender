@@ -19,6 +19,7 @@ ure_vulkan    — Vulkan 1.3 compute/acceleration runtime (STATIC, SDK-neutral p
 ure_d3d12     — Windows D3D12/DXR compute/acceleration runtime (STATIC, SDK-neutral public surface).
 ure_core      — GPU rendering core (STATIC, CUDA 13+). Path tracer kernel, BVH, GPU driver, scene compiler.
 ure_sceneio   — Scene I/O (STATIC, pure C++). glTF 2.0 parser, OBJ/legacy loader, stb_image, SPD loader.
+ure_hydra     — Optional OpenUSD Hydra RenderDelegate plugin (MODULE; SDK-private to Phase U).
 ure_diag      — Unified logging/diagnostics (INTERFACE, Phase Dx complete).
 ure_config    — Config system (STATIC, pure C++, Phase I complete).
 ure_physics   — Physics/acoustic (STATIC, pure C++, built optionally).
@@ -53,7 +54,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | T (Portable GPU Runtime) | Done | T.0-T.11 complete; portable runtime, optional backends, multi-backend scheduling and unified validation closed |
 | V (GPU Acceleration) | Done | V.0-V.11 complete; unified local/farm validation freezes construction, traversal, memory, parity, dynamic and distributed evidence |
 | W (Wave Optics Solver) | Done | W.0-W.12 complete within the declared production/reference boundary; unified physical, API, fail-loud, distributed and static validation closed |
-| U (USD/Hydra Adapter) | In progress | U.1 SDK-free USD schema adapter complete; U.2 Hydra RenderDelegate is the authoritative cursor |
+| U (USD/Hydra Adapter) | In progress | U.1 schema adapter and U.2 actual-OpenUSD RenderDelegate/plugin foundation complete; U.3 mesh RPrim is the authoritative cursor |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -141,6 +142,9 @@ E:\Render Engine\
 │   ├── ure_sceneio/                 # Scene I/O (STATIC, pure C++)
 │   │   ├── include/ure/             # scene_io.hpp, spd_loader.hpp, image_loader.hpp
 │   │   └── src/                     # gltf_scene_frontend.cpp, spd_loader.cpp, image_loader.cpp
+│   ├── ure_hydra/                   # Optional OpenUSD/Hydra plugin (MODULE)
+│   │   ├── src/                     # HdURE delegate and renderer plugin
+│   │   └── resources/               # OpenUSD plugInfo metadata
 │   ├── ure_diag/                    # Diagnostics (STATIC, Phase Dx completed)
 │   │   ├── include/ure/             # log.hpp, log_sink.hpp, timer.hpp
 │   │   └── src/log.cpp              # Global state + sink routing
@@ -218,6 +222,7 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | Vulkan | `vulkan_runtime`, `vulkan_acceleration` |
 | D3D12 | `d3d12_runtime` |
 | Multi-backend | `multi_backend_inventory` |
+| Optional Hydra build | `test_hydra_render_delegate`, `test_hydra_plugin_discovery` in the dedicated U.2 SDK build |
 | **CTest total** | **57 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
@@ -442,10 +447,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 47 | 2026-07-29 W.11 | Established coherent distributed sufficient-statistics transport | Distributed v6 distinguishes radiance, complex field, mutual intensity and coherent realization with phase/layout/source/group/range provenance. Content-digested complex/CSD files, transactional merge, overlap/corruption rejection and W.7 coherent-before-incoherent reduction prevent field-to-RGB flattening. Production coherent workers remain unavailable; cursor advanced to W.12. |
 | 48 | 2026-07-29 W.12 | Closed the bounded Phase W validation program | A versioned validation suite binds source/artifact identities to analytic diffraction, complex thin-film phase, spectral/UV PDF, Stokes/Jones, fluorescence, energy, coherent merge order, fail-loud and API-parity evidence plus Release 56/56 and static gates. Production coherent scene transport remains unavailable by contract; cursor advanced to U.1. |
 | 49 | 2026-07-29 U.1 | Established the USD-to-native schema adapter boundary | SDK-free normalized stage snapshots map units, axes, static meshes/spheres, cameras, basic MaterialGraph nodes, mesh rigid bodies and strong spectral resource metadata into validated Phase Q archives. Unsupported schemas, animation, non-TRS transforms and lossy geometry fail loudly; OpenUSD/Hydra integration remains U.2 onward. |
+| 50 | 2026-07-29 U.2 | Established the actual OpenUSD Hydra delegate/plugin foundation | Optional `HdURE` derives from OpenUSD 25.05 `HdRenderDelegate`, owns resource/settings/stats lifecycle and is dynamically discovered through plugInfo. Explicit SDK roots prevent ambient coupling; the plugin advertises non-ready with no prim types until U.3/U.5, and two isolated SDK tests pass. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, Phase V, and the declared bounded scope of Phase W are complete; U.1 is complete and the authoritative construction cursor is U.2.
+- Phase Q, Phase M, Phase R, Phase T, Phase V, and the declared bounded scope of Phase W are complete; U.1-U.2 are complete and the authoritative construction cursor is U.3.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 2); a 2026-07-28 stress run on the 16 GiB CUDA 13 workstation reduced the three heaviest translation-unit critical path from about 602 seconds serial to 362 seconds, while depth 3 was slower. Host and unrelated targets remain globally parallel.
