@@ -86,6 +86,13 @@ lowered. Existing backend-only C entry points retain
 their original layout and behavior; the execution-config entry points add
 acceleration without requiring callers to pass a larger legacy structure.
 
+V.11 adds no new renderer ABI. It freezes the existing acceleration behavior
+through `scripts/run_phase_v_validation_suite.ps1` and the stable
+`ure.phase_v.validation.v1` report. The report combines dense build/trace/VRAM,
+provider parity, cluster LoD, dynamic update and distributed v5
+resource/worker/cache provenance. The farm entry records explicit run, shard
+and sample coverage and requires a clean source tree.
+
 ## Threading and ownership
 
 - `RenderSession` serializes state and engine access with its internal synchronization.

@@ -2,12 +2,12 @@
 
 ## Status
 
-V.0 through V.10 are complete and the authoritative cursor is V.11. This
+V.0 through V.11 are complete and the authoritative cursor is W.2. This
 document records the initial acceleration audit, configuration contract,
 self-compute construction, optional native-provider lifecycle and the
 cross-provider traversal contract. V.8 establishes clustered geometry
-resources, V.9 closes physical-error LoD selection, and V.10 closes dynamic
-geometry lifecycle.
+resources, V.9 closes physical-error LoD selection, V.10 closes dynamic
+geometry lifecycle, and V.11 freezes the unified validation contract.
 
 ## Current production path
 
@@ -44,7 +44,7 @@ V.7 does not claim that broader renderer migration.
 | V0-HOST | `BVHAccelerator` is a recursive host traversal compiled into `ure_core`; `SimpleAccelerator` and an Embree placeholder remain in installed `ure_types` headers. Repository search finds no renderer/session/CLI consumer. | Extending these classes would create the forbidden second host production traversal path and split hit semantics from GPU providers. | Remove or quarantine in V.2 |
 | V0-OPT | V.0 found two installed `OptixAccelerator` placeholders whose build/update were empty and whose queries always missed. V.6 removed both and added one optional SDK-backed provider; V.7 adds an actual OptiX IR raygen/miss/closest-hit pipeline. | Closed for native construction and the canonical parity fixture; arbitrary-scene integrator lowering remains separate. | V.6/V.7 |
 | V0-API | Phase T exposes SDK-free bounded geometry, instance, ray/hit and capability contracts, but no `AccelerationConfig`, quality preset, update policy, build statistics or scratch/compaction budget. | Provider selection and operational policy cannot yet be expressed consistently through config, ABI, Session or pyure. | V.1 |
-| V0-VAL | V.2-V.4 now cover robust/deep traversal, transformed instances, dynamic TLAS refit and a fixed large-mesh build/trace/memory benchmark. | Native-provider parity, dense geometry and full-suite aggregation remain later work. | V.2-V.11 |
+| V0-VAL | Robust/deep traversal, transformed instances, dense build/trace/memory, provider parity, dynamic updates and distributed provenance are aggregated by the V.11 suite. | Closed by the stable local/farm validation and negative report contract. | V.2-V.11 |
 
 ## Frozen boundaries
 
@@ -103,8 +103,8 @@ axes:
 |---|---|---|
 | provider | `auto`, `self_compute`, `optix`, `vulkan_rt`, `dxr` | `auto` resolves to CUDA `self_compute`; native construction and canonical traversal parity are complete, while arbitrary-scene native integrator selection remains fail-loud |
 | quality | `auto`, `fast_build`, `balanced`, `high_quality` | all four execute on CUDA self-compute since V.4 |
-| update policy | `auto`, `static`, `refit`, `rebuild` | `auto` and `static`; refit/rebuild become executable with V.3/V.6/V.10 |
-| clustered geometry | enabled/disabled | resource/streaming contract complete in V.8; production selection remains fail-loud until V.9 |
+| update policy | `auto`, `static`, `refit`, `rebuild` | all policies execute where the provider advertises the required lifecycle; unsupported deformation/topology refit rejects |
+| clustered geometry | enabled/disabled | resource, selector and lifecycle contracts are complete; the renderer flag remains fail-loud until complete SceneIR clustered traversal lowering exists |
 | statistics | enabled/disabled | executable on CUDA self-compute since V.2 |
 | scratch budget | bytes or MiB at input surfaces | zero/derived until V.5 |
 
@@ -380,8 +380,8 @@ reflection mismatches, while physical selection produces zero in both classes
 and still selects coarse geometry for all 256 diffuse queries.
 `tools/benchmarks/run_phase_v9_lod_visibility.ps1` writes the stable
 `ure.phase_v.cluster_lod.v1` evidence. The main renderer cluster flag remains
-fail-loud until V.10 connects rigid, deforming and topology-changing resource
-lifecycle to SceneDiff.
+fail-loud: V.10 adds the resource lifecycle contract, but that alone is not a
+complete clustered SceneIR traversal lowering.
 
 ## V.10 dynamic and deforming geometry
 
@@ -410,3 +410,32 @@ validation machine. `tools/benchmarks/run_phase_v10_dynamic_geometry.ps1`
 writes stable `ure.phase_v.dynamic_geometry.v1` evidence. The clustered
 renderer flag remains fail-loud because the resource/selector/lifecycle
 contracts are not yet a complete SceneIR clustered traversal lowering.
+
+## V.11 unified validation
+
+`scripts/run_phase_v_validation_suite.ps1` writes
+`ure.phase_v.validation.v1`. It aggregates repeated dense-geometry build,
+trace throughput, compact memory and asynchronous construction evidence;
+canonical CUDA self-compute, optional OptiX, Vulkan RT and DXR parity;
+physical cluster LoD visibility; rigid/deforming/topology update time and
+correctness; distributed file v5 resource-set, backend, driver, compiler,
+executable and resource-cache provenance; and the complete registered CTest
+gate.
+
+The closure fixture contains 18,432 triangles and 4,096 rays. The local run
+recorded fast/balanced/high-quality build times of about
+2.159/10.591/48.162 ms, trace times of 0.041/0.043/0.053 ms, corresponding to
+99.90/95.26/77.28 Mray/s for this scalar benchmark, and a 2 MiB benchmark
+allocation. These figures describe this fixed workload and do not assert that
+one quality preset is universally faster. Dynamic rigid/deforming/topology
+updates measured about 0.064/3.378/1.481 ms.
+
+`validate_phase_v_validation_report.ps1` rejects invalid schemas, missing or
+non-positive metrics, insufficient dense workloads, lost wide-node work
+reduction, missing SBVH stress splits, parity or LoD failures, incorrect
+dynamic operations, malformed artifact identities, incomplete CTest results,
+and distributed sample gaps or overlaps. A negative fixture suite exercises
+those rejection paths. `run_phase_v_farm_longrun.ps1` is the clean-tree farm
+worker entry and records run, shard and sample coverage with repeated
+measurements. Completion of this suite does not enable arbitrary native
+SceneIR radiometric lowering or clustered production traversal.

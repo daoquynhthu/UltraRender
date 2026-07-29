@@ -67,7 +67,7 @@ try {
     }
     Assert-Contains $ledger "This is a" "V.0 gate lacks its regression-boundary qualification"
     Assert-Contains $ledger "regression boundary" "V.0 gate overstates audited correctness"
-    Assert-Contains "PLAN.md" "当前游标: V\.11" "PLAN cursor did not advance to V.11"
+    Assert-Contains "PLAN.md" "状态.*已完成.*V\.0-V\.11" "PLAN does not close Phase V"
     Assert-Contains "PLAN.md" "V\.0 closure.*权威游标进入 V\.1" "PLAN lacks the V.0 closure and V.1 gate"
     Assert-Contains "PLAN.md" "V\.1 closure.*权威游标进入 V\.2" "PLAN lacks the V.1 closure and V.2 gate"
     Assert-Contains "PLAN.md" "V\.2 closure.*权威游标进入 V\.3" "PLAN lacks the V.2 closure and V.3 gate"
@@ -79,6 +79,7 @@ try {
     Assert-Contains "PLAN.md" "V\.8 closure.*权威游标进入 V\.9" "PLAN lacks the V.8 closure and V.9 gate"
     Assert-Contains "PLAN.md" "V\.9 closure.*权威游标进入 V\.10" "PLAN lacks the V.9 closure and V.10 gate"
     Assert-Contains "PLAN.md" "V\.10 closure.*权威游标进入 V\.11" "PLAN lacks the V.10 closure and V.11 gate"
+    Assert-Contains "PLAN.md" "V\.11 closure.*权威游标进入 W\.2" "PLAN lacks the V.11 closure and W.2 gate"
     Assert-Contains "README.md" "OptiX SDK.*可选" "README misstates OptiX optionality"
     Assert-Contains "STATUS.md" "full SceneIR renderer remains unavailable" "STATUS misstates the portable acceleration boundary"
     Assert-Contains "libs/ure_types/include/ure/render_config.hpp" "struct AccelerationConfig" "V.1 C++ acceleration config is missing"
@@ -150,6 +151,11 @@ try {
     Assert-Contains "tests/host/test_dynamic_geometry.cpp" "test_refit_rebuild_and_recluster_plans" "V.10 host lifecycle gate is missing"
     Assert-Contains "tests/gpu/test_dynamic_geometry.cu" "schema=ure\.phase_v\.dynamic_geometry\.v1" "V.10 GPU dynamic benchmark is missing"
     Assert-Contains "tools/benchmarks/run_phase_v10_dynamic_geometry.ps1" "ure\.phase_v\.dynamic_geometry\.v1" "V.10 dynamic report gate is missing"
+    Assert-Contains "scripts/run_phase_v_validation_suite.ps1" "ure\.phase_v\.validation\.v1" "V.11 unified validation schema is missing"
+    Assert-Contains "tools/benchmarks/validate_phase_v_validation_report.ps1" "distributed sample shards contain a gap or overlap" "V.11 distributed shard validator is missing"
+    Assert-Contains "tools/benchmarks/test_phase_v_validation_report_contract.ps1" "validator accepted invalid fixture" "V.11 negative report contract is missing"
+    Assert-Contains "tools/benchmarks/run_phase_v_farm_longrun.ps1" "Phase V farm long-run requires a clean source tree" "V.11 farm entry is missing"
+    Assert-Contains "tools/benchmarks/run_phase_v_build_telemetry.ps1" "trace_mrays_per_second" "V.11 trace throughput metric is missing"
 
     Assert-Contains "libs/ure_core/src/bvh_builder.cpp" "count <= 4" "CUDA BVH leaf-size audit signature changed"
     Assert-Contains "libs/ure_core/src/bvh_builder.cpp" "std::nth_element" "CUDA BVH split fallback audit signature changed"

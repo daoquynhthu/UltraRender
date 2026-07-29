@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-29 (V.10 closure and V.11 cursor)
+最后更新: 2026-07-29 (V.11 closure and W.2 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -28,7 +28,7 @@
 远期 Phase Q:   URE 原生场景系统 / 程序化工业格式                    已完成
 远期 Phase R:   工业级/科研级积分器升级                              已完成
 远期 Phase T:   可移植 GPU 运行时 / 多后端执行                        已完成
-远期 Phase V:   GPU 几何加速结构 / BVH / OptiX / Clustered Geometry   进行中
+远期 Phase V:   GPU 几何加速结构 / BVH / OptiX / Clustered Geometry   已完成
 远期 Phase W:   波动光学求解器 / 相干场输运                          进行中
 ```
 
@@ -57,10 +57,10 @@ R-P4 specular manifold + BDPT/VCM [done]
 Phase T complete [done]
    │
    ▼
-当前游标: V.11
+Phase V complete [done]
    │
    ▼
-Phase V complete
+当前游标: W.2
    │
    ▼
 Phase W complete
@@ -80,7 +80,8 @@ Phase X complete
 - **Phase Q 已闭环**: URE native schema、serialization、programmatic graph、feature declaration、tooling/adapter、compiled cache/farm 与 validation suite 已冻结为后续阶段的权威 authoring contract。
 - **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
 - **Phase T 已闭环**: T.0-T.11 已冻结 coupling、backend identity、共享 Slang 工具链、SDK-free runtime/resource/execution/acceleration/scheduling contract、CUDA production lowering、Vulkan compute/acceleration foundation、Windows optional D3D12/DXR backend、heterogeneous sample-shard negotiation 和 cross-backend validation/performance suite。
-- **当前唯一施工项 — Phase V**: V.0-V.10 已闭环；当前游标为 V.11 validation suite。Phase W 现有 reference/oracle 成果保留，新增 W production work 继续冻结。
+- **Phase V 已闭环**: V.0-V.11 已完成 acceleration audit/config、self-compute/native provider、TLAS/BLAS、wide BVH、cluster/LoD/dynamic lifecycle 与统一 validation suite。
+- **当前唯一施工项 — Phase W**: 当前游标为 W.2 diffraction camera production integration；W.3/W.4/W.8 已有 reference contract 保留，不允许绕过 W.2 的 GPU camera/film 闭环跳跃施工。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
 - 文档中的“进行中”表示已有未闭环成果，不等于允许并行施工。发生冲突时，以本节当前游标为准。
@@ -2076,7 +2077,7 @@ T.11 closure（2026-07-28）：新增 `run_phase_t_validation_suite.ps1` 与 `ur
 
 ### Phase V — GPU 几何加速结构 / BVH / OptiX / Clustered Geometry
 
-**状态**: 进行中，V.0-V.10 已完成，当前游标 V.11。
+**状态**: 已完成，V.0-V.11 全部闭环。
 
 **目标**: 将当前 mesh-local BVH 和线性 fallback traversal 升级为适配 UltraRender 光谱、偏振、材质图、动态场景和未来波动光学的 GPU 几何加速栈。Phase V 的核心不是复制外部引擎的可见性系统，而是在 Phase T 的 acceleration-provider contract 上建立自己的 `AccelerationScene`：同一份 SceneIR/resource graph 能选择自研 compute BVH、OptiX、Vulkan RT 或 DXR provider，并在能力不满足时 fail-loud。
 
@@ -2142,6 +2143,8 @@ V.9 closure（2026-07-29）：新增 SDK-free、host/CUDA 共享的 `cluster_lod
 
 V.10 closure（2026-07-29）：新增 SDK-free `dynamic_geometry` lifecycle planner，以 stable resource identity、vertex/index count、topology/boundary/attribute hash、maximum displacement 和 cluster error budget 自动分类 rigid、deforming 与 topology-change mutation，并按 acceleration policy/capability 产生 TLAS refit/rebuild、BLAS refit/rebuild、cluster-bounds refit 或 recluster action；static mutation、显式 refit 但无 BLAS refit capability、topology+refit，以及 clustered deformation/topology 缺少 refit/recluster capability 均 fail-loud。`SceneDiff::update_scene_ir_mesh` 以索引、finite vertex、duplicate mutation 和 transactional rollback 校验更新 retained SceneIR；rigid transform 保持实际 CUDA TLAS refit，显式 rebuild policy 新增实际 TLAS rebuild 与 instance-index upload，当前 CUDA deformation/topology 因没有安全 in-place BLAS refit capability 而在 auto/rebuild 下执行完整 BLAS/TLAS rebuild，显式 refit 拒绝而不静默降级。实际 8×8 CUDA benchmark 以 depth AOV 验证 rigid/deforming/topology 三类更新后的命中正确性，记录约 0.079/3.198/1.462 ms，invalid acceleration/stack overflow 为零，并覆盖 refit rejection 与 rigid rebuild；`run_phase_v10_dynamic_geometry.ps1` 固化 `ure.phase_v.dynamic_geometry.v1` JSON。clustered renderer flag 仍保持 fail-loud，因为 V.8-V.10 建立的是可验证 resource/selector/lifecycle contract，不把尚未 lower 到完整 SceneIR traversal 的路径虚报 production；权威游标进入 V.11 validation suite。
 
+V.11 closure（2026-07-29）：新增本地可执行的 `scripts/run_phase_v_validation_suite.ps1` 与稳定 `ure.phase_v.validation.v1` report contract，统一聚合 fixed dense-geometry BLAS build、trace throughput、compact bytes/VRAM、async construction，CUDA/OptiX/Vulkan RT/DXR canonical SceneIR parity，cluster physical-LoD visibility，rigid/deforming/topology dynamic update，以及 distributed file v5 resource-set/backend/compiler/executable/cache provenance 和无 gap/overlap sample ranges。18,432-triangle/4,096-ray closure run 的 fast/balanced/high-quality build 为约 2.159/10.591/48.162 ms，trace 为 0.041/0.043/0.053 ms（99.90/95.26/77.28 Mray/s），benchmark allocation 2 MiB；dynamic update 为约 0.064/3.378/1.481 ms。validator 对 schema、正数/规模阈值、wide traversal work、SBVH stress split、provider status、dynamic operation、LoD mismatch、artifact digest、54/54 CTest、五个实际 heterogeneous worker 的 resource-set identity 和连续 sample coverage fail-loud，negative fixtures 证明 schema、throughput、dynamic、parity 与 shard-overlap corruption 均被拒绝。`tools/benchmarks/run_phase_v_farm_longrun.ps1` 是 clean-tree、多次测量且携带 run/shard/sample metadata 的 farm worker 入口。Phase T/V static、documentation、Release 54/54 与统一报告通过；Phase V 在不虚报 arbitrary native SceneIR integrator 或 clustered production traversal 的边界下闭环，权威游标进入 W.2。
+
 #### 完成标准
 
 - 当前兼容默认仍是 CUDA self-compute GPU path，不引入第二套 host production traversal backend。
@@ -2155,7 +2158,7 @@ V.10 closure（2026-07-29）：新增 SDK-free `dynamic_geometry` lifecycle plan
 
 ### Phase W — 波动光学求解器 / Wave Optics Solver
 
-**状态**: 进行中。
+**状态**: 进行中，当前游标 W.2。
 
 **目标**: 将 UltraRender 从“高级光谱偏振路径追踪器 + 局部边界波动效应”扩展为具备可选波动光学求解器的渲染系统。Phase W 不等价于全局 Maxwell/FDTD；宏观场景仍默认使用 radiometric spectral path tracing，波动能力通过显式 feature switch opt-in，并在 unsupported solver/film/merge/material/API path 上 fail-loud。
 

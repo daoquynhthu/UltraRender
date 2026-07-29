@@ -1134,6 +1134,7 @@ int main() {
             "wide BVH did not reduce large-mesh traversal visits");
         std::printf(
             "V.4 large mesh: triangles=%llu "
+            "rays=%d "
             "build_ms=[%.3f,%.3f,%.3f] "
             "trace_ms=[%.3f,%.3f,%.3f] "
             "node_bytes=[%llu,%llu,%llu] "
@@ -1143,6 +1144,7 @@ int main() {
             "vram_bytes=%llu\n",
             static_cast<unsigned long long>(
                 fast_stats.triangle_count),
+            benchmark_ray_count,
             static_cast<double>(
                 fast_stats.build_nanoseconds) / 1.0e6,
             static_cast<double>(

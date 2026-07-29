@@ -258,6 +258,15 @@ int main() {
                 << "  \"worker_count\": "
                 << schedule.shards.size()
                 << ",\n"
+                << "  \"resource_set\": {\"content_hash\": \""
+                << digest_hex(resources.content_hash)
+                << "\", \"descriptor_count\": "
+                << resources.descriptor_count
+                << ", \"logical_bytes\": "
+                << resources.logical_bytes
+                << ", \"minimum_resident_bytes\": "
+                << resources.minimum_resident_bytes
+                << "},\n"
                 << "  \"workers\": [\n";
             for (std::size_t index = 0;
                  index < schedule.shards.size();
