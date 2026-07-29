@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-29 (W.5 closure and W.6 cursor)
+最后更新: 2026-07-29 (W.6 closure and W.7 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -60,7 +60,7 @@ Phase T complete [done]
 Phase V complete [done]
    │
    ▼
-当前游标: W.6
+当前游标: W.7
    │
    ▼
 Phase W complete
@@ -81,7 +81,7 @@ Phase X complete
 - **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
 - **Phase T 已闭环**: T.0-T.11 已冻结 coupling、backend identity、共享 Slang 工具链、SDK-free runtime/resource/execution/acceleration/scheduling contract、CUDA production lowering、Vulkan compute/acceleration foundation、Windows optional D3D12/DXR backend、heterogeneous sample-shard negotiation 和 cross-backend validation/performance suite。
 - **Phase V 已闭环**: V.0-V.11 已完成 acceleration audit/config、self-compute/native provider、TLAS/BLAS、wide BVH、cluster/LoD/dynamic lifecycle 与统一 validation suite。
-- **当前唯一施工项 — Phase W**: W.5 diffractive material operators 已闭环；W.3/W.4/W.8 reference contract 已保留，当前游标进入 W.6 fluorescence/phosphorescence。
+- **当前唯一施工项 — Phase W**: W.6 fluorescence/phosphorescence 已闭环；W.3/W.4/W.8 reference contract 已保留，当前游标进入 W.7 partial coherence/generalized transport。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
 - 文档中的“进行中”表示已有未闭环成果，不等于允许并行施工。发生冲突时，以本节当前游标为准。
@@ -2158,7 +2158,7 @@ V.11 closure（2026-07-29）：新增本地可执行的 `scripts/run_phase_v_val
 
 ### Phase W — 波动光学求解器 / Wave Optics Solver
 
-**状态**: 进行中，当前游标 W.6。
+**状态**: 进行中，当前游标 W.7。
 
 **目标**: 将 UltraRender 从“高级光谱偏振路径追踪器 + 局部边界波动效应”扩展为具备可选波动光学求解器的渲染系统。Phase W 不等价于全局 Maxwell/FDTD；宏观场景仍默认使用 radiometric spectral path tracing，波动能力通过显式 feature switch opt-in，并在 unsupported solver/film/merge/material/API path 上 fail-loud。
 
@@ -2202,7 +2202,7 @@ V.11 closure（2026-07-29）：新增本地可执行的 `scripts/run_phase_v_val
 | W.3 | Coherent field state：定义 `ComplexSpectrum`、Jones field、OPL/phase accumulation、coherence group/source coherence metadata、coherent realization id；新增 `ComplexFieldFilm` 和 coherent accumulation order | 已完成基础合约闭环：`ComplexSpectrum` / `JonesSpectrum` / `CoherenceMetadata` / OPL phase helpers / `ComplexFieldFilm` 已进入 `ure::wave` host oracle 层；测试覆盖 OPL 相位推进、Jones 分量功率保持、同相两束 `|sum E|^2 = 4`、反相抵消为 0、incoherent `sum |E|^2 = 2` 与 out-of-range/invalid fail-closed。主 GPU path tracer 的 coherent field transport 和 distributed coherent merge 仍分别留给后续 W.7/W.11 |
 | W.4 | Wave propagation operators：统一 `PropagationOperator` 接口，支持 Fraunhofer、Fresnel、angular spectrum、Rayleigh-Sommerfeld/Huygens-Fresnel 的 CPU oracle 与首个 GPU backend | 已完成本阶段闭环：已新增 `PropagationOperatorKind` / `PropagationConfig` / `PropagationResult` 统一 dispatch，Fraunhofer/Fresnel/angular-spectrum/Rayleigh-Sommerfeld/Huygens-Fresnel CPU oracle 通过同一接口返回 explicit field/far-field carrier；首个 CUDA backend 为 Fraunhofer direct DFT reference backend，`gpu_test_wave_optics` 覆盖 uniform aperture、CPU/GPU reference match 和 invalid fail-closed。后续性能型 FFT/tiling backend 进入 W.4 后续优化，不阻塞本阶段接口闭环 |
 | W.5 | Diffractive material operators：MaterialGraph 新增 grating、sinusoidal phase mask、ideal continuous-phase zone plate、blazed DOE 与 RCWA/FMM scattering table 节点。SDK-free SceneIR/native binary/text/MaterialX 保留 bounded operator/table；host oracle 与 CUDA wavefront 按 wavelength lane 返回/采样传播级次、complex Jones amplitude、Stokes response 与 propagating/evanescent classification。Table 要求共享采样网格和完整 order/side channel，按联合 `ΣJ†J` 最大特征值验证被动性，host/device 使用相同四邻点复数插值；UV tangent frame、zone-plate radial gradient、thin-sheet medium preservation、显式 feature gate、资源预算和 unsupported integrator fail-loud 均已闭环。host/GPU E2E、native/MaterialX roundtrip、C/pyure/config/static gate 与 Release 54/54 通过 | 已完成 |
-| W.6 | Fluorescence/phosphorescence：新增 excitation wavelength → emission distribution resource，路径状态处理 wavelength shift、energy conservation、PDF conversion 和 spectral budget；关闭时遇到 fluorescence node fail-loud | Phase L resource graph + W.1 |
+| W.6 | Fluorescence/phosphorescence：SDK-free SceneIR 新增 4,096-cell bounded excitation→emission matrix、per-excitation efficiency/quantum yield 与 lifetime，native binary/text 和 MaterialX 保留同一资源；严格 finite/shape/normalization/Stokes-shift 验证保证 forward radiant weight `efficiency × yield × λexc/λem` 不增能。Host 同时提供 forward emission 与 camera-path adjoint excitation oracle；CUDA ordinary `Wavefront` 在事件处拆分 wavelength lane、按 adjoint kernel 更新 transport wavelength/joint PDF/throughput，独立保留 detector wavelength，去偏振、保持 medium 并累积 exponential phosphorescence delay。当前 Beauty film 为 steady-state，不做 time binning。资源不可变并要求 full scene reload；关闭态、超过预算、anti-Stokes、无效 PDF 和 camera diffraction/coherent/diffractive/path-guiding/ReSTIR/manifold/BDPT/VCM/MLT 组合均 fail-loud。host/GPU E2E、native/MaterialX、C ABI/pyure/solver/static gate 与 Release 54/54 通过 | 已完成 |
 | W.7 | Partial coherence/generalized transport：引入 coherence length、mutual intensity/cross-spectral density 或 Wigner/generalized-ray 表达；支持 extended coherent source、speckle、OCT/lidar/interferometry 的 coherent/incoherent averaging order | W.3 + distributed merge update |
 | W.8 | Edge/aperture diffraction：先实现 knife-edge/slit/circular/rectangular aperture analytic references，再评估 GTD/UTD/Keller cone 或 generalized region transport | 已完成解析 reference 层：圆孔由 W.2 Airy/MTF oracle 覆盖；本阶段新增 knife-edge Fresnel half-plane、single-slit sinc^2、rectangular aperture separable sinc^2、finite grating order/grating equation + single-slit envelope references，并测试第一零点、对称性、矩形孔径乘积分离、传播/evanescent order 分类和非法几何 fail-closed。GTD/UTD/Keller cone 与生产 visibility/edge event 接入仍是后续集成，不作为本 reference 阶段闭环 |
 | W.9 | Anisotropic/modal media：为 birefringence、optical activity、dichroism、liquid crystal、stress birefringence 建立 tensor/material modal transport，而不是继续扩展 scalar dielectric `ior` | W.3 |

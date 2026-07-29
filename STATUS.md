@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `W.6`. Phase Q, Phase R, Phase T and Phase V are complete. Phase W.2 provides an explicitly enabled CUDA wavefront diffraction camera, and W.5 provides explicitly enabled radiometric diffractive MaterialGraph operators with wavelength-lane order sampling, complex Jones response and bounded passive RCWA/FMM tables. Unsupported coherent features and advanced-integrator combinations reject before GPU allocation. The ordinary radiometric path remains the default and is unchanged when wave features are disabled.
+The authoritative construction cursor is `W.7`. Phase Q, Phase R, Phase T and Phase V are complete. Phase W.2 provides an explicitly enabled CUDA wavefront diffraction camera, W.5 provides radiometric diffractive MaterialGraph operators, and W.6 provides bounded Stokes-shift fluorescence resources with adjoint wavelength transport and phosphorescence delay state. Unsupported coherent features and advanced-integrator combinations reject before GPU allocation. The ordinary radiometric path remains the default and is unchanged when wave features are disabled.
 
 ## Supported execution baseline
 
@@ -73,7 +73,8 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | Denoising | A tested GPU target exists | No general quality or production guarantee is claimed |
 | Diffraction camera | W.2 implemented and tested | Explicit CUDA `Wavefront` mode; wavelength PSF bank and spectral-film resolve, with geometric AOVs left unfiltered |
 | Diffractive materials | W.5 implemented and tested | Grating, sinusoidal phase-mask, ideal zone-plate, blazed DOE and bounded passive Jones scattering-table operators in ordinary CUDA `Wavefront`; no cross-path coherent interference |
-| General wave-optics host/CUDA references | Partially implemented | Coherent/partial-coherent transport, fluorescence and scalable general propagation remain incomplete |
+| Fluorescence/phosphorescence | W.6 implemented and tested | Bounded excitation-emission surface resource in ordinary CUDA `Wavefront`; camera paths use adjoint wavelength conversion, preserve detector wavelength, depolarize the shifted lane and carry lifetime delay; film output remains steady-state |
+| General wave-optics host/CUDA references | Partially implemented | Coherent/partial-coherent transport and scalable general propagation remain incomplete |
 
 ## Scene and API capability matrix
 
@@ -99,7 +100,8 @@ The following must not be described as production capabilities merely because en
 - ReSTIR PT suffix classes outside the bounded production replay contract;
 - MLT combined with BDPT/VCM/manifold or adaptive reuse schedulers;
 - coherent/partial-coherent production transport and film merge;
-- coherent/partial-coherent transport, fluorescence and scalable general propagation backends;
+- coherent/partial-coherent transport and scalable general propagation backends;
+- transient fluorescence film output, anti-Stokes resources, fluorescent participating media and advanced-integrator fluorescence;
 - Vulkan/D3D12/OptiX arbitrary-scene radiometric integrator lowering and DispatchRays;
 - complete USD/Hydra and plugin ecosystems;
 - production-grade general fluid or acoustic simulation.

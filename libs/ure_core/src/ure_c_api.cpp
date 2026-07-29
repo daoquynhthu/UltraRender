@@ -196,6 +196,10 @@ bool supported_wave_optics_config(
             config)) {
         return true;
     }
+    if (wave::is_supported_fluorescence_config(
+            config)) {
+        return true;
+    }
     return wave::is_valid_diffraction_camera_config(
                config.wave_optics) &&
            !config.wave_optics.coherent_field_enabled &&

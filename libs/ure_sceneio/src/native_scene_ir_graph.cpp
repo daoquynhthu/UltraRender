@@ -68,7 +68,7 @@ scene_ir::VolumePhaseFunction phase(schema::VolumePhaseFunction value) {
 
 schema::MaterialGraphNodeKind graph_kind(scene_ir::MaterialGraphNodeKind value) {
     const auto raw = static_cast<std::uint8_t>(value);
-    if (raw > static_cast<std::uint8_t>(scene_ir::MaterialGraphNodeKind::BsdfScatteringTable)) {
+    if (raw > static_cast<std::uint8_t>(scene_ir::MaterialGraphNodeKind::BsdfFluorescence)) {
         throw std::invalid_argument("Invalid material graph node kind");
     }
     return static_cast<schema::MaterialGraphNodeKind>(raw);
@@ -76,7 +76,7 @@ schema::MaterialGraphNodeKind graph_kind(scene_ir::MaterialGraphNodeKind value) 
 
 scene_ir::MaterialGraphNodeKind graph_kind(schema::MaterialGraphNodeKind value) {
     const auto raw = static_cast<std::uint8_t>(value);
-    if (raw > static_cast<std::uint8_t>(schema::MaterialGraphNodeKind::BsdfScatteringTable)) {
+    if (raw > static_cast<std::uint8_t>(schema::MaterialGraphNodeKind::BsdfFluorescence)) {
         throw std::invalid_argument("Invalid material graph node kind");
     }
     return static_cast<scene_ir::MaterialGraphNodeKind>(raw);
@@ -299,6 +299,55 @@ std::unique_ptr<schema::ResourceReferenceT> mie_reference(
     return resource_reference(found->second);
 }
 
+std::unique_ptr<schema::FluorescenceResourceT>
+encode_fluorescence(
+    const scene_ir::FluorescenceResource& source) {
+    if (source.emission_pdf_per_nm.size() >
+        scene_ir::kMaxFluorescenceMatrixEntries) {
+        throw std::invalid_argument(
+            "Fluorescence matrix exceeds the schema budget");
+    }
+    auto result =
+        std::make_unique<
+            schema::FluorescenceResourceT>();
+    result->resource_id = source.resource_id;
+    result->excitation_wavelengths_nm =
+        source.excitation_wavelengths_nm;
+    result->emission_wavelengths_nm =
+        source.emission_wavelengths_nm;
+    result->excitation_efficiency =
+        source.excitation_efficiency;
+    result->quantum_yield = source.quantum_yield;
+    result->emission_pdf_per_nm =
+        source.emission_pdf_per_nm;
+    result->lifetime_seconds =
+        source.lifetime_seconds;
+    return result;
+}
+
+scene_ir::FluorescenceResource decode_fluorescence(
+    const schema::FluorescenceResourceT& source) {
+    if (source.emission_pdf_per_nm.size() >
+        scene_ir::kMaxFluorescenceMatrixEntries) {
+        throw std::invalid_argument(
+            "Fluorescence matrix exceeds the schema budget");
+    }
+    scene_ir::FluorescenceResource result;
+    result.resource_id = source.resource_id;
+    result.excitation_wavelengths_nm =
+        source.excitation_wavelengths_nm;
+    result.emission_wavelengths_nm =
+        source.emission_wavelengths_nm;
+    result.excitation_efficiency =
+        source.excitation_efficiency;
+    result.quantum_yield = source.quantum_yield;
+    result.emission_pdf_per_nm =
+        source.emission_pdf_per_nm;
+    result.lifetime_seconds =
+        source.lifetime_seconds;
+    return result;
+}
+
 std::unique_ptr<schema::MaterialGraphT> encode_graph(
     const scene_ir::MaterialGraph& source,
     const std::unordered_map<const scene_ir::TextureResource*, std::string>& texture_ids) {
@@ -321,6 +370,13 @@ std::unique_ptr<schema::MaterialGraphT> encode_graph(
             node->diffraction =
                 encode_diffraction(
                     source_node.diffraction);
+        }
+        if (source_node.kind ==
+            scene_ir::MaterialGraphNodeKind::
+                BsdfFluorescence) {
+            node->fluorescence =
+                encode_fluorescence(
+                    source_node.fluorescence);
         }
         for (const auto& source_input : source_node.inputs) {
             auto input = std::make_unique<schema::MaterialGraphInputT>();
@@ -352,6 +408,11 @@ std::shared_ptr<scene_ir::MaterialGraph> decode_graph(
             node.diffraction =
                 decode_diffraction(
                     *source_node->diffraction);
+        }
+        if (source_node->fluorescence) {
+            node.fluorescence =
+                decode_fluorescence(
+                    *source_node->fluorescence);
         }
         for (const auto& source_input : source_node->inputs) {
             if (!source_input) throw std::invalid_argument("Null material graph input");

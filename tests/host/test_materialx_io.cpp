@@ -225,6 +225,92 @@ static int test_diffractive_materialx_roundtrip_and_gate() {
     return 0;
 }
 
+static int test_fluorescence_materialx_roundtrip_and_gate() {
+    ure::scene_ir::MaterialGraph graph;
+    ure::scene_ir::MaterialGraphNode fluorescence;
+    fluorescence.id = 1;
+    fluorescence.kind =
+        ure::scene_ir::MaterialGraphNodeKind::
+            BsdfFluorescence;
+    fluorescence.fluorescence.resource_id =
+        "fluorescence/<>&";
+    fluorescence.fluorescence
+        .excitation_wavelengths_nm = {
+            400.0f,
+            500.0f};
+    fluorescence.fluorescence
+        .emission_wavelengths_nm = {
+            600.0f,
+            700.0f};
+    fluorescence.fluorescence
+        .excitation_efficiency = {
+            0.8f,
+            0.6f};
+    fluorescence.fluorescence.quantum_yield = {
+        0.5f,
+        0.4f};
+    fluorescence.fluorescence
+        .emission_pdf_per_nm = {
+            0.01f,
+            0.01f,
+            0.01f,
+            0.01f};
+    fluorescence.fluorescence.lifetime_seconds =
+        0.002;
+    ure::scene_ir::MaterialGraphNode output;
+    output.id = 2;
+    output.kind =
+        ure::scene_ir::MaterialGraphNodeKind::
+            OutputSurface;
+    output.inputs.push_back(
+        input("surface", fluorescence.id));
+    graph.nodes = {fluorescence, output};
+    graph.output_node_id = output.id;
+
+    const auto imported =
+        ure::io::import_materialx_graph(
+            ure::io::export_materialx_graph(
+                graph,
+                "FluorescenceMaterial"));
+    const auto& node =
+        imported.require_node(1, "fluorescence");
+    CHECK(node.kind ==
+          ure::scene_ir::MaterialGraphNodeKind::
+              BsdfFluorescence);
+    CHECK(node.fluorescence.resource_id ==
+          "fluorescence/<>&");
+    CHECK(node.fluorescence
+              .emission_pdf_per_nm ==
+          fluorescence.fluorescence
+              .emission_pdf_per_nm);
+    CHECK(node.fluorescence.lifetime_seconds ==
+          0.002);
+
+    bool rejected = false;
+    try {
+        (void)ure::GpuSceneCompiler::compile(
+            scene_with_graph(imported),
+            ure::RenderConfig{});
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+    ure::RenderConfig enabled;
+    enabled.wave_optics.fluorescence_enabled =
+        true;
+    const auto compiled =
+        ure::GpuSceneCompiler::compile(
+            scene_with_graph(imported),
+            enabled);
+    CHECK(compiled.materials.size() == 1);
+    CHECK(compiled.materials[0].header.type ==
+          ure::gpu::MaterialType::Fluorescent);
+    CHECK(compiled.materials[0]
+              .fluorescence.resource_id ==
+          "fluorescence/<>&");
+    return 0;
+}
+
 static int test_materialx_unknown_node_fails_loud() {
     bool rejected = false;
     try {
@@ -256,6 +342,7 @@ int main() {
     failed += run("test_ure_materialx_roundtrips_layer_graph", test_ure_materialx_roundtrips_layer_graph);
     failed += run("test_standard_surface_imports_as_lambert_graph", test_standard_surface_imports_as_lambert_graph);
     failed += run("test_diffractive_materialx_roundtrip_and_gate", test_diffractive_materialx_roundtrip_and_gate);
+    failed += run("test_fluorescence_materialx_roundtrip_and_gate", test_fluorescence_materialx_roundtrip_and_gate);
     failed += run("test_materialx_unknown_node_fails_loud", test_materialx_unknown_node_fails_loud);
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

@@ -219,6 +219,15 @@ def main() -> int:
     )
     diffractive.close()
 
+    fluorescence = pyure.create_session(
+        domain_bins=1000000,
+        packet_lanes=8,
+        queue_capacity=64,
+        max_trace_depth=12,
+        fluorescence=True,
+    )
+    fluorescence.close()
+
     try:
         pyure.create_session(
             domain_bins=1000000,
@@ -233,6 +242,22 @@ def main() -> int:
     else:
         raise AssertionError(
             "diffractive materials with ReSTIR DI must fail"
+        )
+
+    try:
+        pyure.create_session(
+            domain_bins=1000000,
+            packet_lanes=8,
+            queue_capacity=64,
+            max_trace_depth=12,
+            fluorescence=True,
+            path_guiding=True,
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError(
+            "fluorescence with path guiding must fail"
         )
 
     try:

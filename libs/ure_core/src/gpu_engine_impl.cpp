@@ -515,6 +515,10 @@ private:
                 config_)) {
             return;
         }
+        if (wave::is_supported_fluorescence_config(
+                config_)) {
+            return;
+        }
         throw std::runtime_error(
             "requested wave-optics configuration is unsupported by the GPU renderer");
     }
@@ -532,6 +536,19 @@ private:
                 config_)) {
             throw std::runtime_error(
                 "diffractive MaterialGraph operators require the explicit diffractive-materials wave-optics gate");
+        }
+        const bool has_fluorescent_material =
+            std::ranges::any_of(
+                compiled.materials,
+                [](const gpu::GpuMaterialData& material) {
+                    return material.header.type ==
+                        gpu::MaterialType::Fluorescent;
+                });
+        if (has_fluorescent_material &&
+            !wave::is_supported_fluorescence_config(
+                config_)) {
+            throw std::runtime_error(
+                "fluorescence MaterialGraph operators require the explicit fluorescence wave-optics gate");
         }
         if (gpu_context_) {
             ure::gpu::free_gpu_renderer(gpu_context_);

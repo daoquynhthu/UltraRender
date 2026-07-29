@@ -228,7 +228,7 @@ static ure::native_scene::NativeSceneArchive make_full_archive() {
     material->spectral_extension->albedo_spd = "spectra/albedo.spd";
     material->spectral_extension->emission_spd = "spectra/emission.spd";
     material->graph = std::make_shared<ure::scene_ir::MaterialGraph>();
-    for (int kind = 0; kind <= 19; ++kind) {
+    for (int kind = 0; kind <= 20; ++kind) {
         ure::scene_ir::MaterialGraphNode node;
         node.id = static_cast<std::uint32_t>(kind + 1);
         node.kind = static_cast<ure::scene_ir::MaterialGraphNodeKind>(kind);
@@ -236,7 +236,7 @@ static ure::native_scene::NativeSceneArchive make_full_archive() {
         node.color = {static_cast<float>(kind), 0.25f, 0.5f};
         node.value = static_cast<float>(kind) * 0.1f;
         if (kind == 2) node.texture = scene.textures[0];
-        if (kind >= 15) {
+        if (kind >= 15 && kind <= 19) {
             node.diffraction.kind =
                 static_cast<
                     ure::scene_ir::DiffractiveOperatorKind>(
@@ -251,6 +251,33 @@ static ure::native_scene::NativeSceneArchive make_full_archive() {
                 entry.jones_pp.real = 0.5f;
                 node.diffraction.table.push_back(entry);
             }
+        }
+        if (kind == 20) {
+            node.fluorescence.resource_id =
+                "fluorescence/full-fixture";
+            node.fluorescence
+                .excitation_wavelengths_nm = {
+                    400.0f,
+                    500.0f};
+            node.fluorescence
+                .emission_wavelengths_nm = {
+                    600.0f,
+                    700.0f};
+            node.fluorescence
+                .excitation_efficiency = {
+                    0.8f,
+                    0.6f};
+            node.fluorescence.quantum_yield = {
+                0.5f,
+                0.4f};
+            node.fluorescence
+                .emission_pdf_per_nm = {
+                    0.01f,
+                    0.01f,
+                    0.01f,
+                    0.01f};
+            node.fluorescence.lifetime_seconds =
+                0.002;
         }
         material->graph->nodes.push_back(std::move(node));
     }
@@ -315,7 +342,7 @@ static void test_full_current_field_roundtrip() {
     CHECK(binary.ok());
     CHECK(text.ok());
     if (binary.value && text.value) {
-        CHECK(binary.value->scene.materials[0]->graph->nodes.size() == 20);
+        CHECK(binary.value->scene.materials[0]->graph->nodes.size() == 21);
         const auto& binary_diffraction =
             binary.value->scene.materials[0]->graph->nodes[19].diffraction;
         const auto& text_diffraction =
@@ -323,6 +350,15 @@ static void test_full_current_field_roundtrip() {
         CHECK(binary_diffraction.table_id == "rcwa/full-fixture");
         CHECK(text_diffraction.table.size() == 1);
         CHECK(text_diffraction.table[0].jones_pp.real == 0.5f);
+        const auto& binary_fluorescence =
+            binary.value->scene.materials[0]->graph->nodes[20].fluorescence;
+        const auto& text_fluorescence =
+            text.value->scene.materials[0]->graph->nodes[20].fluorescence;
+        CHECK(binary_fluorescence.resource_id ==
+              "fluorescence/full-fixture");
+        CHECK(binary_fluorescence.emission_pdf_per_nm.size() == 4);
+        CHECK(text_fluorescence.quantum_yield[1] == 0.4f);
+        CHECK(text_fluorescence.lifetime_seconds == 0.002);
         CHECK(binary.value->scene.materials[0]->medium_mie_resource == binary.value->scene.medium_mie_resource);
         CHECK(text.value->scene.materials[0]->medium_mie_resource == text.value->scene.medium_mie_resource);
         CHECK(ure::native_scene::scene_ir_semantic_hash(*binary.value) ==

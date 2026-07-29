@@ -153,6 +153,20 @@ int main() {
              invalid_diffractive,
              registry).ok(),
         "diffractive materials with ReSTIR DI were accepted");
+    auto fluorescence = value;
+    fluorescence.wave_optics.fluorescence_enabled = true;
+    check(
+        compile_solver_contract(
+            fluorescence,
+            registry).ok(),
+        "supported fluorescence boundary was rejected");
+    auto invalid_fluorescence = fluorescence;
+    invalid_fluorescence.path_guiding.enabled = true;
+    check(
+        !compile_solver_contract(
+             invalid_fluorescence,
+             registry).ok(),
+        "fluorescence with path guiding was accepted");
     auto bad_metric = value; bad_metric.validation[0].metric = "unknown.metric";
     check(!compile_solver_contract(bad_metric, registry).ok(), "unsupported validation metric accepted");
     std::cout << "Phase Q.7 solver contract checks: " << (failures ? "FAILED" : "PASSED") << '\n';

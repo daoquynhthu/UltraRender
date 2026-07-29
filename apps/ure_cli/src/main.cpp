@@ -325,6 +325,11 @@ bool validate_supported_wave_optics(
                 config)) {
         return true;
     }
+    if (ure::wave::
+            is_supported_fluorescence_config(
+                config)) {
+        return true;
+    }
     if (ure::wave::is_valid_diffraction_camera_config(cfg) &&
         !cfg.coherent_field_enabled &&
         !cfg.partial_coherence_enabled &&

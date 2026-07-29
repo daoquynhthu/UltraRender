@@ -544,6 +544,11 @@ static __device__ inline bool enqueue_diffractive_material(
             throughput,
             channel,
             lane_value);
+        copy_film_wavelengths(
+            current_queue,
+            idx,
+            next_queue,
+            out_idx);
         for (int lane = 0;
              lane <
                  current_queue.num_spectral_channels;
@@ -604,6 +609,12 @@ static __device__ inline bool enqueue_diffractive_material(
             channel;
         next_queue.wavelength_pdfs[out_idx] =
             wavelength_pdf;
+        if (next_queue.fluorescence_delay_seconds) {
+            next_queue.fluorescence_delay_seconds[out_idx] =
+                current_queue.fluorescence_delay_seconds
+                ? current_queue.fluorescence_delay_seconds[idx]
+                : 0.0f;
+        }
     }
     return true;
 }

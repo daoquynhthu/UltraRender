@@ -547,6 +547,7 @@ void validate_phase_m1_graph_node(const scene_ir::MaterialGraphNode& node) {
         case scene_ir::MaterialGraphNodeKind::BsdfZonePlate:
         case scene_ir::MaterialGraphNodeKind::BsdfDoe:
         case scene_ir::MaterialGraphNodeKind::BsdfScatteringTable:
+        case scene_ir::MaterialGraphNodeKind::BsdfFluorescence:
             return;
         default:
             throw std::runtime_error("MaterialGraph contains a node kind not supported by the Phase M.1 compiler");
@@ -921,6 +922,35 @@ ure::gpu::GpuMaterialData compile_material(const std::shared_ptr<scene_ir::Mater
                 data.diffraction_table.push_back(
                     gpu_entry);
             }
+            return data;
+        }
+        if (bsdf.kind ==
+            scene_ir::MaterialGraphNodeKind::
+                BsdfFluorescence) {
+            if (!wave::is_valid(bsdf.fluorescence)) {
+                throw std::runtime_error(
+                    "MaterialGraph fluorescence resource contract is invalid");
+            }
+            ure::gpu::GpuMaterialData data =
+                compile_material_node(
+                    scene_ir::MaterialModel::Lambertian,
+                    {1.0f, 1.0f, 1.0f},
+                    {0.0f, 0.0f, 0.0f},
+                    0.0f,
+                    1.0f,
+                    {},
+                    0.0f,
+                    0.0f,
+                    1.0f,
+                    0.0f,
+                    0.0f,
+                    {},
+                    {},
+                    {},
+                    wavelengths);
+            data.header.type =
+                ure::gpu::MaterialType::Fluorescent;
+            data.fluorescence = bsdf.fluorescence;
             return data;
         }
 
@@ -1474,6 +1504,13 @@ CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir, co
                 config)) {
             throw std::runtime_error(
                 "diffractive MaterialGraph requires the supported explicit wave_optics.diffractive_materials configuration");
+        }
+        if (material.header.type ==
+                gpu::MaterialType::Fluorescent &&
+            !wave::is_supported_fluorescence_config(
+                config)) {
+            throw std::runtime_error(
+                "fluorescence MaterialGraph requires the supported explicit wave_optics.fluorescence configuration");
         }
         material.header.medium_phase = static_cast<int>(mat->medium_phase);
         material.header.medium_phase_resource_index = cache_mie_resource(

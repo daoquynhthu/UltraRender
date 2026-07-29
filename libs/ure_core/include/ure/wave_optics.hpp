@@ -246,6 +246,23 @@ struct PropagationResult {
     FraunhoferFieldGrid far_field;
 };
 
+struct FluorescenceSample {
+    double emission_wavelength_nm = 0.0;
+    double emission_pdf_per_nm = 0.0;
+    double excitation_efficiency = 0.0;
+    double quantum_yield = 0.0;
+    double radiant_energy_scale = 0.0;
+    double delay_seconds = 0.0;
+};
+
+struct FluorescenceAdjointSample {
+    double excitation_wavelength_nm = 0.0;
+    double transition_pdf_per_nm = 0.0;
+    double kernel_density_per_nm = 0.0;
+    double estimator_weight = 0.0;
+    double delay_seconds = 0.0;
+};
+
 constexpr double kAiryFirstZero = 3.8317059702075125;
 
 bool is_valid(const CircularAperture& aperture);
@@ -259,6 +276,7 @@ bool is_valid(const CoherenceMetadata& metadata);
 bool is_valid(const ComplexSpectrum& spectrum);
 bool is_valid(const JonesSpectrum& spectrum);
 bool is_valid(const scene_ir::DiffractiveOperator& diffraction);
+bool is_valid(const scene_ir::FluorescenceResource& fluorescence);
 bool is_ready(DiffractionCameraPlanStatus status);
 bool is_ready(PropagationStatus status);
 ComplexAmplitude add(ComplexAmplitude a, ComplexAmplitude b);
@@ -335,6 +353,24 @@ DiffractionCameraPlan make_diffraction_camera_plan(const ure::WaveOpticsConfig& 
 bool is_valid_diffraction_camera_config(const ure::WaveOpticsConfig& config);
 bool is_supported_diffractive_material_config(
     const ure::RenderConfig& config);
+bool is_supported_fluorescence_config(
+    const ure::RenderConfig& config);
+double fluorescence_emission_pdf(
+    const scene_ir::FluorescenceResource& fluorescence,
+    double excitation_wavelength_nm,
+    double emission_wavelength_nm);
+FluorescenceSample sample_fluorescence(
+    const scene_ir::FluorescenceResource& fluorescence,
+    double excitation_wavelength_nm,
+    double row_sample,
+    double emission_sample,
+    double delay_sample);
+FluorescenceAdjointSample
+sample_fluorescence_adjoint(
+    const scene_ir::FluorescenceResource& fluorescence,
+    double emission_wavelength_nm,
+    double excitation_sample,
+    double delay_sample);
 DiffractionPsfBank make_diffraction_psf_bank(const ure::WaveOpticsConfig& config);
 
 }

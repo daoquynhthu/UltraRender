@@ -356,6 +356,70 @@ static ure::scene_ir::SceneIR make_diffractive_scene(
     return scene;
 }
 
+static ure::scene_ir::SceneIR make_fluorescent_scene() {
+    ure::scene_ir::SceneIR scene;
+    scene.width = 16;
+    scene.height = 16;
+    scene.camera.position = {0.0f, 0.0f, 4.0f};
+    scene.camera.look_at = {0.0f, 0.0f, 0.0f};
+    scene.camera.fov = 35.0f;
+    auto material =
+        std::make_shared<
+            ure::scene_ir::MaterialNode>();
+    material->name = "fluorescent";
+    material->graph =
+        std::make_shared<
+            ure::scene_ir::MaterialGraph>();
+    ure::scene_ir::MaterialGraphNode fluorescence;
+    fluorescence.id = 1;
+    fluorescence.kind =
+        ure::scene_ir::MaterialGraphNodeKind::
+            BsdfFluorescence;
+    fluorescence.fluorescence.resource_id =
+        "gpu/fluorescence";
+    fluorescence.fluorescence
+        .excitation_wavelengths_nm = {
+            400.0f,
+            500.0f};
+    fluorescence.fluorescence
+        .emission_wavelengths_nm = {
+            600.0f,
+            700.0f};
+    fluorescence.fluorescence
+        .excitation_efficiency = {
+            0.8f,
+            0.6f};
+    fluorescence.fluorescence.quantum_yield = {
+        0.75f,
+        0.5f};
+    fluorescence.fluorescence
+        .emission_pdf_per_nm = {
+            0.01f,
+            0.01f,
+            0.01f,
+            0.01f};
+    fluorescence.fluorescence.lifetime_seconds =
+        0.002;
+    ure::scene_ir::MaterialGraphNode output;
+    output.id = 2;
+    output.kind =
+        ure::scene_ir::MaterialGraphNodeKind::
+            OutputSurface;
+    output.inputs.push_back(
+        {"surface", fluorescence.id, "out"});
+    material->graph->nodes = {
+        fluorescence,
+        output};
+    material->graph->output_node_id = output.id;
+    scene.materials.push_back(material);
+    ure::scene_ir::SphereNode sphere;
+    sphere.center = {0.0f, 0.0f, 0.0f};
+    sphere.radius = 1.2f;
+    sphere.material = material;
+    scene.spheres.push_back(sphere);
+    return scene;
+}
+
 static std::vector<float> render_diffractive_scene(
     const ure::scene_ir::SceneIR& scene,
     int pass_count) {
@@ -579,6 +643,147 @@ static int test_gpu_diffractive_material_update_requires_reload() {
     return 0;
 }
 
+static int test_gpu_fluorescence_transport_and_gate() {
+    REQUIRE_GPU();
+    auto disabled =
+        ure::RenderEngineFactory::create_gpu_renderer(
+            ure::RenderConfig{});
+    bool rejected = false;
+    try {
+        disabled->load_scene_ir(
+            make_fluorescent_scene());
+    } catch (const std::runtime_error& error) {
+        rejected =
+            std::string(error.what()).find(
+                "fluorescence") !=
+            std::string::npos;
+    }
+    CHECK(rejected);
+
+    ure::RenderConfig config;
+    config.queue_capacity = 8192;
+    config.spectral_packet_lanes = 8;
+    config.spectral_domain_bins = 8;
+    config.max_trace_depth = 3;
+    config.wave_optics.fluorescence_enabled = true;
+    auto engine =
+        ure::RenderEngineFactory::create_gpu_renderer(
+            config);
+    engine->load_scene_ir(make_fluorescent_scene());
+    for (int pass = 0; pass < 32; ++pass) {
+        engine->render_pass();
+    }
+    const auto framebuffer = engine->get_framebuffer();
+    CHECK(framebuffer.size() == 16 * 16 * 3);
+    float center_energy = 0.0f;
+    float center_red = 0.0f;
+    float center_blue = 0.0f;
+    for (int y = 4; y < 12; ++y) {
+        for (int x = 4; x < 12; ++x) {
+            const std::size_t base =
+                static_cast<std::size_t>(
+                    (y * 16 + x) * 3);
+            CHECK(std::isfinite(framebuffer[base]));
+            CHECK(std::isfinite(framebuffer[base + 1]));
+            CHECK(std::isfinite(framebuffer[base + 2]));
+            center_red += framebuffer[base];
+            center_energy +=
+                framebuffer[base] +
+                framebuffer[base + 1] +
+                framebuffer[base + 2];
+            center_blue += framebuffer[base + 2];
+        }
+    }
+    CHECK(center_energy > 0.0f);
+    CHECK(center_red > center_blue);
+    return 0;
+}
+
+static int test_gpu_fluorescence_update_requires_reload() {
+    REQUIRE_GPU();
+    ure::RenderConfig config;
+    config.queue_capacity = 512;
+    config.spectral_packet_lanes = 8;
+    config.spectral_domain_bins = 8;
+    config.wave_optics.fluorescence_enabled = true;
+    auto compiled = ure::GpuSceneCompiler::compile(
+        make_fluorescent_scene(),
+        config);
+    auto constrained = config;
+    constrained.backend.memory_budget_bytes = 1024;
+    bool budget_rejected = false;
+    try {
+        ure::gpu::GpuContext* unexpected =
+            ure::gpu::init_gpu_renderer(
+                compiled.width,
+                compiled.height,
+                compiled.meshes,
+                compiled.instances,
+                compiled.spheres,
+                compiled.materials,
+                compiled.textures,
+                constrained);
+        ure::gpu::free_gpu_renderer(unexpected);
+    } catch (const std::runtime_error& error) {
+        budget_rejected =
+            std::string(error.what()).find(
+                "fluorescence queue state") !=
+            std::string::npos;
+    }
+    CHECK(budget_rejected);
+    ure::gpu::GpuContext* context =
+        ure::gpu::init_gpu_renderer(
+            compiled.width,
+            compiled.height,
+            compiled.meshes,
+            compiled.instances,
+            compiled.spheres,
+            compiled.materials,
+            compiled.textures,
+            config);
+    CHECK(context != nullptr);
+    int material_index = -1;
+    for (std::size_t index = 0;
+         index <
+             context->
+                 host_materials_for_light_distribution
+                     .size();
+         ++index) {
+        if (context->
+                host_materials_for_light_distribution[
+                    index]
+                    .header.type ==
+            ure::gpu::MaterialType::Fluorescent) {
+            material_index =
+                static_cast<int>(index);
+            break;
+        }
+    }
+    CHECK(material_index >= 0);
+    ure::gpu::GpuMaterialData ordinary =
+        context->host_materials_for_light_distribution[
+            static_cast<std::size_t>(material_index)];
+    ordinary.header.type =
+        ure::gpu::MaterialType::Lambertian;
+    ordinary.fluorescence = {};
+    bool rejected = false;
+    try {
+        ure::gpu::update_materials_gpu(
+            context,
+            &ordinary,
+            1,
+            material_index);
+    } catch (const std::runtime_error& error) {
+        rejected =
+            std::string(error.what()).find(
+                "full scene reload") !=
+            std::string::npos;
+    }
+    CHECK(rejected);
+    ure::gpu::free_gpu_renderer(context);
+    return 0;
+}
+
 int main() {
     std::printf("[GPU Wave Optics Test]\n");
     RUN_TEST(test_gpu_diffractive_jones_response);
@@ -590,6 +795,8 @@ int main() {
     RUN_TEST(test_gpu_diffractive_material_transport);
     RUN_TEST(test_gpu_diffractive_material_requires_gate);
     RUN_TEST(test_gpu_diffractive_material_update_requires_reload);
+    RUN_TEST(test_gpu_fluorescence_transport_and_gate);
+    RUN_TEST(test_gpu_fluorescence_update_requires_reload);
     std::printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;
 }

@@ -104,6 +104,12 @@ static __device__ void initialize_camera_ray(
             spectral_mode == SpectralRayModeSampled && c == active_channel
                 ? sampled_lambda
                 : kSpectralLambdaMin + (float(c) + 0.5f) * bin_width;
+        if (queue.film_wavelengths) {
+            queue.film_wavelengths[
+                c * queue.capacity + ray_index] =
+                queue.throughput_wavelengths[
+                    c * queue.capacity + ray_index];
+        }
     }
     if (spectral_mode_is_sampled(spectral_mode)) {
         for (int c = 0; c < queue.num_spectral_channels; ++c) {
@@ -126,6 +132,9 @@ static __device__ void initialize_camera_ray(
     queue.wavelength_pdfs[ray_index] = spectral_mode == SpectralRayModeSampled
         ? wavelength_pdf
         : 1.0f / fmaxf(1.0f, float(queue.num_spectral_channels));
+    if (queue.fluorescence_delay_seconds) {
+        queue.fluorescence_delay_seconds[ray_index] = 0.0f;
+    }
 }
 
 __global__ __launch_bounds__(512) void generate_rays_kernel(

@@ -68,6 +68,12 @@ struct GpuContext {
     GpuDiffractiveTableEntry*
         d_material_diffraction_table = nullptr;
     int material_diffraction_table_count = 0;
+    GpuFluorescenceOperator*
+        d_material_fluorescence_operators = nullptr;
+    int material_fluorescence_operator_count = 0;
+    GpuFluorescenceEntry*
+        d_material_fluorescence_table = nullptr;
+    int material_fluorescence_table_count = 0;
     GpuDiffractiveOperator*
         d_material_diffraction_operators = nullptr;
     int material_diffraction_operator_count = 0;

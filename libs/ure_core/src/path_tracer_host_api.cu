@@ -116,7 +116,11 @@ GpuContext::~GpuContext() = default;
 
 // ===== Queue alloc/free helpers =====
 
-void alloc_ray_queue(RayQueue& q, int capacity, int num_spec_channels) {
+void alloc_ray_queue(
+    RayQueue& q,
+    int capacity,
+    int num_spec_channels,
+    bool fluorescence_enabled) {
     q.capacity = capacity;
     q.num_spectral_channels = num_spec_channels;
     q.initial_spectral_mode = SpectralRayModePacket;
@@ -124,6 +128,11 @@ void alloc_ray_queue(RayQueue& q, int capacity, int num_spec_channels) {
     UR_CUDA_CHECK(cudaMalloc(&q.directions, capacity * sizeof(GpuVec3)));
     UR_CUDA_CHECK(cudaMalloc(&q.throughput_vals, num_spec_channels * capacity * sizeof(float)));
     UR_CUDA_CHECK(cudaMalloc(&q.throughput_wavelengths, num_spec_channels * capacity * sizeof(float)));
+    if (fluorescence_enabled) {
+        UR_CUDA_CHECK(cudaMalloc(
+            &q.film_wavelengths,
+            num_spec_channels * capacity * sizeof(float)));
+    }
     UR_CUDA_CHECK(cudaMalloc(&q.stokes_i, num_spec_channels * capacity * sizeof(float)));
     UR_CUDA_CHECK(cudaMalloc(&q.stokes_q, num_spec_channels * capacity * sizeof(float)));
     UR_CUDA_CHECK(cudaMalloc(&q.stokes_u, num_spec_channels * capacity * sizeof(float)));
@@ -139,6 +148,11 @@ void alloc_ray_queue(RayQueue& q, int capacity, int num_spec_channels) {
     UR_CUDA_CHECK(cudaMalloc(&q.spectral_modes, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.active_channels, capacity * sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.wavelength_pdfs, capacity * sizeof(float)));
+    if (fluorescence_enabled) {
+        UR_CUDA_CHECK(cudaMalloc(
+            &q.fluorescence_delay_seconds,
+            capacity * sizeof(float)));
+    }
     UR_CUDA_CHECK(cudaMalloc(&q.count, sizeof(int)));
     UR_CUDA_CHECK(cudaMalloc(&q.overflow_count, sizeof(int)));
     UR_CUDA_CHECK(cudaMemset(q.overflow_count, 0, sizeof(int)));
@@ -149,6 +163,7 @@ void free_ray_queue(RayQueue& q) {
     cudaFree(q.directions);
     cudaFree(q.throughput_vals);
     cudaFree(q.throughput_wavelengths);
+    cudaFree(q.film_wavelengths);
     cudaFree(q.stokes_i);
     cudaFree(q.stokes_q);
     cudaFree(q.stokes_u);
@@ -164,6 +179,7 @@ void free_ray_queue(RayQueue& q) {
     cudaFree(q.spectral_modes);
     cudaFree(q.active_channels);
     cudaFree(q.wavelength_pdfs);
+    cudaFree(q.fluorescence_delay_seconds);
     cudaFree(q.count);
     cudaFree(q.overflow_count);
 }
@@ -583,6 +599,10 @@ static void upload_material_expression_graphs(GpuContext* ctx,
         diffraction_operators;
     std::vector<GpuDiffractiveTableEntry>
         diffraction_entries;
+    std::vector<GpuFluorescenceOperator>
+        fluorescence_operators;
+    std::vector<GpuFluorescenceEntry>
+        fluorescence_entries;
     for (size_t mat_idx = 0; mat_idx < host_materials.size(); ++mat_idx) {
         GpuMaterialData& material = host_materials[mat_idx];
         GpuMaterial& header = host_headers[mat_idx];
@@ -646,6 +666,107 @@ static void upload_material_expression_graphs(GpuContext* ctx,
             diffraction_entries.end(),
             material.diffraction_table.begin(),
             material.diffraction_table.end());
+        if (header.type == MaterialType::Fluorescent) {
+            if (!ure::wave::is_valid(
+                    material.fluorescence)) {
+                throw std::runtime_error(
+                    "fluorescence resource is invalid");
+            }
+            if (fluorescence_operators.size() >=
+                static_cast<std::size_t>(
+                    std::numeric_limits<int>::max())) {
+                throw std::runtime_error(
+                    "fluorescence operator count exceeds the GPU index range");
+            }
+            const std::size_t entry_count =
+                material.fluorescence
+                    .emission_pdf_per_nm.size();
+            if (entry_count >
+                    scene_ir::
+                        kMaxFluorescenceMatrixEntries ||
+                fluorescence_entries.size() >
+                    scene_ir::
+                        kMaxFluorescenceMatrixEntries -
+                            entry_count) {
+                throw std::runtime_error(
+                    "fluorescence tables exceed the bounded scene resource budget");
+            }
+            GpuFluorescenceOperator fluorescence;
+            fluorescence.table_start =
+                static_cast<int>(
+                    fluorescence_entries.size());
+            fluorescence.excitation_count =
+                static_cast<int>(
+                    material.fluorescence
+                        .excitation_wavelengths_nm
+                        .size());
+            fluorescence.emission_count =
+                static_cast<int>(
+                    material.fluorescence
+                        .emission_wavelengths_nm
+                        .size());
+            fluorescence.lifetime_seconds =
+                static_cast<float>(
+                    material.fluorescence
+                        .lifetime_seconds);
+            header.fluorescence_operator_index =
+                static_cast<int>(
+                    fluorescence_operators.size());
+            fluorescence_operators.push_back(
+                fluorescence);
+            for (int row = 0;
+                 row <
+                     fluorescence.excitation_count;
+                 ++row) {
+                for (int column = 0;
+                     column <
+                         fluorescence.emission_count;
+                     ++column) {
+                    GpuFluorescenceEntry entry;
+                    entry.excitation_wavelength_nm =
+                        material.fluorescence
+                            .excitation_wavelengths_nm[
+                                static_cast<
+                                    std::size_t>(row)];
+                    entry.emission_wavelength_nm =
+                        material.fluorescence
+                            .emission_wavelengths_nm[
+                                static_cast<
+                                    std::size_t>(
+                                        column)];
+                    entry.excitation_efficiency =
+                        material.fluorescence
+                            .excitation_efficiency[
+                                static_cast<
+                                    std::size_t>(row)];
+                    entry.quantum_yield =
+                        material.fluorescence
+                            .quantum_yield[
+                                static_cast<
+                                    std::size_t>(row)];
+                    entry.emission_pdf_per_nm =
+                        material.fluorescence
+                            .emission_pdf_per_nm[
+                                static_cast<
+                                    std::size_t>(
+                                        row *
+                                            fluorescence
+                                                .emission_count +
+                                        column)];
+                    fluorescence_entries.push_back(
+                        entry);
+                }
+            }
+        } else {
+            if (!material.fluorescence.resource_id
+                     .empty() ||
+                !material.fluorescence
+                     .emission_pdf_per_nm.empty()) {
+                throw std::runtime_error(
+                    "non-fluorescent material carries a fluorescence resource");
+            }
+            header.fluorescence_operator_index = -1;
+        }
         if (material.bsdf_lobes.size() != static_cast<size_t>(header.bsdf_lobe_count) ||
             header.bsdf_lobe_count > kMaxMaterialBsdfLobes) {
             throw std::runtime_error("material BSDF lobe descriptor count is invalid");
@@ -737,6 +858,43 @@ static void upload_material_expression_graphs(GpuContext* ctx,
     } else {
         ctx->d_material_diffraction_table = nullptr;
     }
+
+    ctx->material_fluorescence_operator_count =
+        static_cast<int>(
+            fluorescence_operators.size());
+    if (!fluorescence_operators.empty()) {
+        const size_t bytes =
+            fluorescence_operators.size() *
+            sizeof(GpuFluorescenceOperator);
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_material_fluorescence_operators,
+            bytes));
+        UR_CUDA_CHECK(cudaMemcpy(
+            ctx->d_material_fluorescence_operators,
+            fluorescence_operators.data(),
+            bytes,
+            cudaMemcpyHostToDevice));
+        ctx->resources->retain_allocation(
+            ctx->d_material_fluorescence_operators);
+    }
+    ctx->material_fluorescence_table_count =
+        static_cast<int>(
+            fluorescence_entries.size());
+    if (!fluorescence_entries.empty()) {
+        const size_t bytes =
+            fluorescence_entries.size() *
+            sizeof(GpuFluorescenceEntry);
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_material_fluorescence_table,
+            bytes));
+        UR_CUDA_CHECK(cudaMemcpy(
+            ctx->d_material_fluorescence_table,
+            fluorescence_entries.data(),
+            bytes,
+            cudaMemcpyHostToDevice));
+        ctx->resources->retain_allocation(
+            ctx->d_material_fluorescence_table);
+    }
 }
 
 static void free_material_resource_tables(GpuContext* ctx) {
@@ -753,6 +911,13 @@ static bool contains_material_expression_graph(const GpuMaterialData* materials,
 static bool contains_diffractive_material(const GpuMaterialData* materials, int count) {
     for (int i = 0; i < count; ++i) {
         if (materials[i].header.type == MaterialType::Diffractive) return true;
+    }
+    return false;
+}
+
+static bool contains_fluorescent_material(const GpuMaterialData* materials, int count) {
+    for (int i = 0; i < count; ++i) {
+        if (materials[i].header.type == MaterialType::Fluorescent) return true;
     }
     return false;
 }
@@ -787,6 +952,17 @@ static std::uint64_t material_resource_float_count(const GpuMaterialData& materi
     count += sampled_resource_float_count(material.emission_resource);
     for (const HostSpectralExpressionNode& node : material.expression_nodes) {
         count += sampled_resource_float_count(node.resource);
+    }
+    if (material.header.type == MaterialType::Fluorescent) {
+        count +=
+            static_cast<std::uint64_t>(
+                material.fluorescence
+                    .emission_pdf_per_nm.size()) *
+            (sizeof(GpuFluorescenceEntry) /
+             sizeof(float));
+        count +=
+            sizeof(GpuFluorescenceOperator) /
+            sizeof(float);
     }
     return count;
 }
@@ -2985,6 +3161,9 @@ GpuContext* init_gpu_renderer(int width, int height,
                    config.wave_optics) &&
                !ure::wave::
                     is_supported_diffractive_material_config(
+                        config) &&
+               !ure::wave::
+                    is_supported_fluorescence_config(
                         config)) {
         throw std::invalid_argument(
             "requested wave-optics mode is not implemented by the GPU renderer");
@@ -3018,6 +3197,50 @@ GpuContext* init_gpu_renderer(int width, int height,
     }
     const int primary_ray_count = checked_primary_ray_count(width, height);
     const int max_rays = configured_ray_queue_capacity(config, primary_ray_count);
+    const int num_spec = ure::spectral_packet_lanes(config);
+    if (!valid_packet_lane_count(num_spec)) {
+        throw std::runtime_error("RenderConfig spectral packet lanes must be 1 or in [8, kMaxPacketLanes]");
+    }
+    if (ure::spectral_domain_bins(config) < static_cast<std::uint64_t>(num_spec)) {
+        throw std::runtime_error("RenderConfig spectral domain bins must be >= spectral packet lanes");
+    }
+    if (config.wave_optics.fluorescence_enabled) {
+        const std::size_t ray_count =
+            static_cast<std::size_t>(max_rays);
+        const std::size_t state_float_count =
+            static_cast<std::size_t>(num_spec) + 1;
+        if (ray_count >
+            std::numeric_limits<std::size_t>::max() /
+                state_float_count /
+                sizeof(float) /
+                2) {
+            throw std::overflow_error(
+                "fluorescence queue state size overflow");
+        }
+        const std::size_t state_bytes =
+            ray_count *
+            state_float_count *
+            sizeof(float) *
+            2;
+        if (config.backend.memory_budget_bytes != 0 &&
+            state_bytes >
+                config.backend.memory_budget_bytes) {
+            throw std::runtime_error(
+                "fluorescence queue state exceeds backend memory budget");
+        }
+        std::size_t free_device_bytes = 0;
+        std::size_t total_device_bytes = 0;
+        UR_CUDA_CHECK(cudaMemGetInfo(
+            &free_device_bytes,
+            &total_device_bytes));
+        static_cast<void>(total_device_bytes);
+        if (state_bytes >
+            free_device_bytes -
+                free_device_bytes / 20) {
+            throw std::runtime_error(
+                "fluorescence queue state exceeds available device memory");
+        }
+    }
 
     auto runtime_device = backend_adapter
         ? make_cuda_runtime_device(
@@ -3191,15 +3414,16 @@ GpuContext* init_gpu_renderer(int width, int height,
 
     init_debug_log();
 
-    int num_spec = ure::spectral_packet_lanes(config);
-    if (!valid_packet_lane_count(num_spec)) {
-        throw std::runtime_error("RenderConfig spectral packet lanes must be 1 or in [8, kMaxPacketLanes]");
-    }
-    if (ure::spectral_domain_bins(config) < static_cast<std::uint64_t>(num_spec)) {
-        throw std::runtime_error("RenderConfig spectral domain bins must be >= spectral packet lanes");
-    }
-    alloc_ray_queue(ctx->queueA, max_rays, num_spec);
-    alloc_ray_queue(ctx->queueB, max_rays, num_spec);
+    alloc_ray_queue(
+        ctx->queueA,
+        max_rays,
+        num_spec,
+        config.wave_optics.fluorescence_enabled);
+    alloc_ray_queue(
+        ctx->queueB,
+        max_rays,
+        num_spec,
+        config.wave_optics.fluorescence_enabled);
     alloc_hit_queue(ctx->hitQueue, max_rays);
     alloc_shadow_queue(ctx->shadowQueue, max_rays, num_spec);
     allocate_mlt_runtime(ctx);
@@ -4433,6 +4657,14 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         ctx->d_material_diffraction_operators;
     scene.material_diffraction_operator_count =
         ctx->material_diffraction_operator_count;
+    scene.material_fluorescence_operators =
+        ctx->d_material_fluorescence_operators;
+    scene.material_fluorescence_operator_count =
+        ctx->material_fluorescence_operator_count;
+    scene.material_fluorescence_table =
+        ctx->d_material_fluorescence_table;
+    scene.material_fluorescence_table_count =
+        ctx->material_fluorescence_table_count;
     scene.num_spectral_channels = ctx->num_spectral_channels;
     scene.diffraction_spectral_accum =
         ctx->d_diffraction_spectral_accum;
@@ -5384,6 +5616,10 @@ void update_materials_gpu(GpuContext* ctx,
     if (contains_diffractive_material(materials, count) ||
         contains_diffractive_material(cached_materials, count)) {
         throw std::runtime_error("diffractive material updates require a full scene reload");
+    }
+    if (contains_fluorescent_material(materials, count) ||
+        contains_fluorescent_material(cached_materials, count)) {
+        throw std::runtime_error("fluorescent material updates require a full scene reload");
     }
     if (full_material_update) {
         free_material_resource_tables(ctx);

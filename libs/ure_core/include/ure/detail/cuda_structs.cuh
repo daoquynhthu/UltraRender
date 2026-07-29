@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "ure/scene_ir.hpp"
 #include "ure/spectral_limits.hpp"
 
 #if defined(_MSC_VER)
@@ -338,7 +339,8 @@ enum class MaterialType {
     Cloth,
     Composite,
     Layered,
-    Diffractive
+    Diffractive,
+    Fluorescent
 };
 
 enum class GpuDiffractiveOperatorKind : int {
@@ -368,6 +370,21 @@ struct GpuDiffractiveTableEntry {
     float jones_ps_imag = 0.0f;
     float jones_pp_real = 0.0f;
     float jones_pp_imag = 0.0f;
+};
+
+struct GpuFluorescenceEntry {
+    float excitation_wavelength_nm = 0.0f;
+    float emission_wavelength_nm = 0.0f;
+    float excitation_efficiency = 0.0f;
+    float quantum_yield = 0.0f;
+    float emission_pdf_per_nm = 0.0f;
+};
+
+struct GpuFluorescenceOperator {
+    int table_start = -1;
+    int excitation_count = 0;
+    int emission_count = 0;
+    float lifetime_seconds = 0.0f;
 };
 
 struct GpuDiffractiveOperator {
@@ -515,6 +532,7 @@ struct GpuMaterial {
     int layer_thickness_expression_root = -1;
     int layer_absorption_expression_root = -1;
     int diffraction_operator_index = -1;
+    int fluorescence_operator_index = -1;
 };
 
 // Host-side companion holding spectral data alongside the GPU header.
@@ -537,6 +555,7 @@ struct GpuMaterialData {
     GpuDiffractiveOperator diffraction_operator;
     std::vector<GpuDiffractiveTableEntry>
         diffraction_table;
+    scene_ir::FluorescenceResource fluorescence;
 };
 
 struct GpuSphere {
@@ -686,6 +705,12 @@ struct GpuScene {
     const GpuDiffractiveTableEntry*
         material_diffraction_table;
     int material_diffraction_table_count;
+    const GpuFluorescenceOperator*
+        material_fluorescence_operators;
+    int material_fluorescence_operator_count;
+    const GpuFluorescenceEntry*
+        material_fluorescence_table;
+    int material_fluorescence_table_count;
     int num_spectral_channels;
     GpuVec3* diffraction_spectral_accum;
     const float* diffraction_psf_weights;
@@ -808,6 +833,8 @@ enum SpectralRayMode : int {
     SpectralRayModeSampled = 2
 };
 
+inline constexpr int kRayFlagNeeUnavailable = 4;
+
 enum SpectralWavelengthSamplingStrategy : int {
     SpectralWavelengthSamplingUniform = 0,
     SpectralWavelengthSamplingCieYImportance = 1,
@@ -823,6 +850,7 @@ struct RayQueue {
     GpuVec3* directions = nullptr;
     float* throughput_vals = nullptr;
     float* throughput_wavelengths = nullptr;
+    float* film_wavelengths = nullptr;
     int num_spectral_channels = 0;
     float* stokes_i = nullptr;
     float* stokes_q = nullptr;
@@ -839,6 +867,7 @@ struct RayQueue {
     int* spectral_modes = nullptr;
     int* active_channels = nullptr;
     float* wavelength_pdfs = nullptr;
+    float* fluorescence_delay_seconds = nullptr;
     int initial_spectral_mode = SpectralRayModePacket;
     int wavelength_sampling_strategy = SpectralWavelengthSamplingUniform;
     float* wavelength_proposal_cdf = nullptr;

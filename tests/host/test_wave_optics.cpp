@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <numbers>
 #include <stdexcept>
 #include <string>
@@ -1103,6 +1104,159 @@ static int test_diffractive_config_boundary() {
     return 0;
 }
 
+static ure::scene_ir::FluorescenceResource
+fluorescence_fixture() {
+    ure::scene_ir::FluorescenceResource resource;
+    resource.resource_id = "fluorescence/reference";
+    resource.excitation_wavelengths_nm = {
+        400.0f,
+        500.0f};
+    resource.emission_wavelengths_nm = {
+        600.0f,
+        700.0f};
+    resource.excitation_efficiency = {
+        0.8f,
+        0.6f};
+    resource.quantum_yield = {
+        0.5f,
+        0.4f};
+    resource.emission_pdf_per_nm = {
+        0.01f,
+        0.01f,
+        0.01f,
+        0.01f};
+    resource.lifetime_seconds = 0.002;
+    return resource;
+}
+
+static int test_fluorescence_resource_and_sampling() {
+    const auto resource = fluorescence_fixture();
+    CHECK(ure::wave::is_valid(resource));
+    CHECK_NEAR(
+        ure::wave::fluorescence_emission_pdf(
+            resource,
+            450.0,
+            650.0),
+        0.01,
+        1.0e-9);
+    CHECK_NEAR(
+        ure::wave::fluorescence_emission_pdf(
+            resource,
+            550.0,
+            650.0),
+        0.0,
+        0.0);
+    const auto sample =
+        ure::wave::sample_fluorescence(
+            resource,
+            450.0,
+            0.25,
+            0.25,
+            1.0 - std::exp(-1.0));
+    CHECK_NEAR(
+        sample.emission_wavelength_nm,
+        625.0,
+        1.0e-5);
+    CHECK_NEAR(
+        sample.emission_pdf_per_nm,
+        0.01,
+        1.0e-9);
+    CHECK_NEAR(
+        sample.excitation_efficiency,
+        0.7,
+        1.0e-7);
+    CHECK_NEAR(
+        sample.quantum_yield,
+        0.45,
+        1.0e-7);
+    CHECK_NEAR(
+        sample.radiant_energy_scale,
+        0.7 * 0.45 * 450.0 / 625.0,
+        1.0e-7);
+    CHECK(sample.radiant_energy_scale <=
+          sample.excitation_efficiency *
+              sample.quantum_yield);
+    CHECK_NEAR(
+        sample.delay_seconds,
+        resource.lifetime_seconds,
+        1.0e-12);
+    const auto adjoint =
+        ure::wave::sample_fluorescence_adjoint(
+            resource,
+            650.0,
+            0.5,
+            1.0 - std::exp(-1.0));
+    CHECK(adjoint.excitation_wavelength_nm >= 400.0);
+    CHECK(adjoint.excitation_wavelength_nm <= 500.0);
+    CHECK(adjoint.excitation_wavelength_nm < 650.0);
+    CHECK(adjoint.transition_pdf_per_nm > 0.0);
+    CHECK(adjoint.kernel_density_per_nm > 0.0);
+    CHECK_NEAR(
+        adjoint.estimator_weight,
+        0.5 *
+            (0.8 * 0.5 * 400.0 / 650.0 *
+                 0.01 +
+             0.6 * 0.4 * 500.0 / 650.0 *
+                 0.01) *
+            100.0,
+        1.0e-7);
+    CHECK_NEAR(
+        adjoint.delay_seconds,
+        resource.lifetime_seconds,
+        1.0e-12);
+    return 0;
+}
+
+static int test_fluorescence_resource_rejects_invalid_energy() {
+    auto resource = fluorescence_fixture();
+    resource.quantum_yield[0] = 1.01f;
+    CHECK(!ure::wave::is_valid(resource));
+    resource = fluorescence_fixture();
+    resource.emission_pdf_per_nm[0] = 0.02f;
+    CHECK(!ure::wave::is_valid(resource));
+    resource = fluorescence_fixture();
+    resource.emission_wavelengths_nm[0] = 450.0f;
+    CHECK(!ure::wave::is_valid(resource));
+    resource = fluorescence_fixture();
+    resource.emission_wavelengths_nm = {
+        490.0f,
+        510.0f};
+    resource.emission_pdf_per_nm = {
+        0.0f,
+        0.1f,
+        0.0f,
+        0.1f};
+    CHECK(!ure::wave::is_valid(resource));
+    resource = fluorescence_fixture();
+    resource.lifetime_seconds =
+        std::numeric_limits<double>::max();
+    CHECK(!ure::wave::is_valid(resource));
+    resource = fluorescence_fixture();
+    resource.emission_pdf_per_nm.resize(
+        ure::scene_ir::kMaxFluorescenceMatrixEntries +
+        1,
+        0.0f);
+    CHECK(!ure::wave::is_valid(resource));
+    return 0;
+}
+
+static int test_fluorescence_config_boundary() {
+    ure::RenderConfig config;
+    CHECK(!ure::wave::
+              is_supported_fluorescence_config(
+                  config));
+    config.wave_optics.fluorescence_enabled =
+        true;
+    CHECK(ure::wave::
+              is_supported_fluorescence_config(
+                  config));
+    config.mlt.enabled = true;
+    CHECK(!ure::wave::
+              is_supported_fluorescence_config(
+                  config));
+    return 0;
+}
+
 static int test_gpu_renderer_rejects_unsupported_wave_combination() {
     ure::RenderConfig config;
     config.wave_optics.mode = ure::WaveOpticsMode::CameraDiffraction;
@@ -1172,6 +1326,9 @@ int main() {
     failed += run("test_diffractive_analytic_orders", test_diffractive_analytic_orders);
     failed += run("test_diffractive_scattering_table_contract", test_diffractive_scattering_table_contract);
     failed += run("test_diffractive_config_boundary", test_diffractive_config_boundary);
+    failed += run("test_fluorescence_resource_and_sampling", test_fluorescence_resource_and_sampling);
+    failed += run("test_fluorescence_resource_rejects_invalid_energy", test_fluorescence_resource_rejects_invalid_energy);
+    failed += run("test_fluorescence_config_boundary", test_fluorescence_config_boundary);
     failed += run("test_gpu_renderer_rejects_unsupported_wave_combination", test_gpu_renderer_rejects_unsupported_wave_combination);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);

@@ -41,6 +41,10 @@ struct DiffractiveOperator;
 struct DiffractiveOperatorBuilder;
 struct DiffractiveOperatorT;
 
+struct FluorescenceResource;
+struct FluorescenceResourceBuilder;
+struct FluorescenceResourceT;
+
 struct MaterialGraphNode;
 struct MaterialGraphNodeBuilder;
 struct MaterialGraphNodeT;
@@ -224,11 +228,12 @@ enum class MaterialGraphNodeKind : uint8_t {
   BsdfZonePlate = 17,
   BsdfDoe = 18,
   BsdfScatteringTable = 19,
+  BsdfFluorescence = 20,
   MIN = ConstantColor,
-  MAX = BsdfScatteringTable
+  MAX = BsdfFluorescence
 };
 
-inline const MaterialGraphNodeKind (&EnumValuesMaterialGraphNodeKind())[20] {
+inline const MaterialGraphNodeKind (&EnumValuesMaterialGraphNodeKind())[21] {
   static const MaterialGraphNodeKind values[] = {
     MaterialGraphNodeKind::ConstantColor,
     MaterialGraphNodeKind::ConstantFloat,
@@ -249,13 +254,14 @@ inline const MaterialGraphNodeKind (&EnumValuesMaterialGraphNodeKind())[20] {
     MaterialGraphNodeKind::BsdfPhaseMask,
     MaterialGraphNodeKind::BsdfZonePlate,
     MaterialGraphNodeKind::BsdfDoe,
-    MaterialGraphNodeKind::BsdfScatteringTable
+    MaterialGraphNodeKind::BsdfScatteringTable,
+    MaterialGraphNodeKind::BsdfFluorescence
   };
   return values;
 }
 
 inline const char * const *EnumNamesMaterialGraphNodeKind() {
-  static const char * const names[21] = {
+  static const char * const names[22] = {
     "ConstantColor",
     "ConstantFloat",
     "Texture2D",
@@ -276,13 +282,14 @@ inline const char * const *EnumNamesMaterialGraphNodeKind() {
     "BsdfZonePlate",
     "BsdfDoe",
     "BsdfScatteringTable",
+    "BsdfFluorescence",
     nullptr
   };
   return names;
 }
 
 inline const char *EnumNameMaterialGraphNodeKind(MaterialGraphNodeKind e) {
-  if (::flatbuffers::IsOutRange(e, MaterialGraphNodeKind::ConstantColor, MaterialGraphNodeKind::BsdfScatteringTable)) return "";
+  if (::flatbuffers::IsOutRange(e, MaterialGraphNodeKind::ConstantColor, MaterialGraphNodeKind::BsdfFluorescence)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesMaterialGraphNodeKind()[index];
 }
@@ -1026,6 +1033,163 @@ inline ::flatbuffers::Offset<DiffractiveOperator> CreateDiffractiveOperatorDirec
 
 ::flatbuffers::Offset<DiffractiveOperator> CreateDiffractiveOperator(::flatbuffers::FlatBufferBuilder &_fbb, const DiffractiveOperatorT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
+struct FluorescenceResourceT : public ::flatbuffers::NativeTable {
+  typedef FluorescenceResource TableType;
+  std::string resource_id{};
+  std::vector<float> excitation_wavelengths_nm{};
+  std::vector<float> emission_wavelengths_nm{};
+  std::vector<float> excitation_efficiency{};
+  std::vector<float> quantum_yield{};
+  std::vector<float> emission_pdf_per_nm{};
+  double lifetime_seconds = 0.0;
+};
+
+struct FluorescenceResource FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef FluorescenceResourceT NativeTableType;
+  typedef FluorescenceResourceBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_RESOURCE_ID = 4,
+    VT_EXCITATION_WAVELENGTHS_NM = 6,
+    VT_EMISSION_WAVELENGTHS_NM = 8,
+    VT_EXCITATION_EFFICIENCY = 10,
+    VT_QUANTUM_YIELD = 12,
+    VT_EMISSION_PDF_PER_NM = 14,
+    VT_LIFETIME_SECONDS = 16
+  };
+  const ::flatbuffers::String *resource_id() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_RESOURCE_ID);
+  }
+  const ::flatbuffers::Vector<float> *excitation_wavelengths_nm() const {
+    return GetPointer<const ::flatbuffers::Vector<float> *>(VT_EXCITATION_WAVELENGTHS_NM);
+  }
+  const ::flatbuffers::Vector<float> *emission_wavelengths_nm() const {
+    return GetPointer<const ::flatbuffers::Vector<float> *>(VT_EMISSION_WAVELENGTHS_NM);
+  }
+  const ::flatbuffers::Vector<float> *excitation_efficiency() const {
+    return GetPointer<const ::flatbuffers::Vector<float> *>(VT_EXCITATION_EFFICIENCY);
+  }
+  const ::flatbuffers::Vector<float> *quantum_yield() const {
+    return GetPointer<const ::flatbuffers::Vector<float> *>(VT_QUANTUM_YIELD);
+  }
+  const ::flatbuffers::Vector<float> *emission_pdf_per_nm() const {
+    return GetPointer<const ::flatbuffers::Vector<float> *>(VT_EMISSION_PDF_PER_NM);
+  }
+  double lifetime_seconds() const {
+    return GetField<double>(VT_LIFETIME_SECONDS, 0.0);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_RESOURCE_ID) &&
+           verifier.VerifyString(resource_id()) &&
+           VerifyOffset(verifier, VT_EXCITATION_WAVELENGTHS_NM) &&
+           verifier.VerifyVector(excitation_wavelengths_nm()) &&
+           VerifyOffset(verifier, VT_EMISSION_WAVELENGTHS_NM) &&
+           verifier.VerifyVector(emission_wavelengths_nm()) &&
+           VerifyOffset(verifier, VT_EXCITATION_EFFICIENCY) &&
+           verifier.VerifyVector(excitation_efficiency()) &&
+           VerifyOffset(verifier, VT_QUANTUM_YIELD) &&
+           verifier.VerifyVector(quantum_yield()) &&
+           VerifyOffset(verifier, VT_EMISSION_PDF_PER_NM) &&
+           verifier.VerifyVector(emission_pdf_per_nm()) &&
+           VerifyField<double>(verifier, VT_LIFETIME_SECONDS, 8) &&
+           verifier.EndTable();
+  }
+  FluorescenceResourceT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(FluorescenceResourceT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<FluorescenceResource> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const FluorescenceResourceT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct FluorescenceResourceBuilder {
+  typedef FluorescenceResource Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_resource_id(::flatbuffers::Offset<::flatbuffers::String> resource_id) {
+    fbb_.AddOffset(FluorescenceResource::VT_RESOURCE_ID, resource_id);
+  }
+  void add_excitation_wavelengths_nm(::flatbuffers::Offset<::flatbuffers::Vector<float>> excitation_wavelengths_nm) {
+    fbb_.AddOffset(FluorescenceResource::VT_EXCITATION_WAVELENGTHS_NM, excitation_wavelengths_nm);
+  }
+  void add_emission_wavelengths_nm(::flatbuffers::Offset<::flatbuffers::Vector<float>> emission_wavelengths_nm) {
+    fbb_.AddOffset(FluorescenceResource::VT_EMISSION_WAVELENGTHS_NM, emission_wavelengths_nm);
+  }
+  void add_excitation_efficiency(::flatbuffers::Offset<::flatbuffers::Vector<float>> excitation_efficiency) {
+    fbb_.AddOffset(FluorescenceResource::VT_EXCITATION_EFFICIENCY, excitation_efficiency);
+  }
+  void add_quantum_yield(::flatbuffers::Offset<::flatbuffers::Vector<float>> quantum_yield) {
+    fbb_.AddOffset(FluorescenceResource::VT_QUANTUM_YIELD, quantum_yield);
+  }
+  void add_emission_pdf_per_nm(::flatbuffers::Offset<::flatbuffers::Vector<float>> emission_pdf_per_nm) {
+    fbb_.AddOffset(FluorescenceResource::VT_EMISSION_PDF_PER_NM, emission_pdf_per_nm);
+  }
+  void add_lifetime_seconds(double lifetime_seconds) {
+    fbb_.AddElement<double>(FluorescenceResource::VT_LIFETIME_SECONDS, lifetime_seconds, 0.0);
+  }
+  explicit FluorescenceResourceBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<FluorescenceResource> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<FluorescenceResource>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<FluorescenceResource> CreateFluorescenceResource(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<::flatbuffers::String> resource_id = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<float>> excitation_wavelengths_nm = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<float>> emission_wavelengths_nm = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<float>> excitation_efficiency = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<float>> quantum_yield = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<float>> emission_pdf_per_nm = 0,
+    double lifetime_seconds = 0.0) {
+  FluorescenceResourceBuilder builder_(_fbb);
+  builder_.add_lifetime_seconds(lifetime_seconds);
+  builder_.add_emission_pdf_per_nm(emission_pdf_per_nm);
+  builder_.add_quantum_yield(quantum_yield);
+  builder_.add_excitation_efficiency(excitation_efficiency);
+  builder_.add_emission_wavelengths_nm(emission_wavelengths_nm);
+  builder_.add_excitation_wavelengths_nm(excitation_wavelengths_nm);
+  builder_.add_resource_id(resource_id);
+  return builder_.Finish();
+}
+
+struct FluorescenceResource::Traits {
+  using type = FluorescenceResource;
+  static auto constexpr Create = CreateFluorescenceResource;
+};
+
+inline ::flatbuffers::Offset<FluorescenceResource> CreateFluorescenceResourceDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *resource_id = nullptr,
+    const std::vector<float> *excitation_wavelengths_nm = nullptr,
+    const std::vector<float> *emission_wavelengths_nm = nullptr,
+    const std::vector<float> *excitation_efficiency = nullptr,
+    const std::vector<float> *quantum_yield = nullptr,
+    const std::vector<float> *emission_pdf_per_nm = nullptr,
+    double lifetime_seconds = 0.0) {
+  auto resource_id__ = resource_id ? _fbb.CreateString(resource_id) : 0;
+  auto excitation_wavelengths_nm__ = excitation_wavelengths_nm ? _fbb.CreateVector<float>(*excitation_wavelengths_nm) : 0;
+  auto emission_wavelengths_nm__ = emission_wavelengths_nm ? _fbb.CreateVector<float>(*emission_wavelengths_nm) : 0;
+  auto excitation_efficiency__ = excitation_efficiency ? _fbb.CreateVector<float>(*excitation_efficiency) : 0;
+  auto quantum_yield__ = quantum_yield ? _fbb.CreateVector<float>(*quantum_yield) : 0;
+  auto emission_pdf_per_nm__ = emission_pdf_per_nm ? _fbb.CreateVector<float>(*emission_pdf_per_nm) : 0;
+  return ure::native::schema::CreateFluorescenceResource(
+      _fbb,
+      resource_id__,
+      excitation_wavelengths_nm__,
+      emission_wavelengths_nm__,
+      excitation_efficiency__,
+      quantum_yield__,
+      emission_pdf_per_nm__,
+      lifetime_seconds);
+}
+
+::flatbuffers::Offset<FluorescenceResource> CreateFluorescenceResource(::flatbuffers::FlatBufferBuilder &_fbb, const FluorescenceResourceT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
 struct MaterialGraphNodeT : public ::flatbuffers::NativeTable {
   typedef MaterialGraphNode TableType;
   uint32_t id = 4294967295;
@@ -1036,6 +1200,7 @@ struct MaterialGraphNodeT : public ::flatbuffers::NativeTable {
   std::string texture_id{};
   std::vector<std::unique_ptr<ure::native::schema::MaterialGraphInputT>> inputs{};
   std::unique_ptr<ure::native::schema::DiffractiveOperatorT> diffraction{};
+  std::unique_ptr<ure::native::schema::FluorescenceResourceT> fluorescence{};
   MaterialGraphNodeT() = default;
   MaterialGraphNodeT(const MaterialGraphNodeT &o);
   MaterialGraphNodeT(MaterialGraphNodeT&&) FLATBUFFERS_NOEXCEPT = default;
@@ -1054,7 +1219,8 @@ struct MaterialGraphNode FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table 
     VT_VALUE = 12,
     VT_TEXTURE_ID = 14,
     VT_INPUTS = 16,
-    VT_DIFFRACTION = 18
+    VT_DIFFRACTION = 18,
+    VT_FLUORESCENCE = 20
   };
   uint32_t id() const {
     return GetField<uint32_t>(VT_ID, 4294967295);
@@ -1080,6 +1246,9 @@ struct MaterialGraphNode FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table 
   const ure::native::schema::DiffractiveOperator *diffraction() const {
     return GetPointer<const ure::native::schema::DiffractiveOperator *>(VT_DIFFRACTION);
   }
+  const ure::native::schema::FluorescenceResource *fluorescence() const {
+    return GetPointer<const ure::native::schema::FluorescenceResource *>(VT_FLUORESCENCE);
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -1096,6 +1265,8 @@ struct MaterialGraphNode FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table 
            verifier.VerifyVectorOfTables(inputs()) &&
            VerifyOffset(verifier, VT_DIFFRACTION) &&
            verifier.VerifyTable(diffraction()) &&
+           VerifyOffset(verifier, VT_FLUORESCENCE) &&
+           verifier.VerifyTable(fluorescence()) &&
            verifier.EndTable();
   }
   MaterialGraphNodeT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -1131,6 +1302,9 @@ struct MaterialGraphNodeBuilder {
   void add_diffraction(::flatbuffers::Offset<ure::native::schema::DiffractiveOperator> diffraction) {
     fbb_.AddOffset(MaterialGraphNode::VT_DIFFRACTION, diffraction);
   }
+  void add_fluorescence(::flatbuffers::Offset<ure::native::schema::FluorescenceResource> fluorescence) {
+    fbb_.AddOffset(MaterialGraphNode::VT_FLUORESCENCE, fluorescence);
+  }
   explicit MaterialGraphNodeBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -1151,8 +1325,10 @@ inline ::flatbuffers::Offset<MaterialGraphNode> CreateMaterialGraphNode(
     float value = 0.0f,
     ::flatbuffers::Offset<::flatbuffers::String> texture_id = 0,
     ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>>> inputs = 0,
-    ::flatbuffers::Offset<ure::native::schema::DiffractiveOperator> diffraction = 0) {
+    ::flatbuffers::Offset<ure::native::schema::DiffractiveOperator> diffraction = 0,
+    ::flatbuffers::Offset<ure::native::schema::FluorescenceResource> fluorescence = 0) {
   MaterialGraphNodeBuilder builder_(_fbb);
+  builder_.add_fluorescence(fluorescence);
   builder_.add_diffraction(diffraction);
   builder_.add_inputs(inputs);
   builder_.add_texture_id(texture_id);
@@ -1178,7 +1354,8 @@ inline ::flatbuffers::Offset<MaterialGraphNode> CreateMaterialGraphNodeDirect(
     float value = 0.0f,
     const char *texture_id = nullptr,
     const std::vector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>> *inputs = nullptr,
-    ::flatbuffers::Offset<ure::native::schema::DiffractiveOperator> diffraction = 0) {
+    ::flatbuffers::Offset<ure::native::schema::DiffractiveOperator> diffraction = 0,
+    ::flatbuffers::Offset<ure::native::schema::FluorescenceResource> fluorescence = 0) {
   auto name__ = name ? _fbb.CreateString(name) : 0;
   auto texture_id__ = texture_id ? _fbb.CreateString(texture_id) : 0;
   auto inputs__ = inputs ? _fbb.CreateVector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>>(*inputs) : 0;
@@ -1191,7 +1368,8 @@ inline ::flatbuffers::Offset<MaterialGraphNode> CreateMaterialGraphNodeDirect(
       value,
       texture_id__,
       inputs__,
-      diffraction);
+      diffraction,
+      fluorescence);
 }
 
 ::flatbuffers::Offset<MaterialGraphNode> CreateMaterialGraphNode(::flatbuffers::FlatBufferBuilder &_fbb, const MaterialGraphNodeT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
@@ -3668,6 +3846,50 @@ inline ::flatbuffers::Offset<DiffractiveOperator> DiffractiveOperator::Pack(::fl
       _table);
 }
 
+inline FluorescenceResourceT *FluorescenceResource::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<FluorescenceResourceT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void FluorescenceResource::UnPackTo(FluorescenceResourceT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = resource_id(); if (_e) _o->resource_id = _e->str(); }
+  { auto _e = excitation_wavelengths_nm(); if (_e) { _o->excitation_wavelengths_nm.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->excitation_wavelengths_nm[_i] = _e->Get(_i); } } else { _o->excitation_wavelengths_nm.resize(0); } }
+  { auto _e = emission_wavelengths_nm(); if (_e) { _o->emission_wavelengths_nm.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->emission_wavelengths_nm[_i] = _e->Get(_i); } } else { _o->emission_wavelengths_nm.resize(0); } }
+  { auto _e = excitation_efficiency(); if (_e) { _o->excitation_efficiency.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->excitation_efficiency[_i] = _e->Get(_i); } } else { _o->excitation_efficiency.resize(0); } }
+  { auto _e = quantum_yield(); if (_e) { _o->quantum_yield.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->quantum_yield[_i] = _e->Get(_i); } } else { _o->quantum_yield.resize(0); } }
+  { auto _e = emission_pdf_per_nm(); if (_e) { _o->emission_pdf_per_nm.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->emission_pdf_per_nm[_i] = _e->Get(_i); } } else { _o->emission_pdf_per_nm.resize(0); } }
+  { auto _e = lifetime_seconds(); _o->lifetime_seconds = _e; }
+}
+
+inline ::flatbuffers::Offset<FluorescenceResource> CreateFluorescenceResource(::flatbuffers::FlatBufferBuilder &_fbb, const FluorescenceResourceT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return FluorescenceResource::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<FluorescenceResource> FluorescenceResource::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const FluorescenceResourceT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const FluorescenceResourceT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _resource_id = _o->resource_id.empty() ? 0 : _fbb.CreateString(_o->resource_id);
+  auto _excitation_wavelengths_nm = _o->excitation_wavelengths_nm.size() ? _fbb.CreateVector(_o->excitation_wavelengths_nm) : 0;
+  auto _emission_wavelengths_nm = _o->emission_wavelengths_nm.size() ? _fbb.CreateVector(_o->emission_wavelengths_nm) : 0;
+  auto _excitation_efficiency = _o->excitation_efficiency.size() ? _fbb.CreateVector(_o->excitation_efficiency) : 0;
+  auto _quantum_yield = _o->quantum_yield.size() ? _fbb.CreateVector(_o->quantum_yield) : 0;
+  auto _emission_pdf_per_nm = _o->emission_pdf_per_nm.size() ? _fbb.CreateVector(_o->emission_pdf_per_nm) : 0;
+  auto _lifetime_seconds = _o->lifetime_seconds;
+  return ure::native::schema::CreateFluorescenceResource(
+      _fbb,
+      _resource_id,
+      _excitation_wavelengths_nm,
+      _emission_wavelengths_nm,
+      _excitation_efficiency,
+      _quantum_yield,
+      _emission_pdf_per_nm,
+      _lifetime_seconds);
+}
+
 inline MaterialGraphNodeT::MaterialGraphNodeT(const MaterialGraphNodeT &o)
       : id(o.id),
         kind(o.kind),
@@ -3675,7 +3897,8 @@ inline MaterialGraphNodeT::MaterialGraphNodeT(const MaterialGraphNodeT &o)
         color((o.color) ? new ure::native::schema::Vec3(*o.color) : nullptr),
         value(o.value),
         texture_id(o.texture_id),
-        diffraction((o.diffraction) ? new ure::native::schema::DiffractiveOperatorT(*o.diffraction) : nullptr) {
+        diffraction((o.diffraction) ? new ure::native::schema::DiffractiveOperatorT(*o.diffraction) : nullptr),
+        fluorescence((o.fluorescence) ? new ure::native::schema::FluorescenceResourceT(*o.fluorescence) : nullptr) {
   inputs.reserve(o.inputs.size());
   for (const auto &inputs_ : o.inputs) { inputs.emplace_back((inputs_) ? new ure::native::schema::MaterialGraphInputT(*inputs_) : nullptr); }
 }
@@ -3689,6 +3912,7 @@ inline MaterialGraphNodeT &MaterialGraphNodeT::operator=(MaterialGraphNodeT o) F
   std::swap(texture_id, o.texture_id);
   std::swap(inputs, o.inputs);
   std::swap(diffraction, o.diffraction);
+  std::swap(fluorescence, o.fluorescence);
   return *this;
 }
 
@@ -3709,6 +3933,7 @@ inline void MaterialGraphNode::UnPackTo(MaterialGraphNodeT *_o, const ::flatbuff
   { auto _e = texture_id(); if (_e) _o->texture_id = _e->str(); }
   { auto _e = inputs(); if (_e) { _o->inputs.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->inputs[_i]) { _e->Get(_i)->UnPackTo(_o->inputs[_i].get(), _resolver); } else { _o->inputs[_i] = std::unique_ptr<ure::native::schema::MaterialGraphInputT>(_e->Get(_i)->UnPack(_resolver)); } } } else { _o->inputs.resize(0); } }
   { auto _e = diffraction(); if (_e) { if(_o->diffraction) { _e->UnPackTo(_o->diffraction.get(), _resolver); } else { _o->diffraction = std::unique_ptr<ure::native::schema::DiffractiveOperatorT>(_e->UnPack(_resolver)); } } else if (_o->diffraction) { _o->diffraction.reset(); } }
+  { auto _e = fluorescence(); if (_e) { if(_o->fluorescence) { _e->UnPackTo(_o->fluorescence.get(), _resolver); } else { _o->fluorescence = std::unique_ptr<ure::native::schema::FluorescenceResourceT>(_e->UnPack(_resolver)); } } else if (_o->fluorescence) { _o->fluorescence.reset(); } }
 }
 
 inline ::flatbuffers::Offset<MaterialGraphNode> CreateMaterialGraphNode(::flatbuffers::FlatBufferBuilder &_fbb, const MaterialGraphNodeT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -3727,6 +3952,7 @@ inline ::flatbuffers::Offset<MaterialGraphNode> MaterialGraphNode::Pack(::flatbu
   auto _texture_id = _o->texture_id.empty() ? 0 : _fbb.CreateString(_o->texture_id);
   auto _inputs = _o->inputs.size() ? _fbb.CreateVector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>> (_o->inputs.size(), [](size_t i, _VectorArgs *__va) { return CreateMaterialGraphInput(*__va->__fbb, __va->__o->inputs[i].get(), __va->__rehasher); }, &_va ) : 0;
   auto _diffraction = _o->diffraction ? CreateDiffractiveOperator(_fbb, _o->diffraction.get(), _rehasher) : 0;
+  auto _fluorescence = _o->fluorescence ? CreateFluorescenceResource(_fbb, _o->fluorescence.get(), _rehasher) : 0;
   return ure::native::schema::CreateMaterialGraphNode(
       _fbb,
       _id,
@@ -3736,7 +3962,8 @@ inline ::flatbuffers::Offset<MaterialGraphNode> MaterialGraphNode::Pack(::flatbu
       _value,
       _texture_id,
       _inputs,
-      _diffraction);
+      _diffraction,
+      _fluorescence);
 }
 
 inline MaterialGraphT::MaterialGraphT(const MaterialGraphT &o)

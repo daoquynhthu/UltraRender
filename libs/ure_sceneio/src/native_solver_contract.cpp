@@ -163,6 +163,24 @@ ValidationReport validate_solver_contract(const NativeSolverContract& value, con
          value.mlt.enabled)) {
         error(report, "URE-Q7-WAVE-006", "/solver/wave/diffractive_materials", "Diffractive materials require the ordinary radiometric wavefront boundary");
     }
+    if (value.wave_optics.fluorescence_enabled &&
+        (value.wave_optics.mode !=
+             WaveOpticsMode::Radiometric ||
+         value.wave_optics.camera_diffraction_enabled ||
+         value.wave_optics.coherent_field_enabled ||
+         value.wave_optics.partial_coherence_enabled ||
+         value.wave_optics.diffractive_materials_enabled ||
+         value.wave_optics.specular_manifold_enabled ||
+         value.wave_optics.local_fullwave_enabled ||
+         value.integrator !=
+             NativeIntegratorMode::Wavefront ||
+         value.path_guiding.enabled ||
+         value.restir_di.enabled ||
+         value.restir_pt.enabled ||
+         value.specular_manifold.enabled ||
+         value.mlt.enabled)) {
+        error(report, "URE-Q7-WAVE-007", "/solver/wave/fluorescence", "Fluorescence requires the ordinary radiometric wavefront boundary");
+    }
     if (value.path_guiding.enabled && (!finite(value.path_guiding.light_mixture) || value.path_guiding.light_mixture < 0.0f || value.path_guiding.light_mixture > 1.0f || !finite(value.path_guiding.learning_rate) || value.path_guiding.learning_rate <= 0.0f)) error(report, "URE-Q7-PARAMETER-001", "/solver/path_guiding", "Invalid path-guiding parameters");
     if (value.restir_di.enabled && (value.restir_di.max_history < 1 || !finite(value.restir_di.min_target) || value.restir_di.min_target <= 0.0f || !finite(value.restir_di.position_threshold) || value.restir_di.position_threshold <= 0.0f || !finite(value.restir_di.normal_threshold) || value.restir_di.normal_threshold < 0.0f || value.restir_di.normal_threshold > 1.0f)) error(report, "URE-Q7-PARAMETER-002", "/solver/restir_di", "Invalid ReSTIR parameters");
     if (value.restir_pt.enabled && (value.restir_pt.max_reuse_depth < 1 || value.restir_pt.candidate_count < 1 || value.restir_pt.max_history < 1 || !finite(value.restir_pt.position_threshold) || value.restir_pt.position_threshold <= 0.0f || !finite(value.restir_pt.normal_threshold) || value.restir_pt.normal_threshold < 0.0f || value.restir_pt.normal_threshold > 1.0f)) error(report, "URE-Q7-PARAMETER-003", "/solver/restir_pt", "Invalid ReSTIR PT parameters");

@@ -204,6 +204,7 @@ std::string export_kind(scene_ir::MaterialGraphNodeKind kind) {
     case scene_ir::MaterialGraphNodeKind::BsdfZonePlate: return "URE_bsdf_zone_plate";
     case scene_ir::MaterialGraphNodeKind::BsdfDoe: return "URE_bsdf_doe";
     case scene_ir::MaterialGraphNodeKind::BsdfScatteringTable: return "URE_bsdf_scattering_table";
+    case scene_ir::MaterialGraphNodeKind::BsdfFluorescence: return "URE_bsdf_fluorescence";
     }
     throw std::runtime_error("MaterialGraph node kind is not exportable to MaterialX");
 }
@@ -228,6 +229,7 @@ scene_ir::MaterialGraphNodeKind import_kind(std::string_view name) {
     if (name == "URE_bsdf_zone_plate") return scene_ir::MaterialGraphNodeKind::BsdfZonePlate;
     if (name == "URE_bsdf_doe") return scene_ir::MaterialGraphNodeKind::BsdfDoe;
     if (name == "URE_bsdf_scattering_table") return scene_ir::MaterialGraphNodeKind::BsdfScatteringTable;
+    if (name == "URE_bsdf_fluorescence") return scene_ir::MaterialGraphNodeKind::BsdfFluorescence;
     if (name == "surfacematerial") return scene_ir::MaterialGraphNodeKind::OutputSurface;
     throw std::runtime_error("MaterialX node is not supported by the URE MaterialGraph adapter: " + std::string(name));
 }
@@ -380,6 +382,43 @@ parse_scattering_table(std::string_view text) {
     return result;
 }
 
+std::string float_list_string(
+    const std::vector<float>& values) {
+    std::ostringstream out;
+    for (std::size_t index = 0;
+         index < values.size();
+         ++index) {
+        if (index != 0) out << ',';
+        out << std::format("{:.9g}", values[index]);
+    }
+    return out.str();
+}
+
+std::vector<float> parse_float_list(
+    std::string_view text) {
+    std::vector<float> result;
+    std::size_t start = 0;
+    while (start < text.size()) {
+        const std::size_t end = text.find(',', start);
+        result.push_back(
+            static_cast<float>(
+                parse_double(
+                    text.substr(
+                        start,
+                        end == std::string_view::npos
+                        ? text.size() - start
+                        : end - start))));
+        if (result.size() >
+            scene_ir::kMaxFluorescenceMatrixEntries) {
+            throw std::runtime_error(
+                "MaterialX fluorescence array exceeds the adapter budget");
+        }
+        if (end == std::string_view::npos) break;
+        start = end + 1;
+    }
+    return result;
+}
+
 } // namespace
 
 scene_ir::MaterialGraph import_materialx_graph(std::string_view xml) {
@@ -478,6 +517,23 @@ scene_ir::MaterialGraph import_materialx_graph(std::string_view xml) {
             node.diffraction.table =
                 parse_scattering_table(
                     attr(element, "URE:table"));
+        } else if (node.kind ==
+                   scene_ir::MaterialGraphNodeKind::
+                       BsdfFluorescence) {
+            node.fluorescence.resource_id =
+                hex_decode(attr(element, "URE:resource_id_hex"));
+            node.fluorescence.excitation_wavelengths_nm =
+                parse_float_list(attr(element, "URE:excitation_wavelengths_nm"));
+            node.fluorescence.emission_wavelengths_nm =
+                parse_float_list(attr(element, "URE:emission_wavelengths_nm"));
+            node.fluorescence.excitation_efficiency =
+                parse_float_list(attr(element, "URE:excitation_efficiency"));
+            node.fluorescence.quantum_yield =
+                parse_float_list(attr(element, "URE:quantum_yield"));
+            node.fluorescence.emission_pdf_per_nm =
+                parse_float_list(attr(element, "URE:emission_pdf_per_nm"));
+            node.fluorescence.lifetime_seconds =
+                parse_double(attr(element, "URE:lifetime_seconds"));
         }
         name_to_id[node_name] = node.id;
         graph.nodes.push_back(std::move(node));
@@ -596,6 +652,46 @@ std::string export_materialx_graph(const scene_ir::MaterialGraph& graph, std::st
                 << "\" URE:table=\""
                 << scattering_table_string(
                        node.diffraction)
+                << "\"";
+        }
+        if (node.kind ==
+            scene_ir::MaterialGraphNodeKind::
+                BsdfFluorescence) {
+            if (node.fluorescence
+                    .emission_pdf_per_nm.size() >
+                scene_ir::
+                    kMaxFluorescenceMatrixEntries) {
+                throw std::runtime_error(
+                    "MaterialX fluorescence matrix exceeds the adapter budget");
+            }
+            out << " URE:resource_id_hex=\""
+                << hex_encode(
+                       node.fluorescence.resource_id)
+                << "\" URE:excitation_wavelengths_nm=\""
+                << float_list_string(
+                       node.fluorescence
+                           .excitation_wavelengths_nm)
+                << "\" URE:emission_wavelengths_nm=\""
+                << float_list_string(
+                       node.fluorescence
+                           .emission_wavelengths_nm)
+                << "\" URE:excitation_efficiency=\""
+                << float_list_string(
+                       node.fluorescence
+                           .excitation_efficiency)
+                << "\" URE:quantum_yield=\""
+                << float_list_string(
+                       node.fluorescence
+                           .quantum_yield)
+                << "\" URE:emission_pdf_per_nm=\""
+                << float_list_string(
+                       node.fluorescence
+                           .emission_pdf_per_nm)
+                << "\" URE:lifetime_seconds=\""
+                << std::format(
+                       "{:.17g}",
+                       node.fluorescence
+                           .lifetime_seconds)
                 << "\"";
         }
         if (node.inputs.empty()) {

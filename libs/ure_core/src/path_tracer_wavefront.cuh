@@ -100,6 +100,46 @@ __device__ inline void store_lane_throughput(RayQueue& q, int idx, const Spectra
     store_throughput(q, idx, t);
 }
 
+__device__ inline void copy_film_wavelengths(
+    const RayQueue& source,
+    int source_index,
+    RayQueue& destination,
+    int destination_index) {
+    if (!destination.film_wavelengths) return;
+    for (int channel = 0;
+         channel < destination.num_spectral_channels;
+         ++channel) {
+        const int destination_offset =
+            channel * destination.capacity +
+            destination_index;
+        destination.film_wavelengths[
+            destination_offset] =
+            source.film_wavelengths
+            ? source.film_wavelengths[
+                  channel * source.capacity +
+                  source_index]
+            : source.throughput_wavelengths[
+                  channel * source.capacity +
+                  source_index];
+    }
+}
+
+__device__ inline SpectralPacket film_spectrum(
+    const RayQueue& queue,
+    int index,
+    const SpectralPacket& spectrum) {
+    SpectralPacket result = spectrum;
+    if (!queue.film_wavelengths) return result;
+    for (int channel = 0;
+         channel < queue.num_spectral_channels;
+         ++channel) {
+        result.wavelengths[channel] =
+            queue.film_wavelengths[
+                channel * queue.capacity + index];
+    }
+    return result;
+}
+
 __device__ inline int next_dielectric_medium_index(
     int current_medium_idx,
     int material_idx,
@@ -120,6 +160,7 @@ __device__ inline int next_dielectric_medium_index(
 }
 
 #include "path_tracer_diffractive_material.cuh"
+#include "path_tracer_fluorescence_material.cuh"
 #include "path_tracer_light_sampling.cuh"
 #include "bidirectional_capture.cuh"
 
@@ -400,6 +441,11 @@ __device__ inline bool split_dispersive_dielectric_lanes(
                 next_queue.directions[out_idx] = out_direction;
                 float wavelength_pdf = current_queue.wavelength_pdfs[idx];
                 store_lane_throughput(next_queue, out_idx, throughput, c, throughput.values[c] * R * wavelength_pdf);
+                copy_film_wavelengths(
+                    current_queue,
+                    idx,
+                    next_queue,
+                    out_idx);
                 for (int s = 0; s < current_queue.num_spectral_channels; ++s) {
                     store_stokes(next_queue, out_idx, s, StokesVector(0.0f, 0.0f, 0.0f, 0.0f));
                 }
@@ -426,6 +472,12 @@ __device__ inline bool split_dispersive_dielectric_lanes(
                 next_queue.spectral_modes[out_idx] = SpectralRayModeLane;
                 next_queue.active_channels[out_idx] = c;
                 next_queue.wavelength_pdfs[out_idx] = wavelength_pdf;
+                if (next_queue.fluorescence_delay_seconds) {
+                    next_queue.fluorescence_delay_seconds[out_idx] =
+                        current_queue.fluorescence_delay_seconds
+                        ? current_queue.fluorescence_delay_seconds[idx]
+                        : 0.0f;
+                }
             }
         }
 
@@ -444,6 +496,11 @@ __device__ inline bool split_dispersive_dielectric_lanes(
                 next_queue.origins[out_idx] = p + offset * 1e-4f;
                 next_queue.directions[out_idx] = out_direction;
                 store_lane_throughput(next_queue, out_idx, throughput, c, throughput.values[c] * transport_weight * wavelength_pdf);
+                copy_film_wavelengths(
+                    current_queue,
+                    idx,
+                    next_queue,
+                    out_idx);
                 for (int s = 0; s < current_queue.num_spectral_channels; ++s) {
                     store_stokes(next_queue, out_idx, s, StokesVector(0.0f, 0.0f, 0.0f, 0.0f));
                 }
@@ -474,6 +531,12 @@ __device__ inline bool split_dispersive_dielectric_lanes(
                 next_queue.spectral_modes[out_idx] = SpectralRayModeLane;
                 next_queue.active_channels[out_idx] = c;
                 next_queue.wavelength_pdfs[out_idx] = wavelength_pdf;
+                if (next_queue.fluorescence_delay_seconds) {
+                    next_queue.fluorescence_delay_seconds[out_idx] =
+                        current_queue.fluorescence_delay_seconds
+                        ? current_queue.fluorescence_delay_seconds[idx]
+                        : 0.0f;
+                }
             }
         }
     }
@@ -797,7 +860,11 @@ __global__ __launch_bounds__(256) void shade_kernel(
                              shadow_queue.max_dist[s_idx] = light_sample.max_dist - 1e-4f;
                              for (int c = 0; c < scene.num_spectral_channels; ++c) {
                                  shadow_queue.radiance_vals[c * cap + s_idx] = contribution.values[c];
-                                 shadow_queue.radiance_wavelengths[c * cap + s_idx] = contribution.wavelengths[c];
+                                 shadow_queue.radiance_wavelengths[c * cap + s_idx] =
+                                     current_queue.film_wavelengths
+                                     ? current_queue.film_wavelengths[
+                                           c * current_queue.capacity + idx]
+                                     : contribution.wavelengths[c];
                              }
                              shadow_queue.pixel_indices[s_idx] = pixel_index;
                              shadow_queue.spectral_modes[s_idx] = spectral_mode;
@@ -871,6 +938,11 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 next_queue.origins[out_idx] = new_origin;
                 next_queue.directions[out_idx] = new_dir;
                 store_throughput(next_queue, out_idx, throughput);
+                copy_film_wavelengths(
+                    current_queue,
+                    idx,
+                    next_queue,
+                    out_idx);
                 for (int c = 0; c < scene.num_spectral_channels; ++c) {
                     const StokesVector input_stokes = load_stokes(current_queue, idx, c);
                     const StokesVector output_stokes = apply_volume_phase_polarization(
@@ -888,6 +960,12 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 next_queue.spectral_modes[out_idx] = current_queue.spectral_modes[idx];
                 next_queue.active_channels[out_idx] = current_queue.active_channels[idx];
                 next_queue.wavelength_pdfs[out_idx] = current_queue.wavelength_pdfs[idx];
+                if (next_queue.fluorescence_delay_seconds) {
+                    next_queue.fluorescence_delay_seconds[out_idx] =
+                        current_queue.fluorescence_delay_seconds
+                        ? current_queue.fluorescence_delay_seconds[idx]
+                        : 0.0f;
+                }
              }
              return;
         } else {
@@ -912,7 +990,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
             scene, pixel_index, depth, GpuVec3(), GpuVec3(),
             GpuRestirPathVertexKind::Environment, -1, -1, -1, -1);
         float mis_weight = 1.0f;
-        if (depth > 0 && !(flag & 1) && scene.environment_light_direct_sampling) {
+        if (depth > 0 &&
+            !(flag & 1) &&
+            !(flag & kRayFlagNeeUnavailable) &&
+            scene.environment_light_direct_sampling) {
             const float pdf_nee = selected_environment_light_pdf(scene, current_queue.origins[idx]);
             if (pdf_nee > 0.0f) {
                 const float last_pdf = current_queue.last_pdf[idx];
@@ -922,7 +1003,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
 
         GpuVec3 sky_color = environment_sky_color(scene, current_queue.directions[idx], current_medium_idx);
         SpectralPacket sky_spectrum = environment_radiance_spectrum(scene, current_queue.directions[idx], current_medium_idx, throughput.wavelengths);
-        SpectralPacket contribution = throughput * sky_spectrum * mis_weight;
+        SpectralPacket contribution = film_spectrum(
+            current_queue,
+            idx,
+            throughput * sky_spectrum * mis_weight);
 
         GpuVec3 xyz = spectral_sample_to_xyz(
             contribution,
@@ -1091,7 +1175,11 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 mat_idx, hit_queue.hit_types[idx], hit_queue.hit_indices[idx],
                 hit_queue.hit_primitive_indices
                     ? hit_queue.hit_primitive_indices[idx] : -1);
-        } else if (depth > 0 && !(flag & 1) && scene.light_count > 0) {
+        } else if (
+            depth > 0 &&
+            !(flag & 1) &&
+            !(flag & kRayFlagNeeUnavailable) &&
+            scene.light_count > 0) {
              float pdf_nee = 0.0f;
              int hit_type = hit_queue.hit_types[idx];
              int hit_index = hit_queue.hit_indices[idx];
@@ -1131,7 +1219,12 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 reference_emission.wavelengths[c] = throughput.wavelengths[c];
             }
             const SpectralPacket reference =
-                throughput * reference_emission * mis_weight;
+                film_spectrum(
+                    current_queue,
+                    idx,
+                    throughput *
+                        reference_emission *
+                        mis_weight);
             const GpuVec3 rgb = xyz_to_rgb(spectral_mode_is_sampled(spectral_mode)
                 ? spectral_sample_to_xyz(
                     reference, scene.num_spectral_channels, active_channel,
@@ -1149,7 +1242,13 @@ __global__ __launch_bounds__(256) void shade_kernel(
             for (int c = 0; c < scene.num_spectral_channels; ++c) {
                 emission_spectrum.wavelengths[c] = throughput.wavelengths[c];
             }
-            SpectralPacket contribution = throughput * emission_spectrum * mis_weight;
+            SpectralPacket contribution =
+                film_spectrum(
+                    current_queue,
+                    idx,
+                    throughput *
+                        emission_spectrum *
+                        mis_weight);
 
             GpuVec3 xyz = spectral_sample_to_xyz(
                 contribution,
@@ -1308,7 +1407,11 @@ __global__ __launch_bounds__(256) void shade_kernel(
                              shadow_queue.max_dist[s_idx] = light_sample.max_dist - adaptive_eps;
                              for (int c = 0; c < scene.num_spectral_channels; ++c) {
                                  shadow_queue.radiance_vals[c * cap + s_idx] = contribution.values[c];
-                                 shadow_queue.radiance_wavelengths[c * cap + s_idx] = contribution.wavelengths[c];
+                                 shadow_queue.radiance_wavelengths[c * cap + s_idx] =
+                                     current_queue.film_wavelengths
+                                     ? current_queue.film_wavelengths[
+                                           c * current_queue.capacity + idx]
+                                     : contribution.wavelengths[c];
                              }
                              shadow_queue.pixel_indices[s_idx] = pixel_index;
                              shadow_queue.spectral_modes[s_idx] = spectral_mode;
@@ -1391,6 +1494,23 @@ __global__ __launch_bounds__(256) void shade_kernel(
                         p,
                         n),
                     uv,
+                    throughput,
+                    current_medium_idx,
+                    pixel_index,
+                    depth,
+                    seed)) {
+                return;
+            }
+            if (mat.type == MaterialType::Fluorescent &&
+                enqueue_fluorescent_material(
+                    scene,
+                    current_queue,
+                    next_queue,
+                    idx,
+                    mat,
+                    p,
+                    n,
+                    ng,
                     throughput,
                     current_medium_idx,
                     pixel_index,
@@ -1507,6 +1627,11 @@ __global__ __launch_bounds__(256) void shade_kernel(
             next_queue.origins[out_idx] = scattered.origin;
             next_queue.directions[out_idx] = scattered.direction;
             store_throughput(next_queue, out_idx, new_throughput);
+            copy_film_wavelengths(
+                current_queue,
+                idx,
+                next_queue,
+                out_idx);
             if (spectral_mode_is_sampled(spectral_mode)) {
                 for (int c = 0; c < scene.num_spectral_channels; ++c) {
                     store_stokes(next_queue, out_idx, c, StokesVector(0.0f, 0.0f, 0.0f, 0.0f));
@@ -1552,6 +1677,12 @@ __global__ __launch_bounds__(256) void shade_kernel(
             next_queue.spectral_modes[out_idx] = spectral_mode;
             next_queue.active_channels[out_idx] = current_queue.active_channels[idx];
             next_queue.wavelength_pdfs[out_idx] = current_queue.wavelength_pdfs[idx];
+            if (next_queue.fluorescence_delay_seconds) {
+                next_queue.fluorescence_delay_seconds[out_idx] =
+                    current_queue.fluorescence_delay_seconds
+                    ? current_queue.fluorescence_delay_seconds[idx]
+                    : 0.0f;
+            }
         }
     }
 }

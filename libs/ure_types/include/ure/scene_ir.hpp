@@ -68,7 +68,8 @@ enum class MaterialGraphNodeKind {
     BsdfPhaseMask,
     BsdfZonePlate,
     BsdfDoe,
-    BsdfScatteringTable
+    BsdfScatteringTable,
+    BsdfFluorescence
 };
 
 enum class DiffractiveOperatorKind {
@@ -120,6 +121,18 @@ struct DiffractiveOperator {
     std::vector<DiffractiveScatteringEntry> table;
 };
 
+constexpr std::size_t kMaxFluorescenceMatrixEntries = 4096;
+
+struct FluorescenceResource {
+    std::string resource_id;
+    std::vector<float> excitation_wavelengths_nm;
+    std::vector<float> emission_wavelengths_nm;
+    std::vector<float> excitation_efficiency;
+    std::vector<float> quantum_yield;
+    std::vector<float> emission_pdf_per_nm;
+    double lifetime_seconds = 0.0;
+};
+
 struct MaterialGraphInput {
     std::string name;
     MaterialGraphNodeId node_id = kInvalidMaterialGraphNode;
@@ -135,6 +148,7 @@ struct MaterialGraphNode {
     std::shared_ptr<TextureResource> texture;
     std::vector<MaterialGraphInput> inputs;
     DiffractiveOperator diffraction;
+    FluorescenceResource fluorescence;
 };
 
 struct MaterialGraph {

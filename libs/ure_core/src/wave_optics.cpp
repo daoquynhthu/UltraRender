@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <numbers>
 #include <set>
@@ -396,6 +397,112 @@ bool is_valid(
                    sample_channels.at(item.first) ==
                        channels;
         });
+}
+
+bool is_valid(
+    const scene_ir::FluorescenceResource& fluorescence) {
+    const std::size_t excitation_count =
+        fluorescence.excitation_wavelengths_nm.size();
+    const std::size_t emission_count =
+        fluorescence.emission_wavelengths_nm.size();
+    if (fluorescence.resource_id.empty() ||
+        excitation_count < 2 ||
+        emission_count < 2 ||
+        excitation_count >
+            scene_ir::kMaxFluorescenceMatrixEntries /
+                emission_count ||
+        fluorescence.excitation_efficiency.size() !=
+            excitation_count ||
+        fluorescence.quantum_yield.size() !=
+            excitation_count ||
+        fluorescence.emission_pdf_per_nm.size() !=
+            excitation_count * emission_count ||
+        !std::isfinite(fluorescence.lifetime_seconds) ||
+        fluorescence.lifetime_seconds < 0.0 ||
+        fluorescence.lifetime_seconds >
+            std::numeric_limits<float>::max()) {
+        return false;
+    }
+    const auto strictly_increasing =
+        [](const std::vector<float>& values) {
+            for (std::size_t index = 0;
+                 index < values.size();
+                 ++index) {
+                if (!std::isfinite(values[index]) ||
+                    values[index] <= 0.0f ||
+                    (index > 0 &&
+                     values[index] <=
+                         values[index - 1])) {
+                    return false;
+                }
+            }
+            return true;
+        };
+    if (!strictly_increasing(
+            fluorescence.excitation_wavelengths_nm) ||
+        !strictly_increasing(
+            fluorescence.emission_wavelengths_nm)) {
+        return false;
+    }
+    for (std::size_t row = 0;
+         row < excitation_count;
+         ++row) {
+        const double efficiency =
+            fluorescence.excitation_efficiency[row];
+        const double yield =
+            fluorescence.quantum_yield[row];
+        if (!std::isfinite(efficiency) ||
+            efficiency < 0.0 ||
+            efficiency > 1.0 ||
+            !std::isfinite(yield) ||
+            yield < 0.0 ||
+            yield > 1.0) {
+            return false;
+        }
+        double integral = 0.0;
+        for (std::size_t column = 0;
+             column < emission_count;
+             ++column) {
+            const double density =
+                fluorescence.emission_pdf_per_nm[
+                    row * emission_count + column];
+            if (!std::isfinite(density) ||
+                density < 0.0 ||
+                (density > 0.0 &&
+                 fluorescence.emission_wavelengths_nm[
+                     column] <=
+                     fluorescence.excitation_wavelengths_nm
+                         .back())) {
+                return false;
+            }
+            if (column + 1 < emission_count) {
+                const double next =
+                    fluorescence.emission_pdf_per_nm[
+                        row * emission_count +
+                        column + 1];
+                if (!std::isfinite(next) ||
+                    next < 0.0 ||
+                    (next > 0.0 &&
+                     fluorescence.emission_wavelengths_nm[
+                         column] <
+                         fluorescence.excitation_wavelengths_nm
+                             .back())) {
+                    return false;
+                }
+                const double width =
+                    fluorescence.emission_wavelengths_nm[
+                        column + 1] -
+                    fluorescence.emission_wavelengths_nm[
+                        column];
+                integral +=
+                    0.5 * (density + next) * width;
+            }
+        }
+        if (std::abs(integral - 1.0) > 1.0e-4) {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool is_ready(DiffractionCameraPlanStatus status) {
@@ -1406,6 +1513,444 @@ bool is_supported_diffractive_material_config(
            !config.bidirectional.enabled &&
            !config.vcm.enabled &&
            !config.mlt.enabled;
+}
+
+bool is_supported_fluorescence_config(
+    const ure::RenderConfig& config) {
+    const auto& wave = config.wave_optics;
+    return wave.mode ==
+               ure::WaveOpticsMode::Radiometric &&
+           !wave.camera_diffraction_enabled &&
+           !wave.coherent_field_enabled &&
+           !wave.partial_coherence_enabled &&
+           !wave.diffractive_materials_enabled &&
+           wave.fluorescence_enabled &&
+           !wave.specular_manifold_enabled &&
+           !wave.local_fullwave_enabled &&
+           config.integrator.mode ==
+               ure::IntegratorMode::Wavefront &&
+           !config.path_guiding.enabled &&
+           !config.restir_di.enabled &&
+           !config.restir_pt.enabled &&
+           !config.specular_manifold.enabled &&
+           !config.bidirectional.enabled &&
+           !config.vcm.enabled &&
+           !config.mlt.enabled;
+}
+
+double fluorescence_emission_pdf(
+    const scene_ir::FluorescenceResource& fluorescence,
+    double excitation_wavelength_nm,
+    double emission_wavelength_nm) {
+    if (!is_valid(fluorescence) ||
+        !std::isfinite(excitation_wavelength_nm) ||
+        !std::isfinite(emission_wavelength_nm)) {
+        return 0.0;
+    }
+    const auto& excitation =
+        fluorescence.excitation_wavelengths_nm;
+    const auto& emission =
+        fluorescence.emission_wavelengths_nm;
+    if (excitation_wavelength_nm < excitation.front() ||
+        excitation_wavelength_nm > excitation.back()) {
+        return 0.0;
+    }
+    std::size_t lower_row = 0;
+    std::size_t upper_row = 0;
+    double row_t = 0.0;
+    if (excitation_wavelength_nm <= excitation.front()) {
+        lower_row = upper_row = 0;
+    } else if (excitation_wavelength_nm >=
+               excitation.back()) {
+        lower_row = upper_row =
+            excitation.size() - 1;
+    } else {
+        const auto upper = std::upper_bound(
+            excitation.begin(),
+            excitation.end(),
+            static_cast<float>(
+                excitation_wavelength_nm));
+        upper_row =
+            static_cast<std::size_t>(
+                upper - excitation.begin());
+        lower_row = upper_row - 1;
+        row_t =
+            (excitation_wavelength_nm -
+             excitation[lower_row]) /
+            (excitation[upper_row] -
+             excitation[lower_row]);
+    }
+    if (emission_wavelength_nm < emission.front() ||
+        emission_wavelength_nm > emission.back()) {
+        return 0.0;
+    }
+    const auto upper = std::upper_bound(
+        emission.begin(),
+        emission.end(),
+        static_cast<float>(emission_wavelength_nm));
+    const std::size_t lower_column =
+        upper == emission.end()
+        ? emission.size() - 2
+        : static_cast<std::size_t>(
+              upper - emission.begin() - 1);
+    const std::size_t upper_column =
+        lower_column + 1;
+    const double column_t =
+        (emission_wavelength_nm -
+         emission[lower_column]) /
+        (emission[upper_column] -
+         emission[lower_column]);
+    const auto row_pdf =
+        [&](std::size_t row) {
+            const std::size_t base =
+                row * emission.size();
+            return std::lerp(
+                static_cast<double>(
+                    fluorescence.emission_pdf_per_nm[
+                        base + lower_column]),
+                static_cast<double>(
+                    fluorescence.emission_pdf_per_nm[
+                        base + upper_column]),
+                column_t);
+        };
+    return std::lerp(
+        row_pdf(lower_row),
+        row_pdf(upper_row),
+        row_t);
+}
+
+FluorescenceSample sample_fluorescence(
+    const scene_ir::FluorescenceResource& fluorescence,
+    double excitation_wavelength_nm,
+    double row_sample,
+    double emission_sample,
+    double delay_sample) {
+    FluorescenceSample result;
+    if (!is_valid(fluorescence) ||
+        !std::isfinite(excitation_wavelength_nm) ||
+        row_sample < 0.0 ||
+        row_sample >= 1.0 ||
+        emission_sample < 0.0 ||
+        emission_sample >= 1.0 ||
+        delay_sample < 0.0 ||
+        delay_sample >= 1.0) {
+        return result;
+    }
+    const auto& excitation =
+        fluorescence.excitation_wavelengths_nm;
+    const auto& emission =
+        fluorescence.emission_wavelengths_nm;
+    if (excitation_wavelength_nm < excitation.front() ||
+        excitation_wavelength_nm > excitation.back()) {
+        return result;
+    }
+    std::size_t lower_row = 0;
+    std::size_t upper_row = 0;
+    double row_t = 0.0;
+    if (excitation_wavelength_nm <= excitation.front()) {
+        lower_row = upper_row = 0;
+    } else if (excitation_wavelength_nm >=
+               excitation.back()) {
+        lower_row = upper_row =
+            excitation.size() - 1;
+    } else {
+        const auto upper = std::upper_bound(
+            excitation.begin(),
+            excitation.end(),
+            static_cast<float>(
+                excitation_wavelength_nm));
+        upper_row =
+            static_cast<std::size_t>(
+                upper - excitation.begin());
+        lower_row = upper_row - 1;
+        row_t =
+            (excitation_wavelength_nm -
+             excitation[lower_row]) /
+            (excitation[upper_row] -
+             excitation[lower_row]);
+    }
+    const std::size_t selected_row =
+        row_sample < row_t ? upper_row : lower_row;
+    const std::size_t row_base =
+        selected_row * emission.size();
+    double cumulative = 0.0;
+    std::size_t segment = emission.size();
+    std::size_t last_positive_segment =
+        emission.size();
+    double last_positive_mass = 0.0;
+    double segment_target = 0.0;
+    for (std::size_t index = 0;
+         index + 1 < emission.size();
+         ++index) {
+        const double width =
+            emission[index + 1] - emission[index];
+        const double p0 =
+            fluorescence.emission_pdf_per_nm[
+                row_base + index];
+        const double p1 =
+            fluorescence.emission_pdf_per_nm[
+                row_base + index + 1];
+        const double mass =
+            0.5 * (p0 + p1) * width;
+        if (!(mass > 0.0)) continue;
+        last_positive_segment = index;
+        last_positive_mass = mass;
+        if (emission_sample < cumulative + mass) {
+            segment = index;
+            segment_target =
+                std::clamp(
+                    emission_sample - cumulative,
+                    0.0,
+                    mass);
+            break;
+        }
+        cumulative += mass;
+    }
+    if (segment == emission.size()) {
+        segment = last_positive_segment;
+        segment_target = last_positive_mass;
+    }
+    const double width =
+        emission[segment + 1] -
+        emission[segment];
+    const double p0 =
+        fluorescence.emission_pdf_per_nm[
+            row_base + segment];
+    const double p1 =
+        fluorescence.emission_pdf_per_nm[
+            row_base + segment + 1];
+    const double slope = (p1 - p0) / width;
+    double offset = 0.0;
+    if (std::abs(slope) < 1.0e-14) {
+        offset =
+            p0 > 0.0
+            ? segment_target / p0
+            : 0.0;
+    } else {
+        const double discriminant =
+            std::max(
+                0.0,
+                p0 * p0 +
+                    2.0 * slope * segment_target);
+        offset =
+            (-p0 + std::sqrt(discriminant)) /
+            slope;
+    }
+    result.emission_wavelength_nm =
+        emission[segment] +
+        std::clamp(offset, 0.0, width);
+    result.emission_pdf_per_nm =
+        fluorescence_emission_pdf(
+            fluorescence,
+            excitation_wavelength_nm,
+            result.emission_wavelength_nm);
+    result.excitation_efficiency =
+        std::lerp(
+            static_cast<double>(
+                fluorescence.excitation_efficiency[
+                    lower_row]),
+            static_cast<double>(
+                fluorescence.excitation_efficiency[
+                    upper_row]),
+            row_t);
+    result.quantum_yield =
+        std::lerp(
+            static_cast<double>(
+                fluorescence.quantum_yield[
+                    lower_row]),
+            static_cast<double>(
+                fluorescence.quantum_yield[
+                    upper_row]),
+            row_t);
+    result.radiant_energy_scale =
+        result.excitation_efficiency *
+        result.quantum_yield *
+        excitation_wavelength_nm /
+        result.emission_wavelength_nm;
+    if (fluorescence.lifetime_seconds > 0.0) {
+        result.delay_seconds =
+            -fluorescence.lifetime_seconds *
+            std::log1p(-delay_sample);
+    }
+    return result;
+}
+
+FluorescenceAdjointSample
+sample_fluorescence_adjoint(
+    const scene_ir::FluorescenceResource& fluorescence,
+    double emission_wavelength_nm,
+    double excitation_sample,
+    double delay_sample) {
+    FluorescenceAdjointSample result;
+    if (!is_valid(fluorescence) ||
+        !std::isfinite(emission_wavelength_nm) ||
+        emission_wavelength_nm <
+            fluorescence.emission_wavelengths_nm
+                .front() ||
+        emission_wavelength_nm >
+            fluorescence.emission_wavelengths_nm
+                .back() ||
+        excitation_sample < 0.0 ||
+        excitation_sample >= 1.0 ||
+        delay_sample < 0.0 ||
+        delay_sample >= 1.0) {
+        return result;
+    }
+    const std::size_t excitation_count =
+        fluorescence.excitation_wavelengths_nm.size();
+    const std::size_t emission_count =
+        fluorescence.emission_wavelengths_nm.size();
+    const auto row_pdf =
+        [&](std::size_t row) {
+            const auto upper = std::upper_bound(
+                fluorescence.emission_wavelengths_nm
+                    .begin(),
+                fluorescence.emission_wavelengths_nm
+                    .end(),
+                static_cast<float>(
+                    emission_wavelength_nm));
+            const std::size_t lower_column =
+                upper ==
+                    fluorescence
+                        .emission_wavelengths_nm.end()
+                ? emission_count - 2
+                : static_cast<std::size_t>(
+                      upper -
+                      fluorescence
+                          .emission_wavelengths_nm
+                          .begin() -
+                      1);
+            const std::size_t upper_column =
+                lower_column + 1;
+            const double t =
+                (emission_wavelength_nm -
+                 fluorescence.emission_wavelengths_nm[
+                     lower_column]) /
+                (fluorescence.emission_wavelengths_nm[
+                     upper_column] -
+                 fluorescence.emission_wavelengths_nm[
+                     lower_column]);
+            const std::size_t base =
+                row * emission_count;
+            return std::lerp(
+                static_cast<double>(
+                    fluorescence.emission_pdf_per_nm[
+                        base + lower_column]),
+                static_cast<double>(
+                    fluorescence.emission_pdf_per_nm[
+                        base + upper_column]),
+                t);
+        };
+    const auto row_weight =
+        [&](std::size_t row) {
+            return static_cast<double>(
+                       fluorescence
+                           .excitation_efficiency[row]) *
+                   static_cast<double>(
+                       fluorescence.quantum_yield[row]) *
+                   fluorescence
+                       .excitation_wavelengths_nm[row] /
+                   emission_wavelength_nm *
+                   row_pdf(row);
+        };
+    double total_weight = 0.0;
+    for (std::size_t row = 0;
+         row + 1 < excitation_count;
+         ++row) {
+        total_weight +=
+            0.5 *
+            (row_weight(row) +
+             row_weight(row + 1)) *
+            (fluorescence
+                 .excitation_wavelengths_nm[row + 1] -
+             fluorescence
+                 .excitation_wavelengths_nm[row]);
+    }
+    if (!(total_weight > 0.0) ||
+        !std::isfinite(total_weight)) {
+        return result;
+    }
+    const double target =
+        excitation_sample * total_weight;
+    double cumulative = 0.0;
+    std::size_t segment = excitation_count;
+    std::size_t last_positive =
+        excitation_count;
+    double segment_target = 0.0;
+    double last_mass = 0.0;
+    for (std::size_t row = 0;
+         row + 1 < excitation_count;
+         ++row) {
+        const double width =
+            fluorescence
+                .excitation_wavelengths_nm[row + 1] -
+            fluorescence
+                .excitation_wavelengths_nm[row];
+        const double mass =
+            0.5 *
+            (row_weight(row) +
+             row_weight(row + 1)) *
+            width;
+        if (!(mass > 0.0)) continue;
+        last_positive = row;
+        last_mass = mass;
+        if (target < cumulative + mass) {
+            segment = row;
+            segment_target = target - cumulative;
+            break;
+        }
+        cumulative += mass;
+    }
+    if (segment == excitation_count) {
+        segment = last_positive;
+        segment_target = last_mass;
+    }
+    if (segment == excitation_count) return result;
+    const double w0 = row_weight(segment);
+    const double w1 = row_weight(segment + 1);
+    const double width =
+        fluorescence.excitation_wavelengths_nm[
+            segment + 1] -
+        fluorescence.excitation_wavelengths_nm[
+            segment];
+    const double slope = (w1 - w0) / width;
+    double offset = 0.0;
+    if (std::abs(slope) < 1.0e-14) {
+        offset =
+            w0 > 0.0
+            ? segment_target / w0
+            : 0.0;
+    } else {
+        offset =
+            (-w0 +
+             std::sqrt(
+                 std::max(
+                     0.0,
+                     w0 * w0 +
+                         2.0 *
+                             slope *
+                             segment_target))) /
+            slope;
+    }
+    offset = std::clamp(offset, 0.0, width);
+    result.excitation_wavelength_nm =
+        fluorescence.excitation_wavelengths_nm[
+            segment] +
+        offset;
+    result.kernel_density_per_nm =
+        std::lerp(w0, w1, offset / width);
+    result.transition_pdf_per_nm =
+        result.kernel_density_per_nm /
+        total_weight;
+    result.estimator_weight =
+        result.kernel_density_per_nm /
+        result.transition_pdf_per_nm;
+    if (fluorescence.lifetime_seconds > 0.0) {
+        result.delay_seconds =
+            -fluorescence.lifetime_seconds *
+            std::log1p(-delay_sample);
+    }
+    return result;
 }
 
 DiffractionPsfBank make_diffraction_psf_bank(

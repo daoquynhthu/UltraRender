@@ -206,6 +206,25 @@ ExplodedSceneArchive write_scene_ir_text(const NativeSceneArchive& archive) {
                         {"table", std::move(table)},
                         {"table_id", node.diffraction.table_id}};
                 }
+                if (node.kind ==
+                    scene_ir::MaterialGraphNodeKind::
+                        BsdfFluorescence) {
+                    if (node.fluorescence
+                            .emission_pdf_per_nm.size() >
+                        scene_ir::
+                            kMaxFluorescenceMatrixEntries) {
+                        throw std::invalid_argument(
+                            "Fluorescence matrix exceeds the text schema budget");
+                    }
+                    node_json["fluorescence"] = {
+                        {"emission_pdf_per_nm", node.fluorescence.emission_pdf_per_nm},
+                        {"emission_wavelengths_nm", node.fluorescence.emission_wavelengths_nm},
+                        {"excitation_efficiency", node.fluorescence.excitation_efficiency},
+                        {"excitation_wavelengths_nm", node.fluorescence.excitation_wavelengths_nm},
+                        {"lifetime_seconds", node.fluorescence.lifetime_seconds},
+                        {"quantum_yield", node.fluorescence.quantum_yield},
+                        {"resource_id", node.fluorescence.resource_id}};
+                }
                 material_graph["nodes"].push_back(std::move(node_json));
             }
             material["graph"] = std::move(material_graph);
@@ -388,14 +407,14 @@ LoadResult<NativeSceneArchive> read_scene_ir_text(
                 for (const auto& source_node : source.at("graph").at("nodes")) {
                     scene_ir::MaterialGraphNode node;
                     const int kind = source_node.at("kind").get<int>();
-                    if (kind < 0 || kind > 19) throw std::invalid_argument("Invalid graph node kind");
+                    if (kind < 0 || kind > 20) throw std::invalid_argument("Invalid graph node kind");
                     node.id = source_node.at("id").get<std::uint32_t>();
                     node.kind = static_cast<scene_ir::MaterialGraphNodeKind>(kind);
                     node.name = source_node.at("name").get<std::string>();
                     node.color = read_vec3(source_node.at("color"));
                     node.value = source_node.at("value").get<float>();
                     node.texture = object_ref(textures, source_node.at("texture_id"));
-                    if (kind >= 15) {
+                    if (kind >= 15 && kind <= 19) {
                         const auto& diffraction = source_node.at("diffraction");
                         const int diffraction_kind = diffraction.at("kind").get<int>();
                         const int diffraction_side = diffraction.at("side").get<int>();
@@ -439,6 +458,29 @@ LoadResult<NativeSceneArchive> read_scene_ir_text(
                             entry.jones_ps = coefficient(source_entry.at("jones_ps"));
                             entry.jones_pp = coefficient(source_entry.at("jones_pp"));
                             node.diffraction.table.push_back(entry);
+                        }
+                    }
+                    if (kind == 20) {
+                        const auto& fluorescence =
+                            source_node.at("fluorescence");
+                        node.fluorescence.resource_id =
+                            fluorescence.at("resource_id").get<std::string>();
+                        node.fluorescence.excitation_wavelengths_nm =
+                            fluorescence.at("excitation_wavelengths_nm").get<std::vector<float>>();
+                        node.fluorescence.emission_wavelengths_nm =
+                            fluorescence.at("emission_wavelengths_nm").get<std::vector<float>>();
+                        node.fluorescence.excitation_efficiency =
+                            fluorescence.at("excitation_efficiency").get<std::vector<float>>();
+                        node.fluorescence.quantum_yield =
+                            fluorescence.at("quantum_yield").get<std::vector<float>>();
+                        node.fluorescence.emission_pdf_per_nm =
+                            fluorescence.at("emission_pdf_per_nm").get<std::vector<float>>();
+                        node.fluorescence.lifetime_seconds =
+                            fluorescence.at("lifetime_seconds").get<double>();
+                        if (node.fluorescence.emission_pdf_per_nm.size() >
+                            scene_ir::kMaxFluorescenceMatrixEntries) {
+                            throw std::invalid_argument(
+                                "Fluorescence matrix exceeds the text schema budget");
                         }
                     }
                     for (const auto& source_input : source_node.at("inputs")) {

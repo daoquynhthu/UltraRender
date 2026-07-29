@@ -13,7 +13,7 @@ enum MaterialGraphNodeKind : uint8 {
   BsdfLambert = 8, BsdfMetal = 9, BsdfDielectric = 10, BsdfLight = 11,
   BsdfMix = 12, BsdfLayer = 13, OutputSurface = 14,
   BsdfGrating = 15, BsdfPhaseMask = 16, BsdfZonePlate = 17,
-  BsdfDoe = 18, BsdfScatteringTable = 19
+  BsdfDoe = 18, BsdfScatteringTable = 19, BsdfFluorescence = 20
 }
 enum DiffractiveOperatorKind : uint8 { Grating = 0, PhaseMask = 1, ZonePlate = 2, Doe = 3, ScatteringTable = 4 }
 enum DiffractiveScatterSide : uint8 { Reflection = 0, Transmission = 1 }
@@ -56,6 +56,16 @@ table DiffractiveOperator {
   table:[DiffractiveScatteringEntry] (id: 11);
 }
 
+table FluorescenceResource {
+  resource_id:string (id: 0);
+  excitation_wavelengths_nm:[float] (id: 1);
+  emission_wavelengths_nm:[float] (id: 2);
+  excitation_efficiency:[float] (id: 3);
+  quantum_yield:[float] (id: 4);
+  emission_pdf_per_nm:[float] (id: 5);
+  lifetime_seconds:double (id: 6);
+}
+
 table MaterialGraphNode {
   id:uint32 = 4294967295 (id: 0);
   kind:MaterialGraphNodeKind = ConstantColor (id: 1);
@@ -65,6 +75,7 @@ table MaterialGraphNode {
   texture_id:string (id: 5);
   inputs:[MaterialGraphInput] (id: 6);
   diffraction:DiffractiveOperator (id: 7);
+  fluorescence:FluorescenceResource (id: 8);
 }
 
 table MaterialGraph {

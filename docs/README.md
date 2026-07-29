@@ -1,6 +1,6 @@
 # UltraRender Documentation Index
 
-Last reviewed: 2026-07-28
+Last reviewed: 2026-07-29
 
 This index separates current references from historical records. `PLAN.md` is the only authoritative construction queue. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
 
@@ -22,6 +22,7 @@ This index separates current references from historical records. `PLAN.md` is th
 | [`Phase_V_GPU_Acceleration.md`](Phase_V_GPU_Acceleration.md) | Current GPU acceleration audit, configuration contract, risks and migration boundary |
 | [`Phase_W_Wave_Optics_Audit.md`](Phase_W_Wave_Optics_Audit.md) | Current boundary between references and production wave transport |
 | [`Phase_W_W5_Diffractive_Materials.md`](Phase_W_W5_Diffractive_Materials.md) | W.5 radiometric diffractive operator, Jones-table and CUDA estimator contract |
+| [`Phase_W_W6_Fluorescence.md`](Phase_W_W6_Fluorescence.md) | W.6 excitation-emission resource, adjoint CUDA wavelength transport and lifetime boundary |
 
 ## Completed-phase evidence records
 

@@ -1104,6 +1104,17 @@ static int test_c_session_lifecycle() {
     CHECK(diffractive_wave_session != nullptr);
     ure_session_destroy(diffractive_wave_session);
 
+    ure_wave_optics_config_t fluorescence_wave_config{};
+    fluorescence_wave_config.mode =
+        URE_WAVE_OPTICS_RADIOMETRIC;
+    fluorescence_wave_config.fluorescence_enabled = 1;
+    ure_session_t* fluorescence_wave_session =
+        ure_session_create_wave_config(
+            &spectral_config,
+            &fluorescence_wave_config);
+    CHECK(fluorescence_wave_session != nullptr);
+    ure_session_destroy(fluorescence_wave_session);
+
     ure_wave_optics_config_v2_t diffraction_v2{};
     diffraction_v2.struct_size =
         sizeof(diffraction_v2);
@@ -1153,6 +1164,13 @@ static int test_c_session_lifecycle() {
     CHECK(c_metadata.biased == 0);
     CHECK(c_metadata.sample_space_version == 0);
     ure_session_destroy(integrator_session);
+
+    ure_integrator_config_t restir_integrator{};
+    restir_integrator.mode = URE_INTEGRATOR_RESTIR_DI;
+    CHECK(ure_session_create_integrator_config(
+              &spectral_config,
+              &fluorescence_wave_config,
+              &restir_integrator) == nullptr);
 
     ure_integrator_config_t invalid_integrator{};
     invalid_integrator.mode = 99;
