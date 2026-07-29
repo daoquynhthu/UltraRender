@@ -81,6 +81,8 @@ int main() {
     check(!compile_solver_contract(backend, registry).ok(), "unsupported backend silently degraded");
     auto coherent = value; coherent.wave_optics.mode = WaveOpticsMode::CoherentField; coherent.wave_optics.coherent_field_enabled = true; coherent.coherent_merge = CoherentMergeMode::ComplexAmplitude;
     check(!compile_solver_contract(coherent, registry).ok(), "unsupported coherent mode silently degraded");
+    auto partial = value; partial.wave_optics.mode = WaveOpticsMode::PartialCoherence; partial.wave_optics.partial_coherence_enabled = true; partial.coherent_merge = CoherentMergeMode::MutualCoherence;
+    check(!compile_solver_contract(partial, registry).ok(), "reference-only partial coherence silently entered the production solver");
     auto diffraction = value;
     diffraction.wave_optics.mode =
         WaveOpticsMode::CameraDiffraction;

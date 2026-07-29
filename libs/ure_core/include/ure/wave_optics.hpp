@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -135,6 +136,82 @@ struct ComplexFieldFilm {
     double coherent_power_at(int x, int y, std::size_t lane) const;
     double incoherent_power_at(int x, int y, std::size_t lane) const;
     double resolved_power_at(int x, int y, std::size_t lane) const;
+};
+
+constexpr std::size_t kMaxPartialCoherenceSamples = 256;
+constexpr std::size_t kMaxPartialCoherenceRealizations = 65536;
+constexpr std::size_t kMaxPartialCoherenceContributions = 1048576;
+
+struct WavePoint2D {
+    double x_m = 0.0;
+    double y_m = 0.0;
+};
+
+struct CrossSpectralDensity {
+    double wavelength_m = 0.0;
+    std::vector<WavePoint2D> sample_points;
+    std::vector<ComplexAmplitude> values;
+
+    std::size_t sample_count() const;
+    bool is_valid(double tolerance = 1.0e-10) const;
+    ComplexAmplitude at(
+        std::size_t row,
+        std::size_t column) const;
+    double spectral_density_at(
+        std::size_t sample) const;
+    ComplexAmplitude degree_of_coherence(
+        std::size_t first,
+        std::size_t second) const;
+};
+
+struct CoherentRealization {
+    std::uint64_t realization_id = 0;
+    double statistical_weight = 1.0;
+    std::vector<ComplexAmplitude> fields;
+};
+
+struct GeneralizedRay {
+    std::array<double, 3> position_m{};
+    std::array<double, 3> direction{
+        0.0,
+        0.0,
+        1.0};
+    double wavelength_m = 0.0;
+    JonesVector field;
+    CoherenceMetadata coherence;
+    double optical_path_length_m = 0.0;
+    double statistical_weight = 1.0;
+};
+
+struct PartialCoherenceContribution {
+    int x = 0;
+    int y = 0;
+    std::size_t lane = 0;
+    std::uint64_t source_id = 0;
+    std::uint64_t group_id = 0;
+    std::uint64_t realization_id = 0;
+    double statistical_weight = 1.0;
+    ComplexAmplitude amplitude;
+};
+
+struct PartialCoherenceFilm {
+    int width = 0;
+    int height = 0;
+    std::vector<double> wavelengths_m;
+    std::vector<PartialCoherenceContribution>
+        contributions;
+    std::size_t contribution_budget =
+        kMaxPartialCoherenceContributions;
+
+    std::size_t lane_count() const;
+    bool is_valid() const;
+    bool add_sample(
+        const PartialCoherenceContribution&
+            contribution);
+    double resolved_power_at(
+        int x,
+        int y,
+        std::size_t lane) const;
 };
 
 struct PsfKernel {
@@ -275,6 +352,9 @@ bool is_valid(const DiffractionCameraConfig& config);
 bool is_valid(const CoherenceMetadata& metadata);
 bool is_valid(const ComplexSpectrum& spectrum);
 bool is_valid(const JonesSpectrum& spectrum);
+bool is_valid(const CoherentRealization& realization,
+              std::size_t sample_count);
+bool is_valid(const GeneralizedRay& ray);
 bool is_valid(const scene_ir::DiffractiveOperator& diffraction);
 bool is_valid(const scene_ir::FluorescenceResource& fluorescence);
 bool is_ready(DiffractionCameraPlanStatus status);
@@ -297,6 +377,47 @@ JonesSpectrum apply_optical_path_phase(const JonesSpectrum& spectrum,
 ComplexFieldFilm make_complex_field_film(int width,
                                          int height,
                                          const std::vector<double>& wavelengths_m);
+CrossSpectralDensity make_gaussian_schell_csd(
+    double wavelength_m,
+    const std::vector<WavePoint2D>& sample_points,
+    double beam_radius_m,
+    double coherence_width_m,
+    double peak_spectral_density);
+CoherentRealization sample_coherent_realization(
+    const CrossSpectralDensity& density,
+    std::uint64_t realization_id);
+CrossSpectralDensity estimate_cross_spectral_density(
+    double wavelength_m,
+    const std::vector<WavePoint2D>& sample_points,
+    const std::vector<CoherentRealization>&
+        realizations);
+CrossSpectralDensity estimate_cross_spectral_density_gpu(
+    double wavelength_m,
+    const std::vector<WavePoint2D>& sample_points,
+    const std::vector<CoherentRealization>&
+        realizations);
+GeneralizedRay propagate_generalized_ray(
+    const GeneralizedRay& ray,
+    double distance_m,
+    double refractive_index);
+double gaussian_temporal_coherence(
+    double optical_path_difference_m,
+    double coherence_length_m);
+double interferometric_power(
+    double first_power,
+    double second_power,
+    ComplexAmplitude degree_of_coherence,
+    double optical_path_difference_m,
+    double wavelength_m);
+PartialCoherenceFilm make_partial_coherence_film(
+    int width,
+    int height,
+    const std::vector<double>& wavelengths_m,
+    std::size_t contribution_budget =
+        kMaxPartialCoherenceContributions);
+bool merge_partial_coherence_film(
+    PartialCoherenceFilm& target,
+    const PartialCoherenceFilm& source);
 double normalized_sinc(double x);
 double knife_edge_fresnel_intensity(double fresnel_v);
 double slit_diffraction_argument(const SlitAperture& aperture, double theta_rad);

@@ -275,7 +275,9 @@ bool is_valid(const DiffractionCameraConfig& config) {
 }
 
 bool is_valid(const CoherenceMetadata& metadata) {
-    return metadata.coherence_length_m >= 0.0;
+    return std::isfinite(
+               metadata.coherence_length_m) &&
+           metadata.coherence_length_m >= 0.0;
 }
 
 bool is_valid(const ComplexSpectrum& spectrum) {
@@ -604,6 +606,758 @@ double ComplexFieldFilm::incoherent_power_at(int x, int y, std::size_t lane) con
 
 double ComplexFieldFilm::resolved_power_at(int x, int y, std::size_t lane) const {
     return coherent_power_at(x, y, lane) + incoherent_power_at(x, y, lane);
+}
+
+namespace {
+
+bool finite_complex(ComplexAmplitude value) {
+    return std::isfinite(value.real) &&
+           std::isfinite(value.imag);
+}
+
+ComplexAmplitude conjugate(ComplexAmplitude value) {
+    return {value.real, -value.imag};
+}
+
+ComplexAmplitude subtract(
+    ComplexAmplitude first,
+    ComplexAmplitude second) {
+    return {
+        first.real - second.real,
+        first.imag - second.imag};
+}
+
+ComplexAmplitude divide(
+    ComplexAmplitude value,
+    double divisor) {
+    return {
+        value.real / divisor,
+        value.imag / divisor};
+}
+
+std::vector<ComplexAmplitude>
+hermitian_psd_factor(
+    const CrossSpectralDensity& density,
+    double tolerance) {
+    const std::size_t count =
+        density.sample_count();
+    std::vector<ComplexAmplitude> factor(
+        count * count);
+    double maximum_diagonal = 0.0;
+    for (std::size_t index = 0;
+         index < count;
+         ++index) {
+        maximum_diagonal = std::max(
+            maximum_diagonal,
+            density.at(index, index).real);
+    }
+    const double threshold =
+        tolerance *
+        std::max(1.0, maximum_diagonal);
+    for (std::size_t row = 0;
+         row < count;
+         ++row) {
+        for (std::size_t column = 0;
+             column <= row;
+             ++column) {
+            ComplexAmplitude value =
+                density.at(row, column);
+            for (std::size_t inner = 0;
+                 inner < column;
+                 ++inner) {
+                value = subtract(
+                    value,
+                    multiply(
+                        factor[row * count + inner],
+                        conjugate(
+                            factor[
+                                column * count +
+                                inner])));
+            }
+            if (row == column) {
+                if (std::abs(value.imag) >
+                        threshold ||
+                    value.real < -threshold) {
+                    return {};
+                }
+                factor[row * count + column] = {
+                    std::sqrt(
+                        std::max(0.0, value.real)),
+                    0.0};
+                continue;
+            }
+            const double pivot =
+                factor[column * count + column]
+                    .real;
+            if (pivot > threshold) {
+                factor[row * count + column] =
+                    divide(value, pivot);
+            } else if (value.power() >
+                       threshold * threshold) {
+                return {};
+            }
+        }
+    }
+    return factor;
+}
+
+std::uint64_t splitmix64(std::uint64_t value) {
+    value += 0x9e3779b97f4a7c15ULL;
+    value =
+        (value ^ (value >> 30)) *
+        0xbf58476d1ce4e5b9ULL;
+    value =
+        (value ^ (value >> 27)) *
+        0x94d049bb133111ebULL;
+    return value ^ (value >> 31);
+}
+
+double uniform_open(std::uint64_t value) {
+    constexpr double inverse =
+        1.0 / 9007199254740992.0;
+    return (
+        static_cast<double>(
+            value >> 11) +
+        0.5) *
+        inverse;
+}
+
+ComplexAmplitude complex_normal(
+    std::uint64_t realization,
+    std::uint64_t dimension) {
+    const double first = uniform_open(
+        splitmix64(
+            realization ^
+            (dimension *
+             0xd2b74407b1ce6e93ULL)));
+    const double second = uniform_open(
+        splitmix64(
+            realization ^
+            (dimension *
+                 0xca5a826395121157ULL +
+             0x6a09e667f3bcc909ULL)));
+    const double radius =
+        std::sqrt(-std::log(first));
+    const double phase =
+        2.0 * std::numbers::pi * second;
+    return {
+        radius * std::cos(phase),
+        radius * std::sin(phase)};
+}
+
+bool valid_partial_contribution(
+    const PartialCoherenceFilm& film,
+    const PartialCoherenceContribution&
+        contribution) {
+    return contribution.x >= 0 &&
+           contribution.y >= 0 &&
+           contribution.x < film.width &&
+           contribution.y < film.height &&
+           contribution.lane < film.lane_count() &&
+           std::isfinite(
+               contribution.statistical_weight) &&
+           contribution.statistical_weight > 0.0 &&
+           finite_complex(contribution.amplitude);
+}
+
+}
+
+std::size_t CrossSpectralDensity::sample_count() const {
+    return sample_points.size();
+}
+
+ComplexAmplitude CrossSpectralDensity::at(
+    std::size_t row,
+    std::size_t column) const {
+    const std::size_t count = sample_count();
+    if (row >= count ||
+        column >= count ||
+        values.size() != count * count) {
+        return {};
+    }
+    return values[row * count + column];
+}
+
+double CrossSpectralDensity::spectral_density_at(
+    std::size_t sample) const {
+    if (sample >= sample_count()) return 0.0;
+    return at(sample, sample).real;
+}
+
+ComplexAmplitude
+CrossSpectralDensity::degree_of_coherence(
+    std::size_t first,
+    std::size_t second) const {
+    const double first_density =
+        spectral_density_at(first);
+    const double second_density =
+        spectral_density_at(second);
+    const double normalization =
+        std::sqrt(
+            first_density * second_density);
+    if (!(normalization > 0.0)) return {};
+    return divide(
+        at(first, second),
+        normalization);
+}
+
+bool CrossSpectralDensity::is_valid(
+    double tolerance) const {
+    const std::size_t count = sample_count();
+    if (!std::isfinite(wavelength_m) ||
+        wavelength_m <= 0.0 ||
+        count == 0 ||
+        count > kMaxPartialCoherenceSamples ||
+        values.size() != count * count ||
+        !std::isfinite(tolerance) ||
+        tolerance <= 0.0) {
+        return false;
+    }
+    for (const auto& point : sample_points) {
+        if (!std::isfinite(point.x_m) ||
+            !std::isfinite(point.y_m)) {
+            return false;
+        }
+    }
+    double maximum = 1.0;
+    for (const auto& value : values) {
+        if (!finite_complex(value)) return false;
+        maximum = std::max(
+            maximum,
+            std::sqrt(value.power()));
+    }
+    const double threshold = tolerance * maximum;
+    for (std::size_t row = 0;
+         row < count;
+         ++row) {
+        const auto diagonal = at(row, row);
+        if (diagonal.real < -threshold ||
+            std::abs(diagonal.imag) > threshold) {
+            return false;
+        }
+        for (std::size_t column = 0;
+             column < row;
+             ++column) {
+            const auto forward = at(row, column);
+            const auto reverse =
+                conjugate(at(column, row));
+            if (std::abs(
+                    forward.real - reverse.real) >
+                    threshold ||
+                std::abs(
+                    forward.imag - reverse.imag) >
+                    threshold) {
+                return false;
+            }
+        }
+    }
+    return !hermitian_psd_factor(
+                *this,
+                tolerance)
+                .empty();
+}
+
+bool is_valid(
+    const CoherentRealization& realization,
+    std::size_t sample_count) {
+    return sample_count > 0 &&
+           sample_count <=
+               kMaxPartialCoherenceSamples &&
+           realization.fields.size() ==
+               sample_count &&
+           std::isfinite(
+               realization.statistical_weight) &&
+           realization.statistical_weight > 0.0 &&
+           std::all_of(
+               realization.fields.begin(),
+               realization.fields.end(),
+               finite_complex);
+}
+
+bool is_valid(const GeneralizedRay& ray) {
+    double norm_squared = 0.0;
+    for (std::size_t axis = 0;
+         axis < ray.position_m.size();
+         ++axis) {
+        if (!std::isfinite(ray.position_m[axis]) ||
+            !std::isfinite(ray.direction[axis])) {
+            return false;
+        }
+        norm_squared +=
+            ray.direction[axis] *
+            ray.direction[axis];
+    }
+    return std::isfinite(ray.wavelength_m) &&
+           ray.wavelength_m > 0.0 &&
+           finite_complex(ray.field.x) &&
+           finite_complex(ray.field.y) &&
+           is_valid(ray.coherence) &&
+           ray.coherence.coherent &&
+           std::isfinite(
+               ray.optical_path_length_m) &&
+           ray.optical_path_length_m >= 0.0 &&
+           std::isfinite(
+               ray.statistical_weight) &&
+           ray.statistical_weight > 0.0 &&
+           std::abs(norm_squared - 1.0) <=
+               1.0e-10;
+}
+
+CrossSpectralDensity make_gaussian_schell_csd(
+    double wavelength_m,
+    const std::vector<WavePoint2D>& sample_points,
+    double beam_radius_m,
+    double coherence_width_m,
+    double peak_spectral_density) {
+    CrossSpectralDensity result;
+    if (!std::isfinite(wavelength_m) ||
+        wavelength_m <= 0.0 ||
+        sample_points.empty() ||
+        sample_points.size() >
+            kMaxPartialCoherenceSamples ||
+        !std::isfinite(beam_radius_m) ||
+        beam_radius_m <= 0.0 ||
+        !std::isfinite(coherence_width_m) ||
+        coherence_width_m <= 0.0 ||
+        !std::isfinite(peak_spectral_density) ||
+        peak_spectral_density < 0.0) {
+        return result;
+    }
+    result.wavelength_m = wavelength_m;
+    result.sample_points = sample_points;
+    const std::size_t count =
+        sample_points.size();
+    result.values.resize(count * count);
+    const double beam_variance =
+        beam_radius_m * beam_radius_m;
+    const double coherence_variance =
+        coherence_width_m *
+        coherence_width_m;
+    std::vector<double> intensity(count);
+    for (std::size_t index = 0;
+         index < count;
+         ++index) {
+        const auto& point = sample_points[index];
+        if (!std::isfinite(point.x_m) ||
+            !std::isfinite(point.y_m)) {
+            return {};
+        }
+        intensity[index] =
+            peak_spectral_density *
+            std::exp(
+                -0.5 *
+                (point.x_m * point.x_m +
+                 point.y_m * point.y_m) /
+                beam_variance);
+    }
+    for (std::size_t row = 0;
+         row < count;
+         ++row) {
+        for (std::size_t column = 0;
+             column < count;
+             ++column) {
+            const double dx =
+                sample_points[row].x_m -
+                sample_points[column].x_m;
+            const double dy =
+                sample_points[row].y_m -
+                sample_points[column].y_m;
+            result.values[row * count + column] = {
+                std::sqrt(
+                    intensity[row] *
+                    intensity[column]) *
+                    std::exp(
+                        -0.5 *
+                        (dx * dx + dy * dy) /
+                        coherence_variance),
+                0.0};
+        }
+    }
+    if (!result.is_valid()) return {};
+    return result;
+}
+
+CoherentRealization sample_coherent_realization(
+    const CrossSpectralDensity& density,
+    std::uint64_t realization_id) {
+    CoherentRealization result;
+    if (!density.is_valid()) return result;
+    const auto factor =
+        hermitian_psd_factor(density, 1.0e-10);
+    if (factor.empty()) return result;
+    const std::size_t count =
+        density.sample_count();
+    std::vector<ComplexAmplitude> noise(count);
+    for (std::size_t index = 0;
+         index < count;
+         ++index) {
+        noise[index] =
+            complex_normal(
+                realization_id,
+                static_cast<std::uint64_t>(index));
+    }
+    result.realization_id = realization_id;
+    result.fields.resize(count);
+    for (std::size_t row = 0;
+         row < count;
+         ++row) {
+        ComplexAmplitude field;
+        for (std::size_t column = 0;
+             column <= row;
+             ++column) {
+            field = add(
+                field,
+                multiply(
+                    factor[row * count + column],
+                    noise[column]));
+        }
+        result.fields[row] = field;
+    }
+    return result;
+}
+
+CrossSpectralDensity estimate_cross_spectral_density(
+    double wavelength_m,
+    const std::vector<WavePoint2D>& sample_points,
+    const std::vector<CoherentRealization>&
+        realizations) {
+    CrossSpectralDensity result;
+    const std::size_t count =
+        sample_points.size();
+    if (!std::isfinite(wavelength_m) ||
+        wavelength_m <= 0.0 ||
+        count == 0 ||
+        count > kMaxPartialCoherenceSamples ||
+        realizations.empty() ||
+        realizations.size() >
+            kMaxPartialCoherenceRealizations) {
+        return result;
+    }
+    double total_weight = 0.0;
+    result.wavelength_m = wavelength_m;
+    result.sample_points = sample_points;
+    result.values.assign(count * count, {});
+    for (const auto& realization : realizations) {
+        if (!is_valid(realization, count)) {
+            return {};
+        }
+        total_weight +=
+            realization.statistical_weight;
+        for (std::size_t row = 0;
+             row < count;
+             ++row) {
+            for (std::size_t column = 0;
+                 column < count;
+                 ++column) {
+                const auto product = multiply(
+                    realization.fields[row],
+                    conjugate(
+                        realization.fields[column]));
+                auto& value =
+                    result.values[
+                        row * count + column];
+                value.real +=
+                    realization.statistical_weight *
+                    product.real;
+                value.imag +=
+                    realization.statistical_weight *
+                    product.imag;
+            }
+        }
+    }
+    if (!(total_weight > 0.0) ||
+        !std::isfinite(total_weight)) {
+        return {};
+    }
+    for (auto& value : result.values) {
+        value = divide(value, total_weight);
+    }
+    if (!result.is_valid(1.0e-8)) return {};
+    return result;
+}
+
+GeneralizedRay propagate_generalized_ray(
+    const GeneralizedRay& ray,
+    double distance_m,
+    double refractive_index) {
+    if (!is_valid(ray) ||
+        !std::isfinite(distance_m) ||
+        distance_m < 0.0 ||
+        !std::isfinite(refractive_index) ||
+        refractive_index <= 0.0) {
+        return {};
+    }
+    GeneralizedRay result = ray;
+    for (std::size_t axis = 0;
+         axis < result.position_m.size();
+         ++axis) {
+        result.position_m[axis] +=
+            result.direction[axis] * distance_m;
+    }
+    const double optical_distance =
+        distance_m * refractive_index;
+    result.optical_path_length_m +=
+        optical_distance;
+    result.field = apply_optical_path_phase(
+        result.field,
+        optical_distance,
+        result.wavelength_m);
+    return result;
+}
+
+double gaussian_temporal_coherence(
+    double optical_path_difference_m,
+    double coherence_length_m) {
+    if (!std::isfinite(
+            optical_path_difference_m) ||
+        !std::isfinite(coherence_length_m) ||
+        coherence_length_m < 0.0) {
+        return 0.0;
+    }
+    if (coherence_length_m == 0.0) {
+        return optical_path_difference_m == 0.0
+            ? 1.0
+            : 0.0;
+    }
+    const double normalized =
+        optical_path_difference_m /
+        coherence_length_m;
+    return std::exp(
+        -0.5 * normalized * normalized);
+}
+
+double interferometric_power(
+    double first_power,
+    double second_power,
+    ComplexAmplitude degree_of_coherence,
+    double optical_path_difference_m,
+    double wavelength_m) {
+    if (!std::isfinite(first_power) ||
+        !std::isfinite(second_power) ||
+        first_power < 0.0 ||
+        second_power < 0.0 ||
+        !finite_complex(degree_of_coherence) ||
+        degree_of_coherence.power() >
+            1.0 + 1.0e-10 ||
+        !std::isfinite(
+            optical_path_difference_m) ||
+        !std::isfinite(wavelength_m) ||
+        wavelength_m <= 0.0) {
+        return 0.0;
+    }
+    const auto phase = phase_amplitude(
+        optical_phase_radians(
+            optical_path_difference_m,
+            wavelength_m));
+    const double interference =
+        multiply(
+            degree_of_coherence,
+            phase)
+            .real;
+    return std::max(
+        0.0,
+        first_power +
+            second_power +
+            2.0 *
+                std::sqrt(
+                    first_power *
+                    second_power) *
+                interference);
+}
+
+std::size_t PartialCoherenceFilm::lane_count() const {
+    return wavelengths_m.size();
+}
+
+bool PartialCoherenceFilm::is_valid() const {
+    if (width <= 0 ||
+        height <= 0 ||
+        wavelengths_m.empty() ||
+        contribution_budget == 0 ||
+        contribution_budget >
+            kMaxPartialCoherenceContributions ||
+        contributions.size() >
+            contribution_budget) {
+        return false;
+    }
+    for (std::size_t lane = 0;
+         lane < wavelengths_m.size();
+         ++lane) {
+        if (!std::isfinite(wavelengths_m[lane]) ||
+            wavelengths_m[lane] <= 0.0 ||
+            (lane > 0 &&
+             wavelengths_m[lane] <=
+                 wavelengths_m[lane - 1])) {
+            return false;
+        }
+    }
+    using Key = std::tuple<
+        int,
+        int,
+        std::size_t,
+        std::uint64_t,
+        std::uint64_t,
+        std::uint64_t>;
+    std::map<Key, double> weights;
+    for (const auto& contribution :
+         contributions) {
+        if (!valid_partial_contribution(
+                *this,
+                contribution)) {
+            return false;
+        }
+        const Key key{
+            contribution.x,
+            contribution.y,
+            contribution.lane,
+            contribution.source_id,
+            contribution.group_id,
+            contribution.realization_id};
+        const auto [position, inserted] =
+            weights.emplace(
+                key,
+                contribution.statistical_weight);
+        if (!inserted &&
+            position->second !=
+                contribution.statistical_weight) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool PartialCoherenceFilm::add_sample(
+    const PartialCoherenceContribution&
+        contribution) {
+    if (width <= 0 ||
+        height <= 0 ||
+        wavelengths_m.empty() ||
+        contribution_budget == 0 ||
+        contribution_budget >
+            kMaxPartialCoherenceContributions ||
+        contributions.size() >=
+            contribution_budget ||
+        !valid_partial_contribution(
+            *this,
+            contribution)) {
+        return false;
+    }
+    contributions.push_back(contribution);
+    return true;
+}
+
+double PartialCoherenceFilm::resolved_power_at(
+    int x,
+    int y,
+    std::size_t lane) const {
+    if (!is_valid() ||
+        x < 0 ||
+        y < 0 ||
+        x >= width ||
+        y >= height ||
+        lane >= lane_count()) {
+        return 0.0;
+    }
+    using RealizationKey = std::tuple<
+        std::uint64_t,
+        std::uint64_t,
+        std::uint64_t>;
+    struct RealizationValue {
+        ComplexAmplitude amplitude;
+        double weight = 0.0;
+    };
+    std::map<RealizationKey, RealizationValue>
+        coherent_sums;
+    for (const auto& contribution :
+         contributions) {
+        if (contribution.x != x ||
+            contribution.y != y ||
+            contribution.lane != lane) {
+            continue;
+        }
+        const RealizationKey key{
+            contribution.source_id,
+            contribution.group_id,
+            contribution.realization_id};
+        auto& value = coherent_sums[key];
+        value.amplitude = add(
+            value.amplitude,
+            contribution.amplitude);
+        value.weight =
+            contribution.statistical_weight;
+    }
+    using GroupKey =
+        std::pair<std::uint64_t, std::uint64_t>;
+    struct GroupValue {
+        double weighted_power = 0.0;
+        double total_weight = 0.0;
+    };
+    std::map<GroupKey, GroupValue> groups;
+    for (const auto& [key, realization] :
+         coherent_sums) {
+        const GroupKey group{
+            std::get<0>(key),
+            std::get<1>(key)};
+        auto& value = groups[group];
+        value.weighted_power +=
+            realization.weight *
+            realization.amplitude.power();
+        value.total_weight +=
+            realization.weight;
+    }
+    double result = 0.0;
+    for (const auto& [key, group] : groups) {
+        static_cast<void>(key);
+        if (group.total_weight > 0.0) {
+            result +=
+                group.weighted_power /
+                group.total_weight;
+        }
+    }
+    return result;
+}
+
+PartialCoherenceFilm make_partial_coherence_film(
+    int width,
+    int height,
+    const std::vector<double>& wavelengths_m,
+    std::size_t contribution_budget) {
+    PartialCoherenceFilm result;
+    result.width = width;
+    result.height = height;
+    result.wavelengths_m = wavelengths_m;
+    result.contribution_budget =
+        contribution_budget;
+    if (!result.is_valid()) return {};
+    return result;
+}
+
+bool merge_partial_coherence_film(
+    PartialCoherenceFilm& target,
+    const PartialCoherenceFilm& source) {
+    if (&target == &source ||
+        !target.is_valid() ||
+        !source.is_valid() ||
+        target.width != source.width ||
+        target.height != source.height ||
+        target.wavelengths_m !=
+            source.wavelengths_m ||
+        source.contributions.size() >
+            target.contribution_budget -
+                target.contributions.size()) {
+        return false;
+    }
+    const std::size_t original_size =
+        target.contributions.size();
+    target.contributions.insert(
+        target.contributions.end(),
+        source.contributions.begin(),
+        source.contributions.end());
+    if (!target.is_valid()) {
+        target.contributions.resize(original_size);
+        return false;
+    }
+    return true;
 }
 
 ComplexAmplitude add(ComplexAmplitude a, ComplexAmplitude b) {

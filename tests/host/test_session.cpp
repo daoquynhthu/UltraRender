@@ -1146,6 +1146,14 @@ static int test_c_session_lifecycle() {
     coherent_wave_config.coherent_field_enabled = 1;
     CHECK(ure_session_create_wave_config(&spectral_config, &coherent_wave_config) == nullptr);
 
+    ure_wave_optics_config_t partial_wave_config{};
+    partial_wave_config.mode =
+        URE_WAVE_OPTICS_PARTIAL_COHERENCE;
+    partial_wave_config.partial_coherence_enabled = 1;
+    CHECK(ure_session_create_wave_config(
+              &spectral_config,
+              &partial_wave_config) == nullptr);
+
     ure_wave_optics_config_t invalid_wave_config{};
     invalid_wave_config.mode = 99;
     CHECK(ure_session_create_wave_config(&spectral_config, &invalid_wave_config) == nullptr);

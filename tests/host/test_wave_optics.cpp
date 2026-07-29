@@ -690,6 +690,9 @@ static int test_complex_spectrum_optical_path_phase_accumulation() {
     spectrum.coherence.coherence_length_m = -1.0;
     CHECK(!ure::wave::is_valid(spectrum));
     CHECK(ure::wave::apply_optical_path_phase(spectrum, 1.0e-6).amplitudes.empty());
+    spectrum.coherence.coherence_length_m =
+        std::numeric_limits<double>::infinity();
+    CHECK(!ure::wave::is_valid(spectrum));
     return 0;
 }
 
@@ -745,6 +748,351 @@ static int test_complex_field_film_coherent_and_incoherent_order() {
 
     CHECK(!ure::wave::make_complex_field_film(0, 1, {550.0e-9}).is_valid());
     CHECK(!ure::wave::make_complex_field_film(1, 1, {0.0}).is_valid());
+    return 0;
+}
+
+static int test_gaussian_schell_cross_spectral_density() {
+    const std::vector<ure::wave::WavePoint2D>
+        points{
+            {-1.0e-3, 0.0},
+            {0.0, 0.0},
+            {1.0e-3, 0.0}};
+    const auto density =
+        ure::wave::make_gaussian_schell_csd(
+            550.0e-9,
+            points,
+            2.0e-3,
+            0.5e-3,
+            2.0);
+    CHECK(density.is_valid());
+    CHECK(density.sample_count() == 3);
+    CHECK_NEAR(
+        density.spectral_density_at(1),
+        2.0,
+        1.0e-12);
+    CHECK_NEAR(
+        density.spectral_density_at(0),
+        2.0 * std::exp(-0.125),
+        1.0e-12);
+    const auto degree =
+        density.degree_of_coherence(0, 1);
+    CHECK_NEAR(
+        degree.real,
+        std::exp(-2.0),
+        1.0e-12);
+    CHECK_NEAR(degree.imag, 0.0, 0.0);
+    CHECK_NEAR(
+        density.at(0, 1).real,
+        density.at(1, 0).real,
+        0.0);
+
+    auto invalid = density;
+    invalid.values[1].imag = 0.1;
+    CHECK(!invalid.is_valid());
+    invalid = density;
+    invalid.values[0].real = -1.0;
+    CHECK(!invalid.is_valid());
+    invalid = density;
+    invalid.sample_points = {
+        {0.0, 0.0},
+        {1.0, 0.0}};
+    invalid.values = {
+        {1.0, 0.0},
+        {2.0, 0.0},
+        {2.0, 0.0},
+        {1.0, 0.0}};
+    CHECK(!invalid.is_valid());
+    std::vector<ure::wave::WavePoint2D>
+        oversized_points(
+            ure::wave::
+                kMaxPartialCoherenceSamples +
+            1);
+    CHECK(!ure::wave::make_gaussian_schell_csd(
+               550.0e-9,
+               oversized_points,
+               1.0e-3,
+               1.0e-3,
+               1.0)
+               .is_valid());
+    CHECK(!ure::wave::make_gaussian_schell_csd(
+               550.0e-9,
+               points,
+               0.0,
+               1.0e-3,
+               1.0)
+               .is_valid());
+    return 0;
+}
+
+static int test_partial_coherence_realization_statistics() {
+    const std::vector<ure::wave::WavePoint2D>
+        points{
+            {-0.5e-3, 0.0},
+            {0.0, 0.0},
+            {0.5e-3, 0.0}};
+    const auto target =
+        ure::wave::make_gaussian_schell_csd(
+            632.8e-9,
+            points,
+            2.0e-3,
+            0.75e-3,
+            1.0);
+    std::vector<ure::wave::CoherentRealization>
+        realizations;
+    realizations.reserve(8192);
+    for (std::uint64_t id = 0;
+         id < 8192;
+         ++id) {
+        realizations.push_back(
+            ure::wave::sample_coherent_realization(
+                target,
+                id));
+    }
+    CHECK(ure::wave::is_valid(
+        realizations.front(),
+        points.size()));
+    const auto repeated =
+        ure::wave::sample_coherent_realization(
+            target,
+            0);
+    CHECK_NEAR(
+        repeated.fields[0].real,
+        realizations[0].fields[0].real,
+        0.0);
+    CHECK_NEAR(
+        repeated.fields[2].imag,
+        realizations[0].fields[2].imag,
+        0.0);
+    const auto estimated =
+        ure::wave::estimate_cross_spectral_density(
+            target.wavelength_m,
+            points,
+            realizations);
+    CHECK(estimated.is_valid(1.0e-8));
+    for (std::size_t index = 0;
+         index < target.values.size();
+         ++index) {
+        CHECK_NEAR(
+            estimated.values[index].real,
+            target.values[index].real,
+            0.035);
+        CHECK_NEAR(
+            estimated.values[index].imag,
+            target.values[index].imag,
+            0.035);
+    }
+
+    const auto speckle_target =
+        ure::wave::make_gaussian_schell_csd(
+            532.0e-9,
+            {{0.0, 0.0}},
+            1.0e-3,
+            1.0e-3,
+            1.0);
+    double mean = 0.0;
+    double second_moment = 0.0;
+    constexpr std::uint64_t sample_count = 16384;
+    for (std::uint64_t id = 0;
+         id < sample_count;
+         ++id) {
+        const double power =
+            ure::wave::sample_coherent_realization(
+                speckle_target,
+                id)
+                .fields[0]
+                .power();
+        mean += power;
+        second_moment += power * power;
+    }
+    mean /= static_cast<double>(sample_count);
+    second_moment /=
+        static_cast<double>(sample_count);
+    const double contrast =
+        std::sqrt(
+            std::max(
+                0.0,
+                second_moment - mean * mean)) /
+        mean;
+    CHECK_NEAR(mean, 1.0, 0.025);
+    CHECK_NEAR(contrast, 1.0, 0.04);
+    return 0;
+}
+
+static int test_generalized_ray_and_interferometry() {
+    ure::wave::GeneralizedRay ray;
+    ray.wavelength_m = 500.0e-9;
+    ray.field.x = {1.0, 0.0};
+    ray.coherence = {
+        1,
+        2,
+        3,
+        10.0e-6,
+        true};
+    CHECK(ure::wave::is_valid(ray));
+    const auto propagated =
+        ure::wave::propagate_generalized_ray(
+            ray,
+            250.0e-9,
+            2.0);
+    CHECK(ure::wave::is_valid(propagated));
+    CHECK_NEAR(
+        propagated.position_m[2],
+        250.0e-9,
+        0.0);
+    CHECK_NEAR(
+        propagated.optical_path_length_m,
+        500.0e-9,
+        0.0);
+    CHECK_NEAR(
+        propagated.field.x.real,
+        1.0,
+        1.0e-12);
+    CHECK_NEAR(
+        propagated.field.x.imag,
+        0.0,
+        1.0e-12);
+    CHECK_NEAR(
+        ure::wave::gaussian_temporal_coherence(
+            10.0e-6,
+            10.0e-6),
+        std::exp(-0.5),
+        1.0e-12);
+    const double out_of_gate_coherence =
+        ure::wave::gaussian_temporal_coherence(
+            50.0e-6,
+            10.0e-6);
+    CHECK_NEAR(
+        ure::wave::interferometric_power(
+            1.0,
+            1.0,
+            {out_of_gate_coherence, 0.0},
+            50.0e-6,
+            ray.wavelength_m),
+        2.0,
+        1.0e-5);
+    CHECK_NEAR(
+        ure::wave::interferometric_power(
+            1.0,
+            1.0,
+            {1.0, 0.0},
+            0.0,
+            ray.wavelength_m),
+        4.0,
+        1.0e-12);
+    CHECK_NEAR(
+        ure::wave::interferometric_power(
+            1.0,
+            1.0,
+            {1.0, 0.0},
+            0.5 * ray.wavelength_m,
+            ray.wavelength_m),
+        0.0,
+        1.0e-12);
+    CHECK(!ure::wave::is_valid(
+        ure::wave::propagate_generalized_ray(
+            ray,
+            -1.0,
+            1.0)));
+    return 0;
+}
+
+static int test_partial_coherence_film_averaging_order() {
+    auto film =
+        ure::wave::make_partial_coherence_film(
+            1,
+            1,
+            {550.0e-9},
+            8);
+    CHECK(film.is_valid());
+    const auto add_sample =
+        [&](std::uint64_t group,
+            std::uint64_t realization,
+            double real) {
+            ure::wave::PartialCoherenceContribution
+                contribution;
+            contribution.group_id = group;
+            contribution.realization_id =
+                realization;
+            contribution.amplitude = {real, 0.0};
+            return film.add_sample(contribution);
+        };
+    CHECK(add_sample(1, 1, 1.0));
+    CHECK(add_sample(1, 1, 1.0));
+    CHECK(add_sample(1, 2, 1.0));
+    CHECK(add_sample(1, 2, -1.0));
+    CHECK(add_sample(2, 1, 1.0));
+    CHECK_NEAR(
+        film.resolved_power_at(0, 0, 0),
+        3.0,
+        0.0);
+    ure::wave::PartialCoherenceContribution invalid;
+    invalid.x = 2;
+    CHECK(!film.add_sample(invalid));
+    auto bounded =
+        ure::wave::make_partial_coherence_film(
+            1,
+            1,
+            {550.0e-9},
+            1);
+    CHECK(bounded.add_sample({}));
+    CHECK(!bounded.add_sample({}));
+    CHECK(!ure::wave::make_partial_coherence_film(
+               1,
+               1,
+               {600.0e-9, 500.0e-9})
+               .is_valid());
+
+    auto first =
+        ure::wave::make_partial_coherence_film(
+            1,
+            1,
+            {550.0e-9},
+            4);
+    auto second = first;
+    second.contributions.clear();
+    ure::wave::PartialCoherenceContribution
+        shard_sample;
+    shard_sample.source_id = 5;
+    shard_sample.group_id = 7;
+    shard_sample.realization_id = 11;
+    shard_sample.amplitude = {1.0, 0.0};
+    CHECK(first.add_sample(shard_sample));
+    CHECK(second.add_sample(shard_sample));
+    CHECK_NEAR(
+        first.resolved_power_at(0, 0, 0) +
+            second.resolved_power_at(0, 0, 0),
+        2.0,
+        0.0);
+    CHECK(ure::wave::merge_partial_coherence_film(
+        first,
+        second));
+    CHECK_NEAR(
+        first.resolved_power_at(0, 0, 0),
+        4.0,
+        0.0);
+    const auto original_size =
+        first.contributions.size();
+    auto incompatible =
+        ure::wave::make_partial_coherence_film(
+            2,
+            1,
+            {550.0e-9});
+    CHECK(!ure::wave::merge_partial_coherence_film(
+        first,
+        incompatible));
+    CHECK(first.contributions.size() ==
+          original_size);
+    auto inconsistent = second;
+    inconsistent.contributions[0].
+        statistical_weight = 2.0;
+    CHECK(!ure::wave::merge_partial_coherence_film(
+        first,
+        inconsistent));
+    CHECK(first.contributions.size() ==
+          original_size);
+    CHECK(!ure::wave::merge_partial_coherence_film(
+        first,
+        first));
     return 0;
 }
 
@@ -1317,6 +1665,10 @@ int main() {
     failed += run("test_complex_spectrum_optical_path_phase_accumulation", test_complex_spectrum_optical_path_phase_accumulation);
     failed += run("test_jones_field_optical_path_phase_preserves_polarized_power", test_jones_field_optical_path_phase_preserves_polarized_power);
     failed += run("test_complex_field_film_coherent_and_incoherent_order", test_complex_field_film_coherent_and_incoherent_order);
+    failed += run("test_gaussian_schell_cross_spectral_density", test_gaussian_schell_cross_spectral_density);
+    failed += run("test_partial_coherence_realization_statistics", test_partial_coherence_realization_statistics);
+    failed += run("test_generalized_ray_and_interferometry", test_generalized_ray_and_interferometry);
+    failed += run("test_partial_coherence_film_averaging_order", test_partial_coherence_film_averaging_order);
     failed += run("test_diffraction_camera_plan_requires_feature_gate", test_diffraction_camera_plan_requires_feature_gate);
     failed += run("test_diffraction_camera_plan_builds_reference_products", test_diffraction_camera_plan_builds_reference_products);
     failed += run("test_diffraction_camera_plan_rejects_invalid_optics", test_diffraction_camera_plan_rejects_invalid_optics);

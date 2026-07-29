@@ -23,6 +23,7 @@ This index separates current references from historical records. `PLAN.md` is th
 | [`Phase_W_Wave_Optics_Audit.md`](Phase_W_Wave_Optics_Audit.md) | Current boundary between references and production wave transport |
 | [`Phase_W_W5_Diffractive_Materials.md`](Phase_W_W5_Diffractive_Materials.md) | W.5 radiometric diffractive operator, Jones-table and CUDA estimator contract |
 | [`Phase_W_W6_Fluorescence.md`](Phase_W_W6_Fluorescence.md) | W.6 excitation-emission resource, adjoint CUDA wavelength transport and lifetime boundary |
+| [`Phase_W_W7_Partial_Coherence.md`](Phase_W_W7_Partial_Coherence.md) | W.7 cross-spectral-density, coherent-realization, generalized-ray and averaging-order reference contract |
 
 ## Completed-phase evidence records
 

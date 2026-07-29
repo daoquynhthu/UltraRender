@@ -193,6 +193,22 @@ def main() -> int:
     else:
         raise AssertionError("unimplemented coherent wave optics mode must fail")
 
+    try:
+        pyure.create_session(
+            domain_bins=1000000,
+            packet_lanes=8,
+            queue_capacity=64,
+            max_trace_depth=12,
+            wave_optics_mode="partial_coherence",
+            partial_coherence=True,
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError(
+            "reference-only partial coherence must fail in the production session"
+        )
+
     diffraction = pyure.create_session(
         domain_bins=1000000,
         packet_lanes=8,

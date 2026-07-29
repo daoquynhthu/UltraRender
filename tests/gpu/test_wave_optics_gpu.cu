@@ -784,6 +784,78 @@ static int test_gpu_fluorescence_update_requires_reload() {
     return 0;
 }
 
+static int test_gpu_partial_coherence_ensemble_reduction() {
+    REQUIRE_GPU();
+    const std::vector<ure::wave::WavePoint2D>
+        points{
+            {-0.75e-3, 0.0},
+            {-0.25e-3, 0.0},
+            {0.25e-3, 0.0},
+            {0.75e-3, 0.0}};
+    const auto target =
+        ure::wave::make_gaussian_schell_csd(
+            632.8e-9,
+            points,
+            2.0e-3,
+            0.6e-3,
+            1.0);
+    std::vector<ure::wave::CoherentRealization>
+        realizations;
+    realizations.reserve(2048);
+    for (std::uint64_t id = 0;
+         id < 2048;
+         ++id) {
+        auto realization =
+            ure::wave::sample_coherent_realization(
+                target,
+                id);
+        realization.statistical_weight =
+            id % 3 == 0 ? 2.0 : 1.0;
+        realizations.push_back(
+            std::move(realization));
+    }
+    const auto host =
+        ure::wave::estimate_cross_spectral_density(
+            target.wavelength_m,
+            points,
+            realizations);
+    const auto device =
+        ure::wave::
+            estimate_cross_spectral_density_gpu(
+                target.wavelength_m,
+                points,
+                realizations);
+    CHECK(host.is_valid(1.0e-8));
+    CHECK(device.is_valid(1.0e-7));
+    CHECK(host.values.size() ==
+          device.values.size());
+    for (std::size_t index = 0;
+         index < host.values.size();
+         ++index) {
+        CHECK_FLOAT_EQ(
+            static_cast<float>(
+                device.values[index].real),
+            static_cast<float>(
+                host.values[index].real),
+            1.0e-5f);
+        CHECK_FLOAT_EQ(
+            static_cast<float>(
+                device.values[index].imag),
+            static_cast<float>(
+                host.values[index].imag),
+            1.0e-5f);
+    }
+    auto invalid = realizations;
+    invalid[0].statistical_weight = 0.0;
+    CHECK(ure::wave::
+              estimate_cross_spectral_density_gpu(
+                  target.wavelength_m,
+                  points,
+                  invalid)
+              .values.empty());
+    return 0;
+}
+
 int main() {
     std::printf("[GPU Wave Optics Test]\n");
     RUN_TEST(test_gpu_diffractive_jones_response);
@@ -797,6 +869,7 @@ int main() {
     RUN_TEST(test_gpu_diffractive_material_update_requires_reload);
     RUN_TEST(test_gpu_fluorescence_transport_and_gate);
     RUN_TEST(test_gpu_fluorescence_update_requires_reload);
+    RUN_TEST(test_gpu_partial_coherence_ensemble_reduction);
     std::printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;
 }
