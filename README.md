@@ -6,7 +6,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- Phase Q、Phase R、Phase T 与 Phase V 已完成。Phase W.2 的 diffraction camera、W.5 的 diffractive MaterialGraph operators 与 W.6 的 fluorescence material 已接入显式启用的 CUDA wavefront 路径；W.7 已建立部分相干的参考与统计合同，当前施工游标是 `W.9`。
+- Phase Q、Phase R、Phase T 与 Phase V 已完成。Phase W.2 的 diffraction camera、W.5 的 diffractive MaterialGraph operators 与 W.6 的 fluorescence material 已接入显式启用的 CUDA wavefront 路径；W.7 与 W.9 已分别建立部分相干统计和各向异性模态传播参考合同，当前施工游标是 `W.10`。
 - 默认完整场景渲染后端仍是 CUDA。Vulkan RT 与 DXR 已具备多 BLAS/TLAS build、compaction、transform refit/rebuild、scratch budget 和 telemetry；OptiX SDK 保持可选，存在时启用同一构建合同和实际 raygen/miss/closest-hit pipeline，缺失时不影响 CUDA self-compute、Vulkan 或 D3D12。一个由同一 SceneIR lower 的固定 fixture 已对齐四类 provider 的 shadow/closest hit、transform、material、UV/normal/tangent metadata 和小型 AOV；这不等同于任意 SceneIR 的完整 radiometric integrator 已迁移到 native provider。
 - 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure。Acceleration provider、build quality、update policy、cluster gate、stats gate 与 scratch budget 使用独立的向后兼容配置合同；CUDA `self_compute` 的质量预设、auto/static/refit/rebuild update、scratch-budget enforcement 与 versioned acceleration stats 已可执行。Native construction 与 traversal parity fixture 已完成。V.8-V.10 已加入 SDK-free clustered geometry resource、host/CUDA physical-error selector，以及 rigid/deforming/topology-change lifecycle planner；SceneDiff mesh mutation会校验并事务回滚。当前 CUDA 对 deformation/topology 采取正确但保守的完整 BLAS/TLAS rebuild，显式请求尚不可用的 BLAS refit 会失败。主 renderer 的 cluster flag 在完整 SceneIR traversal lowering 前继续明确失败。
 - Slang 2026.14 已完成固定版本、多目标编译、反射、debug mapping、CUDA 占用率及数值执行验证。Vulkan SPIR-V 与 D3D12 DXIL 复用共享光谱/偏振及加速语义；D3D12 release DXIL 由固定 Windows SDK DXC 确定性生成，debug artifact 单独生成。现有 CUDA production kernels 仍是私有 `.cu` fast path，Slang RHI 未被引入。
@@ -32,6 +32,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 - CUDA wavefront diffraction camera：归一化的 360–830 nm PSF bank、仅对 PSF 插值分 bin 的精确波长 XYZ film、圆形/规则多叶片光阑、离焦相位和 2x2 sensor aperture integration；普通 material path 与关闭状态保持不变。
 - CUDA diffractive material operators：按 wavelength lane 采样传播级次并传输完整 2×2 complex Jones response；RCWA/FMM table 受 4,096-entry 预算、完整采样网格和联合被动性校验约束。该路径是非相干 radiometric thin-sheet scattering，不等同于 coherent field propagation。
 - 部分相干参考层：有界 Hermitian PSD cross-spectral density、Gaussian-Schell 扩展光源、确定性 coherent realizations、Jones/OPL generalized rays、OCT/interferometry coherence oracle、speckle 统计门禁，以及保持 coherent-before-incoherent 顺序的事务式 raw-field merge。CUDA 只执行 ensemble-to-CSD reference reduction，不表示主 path tracer 已支持部分相干场。
+- 各向异性介质参考层：有界 spectral dielectric-impermeability/extinction tensor、ordinary/extraordinary eigenmodes、birefringence、dichroism、optical activity、liquid-crystal director 与 stress-optic response。host/CUDA 使用同一 homogeneous transverse-displacement complex generator；该合同没有被压平为 scalar `ior`，也不表示 SceneIR path tracer 已接入 tensor interface、walk-off 或 ray splitting。
 - Stokes 状态与若干 Mueller 边界变换。它们属于强度域偏振传输，不等同于跨路径相干场求解。
 - Lambertian、metal、dielectric、cloth、有限厚度 dielectric layer 和受约束的 BSDF mix/material graph 路径。
 - 均质体积、Henyey–Greenstein、Rayleigh，以及资源驱动的光谱 Mie `eval/pdf/sample`、NEE 和 continuation。

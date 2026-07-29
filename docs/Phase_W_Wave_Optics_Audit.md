@@ -4,7 +4,7 @@ Document status: current capability boundary
 
 Last reviewed: 2026-07-29
 
-Phase W is active. W.2 integrates an explicitly enabled incoherent diffraction camera, W.5 adds radiometric diffractive thin-sheet materials, W.6 adds a bounded radiometric fluorescence surface transition, and W.7 establishes a partial-coherence reference/statistical layer. The ordinary renderer remains a spectral/polarimetric radiometric path tracer. These capabilities do not make UltraRender a general coherent wave-optics renderer.
+Phase W is active. W.2 integrates an explicitly enabled incoherent diffraction camera, W.5 adds radiometric diffractive thin-sheet materials, W.6 adds a bounded radiometric fluorescence surface transition, W.7 establishes a partial-coherence reference/statistical layer, and W.9 establishes homogeneous anisotropic modal transport references. The ordinary renderer remains a spectral/polarimetric radiometric path tracer. These capabilities do not make UltraRender a general coherent wave-optics renderer.
 
 ## Implemented reference and contract work
 
@@ -20,6 +20,7 @@ Phase W is active. W.2 integrates an explicitly enabled incoherent diffraction c
 | Diffractive materials | grating, sinusoidal phase mask, ideal zone plate, blazed DOE and bounded passive RCWA/FMM Jones tables | Production CUDA wavefront thin-sheet scattering; per-lane order sampling without cross-path coherence |
 | Fluorescence | bounded excitation-emission matrices, forward/adjoint oracles, lifetime state and detector-wavelength preservation | Production CUDA wavefront inelastic surface transition; steady-state film only |
 | Partial coherence | bounded PSD cross-spectral density, Gaussian-Schell extended source, deterministic coherent realizations, generalized Jones rays, temporal-coherence/interferometry oracle and raw-field film merge | Host/statistical reference plus CUDA ensemble-to-CSD reduction; production sessions still reject |
+| Anisotropic/modal media | bounded spectral dielectric-impermeability/extinction tensors, ordinary/extraordinary eigenmodes, optical activity, liquid-crystal directors and stress birefringence | Homogeneous host/CUDA Jones-segment reference; no SceneIR attachment, interface ray splitting or production path queue |
 
 ## Production renderer boundary
 
@@ -39,7 +40,7 @@ Consequently, the following are not implemented production capabilities:
 - serialized distributed coherent merge with phase-reference guarantees;
 - scalable FFT, tiling, out-of-core or multi-GPU propagation backends;
 - coherent holographic reconstruction or cross-path interference through diffractive materials;
-- birefringent/modal propagation and tensor optical materials;
+- scene-integrated anisotropic interfaces, walk-off/ray splitting and tensor optical materials;
 - transient/time-domain wave propagation;
 - production coupling to RCWA, FDTD, FEM, BEM, DDA or other local full-wave solvers.
 
@@ -72,7 +73,8 @@ ctest --test-dir build_modular_x64 -C Release -R "test_wave_optics|gpu_wave_opti
 .\scripts\check_phase_w5_static.ps1
 .\scripts\check_phase_w6_static.ps1
 .\scripts\check_phase_w7_static.ps1
+.\scripts\check_phase_w9_static.ps1
 .\scripts\check_physics_optics.ps1
 ```
 
-Passing these tests proves the covered diffraction-camera, radiometric diffractive-material, fluorescence, partial-coherence statistical contract and reference boundaries only. It does not establish a complete coherent wave-optics production renderer.
+Passing these tests proves the covered diffraction-camera, radiometric diffractive-material, fluorescence, partial-coherence statistical, anisotropic modal and reference boundaries only. It does not establish a complete coherent wave-optics production renderer.

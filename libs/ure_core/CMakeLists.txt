@@ -32,6 +32,8 @@ add_library(ure_core STATIC
     src/bvh_accelerator.cpp
     src/render_api.cpp
     src/specular_manifold.cpp
+    src/anisotropic_optics.cpp
+    src/anisotropic_optics_gpu.cu
     src/wave_optics.cpp
     src/wave_optics_gpu.cu
 )

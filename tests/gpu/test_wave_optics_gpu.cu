@@ -12,6 +12,7 @@
 #include "ure/render.hpp"
 #include "ure/scene_ir.hpp"
 #include "ure/wave_optics.hpp"
+#include "ure/anisotropic_optics.hpp"
 
 namespace ure::gpu {
 
@@ -856,6 +857,104 @@ static int test_gpu_partial_coherence_ensemble_reduction() {
     return 0;
 }
 
+static int test_gpu_anisotropic_modal_transport() {
+    REQUIRE_GPU();
+    const auto medium =
+        ure::wave::make_anisotropic_medium({
+            ure::wave::make_uniaxial_sample(
+                450.0e-9,
+                1.53,
+                1.64,
+                {1.0, 0.0, 0.0},
+                0.002,
+                0.01,
+                0.2),
+            ure::wave::make_uniaxial_sample(
+                550.0e-9,
+                1.51,
+                1.61,
+                {1.0, 0.0, 0.0},
+                0.001,
+                0.008,
+                0.15),
+            ure::wave::make_uniaxial_sample(
+                650.0e-9,
+                1.49,
+                1.58,
+                {1.0, 0.0, 0.0},
+                0.0005,
+                0.006,
+                0.1)});
+    CHECK(medium.is_valid());
+    std::vector<ure::wave::ModalPropagationSample>
+        samples(4);
+    samples[0] = {
+        {0.0, 0.0, 1.0},
+        450.0e-9,
+        2.0e-6,
+        {{1.0, 0.0}, {0.0, 0.0}}};
+    samples[1] = {
+        {0.2, 0.1, 1.0},
+        500.0e-9,
+        4.0e-6,
+        {{0.5, 0.25}, {-0.1, 0.7}}};
+    samples[2] = {
+        {-0.3, 0.4, 1.0},
+        550.0e-9,
+        7.0e-6,
+        {{0.0, 1.0}, {1.0, 0.0}}};
+    samples[3] = {
+        {0.0, 1.0, 0.25},
+        650.0e-9,
+        1.0e-5,
+        {{-0.3, 0.2}, {0.8, -0.1}}};
+    const auto device =
+        ure::wave::
+            propagate_anisotropic_displacements_gpu(
+                medium,
+                samples);
+    CHECK(device.size() == samples.size());
+    for (std::size_t index = 0;
+         index < samples.size();
+         ++index) {
+        const auto host =
+            ure::wave::
+                propagate_anisotropic_displacement(
+                medium,
+                samples[index]);
+        CHECK(host.is_valid());
+        CHECK(
+            host.transverse_displacement.power() <=
+            samples[index].
+                    transverse_displacement.power() +
+                1.0e-10);
+        CHECK(std::abs(
+                  device[index].x.real -
+                  host.transverse_displacement.x.real) <=
+              1.0e-9);
+        CHECK(std::abs(
+                  device[index].x.imag -
+                  host.transverse_displacement.x.imag) <=
+              1.0e-9);
+        CHECK(std::abs(
+                  device[index].y.real -
+                  host.transverse_displacement.y.real) <=
+              1.0e-9);
+        CHECK(std::abs(
+                  device[index].y.imag -
+                  host.transverse_displacement.y.imag) <=
+              1.0e-9);
+    }
+    auto invalid = samples;
+    invalid[0].wavelength_m = 700.0e-9;
+    CHECK(ure::wave::
+              propagate_anisotropic_displacements_gpu(
+                  medium,
+                  invalid)
+              .empty());
+    return 0;
+}
+
 int main() {
     std::printf("[GPU Wave Optics Test]\n");
     RUN_TEST(test_gpu_diffractive_jones_response);
@@ -870,6 +969,7 @@ int main() {
     RUN_TEST(test_gpu_fluorescence_transport_and_gate);
     RUN_TEST(test_gpu_fluorescence_update_requires_reload);
     RUN_TEST(test_gpu_partial_coherence_ensemble_reduction);
+    RUN_TEST(test_gpu_anisotropic_modal_transport);
     std::printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;
 }

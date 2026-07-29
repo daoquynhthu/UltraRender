@@ -1,4 +1,5 @@
 #include <ure/wave_optics.hpp>
+#include <ure/anisotropic_optics.hpp>
 #include <ure/render.hpp>
 #include <ure/scene_ir.hpp>
 
@@ -1096,6 +1097,304 @@ static int test_partial_coherence_film_averaging_order() {
     return 0;
 }
 
+static int test_anisotropic_spectral_tensor_contract() {
+    const std::array<std::array<double, 3>, 3>
+        axes{{
+            {1.0, 0.0, 0.0},
+            {0.0, 1.0, 0.0},
+            {0.0, 0.0, 1.0}}};
+    const auto blue =
+        ure::wave::make_principal_anisotropic_sample(
+            450.0e-9,
+            {1.60, 1.55, 1.50},
+            {0.01, 0.02, 0.03},
+            axes,
+            0.25);
+    const auto red =
+        ure::wave::make_principal_anisotropic_sample(
+            650.0e-9,
+            {1.50, 1.48, 1.46},
+            {0.005, 0.01, 0.015},
+            axes,
+            0.15);
+    CHECK(ure::wave::is_valid(blue));
+    CHECK(ure::wave::is_valid(red));
+    const auto medium =
+        ure::wave::make_anisotropic_medium(
+            {blue, red});
+    CHECK(medium.is_valid());
+    const auto middle =
+        ure::wave::sample_anisotropic_medium(
+            medium,
+            550.0e-9);
+    CHECK(ure::wave::is_valid(middle));
+    CHECK_NEAR(
+        middle.dielectric_impermeability.xx,
+        0.5 *
+            (blue.dielectric_impermeability.xx +
+             red.dielectric_impermeability.xx),
+        1.0e-15);
+    CHECK_NEAR(
+        middle.optical_activity_rad_per_m,
+        0.2,
+        1.0e-15);
+    CHECK(!ure::wave::is_valid(
+        ure::wave::sample_anisotropic_medium(
+            medium,
+            700.0e-9)));
+
+    auto invalid_axes = axes;
+    invalid_axes[1] = {1.0, 0.0, 0.0};
+    CHECK(!ure::wave::is_valid(
+        ure::wave::make_principal_anisotropic_sample(
+            550.0e-9,
+            {1.5, 1.6, 1.7},
+            {0.0, 0.0, 0.0},
+            invalid_axes)));
+    CHECK(!ure::wave::is_valid(
+        ure::wave::make_principal_anisotropic_sample(
+            550.0e-9,
+            {1.5, 1.6, 1.7},
+            {0.0, -0.1, 0.0},
+            axes)));
+    CHECK(!ure::wave::is_valid(
+        ure::wave::make_uniaxial_sample(
+            550.0e-9,
+            0.0,
+            1.6,
+            {1.0, 0.0, 0.0})));
+    return 0;
+}
+
+static int test_uniaxial_and_liquid_crystal_modes() {
+    const auto sample =
+        ure::wave::make_uniaxial_sample(
+            500.0e-9,
+            1.5,
+            1.6,
+            {1.0, 0.0, 0.0});
+    const auto medium =
+        ure::wave::make_anisotropic_medium(
+            {sample});
+    const auto transverse =
+        ure::wave::solve_anisotropic_modes(
+            medium,
+            {0.0, 0.0, 1.0},
+            500.0e-9);
+    CHECK(transverse.is_valid());
+    CHECK(!transverse.degenerate);
+    CHECK_NEAR(
+        transverse.modes[0].refractive_index,
+        1.6,
+        1.0e-12);
+    CHECK_NEAR(
+        std::abs(
+            transverse.modes[0].
+                displacement[0]),
+        1.0,
+        1.0e-12);
+    CHECK_NEAR(
+        transverse.modes[1].refractive_index,
+        1.5,
+        1.0e-12);
+    const auto axial =
+        ure::wave::solve_anisotropic_modes(
+            medium,
+            {1.0, 0.0, 0.0},
+            500.0e-9);
+    CHECK(axial.is_valid());
+    CHECK(axial.degenerate);
+    CHECK_NEAR(
+        axial.modes[0].refractive_index,
+        1.5,
+        1.0e-12);
+    CHECK_NEAR(
+        axial.modes[1].refractive_index,
+        1.5,
+        1.0e-12);
+
+    const auto liquid_crystal =
+        ure::wave::make_liquid_crystal_sample(
+            500.0e-9,
+            1.5,
+            1.6,
+            {1.0, 0.0, 0.0});
+    CHECK_NEAR(
+        liquid_crystal.
+            dielectric_impermeability.xx,
+        sample.dielectric_impermeability.xx,
+        0.0);
+    CHECK_NEAR(
+        liquid_crystal.
+            dielectric_impermeability.yy,
+        sample.dielectric_impermeability.yy,
+        0.0);
+    return 0;
+}
+
+static int test_modal_retardance_activity_and_dichroism() {
+    constexpr double wavelength = 500.0e-9;
+    const auto retarder =
+        ure::wave::make_anisotropic_medium({
+            ure::wave::make_uniaxial_sample(
+                wavelength,
+                1.5,
+                1.6,
+                {1.0, 0.0, 0.0})});
+    ure::wave::ModalPropagationSample propagation;
+    propagation.wavelength_m = wavelength;
+    propagation.distance_m =
+        wavelength / (4.0 * (1.6 - 1.5));
+    propagation.transverse_displacement.x.real =
+        std::sqrt(0.5);
+    propagation.transverse_displacement.y.real =
+        std::sqrt(0.5);
+    const auto quarter_wave =
+        ure::wave::
+            propagate_anisotropic_displacement(
+            retarder,
+            propagation);
+    CHECK(quarter_wave.is_valid());
+    CHECK_NEAR(
+        quarter_wave.
+            transverse_displacement.power(),
+        1.0,
+        1.0e-12);
+    const double relative_real =
+        quarter_wave.transverse_displacement.x.real *
+            quarter_wave.transverse_displacement.y.real +
+        quarter_wave.transverse_displacement.x.imag *
+            quarter_wave.transverse_displacement.y.imag;
+    const double relative_imag =
+        quarter_wave.transverse_displacement.x.imag *
+            quarter_wave.transverse_displacement.y.real -
+        quarter_wave.transverse_displacement.x.real *
+            quarter_wave.transverse_displacement.y.imag;
+    CHECK_NEAR(relative_real, 0.0, 1.0e-12);
+    CHECK_NEAR(
+        std::abs(relative_imag),
+        0.5,
+        1.0e-12);
+
+    const auto active =
+        ure::wave::make_anisotropic_medium({
+            ure::wave::make_uniaxial_sample(
+                wavelength,
+                1.5,
+                1.5,
+                {0.0, 0.0, 1.0},
+                0.0,
+                0.0,
+                std::numbers::pi / 4.0)});
+    propagation.distance_m = 1.0;
+    propagation.transverse_displacement = {
+        {1.0, 0.0},
+        {}};
+    const auto rotated =
+        ure::wave::
+            propagate_anisotropic_displacement(
+            active,
+            propagation);
+    CHECK(rotated.is_valid());
+    CHECK_NEAR(
+        rotated.transverse_displacement.x.power(),
+        0.5,
+        1.0e-11);
+    CHECK_NEAR(
+        rotated.transverse_displacement.y.power(),
+        0.5,
+        1.0e-11);
+    propagation.distance_m = 0.0;
+    propagation.transverse_displacement = {
+        {0.25, -0.5},
+        {0.75, 0.125}};
+    const auto identity =
+        ure::wave::
+            propagate_anisotropic_displacement(
+                active,
+                propagation);
+    CHECK(identity.is_valid());
+    CHECK_NEAR(
+        identity.transverse_displacement.x.real,
+        0.25,
+        0.0);
+    CHECK_NEAR(
+        identity.transverse_displacement.x.imag,
+        -0.5,
+        0.0);
+    CHECK_NEAR(
+        identity.transverse_displacement.y.real,
+        0.75,
+        0.0);
+    CHECK_NEAR(
+        identity.transverse_displacement.y.imag,
+        0.125,
+        0.0);
+
+    constexpr double extraordinary_extinction = 0.01;
+    const auto dichroic =
+        ure::wave::make_anisotropic_medium({
+            ure::wave::make_uniaxial_sample(
+                wavelength,
+                1.5,
+                1.5,
+                {1.0, 0.0, 0.0},
+                0.0,
+                extraordinary_extinction)});
+    propagation.distance_m =
+        std::log(2.0) * wavelength /
+        (2.0 * std::numbers::pi *
+         extraordinary_extinction);
+    propagation.transverse_displacement = {
+        {std::sqrt(0.5), 0.0},
+        {std::sqrt(0.5), 0.0}};
+    const auto attenuated =
+        ure::wave::
+            propagate_anisotropic_displacement(
+            dichroic,
+            propagation);
+    CHECK(attenuated.is_valid());
+    CHECK_NEAR(
+        attenuated.transverse_displacement.power(),
+        0.625,
+        1.0e-12);
+    return 0;
+}
+
+static int test_stress_birefringence_contract() {
+    ure::wave::SymmetricTensor3 stress;
+    stress.xx = 1.0e6;
+    stress.yy = -1.0e6;
+    const auto stressed =
+        ure::wave::make_stress_birefringent_sample(
+            550.0e-9,
+            1.5,
+            stress,
+            1.0e-12,
+            0.001);
+    CHECK(ure::wave::is_valid(stressed));
+    const auto modes =
+        ure::wave::solve_anisotropic_modes(
+            ure::wave::make_anisotropic_medium(
+                {stressed}),
+            {0.0, 0.0, 1.0},
+            550.0e-9);
+    CHECK(modes.is_valid());
+    CHECK(
+        std::abs(
+            modes.modes[0].refractive_index -
+            modes.modes[1].refractive_index) >
+        1.0e-6);
+    const auto invalid =
+        ure::wave::make_stress_birefringent_sample(
+            550.0e-9,
+            1.5,
+            stress,
+            1.0);
+    CHECK(!ure::wave::is_valid(invalid));
+    return 0;
+}
+
 static int test_diffraction_camera_plan_requires_feature_gate() {
     ure::wave::DiffractionCameraConfig camera;
     camera.pupil.aperture.wavelength_m = 550.0e-9;
@@ -1669,6 +1968,10 @@ int main() {
     failed += run("test_partial_coherence_realization_statistics", test_partial_coherence_realization_statistics);
     failed += run("test_generalized_ray_and_interferometry", test_generalized_ray_and_interferometry);
     failed += run("test_partial_coherence_film_averaging_order", test_partial_coherence_film_averaging_order);
+    failed += run("test_anisotropic_spectral_tensor_contract", test_anisotropic_spectral_tensor_contract);
+    failed += run("test_uniaxial_and_liquid_crystal_modes", test_uniaxial_and_liquid_crystal_modes);
+    failed += run("test_modal_retardance_activity_and_dichroism", test_modal_retardance_activity_and_dichroism);
+    failed += run("test_stress_birefringence_contract", test_stress_birefringence_contract);
     failed += run("test_diffraction_camera_plan_requires_feature_gate", test_diffraction_camera_plan_requires_feature_gate);
     failed += run("test_diffraction_camera_plan_builds_reference_products", test_diffraction_camera_plan_builds_reference_products);
     failed += run("test_diffraction_camera_plan_rejects_invalid_optics", test_diffraction_camera_plan_rejects_invalid_optics);
