@@ -86,8 +86,8 @@ AdapterLossReport assess_native_export(const NativeSceneArchive& archive, Adapte
     report.format = format;
     if (format == AdapterFormat::Usd) {
         add_loss(report, "URE-Q10-USD-001", "/", "ure.adapter.usd",
-                 "USD adapter implementation is reserved for Phase U and cannot currently serialize native scenes",
-                 "Retain .ure/.urescene as the authoritative source and wait for Phase U");
+                 "USD export is reserved for Phase U.6 and cannot currently serialize native scenes",
+                 "Retain .ure/.urescene as the authoritative source or use the U.1 import schema adapter");
         return report;
     }
     if (archive.procedural_graph) add_loss(report, "URE-Q10-LOSS-001", "/procedural_graph", "ure.scene.procedural", "Target format cannot preserve the deterministic procedural graph", "Bake generated geometry or retain URE native source");

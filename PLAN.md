@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-29 (Phase W closure and U.1 cursor)
+最后更新: 2026-07-29 (Phase U.1 closure and U.2 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -29,7 +29,8 @@
 远期 Phase R:   工业级/科研级积分器升级                              已完成
 远期 Phase T:   可移植 GPU 运行时 / 多后端执行                        已完成
 远期 Phase V:   GPU 几何加速结构 / BVH / OptiX / Clustered Geometry   已完成
-远期 Phase W:   波动光学求解器 / 相干场输运                          进行中
+远期 Phase W:   波动光学求解器 / 相干场输运                          已完成
+远期 Phase U:   USD/Hydra 生态适配                                   进行中
 ```
 
 ---
@@ -60,10 +61,10 @@ Phase T complete [done]
 Phase V complete [done]
    │
    ▼
-当前游标: U.1
+Phase W complete [done]
    │
    ▼
-Phase W complete
+当前游标: U.2
    │
    ▼
 Phase U complete
@@ -82,7 +83,8 @@ Phase X complete
 - **Phase T 已闭环**: T.0-T.11 已冻结 coupling、backend identity、共享 Slang 工具链、SDK-free runtime/resource/execution/acceleration/scheduling contract、CUDA production lowering、Vulkan compute/acceleration foundation、Windows optional D3D12/DXR backend、heterogeneous sample-shard negotiation 和 cross-backend validation/performance suite。
 - **Phase V 已闭环**: V.0-V.11 已完成 acceleration audit/config、self-compute/native provider、TLAS/BLAS、wide BVH、cluster/LoD/dynamic lifecycle 与统一 validation suite。
 - **Phase W 已闭环**: W.0-W.12 的 production radiometric features、bounded coherent/reference contracts、distributed sufficient statistics 与统一 validation suite 已完成；不扩大为 scene-integrated coherent renderer 声明。
-- **当前唯一施工项 — Phase U**: 核心 scene/runtime/acceleration/wave contracts 已稳定，当前游标进入 U.1 USD schema adapter；USD 只能映射 Phase Q 原生 schema，不能反向成为权威模型。
+- **Phase U.1 已闭环**: SDK-free authored-stage snapshot 将单位/坐标系、静态几何、相机、基础材质、刚体和强光谱资源映射到 Phase Q archive；OpenUSD 类型不进入公共接口，弱 `bands` 语义、未知 required schema、动画和有损几何会显式拒绝。
+- **当前唯一施工项 — Phase U**: 当前游标进入 U.2 Hydra RenderDelegate 骨架；USD/Hydra 只能消费 Phase Q 原生 schema 和 Session，不能反向成为权威模型。
 - **Phase X**: 只在稳定 Session/MaterialGraph/native scene contracts 上暴露插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
 - 文档中的“进行中”表示已有未闭环成果，不等于允许并行施工。发生冲突时，以本节当前游标为准。
@@ -2159,7 +2161,7 @@ V.11 closure（2026-07-29）：新增本地可执行的 `scripts/run_phase_v_val
 
 ### Phase W — 波动光学求解器 / Wave Optics Solver
 
-**状态**: ✅ 已完成。W.0-W.12 已在声明边界内闭环；权威施工游标已推进到 U.1。
+**状态**: ✅ 已完成。W.0-W.12 已在声明边界内闭环；U.1 已完成，权威施工游标已推进到 U.2。
 
 **目标**: 将 UltraRender 从“高级光谱偏振路径追踪器 + 局部边界波动效应”扩展为具备可选波动光学求解器的渲染系统。Phase W 不等价于全局 Maxwell/FDTD；宏观场景仍默认使用 radiometric spectral path tracing，波动能力通过显式 feature switch opt-in，并在 unsupported solver/film/merge/material/API path 上 fail-loud。
 
@@ -2383,7 +2385,7 @@ DCC (Maya/Houdini) → USD Stage → HdURE adapter
 
 | Step | 内容 | 复杂度 |
 |------|------|--------|
-| U.1 | USD schema adapter：把 USD prim/material 属性映射到 Phase Q URE native schema；不能用 USD schema 取代原生 schema | 中 |
+| U.1 | ✅ USD schema adapter：SDK-free normalized authored-stage snapshot 将 USD prim/material/physics/strong spectral resource 语义映射到 validated Phase Q URE native archive；不能用 USD schema 取代原生 schema | 中 |
 | U.2 | Hydra RenderDelegate 骨架：`HdURE` 继承 `HdRenderDelegate` | 高 |
 | U.3 | RPrim 支持：`HdMesh` → URE native geometry / SceneIR | 高 |
 | U.4 | 材质转换：USD `Material` + URE adapter schema → URE MaterialGraph；能力损失输出 loss report | 中 |
@@ -2400,8 +2402,12 @@ over "GlassCup" (
 {
     uniform token ure:physics:colliderType = "sphere"
     uniform float ure:physics:mass = 1.5
-    uniform int ure:spectral:bands = 64
-    uniform asset ure:spectral:albedoSPD = @spds/glass.spd@
+    uniform int64 ure:spectral:domainBins = 1000000
+    uniform int ure:spectral:packetLanes = 16
+    uniform asset ure:spectral:resourceUri = @spds/glass.urespd@
+    uniform string ure:spectral:contentHash = "..."
+    uniform int ure:spectral:basisCount = 0
+    uniform int64 ure:spectral:tileBins = 4096
 }
 ```
 

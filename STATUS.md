@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `U.1`. Phase Q, Phase R, Phase T, Phase V and the declared bounded scope of Phase W are complete. W.12 aggregates analytic diffraction, complex thin-film phase, rough-dielectric spectral/UV PDF, Stokes/Jones, fluorescence, coherent merge order, fail-loud and API-parity evidence in a versioned validation report. Production coherent and partially coherent sessions still reject before GPU allocation. The ordinary radiometric path remains the default and is unchanged when wave features are disabled.
+The authoritative construction cursor is `U.2`. Phase Q, Phase R, Phase T, Phase V and the declared bounded scope of Phase W are complete. U.1 maps a normalized, SDK-free USD authored-stage snapshot into the validated Phase Q native archive with explicit units, axes, static geometry, camera, basic materials, mesh physics and strong spectral resources. It is not an OpenUSD file bridge or Hydra delegate. Production coherent and partially coherent sessions still reject before GPU allocation. The ordinary radiometric path remains the default and is unchanged when wave features are disabled.
 
 ## Supported execution baseline
 
@@ -19,7 +19,7 @@ The authoritative construction cursor is `U.1`. Phase Q, Phase R, Phase T, Phase
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
 | Build tree | `build_modular_x64` using Ninja |
 | Primary executable | `build_modular_x64/apps/ure_cli/ure_cli.exe` |
-| Registered tests | 56 CTest entries at this snapshot |
+| Registered tests | 57 CTest entries at this snapshot |
 
 The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remains unavailable on the portable native backends. Vulkan additionally has a Linux GCC/Ninja gate, Windows NVIDIA native ray-query evidence, and Windows NVIDIA/Intel compute-BVH evidence. D3D12 additionally has Windows NVIDIA DXR 1.1, compute fallback, typed texture/descriptor and cross-queue fence evidence. macOS, older CUDA architectures, and complete Linux/non-NVIDIA/D3D12 scene rendering do not have equivalent evidence.
 
@@ -92,7 +92,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | Native validate/build/pack/unpack/inspect/migrate | Implemented in `ure_cli` | Validation remains capability-aware |
 | glTF/GLB import | Implemented through native validation boundary | glTF is an adapter, not core schema |
 | MaterialX import/export | Implemented for accepted subset | Unsupported nodes fail; URE graph remains authoritative |
-| USD/Hydra | Not implemented | Planned for Phase U; current boundary rejects use |
+| USD/Hydra | U.1 schema adapter implemented | SDK-free normalized stage snapshots map into validated native archives; OpenUSD file/stage integration, Hydra delegate, full USDShade conversion, interactive sync and export remain U.2-U.6 |
 | RenderSession / C ABI / pyure | Implemented and tested | ABI/version stability is not promised yet |
 | Native procedural graph | Implemented | Deterministic build graph, not runtime GPU interpretation |
 | Script build hook | Contract implemented, disabled by default | Requires explicit opt-in and attestable external runner |
@@ -110,7 +110,7 @@ The following must not be described as production capabilities merely because en
 - bundled local full-wave solvers, engine-owned process discovery/execution and a stable Phase X dynamic provider ABI;
 - transient fluorescence film output, anti-Stokes resources, fluorescent participating media and advanced-integrator fluorescence;
 - Vulkan/D3D12/OptiX arbitrary-scene radiometric integrator lowering and DispatchRays;
-- complete USD/Hydra and plugin ecosystems;
+- OpenUSD file/stage integration, Hydra rendering, complete USDShade conversion, interactive USD synchronization and the plugin ecosystem;
 - production-grade general fluid or acoustic simulation.
 
 ## Verification

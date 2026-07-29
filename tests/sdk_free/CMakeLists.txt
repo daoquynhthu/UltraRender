@@ -49,6 +49,7 @@ add_executable(test_public_surface_sdk_free
 )
 target_include_directories(test_public_surface_sdk_free PRIVATE
     "${URE_ROOT}/libs/ure_core/include"
+    "${URE_ROOT}/libs/ure_sceneio/include"
     "${URE_ROOT}/libs/ure_types/include"
     "${URE_ROOT}/libs/ure_runtime/include"
 )

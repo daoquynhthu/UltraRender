@@ -52,7 +52,8 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | Q.0-Q.12 (Native Scene) | Done | Native schema/serialization, procedural/script, resources/solvers/simulation, tooling/adapters/cache/farm, validation suite |
 | T (Portable GPU Runtime) | Done | T.0-T.11 complete; portable runtime, optional backends, multi-backend scheduling and unified validation closed |
 | V (GPU Acceleration) | Done | V.0-V.11 complete; unified local/farm validation freezes construction, traversal, memory, parity, dynamic and distributed evidence |
-| W (Wave Optics Solver) | Done | W.0-W.12 complete within the declared production/reference boundary; unified physical, API, fail-loud, distributed and static validation closed; U.1 is the authoritative cursor |
+| W (Wave Optics Solver) | Done | W.0-W.12 complete within the declared production/reference boundary; unified physical, API, fail-loud, distributed and static validation closed |
+| U (USD/Hydra Adapter) | In progress | U.1 SDK-free USD schema adapter complete; U.2 Hydra RenderDelegate is the authoritative cursor |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -212,12 +213,12 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | GPU core | `gpu_device`, `gpu_math`, `gpu_spectral`, `gpu_spectral_soa`, `gpu_hardware`, `gpu_render`, `gpu_instance`, `gpu_tangents`, `gpu_denoise`, `gpu_cuda_runtime`, `gpu_acceleration_contract`, `gpu_clustered_geometry`, `gpu_cluster_lod`, `gpu_dynamic_geometry` |
 | GPU physics/contracts | `gpu_polarization`, `gpu_volume`, `gpu_contract`, `gpu_wave_optics` |
 | Host core | `test_world`, `test_asset_pipeline`, `test_config`, `test_runtime_contract`, `test_acceleration_contract`, `test_clustered_geometry`, `test_cluster_lod`, `test_dynamic_geometry`, `test_resource_plan`, `test_execution_graph`, `test_multi_backend_schedule`, `test_spectral_oracle`, `test_wave_optics`, `test_local_fullwave`, `test_integrator`, `test_mie_phase` |
-| Host scene/material/session | `test_native_scene`, `test_native_scene_ir`, `test_native_procedural_graph`, `test_native_script_build`, `test_native_resource_catalog`, `test_native_solver_contract`, `test_native_simulation_contract`, `test_native_tooling`, `test_native_adapter`, `test_native_compiled_cache`, `test_native_validation_suite`, `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io`, `test_distributed_wave_io` |
+| Host scene/material/session | `test_native_scene`, `test_native_scene_ir`, `test_native_procedural_graph`, `test_native_script_build`, `test_native_resource_catalog`, `test_native_solver_contract`, `test_native_simulation_contract`, `test_native_tooling`, `test_native_adapter`, `test_usd_schema_adapter`, `test_native_compiled_cache`, `test_native_validation_suite`, `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io`, `test_distributed_wave_io` |
 | Python | `test_pyure_smoke` |
 | Vulkan | `vulkan_runtime`, `vulkan_acceleration` |
 | D3D12 | `d3d12_runtime` |
 | Multi-backend | `multi_backend_inventory` |
-| **CTest total** | **56 registered tests** in `build_modular_x64` |
+| **CTest total** | **57 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -440,10 +441,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 46 | 2026-07-29 W.10 | Established bounded local full-wave coupling | Versioned SDK-free byte envelopes negotiate RCWA/FDTD/FEM/BEM/FMM/DDA/S-matrix providers by capability, binary and semantic identity. Exact-grid passive Jones tables, solver convergence/error/budget evidence and request/provider-bound deterministic cache entries fail closed before W.5 host/CUDA consumption. No solver, ambient subprocess policy or scene-scale Maxwell discretization is claimed; cursor advanced to W.11. |
 | 47 | 2026-07-29 W.11 | Established coherent distributed sufficient-statistics transport | Distributed v6 distinguishes radiance, complex field, mutual intensity and coherent realization with phase/layout/source/group/range provenance. Content-digested complex/CSD files, transactional merge, overlap/corruption rejection and W.7 coherent-before-incoherent reduction prevent field-to-RGB flattening. Production coherent workers remain unavailable; cursor advanced to W.12. |
 | 48 | 2026-07-29 W.12 | Closed the bounded Phase W validation program | A versioned validation suite binds source/artifact identities to analytic diffraction, complex thin-film phase, spectral/UV PDF, Stokes/Jones, fluorescence, energy, coherent merge order, fail-loud and API-parity evidence plus Release 56/56 and static gates. Production coherent scene transport remains unavailable by contract; cursor advanced to U.1. |
+| 49 | 2026-07-29 U.1 | Established the USD-to-native schema adapter boundary | SDK-free normalized stage snapshots map units, axes, static meshes/spheres, cameras, basic MaterialGraph nodes, mesh rigid bodies and strong spectral resource metadata into validated Phase Q archives. Unsupported schemas, animation, non-TRS transforms and lossy geometry fail loudly; OpenUSD/Hydra integration remains U.2 onward. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, Phase V, and the declared bounded scope of Phase W are complete; the authoritative construction cursor is U.1.
+- Phase Q, Phase M, Phase R, Phase T, Phase V, and the declared bounded scope of Phase W are complete; U.1 is complete and the authoritative construction cursor is U.2.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 2); a 2026-07-28 stress run on the 16 GiB CUDA 13 workstation reduced the three heaviest translation-unit critical path from about 602 seconds serial to 362 seconds, while depth 3 was slower. Host and unrelated targets remain globally parallel.

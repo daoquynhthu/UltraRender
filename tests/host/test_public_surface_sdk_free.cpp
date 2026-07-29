@@ -11,9 +11,12 @@
 #include "ure/anisotropic_optics.hpp"
 #include "ure/local_fullwave.hpp"
 #include "ure/distributed_wave_io.hpp"
+#include "ure/usd_schema_adapter.hpp"
 
 int main() {
     static_assert(std::is_enum_v<ure::BackendKind>);
+    static_assert(
+        ure::usd::kUsdSchemaAdapterVersion.major == 1);
     static_assert(std::is_abstract_v<ure::IRenderEngine>);
     static_assert(std::is_standard_layout_v<ure_backend_config_t>);
     std::printf("SDK-free public surface compiled\n");

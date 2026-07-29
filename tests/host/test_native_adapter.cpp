@@ -31,7 +31,7 @@ int main() {
     check(serialized.find("ure.adapter.loss/1.0") != std::string::npos, "loss report schema identity is missing");
     check(serialized.find("ure.render.solver") != std::string::npos, "solver loss is missing");
     const auto usd = assess_native_export(imported.archive, AdapterFormat::Usd);
-    check(!usd.exportable() && !usd.losses.empty(), "unimplemented USD adapter did not fail loud");
+    check(!usd.exportable() && !usd.losses.empty(), "unimplemented USD export did not fail loud");
     const bool has_graph = !imported.archive.scene.materials.empty() && imported.archive.scene.materials.front() && imported.archive.scene.materials.front()->graph;
     check(has_graph, "glTF adapter did not create a MaterialGraph");
     if (has_graph) {
