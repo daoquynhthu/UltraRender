@@ -8,13 +8,17 @@
 #include <pxr/base/vt/value.h>
 #include <pxr/imaging/hd/bprim.h>
 #include <pxr/imaging/hd/instancer.h>
+#include <pxr/imaging/hd/mesh.h>
 #include <pxr/imaging/hd/resourceRegistry.h>
 #include <pxr/imaging/hd/rprim.h>
 #include <pxr/imaging/hd/sprim.h>
+#include <pxr/imaging/hd/tokens.h>
 
 #include <ure/usd_schema_adapter.hpp>
 
+#include "mesh_rprim.hpp"
 #include "render_delegate.hpp"
+#include "render_param.hpp"
 
 PXR_NAMESPACE_OPEN_SCOPE
 namespace {
@@ -24,15 +28,18 @@ const TfTokenVector& empty_types() {
     return value;
 }
 
+const TfTokenVector& rprim_types() {
+    static const TfTokenVector value{
+        HdPrimTypeTokens->mesh};
+    return value;
+}
+
 }
 
 struct HdURE::Impl {
-    class RenderParam final : public HdRenderParam {
-    };
-
     HdResourceRegistrySharedPtr resource_registry =
         std::make_shared<HdResourceRegistry>();
-    RenderParam render_param;
+    HdURERenderParam render_param;
     std::atomic<std::uint64_t> resource_epoch = 0;
 };
 
@@ -55,7 +62,7 @@ HdURE::~HdURE() = default;
 
 const TfTokenVector&
 HdURE::GetSupportedRprimTypes() const {
-    return empty_types();
+    return rprim_types();
 }
 
 const TfTokenVector&
@@ -94,7 +101,7 @@ HdInstancer* HdURE::CreateInstancer(
     static_cast<void>(delegate);
     static_cast<void>(id);
     TF_CODING_ERROR(
-        "HdURE instancing is unavailable before U.3");
+        "HdURE instancing requires a dedicated native instance mapping");
     return nullptr;
 }
 
@@ -106,10 +113,11 @@ void HdURE::DestroyInstancer(
 HdRprim* HdURE::CreateRprim(
     const TfToken& type_id,
     const SdfPath& rprim_id) {
-    static_cast<void>(type_id);
-    static_cast<void>(rprim_id);
+    if (type_id == HdPrimTypeTokens->mesh) {
+        return new HdUREMesh(rprim_id);
+    }
     TF_CODING_ERROR(
-        "HdURE RPrims are unavailable before U.3");
+        "HdURE received an unsupported RPrim type");
     return nullptr;
 }
 
@@ -204,6 +212,16 @@ VtDictionary HdURE::GetRenderStats() const {
         VtValue(impl_->resource_epoch.load(
             std::memory_order_acquire));
     stats["renderReady"] = VtValue(false);
+    stats["meshCount"] =
+        VtValue(static_cast<std::uint64_t>(
+            impl_->render_param.MeshCount()));
+    stats["rejectedMeshCount"] =
+        VtValue(
+            impl_->render_param.
+                RejectedMeshCount());
+    stats["lastError"] =
+        VtValue(
+            impl_->render_param.LastError());
     return stats;
 }
 

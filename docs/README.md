@@ -30,6 +30,7 @@ This index separates current references from historical records. `PLAN.md` is th
 | [`Phase_W_W12_Validation.md`](Phase_W_W12_Validation.md) | W.12 unified physical, API, fail-loud, static and complete CTest closure |
 | [`Phase_U_U1_USD_Schema_Adapter.md`](Phase_U_U1_USD_Schema_Adapter.md) | U.1 SDK-free USD semantic snapshot, native-schema mapping and fail-loud boundary |
 | [`Phase_U_U2_Hydra_RenderDelegate.md`](Phase_U_U2_Hydra_RenderDelegate.md) | U.2 optional OpenUSD `HdURE` delegate/plugin foundation and non-ready boundary |
+| [`Phase_U_U3_Hydra_Mesh_RPrim.md`](Phase_U_U3_Hydra_Mesh_RPrim.md) | U.3 actual `HdMesh` RPrim, SceneIR geometry mapping, updates and rejection boundary |
 
 ## Completed-phase evidence records
 

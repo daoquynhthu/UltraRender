@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `U.3`. Phase Q, Phase R, Phase T, Phase V and the declared bounded scope of Phase W are complete. U.1 maps a normalized, SDK-free USD authored-stage snapshot into the validated Phase Q native archive. U.2 adds an optional, dynamically discoverable `HdURE : HdRenderDelegate` built and tested against OpenUSD 25.05 from Houdini 21.0.671; it advertises no prim support and reports non-ready until U.3/U.5. Production coherent and partially coherent sessions still reject before GPU allocation.
+The authoritative construction cursor is `U.4`. Phase Q, Phase R, Phase T, Phase V and the declared bounded scope of Phase W are complete. U.1 maps a normalized, SDK-free USD authored-stage snapshot into the validated Phase Q native archive. U.2 adds an optional, dynamically discoverable `HdURE : HdRenderDelegate` built and tested against OpenUSD 25.05 from Houdini 21.0.671. U.3 adds an actual polygonal `HdMesh` RPrim that preserves indexed and face-varying primvars plus dynamic native state in SceneIR geometry; the plugin remains non-ready until U.5. Production coherent and partially coherent sessions still reject before GPU allocation.
 
 ## Supported execution baseline
 
@@ -92,7 +92,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | Native validate/build/pack/unpack/inspect/migrate | Implemented in `ure_cli` | Validation remains capability-aware |
 | glTF/GLB import | Implemented through native validation boundary | glTF is an adapter, not core schema |
 | MaterialX import/export | Implemented for accepted subset | Unsupported nodes fail; URE graph remains authoritative |
-| USD/Hydra | U.1 schema adapter and U.2 delegate/plugin foundation implemented | Optional actual-OpenUSD plugin is discoverable but intentionally unsupported for rendering; file/stage integration, mesh RPrims, full USDShade conversion, interactive sync and export remain U.3-U.6 |
+| USD/Hydra | U.1 schema adapter, U.2 delegate/plugin foundation and U.3 polygonal mesh RPrim implemented | Optional actual-OpenUSD plugin is discoverable but intentionally unsupported for rendering; subdivision/instancing, file/stage integration, material conversion, interactive rendering and export remain unavailable |
 | RenderSession / C ABI / pyure | Implemented and tested | ABI/version stability is not promised yet |
 | Native procedural graph | Implemented | Deterministic build graph, not runtime GPU interpretation |
 | Script build hook | Contract implemented, disabled by default | Requires explicit opt-in and attestable external runner |
@@ -110,7 +110,7 @@ The following must not be described as production capabilities merely because en
 - bundled local full-wave solvers, engine-owned process discovery/execution and a stable Phase X dynamic provider ABI;
 - transient fluorescence film output, anti-Stokes resources, fluorescent participating media and advanced-integrator fluorescence;
 - Vulkan/D3D12/OptiX arbitrary-scene radiometric integrator lowering and DispatchRays;
-- OpenUSD file/stage ingestion, Hydra mesh/material/render execution, complete USDShade conversion, interactive USD synchronization and the general plugin ecosystem;
+- OpenUSD file/stage ingestion, Hydra subdivision/instancing/material/render execution, complete USDShade conversion, interactive USD synchronization and the general plugin ecosystem;
 - production-grade general fluid or acoustic simulation.
 
 ## Verification

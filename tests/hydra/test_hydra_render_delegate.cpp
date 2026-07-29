@@ -46,10 +46,12 @@ int main() {
     pxr::HdURE delegate(settings);
 
     check(
-        delegate.GetSupportedRprimTypes().empty() &&
+        delegate.GetSupportedRprimTypes().size() == 1 &&
+            delegate.GetSupportedRprimTypes().front() ==
+                pxr::HdPrimTypeTokens->mesh &&
             delegate.GetSupportedSprimTypes().empty() &&
             delegate.GetSupportedBprimTypes().empty(),
-        "U.2 delegate advertised prim support early");
+        "Hydra prim capability boundary is wrong");
     check(delegate.GetRenderParam() != nullptr,
           "Hydra render param is missing");
     check(delegate.GetResourceRegistry() != nullptr,

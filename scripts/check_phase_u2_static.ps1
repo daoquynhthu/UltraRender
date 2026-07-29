@@ -65,7 +65,7 @@ Require-Text "libs/ure_hydra/src/render_delegate.cpp" @(
     "renderReady",
     "return empty_types()",
     "unavailable until",
-    "unavailable before U.3",
+    "unavailable before U.4",
     "resource_epoch"
 )
 Require-Text "libs/ure_hydra/src/renderer_plugin.cpp" @(
@@ -80,7 +80,7 @@ Require-Text "libs/ure_hydra/resources/plugInfo.json.in" @(
 )
 Require-Text "tests/hydra/test_hydra_render_delegate.cpp" @(
     "std::is_base_of_v",
-    "advertised prim support early",
+    "Hydra prim capability boundary is wrong",
     "renderReady",
     "resourceEpoch"
 )

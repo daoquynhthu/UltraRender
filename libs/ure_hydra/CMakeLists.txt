@@ -28,6 +28,7 @@ set(_ur_openusd_targets
     Houdini::Dep::pxr_hd
     Houdini::Dep::pxr_hf
     Houdini::Dep::pxr_plug
+    Houdini::Dep::pxr_pxOsd
     Houdini::Dep::pxr_python
     Houdini::Dep::pxr_sdf
     Houdini::Dep::pxr_tf
@@ -63,7 +64,9 @@ target_compile_definitions(ur_openusd_hydra_sdk
 )
 
 add_library(ure_hydra_delegate OBJECT
+    src/mesh_rprim.cpp
     src/render_delegate.cpp
+    src/render_param.cpp
 )
 target_include_directories(ure_hydra_delegate
     PRIVATE

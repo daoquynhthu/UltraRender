@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-29 (Phase U.2 closure and U.3 cursor)
+最后更新: 2026-07-29 (Phase U.3 closure and U.4 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -64,7 +64,7 @@ Phase V complete [done]
 Phase W complete [done]
    │
    ▼
-当前游标: U.3
+当前游标: U.4
    │
    ▼
 Phase U complete
@@ -84,8 +84,9 @@ Phase X complete
 - **Phase V 已闭环**: V.0-V.11 已完成 acceleration audit/config、self-compute/native provider、TLAS/BLAS、wide BVH、cluster/LoD/dynamic lifecycle 与统一 validation suite。
 - **Phase W 已闭环**: W.0-W.12 的 production radiometric features、bounded coherent/reference contracts、distributed sufficient statistics 与统一 validation suite 已完成；不扩大为 scene-integrated coherent renderer 声明。
 - **Phase U.1 已闭环**: SDK-free authored-stage snapshot 将单位/坐标系、静态几何、相机、基础材质、刚体和强光谱资源映射到 Phase Q archive；OpenUSD 类型不进入公共接口，弱 `bands` 语义、未知 required schema、动画和有损几何会显式拒绝。
-- **Phase U.2 已闭环**: 可选 `ure_hydra` 以实际 OpenUSD 25.05 编译 `HdURE : HdRenderDelegate` 和可发现 plugin；显式 SDK root、resource/settings/stats 生命周期与 Windows registry section 均有门禁，且在 U.3/U.5 前通过 `IsSupported(false)` 和空 prim capability 防止黑帧路径。
-- **当前唯一施工项 — Phase U**: 当前游标进入 U.3 `HdMesh` RPrim 到 URE native geometry / SceneIR；USD/Hydra 只能消费 Phase Q 原生 schema 和 Session，不能反向成为权威模型。
+- **Phase U.2 已闭环**: 可选 `ure_hydra` 以实际 OpenUSD 25.05 编译 `HdURE : HdRenderDelegate` 和可发现 plugin；显式 SDK root、resource/settings/stats 生命周期与 Windows registry section 均有门禁，且通过 `IsSupported(false)` 防止未完成后端成为黑帧路径。
+- **Phase U.3 已闭环**: 实际 `HdMesh` RPrim 将 polygon topology、indexed/face-varying primvar 和 transform/material/visibility/double-sided 更新映射为不可变 SceneIR geometry；subdivision、instancing、非法 domain 与非有限/退化输入显式拒绝，transform-only 更新不重建 geometry。
+- **当前唯一施工项 — Phase U**: 当前游标进入 U.4 USD `Material` + URE adapter schema 到 MaterialGraph 与 loss report；USD/Hydra 只能消费 Phase Q 原生 schema 和 Session，不能反向成为权威模型。
 - **Phase X**: 只在稳定 Session/MaterialGraph/native scene contracts 上暴露插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
 - 文档中的“进行中”表示已有未闭环成果，不等于允许并行施工。发生冲突时，以本节当前游标为准。
@@ -2388,7 +2389,7 @@ DCC (Maya/Houdini) → USD Stage → HdURE adapter
 |------|------|--------|
 | U.1 | ✅ USD schema adapter：SDK-free normalized authored-stage snapshot 将 USD prim/material/physics/strong spectral resource 语义映射到 validated Phase Q URE native archive；不能用 USD schema 取代原生 schema | 中 |
 | U.2 | ✅ Hydra RenderDelegate 骨架：可选 `ure_hydra` 的 `HdURE` 继承实际 OpenUSD `HdRenderDelegate`，plugin 可动态发现；U.3/U.5 前不声明 render-ready | 高 |
-| U.3 | RPrim 支持：`HdMesh` → URE native geometry / SceneIR | 高 |
+| U.3 | ✅ RPrim 支持：实际 `HdMesh` polygon topology、indexed/face-varying primvar 与动态状态 → immutable URE native geometry / SceneIR；subdivision/instancing 和有损输入 fail-loud | 高 |
 | U.4 | 材质转换：USD `Material` + URE adapter schema → URE MaterialGraph；能力损失输出 loss report | 中 |
 | U.5 | 交互渲染：Hydra 视口 → 渐进式渲染会话 | 高 |
 | U.6 | 场景导出：`.ure/.urescene/.urepkg` 或 `SceneIR → .usda` adapter output；无法表达的能力必须 fail-loud 或 loss report | 低 |

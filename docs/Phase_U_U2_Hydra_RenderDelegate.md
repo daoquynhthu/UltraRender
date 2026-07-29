@@ -22,7 +22,7 @@ The adapter is disabled by default. Enabling it requires both `UR_ENABLE_HYDRA=O
 
 ## Fail-loud readiness boundary
 
-U.2 deliberately advertises no RPrim, SPrim or BPrim types. RPrim/instancer creation rejects until U.3, material and related SPrim creation rejects until U.4, and render pass/BPrim execution rejects until U.5. The plugin returns `IsSupported(false)` so a DCC cannot select an empty render delegate as if it were render-capable.
+At U.2 closure the delegate advertised no prim types. U.3 now advertises only the implemented mesh RPrim. Material and related SPrim creation rejects until U.4, and render pass/BPrim execution rejects until U.5. Instancing remains rejected until it has a dedicated native mapping. The plugin still returns `IsSupported(false)` so a DCC cannot select the partial delegate as if it were render-capable.
 
 `GetRenderStats()` reports:
 
@@ -49,7 +49,7 @@ Run:
 The isolated SDK build verifies:
 
 - `HdURE` inheritance, settings, resource ownership, statistics and commit lifecycle;
-- empty advertised prim support and non-ready state;
+- the current phase-bounded prim capability and non-ready state;
 - generated plugin metadata, dynamic module discovery and plugin factory creation;
 - discovery from both the build tree and an isolated installed plugin layout;
 - actual OpenUSD/Hydra linkage without a graphics context.

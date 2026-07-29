@@ -28,6 +28,21 @@ add_test(
 add_executable(test_hydra_plugin_discovery
     test_hydra_plugin_discovery.cpp
 )
+
+add_executable(test_hydra_mesh_rprim
+    test_hydra_mesh_rprim.cpp
+    $<TARGET_OBJECTS:ure_hydra_delegate>
+)
+target_include_directories(test_hydra_mesh_rprim
+    PRIVATE
+        "${CMAKE_SOURCE_DIR}/libs/ure_hydra/src"
+)
+target_link_libraries(test_hydra_mesh_rprim
+    PRIVATE ure_sceneio ur_openusd_hydra_sdk
+)
+target_compile_definitions(test_hydra_mesh_rprim
+    PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
+)
 target_link_libraries(test_hydra_plugin_discovery
     PRIVATE ur_openusd_hydra_sdk
 )
@@ -37,18 +52,27 @@ target_compile_definitions(test_hydra_plugin_discovery
 if(MSVC)
     target_compile_options(test_hydra_plugin_discovery
         PRIVATE /W4 /WX /utf-8 /EHsc /wd4819)
+    target_compile_options(test_hydra_mesh_rprim
+        PRIVATE /W4 /WX /utf-8 /EHsc /wd4819)
 else()
     target_compile_options(test_hydra_plugin_discovery
+        PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    target_compile_options(test_hydra_mesh_rprim
         PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
 add_test(
     NAME test_hydra_plugin_discovery
     COMMAND test_hydra_plugin_discovery
 )
+add_test(
+    NAME test_hydra_mesh_rprim
+    COMMAND test_hydra_mesh_rprim
+)
 
 set_tests_properties(
     test_hydra_render_delegate
     test_hydra_plugin_discovery
+    test_hydra_mesh_rprim
     PROPERTIES
     ENVIRONMENT_MODIFICATION
         "PATH=path_list_prepend:${UR_OPENUSD_ROOT}/bin;PXR_PLUGINPATH_NAME=set:$<TARGET_FILE_DIR:ure_hydra>/resources"
