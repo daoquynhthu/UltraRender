@@ -198,7 +198,7 @@ try {
     Assert-Contains "libs/ure_runtime/src/multi_backend.cpp" "negotiate_sample_shards" "T.10 sample scheduler is missing"
     Assert-Contains "libs/ure_runtime/src/multi_backend.cpp" "worker lacks required numeric precision" "T.10 precision negotiation is missing"
     Assert-Contains "libs/ure_runtime/src/multi_backend.cpp" "worker lacks required coherence mode" "T.10 coherence negotiation is missing"
-    Assert-Contains "libs/ure_core/src/distributed_file_io.cpp" "constexpr int kVersion = 5" "T.10 distributed file version did not advance"
+    Assert-Contains "libs/ure_core/src/distributed_file_io.cpp" "constexpr int kVersion = 6" "distributed file version does not match the current contract"
     Assert-Contains "libs/ure_core/src/distributed_file_io.cpp" "kLegacyVersion = 4" "T.10 distributed v4 compatibility is missing"
     Assert-Contains "libs/ure_core/src/distributed_contract.cpp" "RGB distributed framebuffer cannot merge coherent fields" "T.10 coherent merge rejection is missing"
     Assert-Contains "libs/ure_core/src/gpu_multi_driver.cu" "negotiate_sample_shards" "T.10 CUDA multi-GPU path does not use the scheduler"

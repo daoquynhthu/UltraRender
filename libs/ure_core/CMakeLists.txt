@@ -24,6 +24,7 @@ add_library(ure_core STATIC
     src/gpu_scene_compiler.cpp
     src/distributed_contract.cpp
     src/distributed_file_io.cpp
+    src/distributed_wave_io.cpp
     src/session.cpp
     src/acceleration_build_pipeline.cpp
     src/acceleration_upload.cu

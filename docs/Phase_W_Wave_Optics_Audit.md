@@ -4,7 +4,7 @@ Document status: current capability boundary
 
 Last reviewed: 2026-07-29
 
-Phase W is active. W.2 integrates an explicitly enabled incoherent diffraction camera, W.5 adds radiometric diffractive thin-sheet materials, W.6 adds a bounded radiometric fluorescence surface transition, W.7 establishes a partial-coherence reference/statistical layer, W.9 establishes homogeneous anisotropic modal transport references, and W.10 establishes a bounded local full-wave provider/cache contract. The ordinary renderer remains a spectral/polarimetric radiometric path tracer. These capabilities do not make UltraRender a general coherent wave-optics renderer.
+Phase W is active. W.2 integrates an explicitly enabled incoherent diffraction camera, W.5 adds radiometric diffractive thin-sheet materials, W.6 adds a bounded radiometric fluorescence surface transition, W.7 establishes a partial-coherence reference/statistical layer, W.9 establishes homogeneous anisotropic modal transport references, W.10 establishes a bounded local full-wave provider/cache contract, and W.11 establishes coherent distributed sufficient-statistics files and merges. The ordinary renderer remains a spectral/polarimetric radiometric path tracer. These capabilities do not make UltraRender a general coherent wave-optics renderer.
 
 ## Implemented reference and contract work
 
@@ -22,6 +22,7 @@ Phase W is active. W.2 integrates an explicitly enabled incoherent diffraction c
 | Partial coherence | bounded PSD cross-spectral density, Gaussian-Schell extended source, deterministic coherent realizations, generalized Jones rays, temporal-coherence/interferometry oracle and raw-field film merge | Host/statistical reference plus CUDA ensemble-to-CSD reduction; production sessions still reject |
 | Anisotropic/modal media | bounded spectral dielectric-impermeability/extinction tensors, ordinary/extraordinary eigenmodes, optical activity, liquid-crystal directors and stress birefringence | Homogeneous host/CUDA Jones-segment reference; no SceneIR attachment, interface ray splitting or production path queue |
 | Local full-wave coupling | versioned binary RCWA/FDTD/FEM/BEM/FMM/DDA/S-matrix request/result envelopes, provider negotiation, solver evidence and content-addressed cache | Imports strictly verified W.5 Jones tables; no bundled solver, ambient process launch, global Maxwell discretization or Phase X dynamic ABI |
+| Coherent distributed contract | v6 frame semantics plus content-digested complex-field and mutual-intensity files, phase/layout/source/group/realization provenance and transactional merge | Coherent-realization fields merge before power and mutual intensity merges over disjoint realization ranges; production coherent sessions remain rejected |
 
 ## Production renderer boundary
 
@@ -38,7 +39,7 @@ Consequently, the following are not implemented production capabilities:
 - coherent or partially coherent scene transport;
 - scene-integrated coherent grouping and mutual-intensity/cross-spectral-density transport;
 - a complex-field GPU path queue and coherent film;
-- serialized distributed coherent merge with phase-reference guarantees;
+- production worker output wired to the coherent distributed files;
 - scalable FFT, tiling, out-of-core or multi-GPU propagation backends;
 - coherent holographic reconstruction or cross-path interference through diffractive materials;
 - scene-integrated anisotropic interfaces, walk-off/ray splitting and tensor optical materials;
@@ -78,7 +79,8 @@ ctest --test-dir build_modular_x64 -C Release -R "test_wave_optics|gpu_wave_opti
 .\scripts\check_phase_w7_static.ps1
 .\scripts\check_phase_w9_static.ps1
 .\scripts\check_phase_w10_static.ps1
+.\scripts\check_phase_w11_static.ps1
 .\scripts\check_physics_optics.ps1
 ```
 
-Passing these tests proves the covered diffraction-camera, radiometric diffractive-material, fluorescence, partial-coherence statistical, anisotropic modal, local-solver exchange and reference boundaries only. It does not establish a complete coherent wave-optics production renderer.
+Passing these tests proves the covered diffraction-camera, radiometric diffractive-material, fluorescence, partial-coherence statistical, anisotropic modal, local-solver exchange, coherent distributed sufficient-statistics and reference boundaries only. It does not establish a complete coherent wave-optics production renderer.

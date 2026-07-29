@@ -497,6 +497,24 @@ static int test_multi_backend_metadata_roundtrip_and_merge() {
             resources,
             coherent_workers,
             8);
+    CHECK(throws_exception([&] {
+        static_cast<void>(
+            ure::gpu::
+                make_scheduled_shard_metadata(
+                    spectral,
+                    frame,
+                    resources,
+                    coherent_schedule,
+                    0));
+    }));
+    const auto coherent_semantics =
+        ure::gpu::make_complex_field_semantics(
+            ure::runtime::identity_digest(
+                "phase-reference"),
+            ure::runtime::identity_digest(
+                "field-layout"),
+            7,
+            11);
     auto coherent = second;
     coherent.shard =
         ure::gpu::make_scheduled_shard_metadata(
@@ -504,7 +522,8 @@ static int test_multi_backend_metadata_roundtrip_and_merge() {
             frame,
             resources,
             coherent_schedule,
-            0);
+            0,
+            coherent_semantics);
     CHECK(throws_exception([&] {
         ure::gpu::write_framebuffer_file(
             frame_path, coherent);

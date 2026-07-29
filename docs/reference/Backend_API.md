@@ -89,8 +89,9 @@ acceleration without requiring callers to pass a larger legacy structure.
 V.11 adds no new renderer ABI. It freezes the existing acceleration behavior
 through `scripts/run_phase_v_validation_suite.ps1` and the stable
 `ure.phase_v.validation.v1` report. The report combines dense build/trace/VRAM,
-provider parity, cluster LoD, dynamic update and distributed v5
-resource/worker/cache provenance. The farm entry records explicit run, shard
+provider parity, cluster LoD, dynamic update and the distributed
+resource/worker/cache provenance introduced by v5 and retained by current v6.
+The farm entry records explicit run, shard
 and sample coverage and requires a clean source tree.
 
 ## Threading and ownership

@@ -48,7 +48,7 @@ identity belong above it.
 | T0-RES | Stable ResourceId, typed buffer/image/spectral layouts, residency, sparse tiles and upload plans own public semantics. CUDA native resources remain private; Vulkan and D3D12 implement typed buffer/image/sampler descriptors behind SDK-neutral headers. | Resource/descriptor model | T.4/T.7/T.9 complete |
 | T0-EXE | Stable execution graphs are validated and lowered against adapter limits before work. CUDA retains its private fast path; Vulkan and D3D12 record dependency-ordered command DAGs with native timelines/fences, transitions and typed descriptor binding. | Dispatch graph and backend executors | T.5-T.7/T.9 complete |
 | T0-KRN | Estimator/PDF versions and critical stage order are backend-neutral. Existing optimized `.cu` bodies remain a private CUDA fast path; pinned Slang emits Vulkan SPIR-V directly and normalized HLSL consumed by pinned DXC for D3D12 DXIL. | Kernel toolchain and semantic library | T.2/T.5-T.9 complete |
-| T0-MGPU | CUDA multi-GPU keeps private device ordinals and peer copies but obtains sample ranges from the SDK-free scheduler. Homogeneous and heterogeneous workers negotiate executable feature, precision, coherence, resident budget and shared semantic identity; distributed v5 provenance preserves backend/compiler/cache identity through merge. | Multi-adapter scheduler | T.10 complete |
+| T0-MGPU | CUDA multi-GPU keeps private device ordinals and peer copies but obtains sample ranges from the SDK-free scheduler. Homogeneous and heterogeneous workers negotiate executable feature, precision, coherence, resident budget and shared semantic identity; distributed v6 provenance preserves backend/compiler/cache identity and frame semantics through merge while retaining v4/v5 radiance read compatibility. | Multi-adapter scheduler | T.10 complete; W.11 extension |
 | T0-WAVE | Fraunhofer CUDA execution and the Vulkan reference propagation operator consume shared wave semantics and runtime-owned resources/timelines; D3D12 foundation validates the same Mueller/Stokes semantic module. | Wave operator/runtime integration | T.2/T.5-T.7/T.9 complete |
 | T0-ACC | SDK-free acceleration descriptors, selection policy, stable ray/hit layout and provider lifetime bridge bounded triangle BLAS/TLAS fixtures to Vulkan ray query and DXR inline ray query. Compute fallback and rejection are explicit. CUDA `world_hit` remains the production reference. | Acceleration-provider API | T.8/T.9 bridges complete; production construction/refit/compaction remains Phase V |
 | T0-DIAG | Public diagnostics are SDK-free. CUDA, Vulkan and D3D12 map native failures to structured runtime errors; Vulkan retains validation messages and D3D12 retains DRED breadcrumbs/page-fault diagnostics. | Runtime error and diagnostics | T.3/T.6/T.7/T.9 complete |
@@ -526,7 +526,7 @@ adapter instance ID. Identical devices using the same backend artifact may
 reuse native cache entries; different APIs, device models, drivers, compilers
 or artifacts cannot alias. The worker instance ID remains in provenance.
 
-Distributed range and framebuffer files use version 5 for execution metadata.
+T.10 introduced distributed range and framebuffer version 5 for execution metadata.
 Each contribution retains sample, spectral-domain and frame coverage together
 with worker and cache identity. Provenance is canonicalized before merge;
 overlapping samples or spectral partitions, forged cache keys, inaccurate
@@ -534,7 +534,11 @@ sample counts and feature/precision/coherence/semantic mismatches are rejected.
 Version 4 remains readable as legacy metadata, but a non-empty legacy
 accumulator cannot silently mix with versioned contributions. The RGB
 framebuffer explicitly rejects coherent-field metadata because complex field
-addition is a Phase W contract, not an intensity merge.
+addition is not an intensity merge. W.11 subsequently advanced the current
+writer to version 6 by adding explicit radiance/complex-field/mutual-intensity/
+coherent-realization semantics. Version 4 and version 5 radiance files remain
+readable. Coherent payloads use separate content-digested file magics and never
+enter the RGB merge.
 
 The existing CUDA private multi-GPU pass now calls the same scheduler before
 launch and maps its assigned ranges back to runtime-owned CUDA contexts. It

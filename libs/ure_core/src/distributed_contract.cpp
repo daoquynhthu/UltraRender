@@ -22,6 +22,61 @@ int checked_pixel_value_count(int width, int height) {
     return width * height * kChannels;
 }
 
+bool valid_realization_ranges(
+    const std::vector<DistributedRealizationRange>&
+        ranges,
+    bool require_nonempty) {
+    if (ranges.size() >
+            kMaxDistributedRealizationRanges ||
+        (require_nonempty && ranges.empty())) {
+        return false;
+    }
+    std::uint64_t previous_end = 0;
+    bool first = true;
+    for (const auto& range : ranges) {
+        if (range.count == 0 ||
+            range.start >
+                std::numeric_limits<std::uint64_t>::
+                    max() -
+                    range.count) {
+            return false;
+        }
+        if (!first &&
+            range.start < previous_end) {
+            return false;
+        }
+        previous_end = range.start + range.count;
+        first = false;
+    }
+    return true;
+}
+
+bool ranges_overlap(
+    const std::vector<DistributedRealizationRange>&
+        first,
+    const std::vector<DistributedRealizationRange>&
+        second) {
+    std::size_t left = 0;
+    std::size_t right = 0;
+    while (left < first.size() &&
+           right < second.size()) {
+        const auto& a = first[left];
+        const auto& b = second[right];
+        const std::uint64_t a_end =
+            a.start + a.count;
+        const std::uint64_t b_end =
+            b.start + b.count;
+        if (a_end <= b.start) {
+            ++left;
+        } else if (b_end <= a.start) {
+            ++right;
+        } else {
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 DistributedSpectralDomainShard make_spectral_domain_shard(int shard_id,
@@ -101,7 +156,9 @@ DistributedShardMetadata make_scheduled_shard_metadata(
     const DistributedFrameShard& frame,
     const resource::ResourceSetMetadata& resources,
     const runtime::MultiBackendSchedule& schedule,
-    std::size_t schedule_shard_index) {
+    std::size_t schedule_shard_index,
+    const DistributedFrameSemantics&
+        frame_semantics) {
     if (schedule_shard_index >= schedule.shards.size()) {
         throw std::out_of_range(
             "distributed schedule shard index out of range");
@@ -112,6 +169,7 @@ DistributedShardMetadata make_scheduled_shard_metadata(
     metadata.spectral = spectral;
     metadata.frame = frame;
     metadata.resources = resources;
+    metadata.frame_semantics = frame_semantics;
     metadata.execution.compatibility =
         schedule.compatibility;
     metadata.execution.shards.push_back({
@@ -127,6 +185,87 @@ DistributedShardMetadata make_scheduled_shard_metadata(
             "scheduled distributed shard metadata is invalid");
     }
     return metadata;
+}
+
+DistributedFrameSemantics
+make_complex_field_semantics(
+    const runtime::IdentityDigest&
+        phase_reference_identity,
+    const runtime::IdentityDigest&
+        field_layout_identity,
+    std::uint64_t source_id,
+    std::uint64_t group_id) {
+    DistributedFrameSemantics semantics;
+    semantics.kind =
+        DistributedFrameKind::ComplexField;
+    semantics.phase_reference_identity =
+        phase_reference_identity;
+    semantics.field_layout_identity =
+        field_layout_identity;
+    semantics.source_id = source_id;
+    semantics.group_id = group_id;
+    if (!validate_frame_semantics(
+            semantics,
+            runtime::CoherenceMode::CoherentField)) {
+        throw std::invalid_argument(
+            "invalid distributed complex-field semantics");
+    }
+    return semantics;
+}
+
+DistributedFrameSemantics
+make_coherent_realization_semantics(
+    const runtime::IdentityDigest&
+        phase_reference_identity,
+    const runtime::IdentityDigest&
+        field_layout_identity,
+    std::uint64_t source_id,
+    std::uint64_t group_id,
+    std::uint64_t realization_id) {
+    auto semantics = make_complex_field_semantics(
+        phase_reference_identity,
+        field_layout_identity,
+        source_id,
+        group_id);
+    semantics.kind =
+        DistributedFrameKind::CoherentRealization;
+    semantics.realization_id = realization_id;
+    semantics.realization_ranges.push_back({
+        realization_id,
+        1});
+    if (!validate_frame_semantics(
+            semantics,
+            runtime::CoherenceMode::CoherentField)) {
+        throw std::invalid_argument(
+            "invalid distributed coherent-realization semantics");
+    }
+    return semantics;
+}
+
+DistributedFrameSemantics
+make_mutual_intensity_semantics(
+    const runtime::IdentityDigest&
+        phase_reference_identity,
+    const runtime::IdentityDigest&
+        field_layout_identity,
+    std::uint64_t source_id,
+    std::uint64_t group_id,
+    DistributedRealizationRange range) {
+    auto semantics = make_complex_field_semantics(
+        phase_reference_identity,
+        field_layout_identity,
+        source_id,
+        group_id);
+    semantics.kind =
+        DistributedFrameKind::MutualIntensity;
+    semantics.realization_ranges.push_back(range);
+    if (!validate_frame_semantics(
+            semantics,
+            runtime::CoherenceMode::CoherentField)) {
+        throw std::invalid_argument(
+            "invalid distributed mutual-intensity semantics");
+    }
+    return semantics;
 }
 
 DistributedSampleRange make_sample_range(int node_id,
@@ -190,6 +329,91 @@ bool validate_frame_shard(const DistributedFrameShard& shard) {
            shard.frame_index < shard.frame_count;
 }
 
+bool validate_frame_semantics(
+    const DistributedFrameSemantics& semantics,
+    runtime::CoherenceMode coherence) {
+    if (semantics.schema_version !=
+        kDistributedFrameSemanticsVersion) {
+        return false;
+    }
+    const bool phase_empty =
+        runtime::identity_digest_empty(
+            semantics.phase_reference_identity);
+    const bool layout_empty =
+        runtime::identity_digest_empty(
+            semantics.field_layout_identity);
+    switch (semantics.kind) {
+    case DistributedFrameKind::Radiance:
+        return coherence ==
+                   runtime::CoherenceMode::
+                       IncoherentRadiance &&
+               phase_empty &&
+               layout_empty &&
+               semantics.source_id == 0 &&
+               semantics.group_id == 0 &&
+               semantics.realization_id == 0 &&
+               semantics.realization_ranges.empty();
+    case DistributedFrameKind::ComplexField:
+        return coherence ==
+                   runtime::CoherenceMode::
+                       CoherentField &&
+               !phase_empty &&
+               !layout_empty &&
+               semantics.realization_id == 0 &&
+               semantics.realization_ranges.empty();
+    case DistributedFrameKind::MutualIntensity:
+        return coherence ==
+                   runtime::CoherenceMode::
+                       CoherentField &&
+               !phase_empty &&
+               !layout_empty &&
+               semantics.realization_id == 0 &&
+               valid_realization_ranges(
+                   semantics.realization_ranges,
+                   true);
+    case DistributedFrameKind::
+        CoherentRealization:
+        return coherence ==
+                   runtime::CoherenceMode::
+                       CoherentField &&
+               !phase_empty &&
+               !layout_empty &&
+               semantics.realization_ranges.size() ==
+                   1 &&
+               valid_realization_ranges(
+                   semantics.realization_ranges,
+                   true) &&
+               semantics.realization_ranges[0].start ==
+                   semantics.realization_id &&
+               semantics.realization_ranges[0].count ==
+                   1;
+    }
+    return false;
+}
+
+bool compatible_frame_semantics_for_merge(
+    const DistributedFrameSemantics& accum,
+    const DistributedFrameSemantics& incoming) {
+    if (accum.schema_version !=
+            incoming.schema_version ||
+        accum.kind != incoming.kind ||
+        accum.phase_reference_identity !=
+            incoming.phase_reference_identity ||
+        accum.field_layout_identity !=
+            incoming.field_layout_identity ||
+        accum.source_id != incoming.source_id ||
+        accum.group_id != incoming.group_id) {
+        return false;
+    }
+    if (accum.kind ==
+        DistributedFrameKind::MutualIntensity) {
+        return !ranges_overlap(
+            accum.realization_ranges,
+            incoming.realization_ranges);
+    }
+    return accum == incoming;
+}
+
 static bool validate_resource_set_metadata(
     const resource::ResourceSetMetadata& resources) {
     const bool hash_empty = std::ranges::all_of(
@@ -208,6 +432,9 @@ static bool validate_resource_set_metadata(
 bool validate_shard_metadata(const DistributedShardMetadata& metadata) {
     if (!validate_spectral_domain_shard(metadata.spectral) ||
         !validate_frame_shard(metadata.frame) ||
+        !validate_frame_semantics(
+            metadata.frame_semantics,
+            metadata.execution.compatibility.coherence) ||
         !validate_resource_set_metadata(metadata.resources)) {
         return false;
     }
@@ -253,6 +480,9 @@ bool compatible_shard_metadata_for_merge(const DistributedShardMetadata& accum,
            accum.frame.frame_index == incoming.frame.frame_index &&
            accum.frame.frame_count == incoming.frame.frame_count &&
            accum.resources == incoming.resources &&
+           compatible_frame_semantics_for_merge(
+               accum.frame_semantics,
+               incoming.frame_semantics) &&
            runtime::compatible_merge_execution_metadata(
                accum.execution, incoming.execution);
 }
@@ -330,6 +560,13 @@ void merge_partial_framebuffer(DistributedFrameBuffer& accum,
     }
     if (!accum.data || !incoming.data) {
         throw std::invalid_argument("distributed framebuffer data must not be null");
+    }
+    if (accum.shard.frame_semantics.kind !=
+            DistributedFrameKind::Radiance ||
+        incoming.shard.frame_semantics.kind !=
+            DistributedFrameKind::Radiance) {
+        throw std::invalid_argument(
+            "RGB distributed framebuffer accepts radiance frames only");
     }
     if (accum.total_samples < 0 || incoming.total_samples < 0) {
         throw std::invalid_argument("distributed framebuffer sample counts must be non-negative");

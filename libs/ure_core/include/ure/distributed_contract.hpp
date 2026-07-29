@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "ure/render.hpp"
 #include "ure/resource_types.hpp"
@@ -10,6 +11,45 @@
 namespace ure::gpu {
 
 constexpr int kDistributedAggregateShardId = -1;
+constexpr std::uint32_t
+    kDistributedFrameSemanticsVersion = 1;
+constexpr std::size_t
+    kMaxDistributedRealizationRanges = 65536;
+
+enum class DistributedFrameKind : std::uint8_t {
+    Radiance,
+    ComplexField,
+    MutualIntensity,
+    CoherentRealization
+};
+
+struct DistributedRealizationRange {
+    std::uint64_t start = 0;
+    std::uint64_t count = 0;
+
+    bool operator==(
+        const DistributedRealizationRange&) const =
+        default;
+};
+
+struct DistributedFrameSemantics {
+    std::uint32_t schema_version =
+        kDistributedFrameSemanticsVersion;
+    DistributedFrameKind kind =
+        DistributedFrameKind::Radiance;
+    runtime::IdentityDigest
+        phase_reference_identity = {};
+    runtime::IdentityDigest field_layout_identity = {};
+    std::uint64_t source_id = 0;
+    std::uint64_t group_id = 0;
+    std::uint64_t realization_id = 0;
+    std::vector<DistributedRealizationRange>
+        realization_ranges;
+
+    bool operator==(
+        const DistributedFrameSemantics&) const =
+        default;
+};
 
 struct DistributedSpectralDomainShard {
     int shard_id = kDistributedAggregateShardId;
@@ -32,6 +72,7 @@ struct DistributedShardMetadata {
     DistributedFrameShard frame;
     resource::ResourceSetMetadata resources;
     runtime::MergeExecutionMetadata execution;
+    DistributedFrameSemantics frame_semantics;
 };
 
 // Describes which sample range a node should render.
@@ -81,11 +122,48 @@ DistributedShardMetadata make_scheduled_shard_metadata(
     const DistributedFrameShard& frame,
     const resource::ResourceSetMetadata& resources,
     const runtime::MultiBackendSchedule& schedule,
-    std::size_t schedule_shard_index);
+    std::size_t schedule_shard_index,
+    const DistributedFrameSemantics&
+        frame_semantics = {});
+
+DistributedFrameSemantics
+make_complex_field_semantics(
+    const runtime::IdentityDigest&
+        phase_reference_identity,
+    const runtime::IdentityDigest&
+        field_layout_identity,
+    std::uint64_t source_id,
+    std::uint64_t group_id);
+
+DistributedFrameSemantics
+make_coherent_realization_semantics(
+    const runtime::IdentityDigest&
+        phase_reference_identity,
+    const runtime::IdentityDigest&
+        field_layout_identity,
+    std::uint64_t source_id,
+    std::uint64_t group_id,
+    std::uint64_t realization_id);
+
+DistributedFrameSemantics
+make_mutual_intensity_semantics(
+    const runtime::IdentityDigest&
+        phase_reference_identity,
+    const runtime::IdentityDigest&
+        field_layout_identity,
+    std::uint64_t source_id,
+    std::uint64_t group_id,
+    DistributedRealizationRange range);
 
 bool validate_sample_range(const DistributedSampleRange& range);
 bool validate_spectral_domain_shard(const DistributedSpectralDomainShard& shard);
 bool validate_frame_shard(const DistributedFrameShard& shard);
+bool validate_frame_semantics(
+    const DistributedFrameSemantics& semantics,
+    runtime::CoherenceMode coherence);
+bool compatible_frame_semantics_for_merge(
+    const DistributedFrameSemantics& accum,
+    const DistributedFrameSemantics& incoming);
 bool validate_shard_metadata(const DistributedShardMetadata& metadata);
 bool validate_framebuffer_sample_provenance(
     const DistributedShardMetadata& metadata,

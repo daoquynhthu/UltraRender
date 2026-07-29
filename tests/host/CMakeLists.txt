@@ -188,6 +188,16 @@ add_executable(test_distributed_file_io test_distributed_file_io.cpp)
 target_link_libraries(test_distributed_file_io PRIVATE ure_core ure_diag)
 add_test(NAME test_distributed_file_io COMMAND test_distributed_file_io)
 
+add_executable(
+    test_distributed_wave_io
+    test_distributed_wave_io.cpp)
+target_link_libraries(
+    test_distributed_wave_io
+    PRIVATE ure_core ure_diag)
+add_test(
+    NAME test_distributed_wave_io
+    COMMAND test_distributed_wave_io)
+
 set(CUDA_BACKEND_HOST_TESTS
     test_gltf_frontend
     test_materialx_io
