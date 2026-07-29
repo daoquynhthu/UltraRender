@@ -583,14 +583,29 @@ __global__ __launch_bounds__(256) void extend_shadow_kernel(
     GpuVec3 rgb = xyz_to_rgb(xyz);
 
     float max_val = 1000.0f;
+    const float peak =
+        fmaxf(rgb.x, fmaxf(rgb.y, rgb.z));
+    const float diffraction_scale =
+        peak > max_val ? max_val / peak : 1.0f;
     rgb.x = fminf(rgb.x, max_val);
     rgb.y = fminf(rgb.y, max_val);
     rgb.z = fminf(rgb.z, max_val);
 
     if (isfinite(rgb.x) && isfinite(rgb.y) && isfinite(rgb.z)) {
-        atomicAdd(&accum_buffer[pixel_index].x, rgb.x);
-        atomicAdd(&accum_buffer[pixel_index].y, rgb.y);
-        atomicAdd(&accum_buffer[pixel_index].z, rgb.z);
+        if (diffraction_film_enabled(scene)) {
+            accumulate_diffraction_spectrum(
+                scene,
+                pixel_index,
+                radiance,
+                spectral_mode,
+                active_channel,
+                wavelength_pdf,
+                diffraction_scale);
+        } else {
+            atomicAdd(&accum_buffer[pixel_index].x, rgb.x);
+            atomicAdd(&accum_buffer[pixel_index].y, rgb.y);
+            atomicAdd(&accum_buffer[pixel_index].z, rgb.z);
+        }
         store_restir_di_visible_candidate(scene, shadow_queue, idx, rgb);
         if (scene.path_guiding_light_weights &&
             shadow_queue.light_list_indices &&
@@ -917,9 +932,19 @@ __global__ __launch_bounds__(256) void shade_kernel(
         GpuVec3 rgb = xyz_to_rgb(xyz);
 
         if (isfinite(rgb.x) && isfinite(rgb.y) && isfinite(rgb.z)) {
-            atomicAdd(&accum_buffer[pixel_index].x, rgb.x);
-            atomicAdd(&accum_buffer[pixel_index].y, rgb.y);
-            atomicAdd(&accum_buffer[pixel_index].z, rgb.z);
+            if (diffraction_film_enabled(scene)) {
+                accumulate_diffraction_spectrum(
+                    scene,
+                    pixel_index,
+                    contribution,
+                    current_queue.spectral_modes[idx],
+                    current_queue.active_channels[idx],
+                    current_queue.wavelength_pdfs[idx]);
+            } else {
+                atomicAdd(&accum_buffer[pixel_index].x, rgb.x);
+                atomicAdd(&accum_buffer[pixel_index].y, rgb.y);
+                atomicAdd(&accum_buffer[pixel_index].z, rgb.z);
+            }
         }
 
         if (depth == 0) {
@@ -1132,18 +1157,36 @@ __global__ __launch_bounds__(256) void shade_kernel(
                 current_queue.wavelength_pdfs[idx],
                 current_queue.spectral_modes[idx]);
             GpuVec3 rgb = xyz_to_rgb(xyz);
+            float diffraction_scale = 1.0f;
 
             if (depth > 0) {
                 float max_radiance = 1000.0f;
+                const float peak =
+                    fmaxf(rgb.x, fmaxf(rgb.y, rgb.z));
+                if (peak > max_radiance) {
+                    diffraction_scale =
+                        max_radiance / peak;
+                }
                 if (rgb.x > max_radiance) rgb.x = max_radiance;
                 if (rgb.y > max_radiance) rgb.y = max_radiance;
                  if (rgb.z > max_radiance) rgb.z = max_radiance;
             }
 
             if (isfinite(rgb.x) && isfinite(rgb.y) && isfinite(rgb.z)) {
-                atomicAdd(&accum_buffer[pixel_index].x, rgb.x);
-                atomicAdd(&accum_buffer[pixel_index].y, rgb.y);
-                atomicAdd(&accum_buffer[pixel_index].z, rgb.z);
+                if (diffraction_film_enabled(scene)) {
+                    accumulate_diffraction_spectrum(
+                        scene,
+                        pixel_index,
+                        contribution,
+                        current_queue.spectral_modes[idx],
+                        current_queue.active_channels[idx],
+                        current_queue.wavelength_pdfs[idx],
+                        diffraction_scale);
+                } else {
+                    atomicAdd(&accum_buffer[pixel_index].x, rgb.x);
+                    atomicAdd(&accum_buffer[pixel_index].y, rgb.y);
+                    atomicAdd(&accum_buffer[pixel_index].z, rgb.z);
+                }
             }
         }
     }

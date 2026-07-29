@@ -20,6 +20,17 @@ __global__ __launch_bounds__(256) void resolve_framebuffer_kernel(
     int width,
     int height
 );
+__global__ __launch_bounds__(256)
+void resolve_diffraction_framebuffer_kernel(
+    const GpuVec3* spectral_accumulation,
+    const float* psf_weights,
+    const float* psf_prefix,
+    const int* sample_counts,
+    GpuVec3* output,
+    int width,
+    int height,
+    int radius_pixels,
+    int wavelength_count);
 
 __global__ __launch_bounds__(256) void fxaa_kernel(
     GpuVec3* output,

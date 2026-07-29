@@ -2,25 +2,27 @@
 
 Document status: current capability boundary
 
-Last reviewed: 2026-07-15
+Last reviewed: 2026-07-29
 
-Phase W is not the active construction phase. Existing reference/oracle work is retained, but new production integration is frozen until the authoritative queue reaches W. The current renderer must be described as a spectral/polarimetric radiometric path tracer, not as a general wave-optics renderer.
+Phase W is active. W.2 integrates an explicitly enabled incoherent diffraction camera into the CUDA wavefront film, while the ordinary renderer remains a spectral/polarimetric radiometric path tracer. This does not make UltraRender a general coherent wave-optics renderer.
 
 ## Implemented reference and contract work
 
 | Area | Current evidence | Scope |
 |---|---|---|
-| Configuration gates | `WaveOpticsConfig` reaches C++, JSON/CLI, C ABI and pyure | Unsupported production modes are rejected before rendering |
+| Configuration gates | `WaveOpticsConfig` reaches C++, JSON/CLI, versioned native schema, C ABI v2 and pyure | Unsupported modes, optics, budgets and integrator combinations reject before GPU allocation |
 | Local complex boundaries | complex Fresnel and thin-film helpers feed power/Mueller evaluation | Local boundary interference only; no global phase transport |
 | Diffraction references | circular Airy PSF, encircled energy, diffraction MTF, pupil/defocus, slit/aperture/grating and knife-edge references | Host correctness oracles, not scene-integrated production effects |
 | Complex field carriers | `ComplexSpectrum`, `JonesSpectrum`, `CoherenceMetadata`, `ComplexFieldFilm`, `WaveFieldGrid` | Host-side mathematical contracts |
 | Propagation references | direct Fraunhofer, Fresnel, angular-spectrum, Huygens–Fresnel and Rayleigh–Sommerfeld operators | Direct/reference implementations; not a scalable general backend |
 | CUDA reference | direct Fraunhofer GPU DFT path | Reference parity path, not optimized FFT/tiling infrastructure |
-| Diffraction camera plan | feature-gated `DiffractionCameraPlan` and PSF construction | Planning/reference boundary; main GPU film is still radiometric |
+| Diffraction camera | normalized wavelength PSF bank, circular or regular-blade pupil, defocus phase, 2x2 sensor-pixel integration and CUDA spectral film resolve | Production CUDA wavefront boundary; explicitly enabled and incoherent |
 
 ## Production renderer boundary
 
-The production wavefront queues transport spectral radiometric throughput and Stokes components. They do not transport an absolute complex phase shared across independent paths. The production framebuffer and distributed merge accumulate radiometric values, not coherent field samples.
+The production wavefront queues transport spectral radiometric throughput and Stokes components. With camera diffraction enabled, terminal radiometric contributions are converted at their sampled wavelengths and accumulated into a bounded wavelength-binned XYZ film before wavelength-specific PSF convolution. The bin interpolation applies only to the PSF, so coarse wavelength banks do not approximate the CIE response. The material path is unchanged, Beauty is filtered, and geometric AOVs remain unfiltered. With the feature disabled, the original RGB accumulation path is retained.
+
+The diffraction film is currently limited to the CUDA `Wavefront` integrator. Path guiding, ReSTIR, BDPT, VCM, specular-manifold and MLT combinations reject rather than applying a post-hoc RGB blur. PSF banks cover 360–830 nm, interpolate each exact-wavelength XYZ contribution between adjacent kernels, normalize every wavelength kernel and renormalize each source footprint against valid sensor support at image edges. C ABI optical parameters use `ure_wave_optics_config_v2_t`; the original structure remains layout-compatible and selects documented defaults.
 
 Consequently, the following are not implemented production capabilities:
 
@@ -28,7 +30,6 @@ Consequently, the following are not implemented production capabilities:
 - coherent grouping and mutual-intensity/cross-spectral-density models;
 - a complex-field GPU path queue and coherent film;
 - distributed coherent merge with phase-reference guarantees;
-- diffraction-camera integration in the main rendering pipeline;
 - scalable FFT, tiling, out-of-core or multi-GPU propagation backends;
 - diffractive materials, gratings and holograms as first-class scene scattering operators;
 - birefringent/modal propagation and tensor optical materials;
@@ -50,7 +51,7 @@ Before claiming production wave-optics support, the project must provide evidenc
 1. explicit complex/Jones path state and phase-reference conventions;
 2. source coherence and realization grouping;
 3. propagation/operator normalization against independent oracles;
-4. scene-integrated diffraction camera and complex-field film behavior;
+4. complex-field path and film behavior beyond the completed incoherent diffraction camera;
 5. coherent/incoherent accumulation and distributed merge order;
 6. wavelength, polarization and energy normalization across adapters and resources;
 7. memory budgets, performance measurements and failure behavior on supported hardware;
@@ -60,7 +61,8 @@ Before claiming production wave-optics support, the project must provide evidenc
 
 ```powershell
 ctest --test-dir build_modular_x64 -C Release -R "test_wave_optics|gpu_wave_optics|gpu_polarization" --output-on-failure
+.\scripts\check_phase_w2_static.ps1
 .\scripts\check_physics_optics.ps1
 ```
 
-Passing these tests proves the covered contracts and references only. It does not establish a complete wave-optics production renderer.
+Passing these tests proves the covered diffraction-camera, contract and reference boundaries only. It does not establish a complete coherent wave-optics production renderer.

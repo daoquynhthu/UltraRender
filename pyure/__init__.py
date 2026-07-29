@@ -239,6 +239,23 @@ class _WaveOpticsConfig(ctypes.Structure):
     ]
 
 
+class _WaveOpticsConfigV2(ctypes.Structure):
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("version", ctypes.c_uint32),
+        ("base", _WaveOpticsConfig),
+        ("camera_aperture_diameter_m", ctypes.c_double),
+        ("camera_focal_length_m", ctypes.c_double),
+        ("sensor_pixel_pitch_m", ctypes.c_double),
+        ("camera_defocus_waves_at_edge", ctypes.c_double),
+        ("camera_aperture_rotation_rad", ctypes.c_double),
+        ("camera_aperture_blade_count", ctypes.c_int),
+        ("camera_psf_radius_pixels", ctypes.c_int),
+        ("camera_wavelength_bin_count", ctypes.c_int),
+        ("camera_pupil_sample_count", ctypes.c_int),
+    ]
+
+
 class _IntegratorConfig(ctypes.Structure):
     _fields_ = [
         ("mode", ctypes.c_int),
@@ -413,6 +430,11 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(_WaveOpticsConfig),
     ]
     lib.ure_session_create_wave_config.restype = ctypes.c_void_p
+    lib.ure_session_create_wave_config_v2.argtypes = [
+        ctypes.POINTER(_SpectralConfig),
+        ctypes.POINTER(_WaveOpticsConfigV2),
+    ]
+    lib.ure_session_create_wave_config_v2.restype = ctypes.c_void_p
     lib.ure_session_create_integrator_config.argtypes = [
         ctypes.POINTER(_SpectralConfig),
         ctypes.POINTER(_WaveOpticsConfig),
@@ -434,6 +456,14 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(_AccelerationConfig),
     ]
     lib.ure_session_create_execution_config.restype = ctypes.c_void_p
+    lib.ure_session_create_execution_config_v2.argtypes = [
+        ctypes.POINTER(_SpectralConfig),
+        ctypes.POINTER(_WaveOpticsConfigV2),
+        ctypes.POINTER(_IntegratorConfig),
+        ctypes.POINTER(_BackendConfig),
+        ctypes.POINTER(_AccelerationConfig),
+    ]
+    lib.ure_session_create_execution_config_v2.restype = ctypes.c_void_p
     lib.ure_backend_adapter_count.argtypes = [ctypes.c_int]
     lib.ure_backend_adapter_count.restype = ctypes.c_int
     lib.ure_backend_get_adapter_info.argtypes = [
@@ -552,6 +582,35 @@ def _wave_optics_mode_id(mode: str) -> int:
         return modes[mode]
     except KeyError as exc:
         raise ValueError(f"unsupported wave optics mode: {mode}") from exc
+
+
+def _wave_optics_config_v2(
+    base: _WaveOpticsConfig,
+    aperture_diameter_m: float,
+    focal_length_m: float,
+    sensor_pixel_pitch_m: float,
+    defocus_waves_at_edge: float,
+    aperture_rotation_rad: float,
+    aperture_blade_count: int,
+    psf_radius_pixels: int,
+    wavelength_bin_count: int,
+    pupil_sample_count: int,
+) -> _WaveOpticsConfigV2:
+    config = _WaveOpticsConfigV2(
+        ctypes.sizeof(_WaveOpticsConfigV2),
+        2,
+        base,
+        float(aperture_diameter_m),
+        float(focal_length_m),
+        float(sensor_pixel_pitch_m),
+        float(defocus_waves_at_edge),
+        float(aperture_rotation_rad),
+        int(aperture_blade_count),
+        int(psf_radius_pixels),
+        int(wavelength_bin_count),
+        int(pupil_sample_count),
+    )
+    return config
 
 
 def _integrator_mode_id(mode: str) -> int:
@@ -729,6 +788,15 @@ class RenderSession:
         specular_manifold: bool = False,
         local_fullwave: bool = False,
         allow_wave_preview_degradation: bool = False,
+        camera_aperture_diameter_m: float = 10.0e-3,
+        camera_focal_length_m: float = 50.0e-3,
+        sensor_pixel_pitch_m: float = 4.0e-6,
+        camera_defocus_waves_at_edge: float = 0.0,
+        camera_aperture_rotation_rad: float = 0.0,
+        camera_aperture_blade_count: int = 0,
+        camera_psf_radius_pixels: int = 8,
+        camera_wavelength_bin_count: int = 16,
+        camera_pupil_sample_count: int = 32,
         integrator_mode: str = "wavefront",
         integrator_sampler: str = "default",
         integrator_quality_preset: str = "default",
@@ -782,6 +850,10 @@ class RenderSession:
             or local_fullwave
             or allow_wave_preview_degradation
         )
+        diffraction_requested = (
+            wave_optics_mode == "camera_diffraction"
+            or camera_diffraction
+        )
         integrator_requested = (
             integrator_mode != "wavefront"
             or integrator_sampler != "default"
@@ -834,6 +906,18 @@ class RenderSession:
                 int(specular_manifold),
                 int(local_fullwave),
                 int(allow_wave_preview_degradation),
+            )
+            wave_v2 = _wave_optics_config_v2(
+                wave,
+                camera_aperture_diameter_m,
+                camera_focal_length_m,
+                sensor_pixel_pitch_m,
+                camera_defocus_waves_at_edge,
+                camera_aperture_rotation_rad,
+                camera_aperture_blade_count,
+                camera_psf_radius_pixels,
+                camera_wavelength_bin_count,
+                camera_pupil_sample_count,
             )
             adapter_id_bytes = (
                 backend_adapter_id.encode() if backend_adapter_id else None
@@ -907,13 +991,22 @@ class RenderSession:
                     0.9,
                 )
                 integrator_ptr = ctypes.byref(integrator)
-            handle = native().ure_session_create_execution_config(
-                ctypes.byref(cfg),
-                ctypes.byref(wave),
-                integrator_ptr,
-                ctypes.byref(backend_config),
-                ctypes.byref(acceleration_config),
-            )
+            if diffraction_requested:
+                handle = native().ure_session_create_execution_config_v2(
+                    ctypes.byref(cfg),
+                    ctypes.byref(wave_v2),
+                    integrator_ptr,
+                    ctypes.byref(backend_config),
+                    ctypes.byref(acceleration_config),
+                )
+            else:
+                handle = native().ure_session_create_execution_config(
+                    ctypes.byref(cfg),
+                    ctypes.byref(wave),
+                    integrator_ptr,
+                    ctypes.byref(backend_config),
+                    ctypes.byref(acceleration_config),
+                )
         elif integrator_requested:
             cfg = _SpectralConfig(
                 int(domain_bins),
@@ -932,6 +1025,18 @@ class RenderSession:
                 int(specular_manifold),
                 int(local_fullwave),
                 int(allow_wave_preview_degradation),
+            )
+            wave_v2 = _wave_optics_config_v2(
+                wave,
+                camera_aperture_diameter_m,
+                camera_focal_length_m,
+                sensor_pixel_pitch_m,
+                camera_defocus_waves_at_edge,
+                camera_aperture_rotation_rad,
+                camera_aperture_blade_count,
+                camera_psf_radius_pixels,
+                camera_wavelength_bin_count,
+                camera_pupil_sample_count,
             )
             integrator = _IntegratorConfig(
                 _integrator_mode_id(integrator_mode),
@@ -982,11 +1087,20 @@ class RenderSession:
                 0.01,
                 0.9,
             )
-            handle = native().ure_session_create_integrator_config(
-                ctypes.byref(cfg),
-                ctypes.byref(wave),
-                ctypes.byref(integrator),
-            )
+            if diffraction_requested:
+                handle = native().ure_session_create_execution_config_v2(
+                    ctypes.byref(cfg),
+                    ctypes.byref(wave_v2),
+                    ctypes.byref(integrator),
+                    None,
+                    None,
+                )
+            else:
+                handle = native().ure_session_create_integrator_config(
+                    ctypes.byref(cfg),
+                    ctypes.byref(wave),
+                    ctypes.byref(integrator),
+                )
         elif wave_requested:
             cfg = _SpectralConfig(
                 int(domain_bins),
@@ -1006,7 +1120,28 @@ class RenderSession:
                 int(local_fullwave),
                 int(allow_wave_preview_degradation),
             )
-            handle = native().ure_session_create_wave_config(ctypes.byref(cfg), ctypes.byref(wave))
+            if diffraction_requested:
+                wave_v2 = _wave_optics_config_v2(
+                    wave,
+                    camera_aperture_diameter_m,
+                    camera_focal_length_m,
+                    sensor_pixel_pitch_m,
+                    camera_defocus_waves_at_edge,
+                    camera_aperture_rotation_rad,
+                    camera_aperture_blade_count,
+                    camera_psf_radius_pixels,
+                    camera_wavelength_bin_count,
+                    camera_pupil_sample_count,
+                )
+                handle = native().ure_session_create_wave_config_v2(
+                    ctypes.byref(cfg),
+                    ctypes.byref(wave_v2),
+                )
+            else:
+                handle = native().ure_session_create_wave_config(
+                    ctypes.byref(cfg),
+                    ctypes.byref(wave),
+                )
         elif domain_bins > 0 or packet_lanes > 0 or max_resident_mb > 0:
             cfg = _SpectralConfig(
                 int(domain_bins),
@@ -1269,6 +1404,15 @@ def create_session(
     specular_manifold: bool = False,
     local_fullwave: bool = False,
     allow_wave_preview_degradation: bool = False,
+    camera_aperture_diameter_m: float = 10.0e-3,
+    camera_focal_length_m: float = 50.0e-3,
+    sensor_pixel_pitch_m: float = 4.0e-6,
+    camera_defocus_waves_at_edge: float = 0.0,
+    camera_aperture_rotation_rad: float = 0.0,
+    camera_aperture_blade_count: int = 0,
+    camera_psf_radius_pixels: int = 8,
+    camera_wavelength_bin_count: int = 16,
+    camera_pupil_sample_count: int = 32,
     integrator_mode: str = "wavefront",
     integrator_sampler: str = "default",
     integrator_quality_preset: str = "default",
@@ -1326,6 +1470,15 @@ def create_session(
         specular_manifold=specular_manifold,
         local_fullwave=local_fullwave,
         allow_wave_preview_degradation=allow_wave_preview_degradation,
+        camera_aperture_diameter_m=camera_aperture_diameter_m,
+        camera_focal_length_m=camera_focal_length_m,
+        sensor_pixel_pitch_m=sensor_pixel_pitch_m,
+        camera_defocus_waves_at_edge=camera_defocus_waves_at_edge,
+        camera_aperture_rotation_rad=camera_aperture_rotation_rad,
+        camera_aperture_blade_count=camera_aperture_blade_count,
+        camera_psf_radius_pixels=camera_psf_radius_pixels,
+        camera_wavelength_bin_count=camera_wavelength_bin_count,
+        camera_pupil_sample_count=camera_pupil_sample_count,
         integrator_mode=integrator_mode,
         integrator_sampler=integrator_sampler,
         integrator_quality_preset=integrator_quality_preset,

@@ -215,6 +215,13 @@ struct GpuContext {
     float* d_wavelength_proposal_cdf = nullptr;
     float* d_wavelength_proposal_pdf = nullptr;
     int wavelength_proposal_count = 0;
+    GpuVec3* d_diffraction_spectral_accum = nullptr;
+    float* d_diffraction_psf_weights = nullptr;
+    float* d_diffraction_psf_prefix = nullptr;
+    int diffraction_radius_pixels = 0;
+    int diffraction_wavelength_count = 0;
+    float diffraction_wavelength_min_nm = 0.0f;
+    float diffraction_wavelength_max_nm = 0.0f;
 
     int material_count = 0;
     int sphere_count = 0;

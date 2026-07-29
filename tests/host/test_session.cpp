@@ -1081,6 +1081,43 @@ static int test_c_session_lifecycle() {
     CHECK(preview_only_session != nullptr);
     ure_session_destroy(preview_only_session);
 
+    ure_wave_optics_config_t diffraction_wave_config{};
+    diffraction_wave_config.mode =
+        URE_WAVE_OPTICS_CAMERA_DIFFRACTION;
+    diffraction_wave_config.camera_diffraction_enabled = 1;
+    ure_session_t* diffraction_wave_session =
+        ure_session_create_wave_config(
+            &spectral_config,
+            &diffraction_wave_config);
+    CHECK(diffraction_wave_session != nullptr);
+    ure_session_destroy(diffraction_wave_session);
+
+    ure_wave_optics_config_v2_t diffraction_v2{};
+    diffraction_v2.struct_size =
+        sizeof(diffraction_v2);
+    diffraction_v2.version = 2;
+    diffraction_v2.base = diffraction_wave_config;
+    diffraction_v2.camera_aperture_diameter_m =
+        8.0e-3;
+    diffraction_v2.camera_focal_length_m =
+        50.0e-3;
+    diffraction_v2.sensor_pixel_pitch_m =
+        4.0e-6;
+    diffraction_v2.camera_aperture_blade_count = 6;
+    diffraction_v2.camera_psf_radius_pixels = 6;
+    diffraction_v2.camera_wavelength_bin_count = 12;
+    diffraction_v2.camera_pupil_sample_count = 24;
+    ure_session_t* diffraction_v2_session =
+        ure_session_create_wave_config_v2(
+            &spectral_config,
+            &diffraction_v2);
+    CHECK(diffraction_v2_session != nullptr);
+    ure_session_destroy(diffraction_v2_session);
+    diffraction_v2.version = 1;
+    CHECK(ure_session_create_wave_config_v2(
+              &spectral_config,
+              &diffraction_v2) == nullptr);
+
     ure_wave_optics_config_t coherent_wave_config{};
     coherent_wave_config.mode = URE_WAVE_OPTICS_COHERENT_FIELD;
     coherent_wave_config.coherent_field_enabled = 1;

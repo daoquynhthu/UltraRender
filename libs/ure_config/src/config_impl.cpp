@@ -87,8 +87,29 @@ RenderConfig load_config(const std::string& path) {
         if (j.contains("wave_optics")) {
             auto& w = j["wave_optics"];
             if (w.contains("mode")) cfg.wave_optics.mode = w["mode"].get<std::string>();
-            if (w.contains("camera_diffraction") && w["camera_diffraction"].contains("enabled"))
-                cfg.wave_optics.camera_diffraction_enabled = w["camera_diffraction"]["enabled"].get<bool>();
+            if (w.contains("camera_diffraction")) {
+                auto& camera = w["camera_diffraction"];
+                if (camera.contains("enabled"))
+                    cfg.wave_optics.camera_diffraction_enabled = camera["enabled"].get<bool>();
+                if (camera.contains("aperture_diameter_m"))
+                    cfg.wave_optics.camera_aperture_diameter_m = camera["aperture_diameter_m"].get<double>();
+                if (camera.contains("focal_length_m"))
+                    cfg.wave_optics.camera_focal_length_m = camera["focal_length_m"].get<double>();
+                if (camera.contains("sensor_pixel_pitch_m"))
+                    cfg.wave_optics.sensor_pixel_pitch_m = camera["sensor_pixel_pitch_m"].get<double>();
+                if (camera.contains("defocus_waves_at_edge"))
+                    cfg.wave_optics.camera_defocus_waves_at_edge = camera["defocus_waves_at_edge"].get<double>();
+                if (camera.contains("aperture_rotation_rad"))
+                    cfg.wave_optics.camera_aperture_rotation_rad = camera["aperture_rotation_rad"].get<double>();
+                if (camera.contains("aperture_blade_count"))
+                    cfg.wave_optics.camera_aperture_blade_count = camera["aperture_blade_count"].get<int>();
+                if (camera.contains("psf_radius_pixels"))
+                    cfg.wave_optics.camera_psf_radius_pixels = camera["psf_radius_pixels"].get<int>();
+                if (camera.contains("wavelength_bin_count"))
+                    cfg.wave_optics.camera_wavelength_bin_count = camera["wavelength_bin_count"].get<int>();
+                if (camera.contains("pupil_sample_count"))
+                    cfg.wave_optics.camera_pupil_sample_count = camera["pupil_sample_count"].get<int>();
+            }
             if (w.contains("coherent_field") && w["coherent_field"].contains("enabled"))
                 cfg.wave_optics.coherent_field_enabled = w["coherent_field"]["enabled"].get<bool>();
             if (w.contains("partial_coherence") && w["partial_coherence"].contains("enabled"))
@@ -232,6 +253,15 @@ CliResult parse_cli(int argc, char** argv) {
     bool wave_specular_manifold = false;
     bool wave_local_fullwave = false;
     bool wave_preview_degradation = false;
+    double wave_camera_aperture_diameter_m = 0.0;
+    double wave_camera_focal_length_m = 0.0;
+    double wave_sensor_pixel_pitch_m = 0.0;
+    double wave_camera_defocus_waves = 0.0;
+    double wave_camera_aperture_rotation_rad = 0.0;
+    int wave_camera_aperture_blades = 0;
+    int wave_camera_psf_radius = 0;
+    int wave_camera_wavelength_bins = 0;
+    int wave_camera_pupil_samples = 0;
     bool path_guiding = false;
     double path_guiding_light_mixture = -1.0;
     double path_guiding_learning_rate = -1.0;
@@ -336,6 +366,42 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_flag("--enable-specular-manifold", wave_specular_manifold, "Enable specular manifold/refractive direct-light paths");
     render_cmd->add_flag("--enable-local-fullwave", wave_local_fullwave, "Enable local full-wave solver coupling");
     render_cmd->add_flag("--allow-wave-preview-degradation", wave_preview_degradation, "Allow explicit non-physical preview degradation for unsupported wave nodes");
+    auto* wave_camera_aperture_option = render_cmd->add_option(
+        "--camera-aperture-diameter-m",
+        wave_camera_aperture_diameter_m,
+        "Diffraction camera aperture diameter in metres");
+    auto* wave_camera_focal_option = render_cmd->add_option(
+        "--camera-focal-length-m",
+        wave_camera_focal_length_m,
+        "Diffraction camera focal length in metres");
+    auto* wave_sensor_pitch_option = render_cmd->add_option(
+        "--sensor-pixel-pitch-m",
+        wave_sensor_pixel_pitch_m,
+        "Diffraction camera sensor pixel pitch in metres");
+    auto* wave_camera_defocus_option = render_cmd->add_option(
+        "--camera-defocus-waves",
+        wave_camera_defocus_waves,
+        "Pupil-edge defocus in waves");
+    auto* wave_camera_rotation_option = render_cmd->add_option(
+        "--camera-aperture-rotation-rad",
+        wave_camera_aperture_rotation_rad,
+        "Regular aperture rotation in radians");
+    auto* wave_camera_blades_option = render_cmd->add_option(
+        "--camera-aperture-blades",
+        wave_camera_aperture_blades,
+        "Regular aperture blade count; zero selects a circle");
+    auto* wave_camera_radius_option = render_cmd->add_option(
+        "--camera-psf-radius",
+        wave_camera_psf_radius,
+        "Diffraction PSF radius in pixels");
+    auto* wave_camera_bins_option = render_cmd->add_option(
+        "--camera-wavelength-bins",
+        wave_camera_wavelength_bins,
+        "Diffraction spectral film wavelength bin count");
+    auto* wave_camera_pupil_option = render_cmd->add_option(
+        "--camera-pupil-samples",
+        wave_camera_pupil_samples,
+        "Pupil quadrature samples per dimension");
     render_cmd->add_flag("--enable-path-guiding", path_guiding, "Enable progressive path guiding for supported radiometric samplers");
     render_cmd->add_option("--path-guiding-light-mixture", path_guiding_light_mixture, "Mixture weight for guided direct-light sampling");
     render_cmd->add_option("--path-guiding-learning-rate", path_guiding_learning_rate, "Progressive path guiding light-weight update scale");
@@ -486,6 +552,24 @@ CliResult parse_cli(int argc, char** argv) {
         if (wave_specular_manifold) cfg.wave_optics.specular_manifold_enabled = true;
         if (wave_local_fullwave) cfg.wave_optics.local_fullwave_enabled = true;
         if (wave_preview_degradation) cfg.wave_optics.experimental_allow_preview_degradation = true;
+        if (wave_camera_aperture_option->count() > 0)
+            cfg.wave_optics.camera_aperture_diameter_m = wave_camera_aperture_diameter_m;
+        if (wave_camera_focal_option->count() > 0)
+            cfg.wave_optics.camera_focal_length_m = wave_camera_focal_length_m;
+        if (wave_sensor_pitch_option->count() > 0)
+            cfg.wave_optics.sensor_pixel_pitch_m = wave_sensor_pixel_pitch_m;
+        if (wave_camera_defocus_option->count() > 0)
+            cfg.wave_optics.camera_defocus_waves_at_edge = wave_camera_defocus_waves;
+        if (wave_camera_rotation_option->count() > 0)
+            cfg.wave_optics.camera_aperture_rotation_rad = wave_camera_aperture_rotation_rad;
+        if (wave_camera_blades_option->count() > 0)
+            cfg.wave_optics.camera_aperture_blade_count = wave_camera_aperture_blades;
+        if (wave_camera_radius_option->count() > 0)
+            cfg.wave_optics.camera_psf_radius_pixels = wave_camera_psf_radius;
+        if (wave_camera_bins_option->count() > 0)
+            cfg.wave_optics.camera_wavelength_bin_count = wave_camera_wavelength_bins;
+        if (wave_camera_pupil_option->count() > 0)
+            cfg.wave_optics.camera_pupil_sample_count = wave_camera_pupil_samples;
         if (path_guiding) cfg.path_guiding.enabled = true;
         if (path_guiding_light_mixture >= 0.0) cfg.path_guiding.light_mixture = path_guiding_light_mixture;
         if (path_guiding_learning_rate >= 0.0) cfg.path_guiding.learning_rate = path_guiding_learning_rate;

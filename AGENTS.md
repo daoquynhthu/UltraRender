@@ -52,7 +52,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | Q.0-Q.12 (Native Scene) | Done | Native schema/serialization, procedural/script, resources/solvers/simulation, tooling/adapters/cache/farm, validation suite |
 | T (Portable GPU Runtime) | Done | T.0-T.11 complete; portable runtime, optional backends, multi-backend scheduling and unified validation closed |
 | V (GPU Acceleration) | Done | V.0-V.11 complete; unified local/farm validation freezes construction, traversal, memory, parity, dynamic and distributed evidence |
-| W (Wave Optics Solver) | In progress | W.0/W.1 contracts and W.3/W.4/W.8 reference layers exist; W.2 GPU diffraction camera/film integration is the authoritative cursor |
+| W (Wave Optics Solver) | In progress | W.2 CUDA diffraction camera/film is complete; W.3/W.4/W.8 reference layers exist; W.5 diffractive material operators are the authoritative cursor |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -432,10 +432,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 38 | 2026-07-29 V.9 | Added physical-error cluster LoD selection | Shared host/CUDA selection evaluates ray footprint and camera/diffuse/glossy/specular/shadow/caustic path class against position, displacement, normal, opacity and spectral error while preserving resource boundaries and residency. A 256-ray CUDA gate proves unsafe preview proxies break every shadow/reflection visibility query while the physical selector preserves all exact results and still selects diffuse coarse LoD; cursor advanced to V.10. |
 | 39 | 2026-07-29 V.10 | Added dynamic and deforming geometry lifecycle | SDK-free planning classifies rigid, deforming and topology-changing resources into TLAS/BLAS refit, rebuild, cluster-bounds refit or recluster actions with capability-aware fail-loud policy. SceneDiff mesh mutations are validated and transactional; CUDA executes rigid refit/rebuild and conservative full BLAS/TLAS rebuild for deformation/topology, with an 8×8 depth-AOV correctness and timing report; cursor advanced to V.11. |
 | 40 | 2026-07-29 V.11 | Closed Phase V with unified acceleration validation | Stable local/farm reports aggregate dense build/trace/VRAM, async construction, four-provider parity, physical cluster LoD, dynamic updates and distributed v5 resource/worker/cache provenance. Negative report fixtures, five actual heterogeneous workers, static/documentation gates and Release 54/54 passed; cursor advanced to W.2. |
+| 41 | 2026-07-29 W.2 | Integrated the explicitly enabled diffraction camera into the CUDA wavefront film | Normalized 360–830 nm PSF banks cover circular and regular-blade pupils, defocus and sensor-pixel quadrature. Terminal spectral contributions accumulate before CIE conversion; unsupported wave/integrator combinations fail before allocation. JSON/CLI, native URSC, C ABI v2 and pyure propagate optics; Release 54/54 and W.2/Q.7/physics-optics/schema gates passed; cursor advanced to W.5. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, and Phase V are complete; the authoritative construction cursor is W.2.
+- Phase Q, Phase M, Phase R, Phase T, and Phase V are complete; Phase W.2 is complete and the authoritative construction cursor is W.5.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 2); a 2026-07-28 stress run on the 16 GiB CUDA 13 workstation reduced the three heaviest translation-unit critical path from about 602 seconds serial to 362 seconds, while depth 3 was slower. Host and unrelated targets remain globally parallel.

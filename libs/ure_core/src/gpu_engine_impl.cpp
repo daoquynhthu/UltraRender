@@ -492,11 +492,27 @@ public:
 private:
     void validate_wave_optics_support() const {
         if (wave_optics_is_radiometric_only(config_.wave_optics)) return;
-        if (config_.wave_optics.mode == WaveOpticsMode::CameraDiffraction ||
-            config_.wave_optics.camera_diffraction_enabled) {
-            throw std::runtime_error("camera diffraction GPU film is not implemented; build a ure::wave::DiffractionCameraPlan before GPU integration");
+        if (wave::is_valid_diffraction_camera_config(
+                config_.wave_optics) &&
+            !config_.wave_optics.coherent_field_enabled &&
+            !config_.wave_optics.partial_coherence_enabled &&
+            !config_.wave_optics.diffractive_materials_enabled &&
+            !config_.wave_optics.fluorescence_enabled &&
+            !config_.wave_optics.specular_manifold_enabled &&
+            !config_.wave_optics.local_fullwave_enabled &&
+            config_.integrator.mode ==
+                IntegratorMode::Wavefront &&
+            !config_.path_guiding.enabled &&
+            !config_.restir_di.enabled &&
+            !config_.restir_pt.enabled &&
+            !config_.specular_manifold.enabled &&
+            !config_.bidirectional.enabled &&
+            !config_.vcm.enabled &&
+            !config_.mlt.enabled) {
+            return;
         }
-        throw std::runtime_error("requested wave optics mode is not implemented by the GPU radiometric renderer");
+        throw std::runtime_error(
+            "requested wave-optics configuration is unsupported by the GPU renderer");
     }
 
     void load_compiled_scene(const CompiledGpuScene& compiled) {

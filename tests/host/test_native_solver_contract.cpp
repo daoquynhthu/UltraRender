@@ -81,6 +81,63 @@ int main() {
     check(!compile_solver_contract(backend, registry).ok(), "unsupported backend silently degraded");
     auto coherent = value; coherent.wave_optics.mode = WaveOpticsMode::CoherentField; coherent.wave_optics.coherent_field_enabled = true; coherent.coherent_merge = CoherentMergeMode::ComplexAmplitude;
     check(!compile_solver_contract(coherent, registry).ok(), "unsupported coherent mode silently degraded");
+    auto diffraction = value;
+    diffraction.wave_optics.mode =
+        WaveOpticsMode::CameraDiffraction;
+    diffraction.wave_optics.camera_diffraction_enabled =
+        true;
+    diffraction.wave_optics.camera_aperture_diameter_m =
+        0.008;
+    diffraction.wave_optics.camera_focal_length_m =
+        0.05;
+    diffraction.wave_optics.sensor_pixel_pitch_m =
+        4.0e-6;
+    diffraction.wave_optics.camera_defocus_waves_at_edge =
+        0.5;
+    diffraction.wave_optics.camera_aperture_rotation_rad =
+        0.25;
+    diffraction.wave_optics.camera_aperture_blade_count =
+        7;
+    diffraction.wave_optics.camera_psf_radius_pixels = 6;
+    diffraction.wave_optics.camera_wavelength_bin_count =
+        12;
+    diffraction.wave_optics.camera_pupil_sample_count = 24;
+    const auto diffraction_binary =
+        read_solver_contract_binary(
+            write_solver_contract_binary(diffraction));
+    check(
+        diffraction_binary.ok() &&
+        diffraction_binary.value->wave_optics.
+            camera_aperture_blade_count == 7 &&
+        diffraction_binary.value->wave_optics.
+            camera_wavelength_bin_count == 12 &&
+        diffraction_binary.value->wave_optics.
+            camera_defocus_waves_at_edge == 0.5,
+        "diffraction camera optics did not roundtrip");
+    const auto diffraction_compiled =
+        compile_solver_contract(diffraction, registry);
+    check(
+        diffraction_compiled.ok() &&
+        diffraction_compiled.config &&
+        diffraction_compiled.config->wave_optics.
+            camera_psf_radius_pixels == 6,
+        "diffraction camera runtime mapping failed");
+    auto invalid_diffraction = diffraction;
+    invalid_diffraction.wave_optics.
+        camera_aperture_blade_count = 2;
+    check(
+        !compile_solver_contract(
+             invalid_diffraction,
+             registry).ok(),
+        "invalid diffraction camera optics were accepted");
+    auto mismatched_diffraction = value;
+    mismatched_diffraction.wave_optics.
+        camera_diffraction_enabled = true;
+    check(
+        !compile_solver_contract(
+             mismatched_diffraction,
+             registry).ok(),
+        "mismatched diffraction mode and enable flag were accepted");
     auto bad_metric = value; bad_metric.validation[0].metric = "unknown.metric";
     check(!compile_solver_contract(bad_metric, registry).ok(), "unsupported validation metric accepted");
     std::cout << "Phase Q.7 solver contract checks: " << (failures ? "FAILED" : "PASSED") << '\n';

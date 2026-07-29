@@ -193,6 +193,23 @@ def main() -> int:
     else:
         raise AssertionError("unimplemented coherent wave optics mode must fail")
 
+    diffraction = pyure.create_session(
+        domain_bins=1000000,
+        packet_lanes=8,
+        queue_capacity=64,
+        max_trace_depth=12,
+        wave_optics_mode="camera_diffraction",
+        camera_diffraction=True,
+        camera_aperture_diameter_m=0.008,
+        camera_focal_length_m=0.05,
+        sensor_pixel_pitch_m=4.0e-6,
+        camera_aperture_blade_count=6,
+        camera_psf_radius_pixels=6,
+        camera_wavelength_bin_count=12,
+        camera_pupil_sample_count=24,
+    )
+    diffraction.close()
+
     try:
         pyure.create_session(wave_optics_mode="invalid")
     except ValueError:

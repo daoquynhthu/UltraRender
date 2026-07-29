@@ -94,6 +94,74 @@ WaveFieldGrid propagate_spherical_direct(const WaveFieldGrid& field,
     return out;
 }
 
+bool regular_pupil_contains(double x,
+                            double y,
+                            int blade_count,
+                            double rotation_rad) {
+    const double radius = std::hypot(x, y);
+    if (radius > 1.0) return false;
+    if (blade_count == 0) return true;
+    const double sector =
+        2.0 * std::numbers::pi / static_cast<double>(blade_count);
+    double angle = std::atan2(y, x) - rotation_rad;
+    angle = std::fmod(angle, sector);
+    if (angle < 0.0) angle += sector;
+    const double boundary =
+        std::cos(std::numbers::pi / static_cast<double>(blade_count)) /
+        std::cos(angle - 0.5 * sector);
+    return radius <= boundary;
+}
+
+double numerical_pupil_intensity(const ure::WaveOpticsConfig& config,
+                                 double wavelength_m,
+                                 double sensor_x_m,
+                                 double sensor_y_m) {
+    const int samples = config.camera_pupil_sample_count;
+    double real = 0.0;
+    double imag = 0.0;
+    int accepted = 0;
+    for (int y = 0; y < samples; ++y) {
+        const double py =
+            2.0 * (static_cast<double>(y) + 0.5) /
+                static_cast<double>(samples) -
+            1.0;
+        for (int x = 0; x < samples; ++x) {
+            const double px =
+                2.0 * (static_cast<double>(x) + 0.5) /
+                    static_cast<double>(samples) -
+                1.0;
+            if (!regular_pupil_contains(
+                    px,
+                    py,
+                    config.camera_aperture_blade_count,
+                    config.camera_aperture_rotation_rad)) {
+                continue;
+            }
+            const double pupil_x =
+                px * 0.5 * config.camera_aperture_diameter_m;
+            const double pupil_y =
+                py * 0.5 * config.camera_aperture_diameter_m;
+            const double phase =
+                2.0 * std::numbers::pi *
+                    config.camera_defocus_waves_at_edge *
+                    (px * px + py * py) -
+                2.0 * std::numbers::pi *
+                    (pupil_x * sensor_x_m +
+                     pupil_y * sensor_y_m) /
+                    (wavelength_m *
+                     config.camera_focal_length_m);
+            real += std::cos(phase);
+            imag += std::sin(phase);
+            ++accepted;
+        }
+    }
+    if (accepted == 0) return 0.0;
+    const double inverse = 1.0 / static_cast<double>(accepted);
+    real *= inverse;
+    imag *= inverse;
+    return real * real + imag * imag;
+}
+
 }
 
 bool is_valid(const CircularAperture& aperture) {
@@ -424,6 +492,43 @@ std::vector<DiffractionOrder> grating_orders(const DiffractionGrating& grating,
 double PsfKernel::at(int x, int y) const {
     if (x < 0 || y < 0 || x >= width || y >= height) return 0.0;
     return weights[static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)];
+}
+
+int DiffractionPsfBank::kernel_width() const {
+    return radius_pixels * 2 + 1;
+}
+
+bool DiffractionPsfBank::is_valid() const {
+    const int width = kernel_width();
+    return radius_pixels >= 0 &&
+           wavelength_count > 0 &&
+           wavelength_min_nm > 0.0 &&
+           wavelength_max_nm >= wavelength_min_nm &&
+           width > 0 &&
+           weights.size() ==
+               static_cast<std::size_t>(wavelength_count) *
+               static_cast<std::size_t>(width) *
+               static_cast<std::size_t>(width);
+}
+
+float DiffractionPsfBank::at(int wavelength_index,
+                             int x,
+                             int y) const {
+    if (!is_valid() ||
+        wavelength_index < 0 ||
+        wavelength_index >= wavelength_count ||
+        x < 0 || x >= kernel_width() ||
+        y < 0 || y >= kernel_width()) {
+        return 0.0f;
+    }
+    const std::size_t area =
+        static_cast<std::size_t>(kernel_width()) *
+        static_cast<std::size_t>(kernel_width());
+    return weights[
+        static_cast<std::size_t>(wavelength_index) * area +
+        static_cast<std::size_t>(y) *
+            static_cast<std::size_t>(kernel_width()) +
+        static_cast<std::size_t>(x)];
 }
 
 ComplexAmplitude WaveFieldGrid::at(int x, int y) const {
@@ -837,6 +942,124 @@ DiffractionCameraPlan make_diffraction_camera_plan(const ure::WaveOpticsConfig& 
     plan.mtf = sample_circular_aperture_mtf(camera_config.pupil.aperture,
                                             camera_config.mtf_sample_count);
     return plan;
+}
+
+bool is_valid_diffraction_camera_config(
+    const ure::WaveOpticsConfig& config) {
+    const bool requested =
+        config.mode == ure::WaveOpticsMode::CameraDiffraction &&
+        config.camera_diffraction_enabled;
+    const bool finite =
+        std::isfinite(config.camera_aperture_diameter_m) &&
+        std::isfinite(config.camera_focal_length_m) &&
+        std::isfinite(config.sensor_pixel_pitch_m) &&
+        std::isfinite(config.camera_defocus_waves_at_edge) &&
+        std::isfinite(config.camera_aperture_rotation_rad);
+    const bool valid_blades =
+        config.camera_aperture_blade_count == 0 ||
+        (config.camera_aperture_blade_count >= 3 &&
+         config.camera_aperture_blade_count <= 16);
+    return requested &&
+           finite &&
+           config.camera_aperture_diameter_m > 0.0 &&
+           config.camera_focal_length_m > 0.0 &&
+           config.sensor_pixel_pitch_m > 0.0 &&
+           std::abs(config.camera_defocus_waves_at_edge) <= 64.0 &&
+           valid_blades &&
+           config.camera_psf_radius_pixels >= 1 &&
+           config.camera_psf_radius_pixels <= 32 &&
+           config.camera_wavelength_bin_count >= 2 &&
+           config.camera_wavelength_bin_count <= 32 &&
+           config.camera_pupil_sample_count >= 16 &&
+           config.camera_pupil_sample_count <= 64;
+}
+
+DiffractionPsfBank make_diffraction_psf_bank(
+    const ure::WaveOpticsConfig& config) {
+    DiffractionPsfBank bank;
+    if (!is_valid_diffraction_camera_config(config)) return bank;
+    bank.radius_pixels = config.camera_psf_radius_pixels;
+    bank.wavelength_count = config.camera_wavelength_bin_count;
+    bank.wavelength_min_nm = 360.0;
+    bank.wavelength_max_nm = 830.0;
+    const int width = bank.kernel_width();
+    const std::size_t area =
+        static_cast<std::size_t>(width) *
+        static_cast<std::size_t>(width);
+    bank.weights.assign(
+        area * static_cast<std::size_t>(bank.wavelength_count),
+        0.0f);
+    const bool analytic =
+        config.camera_aperture_blade_count == 0 &&
+        config.camera_defocus_waves_at_edge == 0.0;
+    constexpr double offsets[] = {-0.25, 0.25};
+    for (int wavelength_index = 0;
+         wavelength_index < bank.wavelength_count;
+         ++wavelength_index) {
+        const double t =
+            static_cast<double>(wavelength_index) /
+            static_cast<double>(bank.wavelength_count - 1);
+        const double wavelength_nm =
+            bank.wavelength_min_nm +
+            (bank.wavelength_max_nm -
+             bank.wavelength_min_nm) * t;
+        CircularAperture aperture;
+        aperture.wavelength_m = wavelength_nm * 1.0e-9;
+        aperture.aperture_diameter_m =
+            config.camera_aperture_diameter_m;
+        aperture.focal_length_m =
+            config.camera_focal_length_m;
+        double sum = 0.0;
+        for (int y = 0; y < width; ++y) {
+            for (int x = 0; x < width; ++x) {
+                double intensity = 0.0;
+                for (double oy : offsets) {
+                    for (double ox : offsets) {
+                        const double sensor_x =
+                            (static_cast<double>(
+                                 x - bank.radius_pixels) +
+                             ox) *
+                            config.sensor_pixel_pitch_m;
+                        const double sensor_y =
+                            (static_cast<double>(
+                                 y - bank.radius_pixels) +
+                             oy) *
+                            config.sensor_pixel_pitch_m;
+                        intensity += analytic
+                            ? airy_intensity_on_sensor(
+                                  aperture,
+                                  std::hypot(
+                                      sensor_x,
+                                      sensor_y))
+                            : numerical_pupil_intensity(
+                                  config,
+                                  aperture.wavelength_m,
+                                  sensor_x,
+                                  sensor_y);
+                    }
+                }
+                intensity *= 0.25;
+                const std::size_t index =
+                    static_cast<std::size_t>(
+                        wavelength_index) * area +
+                    static_cast<std::size_t>(y) *
+                        static_cast<std::size_t>(width) +
+                    static_cast<std::size_t>(x);
+                bank.weights[index] =
+                    static_cast<float>(intensity);
+                sum += intensity;
+            }
+        }
+        if (!(sum > 0.0) || !std::isfinite(sum)) return {};
+        const float inverse =
+            static_cast<float>(1.0 / sum);
+        for (std::size_t i = 0; i < area; ++i) {
+            bank.weights[
+                static_cast<std::size_t>(
+                    wavelength_index) * area + i] *= inverse;
+        }
+    }
+    return bank;
 }
 
 }

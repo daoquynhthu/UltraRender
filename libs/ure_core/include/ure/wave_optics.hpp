@@ -155,6 +155,18 @@ struct DiffractionCameraPlan {
     std::vector<MtfSample> mtf;
 };
 
+struct DiffractionPsfBank {
+    int radius_pixels = 0;
+    int wavelength_count = 0;
+    double wavelength_min_nm = 0.0;
+    double wavelength_max_nm = 0.0;
+    std::vector<float> weights;
+
+    int kernel_width() const;
+    bool is_valid() const;
+    float at(int wavelength_index, int x, int y) const;
+};
+
 struct WaveFieldGrid {
     int width = 0;
     int height = 0;
@@ -295,5 +307,7 @@ PropagationResult propagate_direct(const WaveFieldGrid& field,
                                    const PropagationConfig& config);
 DiffractionCameraPlan make_diffraction_camera_plan(const ure::WaveOpticsConfig& wave_config,
                                                    const DiffractionCameraConfig& camera_config);
+bool is_valid_diffraction_camera_config(const ure::WaveOpticsConfig& config);
+DiffractionPsfBank make_diffraction_psf_bank(const ure::WaveOpticsConfig& config);
 
 }

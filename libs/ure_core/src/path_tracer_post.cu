@@ -2,6 +2,7 @@
 #include <device_launch_parameters.h>
 #include <math.h>
 #include "ure/detail/cuda_structs.cuh"
+#include "ure/gpu_spectrum_utils.cuh"
 
 using namespace ure::gpu;
 
@@ -33,6 +34,122 @@ __global__ __launch_bounds__(256) void resolve_framebuffer_kernel(
     } else {
         output[pixel_index] = GpuVec3(0, 0, 0);
     }
+}
+
+__global__ __launch_bounds__(256)
+void resolve_diffraction_framebuffer_kernel(
+    const GpuVec3* spectral_accumulation,
+    const float* psf_weights,
+    const float* psf_prefix,
+    const int* sample_counts,
+    GpuVec3* output,
+    int width,
+    int height,
+    int radius_pixels,
+    int wavelength_count) {
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x >= width || y >= height) return;
+    const int pixel_index = y * width + x;
+    const int kernel_width = radius_pixels * 2 + 1;
+    const int kernel_area = kernel_width * kernel_width;
+    const int prefix_width = kernel_width + 1;
+    const int prefix_area = prefix_width * prefix_width;
+    const int pixel_count = width * height;
+    GpuVec3 xyz;
+    for (int wavelength_index = 0;
+         wavelength_index < wavelength_count;
+         ++wavelength_index) {
+        GpuVec3 filtered;
+        const int film_offset =
+            wavelength_index * pixel_count;
+        const int kernel_offset =
+            wavelength_index * kernel_area;
+        const int prefix_offset =
+            wavelength_index * prefix_area;
+        for (int ky = 0; ky < kernel_width; ++ky) {
+            const int source_y =
+                y - ky + radius_pixels;
+            if (source_y < 0 ||
+                source_y >= height) {
+                continue;
+            }
+            for (int kx = 0; kx < kernel_width; ++kx) {
+                const int source_x =
+                    x - kx + radius_pixels;
+                if (source_x < 0 ||
+                    source_x >= width) {
+                    continue;
+                }
+                const int source_index =
+                    source_y * width + source_x;
+                const int source_sample_count =
+                    sample_counts[source_index];
+                if (source_sample_count <= 0) {
+                    continue;
+                }
+                const int min_kernel_x = max(
+                    0,
+                    radius_pixels - source_x);
+                const int max_kernel_x = min(
+                    kernel_width - 1,
+                    radius_pixels +
+                        width - 1 - source_x);
+                const int min_kernel_y = max(
+                    0,
+                    radius_pixels - source_y);
+                const int max_kernel_y = min(
+                    kernel_width - 1,
+                    radius_pixels +
+                        height - 1 - source_y);
+                const int prefix_x0 =
+                    min_kernel_x;
+                const int prefix_x1 =
+                    max_kernel_x + 1;
+                const int prefix_y0 =
+                    min_kernel_y;
+                const int prefix_y1 =
+                    max_kernel_y + 1;
+                const float valid_weight =
+                    psf_prefix[
+                        prefix_offset +
+                        prefix_y1 * prefix_width +
+                        prefix_x1] -
+                    psf_prefix[
+                        prefix_offset +
+                        prefix_y0 * prefix_width +
+                        prefix_x1] -
+                    psf_prefix[
+                        prefix_offset +
+                        prefix_y1 * prefix_width +
+                        prefix_x0] +
+                    psf_prefix[
+                        prefix_offset +
+                        prefix_y0 * prefix_width +
+                        prefix_x0];
+                filtered = filtered +
+                    spectral_accumulation[
+                        film_offset +
+                        source_index] *
+                    (psf_weights[
+                         kernel_offset +
+                         ky * kernel_width + kx] /
+                     (fmaxf(valid_weight, 1.0e-20f) *
+                      float(source_sample_count)));
+            }
+        }
+        xyz = xyz + filtered;
+    }
+    GpuVec3 final_value = xyz_to_rgb(xyz);
+    if (!isfinite(final_value.x) ||
+        !isfinite(final_value.y) ||
+        !isfinite(final_value.z)) {
+        final_value = {};
+    }
+    final_value.x = fmaxf(0.0f, final_value.x);
+    final_value.y = fmaxf(0.0f, final_value.y);
+    final_value.z = fmaxf(0.0f, final_value.z);
+    output[pixel_index] = final_value;
 }
 
 static __device__ __forceinline__ float luma(GpuVec3 rgb) {

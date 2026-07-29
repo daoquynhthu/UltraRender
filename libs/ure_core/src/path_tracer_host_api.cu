@@ -32,6 +32,7 @@
 #include "ure/runtime/execution_graph.hpp"
 #include "ure/runtime/resource_plan.hpp"
 #include "ure/specular_manifold.hpp"
+#include "ure/wave_optics.hpp"
 #include "ure/path_tracer_sampling.cuh"
 #include "ure/detail/cuda_scene_loader.cuh"
 #include "ure/detail/cuda_bvh_builder.cuh"
@@ -2793,6 +2794,105 @@ GpuContext* init_gpu_renderer(int width, int height,
                               const ure::RenderConfig& config,
                               const std::vector<scene_ir::MiePhaseResource>& mie_phase_resources,
                               const BackendAdapterInfo* backend_adapter) {
+    const bool diffraction_requested =
+        config.wave_optics.mode ==
+            ure::WaveOpticsMode::CameraDiffraction ||
+        config.wave_optics.camera_diffraction_enabled;
+    ure::wave::DiffractionPsfBank diffraction_bank;
+    std::vector<float> diffraction_psf_prefix;
+    if (diffraction_requested) {
+        if (!ure::wave::is_valid_diffraction_camera_config(
+                config.wave_optics)) {
+            throw std::invalid_argument(
+                "camera diffraction requires matching mode/enable flags and valid bounded optical parameters");
+        }
+        if (config.wave_optics.coherent_field_enabled ||
+            config.wave_optics.partial_coherence_enabled ||
+            config.wave_optics.diffractive_materials_enabled ||
+            config.wave_optics.fluorescence_enabled ||
+            config.wave_optics.specular_manifold_enabled ||
+            config.wave_optics.local_fullwave_enabled) {
+            throw std::invalid_argument(
+                "camera diffraction cannot be combined with unimplemented wave-optics features");
+        }
+        if (config.integrator.mode !=
+                ure::IntegratorMode::Wavefront ||
+            config.path_guiding.enabled ||
+            config.restir_di.enabled ||
+            config.restir_pt.enabled ||
+            config.specular_manifold.enabled ||
+            config.bidirectional.enabled ||
+            config.vcm.enabled ||
+            config.mlt.enabled) {
+            throw std::invalid_argument(
+                "camera diffraction currently requires the unbiased wavefront integrator boundary");
+        }
+        diffraction_bank =
+            ure::wave::make_diffraction_psf_bank(
+                config.wave_optics);
+        if (!diffraction_bank.is_valid()) {
+            throw std::runtime_error(
+                "camera diffraction PSF bank construction failed");
+        }
+        const int kernel_width =
+            diffraction_bank.kernel_width();
+        const int prefix_width =
+            kernel_width + 1;
+        const std::size_t kernel_area =
+            static_cast<std::size_t>(kernel_width) *
+            static_cast<std::size_t>(kernel_width);
+        const std::size_t prefix_area =
+            static_cast<std::size_t>(prefix_width) *
+            static_cast<std::size_t>(prefix_width);
+        diffraction_psf_prefix.assign(
+            prefix_area *
+                static_cast<std::size_t>(
+                    diffraction_bank.wavelength_count),
+            0.0f);
+        for (int wavelength = 0;
+             wavelength <
+                 diffraction_bank.wavelength_count;
+             ++wavelength) {
+            const std::size_t kernel_offset =
+                static_cast<std::size_t>(wavelength) *
+                kernel_area;
+            const std::size_t prefix_offset =
+                static_cast<std::size_t>(wavelength) *
+                prefix_area;
+            for (int y = 1;
+                 y <= kernel_width;
+                 ++y) {
+                float row_sum = 0.0f;
+                for (int x = 1;
+                     x <= kernel_width;
+                     ++x) {
+                    row_sum += diffraction_bank.weights[
+                        kernel_offset +
+                        static_cast<std::size_t>(y - 1) *
+                            static_cast<std::size_t>(
+                                kernel_width) +
+                        static_cast<std::size_t>(x - 1)];
+                    diffraction_psf_prefix[
+                        prefix_offset +
+                        static_cast<std::size_t>(y) *
+                            static_cast<std::size_t>(
+                                prefix_width) +
+                        static_cast<std::size_t>(x)] =
+                        diffraction_psf_prefix[
+                            prefix_offset +
+                            static_cast<std::size_t>(y - 1) *
+                                static_cast<std::size_t>(
+                                    prefix_width) +
+                            static_cast<std::size_t>(x)] +
+                        row_sum;
+                }
+            }
+        }
+    } else if (!ure::wave_optics_is_radiometric_only(
+                   config.wave_optics)) {
+        throw std::invalid_argument(
+            "requested wave-optics mode is not implemented by the GPU renderer");
+    }
     validate_explicit_spectral_resident_budget(materials, textures, mie_phase_resources, config);
     validate_integrator_runtime_config(config);
     validate_environment_light_config(config);
@@ -2882,6 +2982,91 @@ GpuContext* init_gpu_renderer(int width, int height,
     ctx->medium_absorption = SpectralPacket(0.0f);
     ctx->medium_max_distance = 1e6f;
     upload_mie_phase_resources(ctx, mie_phase_resources);
+
+    if (diffraction_bank.is_valid()) {
+        const std::size_t pixel_count =
+            static_cast<std::size_t>(width) *
+            static_cast<std::size_t>(height);
+        if (pixel_count >
+            std::numeric_limits<std::size_t>::max() /
+                static_cast<std::size_t>(
+                    diffraction_bank.wavelength_count) /
+                sizeof(GpuVec3)) {
+            throw std::overflow_error(
+                "camera diffraction film size overflow");
+        }
+        const std::size_t film_bytes =
+            pixel_count *
+            static_cast<std::size_t>(
+                diffraction_bank.wavelength_count) *
+            sizeof(GpuVec3);
+        const std::size_t psf_bytes =
+            diffraction_bank.weights.size() *
+            sizeof(float);
+        const std::size_t prefix_bytes =
+            diffraction_psf_prefix.size() *
+            sizeof(float);
+        if (config.backend.memory_budget_bytes != 0 &&
+            film_bytes >
+                config.backend.memory_budget_bytes -
+                    std::min(
+                        config.backend.memory_budget_bytes,
+                        psf_bytes + prefix_bytes)) {
+            throw std::runtime_error(
+                "camera diffraction resources exceed backend memory budget");
+        }
+        std::size_t free_device_bytes = 0;
+        std::size_t total_device_bytes = 0;
+        UR_CUDA_CHECK(cudaMemGetInfo(
+            &free_device_bytes,
+            &total_device_bytes));
+        static_cast<void>(total_device_bytes);
+        if (film_bytes + psf_bytes + prefix_bytes >
+            free_device_bytes -
+                free_device_bytes / 20) {
+            throw std::runtime_error(
+                "camera diffraction resources exceed available device memory");
+        }
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_diffraction_spectral_accum,
+            film_bytes));
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_diffraction_psf_weights,
+            psf_bytes));
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_diffraction_psf_prefix,
+            prefix_bytes));
+        ctx->resources->retain_allocation(
+            ctx->d_diffraction_spectral_accum);
+        ctx->resources->retain_allocation(
+            ctx->d_diffraction_psf_weights);
+        ctx->resources->retain_allocation(
+            ctx->d_diffraction_psf_prefix);
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_diffraction_spectral_accum,
+            0,
+            film_bytes));
+        UR_CUDA_CHECK(cudaMemcpy(
+            ctx->d_diffraction_psf_weights,
+            diffraction_bank.weights.data(),
+            psf_bytes,
+            cudaMemcpyHostToDevice));
+        UR_CUDA_CHECK(cudaMemcpy(
+            ctx->d_diffraction_psf_prefix,
+            diffraction_psf_prefix.data(),
+            prefix_bytes,
+            cudaMemcpyHostToDevice));
+        ctx->diffraction_radius_pixels =
+            diffraction_bank.radius_pixels;
+        ctx->diffraction_wavelength_count =
+            diffraction_bank.wavelength_count;
+        ctx->diffraction_wavelength_min_nm =
+            static_cast<float>(
+                diffraction_bank.wavelength_min_nm);
+        ctx->diffraction_wavelength_max_nm =
+            static_cast<float>(
+                diffraction_bank.wavelength_max_nm);
+    }
 
     UR_LOG_INFO(GPU, "Allocating memory for {}x{} interactive session...", width, height);
 
@@ -3631,6 +3816,16 @@ void reset_accumulation_gpu(GpuContext* ctx) {
     cudaMemset(ctx->d_depth_buffer, 0, ctx->width * ctx->height * sizeof(float));
     cudaMemset(ctx->d_uv_buffer, 0, ctx->width * ctx->height * sizeof(GpuVec2));
     cudaMemset(ctx->d_motion_vector_buffer, 0, ctx->width * ctx->height * sizeof(GpuVec2));
+    if (ctx->d_diffraction_spectral_accum) {
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_diffraction_spectral_accum,
+            0,
+            static_cast<std::size_t>(ctx->width) *
+                static_cast<std::size_t>(ctx->height) *
+                static_cast<std::size_t>(
+                    ctx->diffraction_wavelength_count) *
+                sizeof(GpuVec3)));
+    }
     clear_restir_di_reservoirs(ctx);
     ++ctx->restir_di_scene_epoch;
     if (ctx->restir_di_scene_epoch == 0) ctx->restir_di_scene_epoch = 1;
@@ -4135,6 +4330,20 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.material_bsdf_lobes = ctx->d_material_bsdf_lobes;
     scene.material_bsdf_lobe_count = ctx->material_bsdf_lobe_count;
     scene.num_spectral_channels = ctx->num_spectral_channels;
+    scene.diffraction_spectral_accum =
+        ctx->d_diffraction_spectral_accum;
+    scene.diffraction_psf_weights =
+        ctx->d_diffraction_psf_weights;
+    scene.diffraction_pixel_count =
+        ctx->width * ctx->height;
+    scene.diffraction_radius_pixels =
+        ctx->diffraction_radius_pixels;
+    scene.diffraction_wavelength_count =
+        ctx->diffraction_wavelength_count;
+    scene.diffraction_wavelength_min_nm =
+        ctx->diffraction_wavelength_min_nm;
+    scene.diffraction_wavelength_max_nm =
+        ctx->diffraction_wavelength_max_nm;
     scene.mie_phase_resources = ctx->d_mie_phase_resources;
     scene.mie_phase_resource_count = ctx->mie_phase_resource_count;
     scene.mie_wavelengths = ctx->d_mie_wavelengths;
@@ -4860,17 +5069,37 @@ void copy_frame_buffer_gpu(GpuContext* ctx, float* host_buffer) {
     dim3 numBlocks((ctx->width + threadsPerBlock.x - 1) / threadsPerBlock.x,
                    (ctx->height + threadsPerBlock.y - 1) / threadsPerBlock.y);
 
-    resolve_framebuffer_kernel<<<numBlocks, threadsPerBlock>>>(
-        ctx->d_accum_buffer,
-        ctx->d_sample_counts,
-        ctx->d_output,
-        ctx->width,
-        ctx->height
-    );
+    if (ctx->d_diffraction_spectral_accum) {
+        resolve_diffraction_framebuffer_kernel<<<
+            numBlocks,
+            threadsPerBlock>>>(
+                ctx->d_diffraction_spectral_accum,
+                ctx->d_diffraction_psf_weights,
+                ctx->d_diffraction_psf_prefix,
+                ctx->d_sample_counts,
+                ctx->d_output,
+                ctx->width,
+                ctx->height,
+                ctx->diffraction_radius_pixels,
+                ctx->diffraction_wavelength_count);
+    } else {
+        resolve_framebuffer_kernel<<<numBlocks, threadsPerBlock>>>(
+            ctx->d_accum_buffer,
+            ctx->d_sample_counts,
+            ctx->d_output,
+            ctx->width,
+            ctx->height
+        );
+    }
+    UR_CUDA_CHECK(cudaGetLastError());
     UR_CUDA_CHECK(cudaDeviceSynchronize());
 
     size_t framebuffer_size = ctx->width * ctx->height * sizeof(GpuVec3);
-    cudaMemcpy(host_buffer, ctx->d_output, framebuffer_size, cudaMemcpyDeviceToHost);
+    UR_CUDA_CHECK(cudaMemcpy(
+        host_buffer,
+        ctx->d_output,
+        framebuffer_size,
+        cudaMemcpyDeviceToHost));
 }
 
 void copy_normal_buffer_gpu(GpuContext* ctx, float* host_buffer) {

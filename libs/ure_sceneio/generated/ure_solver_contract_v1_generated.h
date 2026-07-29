@@ -1088,6 +1088,15 @@ struct WaveOpticsT : public ::flatbuffers::NativeTable {
   bool specular_manifold = false;
   bool local_fullwave = false;
   bool allow_preview_degradation = false;
+  double camera_aperture_diameter_m = 0.01;
+  double camera_focal_length_m = 0.05;
+  double sensor_pixel_pitch_m = 0.000004;
+  double camera_defocus_waves_at_edge = 0.0;
+  double camera_aperture_rotation_rad = 0.0;
+  int32_t camera_aperture_blade_count = 0;
+  int32_t camera_psf_radius_pixels = 8;
+  int32_t camera_wavelength_bin_count = 16;
+  int32_t camera_pupil_sample_count = 32;
 };
 
 struct WaveOptics FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -1103,7 +1112,16 @@ struct WaveOptics FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_FLUORESCENCE = 14,
     VT_SPECULAR_MANIFOLD = 16,
     VT_LOCAL_FULLWAVE = 18,
-    VT_ALLOW_PREVIEW_DEGRADATION = 20
+    VT_ALLOW_PREVIEW_DEGRADATION = 20,
+    VT_CAMERA_APERTURE_DIAMETER_M = 22,
+    VT_CAMERA_FOCAL_LENGTH_M = 24,
+    VT_SENSOR_PIXEL_PITCH_M = 26,
+    VT_CAMERA_DEFOCUS_WAVES_AT_EDGE = 28,
+    VT_CAMERA_APERTURE_ROTATION_RAD = 30,
+    VT_CAMERA_APERTURE_BLADE_COUNT = 32,
+    VT_CAMERA_PSF_RADIUS_PIXELS = 34,
+    VT_CAMERA_WAVELENGTH_BIN_COUNT = 36,
+    VT_CAMERA_PUPIL_SAMPLE_COUNT = 38
   };
   ure::solver::schema::WaveMode mode() const {
     return static_cast<ure::solver::schema::WaveMode>(GetField<uint8_t>(VT_MODE, 0));
@@ -1132,6 +1150,33 @@ struct WaveOptics FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   bool allow_preview_degradation() const {
     return GetField<uint8_t>(VT_ALLOW_PREVIEW_DEGRADATION, 0) != 0;
   }
+  double camera_aperture_diameter_m() const {
+    return GetField<double>(VT_CAMERA_APERTURE_DIAMETER_M, 0.01);
+  }
+  double camera_focal_length_m() const {
+    return GetField<double>(VT_CAMERA_FOCAL_LENGTH_M, 0.05);
+  }
+  double sensor_pixel_pitch_m() const {
+    return GetField<double>(VT_SENSOR_PIXEL_PITCH_M, 0.000004);
+  }
+  double camera_defocus_waves_at_edge() const {
+    return GetField<double>(VT_CAMERA_DEFOCUS_WAVES_AT_EDGE, 0.0);
+  }
+  double camera_aperture_rotation_rad() const {
+    return GetField<double>(VT_CAMERA_APERTURE_ROTATION_RAD, 0.0);
+  }
+  int32_t camera_aperture_blade_count() const {
+    return GetField<int32_t>(VT_CAMERA_APERTURE_BLADE_COUNT, 0);
+  }
+  int32_t camera_psf_radius_pixels() const {
+    return GetField<int32_t>(VT_CAMERA_PSF_RADIUS_PIXELS, 8);
+  }
+  int32_t camera_wavelength_bin_count() const {
+    return GetField<int32_t>(VT_CAMERA_WAVELENGTH_BIN_COUNT, 16);
+  }
+  int32_t camera_pupil_sample_count() const {
+    return GetField<int32_t>(VT_CAMERA_PUPIL_SAMPLE_COUNT, 32);
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -1144,6 +1189,15 @@ struct WaveOptics FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<uint8_t>(verifier, VT_SPECULAR_MANIFOLD, 1) &&
            VerifyField<uint8_t>(verifier, VT_LOCAL_FULLWAVE, 1) &&
            VerifyField<uint8_t>(verifier, VT_ALLOW_PREVIEW_DEGRADATION, 1) &&
+           VerifyField<double>(verifier, VT_CAMERA_APERTURE_DIAMETER_M, 8) &&
+           VerifyField<double>(verifier, VT_CAMERA_FOCAL_LENGTH_M, 8) &&
+           VerifyField<double>(verifier, VT_SENSOR_PIXEL_PITCH_M, 8) &&
+           VerifyField<double>(verifier, VT_CAMERA_DEFOCUS_WAVES_AT_EDGE, 8) &&
+           VerifyField<double>(verifier, VT_CAMERA_APERTURE_ROTATION_RAD, 8) &&
+           VerifyField<int32_t>(verifier, VT_CAMERA_APERTURE_BLADE_COUNT, 4) &&
+           VerifyField<int32_t>(verifier, VT_CAMERA_PSF_RADIUS_PIXELS, 4) &&
+           VerifyField<int32_t>(verifier, VT_CAMERA_WAVELENGTH_BIN_COUNT, 4) &&
+           VerifyField<int32_t>(verifier, VT_CAMERA_PUPIL_SAMPLE_COUNT, 4) &&
            verifier.EndTable();
   }
   WaveOpticsT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -1182,6 +1236,33 @@ struct WaveOpticsBuilder {
   void add_allow_preview_degradation(bool allow_preview_degradation) {
     fbb_.AddElement<uint8_t>(WaveOptics::VT_ALLOW_PREVIEW_DEGRADATION, static_cast<uint8_t>(allow_preview_degradation), 0);
   }
+  void add_camera_aperture_diameter_m(double camera_aperture_diameter_m) {
+    fbb_.AddElement<double>(WaveOptics::VT_CAMERA_APERTURE_DIAMETER_M, camera_aperture_diameter_m, 0.01);
+  }
+  void add_camera_focal_length_m(double camera_focal_length_m) {
+    fbb_.AddElement<double>(WaveOptics::VT_CAMERA_FOCAL_LENGTH_M, camera_focal_length_m, 0.05);
+  }
+  void add_sensor_pixel_pitch_m(double sensor_pixel_pitch_m) {
+    fbb_.AddElement<double>(WaveOptics::VT_SENSOR_PIXEL_PITCH_M, sensor_pixel_pitch_m, 0.000004);
+  }
+  void add_camera_defocus_waves_at_edge(double camera_defocus_waves_at_edge) {
+    fbb_.AddElement<double>(WaveOptics::VT_CAMERA_DEFOCUS_WAVES_AT_EDGE, camera_defocus_waves_at_edge, 0.0);
+  }
+  void add_camera_aperture_rotation_rad(double camera_aperture_rotation_rad) {
+    fbb_.AddElement<double>(WaveOptics::VT_CAMERA_APERTURE_ROTATION_RAD, camera_aperture_rotation_rad, 0.0);
+  }
+  void add_camera_aperture_blade_count(int32_t camera_aperture_blade_count) {
+    fbb_.AddElement<int32_t>(WaveOptics::VT_CAMERA_APERTURE_BLADE_COUNT, camera_aperture_blade_count, 0);
+  }
+  void add_camera_psf_radius_pixels(int32_t camera_psf_radius_pixels) {
+    fbb_.AddElement<int32_t>(WaveOptics::VT_CAMERA_PSF_RADIUS_PIXELS, camera_psf_radius_pixels, 8);
+  }
+  void add_camera_wavelength_bin_count(int32_t camera_wavelength_bin_count) {
+    fbb_.AddElement<int32_t>(WaveOptics::VT_CAMERA_WAVELENGTH_BIN_COUNT, camera_wavelength_bin_count, 16);
+  }
+  void add_camera_pupil_sample_count(int32_t camera_pupil_sample_count) {
+    fbb_.AddElement<int32_t>(WaveOptics::VT_CAMERA_PUPIL_SAMPLE_COUNT, camera_pupil_sample_count, 32);
+  }
   explicit WaveOpticsBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -1203,8 +1284,26 @@ inline ::flatbuffers::Offset<WaveOptics> CreateWaveOptics(
     bool fluorescence = false,
     bool specular_manifold = false,
     bool local_fullwave = false,
-    bool allow_preview_degradation = false) {
+    bool allow_preview_degradation = false,
+    double camera_aperture_diameter_m = 0.01,
+    double camera_focal_length_m = 0.05,
+    double sensor_pixel_pitch_m = 0.000004,
+    double camera_defocus_waves_at_edge = 0.0,
+    double camera_aperture_rotation_rad = 0.0,
+    int32_t camera_aperture_blade_count = 0,
+    int32_t camera_psf_radius_pixels = 8,
+    int32_t camera_wavelength_bin_count = 16,
+    int32_t camera_pupil_sample_count = 32) {
   WaveOpticsBuilder builder_(_fbb);
+  builder_.add_camera_aperture_rotation_rad(camera_aperture_rotation_rad);
+  builder_.add_camera_defocus_waves_at_edge(camera_defocus_waves_at_edge);
+  builder_.add_sensor_pixel_pitch_m(sensor_pixel_pitch_m);
+  builder_.add_camera_focal_length_m(camera_focal_length_m);
+  builder_.add_camera_aperture_diameter_m(camera_aperture_diameter_m);
+  builder_.add_camera_pupil_sample_count(camera_pupil_sample_count);
+  builder_.add_camera_wavelength_bin_count(camera_wavelength_bin_count);
+  builder_.add_camera_psf_radius_pixels(camera_psf_radius_pixels);
+  builder_.add_camera_aperture_blade_count(camera_aperture_blade_count);
   builder_.add_allow_preview_degradation(allow_preview_degradation);
   builder_.add_local_fullwave(local_fullwave);
   builder_.add_specular_manifold(specular_manifold);
@@ -2040,6 +2139,15 @@ inline void WaveOptics::UnPackTo(WaveOpticsT *_o, const ::flatbuffers::resolver_
   { auto _e = specular_manifold(); _o->specular_manifold = _e; }
   { auto _e = local_fullwave(); _o->local_fullwave = _e; }
   { auto _e = allow_preview_degradation(); _o->allow_preview_degradation = _e; }
+  { auto _e = camera_aperture_diameter_m(); _o->camera_aperture_diameter_m = _e; }
+  { auto _e = camera_focal_length_m(); _o->camera_focal_length_m = _e; }
+  { auto _e = sensor_pixel_pitch_m(); _o->sensor_pixel_pitch_m = _e; }
+  { auto _e = camera_defocus_waves_at_edge(); _o->camera_defocus_waves_at_edge = _e; }
+  { auto _e = camera_aperture_rotation_rad(); _o->camera_aperture_rotation_rad = _e; }
+  { auto _e = camera_aperture_blade_count(); _o->camera_aperture_blade_count = _e; }
+  { auto _e = camera_psf_radius_pixels(); _o->camera_psf_radius_pixels = _e; }
+  { auto _e = camera_wavelength_bin_count(); _o->camera_wavelength_bin_count = _e; }
+  { auto _e = camera_pupil_sample_count(); _o->camera_pupil_sample_count = _e; }
 }
 
 inline ::flatbuffers::Offset<WaveOptics> CreateWaveOptics(::flatbuffers::FlatBufferBuilder &_fbb, const WaveOpticsT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -2059,6 +2167,15 @@ inline ::flatbuffers::Offset<WaveOptics> WaveOptics::Pack(::flatbuffers::FlatBuf
   auto _specular_manifold = _o->specular_manifold;
   auto _local_fullwave = _o->local_fullwave;
   auto _allow_preview_degradation = _o->allow_preview_degradation;
+  auto _camera_aperture_diameter_m = _o->camera_aperture_diameter_m;
+  auto _camera_focal_length_m = _o->camera_focal_length_m;
+  auto _sensor_pixel_pitch_m = _o->sensor_pixel_pitch_m;
+  auto _camera_defocus_waves_at_edge = _o->camera_defocus_waves_at_edge;
+  auto _camera_aperture_rotation_rad = _o->camera_aperture_rotation_rad;
+  auto _camera_aperture_blade_count = _o->camera_aperture_blade_count;
+  auto _camera_psf_radius_pixels = _o->camera_psf_radius_pixels;
+  auto _camera_wavelength_bin_count = _o->camera_wavelength_bin_count;
+  auto _camera_pupil_sample_count = _o->camera_pupil_sample_count;
   return ure::solver::schema::CreateWaveOptics(
       _fbb,
       _mode,
@@ -2069,7 +2186,16 @@ inline ::flatbuffers::Offset<WaveOptics> WaveOptics::Pack(::flatbuffers::FlatBuf
       _fluorescence,
       _specular_manifold,
       _local_fullwave,
-      _allow_preview_degradation);
+      _allow_preview_degradation,
+      _camera_aperture_diameter_m,
+      _camera_focal_length_m,
+      _sensor_pixel_pitch_m,
+      _camera_defocus_waves_at_edge,
+      _camera_aperture_rotation_rad,
+      _camera_aperture_blade_count,
+      _camera_psf_radius_pixels,
+      _camera_wavelength_bin_count,
+      _camera_pupil_sample_count);
 }
 
 inline ValidationRequirementT *ValidationRequirement::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {

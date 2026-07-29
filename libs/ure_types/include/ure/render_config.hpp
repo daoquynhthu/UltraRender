@@ -128,6 +128,15 @@ struct WaveOpticsConfig {
     bool specular_manifold_enabled = false;
     bool local_fullwave_enabled = false;
     bool experimental_allow_preview_degradation = false;
+    double camera_aperture_diameter_m = 10.0e-3;
+    double camera_focal_length_m = 50.0e-3;
+    double sensor_pixel_pitch_m = 4.0e-6;
+    double camera_defocus_waves_at_edge = 0.0;
+    double camera_aperture_rotation_rad = 0.0;
+    int camera_aperture_blade_count = 0;
+    int camera_psf_radius_pixels = 8;
+    int camera_wavelength_bin_count = 16;
+    int camera_pupil_sample_count = 32;
 };
 
 struct PathGuidingConfig {

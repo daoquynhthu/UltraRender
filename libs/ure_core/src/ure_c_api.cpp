@@ -7,6 +7,7 @@
 #include "ure/native_scene_tooling.hpp"
 #include "ure/native_adapter.hpp"
 #include "ure/spectral_limits.hpp"
+#include "ure/wave_optics.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
@@ -150,6 +151,64 @@ bool make_wave_optics_config(const ure_wave_optics_config_t* wave_config, WaveOp
     cfg.local_fullwave_enabled = wave_config->local_fullwave_enabled != 0;
     cfg.experimental_allow_preview_degradation = wave_config->experimental_allow_preview_degradation != 0;
     return true;
+}
+
+bool make_wave_optics_config(
+    const ure_wave_optics_config_v2_t* wave_config,
+    WaveOpticsConfig& cfg) {
+    if (!wave_config ||
+        wave_config->version != 2 ||
+        wave_config->struct_size <
+            sizeof(ure_wave_optics_config_v2_t) ||
+        !make_wave_optics_config(
+            &wave_config->base,
+            cfg)) {
+        return false;
+    }
+    cfg.camera_aperture_diameter_m =
+        wave_config->camera_aperture_diameter_m;
+    cfg.camera_focal_length_m =
+        wave_config->camera_focal_length_m;
+    cfg.sensor_pixel_pitch_m =
+        wave_config->sensor_pixel_pitch_m;
+    cfg.camera_defocus_waves_at_edge =
+        wave_config->camera_defocus_waves_at_edge;
+    cfg.camera_aperture_rotation_rad =
+        wave_config->camera_aperture_rotation_rad;
+    cfg.camera_aperture_blade_count =
+        wave_config->camera_aperture_blade_count;
+    cfg.camera_psf_radius_pixels =
+        wave_config->camera_psf_radius_pixels;
+    cfg.camera_wavelength_bin_count =
+        wave_config->camera_wavelength_bin_count;
+    cfg.camera_pupil_sample_count =
+        wave_config->camera_pupil_sample_count;
+    return true;
+}
+
+bool supported_wave_optics_config(
+    const RenderConfig& config) {
+    if (wave_optics_is_radiometric_only(
+            config.wave_optics)) {
+        return true;
+    }
+    return wave::is_valid_diffraction_camera_config(
+               config.wave_optics) &&
+           !config.wave_optics.coherent_field_enabled &&
+           !config.wave_optics.partial_coherence_enabled &&
+           !config.wave_optics.diffractive_materials_enabled &&
+           !config.wave_optics.fluorescence_enabled &&
+           !config.wave_optics.specular_manifold_enabled &&
+           !config.wave_optics.local_fullwave_enabled &&
+           config.integrator.mode ==
+               IntegratorMode::Wavefront &&
+           !config.path_guiding.enabled &&
+           !config.restir_di.enabled &&
+           !config.restir_pt.enabled &&
+           !config.specular_manifold.enabled &&
+           !config.bidirectional.enabled &&
+           !config.vcm.enabled &&
+           !config.mlt.enabled;
 }
 
 bool make_integrator_config(const ure_integrator_config_t* integrator_config, RenderConfig& cfg) {
@@ -850,9 +909,32 @@ ure_session_t* ure_session_create_wave_config(const ure_spectral_config_t* spect
         RenderConfig config;
         if (!apply_spectral_config(config, spectral_config)) return nullptr;
         if (!make_wave_optics_config(wave_config, config.wave_optics)) return nullptr;
-        if (!wave_optics_is_radiometric_only(config.wave_optics)) return nullptr;
+        if (!supported_wave_optics_config(config)) return nullptr;
         auto session = std::make_unique<RenderSession>(RenderSession::create(config));
         return reinterpret_cast<ure_session_t*>(session.release());
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+ure_session_t* ure_session_create_wave_config_v2(
+    const ure_spectral_config_t* spectral_config,
+    const ure_wave_optics_config_v2_t* wave_config) {
+    try {
+        RenderConfig config;
+        if (!apply_spectral_config(
+                config,
+                spectral_config) ||
+            !make_wave_optics_config(
+                wave_config,
+                config.wave_optics) ||
+            !supported_wave_optics_config(config)) {
+            return nullptr;
+        }
+        auto session = std::make_unique<RenderSession>(
+            RenderSession::create(config));
+        return reinterpret_cast<ure_session_t*>(
+            session.release());
     } catch (...) {
         return nullptr;
     }
@@ -865,8 +947,8 @@ ure_session_t* ure_session_create_integrator_config(const ure_spectral_config_t*
         RenderConfig config;
         if (!apply_spectral_config(config, spectral_config)) return nullptr;
         if (!make_wave_optics_config(wave_config, config.wave_optics)) return nullptr;
-        if (!wave_optics_is_radiometric_only(config.wave_optics)) return nullptr;
         if (!make_integrator_config(integrator_config, config)) return nullptr;
+        if (!supported_wave_optics_config(config)) return nullptr;
         auto session = std::make_unique<RenderSession>(RenderSession::create(config));
         return reinterpret_cast<ure_session_t*>(session.release());
     } catch (...) {
@@ -901,9 +983,6 @@ ure_session_t* ure_session_create_execution_config(
                     wave_config, config.wave_optics)) {
                 return nullptr;
             }
-            if (!wave_optics_is_radiometric_only(config.wave_optics)) {
-                return nullptr;
-            }
         }
         if (integrator_config &&
             !make_integrator_config(integrator_config, config)) {
@@ -913,9 +992,55 @@ ure_session_t* ure_session_create_execution_config(
         if (!apply_acceleration_config(config, acceleration_config)) {
             return nullptr;
         }
+        if (!supported_wave_optics_config(config)) {
+            return nullptr;
+        }
         auto session = std::make_unique<RenderSession>(
             RenderSession::create(config));
         return reinterpret_cast<ure_session_t*>(session.release());
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+ure_session_t* ure_session_create_execution_config_v2(
+    const ure_spectral_config_t* spectral_config,
+    const ure_wave_optics_config_v2_t* wave_config,
+    const ure_integrator_config_t* integrator_config,
+    const ure_backend_config_t* backend_config,
+    const ure_acceleration_config_t* acceleration_config) {
+    try {
+        RenderConfig config;
+        if (!apply_spectral_config(
+                config,
+                spectral_config)) {
+            return nullptr;
+        }
+        if (wave_config &&
+            !make_wave_optics_config(
+                wave_config,
+                config.wave_optics)) {
+            return nullptr;
+        }
+        if (integrator_config &&
+            !make_integrator_config(
+                integrator_config,
+                config)) {
+            return nullptr;
+        }
+        if (!apply_backend_config(
+                config,
+                backend_config) ||
+            !apply_acceleration_config(
+                config,
+                acceleration_config) ||
+            !supported_wave_optics_config(config)) {
+            return nullptr;
+        }
+        auto session = std::make_unique<RenderSession>(
+            RenderSession::create(config));
+        return reinterpret_cast<ure_session_t*>(
+            session.release());
     } catch (...) {
         return nullptr;
     }

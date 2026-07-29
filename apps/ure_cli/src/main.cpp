@@ -18,6 +18,7 @@
 #include <ure/render.hpp>
 #include <ure/scene_frontend.hpp>
 #include <ure/spectral_limits.hpp>
+#include <ure/wave_optics.hpp>
 
 namespace {
 
@@ -268,6 +269,15 @@ bool make_wave_optics_config(const ure::config::WaveOpticsConfig& app_config, ur
     cfg.specular_manifold_enabled = app_config.specular_manifold_enabled;
     cfg.local_fullwave_enabled = app_config.local_fullwave_enabled;
     cfg.experimental_allow_preview_degradation = app_config.experimental_allow_preview_degradation;
+    cfg.camera_aperture_diameter_m = app_config.camera_aperture_diameter_m;
+    cfg.camera_focal_length_m = app_config.camera_focal_length_m;
+    cfg.sensor_pixel_pitch_m = app_config.sensor_pixel_pitch_m;
+    cfg.camera_defocus_waves_at_edge = app_config.camera_defocus_waves_at_edge;
+    cfg.camera_aperture_rotation_rad = app_config.camera_aperture_rotation_rad;
+    cfg.camera_aperture_blade_count = app_config.camera_aperture_blade_count;
+    cfg.camera_psf_radius_pixels = app_config.camera_psf_radius_pixels;
+    cfg.camera_wavelength_bin_count = app_config.camera_wavelength_bin_count;
+    cfg.camera_pupil_sample_count = app_config.camera_pupil_sample_count;
     return true;
 }
 
@@ -306,10 +316,29 @@ bool make_integrator_config(const ure::config::IntegratorConfig& app_config, ure
     return true;
 }
 
-bool validate_supported_wave_optics(const ure::WaveOpticsConfig& cfg) {
+bool validate_supported_wave_optics(
+    const ure::RenderConfig& config) {
+    const auto& cfg = config.wave_optics;
     if (ure::wave_optics_is_radiometric_only(cfg)) return true;
-    std::cerr << "Error: Phase W wave-optics modes are configuration/API gated but not implemented yet; "
-              << "only radiometric mode is currently supported.\n";
+    if (ure::wave::is_valid_diffraction_camera_config(cfg) &&
+        !cfg.coherent_field_enabled &&
+        !cfg.partial_coherence_enabled &&
+        !cfg.diffractive_materials_enabled &&
+        !cfg.fluorescence_enabled &&
+        !cfg.specular_manifold_enabled &&
+        !cfg.local_fullwave_enabled &&
+        config.integrator.mode ==
+            ure::IntegratorMode::Wavefront &&
+        !config.path_guiding.enabled &&
+        !config.restir_di.enabled &&
+        !config.restir_pt.enabled &&
+        !config.specular_manifold.enabled &&
+        !config.bidirectional.enabled &&
+        !config.vcm.enabled &&
+        !config.mlt.enabled) {
+        return true;
+    }
+    std::cerr << "Error: unsupported wave-optics feature combination or invalid camera diffraction optics.\n";
     return false;
 }
 
@@ -409,7 +438,7 @@ int cmd_render(const ure::config::CliResult& cli) {
         std::cerr << "Error: spectral domain bins must be >= packet lanes\n";
         return 1;
     }
-    if (!validate_supported_wave_optics(gpu_config.wave_optics)) {
+    if (!validate_supported_wave_optics(gpu_config)) {
         return 1;
     }
     if (!check_scene_path(app_config.scene_path)) {

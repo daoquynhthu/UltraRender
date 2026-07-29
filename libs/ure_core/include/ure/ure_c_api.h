@@ -194,6 +194,21 @@ typedef struct ure_wave_optics_config_t {
     int experimental_allow_preview_degradation;
 } ure_wave_optics_config_t;
 
+typedef struct ure_wave_optics_config_v2_t {
+    uint32_t struct_size;
+    uint32_t version;
+    ure_wave_optics_config_t base;
+    double camera_aperture_diameter_m;
+    double camera_focal_length_m;
+    double sensor_pixel_pitch_m;
+    double camera_defocus_waves_at_edge;
+    double camera_aperture_rotation_rad;
+    int camera_aperture_blade_count;
+    int camera_psf_radius_pixels;
+    int camera_wavelength_bin_count;
+    int camera_pupil_sample_count;
+} ure_wave_optics_config_v2_t;
+
 typedef enum ure_integrator_mode_t {
     URE_INTEGRATOR_WAVEFRONT = 0,
     URE_INTEGRATOR_PATH_GUIDED = 1,
@@ -376,6 +391,9 @@ ure_session_t* ure_session_create_config(int num_wavelengths,
 ure_session_t* ure_session_create_spectral_config(const ure_spectral_config_t* config);
 ure_session_t* ure_session_create_wave_config(const ure_spectral_config_t* spectral_config,
                                               const ure_wave_optics_config_t* wave_config);
+ure_session_t* ure_session_create_wave_config_v2(
+    const ure_spectral_config_t* spectral_config,
+    const ure_wave_optics_config_v2_t* wave_config);
 ure_session_t* ure_session_create_integrator_config(const ure_spectral_config_t* spectral_config,
                                                     const ure_wave_optics_config_t* wave_config,
                                                     const ure_integrator_config_t* integrator_config);
@@ -386,6 +404,12 @@ ure_session_t* ure_session_create_backend_config(const ure_spectral_config_t* sp
 ure_session_t* ure_session_create_execution_config(
     const ure_spectral_config_t* spectral_config,
     const ure_wave_optics_config_t* wave_config,
+    const ure_integrator_config_t* integrator_config,
+    const ure_backend_config_t* backend_config,
+    const ure_acceleration_config_t* acceleration_config);
+ure_session_t* ure_session_create_execution_config_v2(
+    const ure_spectral_config_t* spectral_config,
+    const ure_wave_optics_config_v2_t* wave_config,
     const ure_integrator_config_t* integrator_config,
     const ure_backend_config_t* backend_config,
     const ure_acceleration_config_t* acceleration_config);

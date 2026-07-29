@@ -824,10 +824,124 @@ static int test_diffraction_camera_plan_rejects_invalid_optics() {
     return 0;
 }
 
-static int test_gpu_renderer_rejects_camera_diffraction_before_scene_load() {
+static double psf_second_moment(
+    const ure::wave::DiffractionPsfBank& bank,
+    int wavelength_index) {
+    double moment = 0.0;
+    const int width = bank.kernel_width();
+    for (int y = 0; y < width; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const double dx =
+                static_cast<double>(x - bank.radius_pixels);
+            const double dy =
+                static_cast<double>(y - bank.radius_pixels);
+            moment +=
+                (dx * dx + dy * dy) *
+                bank.at(wavelength_index, x, y);
+        }
+    }
+    return moment;
+}
+
+static int test_diffraction_psf_bank_normalization_and_scaling() {
+    ure::WaveOpticsConfig config;
+    config.mode = ure::WaveOpticsMode::CameraDiffraction;
+    config.camera_diffraction_enabled = true;
+    config.camera_aperture_diameter_m = 1.0e-3;
+    config.camera_focal_length_m = 50.0e-3;
+    config.sensor_pixel_pitch_m = 4.0e-6;
+    config.camera_psf_radius_pixels = 8;
+    config.camera_wavelength_bin_count = 8;
+    const auto bank =
+        ure::wave::make_diffraction_psf_bank(config);
+    CHECK(bank.is_valid());
+    CHECK(bank.kernel_width() == 17);
+    CHECK(bank.weights.size() ==
+          static_cast<std::size_t>(8 * 17 * 17));
+    for (int wavelength = 0;
+         wavelength < bank.wavelength_count;
+         ++wavelength) {
+        double sum = 0.0;
+        for (int y = 0; y < bank.kernel_width(); ++y) {
+            for (int x = 0; x < bank.kernel_width(); ++x) {
+                const float weight =
+                    bank.at(wavelength, x, y);
+                CHECK(weight >= 0.0f);
+                sum += weight;
+            }
+        }
+        CHECK_NEAR(sum, 1.0, 2.0e-6);
+    }
+    CHECK(psf_second_moment(
+              bank,
+              bank.wavelength_count - 1) >
+          psf_second_moment(bank, 0));
+    return 0;
+}
+
+static int test_diffraction_psf_bank_blades_and_defocus() {
+    ure::WaveOpticsConfig focused;
+    focused.mode =
+        ure::WaveOpticsMode::CameraDiffraction;
+    focused.camera_diffraction_enabled = true;
+    focused.camera_aperture_diameter_m = 1.2e-3;
+    focused.camera_focal_length_m = 35.0e-3;
+    focused.sensor_pixel_pitch_m = 3.5e-6;
+    focused.camera_psf_radius_pixels = 5;
+    focused.camera_wavelength_bin_count = 2;
+    focused.camera_pupil_sample_count = 16;
+    const auto circular =
+        ure::wave::make_diffraction_psf_bank(focused);
+
+    auto hexagonal = focused;
+    hexagonal.camera_aperture_blade_count = 6;
+    hexagonal.camera_aperture_rotation_rad = 0.2;
+    const auto blade_bank =
+        ure::wave::make_diffraction_psf_bank(hexagonal);
+    CHECK(blade_bank.is_valid());
+    double shape_difference = 0.0;
+    for (std::size_t i = 0;
+         i < circular.weights.size();
+         ++i) {
+        shape_difference += std::abs(
+            static_cast<double>(circular.weights[i]) -
+            static_cast<double>(blade_bank.weights[i]));
+    }
+    CHECK(shape_difference > 0.05);
+
+    auto defocused = focused;
+    defocused.camera_defocus_waves_at_edge = 1.0;
+    const auto defocused_bank =
+        ure::wave::make_diffraction_psf_bank(defocused);
+    CHECK(defocused_bank.is_valid());
+    const int center = focused.camera_psf_radius_pixels;
+    CHECK(defocused_bank.at(0, center, center) <
+          circular.at(0, center, center));
+    return 0;
+}
+
+static int test_diffraction_psf_bank_invalid_fails_closed() {
+    ure::WaveOpticsConfig config;
+    config.mode =
+        ure::WaveOpticsMode::CameraDiffraction;
+    config.camera_diffraction_enabled = true;
+    config.camera_aperture_blade_count = 2;
+    CHECK(!ure::wave::is_valid_diffraction_camera_config(
+        config));
+    CHECK(ure::wave::make_diffraction_psf_bank(
+              config).weights.empty());
+    config.camera_aperture_blade_count = 0;
+    config.camera_wavelength_bin_count = 33;
+    CHECK(!ure::wave::is_valid_diffraction_camera_config(
+        config));
+    return 0;
+}
+
+static int test_gpu_renderer_rejects_unsupported_wave_combination() {
     ure::RenderConfig config;
     config.wave_optics.mode = ure::WaveOpticsMode::CameraDiffraction;
     config.wave_optics.camera_diffraction_enabled = true;
+    config.wave_optics.coherent_field_enabled = true;
     auto engine = ure::RenderEngineFactory::create_gpu_renderer(config);
 
     bool rejected = false;
@@ -835,7 +949,9 @@ static int test_gpu_renderer_rejects_camera_diffraction_before_scene_load() {
         ure::scene_ir::SceneIR scene;
         engine->load_scene_ir(scene);
     } catch (const std::runtime_error& e) {
-        rejected = std::string(e.what()).find("camera diffraction GPU film is not implemented") != std::string::npos;
+        rejected =
+            std::string(e.what()).find(
+                "unsupported") != std::string::npos;
     }
     CHECK(rejected);
 
@@ -884,7 +1000,10 @@ int main() {
     failed += run("test_diffraction_camera_plan_requires_feature_gate", test_diffraction_camera_plan_requires_feature_gate);
     failed += run("test_diffraction_camera_plan_builds_reference_products", test_diffraction_camera_plan_builds_reference_products);
     failed += run("test_diffraction_camera_plan_rejects_invalid_optics", test_diffraction_camera_plan_rejects_invalid_optics);
-    failed += run("test_gpu_renderer_rejects_camera_diffraction_before_scene_load", test_gpu_renderer_rejects_camera_diffraction_before_scene_load);
+    failed += run("test_diffraction_psf_bank_normalization_and_scaling", test_diffraction_psf_bank_normalization_and_scaling);
+    failed += run("test_diffraction_psf_bank_blades_and_defocus", test_diffraction_psf_bank_blades_and_defocus);
+    failed += run("test_diffraction_psf_bank_invalid_fails_closed", test_diffraction_psf_bank_invalid_fails_closed);
+    failed += run("test_gpu_renderer_rejects_unsupported_wave_combination", test_gpu_renderer_rejects_unsupported_wave_combination);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

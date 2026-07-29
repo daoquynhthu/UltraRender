@@ -73,7 +73,18 @@ static int test_wave_optics_json_fields() {
         f << R"({
   "wave_optics": {
     "mode": "coherent_field",
-    "camera_diffraction": { "enabled": true },
+    "camera_diffraction": {
+      "enabled": true,
+      "aperture_diameter_m": 0.012,
+      "focal_length_m": 0.085,
+      "sensor_pixel_pitch_m": 0.0000045,
+      "defocus_waves_at_edge": 0.75,
+      "aperture_rotation_rad": 0.3,
+      "aperture_blade_count": 7,
+      "psf_radius_pixels": 11,
+      "wavelength_bin_count": 20,
+      "pupil_sample_count": 40
+    },
     "coherent_field": { "enabled": true },
     "partial_coherence": { "enabled": true },
     "diffractive_materials": { "enabled": true },
@@ -96,6 +107,15 @@ static int test_wave_optics_json_fields() {
     CHECK(cfg.wave_optics.specular_manifold_enabled);
     CHECK(cfg.wave_optics.local_fullwave_enabled);
     CHECK(cfg.wave_optics.experimental_allow_preview_degradation);
+    CHECK(std::abs(cfg.wave_optics.camera_aperture_diameter_m - 0.012) < 1.0e-12);
+    CHECK(std::abs(cfg.wave_optics.camera_focal_length_m - 0.085) < 1.0e-12);
+    CHECK(std::abs(cfg.wave_optics.sensor_pixel_pitch_m - 0.0000045) < 1.0e-15);
+    CHECK(std::abs(cfg.wave_optics.camera_defocus_waves_at_edge - 0.75) < 1.0e-12);
+    CHECK(std::abs(cfg.wave_optics.camera_aperture_rotation_rad - 0.3) < 1.0e-12);
+    CHECK(cfg.wave_optics.camera_aperture_blade_count == 7);
+    CHECK(cfg.wave_optics.camera_psf_radius_pixels == 11);
+    CHECK(cfg.wave_optics.camera_wavelength_bin_count == 20);
+    CHECK(cfg.wave_optics.camera_pupil_sample_count == 40);
     return 0;
 }
 
@@ -114,6 +134,15 @@ static int test_wave_optics_cli_overrides() {
         "--enable-specular-manifold",
         "--enable-local-fullwave",
         "--allow-wave-preview-degradation",
+        "--camera-aperture-diameter-m", "0.009",
+        "--camera-focal-length-m", "0.070",
+        "--sensor-pixel-pitch-m", "0.0000038",
+        "--camera-defocus-waves", "-0.5",
+        "--camera-aperture-rotation-rad", "0.4",
+        "--camera-aperture-blades", "9",
+        "--camera-psf-radius", "12",
+        "--camera-wavelength-bins", "24",
+        "--camera-pupil-samples", "48",
     };
     auto cfg = ure::config::parse_cli(static_cast<int>(sizeof(argv) / sizeof(argv[0])),
                                       const_cast<char**>(argv)).config;
@@ -127,6 +156,15 @@ static int test_wave_optics_cli_overrides() {
     CHECK(cfg.wave_optics.specular_manifold_enabled);
     CHECK(cfg.wave_optics.local_fullwave_enabled);
     CHECK(cfg.wave_optics.experimental_allow_preview_degradation);
+    CHECK(std::abs(cfg.wave_optics.camera_aperture_diameter_m - 0.009) < 1.0e-12);
+    CHECK(std::abs(cfg.wave_optics.camera_focal_length_m - 0.070) < 1.0e-12);
+    CHECK(std::abs(cfg.wave_optics.sensor_pixel_pitch_m - 0.0000038) < 1.0e-15);
+    CHECK(std::abs(cfg.wave_optics.camera_defocus_waves_at_edge + 0.5) < 1.0e-12);
+    CHECK(std::abs(cfg.wave_optics.camera_aperture_rotation_rad - 0.4) < 1.0e-12);
+    CHECK(cfg.wave_optics.camera_aperture_blade_count == 9);
+    CHECK(cfg.wave_optics.camera_psf_radius_pixels == 12);
+    CHECK(cfg.wave_optics.camera_wavelength_bin_count == 24);
+    CHECK(cfg.wave_optics.camera_pupil_sample_count == 48);
     return 0;
 }
 

@@ -630,6 +630,13 @@ struct GpuScene {
     GpuMaterialBsdfLobe* material_bsdf_lobes;
     int material_bsdf_lobe_count;
     int num_spectral_channels;
+    GpuVec3* diffraction_spectral_accum;
+    const float* diffraction_psf_weights;
+    int diffraction_pixel_count;
+    int diffraction_radius_pixels;
+    int diffraction_wavelength_count;
+    float diffraction_wavelength_min_nm;
+    float diffraction_wavelength_max_nm;
 
     GpuMiePhaseResource* mie_phase_resources;
     int mie_phase_resource_count;
