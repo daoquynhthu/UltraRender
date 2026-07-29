@@ -2,11 +2,12 @@
 
 ## Status
 
-V.0 through V.8 are complete and the authoritative cursor is V.9. This
+V.0 through V.9 are complete and the authoritative cursor is V.10. This
 document records the initial acceleration audit, configuration contract,
 self-compute construction, optional native-provider lifecycle and the
 cross-provider traversal contract. V.8 establishes clustered geometry
-resources; physical-error LoD selection is V.9.
+resources, V.9 closes physical-error LoD selection, and V.10 owns dynamic
+geometry lifecycle.
 
 ## Current production path
 
@@ -352,3 +353,32 @@ identity from the packed ABI, refuses a nonresident cluster and reads its
 payload only after the second page becomes resident. V.8 does not enable the
 renderer cluster flag; V.9 must connect path/ray physical-error policy to
 cluster LoD selection before production traversal can use this resource.
+
+## V.9 physical-error LoD selection
+
+`ure/runtime/cluster_lod.hpp` is the shared SDK-free host/CUDA selection
+contract. A ray differential carries origin radius, directional spread and
+travel distance; their projected footprint is combined with camera, diffuse,
+glossy, specular, shadow or caustic path class and material roughness. The
+selector evaluates position plus displacement, normal angle, opacity and
+spectral-relative error. Normal-field resources tighten angular tolerance,
+while spectral resources and wavelength span tighten spectral tolerance.
+Specular, shadow and caustic paths accept only zero-error geometry.
+
+Level zero is a zero-error reference. Every parent keeps the same LoD group and
+complete material/resource boundary, reports no smaller error, and has bounds
+that cover its child after position/displacement expansion. Packed coarse
+bounds are expanded by that error before GPU culling. Selection walks only
+resident parents and fails when no physically valid resident representation
+exists.
+
+`test_cluster_lod` covers path class, ray footprint, roughness, resource
+sensitivity, residency and invalid hierarchy/query/policy/provenance. The
+actual CUDA gate traces 256 fixed visibility queries against a deliberately
+unsafe preview proxy: direct preview use produces 256 shadow and 256
+reflection mismatches, while physical selection produces zero in both classes
+and still selects coarse geometry for all 256 diffuse queries.
+`tools/benchmarks/run_phase_v9_lod_visibility.ps1` writes the stable
+`ure.phase_v.cluster_lod.v1` evidence. The main renderer cluster flag remains
+fail-loud until V.10 connects rigid, deforming and topology-changing resource
+lifecycle to SceneDiff.

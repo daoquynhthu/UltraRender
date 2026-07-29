@@ -124,6 +124,47 @@ bool error_covers(
             child.spectral_relative;
 }
 
+bool zero_error(const ClusterLodError& error) {
+    return error.position == 0.0f &&
+        error.displacement == 0.0f &&
+        error.normal_radians == 0.0f &&
+        error.opacity == 0.0f &&
+        error.spectral_relative == 0.0f;
+}
+
+bool lod_bounds_cover(
+    const ClusterBounds& parent,
+    const ClusterBounds& child,
+    const ClusterLodError& error) {
+    const float expansion =
+        error.position + error.displacement;
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        const float scale = std::max(
+            1.0f,
+            std::abs(child.maximum[axis] -
+                     child.minimum[axis]));
+        const float tolerance = scale * 1.0e-5f;
+        if (parent.minimum[axis] - expansion >
+                child.minimum[axis] + tolerance ||
+            parent.maximum[axis] + expansion <
+                child.maximum[axis] - tolerance) {
+            return false;
+        }
+    }
+    float center_distance_squared = 0.0f;
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        const float delta =
+            child.sphere[axis] - parent.sphere[axis];
+        center_distance_squared += delta * delta;
+    }
+    const float sphere_tolerance =
+        std::max(1.0f, child.sphere[3]) * 1.0e-5f;
+    return std::sqrt(center_distance_squared) +
+            child.sphere[3] <=
+        parent.sphere[3] + expansion +
+            sphere_tolerance;
+}
+
 ClusterBounds compute_bounds(
     std::span<const ClusterVertex> vertices) {
     ClusterBounds result;
@@ -590,6 +631,20 @@ ClusterValidationSummary validate_clustered_geometry(
                 "clustered geometry cluster range is invalid");
         }
         boundary_used[cluster.boundary_index] = true;
+        const auto& boundary =
+            resource.boundaries[cluster.boundary_index];
+        if ((cluster.lod_level == 0 &&
+             !zero_error(cluster.lod_error)) ||
+            (cluster.lod_error.displacement > 0.0f &&
+             !boundary.displacement) ||
+            (cluster.lod_error.opacity > 0.0f &&
+             !boundary.opacity) ||
+            (cluster.lod_error.spectral_relative > 0.0f &&
+             !boundary.spectral)) {
+            throw Error(
+                ErrorCode::InvalidArgument,
+                "clustered geometry LoD error provenance is invalid");
+        }
         for (std::uint64_t index =
                  cluster.local_index_offset;
              index < local_end;
@@ -642,11 +697,17 @@ ClusterValidationSummary validate_clustered_geometry(
                     cluster.parent_cluster];
             if (parent.lod_group !=
                     cluster.lod_group ||
+                parent.boundary_index !=
+                    cluster.boundary_index ||
                 parent.lod_level <=
                     cluster.lod_level ||
                 !error_covers(
                     parent.lod_error,
-                    cluster.lod_error)) {
+                    cluster.lod_error) ||
+                !lod_bounds_cover(
+                    parent.bounds,
+                    cluster.bounds,
+                    parent.lod_error)) {
                 throw Error(
                     ErrorCode::InvalidArgument,
                     "clustered geometry LoD hierarchy is invalid");
@@ -802,12 +863,22 @@ PackedClusteredGeometry pack_clustered_geometry(
                 resource.clusters[cluster_index];
             auto& record =
                 cluster_records[cluster_index];
+            const float bounds_expansion =
+                cluster.lod_error.position +
+                cluster.lod_error.displacement;
             record.bounds_minimum = gpu_float4(
                 cluster.bounds.minimum);
             record.bounds_maximum = gpu_float4(
                 cluster.bounds.maximum);
             record.bounds_sphere = gpu_float4(
                 cluster.bounds.sphere);
+            record.bounds_minimum.x -= bounds_expansion;
+            record.bounds_minimum.y -= bounds_expansion;
+            record.bounds_minimum.z -= bounds_expansion;
+            record.bounds_maximum.x += bounds_expansion;
+            record.bounds_maximum.y += bounds_expansion;
+            record.bounds_maximum.z += bounds_expansion;
+            record.bounds_sphere.w += bounds_expansion;
             record.lod_error_primary = {
                 cluster.lod_error.position,
                 cluster.lod_error.displacement,

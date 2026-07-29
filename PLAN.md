@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-29 (V.8 closure and V.9 cursor)
+最后更新: 2026-07-29 (V.9 closure and V.10 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -57,7 +57,7 @@ R-P4 specular manifold + BDPT/VCM [done]
 Phase T complete [done]
    │
    ▼
-当前游标: V.9
+当前游标: V.10
    │
    ▼
 Phase V complete
@@ -80,7 +80,7 @@ Phase X complete
 - **Phase Q 已闭环**: URE native schema、serialization、programmatic graph、feature declaration、tooling/adapter、compiled cache/farm 与 validation suite 已冻结为后续阶段的权威 authoring contract。
 - **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
 - **Phase T 已闭环**: T.0-T.11 已冻结 coupling、backend identity、共享 Slang 工具链、SDK-free runtime/resource/execution/acceleration/scheduling contract、CUDA production lowering、Vulkan compute/acceleration foundation、Windows optional D3D12/DXR backend、heterogeneous sample-shard negotiation 和 cross-backend validation/performance suite。
-- **当前唯一施工项 — Phase V**: V.0-V.8 已闭环；当前游标为 V.9 physical error LoD。Phase W 现有 reference/oracle 成果保留，新增 W production work 继续冻结。
+- **当前唯一施工项 — Phase V**: V.0-V.9 已闭环；当前游标为 V.10 dynamic/deforming geometry。Phase W 现有 reference/oracle 成果保留，新增 W production work 继续冻结。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
 - 文档中的“进行中”表示已有未闭环成果，不等于允许并行施工。发生冲突时，以本节当前游标为准。
@@ -2076,7 +2076,7 @@ T.11 closure（2026-07-28）：新增 `run_phase_t_validation_suite.ps1` 与 `ur
 
 ### Phase V — GPU 几何加速结构 / BVH / OptiX / Clustered Geometry
 
-**状态**: 进行中，V.0-V.8 已完成，当前游标 V.9。
+**状态**: 进行中，V.0-V.9 已完成，当前游标 V.10。
 
 **目标**: 将当前 mesh-local BVH 和线性 fallback traversal 升级为适配 UltraRender 光谱、偏振、材质图、动态场景和未来波动光学的 GPU 几何加速栈。Phase V 的核心不是复制外部引擎的可见性系统，而是在 Phase T 的 acceleration-provider contract 上建立自己的 `AccelerationScene`：同一份 SceneIR/resource graph 能选择自研 compute BVH、OptiX、Vulkan RT 或 DXR provider，并在能力不满足时 fail-loud。
 
@@ -2137,6 +2137,8 @@ V.6 closure（2026-07-28）：Phase T 的 SDK-free acceleration contract 已从�
 V.7 closure（2026-07-29）：新增由单一 `SceneIR` 构造并 lower 的跨 provider fixture，以两个非均匀缩放实例、稳定 material/instance/primitive identity、四条 closest-hit/miss ray 与一条 shadow ray 统一 CUDA self-compute、OptiX、Vulkan RT 和 DXR 的输入语义。SDK-free `AccelerationHit` 增加 16-byte tangent/handedness record；共享 Slang compute/ray-query shader 与 OptiX closest-hit pipeline 对 position/distance、geometric/shading normal、Gram-Schmidt tangent、UV/barycentrics、material/instance/primitive、shadow visibility 和 `uv/|Nz|/visibility` AOV 执行同一合同，退化 tangent 使用确定性正交 fallback。OptiX 从固定 CUDA 13 OptiX IR 构建真实 raygen/miss/closest-hit pipeline，并保留 V.6 two-GAS/IAS lifecycle；SDK 与 native capability 缺失仍只跳过对应可选 provider。`run_phase_v7_cross_provider_parity.ps1` 输出 `ure.phase_v.cross_provider_parity.v1`，记录 fixture/artifact hash、数值阈值以及实际 CUDA 13.3、OptiX 8.1、NVIDIA Vulkan RT 和 DXR 的 adapter/compiler/driver identity。Release build、48/48 CTest、shader determinism、Phase T/V static 与文档一致性通过；通用 Vulkan/D3D12/OptiX radiometric integrator lowering 仍不虚报，权威游标进入 V.8。
 
 V.8 closure（2026-07-29）：新增 SDK-free `clustered_geometry` 派生资源合同，不把 backend construction/cache artifact 写回权威 SceneIR authoring schema。稳定 resource/source-geometry ID、material slot 以及 material/spectral/displacement/opacity/normal-field resource ID 共同定义不可跨越的 cluster boundary；确定性 builder 按 boundary、LoD group/level 和 64-vertex/124-triangle 默认上限生成局部 16-bit index meshlet，保留原始 primitive identity。每个 cluster 保存 conservative AABB/bounding sphere、position/displacement/normal-angle/opacity/spectral-relative 五分量物理 LoD error 和可验证 parent relation。16-byte aligned GPU ABI 将 metadata 与逐页 payload 分离，required-page prefix、generation bitset、canonical packing 和通用 `UploadPlan` 对 partial/full residency、显存预算、越界 local index、非保守 bounds、非法 hierarchy/page/boundary 执行 fail-loud validation。独立 host 与实际 CUDA tests 验证三 cluster/two page streaming、material/spectral boundary identity、nonresident access rejection 和完成 upload 后的 GPU payload 读取。生产 renderer 的 cluster config 仍保持 fail-loud，V.9 在本合同上实现按 path/ray physical error 的 LoD 选择，避免 V.8 资源存在被误称为 production clustered traversal。Release 全量门禁、Phase T/V static、SDK-free build 和文档一致性通过；权威游标进入 V.9。
+
+V.9 closure（2026-07-29）：新增 SDK-free、host/CUDA 共享的 `cluster_lod` 物理选择合同，以 ray differential 的 origin radius、direction spread 和 travel distance 计算 projected footprint，并按 camera/diffuse/glossy/specular/shadow/caustic path class、material roughness、normal-field、displacement、opacity、spectral resource 与 wavelength span 分别约束 position+displacement、normal angle、opacity 和 spectral-relative error。specular/shadow/caustic 对任何非零代理误差保持 exact-only；camera/diffuse/rough-glossy 只在 resident parent 满足全部物理阈值时选择更粗层级。level-0 必须是零误差 reference，parent 必须保持 LoD group 和完整 material/resource boundary；coarse packed bounds 按 position+displacement error 外扩，避免 selector 之前发生 false-negative culling。host gate 覆盖 path class、ray footprint、roughness/resource sensitivity、residency、invalid query/policy、hierarchy/bounds/provenance fail-loud；实际 CUDA 的 256-ray shadow/reflection-heavy gate 中，未经物理选择的 preview proxy 各产生 256/256 visibility mismatch，physical selector 两类均为 0/256，同时 diffuse 256/256 选择 coarse。`run_phase_v9_lod_visibility.ps1` 固化 `ure.phase_v.cluster_lod.v1` JSON 证据。主 renderer 的 cluster flag 继续 fail-loud，避免在 V.10 将 rigid/deforming/topology-change 资源生命周期接入 SceneDiff 前把独立 resource selector 虚报为完整 clustered production traversal；权威游标进入 V.10。
 
 #### 完成标准
 

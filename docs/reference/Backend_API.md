@@ -73,9 +73,12 @@ SceneIR closest/shadow, transform, material, interpolation and AOV contract
 across CUDA self-compute, optional OptiX, Vulkan RT and DXR. Clustered geometry
 V.8 adds an SDK-free derived resource with conservative bounds,
 material/spectral/displacement/opacity/normal-field boundaries, page
-residency, physical LoD error and canonical GPU upload ABI. It does not yet
-make the renderer cluster flag executable; physical-error LoD selection and
-production traversal remain V.9. Existing backend-only C entry points retain
+residency, physical LoD error and canonical GPU upload ABI. V.9 adds a shared
+host/CUDA selector whose ray footprint and path/material/resource sensitivity
+keep nonzero-error proxies out of specular, shadow and caustic visibility.
+The renderer cluster flag remains fail-loud until V.10 integrates the
+rigid/deforming/topology-change resource lifecycle with SceneDiff. Existing
+backend-only C entry points retain
 their original layout and behavior; the execution-config entry points add
 acceleration without requiring callers to pass a larger legacy structure.
 

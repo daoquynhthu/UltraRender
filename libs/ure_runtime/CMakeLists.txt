@@ -1,5 +1,6 @@
 add_library(ure_runtime STATIC
     src/acceleration.cpp
+    src/cluster_lod.cpp
     src/clustered_geometry.cpp
     src/execution_graph.cpp
     src/multi_backend.cpp

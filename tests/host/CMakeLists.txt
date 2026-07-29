@@ -38,6 +38,15 @@ add_test(
     NAME test_clustered_geometry
     COMMAND test_clustered_geometry)
 
+add_executable(
+    test_cluster_lod
+    test_cluster_lod.cpp)
+target_link_libraries(
+    test_cluster_lod PRIVATE ure_runtime)
+add_test(
+    NAME test_cluster_lod
+    COMMAND test_cluster_lod)
+
 add_executable(test_resource_plan test_resource_plan.cpp)
 target_include_directories(test_resource_plan PRIVATE
     "${CMAKE_SOURCE_DIR}/libs/ure_core/include"
