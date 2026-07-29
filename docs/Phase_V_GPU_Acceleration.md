@@ -2,11 +2,11 @@
 
 ## Status
 
-V.0 through V.9 are complete and the authoritative cursor is V.10. This
+V.0 through V.10 are complete and the authoritative cursor is V.11. This
 document records the initial acceleration audit, configuration contract,
 self-compute construction, optional native-provider lifecycle and the
 cross-provider traversal contract. V.8 establishes clustered geometry
-resources, V.9 closes physical-error LoD selection, and V.10 owns dynamic
+resources, V.9 closes physical-error LoD selection, and V.10 closes dynamic
 geometry lifecycle.
 
 ## Current production path
@@ -382,3 +382,31 @@ and still selects coarse geometry for all 256 diffuse queries.
 `ure.phase_v.cluster_lod.v1` evidence. The main renderer cluster flag remains
 fail-loud until V.10 connects rigid, deforming and topology-changing resource
 lifecycle to SceneDiff.
+
+## V.10 dynamic and deforming geometry
+
+`ure/runtime/dynamic_geometry.hpp` classifies stable-resource mutations from
+vertex/index count, topology, boundary and attribute hashes plus maximum
+displacement. The planner maps rigid, deforming and topology-changing inputs
+to TLAS refit/rebuild, BLAS refit/rebuild, cluster-bounds refit or recluster
+actions under the selected acceleration policy and advertised capability.
+Static mutation, topology under refit, unavailable explicit BLAS refit, and
+clustered updates without refit/recluster support reject.
+
+`SceneDiff::update_scene_ir_mesh` validates indexed triangles, finite vertex
+attributes, mesh index and duplicate mutations. A failed backend update rolls
+the retained SceneIR resource back. Rigid instance changes continue through
+the transform hot path. CUDA now executes either TLAS refit or an explicit
+TLAS rebuild with refreshed instance-index upload. Because the CUDA
+self-compute backend does not yet expose a safe in-place mesh-BLAS refit,
+automatic and rebuild policies conservatively reload and rebuild BLAS/TLAS for
+deformation and topology; explicit refit does not silently become rebuild.
+
+The actual CUDA 8×8 gate verifies first-hit depth after rigid, deforming and
+topology-changing mutations, zero invalid-acceleration/stack-overflow counts,
+rigid rebuild, and unsupported deformation refit. The closure run measured
+about 0.079 ms rigid, 3.198 ms deforming and 1.462 ms topology update on the
+validation machine. `tools/benchmarks/run_phase_v10_dynamic_geometry.ps1`
+writes stable `ure.phase_v.dynamic_geometry.v1` evidence. The clustered
+renderer flag remains fail-loud because the resource/selector/lifecycle
+contracts are not yet a complete SceneIR clustered traversal lowering.

@@ -21,6 +21,11 @@ struct SceneIrMaterialMutation {
     scene_ir::MaterialNode material;
 };
 
+struct SceneIrMeshMutation {
+    size_t mesh_index = 0;
+    std::shared_ptr<Mesh> mesh;
+};
+
 struct SceneIrInstanceInsertion {
     scene_ir::InstanceNode instance;
 };
@@ -34,6 +39,7 @@ struct SceneDiff {
     std::optional<Camera> camera;
     std::vector<InstanceTransformMutation> instance_transforms;
     std::vector<SceneIrMaterialMutation> scene_ir_materials;
+    std::vector<SceneIrMeshMutation> scene_ir_meshes;
     std::vector<SceneIrInstanceInsertion> scene_ir_instances_to_add;
     std::vector<size_t> scene_ir_instances_to_remove;
     std::vector<SceneIrSphereInsertion> scene_ir_spheres_to_add;
@@ -67,6 +73,16 @@ struct SceneDiff {
         return diff;
     }
 
+    static SceneDiff update_scene_ir_mesh(
+        size_t mesh_index,
+        std::shared_ptr<Mesh> mesh) {
+        SceneDiff diff;
+        diff.scene_ir_meshes.push_back({
+            mesh_index,
+            std::move(mesh)});
+        return diff;
+    }
+
     static SceneDiff add_scene_ir_instance(scene_ir::InstanceNode instance) {
         SceneDiff diff;
         diff.scene_ir_instances_to_add.push_back({std::move(instance)});
@@ -96,6 +112,7 @@ struct SceneDiff {
                !camera &&
                instance_transforms.empty() &&
                scene_ir_materials.empty() &&
+               scene_ir_meshes.empty() &&
                scene_ir_instances_to_add.empty() &&
                scene_ir_instances_to_remove.empty() &&
                scene_ir_spheres_to_add.empty() &&

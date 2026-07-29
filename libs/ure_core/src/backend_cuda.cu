@@ -417,7 +417,9 @@ BackendSelection select_backend(const RenderConfig& config) {
         acceleration.update_policy !=
             AccelerationUpdatePolicy::Static &&
         acceleration.update_policy !=
-            AccelerationUpdatePolicy::Refit) {
+            AccelerationUpdatePolicy::Refit &&
+        acceleration.update_policy !=
+            AccelerationUpdatePolicy::Rebuild) {
         throw std::invalid_argument(
             "requested acceleration update policy is not implemented");
     }

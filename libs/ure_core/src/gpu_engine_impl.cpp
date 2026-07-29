@@ -9,12 +9,103 @@
 
 #include <ure/log.hpp>
 
+#include <algorithm>
 #include <array>
-#include <vector>
 #include <cassert>
+#include <chrono>
+#include <cmath>
 #include <stdexcept>
+#include <vector>
 
 namespace ure {
+namespace {
+
+std::uint64_t hash_bytes(
+    std::uint64_t hash,
+    const void* data,
+    std::size_t size) {
+    const auto* bytes =
+        static_cast<const unsigned char*>(data);
+    for (std::size_t index = 0; index < size; ++index) {
+        hash ^= bytes[index];
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
+template <typename T>
+std::uint64_t hash_vector(
+    std::uint64_t hash,
+    const std::vector<T>& values) {
+    return hash_bytes(
+        hash,
+        values.data(),
+        values.size() * sizeof(T));
+}
+
+runtime::GeometrySnapshot geometry_snapshot(
+    const gpu::RenderMesh& mesh,
+    std::size_t mesh_index) {
+    constexpr std::uint64_t offset =
+        1469598103934665603ull;
+    std::uint64_t topology_hash =
+        hash_vector(offset, mesh.indices);
+    topology_hash = hash_bytes(
+        topology_hash,
+        &mesh_index,
+        sizeof(mesh_index));
+    std::uint64_t attribute_hash =
+        hash_vector(offset, mesh.vertices);
+    attribute_hash =
+        hash_vector(attribute_hash, mesh.normals);
+    attribute_hash =
+        hash_vector(attribute_hash, mesh.uvs);
+    attribute_hash =
+        hash_vector(attribute_hash, mesh.tangents);
+    const std::uint64_t boundary_hash = hash_bytes(
+        offset,
+        &mesh.material_index,
+        sizeof(mesh.material_index));
+    return {
+        {0x47454f4d45545259ull,
+         static_cast<std::uint64_t>(mesh_index + 1)},
+        mesh.vertices.size() / 3,
+        mesh.indices.size(),
+        topology_hash,
+        boundary_hash,
+        attribute_hash,
+        0.0f,
+        0.0f};
+}
+
+float maximum_mesh_displacement(
+    const gpu::RenderMesh& before,
+    const gpu::RenderMesh& after) {
+    if (before.vertices.size() !=
+        after.vertices.size()) {
+        return 0.0f;
+    }
+    float maximum = 0.0f;
+    for (std::size_t index = 0;
+         index + 2 < before.vertices.size();
+         index += 3) {
+        const float dx =
+            after.vertices[index] -
+            before.vertices[index];
+        const float dy =
+            after.vertices[index + 1] -
+            before.vertices[index + 1];
+        const float dz =
+            after.vertices[index + 2] -
+            before.vertices[index + 2];
+        maximum = std::max(
+            maximum,
+            std::sqrt(dx * dx + dy * dy + dz * dz));
+    }
+    return maximum;
+}
+
+}
 
 IntegratorEstimatorMetadata make_integrator_estimator_metadata(
     const RenderConfig& config,
@@ -159,8 +250,28 @@ public:
         // Step 3: Read safe frame (lags by 1 full cycle) and upload to GPU
         int upload_count = 0;
         const gpu::GpuInstanceTransform* src = transform_ring_buffer_.begin_read(upload_count);
-        gpu::update_instance_transforms_gpu(gpu_context_, src, upload_count);
+        const auto update_start =
+            std::chrono::steady_clock::now();
+        gpu::update_instance_transforms_gpu(
+            gpu_context_, src, upload_count);
+        const auto update_end =
+            std::chrono::steady_clock::now();
         transform_ring_buffer_.end_read();
+        runtime::GeometryUpdatePlan plan;
+        plan.rigid_count = 1;
+        if (config_.acceleration.update_policy ==
+            AccelerationUpdatePolicy::Rebuild) {
+            plan.tlas_rebuild_count = 1;
+        } else {
+            plan.tlas_refit_count = 1;
+        }
+        runtime::accumulate_dynamic_geometry_stats(
+            dynamic_geometry_stats_,
+            plan,
+            static_cast<std::uint64_t>(
+                std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(
+                    update_end - update_start).count()));
 
         reset_accumulation();
     }
@@ -186,6 +297,70 @@ public:
         }
         ure::gpu::update_materials_gpu(gpu_context_, cached_materials_.data(), count, ure::gpu::kDefaultMaterialCount);
         reset_accumulation();
+    }
+
+    void update_geometry(
+        const scene_ir::SceneIR& scene_ir) override {
+        if (!gpu_context_) {
+            throw std::runtime_error(
+                "update_geometry: no GPU context");
+        }
+        const CompiledGpuScene compiled =
+            GpuSceneCompiler::compile(scene_ir, config_);
+        if (compiled.meshes.size() !=
+            cached_meshes_.size()) {
+            throw std::runtime_error(
+                "update_geometry: mesh resource count changed; explicit scene reload required");
+        }
+        std::vector<runtime::GeometryMutation>
+            mutations;
+        for (std::size_t index = 0;
+             index < compiled.meshes.size();
+             ++index) {
+            auto before = geometry_snapshot(
+                cached_meshes_[index], index);
+            auto after = geometry_snapshot(
+                compiled.meshes[index], index);
+            if (before.topology_hash ==
+                    after.topology_hash &&
+                before.boundary_hash ==
+                    after.boundary_hash &&
+                before.attribute_hash ==
+                    after.attribute_hash) {
+                continue;
+            }
+            after.maximum_displacement =
+                maximum_mesh_displacement(
+                    cached_meshes_[index],
+                    compiled.meshes[index]);
+            mutations.push_back({
+                before,
+                after,
+                false});
+        }
+        if (mutations.empty()) {
+            throw std::invalid_argument(
+                "update_geometry: mutation contains no compiled geometry change");
+        }
+        const auto plan =
+            runtime::plan_dynamic_geometry_updates(
+                mutations,
+                config_.acceleration.update_policy,
+                config_.acceleration.
+                    clustered_geometry_enabled,
+                {});
+        const auto update_start =
+            std::chrono::steady_clock::now();
+        load_compiled_scene(compiled);
+        const auto update_end =
+            std::chrono::steady_clock::now();
+        runtime::accumulate_dynamic_geometry_stats(
+            dynamic_geometry_stats_,
+            plan,
+            static_cast<std::uint64_t>(
+                std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(
+                    update_end - update_start).count()));
     }
 
     void render(const RenderSettings& settings) override {
@@ -309,6 +484,11 @@ public:
         return ure::gpu::get_acceleration_stats(gpu_context_);
     }
 
+    runtime::DynamicGeometryStats
+    get_dynamic_geometry_stats() const override {
+        return dynamic_geometry_stats_;
+    }
+
 private:
     void validate_wave_optics_support() const {
         if (wave_optics_is_radiometric_only(config_.wave_optics)) return;
@@ -384,8 +564,28 @@ private:
         // Upload the read frame (lags write by 1-2 frames)
         int count = 0;
         const ure::gpu::GpuInstanceTransform* src = transform_ring_buffer_.begin_read(count);
-        ure::gpu::update_instance_transforms_gpu(gpu_context_, src, count);
+        const auto update_start =
+            std::chrono::steady_clock::now();
+        ure::gpu::update_instance_transforms_gpu(
+            gpu_context_, src, count);
+        const auto update_end =
+            std::chrono::steady_clock::now();
         transform_ring_buffer_.end_read();
+        runtime::GeometryUpdatePlan plan;
+        plan.rigid_count = 1;
+        if (config_.acceleration.update_policy ==
+            AccelerationUpdatePolicy::Rebuild) {
+            plan.tlas_rebuild_count = 1;
+        } else {
+            plan.tlas_refit_count = 1;
+        }
+        runtime::accumulate_dynamic_geometry_stats(
+            dynamic_geometry_stats_,
+            plan,
+            static_cast<std::uint64_t>(
+                std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(
+                    update_end - update_start).count()));
         
         // Advance write frame for next physics step
         transform_ring_buffer_.advance();
@@ -413,6 +613,8 @@ private:
 
     BackendSelection backend_selection_;
     RenderConfig config_;
+    runtime::DynamicGeometryStats
+        dynamic_geometry_stats_;
 
     // Phase P.3: triple-buffer for transforms (writer=physics, reader=render)
     ure::gpu::TransformRingBuffer transform_ring_buffer_;

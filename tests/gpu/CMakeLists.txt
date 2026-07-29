@@ -141,6 +141,19 @@ if(CMAKE_CUDA_COMPILER)
         ure_runtime CUDA::cudart
     )
 
+    add_executable(
+        gpu_test_dynamic_geometry
+        test_dynamic_geometry.cu
+    )
+    target_include_directories(
+        gpu_test_dynamic_geometry PRIVATE
+        ${GPU_TEST_INCLUDES}
+    )
+    target_link_libraries(
+        gpu_test_dynamic_geometry PRIVATE
+        ure_core CUDA::cudart
+    )
+
     add_executable(gpu_phase_r_guiding_benchmark
         phase_r_guiding_benchmark.cu
     )
@@ -155,6 +168,7 @@ if(CMAKE_CUDA_COMPILER)
         gpu_test_acceleration_contract
         gpu_test_clustered_geometry
         gpu_test_cluster_lod
+        gpu_test_dynamic_geometry
         gpu_phase_r_guiding_benchmark
     )
     foreach(gpu_test IN LISTS GPU_TEST_TARGETS)
@@ -190,6 +204,9 @@ if(CMAKE_CUDA_COMPILER)
     add_test(
         NAME gpu_cluster_lod
         COMMAND gpu_test_cluster_lod)
+    add_test(
+        NAME gpu_dynamic_geometry
+        COMMAND gpu_test_dynamic_geometry)
 
     add_custom_target(gpu_tests
         COMMAND gpu_test_device

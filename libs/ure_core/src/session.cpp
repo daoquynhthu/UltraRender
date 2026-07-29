@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <unordered_map>
 
 namespace ure {
@@ -94,6 +95,40 @@ void validate_scene_ir_sphere(const scene_ir::SphereNode& sphere) {
     }
     if (!sphere.material) {
         throw std::runtime_error("SceneDiff sphere topology mutation requires a material");
+    }
+}
+
+void validate_scene_ir_mesh(const std::shared_ptr<Mesh>& mesh) {
+    if (!mesh ||
+        mesh->vertices.size() < 3 ||
+        mesh->indices.empty() ||
+        mesh->indices.size() % 3 != 0) {
+        throw std::runtime_error(
+            "SceneDiff mesh mutation requires indexed triangle geometry");
+    }
+    for (const auto& vertex : mesh->vertices) {
+        if (!std::isfinite(vertex.position.x) ||
+            !std::isfinite(vertex.position.y) ||
+            !std::isfinite(vertex.position.z) ||
+            !std::isfinite(vertex.normal.x) ||
+            !std::isfinite(vertex.normal.y) ||
+            !std::isfinite(vertex.normal.z) ||
+            !std::isfinite(vertex.uv.x) ||
+            !std::isfinite(vertex.uv.y) ||
+            !std::isfinite(vertex.tangent.x) ||
+            !std::isfinite(vertex.tangent.y) ||
+            !std::isfinite(vertex.tangent.z)) {
+            throw std::runtime_error(
+                "SceneDiff mesh mutation contains non-finite vertex data");
+        }
+    }
+    for (const int index : mesh->indices) {
+        if (index < 0 ||
+            static_cast<std::size_t>(index) >=
+                mesh->vertices.size()) {
+            throw std::runtime_error(
+                "SceneDiff mesh mutation contains an out-of-range index");
+        }
     }
 }
 
@@ -199,7 +234,14 @@ void RenderSession::mutate_scene(const SceneDiff& diff) {
     if (!diff.scene_ir_materials.empty()) {
         resource_changed = apply_material_mutations(diff.scene_ir_materials, !topology_changed);
     }
-    if (topology_changed || transform_resource_changed || resource_changed) {
+    bool mesh_resource_changed = false;
+    if (!diff.scene_ir_meshes.empty()) {
+        mesh_resource_changed = apply_mesh_mutations(
+            diff.scene_ir_meshes,
+            !topology_changed);
+    }
+    if (topology_changed || transform_resource_changed ||
+        resource_changed || mesh_resource_changed) {
         reload_current_scene();
     }
     if (diff.camera) {
@@ -209,7 +251,8 @@ void RenderSession::mutate_scene(const SceneDiff& diff) {
                !diff.replacement_scene &&
                !topology_changed &&
                diff.instance_transforms.empty() &&
-               diff.scene_ir_materials.empty()) {
+               diff.scene_ir_materials.empty() &&
+               diff.scene_ir_meshes.empty()) {
         engine_->reset_accumulation();
         state_ = RenderSessionState::Ready;
     }
@@ -325,6 +368,13 @@ AccelerationStats RenderSession::get_acceleration_stats() const {
     std::scoped_lock lock(state_mutex_, engine_mutex_);
     require_engine();
     return engine_->get_acceleration_stats();
+}
+
+runtime::DynamicGeometryStats
+RenderSession::get_dynamic_geometry_stats() const {
+    std::scoped_lock lock(state_mutex_, engine_mutex_);
+    require_engine();
+    return engine_->get_dynamic_geometry_stats();
 }
 
 const std::vector<float>& RenderSession::get_aov(AovType type) const {
@@ -500,6 +550,65 @@ bool RenderSession::apply_material_mutations(const std::vector<SceneIrMaterialMu
     }
 
     throw std::runtime_error("SceneDiff material mutation requires a retained SceneIR scene");
+}
+
+bool RenderSession::apply_mesh_mutations(
+    const std::vector<SceneIrMeshMutation>& mutations,
+    bool upload) {
+    if (!current_scene_ir_) {
+        throw std::runtime_error(
+            "SceneDiff mesh mutation requires a retained SceneIR scene");
+    }
+    std::vector<std::size_t> indices;
+    indices.reserve(mutations.size());
+    for (const auto& mutation : mutations) {
+        if (mutation.mesh_index >=
+            current_scene_ir_->meshes.size()) {
+            throw std::out_of_range(
+                "SceneDiff mesh mutation index is out of range");
+        }
+        if (!current_scene_ir_->meshes[
+                mutation.mesh_index]) {
+            throw std::runtime_error(
+                "SceneDiff mesh mutation targets an empty resource");
+        }
+        validate_scene_ir_mesh(mutation.mesh);
+        indices.push_back(mutation.mesh_index);
+    }
+    std::sort(indices.begin(), indices.end());
+    if (std::adjacent_find(
+            indices.begin(), indices.end()) !=
+        indices.end()) {
+        throw std::runtime_error(
+            "SceneDiff contains duplicate mesh mutations");
+    }
+    std::vector<std::shared_ptr<Mesh>> previous;
+    previous.reserve(mutations.size());
+    for (const auto& mutation : mutations) {
+        auto& resource =
+            current_scene_ir_->meshes[
+                mutation.mesh_index];
+        previous.push_back(resource->mesh);
+        resource->mesh =
+            std::make_shared<Mesh>(*mutation.mesh);
+    }
+    if (!upload) {
+        return true;
+    }
+    try {
+        engine_->update_geometry(*current_scene_ir_);
+    } catch (...) {
+        for (std::size_t index = 0;
+             index < mutations.size();
+             ++index) {
+            current_scene_ir_->meshes[
+                mutations[index].mesh_index]->mesh =
+                previous[index];
+        }
+        throw;
+    }
+    state_ = RenderSessionState::Ready;
+    return false;
 }
 
 } // namespace ure

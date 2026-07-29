@@ -53,6 +53,8 @@ public:
     const std::vector<float>& get_aov(AovType type) const;
     IntegratorEstimatorMetadata get_estimator_metadata() const;
     AccelerationStats get_acceleration_stats() const;
+    runtime::DynamicGeometryStats
+        get_dynamic_geometry_stats() const;
     RenderSessionState state() const;
     bool has_scene() const;
 
@@ -67,6 +69,9 @@ private:
     void reload_current_scene();
     bool apply_instance_transform_mutations(const std::vector<InstanceTransformMutation>& mutations, bool upload);
     bool apply_material_mutations(const std::vector<SceneIrMaterialMutation>& scene_ir_mutations, bool upload);
+    bool apply_mesh_mutations(
+        const std::vector<SceneIrMeshMutation>& mutations,
+        bool upload);
 
     std::unique_ptr<IRenderEngine> engine_;
     RenderConfig config_;

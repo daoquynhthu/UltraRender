@@ -300,7 +300,9 @@ static int test_backend_identity_and_capability_contract() {
         ure::BackendKind::Cuda);
     config.acceleration.update_policy =
         ure::AccelerationUpdatePolicy::Rebuild;
-    CHECK(throws_exception([&] { (void)ure::select_backend(config); }));
+    CHECK(
+        ure::select_backend(config).adapter.kind ==
+        ure::BackendKind::Cuda);
     config.acceleration.update_policy =
         ure::AccelerationUpdatePolicy::Automatic;
     config.acceleration.clustered_geometry_enabled = true;

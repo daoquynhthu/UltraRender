@@ -4905,6 +4905,7 @@ void update_instance_transforms_gpu(GpuContext* ctx,
     if (!ctx->d_instance_transforms ||
         !ctx->d_previous_instance_transforms ||
         !ctx->d_tlas_nodes ||
+        !ctx->d_tlas_instance_indices ||
         count != ctx->instance_count ||
         !transforms) {
         throw std::invalid_argument(
@@ -4940,12 +4941,33 @@ void update_instance_transforms_gpu(GpuContext* ctx,
     }
     std::vector<GpuBvhNode> next_tlas_nodes =
         ctx->host_tlas_nodes;
+    std::vector<int> next_tlas_indices =
+        ctx->host_tlas_instance_indices;
     const auto update_start =
         std::chrono::steady_clock::now();
-    InstanceTlasBuilder::refit(
-        next_transforms,
-        ctx->host_tlas_instance_indices,
-        next_tlas_nodes);
+    const bool rebuild =
+        ctx->render_config.acceleration.update_policy ==
+        AccelerationUpdatePolicy::Rebuild;
+    if (rebuild) {
+        next_tlas_nodes.clear();
+        next_tlas_indices.clear();
+        static_cast<void>(InstanceTlasBuilder::build(
+            next_transforms,
+            next_tlas_indices,
+            next_tlas_nodes));
+        if (next_tlas_nodes.size() !=
+                ctx->host_tlas_nodes.size() ||
+            next_tlas_indices.size() !=
+                ctx->host_tlas_instance_indices.size()) {
+            throw std::runtime_error(
+                "TLAS rebuild changed resident allocation size");
+        }
+    } else {
+        InstanceTlasBuilder::refit(
+            next_transforms,
+            next_tlas_indices,
+            next_tlas_nodes);
+    }
     size_t bytes = count * sizeof(GpuInstanceTransform);
     UR_CUDA_CHECK(cudaMemcpy(ctx->d_previous_instance_transforms, ctx->d_instance_transforms, bytes, cudaMemcpyDeviceToDevice));
     UR_CUDA_CHECK(cudaMemcpy(
@@ -4956,9 +4978,18 @@ void update_instance_transforms_gpu(GpuContext* ctx,
         ctx->d_tlas_nodes, next_tlas_nodes.data(),
         next_tlas_nodes.size() * sizeof(GpuBvhNode),
         cudaMemcpyHostToDevice));
+    if (rebuild) {
+        UR_CUDA_CHECK(cudaMemcpy(
+            ctx->d_tlas_instance_indices,
+            next_tlas_indices.data(),
+            next_tlas_indices.size() * sizeof(int),
+            cudaMemcpyHostToDevice));
+    }
     const auto update_end =
         std::chrono::steady_clock::now();
     ctx->host_tlas_nodes = std::move(next_tlas_nodes);
+    ctx->host_tlas_instance_indices =
+        std::move(next_tlas_indices);
     ctx->acceleration_stats.tlas_update_nanoseconds =
         static_cast<std::uint64_t>(
             std::chrono::duration_cast<

@@ -2,9 +2,11 @@
 
 #include "ure/backend_types.hpp"
 #include "ure/render_config.hpp"
+#include "ure/runtime/dynamic_geometry.hpp"
 #include "ure/ure_api.hpp"
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace ure {
@@ -75,6 +77,9 @@ public:
     // The engine owns default/internal material offsets; callers pass only scene materials.
     virtual void update_materials(const scene_ir::SceneIR& scene_ir) = 0;
 
+    virtual void update_geometry(
+        const scene_ir::SceneIR& scene_ir) = 0;
+
     // Blocking render, implemented using render_pass loop.
     virtual void render(const RenderSettings& settings) = 0;
 
@@ -106,6 +111,8 @@ public:
     virtual IntegratorEstimatorMetadata get_estimator_metadata() const = 0;
     virtual const BackendSelection& get_backend_selection() const = 0;
     virtual AccelerationStats get_acceleration_stats() const = 0;
+    virtual runtime::DynamicGeometryStats
+        get_dynamic_geometry_stats() const = 0;
 
     // Backward compatibility alias
     const std::vector<float>& get_frame_buffer() const { return get_framebuffer(); }

@@ -67,6 +67,17 @@ public:
         spp = 0;
     }
 
+    void update_geometry(
+        const ure::scene_ir::SceneIR& scene_ir) override {
+        if (fail_geometry_update) {
+            throw std::runtime_error(
+                "injected geometry update failure");
+        }
+        ++geometry_updates;
+        last_scene = scene_ir;
+        spp = 0;
+    }
+
     void render(const ure::RenderSettings&) override {
         ++spp;
     }
@@ -129,6 +140,11 @@ public:
         return acceleration_stats;
     }
 
+    ure::runtime::DynamicGeometryStats
+    get_dynamic_geometry_stats() const override {
+        return dynamic_geometry_stats;
+    }
+
     bool loaded = false;
     int spp = 0;
     int scene_ir_loads = 0;
@@ -136,6 +152,8 @@ public:
     int transform_updates = 0;
     int last_transform_count = 0;
     int material_updates = 0;
+    int geometry_updates = 0;
+    bool fail_geometry_update = false;
     int last_material_count = 0;
     int resets = 0;
     int camera_updates = 0;
@@ -143,6 +161,8 @@ public:
     int height = 1;
     ure::scene_ir::SceneIR last_scene;
     ure::AccelerationStats acceleration_stats;
+    ure::runtime::DynamicGeometryStats
+        dynamic_geometry_stats;
     std::vector<ure::scene_ir::MaterialNode> last_materials;
     std::vector<float> framebuffer = {0.1f, 0.2f, 0.3f};
     std::vector<float> normal_aov = {0.0f, 1.0f, 0.0f};
@@ -667,6 +687,78 @@ static int test_scene_diff_material_update_errors() {
     return 0;
 }
 
+static int test_scene_diff_mesh_update_ir() {
+    auto engine = std::make_unique<FakeRenderEngine>();
+    FakeRenderEngine* raw = engine.get();
+    ure::RenderSession session(std::move(engine));
+    session.load_scene(make_scene_ir_with_instance());
+
+    auto deformed = make_triangle_mesh();
+    deformed->vertices[2].position.z = 0.5f;
+    session.mutate_scene(
+        ure::SceneDiff::update_scene_ir_mesh(
+            0, deformed));
+    CHECK(raw->geometry_updates == 1);
+    CHECK(raw->scene_ir_reloads == 0);
+    CHECK(raw->last_scene.meshes[0]->mesh->
+        vertices[2].position.z == 0.5f);
+
+    auto topology = make_triangle_mesh();
+    topology->vertices.push_back({
+        {1.0f, 1.0f, 0.0f},
+        {0.0f, 0.0f, 1.0f},
+        {1.0f, 1.0f}});
+    topology->indices = {0, 1, 2, 1, 3, 2};
+    session.mutate_scene(
+        ure::SceneDiff::update_scene_ir_mesh(
+            0, topology));
+    CHECK(raw->geometry_updates == 2);
+    CHECK(raw->last_scene.meshes[0]->mesh->
+        indices.size() == 6);
+    return 0;
+}
+
+static int test_scene_diff_mesh_update_errors() {
+    auto engine = std::make_unique<FakeRenderEngine>();
+    FakeRenderEngine* raw = engine.get();
+    ure::RenderSession session(std::move(engine));
+    session.load_scene(make_scene_ir_with_instance());
+
+    CHECK(throws_exception([&] {
+        session.mutate_scene(
+            ure::SceneDiff::update_scene_ir_mesh(
+                2, make_triangle_mesh()));
+    }));
+    CHECK(throws_exception([&] {
+        session.mutate_scene(
+            ure::SceneDiff::update_scene_ir_mesh(
+                0, nullptr));
+    }));
+    auto invalid = make_triangle_mesh();
+    invalid->indices[2] = 99;
+    CHECK(throws_exception([&] {
+        session.mutate_scene(
+            ure::SceneDiff::update_scene_ir_mesh(
+                0, invalid));
+    }));
+
+    auto deformed = make_triangle_mesh();
+    deformed->vertices[0].position.z = 0.75f;
+    raw->fail_geometry_update = true;
+    CHECK(throws_exception([&] {
+        session.mutate_scene(
+            ure::SceneDiff::update_scene_ir_mesh(
+                0, deformed));
+    }));
+    raw->fail_geometry_update = false;
+    session.mutate_scene(
+        ure::SceneDiff::update_instance_transform(
+            0, {1.0f, 0.0f, 0.0f}));
+    CHECK(raw->last_scene.meshes[0]->mesh->
+        vertices[0].position.z == 0.0f);
+    return 0;
+}
+
 static int test_scene_diff_topology_update_ir_full_reload() {
     auto* raw_engine = new FakeRenderEngine();
     ure::RenderSession session{std::unique_ptr<ure::IRenderEngine>(raw_engine)};
@@ -1130,6 +1222,8 @@ static int test_restir_estimator_metadata_contract() {
     engine->estimator_metadata = production_metadata;
     engine->acceleration_stats.node_count = 17;
     engine->acceleration_stats.max_depth = 4;
+    engine->dynamic_geometry_stats.
+        deforming_update_count = 3;
     ure::RenderSession session(std::move(engine), production);
     const auto session_metadata = session.get_estimator_metadata();
     CHECK(ure::compatible_integrator_estimator_metadata(
@@ -1138,6 +1232,9 @@ static int test_restir_estimator_metadata_contract() {
         session.get_acceleration_stats();
     CHECK(acceleration_stats.node_count == 17);
     CHECK(acceleration_stats.max_depth == 4);
+    const auto geometry_stats =
+        session.get_dynamic_geometry_stats();
+    CHECK(geometry_stats.deforming_update_count == 3);
     return 0;
 }
 
@@ -1169,6 +1266,8 @@ int main() {
     failed += run("test_scene_diff_material_graph_update_ir_full_reload", test_scene_diff_material_graph_update_ir_full_reload);
     failed += run("test_scene_diff_material_spd_update_ir_full_reload", test_scene_diff_material_spd_update_ir_full_reload);
     failed += run("test_scene_diff_material_update_errors", test_scene_diff_material_update_errors);
+    failed += run("test_scene_diff_mesh_update_ir", test_scene_diff_mesh_update_ir);
+    failed += run("test_scene_diff_mesh_update_errors", test_scene_diff_mesh_update_errors);
     failed += run("test_scene_diff_topology_update_ir_full_reload", test_scene_diff_topology_update_ir_full_reload);
     failed += run("test_scene_diff_topology_errors", test_scene_diff_topology_errors);
     failed += run("test_scene_diff_topology_real_gpu_reload_smoke", test_scene_diff_topology_real_gpu_reload_smoke);

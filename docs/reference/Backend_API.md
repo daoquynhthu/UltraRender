@@ -76,9 +76,13 @@ material/spectral/displacement/opacity/normal-field boundaries, page
 residency, physical LoD error and canonical GPU upload ABI. V.9 adds a shared
 host/CUDA selector whose ray footprint and path/material/resource sensitivity
 keep nonzero-error proxies out of specular, shadow and caustic visibility.
-The renderer cluster flag remains fail-loud until V.10 integrates the
-rigid/deforming/topology-change resource lifecycle with SceneDiff. Existing
-backend-only C entry points retain
+V.10 adds automatic rigid, deforming and topology-change classification with
+TLAS/BLAS refit, rebuild, cluster-bounds refit and recluster actions. SceneDiff
+mesh mutations are validated and transactional. CUDA currently executes rigid
+TLAS refit/rebuild and conservative full BLAS/TLAS rebuild for deformation or
+topology changes; explicit unavailable BLAS refit rejects. The renderer
+cluster flag remains fail-loud until complete SceneIR clustered traversal is
+lowered. Existing backend-only C entry points retain
 their original layout and behavior; the execution-config entry points add
 acceleration without requiring callers to pass a larger legacy structure.
 

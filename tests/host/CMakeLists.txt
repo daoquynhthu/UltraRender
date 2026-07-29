@@ -47,6 +47,15 @@ add_test(
     NAME test_cluster_lod
     COMMAND test_cluster_lod)
 
+add_executable(
+    test_dynamic_geometry
+    test_dynamic_geometry.cpp)
+target_link_libraries(
+    test_dynamic_geometry PRIVATE ure_runtime)
+add_test(
+    NAME test_dynamic_geometry
+    COMMAND test_dynamic_geometry)
+
 add_executable(test_resource_plan test_resource_plan.cpp)
 target_include_directories(test_resource_plan PRIVATE
     "${CMAKE_SOURCE_DIR}/libs/ure_core/include"

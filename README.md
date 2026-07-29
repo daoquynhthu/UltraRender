@@ -6,17 +6,17 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- Phase Q、Phase R 与 Phase T 已完成。Phase V 的 V.0-V.9 已完成；当前施工游标是 `V.10`，负责 dynamic/deforming geometry 的 refit、rebuild 与 recluster 生命周期。
+- Phase Q、Phase R 与 Phase T 已完成。Phase V 的 V.0-V.10 已完成；当前施工游标是 `V.11`，负责统一 acceleration validation suite。
 - 默认完整场景渲染后端仍是 CUDA。Vulkan RT 与 DXR 已具备多 BLAS/TLAS build、compaction、transform refit/rebuild、scratch budget 和 telemetry；OptiX SDK 保持可选，存在时启用同一构建合同和实际 raygen/miss/closest-hit pipeline，缺失时不影响 CUDA self-compute、Vulkan 或 D3D12。一个由同一 SceneIR lower 的固定 fixture 已对齐四类 provider 的 shadow/closest hit、transform、material、UV/normal/tangent metadata 和小型 AOV；这不等同于任意 SceneIR 的完整 radiometric integrator 已迁移到 native provider。
-- 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure。Acceleration provider、build quality、update policy、cluster gate、stats gate 与 scratch budget 使用独立的向后兼容配置合同；CUDA `self_compute` 的质量预设、auto/static/refit update、scratch-budget enforcement 与 versioned acceleration stats 已可执行。Native construction 与 traversal parity fixture 已完成。V.8/V.9 已加入 SDK-free clustered geometry 派生资源、material/spectral 等资源边界、保守 bounds、多分量 LoD error、页级 residency、GPU ABI，以及按 ray differential、path class、roughness 与资源敏感度执行的 host/CUDA physical-error selector。主 renderer 的 cluster flag 在 V.10 接入 SceneDiff 动态资源生命周期前继续明确失败。
+- 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure。Acceleration provider、build quality、update policy、cluster gate、stats gate 与 scratch budget 使用独立的向后兼容配置合同；CUDA `self_compute` 的质量预设、auto/static/refit/rebuild update、scratch-budget enforcement 与 versioned acceleration stats 已可执行。Native construction 与 traversal parity fixture 已完成。V.8-V.10 已加入 SDK-free clustered geometry resource、host/CUDA physical-error selector，以及 rigid/deforming/topology-change lifecycle planner；SceneDiff mesh mutation会校验并事务回滚。当前 CUDA 对 deformation/topology 采取正确但保守的完整 BLAS/TLAS rebuild，显式请求尚不可用的 BLAS refit 会失败。主 renderer 的 cluster flag 在完整 SceneIR traversal lowering 前继续明确失败。
 - Slang 2026.14 已完成固定版本、多目标编译、反射、debug mapping、CUDA 占用率及数值执行验证。Vulkan SPIR-V 与 D3D12 DXIL 复用共享光谱/偏振及加速语义；D3D12 release DXIL 由固定 Windows SDK DXC 确定性生成，debug artifact 单独生成。现有 CUDA production kernels 仍是私有 `.cu` fast path，Slang RHI 未被引入。
 - 纯 C++ `ure_runtime` 已定义 device、queue、timeline fence、event、buffer、image、sampler、module、pipeline、资源规划、dispatch DAG、execution graph、acceleration provider/selection/hit metadata、multi-backend scheduling 和 device-loss 合同；CUDA production backend 已实现这些合同的私有 lowering，并覆盖 path、wave、multi-GPU、PTX pipeline 与结构化错误路径。
 - `ure_vulkan` 已实现 Vulkan 1.3 adapter、queue、timeline、buffer/image/sampler、SPIR-V module、typed descriptor、specialization、pipeline cache、validation/debug-utils、device-loss 映射，以及私有 BLAS/TLAS build 与 ray-query descriptor lowering；其公共头不暴露 Vulkan SDK 类型。
 - `ure_d3d12` 已实现 Windows D3D12 adapter、buffer/image/sampler、DXIL pipeline、descriptor heap、queue/fence、DRED，以及私有 DXR BLAS/TLAS 与 inline ray-query lowering；其公共头不暴露 Windows、D3D12 或 DXGI 类型。
 - SDK-free scheduler 会在执行前校验 worker feature、float precision、coherence mode、显存下限和共享 kernel semantics，以稳定整数权重划分 sample ranges；distributed file v5 保存 backend/adapter、driver/compiler、executable digest 和 resource-cache provenance。兼容 CUDA/Vulkan/D3D12 sample shards 可合并，不兼容或重叠分片会拒绝。
 - `run_phase_t_validation_suite.ps1` 以机器可读报告统一检查物理 unit oracle、hit/framebuffer fixture、CUDA reference render、variance/MSE、device loss、budget、cache、cold/warm launch、VRAM 和 throughput。CUDA/Vulkan 必测，DXR 按实际 capability 执行；不同后端或工作负载的差异必须带阈值和原因分类。
-- 当前 Release 构建注册 52 个 CTest；测试数量只表示已登记门禁规模，不等同于功能覆盖率或发布成熟度。
-- 当前 CUDA self-compute acceleration 使用每 mesh object-space BLAS 和独立 world-space instance TLAS。默认/`fast_build` 保留兼容的 median BVH2；`balanced` 使用 binned object SAH 与 72-byte quantized BVH4，`high_quality` 使用受引用预算约束的 spatial SAH/SBVH 与 116-byte quantized BVH8。transform hot update 只 refit TLAS；bounded async build、pinned-stream compact upload 和 scratch/device budget preflight 已执行。Vulkan RT、DXR 和可选 OptiX 已完成 native construction lifecycle，并通过同一 SceneIR fixture 的 cross-provider traversal/hit/AOV 门禁；clustered resource/streaming 与 physical-error LoD selector 已完成，但通用 native integrator lowering以及 clustered deforming geometry 的 SceneDiff 生命周期仍未完成。
+- 当前 Release 构建注册 54 个 CTest；测试数量只表示已登记门禁规模，不等同于功能覆盖率或发布成熟度。
+- 当前 CUDA self-compute acceleration 使用每 mesh object-space BLAS 和独立 world-space instance TLAS。默认/`fast_build` 保留兼容的 median BVH2；`balanced` 使用 binned object SAH 与 72-byte quantized BVH4，`high_quality` 使用受引用预算约束的 spatial SAH/SBVH 与 116-byte quantized BVH8。transform hot update 可按 policy refit 或 rebuild TLAS；deforming/topology-changing mesh mutation 会重建 BLAS/TLAS并输出 timing/correctness telemetry。bounded async build、pinned-stream compact upload 和 scratch/device budget preflight 已执行。Vulkan RT、DXR 和可选 OptiX 已完成 native construction lifecycle，并通过同一 SceneIR fixture 的 cross-provider traversal/hit/AOV 门禁；通用 native integrator lowering与 clustered SceneIR traversal 仍未完成。
 - 默认积分器是 spectral/polarimetric radiometric wavefront path tracer。
 - coherent field、partial coherence、完整衍射相机和局部全波耦合仍属于 Phase W 后续工作；当前主渲染路径不会静默模拟这些能力。
 - production unbiased/spatial ReSTIR DI 与受限 ReSTIR PT suffix reuse 已完成验证。GPU specular-manifold、BDPT、VCM 和独立 PSSMLT 已通过各自统计门禁；MLT 与 bidirectional/VCM/manifold 的组合仍明确拒绝。
@@ -100,7 +100,7 @@ Ninja 可并行构建宿主代码和独立目标；高内存 CUDA 编译由工�
 ctest --test-dir build_modular_x64 -C Release --output-on-failure
 ```
 
-当前构建树注册 52 个 CTest。这个数字是当前快照，不应用作长期固定接口；以 `ctest -N` 的输出为准。
+当前构建树注册 54 个 CTest。这个数字是当前快照，不应用作长期固定接口；以 `ctest -N` 的输出为准。
 
 仅构建不依赖 GPU SDK 的公共基础库时，可关闭 CUDA backend：
 
