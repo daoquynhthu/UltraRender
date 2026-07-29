@@ -27,6 +27,7 @@ This index separates current references from historical records. `PLAN.md` is th
 | [`Phase_W_W9_Anisotropic_Media.md`](Phase_W_W9_Anisotropic_Media.md) | W.9 spectral dielectric-tensor, eigenmode, birefringence, dichroism and optical-activity reference contract |
 | [`Phase_W_W10_Local_Fullwave_Coupling.md`](Phase_W_W10_Local_Fullwave_Coupling.md) | W.10 bounded local solver provider, evidence, binary exchange and deterministic cache contract |
 | [`Phase_W_W11_Coherent_Distributed_Contract.md`](Phase_W_W11_Coherent_Distributed_Contract.md) | W.11 radiance/complex-field/mutual-intensity/coherent-realization shard semantics and merge-order contract |
+| [`Phase_W_W12_Validation.md`](Phase_W_W12_Validation.md) | W.12 unified physical, API, fail-loud, static and complete CTest closure |
 
 ## Completed-phase evidence records
 

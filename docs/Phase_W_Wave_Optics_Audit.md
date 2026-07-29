@@ -4,7 +4,7 @@ Document status: current capability boundary
 
 Last reviewed: 2026-07-29
 
-Phase W is active. W.2 integrates an explicitly enabled incoherent diffraction camera, W.5 adds radiometric diffractive thin-sheet materials, W.6 adds a bounded radiometric fluorescence surface transition, W.7 establishes a partial-coherence reference/statistical layer, W.9 establishes homogeneous anisotropic modal transport references, W.10 establishes a bounded local full-wave provider/cache contract, and W.11 establishes coherent distributed sufficient-statistics files and merges. The ordinary renderer remains a spectral/polarimetric radiometric path tracer. These capabilities do not make UltraRender a general coherent wave-optics renderer.
+Phase W is complete within its declared bounded scope. W.2 integrates an explicitly enabled incoherent diffraction camera, W.5 adds radiometric diffractive thin-sheet materials, W.6 adds a bounded radiometric fluorescence surface transition, W.7 establishes a partial-coherence reference/statistical layer, W.9 establishes homogeneous anisotropic modal transport references, W.10 establishes a bounded local full-wave provider/cache contract, W.11 establishes coherent distributed sufficient-statistics files and merges, and W.12 unifies physical, API, fail-loud and static validation. The ordinary renderer remains a spectral/polarimetric radiometric path tracer. These capabilities do not make UltraRender a general coherent wave-optics renderer.
 
 ## Implemented reference and contract work
 
@@ -56,9 +56,9 @@ Ordinary spectral estimator correctness, BSDF/PDF consistency, polarization conv
 
 The current code includes rough dielectric eval/PDF/sample and direct-light tests, local thin-film boundary tests, CIE/spectral estimator tests and Mie resource tests. Their coverage is finite and should be extended when the active PLAN item requires it.
 
-## Integration requirements when Phase W becomes active
+## Boundaries beyond Phase W closure
 
-Before claiming production wave-optics support, the project must provide evidence for:
+Before claiming a scene-integrated coherent production renderer, the project must still provide evidence for:
 
 1. explicit complex/Jones path state and phase-reference conventions;
 2. source coherence and realization grouping;
@@ -80,7 +80,9 @@ ctest --test-dir build_modular_x64 -C Release -R "test_wave_optics|gpu_wave_opti
 .\scripts\check_phase_w9_static.ps1
 .\scripts\check_phase_w10_static.ps1
 .\scripts\check_phase_w11_static.ps1
+.\scripts\check_phase_w12_static.ps1
 .\scripts\check_physics_optics.ps1
+.\scripts\run_phase_w_validation_suite.ps1 -BuildDir build_modular_x64 -Config Release
 ```
 
-Passing these tests proves the covered diffraction-camera, radiometric diffractive-material, fluorescence, partial-coherence statistical, anisotropic modal, local-solver exchange, coherent distributed sufficient-statistics and reference boundaries only. It does not establish a complete coherent wave-optics production renderer.
+Passing the W.12 suite proves the covered diffraction-camera, radiometric diffractive-material, fluorescence, partial-coherence statistical, anisotropic modal, local-solver exchange, coherent distributed sufficient-statistics and reference boundaries only. It does not establish a complete coherent wave-optics production renderer. The evidence schema and exact closure matrix are recorded in [`Phase_W_W12_Validation.md`](Phase_W_W12_Validation.md).

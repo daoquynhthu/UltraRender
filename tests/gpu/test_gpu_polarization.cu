@@ -1,6 +1,9 @@
-#include <cuda_runtime.h>
-#include <stdio.h>
 #include <math.h>
+#include <stdio.h>
+#include <complex>
+#include <numbers>
+
+#include <cuda_runtime.h>
 
 #include "test_framework.cuh"
 
@@ -239,6 +242,19 @@ __global__ void test_boundary_thin_film_kernel(float* out) {
 
     ThinFilmBoundary substrate_tir = eval_thin_film_boundary(550.0f, 130.0f, 1.4f, 1.5f, 1.0f, 0.5f);
     out[9] = 0.5f * (substrate_tir.Rs + substrate_tir.Rp);
+
+    ThinFilmBoundary phase_fixture =
+        eval_thin_film_boundary(
+            510.0f,
+            120.0f,
+            1.0f,
+            1.38f,
+            1.62f,
+            0.52f);
+    out[10] = phase_fixture.rs.re;
+    out[11] = phase_fixture.rs.im;
+    out[12] = phase_fixture.rp.re;
+    out[13] = phase_fixture.rp.im;
 }
 
 static int test_rotate_stokes_identity() {
@@ -524,11 +540,11 @@ static int test_boundary_conductor() {
 static int test_boundary_thin_film() {
     REQUIRE_GPU();
     float* d_out;
-    CHECK_CUDA(cudaMalloc(&d_out, 10 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_out, 14 * sizeof(float)));
     test_boundary_thin_film_kernel<<<1, 1>>>(d_out);
     CHECK_CUDA(cudaGetLastError());
-    float h_out[10];
-    CHECK_CUDA(cudaMemcpy(h_out, d_out, 10 * sizeof(float), cudaMemcpyDeviceToHost));
+    float h_out[14];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 14 * sizeof(float), cudaMemcpyDeviceToHost));
 
     float r = (1.0f - 1.5f) / (1.0f + 1.5f);
     CHECK_FLOAT_EQ(h_out[0], r * r, 1e-5f);
@@ -540,6 +556,65 @@ static int test_boundary_thin_film() {
     CHECK_FLOAT_EQ(h_out[7], 1.0f, 1e-5f);
     CHECK(h_out[8] > 0.1f);
     CHECK(h_out[9] > 0.999f);
+
+    constexpr double wavelength = 510.0;
+    constexpr double thickness = 120.0;
+    constexpr double eta_i = 1.0;
+    constexpr double eta_f = 1.38;
+    constexpr double eta_s = 1.62;
+    constexpr double cos_i = 0.52;
+    const double sin_i_squared =
+        1.0 - cos_i * cos_i;
+    const double cos_f = std::sqrt(
+        1.0 -
+        (eta_i * eta_i /
+         (eta_f * eta_f)) *
+            sin_i_squared);
+    const double cos_s = std::sqrt(
+        1.0 -
+        (eta_i * eta_i /
+         (eta_s * eta_s)) *
+            sin_i_squared);
+    const double r01s =
+        (eta_i * cos_i - eta_f * cos_f) /
+        (eta_i * cos_i + eta_f * cos_f);
+    const double r01p =
+        (eta_f * cos_i - eta_i * cos_f) /
+        (eta_f * cos_i + eta_i * cos_f);
+    const double r12s =
+        (eta_f * cos_f - eta_s * cos_s) /
+        (eta_f * cos_f + eta_s * cos_s);
+    const double r12p =
+        (eta_s * cos_f - eta_f * cos_s) /
+        (eta_s * cos_f + eta_f * cos_s);
+    const double phase =
+        4.0 * std::numbers::pi *
+        eta_f * thickness * cos_f /
+        wavelength;
+    const std::complex<double> phase_factor =
+        std::polar(1.0, phase);
+    const auto expected_s =
+        (r01s + r12s * phase_factor) /
+        (1.0 + r01s * r12s * phase_factor);
+    const auto expected_p =
+        (r01p + r12p * phase_factor) /
+        (1.0 + r01p * r12p * phase_factor);
+    CHECK_FLOAT_EQ(
+        h_out[10],
+        static_cast<float>(expected_s.real()),
+        2e-6f);
+    CHECK_FLOAT_EQ(
+        h_out[11],
+        static_cast<float>(expected_s.imag()),
+        2e-6f);
+    CHECK_FLOAT_EQ(
+        h_out[12],
+        static_cast<float>(expected_p.real()),
+        2e-6f);
+    CHECK_FLOAT_EQ(
+        h_out[13],
+        static_cast<float>(expected_p.imag()),
+        2e-6f);
     cudaFree(d_out);
     return 0;
 }

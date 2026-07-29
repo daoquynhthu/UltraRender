@@ -26,7 +26,8 @@ foreach ($term in @("世界顶尖", "世界领先", "行业领先", "革命性",
 $currentDocuments = @(
     "README.md", "STATUS.md", "docs/README.md", "docs/reference/Backend_API.md",
     "docs/Spectral_Semantics_Guide.md", "docs/Phase_Q_Native_Scene_Format.md",
-    "docs/Phase_R_P6_Mie_Volume_Resources.md", "docs/Phase_W_Wave_Optics_Audit.md"
+    "docs/Phase_R_P6_Mie_Volume_Resources.md", "docs/Phase_W_Wave_Optics_Audit.md",
+    "docs/Phase_W_W12_Validation.md"
 )
 foreach ($relative in $currentDocuments) {
     $text = Get-Content -LiteralPath (Join-Path $root $relative) -Raw

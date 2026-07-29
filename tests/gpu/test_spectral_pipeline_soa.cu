@@ -2582,20 +2582,42 @@ __global__ void c11_rough_dielectric_eval_pdf_kernel(float* out)
     SpectralPacket thin_film_pdf_uv = pdf_bsdf_spectral(thin_film, n, GpuVec2(0.0f, 0.8f), wo, wi, wavelengths, num_spec, 20.0f);
     out[10] = thin_film_pdf_uv.values[0];
     out[11] = thin_film_pdf.values[3];
+    RoughDielectricLobe uv_lobe =
+        eval_rough_dielectric_reflection_lobe(
+            thin_film,
+            n,
+            wo,
+            wi,
+            wavelengths[0],
+            20.0f);
+    DielectricSurfaceBoundary uv_surface =
+        eval_dielectric_surface_boundary(
+            wavelengths[0],
+            effective_thin_film_thickness(
+                thin_film,
+                GpuVec2(0.0f, 0.8f)),
+            uv_lobe.eta_i,
+            thin_film.thin_film_ior,
+            uv_lobe.eta_t,
+            uv_lobe.VdotM);
+    out[12] = rough_dielectric_reflection_pdf(
+        uv_lobe,
+        eval_unpolarized_reflection_probability(
+            uv_surface));
 }
 
 static int test_rough_dielectric_eval_pdf_visible_to_direct_light() {
     REQUIRE_GPU();
     float* d_out = nullptr;
-    CHECK_CUDA(cudaMalloc(&d_out, 12 * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&d_out, 13 * sizeof(float)));
     DeviceMem _do(d_out);
 
     c11_rough_dielectric_eval_pdf_kernel<<<1, 1>>>(d_out);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
 
-    float h_out[12];
-    CHECK_CUDA(cudaMemcpy(h_out, d_out, 12 * sizeof(float), cudaMemcpyDeviceToHost));
+    float h_out[13];
+    CHECK_CUDA(cudaMemcpy(h_out, d_out, 13 * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK(h_out[0] > 0.0f);
     CHECK(h_out[1] > 0.0f);
     CHECK(h_out[2] > 0.0f);
@@ -2609,6 +2631,7 @@ static int test_rough_dielectric_eval_pdf_visible_to_direct_light() {
     CHECK(fabsf(h_out[8] - h_out[9]) > 1e-6f);
     CHECK(fabsf(h_out[6] - h_out[10]) > 1e-6f);
     CHECK(fabsf(h_out[6] - h_out[11]) > 1e-6f);
+    CHECK_FLOAT_EQ(h_out[10], h_out[12], 1e-6f);
     return 0;
 }
 
