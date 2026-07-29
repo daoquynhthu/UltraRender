@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <numbers>
+#include <set>
+#include <tuple>
 
 namespace ure::wave {
 
@@ -32,6 +35,69 @@ ComplexAmplitude fresnel_integrals(double v) {
         s_sum += weight * std::sin(phase);
     }
     return {sign * h * c_sum / 3.0, sign * h * s_sum / 3.0};
+}
+
+bool finite_coefficient(
+    const scene_ir::ComplexCoefficient& value) {
+    return std::isfinite(value.real) &&
+           std::isfinite(value.imag);
+}
+
+ComplexAmplitude amplitude(
+    const scene_ir::ComplexCoefficient& value) {
+    return {value.real, value.imag};
+}
+
+double jones_unpolarized_efficiency(
+    const JonesMatrix& value) {
+    return 0.5 * (
+        value.ss.power() +
+        value.sp.power() +
+        value.ps.power() +
+        value.pp.power());
+}
+
+struct JonesPowerSum {
+    double s = 0.0;
+    double p = 0.0;
+    double cross_real = 0.0;
+    double cross_imag = 0.0;
+};
+
+void accumulate_jones_power(
+    JonesPowerSum& sum,
+    const JonesMatrix& matrix) {
+    sum.s += matrix.ss.power() + matrix.ps.power();
+    sum.p += matrix.sp.power() + matrix.pp.power();
+    sum.cross_real +=
+        matrix.ss.real * matrix.sp.real +
+        matrix.ss.imag * matrix.sp.imag +
+        matrix.ps.real * matrix.pp.real +
+        matrix.ps.imag * matrix.pp.imag;
+    sum.cross_imag +=
+        matrix.ss.real * matrix.sp.imag -
+        matrix.ss.imag * matrix.sp.real +
+        matrix.ps.real * matrix.pp.imag -
+        matrix.ps.imag * matrix.pp.real;
+}
+
+double maximum_jones_power(
+    const JonesPowerSum& sum) {
+    const double trace = sum.s + sum.p;
+    const double difference = sum.s - sum.p;
+    const double discriminant =
+        std::sqrt(
+            difference * difference +
+            4.0 *
+                (sum.cross_real * sum.cross_real +
+                 sum.cross_imag * sum.cross_imag));
+    return 0.5 * (trace + discriminant);
+}
+
+double normalized_sinc_pi(double value) {
+    if (std::abs(value) < 1.0e-12) return 1.0;
+    const double x = std::numbers::pi * value;
+    return std::sin(x) / x;
 }
 
 WaveFieldGrid make_output_field(const WaveFieldGrid& field, const FresnelPropagationConfig& config) {
@@ -227,6 +293,109 @@ bool is_valid(const JonesSpectrum& spectrum) {
            spectrum.optical_path_length_m >= 0.0 &&
            std::all_of(spectrum.wavelengths_m.begin(), spectrum.wavelengths_m.end(),
                        [](double wavelength) { return wavelength > 0.0; });
+}
+
+bool is_valid(
+    const scene_ir::DiffractiveOperator& diffraction) {
+    if (diffraction.kind <
+            scene_ir::DiffractiveOperatorKind::Grating ||
+        diffraction.kind >
+            scene_ir::DiffractiveOperatorKind::ScatteringTable ||
+        diffraction.side <
+            scene_ir::DiffractiveScatterSide::Reflection ||
+        diffraction.side >
+            scene_ir::DiffractiveScatterSide::Transmission) {
+        return false;
+    }
+    const bool finite_parameters =
+        std::isfinite(diffraction.period_m) &&
+        std::isfinite(diffraction.orientation_rad) &&
+        std::isfinite(diffraction.duty_cycle) &&
+        std::isfinite(diffraction.phase_depth_rad) &&
+        std::isfinite(diffraction.design_wavelength_nm) &&
+        std::isfinite(diffraction.focal_length_m) &&
+        std::isfinite(diffraction.aperture_radius_m);
+    if (!finite_parameters ||
+        diffraction.period_m <= 0.0 ||
+        diffraction.duty_cycle <= 0.0 ||
+        diffraction.duty_cycle > 1.0 ||
+        diffraction.design_wavelength_nm <= 0.0 ||
+        diffraction.focal_length_m <= 0.0 ||
+        diffraction.aperture_radius_m <= 0.0 ||
+        diffraction.max_order < 0 ||
+        diffraction.max_order > 16) {
+        return false;
+    }
+    if (diffraction.kind !=
+        scene_ir::DiffractiveOperatorKind::ScatteringTable) {
+        return diffraction.table.empty();
+    }
+    if (diffraction.table_id.empty() ||
+        diffraction.table.empty() ||
+        diffraction.table.size() >
+            scene_ir::kMaxDiffractiveScatteringEntries) {
+        return false;
+    }
+    using Key = std::tuple<float, float, int, int>;
+    using Sample = std::pair<float, float>;
+    using Channel = std::pair<int, int>;
+    std::set<Key> keys;
+    std::map<Sample, JonesPowerSum> power;
+    std::map<Sample, std::set<Channel>> sample_channels;
+    std::set<Channel> channels;
+    for (const auto& entry : diffraction.table) {
+        if (!std::isfinite(entry.wavelength_nm) ||
+            entry.wavelength_nm <= 0.0f ||
+            !std::isfinite(entry.incident_cosine) ||
+            entry.incident_cosine < 0.0f ||
+            entry.incident_cosine > 1.0f ||
+            entry.side <
+                scene_ir::DiffractiveScatterSide::Reflection ||
+            entry.side >
+                scene_ir::DiffractiveScatterSide::Transmission ||
+            std::abs(entry.order) >
+                diffraction.max_order ||
+            !finite_coefficient(entry.jones_ss) ||
+            !finite_coefficient(entry.jones_sp) ||
+            !finite_coefficient(entry.jones_ps) ||
+            !finite_coefficient(entry.jones_pp)) {
+            return false;
+        }
+        const Key key{
+            entry.wavelength_nm,
+            entry.incident_cosine,
+            entry.order,
+            static_cast<int>(entry.side)};
+        if (!keys.insert(key).second) return false;
+        JonesMatrix matrix{
+            amplitude(entry.jones_ss),
+            amplitude(entry.jones_sp),
+            amplitude(entry.jones_ps),
+            amplitude(entry.jones_pp)};
+        const double efficiency =
+            jones_unpolarized_efficiency(matrix);
+        if (!std::isfinite(efficiency) ||
+            efficiency < 0.0) {
+            return false;
+        }
+        const Sample sample{
+            entry.wavelength_nm,
+            entry.incident_cosine};
+        const Channel channel{
+            entry.order,
+            static_cast<int>(entry.side)};
+        accumulate_jones_power(power[sample], matrix);
+        sample_channels[sample].insert(channel);
+        channels.insert(channel);
+    }
+    return std::ranges::all_of(
+        power,
+        [&](const auto& item) {
+            return maximum_jones_power(item.second) <=
+                       1.0001 &&
+                   sample_channels.at(item.first) ==
+                       channels;
+        });
 }
 
 bool is_ready(DiffractionCameraPlanStatus status) {
@@ -487,6 +656,248 @@ std::vector<DiffractionOrder> grating_orders(const DiffractionGrating& grating,
         orders.push_back(grating_order(grating, order));
     }
     return orders;
+}
+
+std::vector<DiffractiveOrderResponse> diffractive_orders(
+    const scene_ir::DiffractiveOperator& diffraction,
+    double wavelength_nm,
+    double incident_tangential_sine,
+    double radial_coordinate) {
+    std::vector<DiffractiveOrderResponse> responses;
+    if (!is_valid(diffraction) ||
+        !std::isfinite(wavelength_nm) ||
+        wavelength_nm <= 0.0 ||
+        !std::isfinite(incident_tangential_sine) ||
+        std::abs(incident_tangential_sine) > 1.0 ||
+        !std::isfinite(radial_coordinate)) {
+        return responses;
+    }
+    const double wavelength_m =
+        wavelength_nm * 1.0e-9;
+    auto classify = [&](DiffractiveOrderResponse& response) {
+        response.propagating =
+            std::abs(response.tangential_sine) <= 1.0;
+        if (!response.propagating) {
+            const double wave_number =
+                2.0 * std::numbers::pi / wavelength_m;
+            response.evanescent_decay_per_m =
+                wave_number * std::sqrt(
+                    response.tangential_sine *
+                        response.tangential_sine -
+                    1.0);
+            response.unpolarized_efficiency = 0.0;
+        }
+    };
+    if (diffraction.kind ==
+        scene_ir::DiffractiveOperatorKind::ScatteringTable) {
+        using OrderSide =
+            std::pair<int, scene_ir::DiffractiveScatterSide>;
+        std::set<OrderSide> channels;
+        float wavelength_min =
+            diffraction.table.front().wavelength_nm;
+        float wavelength_max = wavelength_min;
+        for (const auto& entry : diffraction.table) {
+            channels.insert({entry.order, entry.side});
+            wavelength_min =
+                std::min(wavelength_min, entry.wavelength_nm);
+            wavelength_max =
+                std::max(wavelength_max, entry.wavelength_nm);
+        }
+        const double wavelength_scale =
+            std::max(
+                1.0,
+                static_cast<double>(
+                    wavelength_max - wavelength_min));
+        for (const auto& [order, side] : channels) {
+            struct Candidate {
+                double distance = 0.0;
+                std::size_t index = 0;
+                const scene_ir::DiffractiveScatteringEntry*
+                    entry = nullptr;
+            };
+            std::vector<Candidate> candidates;
+            for (std::size_t entry_index = 0;
+                 entry_index < diffraction.table.size();
+                 ++entry_index) {
+                const auto& entry =
+                    diffraction.table[entry_index];
+                if (entry.order != order ||
+                    entry.side != side) {
+                    continue;
+                }
+                const double dw =
+                    (wavelength_nm -
+                     entry.wavelength_nm) /
+                    wavelength_scale;
+                const double dc =
+                    std::sqrt(std::max(
+                        0.0,
+                        1.0 -
+                            incident_tangential_sine *
+                                incident_tangential_sine)) -
+                    entry.incident_cosine;
+                candidates.push_back({
+                    dw * dw + dc * dc,
+                    entry_index,
+                    &entry});
+            }
+            std::ranges::sort(
+                candidates,
+                [](const Candidate& a,
+                   const Candidate& b) {
+                    return std::tie(a.distance, a.index) <
+                           std::tie(b.distance, b.index);
+                });
+            if (candidates.size() > 4) {
+                candidates.resize(4);
+            }
+            JonesMatrix matrix;
+            double weight_sum = 0.0;
+            for (const Candidate& candidate : candidates) {
+                const double weight =
+                    1.0 /
+                    std::max(1.0e-12, candidate.distance);
+                weight_sum += weight;
+                const auto& entry = *candidate.entry;
+                matrix.ss.real +=
+                    weight * entry.jones_ss.real;
+                matrix.ss.imag +=
+                    weight * entry.jones_ss.imag;
+                matrix.sp.real +=
+                    weight * entry.jones_sp.real;
+                matrix.sp.imag +=
+                    weight * entry.jones_sp.imag;
+                matrix.ps.real +=
+                    weight * entry.jones_ps.real;
+                matrix.ps.imag +=
+                    weight * entry.jones_ps.imag;
+                matrix.pp.real +=
+                    weight * entry.jones_pp.real;
+                matrix.pp.imag +=
+                    weight * entry.jones_pp.imag;
+            }
+            if (!(weight_sum > 0.0)) continue;
+            const double inverse = 1.0 / weight_sum;
+            matrix.ss.real *= inverse;
+            matrix.ss.imag *= inverse;
+            matrix.sp.real *= inverse;
+            matrix.sp.imag *= inverse;
+            matrix.ps.real *= inverse;
+            matrix.ps.imag *= inverse;
+            matrix.pp.real *= inverse;
+            matrix.pp.imag *= inverse;
+            DiffractiveOrderResponse response;
+            response.order = order;
+            response.side = side;
+            response.tangential_sine =
+                incident_tangential_sine +
+                static_cast<double>(order) *
+                    wavelength_m /
+                    diffraction.period_m;
+            response.amplitude = matrix;
+            response.unpolarized_efficiency =
+                jones_unpolarized_efficiency(matrix);
+            classify(response);
+            responses.push_back(response);
+        }
+        return responses;
+    }
+
+    double total_raw = 0.0;
+    const double blaze =
+        diffraction.phase_depth_rad /
+        (2.0 * std::numbers::pi);
+    for (int order = -diffraction.max_order;
+         order <= diffraction.max_order;
+         ++order) {
+        DiffractiveOrderResponse response;
+        response.order = order;
+        response.side = diffraction.side;
+        if (diffraction.kind ==
+            scene_ir::DiffractiveOperatorKind::ZonePlate) {
+            response.tangential_sine =
+                incident_tangential_sine -
+                static_cast<double>(order) *
+                    radial_coordinate *
+                    wavelength_nm /
+                    (diffraction.design_wavelength_nm *
+                     diffraction.focal_length_m);
+        } else {
+            response.tangential_sine =
+                incident_tangential_sine +
+                static_cast<double>(order) *
+                    wavelength_m /
+                    diffraction.period_m;
+        }
+        double coefficient = 0.0;
+        switch (diffraction.kind) {
+        case scene_ir::DiffractiveOperatorKind::Grating:
+            coefficient =
+                diffraction.duty_cycle *
+                normalized_sinc_pi(
+                    static_cast<double>(order) *
+                    diffraction.duty_cycle);
+            break;
+        case scene_ir::DiffractiveOperatorKind::PhaseMask: {
+            const int magnitude = std::abs(order);
+            coefficient = std::cyl_bessel_j(
+                magnitude,
+                diffraction.phase_depth_rad);
+            if (order < 0 && magnitude % 2 != 0) {
+                coefficient = -coefficient;
+            }
+            break;
+        }
+        case scene_ir::DiffractiveOperatorKind::ZonePlate:
+            coefficient = order == 1 ? 1.0 : 0.0;
+            break;
+        case scene_ir::DiffractiveOperatorKind::Doe:
+            coefficient =
+                normalized_sinc_pi(
+                    static_cast<double>(order) -
+                    blaze);
+            break;
+        case scene_ir::DiffractiveOperatorKind::ScatteringTable:
+            break;
+        }
+        const double phase =
+            diffraction.phase_depth_rad *
+            static_cast<double>(order);
+        response.amplitude.ss =
+            phase_amplitude(phase, coefficient);
+        response.amplitude.pp =
+            phase_amplitude(phase, coefficient);
+        response.unpolarized_efficiency =
+            coefficient * coefficient;
+        classify(response);
+        total_raw += response.unpolarized_efficiency;
+        responses.push_back(response);
+    }
+    const double target_energy =
+        diffraction.kind ==
+            scene_ir::DiffractiveOperatorKind::Grating
+        ? diffraction.duty_cycle
+        : 1.0;
+    if (total_raw > 0.0) {
+        const double power_scale =
+            target_energy / total_raw;
+        const double amplitude_scale =
+            std::sqrt(power_scale);
+        for (auto& response : responses) {
+            if (!response.propagating) continue;
+            response.amplitude.ss.real *=
+                amplitude_scale;
+            response.amplitude.ss.imag *=
+                amplitude_scale;
+            response.amplitude.pp.real *=
+                amplitude_scale;
+            response.amplitude.pp.imag *=
+                amplitude_scale;
+            response.unpolarized_efficiency *=
+                power_scale;
+        }
+    }
+    return responses;
 }
 
 double PsfKernel::at(int x, int y) const {
@@ -972,6 +1383,29 @@ bool is_valid_diffraction_camera_config(
            config.camera_wavelength_bin_count <= 32 &&
            config.camera_pupil_sample_count >= 16 &&
            config.camera_pupil_sample_count <= 64;
+}
+
+bool is_supported_diffractive_material_config(
+    const ure::RenderConfig& config) {
+    const auto& wave = config.wave_optics;
+    return wave.mode ==
+               ure::WaveOpticsMode::Radiometric &&
+           !wave.camera_diffraction_enabled &&
+           !wave.coherent_field_enabled &&
+           !wave.partial_coherence_enabled &&
+           wave.diffractive_materials_enabled &&
+           !wave.fluorescence_enabled &&
+           !wave.specular_manifold_enabled &&
+           !wave.local_fullwave_enabled &&
+           config.integrator.mode ==
+               ure::IntegratorMode::Wavefront &&
+           !config.path_guiding.enabled &&
+           !config.restir_di.enabled &&
+           !config.restir_pt.enabled &&
+           !config.specular_manifold.enabled &&
+           !config.bidirectional.enabled &&
+           !config.vcm.enabled &&
+           !config.mlt.enabled;
 }
 
 DiffractionPsfBank make_diffraction_psf_bank(

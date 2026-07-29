@@ -68,7 +68,7 @@ scene_ir::VolumePhaseFunction phase(schema::VolumePhaseFunction value) {
 
 schema::MaterialGraphNodeKind graph_kind(scene_ir::MaterialGraphNodeKind value) {
     const auto raw = static_cast<std::uint8_t>(value);
-    if (raw > static_cast<std::uint8_t>(scene_ir::MaterialGraphNodeKind::OutputSurface)) {
+    if (raw > static_cast<std::uint8_t>(scene_ir::MaterialGraphNodeKind::BsdfScatteringTable)) {
         throw std::invalid_argument("Invalid material graph node kind");
     }
     return static_cast<schema::MaterialGraphNodeKind>(raw);
@@ -76,10 +76,192 @@ schema::MaterialGraphNodeKind graph_kind(scene_ir::MaterialGraphNodeKind value) 
 
 scene_ir::MaterialGraphNodeKind graph_kind(schema::MaterialGraphNodeKind value) {
     const auto raw = static_cast<std::uint8_t>(value);
-    if (raw > static_cast<std::uint8_t>(schema::MaterialGraphNodeKind::OutputSurface)) {
+    if (raw > static_cast<std::uint8_t>(schema::MaterialGraphNodeKind::BsdfScatteringTable)) {
         throw std::invalid_argument("Invalid material graph node kind");
     }
     return static_cast<scene_ir::MaterialGraphNodeKind>(raw);
+}
+
+schema::DiffractiveOperatorKind diffraction_kind(
+    scene_ir::DiffractiveOperatorKind value) {
+    const auto raw = static_cast<std::uint8_t>(value);
+    if (raw > static_cast<std::uint8_t>(
+                  scene_ir::DiffractiveOperatorKind::
+                      ScatteringTable)) {
+        throw std::invalid_argument(
+            "Invalid diffractive operator kind");
+    }
+    return static_cast<
+        schema::DiffractiveOperatorKind>(raw);
+}
+
+scene_ir::DiffractiveOperatorKind diffraction_kind(
+    schema::DiffractiveOperatorKind value) {
+    const auto raw = static_cast<std::uint8_t>(value);
+    if (raw > static_cast<std::uint8_t>(
+                  schema::DiffractiveOperatorKind::
+                      ScatteringTable)) {
+        throw std::invalid_argument(
+            "Invalid diffractive operator kind");
+    }
+    return static_cast<
+        scene_ir::DiffractiveOperatorKind>(raw);
+}
+
+schema::DiffractiveScatterSide diffraction_side(
+    scene_ir::DiffractiveScatterSide value) {
+    const auto raw = static_cast<std::uint8_t>(value);
+    if (raw > static_cast<std::uint8_t>(
+                  scene_ir::DiffractiveScatterSide::
+                      Transmission)) {
+        throw std::invalid_argument(
+            "Invalid diffractive scatter side");
+    }
+    return static_cast<
+        schema::DiffractiveScatterSide>(raw);
+}
+
+scene_ir::DiffractiveScatterSide diffraction_side(
+    schema::DiffractiveScatterSide value) {
+    const auto raw = static_cast<std::uint8_t>(value);
+    if (raw > static_cast<std::uint8_t>(
+                  schema::DiffractiveScatterSide::
+                      Transmission)) {
+        throw std::invalid_argument(
+            "Invalid diffractive scatter side");
+    }
+    return static_cast<
+        scene_ir::DiffractiveScatterSide>(raw);
+}
+
+std::unique_ptr<schema::DiffractiveOperatorT>
+encode_diffraction(
+    const scene_ir::DiffractiveOperator& source) {
+    if (source.table.size() >
+        scene_ir::kMaxDiffractiveScatteringEntries) {
+        throw std::invalid_argument(
+            "Diffractive scattering table exceeds the schema budget");
+    }
+    auto result =
+        std::make_unique<
+            schema::DiffractiveOperatorT>();
+    result->kind = diffraction_kind(source.kind);
+    result->side = diffraction_side(source.side);
+    result->period_m = source.period_m;
+    result->orientation_rad =
+        source.orientation_rad;
+    result->duty_cycle = source.duty_cycle;
+    result->phase_depth_rad =
+        source.phase_depth_rad;
+    result->design_wavelength_nm =
+        source.design_wavelength_nm;
+    result->focal_length_m =
+        source.focal_length_m;
+    result->aperture_radius_m =
+        source.aperture_radius_m;
+    result->max_order = source.max_order;
+    result->table_id = source.table_id;
+    for (const auto& source_entry :
+         source.table) {
+        auto entry =
+            std::make_unique<
+                schema::
+                    DiffractiveScatteringEntryT>();
+        entry->wavelength_nm =
+            source_entry.wavelength_nm;
+        entry->incident_cosine =
+            source_entry.incident_cosine;
+        entry->order = source_entry.order;
+        entry->side =
+            diffraction_side(source_entry.side);
+        entry->jones_ss =
+            std::make_unique<
+                schema::ComplexCoefficient>(
+                source_entry.jones_ss.real,
+                source_entry.jones_ss.imag);
+        entry->jones_sp =
+            std::make_unique<
+                schema::ComplexCoefficient>(
+                source_entry.jones_sp.real,
+                source_entry.jones_sp.imag);
+        entry->jones_ps =
+            std::make_unique<
+                schema::ComplexCoefficient>(
+                source_entry.jones_ps.real,
+                source_entry.jones_ps.imag);
+        entry->jones_pp =
+            std::make_unique<
+                schema::ComplexCoefficient>(
+                source_entry.jones_pp.real,
+                source_entry.jones_pp.imag);
+        result->table.push_back(
+            std::move(entry));
+    }
+    return result;
+}
+
+scene_ir::ComplexCoefficient
+decode_coefficient(
+    const std::unique_ptr<
+        schema::ComplexCoefficient>& source) {
+    if (!source) return {};
+    return {source->real(), source->imag()};
+}
+
+scene_ir::DiffractiveOperator
+decode_diffraction(
+    const schema::DiffractiveOperatorT& source) {
+    if (source.table.size() >
+        scene_ir::kMaxDiffractiveScatteringEntries) {
+        throw std::invalid_argument(
+            "Diffractive scattering table exceeds the schema budget");
+    }
+    scene_ir::DiffractiveOperator result;
+    result.kind = diffraction_kind(source.kind);
+    result.side = diffraction_side(source.side);
+    result.period_m = source.period_m;
+    result.orientation_rad =
+        source.orientation_rad;
+    result.duty_cycle = source.duty_cycle;
+    result.phase_depth_rad =
+        source.phase_depth_rad;
+    result.design_wavelength_nm =
+        source.design_wavelength_nm;
+    result.focal_length_m =
+        source.focal_length_m;
+    result.aperture_radius_m =
+        source.aperture_radius_m;
+    result.max_order = source.max_order;
+    result.table_id = source.table_id;
+    for (const auto& source_entry :
+         source.table) {
+        if (!source_entry) {
+            throw std::invalid_argument(
+                "Null diffractive scattering entry");
+        }
+        scene_ir::DiffractiveScatteringEntry entry;
+        entry.wavelength_nm =
+            source_entry->wavelength_nm;
+        entry.incident_cosine =
+            source_entry->incident_cosine;
+        entry.order = source_entry->order;
+        entry.side =
+            diffraction_side(source_entry->side);
+        entry.jones_ss =
+            decode_coefficient(
+                source_entry->jones_ss);
+        entry.jones_sp =
+            decode_coefficient(
+                source_entry->jones_sp);
+        entry.jones_ps =
+            decode_coefficient(
+                source_entry->jones_ps);
+        entry.jones_pp =
+            decode_coefficient(
+                source_entry->jones_pp);
+        result.table.push_back(entry);
+    }
+    return result;
 }
 
 template <typename T>
@@ -130,6 +312,16 @@ std::unique_ptr<schema::MaterialGraphT> encode_graph(
         node->color = vec3(source_node.color);
         node->value = source_node.value;
         node->texture_id = reference_id(texture_ids, source_node.texture);
+        if (source_node.kind >=
+                scene_ir::MaterialGraphNodeKind::
+                    BsdfGrating &&
+            source_node.kind <=
+                scene_ir::MaterialGraphNodeKind::
+                    BsdfScatteringTable) {
+            node->diffraction =
+                encode_diffraction(
+                    source_node.diffraction);
+        }
         for (const auto& source_input : source_node.inputs) {
             auto input = std::make_unique<schema::MaterialGraphInputT>();
             input->name = source_input.name;
@@ -156,6 +348,11 @@ std::shared_ptr<scene_ir::MaterialGraph> decode_graph(
         node.color = vec3(source_node->color);
         node.value = source_node->value;
         node.texture = lookup(textures, source_node->texture_id);
+        if (source_node->diffraction) {
+            node.diffraction =
+                decode_diffraction(
+                    *source_node->diffraction);
+        }
         for (const auto& source_input : source_node->inputs) {
             if (!source_input) throw std::invalid_argument("Null material graph input");
             node.inputs.push_back({source_input->name, source_input->node_id, source_input->output});

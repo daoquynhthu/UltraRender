@@ -210,6 +210,31 @@ def main() -> int:
     )
     diffraction.close()
 
+    diffractive = pyure.create_session(
+        domain_bins=1000000,
+        packet_lanes=8,
+        queue_capacity=64,
+        max_trace_depth=12,
+        diffractive_materials=True,
+    )
+    diffractive.close()
+
+    try:
+        pyure.create_session(
+            domain_bins=1000000,
+            packet_lanes=8,
+            queue_capacity=64,
+            max_trace_depth=12,
+            diffractive_materials=True,
+            restir_di=True,
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError(
+            "diffractive materials with ReSTIR DI must fail"
+        )
+
     try:
         pyure.create_session(wave_optics_mode="invalid")
     except ValueError:

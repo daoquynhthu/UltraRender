@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `W.5`. Phase Q, Phase R, Phase T and Phase V are complete. Phase W.2 now provides an explicitly enabled CUDA wavefront diffraction camera with normalized wavelength PSF banks, an exact-wavelength XYZ film binned only for PSF interpolation, circular or regular-blade pupils, defocus phase and sensor-pixel integration. Unsupported coherent features and advanced-integrator combinations reject before GPU allocation. The ordinary radiometric path remains the default and is unchanged when diffraction is disabled.
+The authoritative construction cursor is `W.6`. Phase Q, Phase R, Phase T and Phase V are complete. Phase W.2 provides an explicitly enabled CUDA wavefront diffraction camera, and W.5 provides explicitly enabled radiometric diffractive MaterialGraph operators with wavelength-lane order sampling, complex Jones response and bounded passive RCWA/FMM tables. Unsupported coherent features and advanced-integrator combinations reject before GPU allocation. The ordinary radiometric path remains the default and is unchanged when wave features are disabled.
 
 ## Supported execution baseline
 
@@ -72,7 +72,8 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | Multi-GPU/farm sample scheduling and merge | Implemented contract | CUDA private multi-GPU uses the shared scheduler; heterogeneous compatible sample shards preserve backend/compiler/cache provenance. Cross-machine transport and worker orchestration remain outside this closure |
 | Denoising | A tested GPU target exists | No general quality or production guarantee is claimed |
 | Diffraction camera | W.2 implemented and tested | Explicit CUDA `Wavefront` mode; wavelength PSF bank and spectral-film resolve, with geometric AOVs left unfiltered |
-| General wave-optics host/CUDA references | Partially implemented | Coherent transport, scalable propagation and diffractive materials remain incomplete |
+| Diffractive materials | W.5 implemented and tested | Grating, sinusoidal phase-mask, ideal zone-plate, blazed DOE and bounded passive Jones scattering-table operators in ordinary CUDA `Wavefront`; no cross-path coherent interference |
+| General wave-optics host/CUDA references | Partially implemented | Coherent/partial-coherent transport, fluorescence and scalable general propagation remain incomplete |
 
 ## Scene and API capability matrix
 
@@ -98,7 +99,7 @@ The following must not be described as production capabilities merely because en
 - ReSTIR PT suffix classes outside the bounded production replay contract;
 - MLT combined with BDPT/VCM/manifold or adaptive reuse schedulers;
 - coherent/partial-coherent production transport and film merge;
-- coherent/partial-coherent transport, diffractive materials and scalable general propagation backends;
+- coherent/partial-coherent transport, fluorescence and scalable general propagation backends;
 - Vulkan/D3D12/OptiX arbitrary-scene radiometric integrator lowering and DispatchRays;
 - complete USD/Hydra and plugin ecosystems;
 - production-grade general fluid or acoustic simulation.

@@ -11,8 +11,13 @@ enum MaterialGraphNodeKind : uint8 {
   ConstantColor = 0, ConstantFloat = 1, Texture2D = 2, Add = 3,
   Multiply = 4, Mix = 5, Checker2D = 6, Noise2D = 7,
   BsdfLambert = 8, BsdfMetal = 9, BsdfDielectric = 10, BsdfLight = 11,
-  BsdfMix = 12, BsdfLayer = 13, OutputSurface = 14
+  BsdfMix = 12, BsdfLayer = 13, OutputSurface = 14,
+  BsdfGrating = 15, BsdfPhaseMask = 16, BsdfZonePlate = 17,
+  BsdfDoe = 18, BsdfScatteringTable = 19
 }
+enum DiffractiveOperatorKind : uint8 { Grating = 0, PhaseMask = 1, ZonePlate = 2, Doe = 3, ScatteringTable = 4 }
+enum DiffractiveScatterSide : uint8 { Reflection = 0, Transmission = 1 }
+struct ComplexCoefficient { real:float; imag:float; }
 
 table ResourceReference {
   id:string (id: 0);
@@ -25,6 +30,32 @@ table MaterialGraphInput {
   output:string (id: 2);
 }
 
+table DiffractiveScatteringEntry {
+  wavelength_nm:float (id: 0);
+  incident_cosine:float (id: 1);
+  order:int32 (id: 2);
+  side:DiffractiveScatterSide = Reflection (id: 3);
+  jones_ss:ComplexCoefficient (id: 4);
+  jones_sp:ComplexCoefficient (id: 5);
+  jones_ps:ComplexCoefficient (id: 6);
+  jones_pp:ComplexCoefficient (id: 7);
+}
+
+table DiffractiveOperator {
+  kind:DiffractiveOperatorKind = Grating (id: 0);
+  side:DiffractiveScatterSide = Reflection (id: 1);
+  period_m:double = 0.000001 (id: 2);
+  orientation_rad:double (id: 3);
+  duty_cycle:double = 0.5 (id: 4);
+  phase_depth_rad:double (id: 5);
+  design_wavelength_nm:double = 550.0 (id: 6);
+  focal_length_m:double = 0.1 (id: 7);
+  aperture_radius_m:double = 0.01 (id: 8);
+  max_order:int32 = 1 (id: 9);
+  table_id:string (id: 10);
+  table:[DiffractiveScatteringEntry] (id: 11);
+}
+
 table MaterialGraphNode {
   id:uint32 = 4294967295 (id: 0);
   kind:MaterialGraphNodeKind = ConstantColor (id: 1);
@@ -33,6 +64,7 @@ table MaterialGraphNode {
   value:float (id: 4);
   texture_id:string (id: 5);
   inputs:[MaterialGraphInput] (id: 6);
+  diffraction:DiffractiveOperator (id: 7);
 }
 
 table MaterialGraph {

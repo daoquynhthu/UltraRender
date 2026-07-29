@@ -65,6 +65,12 @@ struct GpuContext {
     int material_expression_node_count = 0;
     GpuMaterialBsdfLobe* d_material_bsdf_lobes = nullptr;
     int material_bsdf_lobe_count = 0;
+    GpuDiffractiveTableEntry*
+        d_material_diffraction_table = nullptr;
+    int material_diffraction_table_count = 0;
+    GpuDiffractiveOperator*
+        d_material_diffraction_operators = nullptr;
+    int material_diffraction_operator_count = 0;
     int num_spectral_channels = 0;
     GpuMiePhaseResource* d_mie_phase_resources = nullptr;
     int mie_phase_resource_count = 0;

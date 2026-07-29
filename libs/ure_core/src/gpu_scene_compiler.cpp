@@ -6,12 +6,14 @@
 #include "ure/spectral_limits.hpp"
 #include "ure/spectral/spectral.hpp"
 #include "ure/mie_phase_validation.hpp"
+#include "ure/wave_optics.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <functional>
 #include <limits>
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -540,6 +542,11 @@ void validate_phase_m1_graph_node(const scene_ir::MaterialGraphNode& node) {
         case scene_ir::MaterialGraphNodeKind::BsdfMix:
         case scene_ir::MaterialGraphNodeKind::BsdfLayer:
         case scene_ir::MaterialGraphNodeKind::OutputSurface:
+        case scene_ir::MaterialGraphNodeKind::BsdfGrating:
+        case scene_ir::MaterialGraphNodeKind::BsdfPhaseMask:
+        case scene_ir::MaterialGraphNodeKind::BsdfZonePlate:
+        case scene_ir::MaterialGraphNodeKind::BsdfDoe:
+        case scene_ir::MaterialGraphNodeKind::BsdfScatteringTable:
             return;
         default:
             throw std::runtime_error("MaterialGraph contains a node kind not supported by the Phase M.1 compiler");
@@ -783,6 +790,139 @@ ure::gpu::GpuMaterialData compile_material(const std::shared_ptr<scene_ir::Mater
             if (!in || in->node_id == scene_ir::kInvalidMaterialGraphNode) return nullptr;
             return &require_graph_node(*mat->graph, in->node_id, name);
         };
+
+        auto diffractive_kind =
+            [](scene_ir::MaterialGraphNodeKind kind)
+                -> std::optional<
+                    scene_ir::DiffractiveOperatorKind> {
+            switch (kind) {
+            case scene_ir::MaterialGraphNodeKind::BsdfGrating:
+                return scene_ir::DiffractiveOperatorKind::Grating;
+            case scene_ir::MaterialGraphNodeKind::BsdfPhaseMask:
+                return scene_ir::DiffractiveOperatorKind::PhaseMask;
+            case scene_ir::MaterialGraphNodeKind::BsdfZonePlate:
+                return scene_ir::DiffractiveOperatorKind::ZonePlate;
+            case scene_ir::MaterialGraphNodeKind::BsdfDoe:
+                return scene_ir::DiffractiveOperatorKind::Doe;
+            case scene_ir::MaterialGraphNodeKind::BsdfScatteringTable:
+                return scene_ir::DiffractiveOperatorKind::ScatteringTable;
+            default:
+                return std::nullopt;
+            }
+        };
+
+        if (const auto kind =
+                diffractive_kind(bsdf.kind)) {
+            scene_ir::DiffractiveOperator diffraction =
+                bsdf.diffraction;
+            if (diffraction.kind != *kind) {
+                throw std::runtime_error(
+                    "MaterialGraph diffractive node kind does not match its operator contract");
+            }
+            if (!wave::is_valid(diffraction)) {
+                throw std::runtime_error(
+                    "MaterialGraph diffractive operator contract is invalid");
+            }
+            ure::gpu::GpuMaterialData data =
+                compile_material_node(
+                    scene_ir::MaterialModel::Lambertian,
+                    {1.0f, 1.0f, 1.0f},
+                    {0.0f, 0.0f, 0.0f},
+                    0.0f,
+                    1.0f,
+                    {},
+                    0.0f,
+                    0.0f,
+                    1.0f,
+                    0.0f,
+                    0.0f,
+                    {},
+                    {},
+                    {},
+                    wavelengths);
+            data.header.type =
+                ure::gpu::MaterialType::Diffractive;
+            switch (*kind) {
+            case scene_ir::DiffractiveOperatorKind::Grating:
+                data.diffraction_operator.kind =
+                    ure::gpu::GpuDiffractiveOperatorKind::Grating;
+                break;
+            case scene_ir::DiffractiveOperatorKind::PhaseMask:
+                data.diffraction_operator.kind =
+                    ure::gpu::GpuDiffractiveOperatorKind::PhaseMask;
+                break;
+            case scene_ir::DiffractiveOperatorKind::ZonePlate:
+                data.diffraction_operator.kind =
+                    ure::gpu::GpuDiffractiveOperatorKind::ZonePlate;
+                break;
+            case scene_ir::DiffractiveOperatorKind::Doe:
+                data.diffraction_operator.kind =
+                    ure::gpu::GpuDiffractiveOperatorKind::Doe;
+                break;
+            case scene_ir::DiffractiveOperatorKind::ScatteringTable:
+                data.diffraction_operator.kind =
+                    ure::gpu::GpuDiffractiveOperatorKind::ScatteringTable;
+                break;
+            }
+            data.diffraction_operator.side =
+                diffraction.side ==
+                    scene_ir::DiffractiveScatterSide::Reflection
+                ? ure::gpu::GpuDiffractiveScatterSide::Reflection
+                : ure::gpu::GpuDiffractiveScatterSide::Transmission;
+            data.diffraction_operator.period_m =
+                static_cast<float>(diffraction.period_m);
+            data.diffraction_operator.orientation_rad =
+                static_cast<float>(
+                    diffraction.orientation_rad);
+            data.diffraction_operator.duty_cycle =
+                static_cast<float>(diffraction.duty_cycle);
+            data.diffraction_operator.phase_depth_rad =
+                static_cast<float>(
+                    diffraction.phase_depth_rad);
+            data.diffraction_operator.design_wavelength_nm =
+                static_cast<float>(
+                    diffraction.design_wavelength_nm);
+            data.diffraction_operator.focal_length_m =
+                static_cast<float>(
+                    diffraction.focal_length_m);
+            data.diffraction_operator.aperture_radius_m =
+                static_cast<float>(
+                    diffraction.aperture_radius_m);
+            data.diffraction_operator.max_order =
+                diffraction.max_order;
+            for (const auto& entry : diffraction.table) {
+                ure::gpu::GpuDiffractiveTableEntry gpu_entry;
+                gpu_entry.wavelength_nm =
+                    entry.wavelength_nm;
+                gpu_entry.incident_cosine =
+                    entry.incident_cosine;
+                gpu_entry.order = entry.order;
+                gpu_entry.side =
+                    entry.side ==
+                        scene_ir::DiffractiveScatterSide::Reflection
+                    ? ure::gpu::GpuDiffractiveScatterSide::Reflection
+                    : ure::gpu::GpuDiffractiveScatterSide::Transmission;
+                gpu_entry.jones_ss_real =
+                    entry.jones_ss.real;
+                gpu_entry.jones_ss_imag =
+                    entry.jones_ss.imag;
+                gpu_entry.jones_sp_real =
+                    entry.jones_sp.real;
+                gpu_entry.jones_sp_imag =
+                    entry.jones_sp.imag;
+                gpu_entry.jones_ps_real =
+                    entry.jones_ps.real;
+                gpu_entry.jones_ps_imag =
+                    entry.jones_ps.imag;
+                gpu_entry.jones_pp_real =
+                    entry.jones_pp.real;
+                gpu_entry.jones_pp_imag =
+                    entry.jones_pp.imag;
+                data.diffraction_table.push_back(
+                    gpu_entry);
+            }
+            return data;
+        }
 
         auto compile_lobe = [&](const scene_ir::MaterialGraphNode& node) {
             ure::gpu::GpuMaterialBsdfLobe lobe;
@@ -1328,6 +1468,13 @@ CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir, co
                                          texture_index,
                                          roughness_texture_index,
                                          emission_texture_index);
+        if (material.header.type ==
+                gpu::MaterialType::Diffractive &&
+            !wave::is_supported_diffractive_material_config(
+                config)) {
+            throw std::runtime_error(
+                "diffractive MaterialGraph requires the supported explicit wave_optics.diffractive_materials configuration");
+        }
         material.header.medium_phase = static_cast<int>(mat->medium_phase);
         material.header.medium_phase_resource_index = cache_mie_resource(
             mat->medium_phase, mat->medium_mie_resource, mat->medium_density,

@@ -511,11 +511,28 @@ private:
             !config_.mlt.enabled) {
             return;
         }
+        if (wave::is_supported_diffractive_material_config(
+                config_)) {
+            return;
+        }
         throw std::runtime_error(
             "requested wave-optics configuration is unsupported by the GPU renderer");
     }
 
     void load_compiled_scene(const CompiledGpuScene& compiled) {
+        const bool has_diffractive_material =
+            std::ranges::any_of(
+                compiled.materials,
+                [](const gpu::GpuMaterialData& material) {
+                    return material.header.type ==
+                        gpu::MaterialType::Diffractive;
+                });
+        if (has_diffractive_material &&
+            !wave::is_supported_diffractive_material_config(
+                config_)) {
+            throw std::runtime_error(
+                "diffractive MaterialGraph operators require the explicit diffractive-materials wave-optics gate");
+        }
         if (gpu_context_) {
             ure::gpu::free_gpu_renderer(gpu_context_);
             gpu_context_ = nullptr;

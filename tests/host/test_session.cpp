@@ -1092,6 +1092,18 @@ static int test_c_session_lifecycle() {
     CHECK(diffraction_wave_session != nullptr);
     ure_session_destroy(diffraction_wave_session);
 
+    ure_wave_optics_config_t diffractive_wave_config{};
+    diffractive_wave_config.mode =
+        URE_WAVE_OPTICS_RADIOMETRIC;
+    diffractive_wave_config
+        .diffractive_materials_enabled = 1;
+    ure_session_t* diffractive_wave_session =
+        ure_session_create_wave_config(
+            &spectral_config,
+            &diffractive_wave_config);
+    CHECK(diffractive_wave_session != nullptr);
+    ure_session_destroy(diffractive_wave_session);
+
     ure_wave_optics_config_v2_t diffraction_v2{};
     diffraction_v2.struct_size =
         sizeof(diffraction_v2);

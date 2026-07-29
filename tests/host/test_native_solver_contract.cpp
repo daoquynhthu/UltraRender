@@ -138,6 +138,21 @@ int main() {
              mismatched_diffraction,
              registry).ok(),
         "mismatched diffraction mode and enable flag were accepted");
+    auto diffractive = value;
+    diffractive.wave_optics.
+        diffractive_materials_enabled = true;
+    check(
+        compile_solver_contract(
+            diffractive,
+            registry).ok(),
+        "supported diffractive material boundary was rejected");
+    auto invalid_diffractive = diffractive;
+    invalid_diffractive.restir_di.enabled = true;
+    check(
+        !compile_solver_contract(
+             invalid_diffractive,
+             registry).ok(),
+        "diffractive materials with ReSTIR DI were accepted");
     auto bad_metric = value; bad_metric.validation[0].metric = "unknown.metric";
     check(!compile_solver_contract(bad_metric, registry).ok(), "unsupported validation metric accepted");
     std::cout << "Phase Q.7 solver contract checks: " << (failures ? "FAILED" : "PASSED") << '\n';

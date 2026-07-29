@@ -320,6 +320,11 @@ bool validate_supported_wave_optics(
     const ure::RenderConfig& config) {
     const auto& cfg = config.wave_optics;
     if (ure::wave_optics_is_radiometric_only(cfg)) return true;
+    if (ure::wave::
+            is_supported_diffractive_material_config(
+                config)) {
+        return true;
+    }
     if (ure::wave::is_valid_diffraction_camera_config(cfg) &&
         !cfg.coherent_field_enabled &&
         !cfg.partial_coherence_enabled &&

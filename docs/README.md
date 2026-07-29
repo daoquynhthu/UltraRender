@@ -21,6 +21,7 @@ This index separates current references from historical records. `PLAN.md` is th
 | [`Phase_T_Portable_GPU_Runtime.md`](Phase_T_Portable_GPU_Runtime.md) | Completed T.0-T.11 portable-runtime contracts and validation record |
 | [`Phase_V_GPU_Acceleration.md`](Phase_V_GPU_Acceleration.md) | Current GPU acceleration audit, configuration contract, risks and migration boundary |
 | [`Phase_W_Wave_Optics_Audit.md`](Phase_W_Wave_Optics_Audit.md) | Current boundary between references and production wave transport |
+| [`Phase_W_W5_Diffractive_Materials.md`](Phase_W_W5_Diffractive_Materials.md) | W.5 radiometric diffractive operator, Jones-table and CUDA estimator contract |
 
 ## Completed-phase evidence records
 

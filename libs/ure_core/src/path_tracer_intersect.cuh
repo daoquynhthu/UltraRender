@@ -811,6 +811,122 @@ static __device__ BvhTraversalResult hit_instance_tlas(
         : BvhTraversalResult::Miss;
 }
 
+static __device__ GpuVec3 fallback_surface_tangent(
+    const GpuVec3& normal) {
+    const GpuVec3 axis =
+        fabsf(normal.x) > 0.9f
+        ? GpuVec3(0.0f, 1.0f, 0.0f)
+        : GpuVec3(1.0f, 0.0f, 0.0f);
+    return normal.cross(axis).normalize();
+}
+
+static __device__ GpuVec3 orthogonal_surface_tangent(
+    GpuVec3 tangent,
+    const GpuVec3& normal) {
+    tangent =
+        tangent - normal * tangent.dot(normal);
+    if (tangent.length_sq() <= 1.0e-12f) {
+        return fallback_surface_tangent(normal);
+    }
+    return tangent.normalize();
+}
+
+static __device__ GpuVec3 mesh_surface_tangent(
+    const GpuMesh& mesh,
+    int primitive_index,
+    const GpuVec3& normal,
+    const GpuMat4* transform) {
+    if (primitive_index < 0 ||
+        primitive_index >= mesh.triangle_count) {
+        return fallback_surface_tangent(normal);
+    }
+    const int i0 =
+        mesh.indices[primitive_index * 3 + 0];
+    const int i1 =
+        mesh.indices[primitive_index * 3 + 1];
+    const int i2 =
+        mesh.indices[primitive_index * 3 + 2];
+    GpuVec3 tangent;
+    if (mesh.uvs) {
+        const GpuVec3 edge1 =
+            mesh.vertices[i1] - mesh.vertices[i0];
+        const GpuVec3 edge2 =
+            mesh.vertices[i2] - mesh.vertices[i0];
+        const float du1 =
+            mesh.uvs[i1].u - mesh.uvs[i0].u;
+        const float dv1 =
+            mesh.uvs[i1].v - mesh.uvs[i0].v;
+        const float du2 =
+            mesh.uvs[i2].u - mesh.uvs[i0].u;
+        const float dv2 =
+            mesh.uvs[i2].v - mesh.uvs[i0].v;
+        const float determinant =
+            du1 * dv2 - dv1 * du2;
+        if (fabsf(determinant) > 1.0e-12f) {
+            tangent =
+                (edge1 * dv2 - edge2 * dv1) *
+                (1.0f / determinant);
+        }
+    }
+    if (tangent.length_sq() <= 1.0e-12f &&
+        mesh.tangents) {
+        tangent =
+            mesh.tangents[i0] +
+            mesh.tangents[i1] +
+            mesh.tangents[i2];
+    }
+    if (transform) {
+        tangent =
+            transform->transform_vector(tangent);
+    }
+    return orthogonal_surface_tangent(
+        tangent,
+        normal);
+}
+
+static __device__ GpuVec3 surface_tangent(
+    const GpuScene& scene,
+    int hit_type,
+    int hit_index,
+    int primitive_index,
+    const GpuVec3& position,
+    const GpuVec3& normal) {
+    if (hit_type == 0 &&
+        hit_index >= 0 &&
+        hit_index < scene.sphere_count) {
+        const GpuVec3 local =
+            (position -
+             scene.spheres[hit_index].center).normalize();
+        return orthogonal_surface_tangent(
+            GpuVec3(local.z, 0.0f, -local.x),
+            normal);
+    }
+    if (hit_type == 1 &&
+        hit_index >= 0 &&
+        hit_index < scene.mesh_count) {
+        return mesh_surface_tangent(
+            scene.meshes[hit_index],
+            primitive_index,
+            normal,
+            nullptr);
+    }
+    if (hit_type == 2 &&
+        hit_index >= 0 &&
+        hit_index < scene.instance_count) {
+        const GpuInstance& instance =
+            scene.instances[hit_index];
+        if (instance.mesh_index >= 0 &&
+            instance.mesh_index < scene.mesh_count) {
+            return mesh_surface_tangent(
+                scene.meshes[instance.mesh_index],
+                primitive_index,
+                normal,
+                &instance.transform);
+        }
+    }
+    return fallback_surface_tangent(normal);
+}
+
 static __device__ bool world_hit(const GpuScene& scene, const GpuRay& r, float t_min, float t_max, float& t_out, GpuVec3& p_out, GpuVec3& n_out, GpuVec3& ng_out, GpuVec2& uv_out, int& mat_idx_out, int& type_out, int& index_out, int& primitive_index_out, bool ignore_lights = false) {
     float t_closest = t_max;
     bool hit_anything = false;

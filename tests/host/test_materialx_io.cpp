@@ -121,6 +121,110 @@ static int test_standard_surface_imports_as_lambert_graph() {
     return 0;
 }
 
+static int test_diffractive_materialx_roundtrip_and_gate() {
+    const ure::scene_ir::MaterialGraphNodeKind kinds[] = {
+        ure::scene_ir::MaterialGraphNodeKind::BsdfGrating,
+        ure::scene_ir::MaterialGraphNodeKind::BsdfPhaseMask,
+        ure::scene_ir::MaterialGraphNodeKind::BsdfZonePlate,
+        ure::scene_ir::MaterialGraphNodeKind::BsdfDoe,
+        ure::scene_ir::MaterialGraphNodeKind::BsdfScatteringTable};
+    for (int kind_index = 0;
+         kind_index < 5;
+         ++kind_index) {
+        ure::scene_ir::MaterialGraph graph;
+        ure::scene_ir::MaterialGraphNode diffraction;
+        diffraction.id = 1;
+        diffraction.kind = kinds[kind_index];
+        diffraction.diffraction.kind =
+            static_cast<
+                ure::scene_ir::DiffractiveOperatorKind>(
+                kind_index);
+        diffraction.diffraction.side =
+            ure::scene_ir::DiffractiveScatterSide::
+                Transmission;
+        diffraction.diffraction.period_m = 1.25e-6;
+        diffraction.diffraction.orientation_rad = 0.3;
+        diffraction.diffraction.duty_cycle = 0.4;
+        diffraction.diffraction.phase_depth_rad = 1.2;
+        diffraction.diffraction.max_order = 2;
+        if (kind_index == 4) {
+            diffraction.diffraction.table_id =
+                "rcwa/<>&";
+            ure::scene_ir::DiffractiveScatteringEntry entry;
+            entry.wavelength_nm = 532.0f;
+            entry.incident_cosine = 0.8f;
+            entry.order = 0;
+            entry.side =
+                ure::scene_ir::DiffractiveScatterSide::
+                    Reflection;
+            entry.jones_ss = {0.5f, 0.1f};
+            entry.jones_sp = {0.1f, -0.2f};
+            entry.jones_ps = {-0.1f, 0.2f};
+            entry.jones_pp = {0.4f, -0.1f};
+            diffraction.diffraction.table.push_back(entry);
+        }
+        ure::scene_ir::MaterialGraphNode output;
+        output.id = 2;
+        output.kind =
+            ure::scene_ir::MaterialGraphNodeKind::
+                OutputSurface;
+        output.inputs.push_back(
+            input("surface", diffraction.id));
+        graph.nodes = {diffraction, output};
+        graph.output_node_id = output.id;
+
+        const std::string xml =
+            ure::io::export_materialx_graph(
+                graph,
+                "DiffractiveMaterial");
+        const auto imported =
+            ure::io::import_materialx_graph(xml);
+        const auto& imported_diffraction =
+            imported.require_node(1, "diffraction");
+        CHECK(imported_diffraction.kind ==
+              kinds[kind_index]);
+        CHECK(imported_diffraction.diffraction.kind ==
+              diffraction.diffraction.kind);
+        CHECK(imported_diffraction.diffraction.period_m ==
+              diffraction.diffraction.period_m);
+        if (kind_index == 4) {
+            CHECK(imported_diffraction.diffraction.table_id ==
+                  "rcwa/<>&");
+            CHECK(imported_diffraction.diffraction.table.size() ==
+                  1);
+            CHECK(imported_diffraction.diffraction.table[0]
+                      .jones_sp.imag == -0.2f);
+        }
+
+        ure::RenderConfig disabled;
+        bool rejected = false;
+        try {
+            (void)ure::GpuSceneCompiler::compile(
+                scene_with_graph(imported),
+                disabled);
+        } catch (const std::runtime_error&) {
+            rejected = true;
+        }
+        CHECK(rejected);
+
+        ure::RenderConfig enabled;
+        enabled.wave_optics.diffractive_materials_enabled =
+            true;
+        const auto compiled =
+            ure::GpuSceneCompiler::compile(
+                scene_with_graph(imported),
+                enabled);
+        CHECK(compiled.materials.size() == 1);
+        CHECK(compiled.materials[0].header.type ==
+              ure::gpu::MaterialType::Diffractive);
+        CHECK(compiled.materials[0].diffraction_operator.kind ==
+              static_cast<
+                  ure::gpu::GpuDiffractiveOperatorKind>(
+                  kind_index));
+    }
+    return 0;
+}
+
 static int test_materialx_unknown_node_fails_loud() {
     bool rejected = false;
     try {
@@ -151,6 +255,7 @@ int main() {
     int failed = 0;
     failed += run("test_ure_materialx_roundtrips_layer_graph", test_ure_materialx_roundtrips_layer_graph);
     failed += run("test_standard_surface_imports_as_lambert_graph", test_standard_surface_imports_as_lambert_graph);
+    failed += run("test_diffractive_materialx_roundtrip_and_gate", test_diffractive_materialx_roundtrip_and_gate);
     failed += run("test_materialx_unknown_node_fails_loud", test_materialx_unknown_node_fails_loud);
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;

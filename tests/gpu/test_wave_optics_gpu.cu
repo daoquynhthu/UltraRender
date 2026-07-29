@@ -5,9 +5,112 @@
 #include <vector>
 
 #include "test_framework.cuh"
+#include "ure/detail/cuda_context.cuh"
+#include "ure/detail/cuda_driver.cuh"
+#include "ure/detail/cuda_scene_compiler.hpp"
+#include "ure/detail/cuda_structs.cuh"
 #include "ure/render.hpp"
 #include "ure/scene_ir.hpp"
 #include "ure/wave_optics.hpp"
+
+namespace ure::gpu {
+
+#include "path_tracer_decl.cuh"
+#include "path_tracer_boundary.cuh"
+#include "path_tracer_diffractive_jones.cuh"
+
+__global__ void apply_diffractive_jones_test_kernel(
+    StokesVector input,
+    DiffractiveJonesMatrix matrix,
+    StokesVector* output) {
+    *output =
+        apply_diffractive_jones(input, matrix);
+}
+
+}
+
+static ure::gpu::StokesVector apply_gpu_jones(
+    ure::gpu::StokesVector input,
+    ure::gpu::DiffractiveJonesMatrix matrix) {
+    ure::gpu::StokesVector* device_output = nullptr;
+    const cudaError_t allocation = cudaMalloc(
+            reinterpret_cast<void**>(&device_output),
+            sizeof(*device_output));
+    if (allocation != cudaSuccess) {
+        return {};
+    }
+    DeviceMem guard(device_output);
+    ure::gpu::apply_diffractive_jones_test_kernel<<<1, 1>>>(
+        input,
+        matrix,
+        device_output);
+    ure::gpu::StokesVector output;
+    const cudaError_t synchronized =
+        cudaDeviceSynchronize();
+    const cudaError_t copied =
+        synchronized == cudaSuccess
+        ? cudaMemcpy(
+            &output,
+            device_output,
+            sizeof(output),
+            cudaMemcpyDeviceToHost)
+        : synchronized;
+    if (synchronized != cudaSuccess ||
+        copied != cudaSuccess) {
+        return {};
+    }
+    return output;
+}
+
+static int test_gpu_diffractive_jones_response() {
+    REQUIRE_GPU();
+    ure::gpu::DiffractiveJonesMatrix identity;
+    identity.ss = {1.0f, 0.0f};
+    identity.pp = {1.0f, 0.0f};
+    const ure::gpu::StokesVector input(
+        1.0f,
+        0.2f,
+        0.3f,
+        0.4f);
+    const auto unchanged =
+        apply_gpu_jones(input, identity);
+    CHECK_FLOAT_EQ(unchanged.I, input.I, 1.0e-6f);
+    CHECK_FLOAT_EQ(unchanged.Q, input.Q, 1.0e-6f);
+    CHECK_FLOAT_EQ(unchanged.U, input.U, 1.0e-6f);
+    CHECK_FLOAT_EQ(unchanged.V, input.V, 1.0e-6f);
+
+    ure::gpu::DiffractiveJonesMatrix polarizer;
+    polarizer.ss = {1.0f, 0.0f};
+    const auto polarized =
+        apply_gpu_jones(
+            ure::gpu::StokesVector(
+                1.0f,
+                0.0f,
+                0.0f,
+                0.0f),
+            polarizer);
+    CHECK_FLOAT_EQ(polarized.I, 0.5f, 1.0e-6f);
+    CHECK_FLOAT_EQ(polarized.Q, 0.5f, 1.0e-6f);
+    CHECK_FLOAT_EQ(polarized.U, 0.0f, 1.0e-6f);
+    CHECK_FLOAT_EQ(polarized.V, 0.0f, 1.0e-6f);
+
+    ure::gpu::DiffractiveJonesMatrix quarter_wave;
+    quarter_wave.ss = {1.0f, 0.0f};
+    quarter_wave.pp = {0.0f, 1.0f};
+    const auto circular =
+        apply_gpu_jones(
+            ure::gpu::StokesVector(
+                1.0f,
+                0.0f,
+                1.0f,
+                0.0f),
+            quarter_wave);
+    CHECK_FLOAT_EQ(circular.I, 1.0f, 1.0e-6f);
+    CHECK_FLOAT_EQ(circular.Q, 0.0f, 1.0e-6f);
+    CHECK_FLOAT_EQ(circular.U, 0.0f, 1.0e-6f);
+    CHECK_FLOAT_EQ(circular.V, -1.0f, 1.0e-6f);
+    return 0;
+}
 
 static int test_gpu_fraunhofer_uniform_field() {
     REQUIRE_GPU();
@@ -207,13 +310,286 @@ static int test_disabled_diffraction_parameters_are_inert() {
     return 0;
 }
 
+static ure::scene_ir::SceneIR make_diffractive_scene(
+    ure::scene_ir::DiffractiveOperator diffraction) {
+    ure::scene_ir::SceneIR scene;
+    scene.width = 16;
+    scene.height = 16;
+    scene.camera.position = {0.0f, 0.0f, 4.0f};
+    scene.camera.look_at = {0.0f, 0.0f, 0.0f};
+    scene.camera.fov = 35.0f;
+    auto material =
+        std::make_shared<
+            ure::scene_ir::MaterialNode>();
+    material->name = "diffractive";
+    material->graph =
+        std::make_shared<
+            ure::scene_ir::MaterialGraph>();
+    ure::scene_ir::MaterialGraphNode operator_node;
+    operator_node.id = 1;
+    operator_node.kind =
+        static_cast<
+            ure::scene_ir::MaterialGraphNodeKind>(
+            static_cast<int>(
+                ure::scene_ir::MaterialGraphNodeKind::
+                    BsdfGrating) +
+            static_cast<int>(diffraction.kind));
+    operator_node.diffraction =
+        std::move(diffraction);
+    ure::scene_ir::MaterialGraphNode output;
+    output.id = 2;
+    output.kind =
+        ure::scene_ir::MaterialGraphNodeKind::
+            OutputSurface;
+    output.inputs.push_back(
+        {"surface", operator_node.id, "out"});
+    material->graph->nodes = {
+        operator_node,
+        output};
+    material->graph->output_node_id = output.id;
+    scene.materials.push_back(material);
+    ure::scene_ir::SphereNode sphere;
+    sphere.center = {0.0f, 0.0f, 0.0f};
+    sphere.radius = 1.2f;
+    sphere.material = material;
+    scene.spheres.push_back(sphere);
+    return scene;
+}
+
+static std::vector<float> render_diffractive_scene(
+    const ure::scene_ir::SceneIR& scene,
+    int pass_count) {
+    ure::RenderConfig config;
+    config.queue_capacity = 8192;
+    config.spectral_packet_lanes = 8;
+    config.spectral_domain_bins = 8;
+    config.max_trace_depth = 2;
+    config.wave_optics.diffractive_materials_enabled =
+        true;
+    auto engine =
+        ure::RenderEngineFactory::create_gpu_renderer(
+            config);
+    engine->load_scene_ir(scene);
+    for (int pass = 0; pass < pass_count; ++pass) {
+        engine->render_pass();
+    }
+    return engine->get_framebuffer();
+}
+
+static float center_framebuffer_sum(
+    const std::vector<float>& framebuffer) {
+    float sum = 0.0f;
+    for (int y = 4; y < 12; ++y) {
+        for (int x = 4; x < 12; ++x) {
+            const std::size_t base =
+                static_cast<std::size_t>(
+                    (y * 16 + x) * 3);
+            sum += framebuffer[base] +
+                   framebuffer[base + 1] +
+                   framebuffer[base + 2];
+        }
+    }
+    return sum;
+}
+
+static int test_gpu_diffractive_material_transport() {
+    REQUIRE_GPU();
+    ure::scene_ir::DiffractiveOperator phase;
+    phase.kind =
+        ure::scene_ir::DiffractiveOperatorKind::
+            PhaseMask;
+    phase.phase_depth_rad = 0.0;
+    phase.max_order = 3;
+    const auto phase_frame =
+        render_diffractive_scene(
+            make_diffractive_scene(phase),
+            24);
+
+    ure::scene_ir::DiffractiveOperator grating;
+    grating.kind =
+        ure::scene_ir::DiffractiveOperatorKind::
+            Grating;
+    grating.period_m = 1.1e-6;
+    grating.duty_cycle = 0.4;
+    grating.max_order = 3;
+    const auto grating_frame =
+        render_diffractive_scene(
+            make_diffractive_scene(grating),
+            24);
+    grating.orientation_rad = 0.5 *
+        3.14159265358979323846;
+    const auto rotated_frame =
+        render_diffractive_scene(
+            make_diffractive_scene(grating),
+            24);
+
+    ure::scene_ir::DiffractiveOperator table;
+    table.kind =
+        ure::scene_ir::DiffractiveOperatorKind::
+            ScatteringTable;
+    table.table_id = "gpu/rcwa";
+    table.max_order = 0;
+    for (float wavelength : {400.0f, 800.0f}) {
+        ure::scene_ir::DiffractiveScatteringEntry entry;
+        entry.wavelength_nm = wavelength;
+        entry.incident_cosine = 1.0f;
+        entry.jones_ss.real =
+            wavelength == 400.0f ? 0.4f : 0.7f;
+        entry.jones_pp.real =
+            entry.jones_ss.real;
+        table.table.push_back(entry);
+    }
+    const auto table_frame =
+        render_diffractive_scene(
+            make_diffractive_scene(table),
+            24);
+
+    CHECK(phase_frame.size() == 16 * 16 * 3);
+    CHECK(grating_frame.size() == phase_frame.size());
+    CHECK(rotated_frame.size() == phase_frame.size());
+    CHECK(table_frame.size() == phase_frame.size());
+    float orientation_difference = 0.0f;
+    for (std::size_t index = 0;
+         index < phase_frame.size();
+         ++index) {
+        CHECK(std::isfinite(phase_frame[index]));
+        CHECK(std::isfinite(grating_frame[index]));
+        CHECK(std::isfinite(rotated_frame[index]));
+        CHECK(std::isfinite(table_frame[index]));
+        orientation_difference +=
+            std::abs(
+                grating_frame[index] -
+                rotated_frame[index]);
+    }
+    const float phase_energy =
+        center_framebuffer_sum(phase_frame);
+    const float grating_energy =
+        center_framebuffer_sum(grating_frame);
+    const float table_energy =
+        center_framebuffer_sum(table_frame);
+    CHECK(phase_energy > 0.0f);
+    CHECK(grating_energy > 0.0f);
+    CHECK(table_energy > 0.0f);
+    CHECK(grating_energy < phase_energy * 0.75f);
+    CHECK(table_energy < phase_energy * 0.75f);
+    CHECK(orientation_difference > 0.01f);
+    return 0;
+}
+
+static int test_gpu_diffractive_material_requires_gate() {
+    REQUIRE_GPU();
+    ure::scene_ir::DiffractiveOperator grating;
+    grating.kind =
+        ure::scene_ir::DiffractiveOperatorKind::
+            Grating;
+    auto engine =
+        ure::RenderEngineFactory::create_gpu_renderer(
+            ure::RenderConfig{});
+    bool rejected = false;
+    try {
+        engine->load_scene_ir(
+            make_diffractive_scene(grating));
+    } catch (const std::runtime_error& error) {
+        rejected =
+            std::string(error.what()).find(
+                "diffractive") !=
+            std::string::npos;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
+static int test_gpu_diffractive_material_update_requires_reload() {
+    REQUIRE_GPU();
+    ure::scene_ir::DiffractiveOperator grating;
+    grating.kind =
+        ure::scene_ir::DiffractiveOperatorKind::
+            Grating;
+    ure::RenderConfig config;
+    config.queue_capacity = 512;
+    config.spectral_packet_lanes = 8;
+    config.spectral_domain_bins = 8;
+    config.wave_optics.diffractive_materials_enabled =
+        true;
+    auto compiled = ure::GpuSceneCompiler::compile(
+        make_diffractive_scene(grating),
+        config);
+    int material_index = -1;
+    for (std::size_t index = 0;
+         index < compiled.materials.size();
+         ++index) {
+        if (compiled.materials[index].header.type ==
+            ure::gpu::MaterialType::Diffractive) {
+            material_index =
+                static_cast<int>(index);
+            break;
+        }
+    }
+    CHECK(material_index >= 0);
+    ure::gpu::GpuContext* context =
+        ure::gpu::init_gpu_renderer(
+            compiled.width,
+            compiled.height,
+            compiled.meshes,
+            compiled.instances,
+            compiled.spheres,
+            compiled.materials,
+            compiled.textures,
+            config);
+    CHECK(context != nullptr);
+    material_index = -1;
+    for (std::size_t index = 0;
+         index <
+             context->
+                 host_materials_for_light_distribution
+                     .size();
+         ++index) {
+        if (context->
+                host_materials_for_light_distribution[
+                    index]
+                    .header.type ==
+            ure::gpu::MaterialType::Diffractive) {
+            material_index =
+                static_cast<int>(index);
+            break;
+        }
+    }
+    CHECK(material_index >= 0);
+    ure::gpu::GpuMaterialData ordinary =
+        context->host_materials_for_light_distribution[
+            static_cast<std::size_t>(material_index)];
+    ordinary.header.type =
+        ure::gpu::MaterialType::Lambertian;
+    ordinary.diffraction_table.clear();
+    bool rejected = false;
+    try {
+        ure::gpu::update_materials_gpu(
+            context,
+            &ordinary,
+            1,
+            material_index);
+    } catch (const std::runtime_error& error) {
+        rejected =
+            std::string(error.what()).find(
+                "full scene reload") !=
+            std::string::npos;
+    }
+    CHECK(rejected);
+    ure::gpu::free_gpu_renderer(context);
+    return 0;
+}
+
 int main() {
     std::printf("[GPU Wave Optics Test]\n");
+    RUN_TEST(test_gpu_diffractive_jones_response);
     RUN_TEST(test_gpu_fraunhofer_uniform_field);
     RUN_TEST(test_gpu_fraunhofer_matches_cpu_reference);
     RUN_TEST(test_gpu_fraunhofer_invalid_fails_closed);
     RUN_TEST(test_gpu_diffraction_camera_film_integration);
     RUN_TEST(test_disabled_diffraction_parameters_are_inert);
+    RUN_TEST(test_gpu_diffractive_material_transport);
+    RUN_TEST(test_gpu_diffractive_material_requires_gate);
+    RUN_TEST(test_gpu_diffractive_material_update_requires_reload);
     std::printf("  passed: %d, failed: %d\n", g_tests_passed, g_tests_failed);
     return g_test_result;
 }

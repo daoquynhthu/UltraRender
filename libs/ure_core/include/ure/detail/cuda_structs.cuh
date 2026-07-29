@@ -337,7 +337,54 @@ enum class MaterialType {
     Light,
     Cloth,
     Composite,
-    Layered
+    Layered,
+    Diffractive
+};
+
+enum class GpuDiffractiveOperatorKind : int {
+    Grating = 0,
+    PhaseMask = 1,
+    ZonePlate = 2,
+    Doe = 3,
+    ScatteringTable = 4
+};
+
+enum class GpuDiffractiveScatterSide : int {
+    Reflection = 0,
+    Transmission = 1
+};
+
+struct GpuDiffractiveTableEntry {
+    float wavelength_nm = 0.0f;
+    float incident_cosine = 0.0f;
+    int order = 0;
+    GpuDiffractiveScatterSide side =
+        GpuDiffractiveScatterSide::Reflection;
+    float jones_ss_real = 0.0f;
+    float jones_ss_imag = 0.0f;
+    float jones_sp_real = 0.0f;
+    float jones_sp_imag = 0.0f;
+    float jones_ps_real = 0.0f;
+    float jones_ps_imag = 0.0f;
+    float jones_pp_real = 0.0f;
+    float jones_pp_imag = 0.0f;
+};
+
+struct GpuDiffractiveOperator {
+    GpuDiffractiveOperatorKind kind =
+        GpuDiffractiveOperatorKind::Grating;
+    GpuDiffractiveScatterSide side =
+        GpuDiffractiveScatterSide::Reflection;
+    float period_m = 1.0e-6f;
+    float orientation_rad = 0.0f;
+    float duty_cycle = 0.5f;
+    float phase_depth_rad = 0.0f;
+    float design_wavelength_nm = 550.0f;
+    float focal_length_m = 0.1f;
+    float aperture_radius_m = 0.01f;
+    int max_order = 1;
+    int table_start = -1;
+    int table_count = 0;
 };
 
 constexpr int kMaxMaterialBsdfLobes = 4;
@@ -467,6 +514,7 @@ struct GpuMaterial {
     int bsdf_mix_expression_root = -1;
     int layer_thickness_expression_root = -1;
     int layer_absorption_expression_root = -1;
+    int diffraction_operator_index = -1;
 };
 
 // Host-side companion holding spectral data alongside the GPU header.
@@ -486,6 +534,9 @@ struct GpuMaterialData {
     HostSpectralResource emission_resource;
     std::vector<HostSpectralExpressionNode> expression_nodes;
     std::vector<GpuMaterialBsdfLobe> bsdf_lobes;
+    GpuDiffractiveOperator diffraction_operator;
+    std::vector<GpuDiffractiveTableEntry>
+        diffraction_table;
 };
 
 struct GpuSphere {
@@ -629,6 +680,12 @@ struct GpuScene {
     int material_expression_node_count;
     GpuMaterialBsdfLobe* material_bsdf_lobes;
     int material_bsdf_lobe_count;
+    const GpuDiffractiveOperator*
+        material_diffraction_operators;
+    int material_diffraction_operator_count;
+    const GpuDiffractiveTableEntry*
+        material_diffraction_table;
+    int material_diffraction_table_count;
     int num_spectral_channels;
     GpuVec3* diffraction_spectral_accum;
     const float* diffraction_psf_weights;

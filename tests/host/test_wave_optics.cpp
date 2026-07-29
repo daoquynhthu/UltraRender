@@ -937,6 +937,172 @@ static int test_diffraction_psf_bank_invalid_fails_closed() {
     return 0;
 }
 
+static int test_diffractive_analytic_orders() {
+    ure::scene_ir::DiffractiveOperator grating;
+    grating.kind =
+        ure::scene_ir::DiffractiveOperatorKind::Grating;
+    grating.period_m = 1.0e-6;
+    grating.duty_cycle = 0.5;
+    grating.max_order = 3;
+    CHECK(ure::wave::is_valid(grating));
+    const auto orders =
+        ure::wave::diffractive_orders(
+            grating,
+            550.0,
+            0.0);
+    CHECK(orders.size() == 7);
+    double energy = 0.0;
+    bool found_positive_first = false;
+    bool found_evanescent = false;
+    for (const auto& order : orders) {
+        energy += order.unpolarized_efficiency;
+        if (order.order == 1) {
+            found_positive_first = true;
+            CHECK(order.propagating);
+            CHECK_NEAR(
+                order.tangential_sine,
+                0.55,
+                1.0e-12);
+        }
+        if (order.order == 2) {
+            found_evanescent = true;
+            CHECK(!order.propagating);
+            CHECK(order.evanescent_decay_per_m > 0.0);
+            CHECK_NEAR(
+                order.unpolarized_efficiency,
+                0.0,
+                0.0);
+        }
+    }
+    CHECK(found_positive_first);
+    CHECK(found_evanescent);
+    CHECK_NEAR(energy, 0.5, 1.0e-12);
+
+    ure::scene_ir::DiffractiveOperator phase_mask;
+    phase_mask.kind =
+        ure::scene_ir::DiffractiveOperatorKind::
+            PhaseMask;
+    phase_mask.phase_depth_rad = 1.7;
+    phase_mask.max_order = 5;
+    const auto phase_orders =
+        ure::wave::diffractive_orders(
+            phase_mask,
+            500.0,
+            0.0);
+    double phase_energy = 0.0;
+    for (const auto& order : phase_orders) {
+        phase_energy += order.unpolarized_efficiency;
+    }
+    CHECK_NEAR(phase_energy, 1.0, 1.0e-12);
+
+    ure::scene_ir::DiffractiveOperator zone_plate;
+    zone_plate.kind =
+        ure::scene_ir::DiffractiveOperatorKind::
+            ZonePlate;
+    zone_plate.max_order = 2;
+    const auto zone_orders =
+        ure::wave::diffractive_orders(
+            zone_plate,
+            550.0,
+            0.0,
+            0.002);
+    double zone_energy = 0.0;
+    for (const auto& order : zone_orders) {
+        zone_energy += order.unpolarized_efficiency;
+        if (order.order == 1) {
+            CHECK(order.tangential_sine < 0.0);
+        }
+    }
+    CHECK_NEAR(zone_energy, 1.0, 1.0e-12);
+    return 0;
+}
+
+static int test_diffractive_scattering_table_contract() {
+    ure::scene_ir::DiffractiveOperator table;
+    table.kind =
+        ure::scene_ir::DiffractiveOperatorKind::
+            ScatteringTable;
+    table.table_id = "rcwa/interpolation";
+    table.max_order = 0;
+    for (const float wavelength : {500.0f, 600.0f}) {
+        ure::scene_ir::DiffractiveScatteringEntry entry;
+        entry.wavelength_nm = wavelength;
+        entry.incident_cosine = 1.0f;
+        entry.order = 0;
+        entry.jones_ss.real =
+            wavelength == 500.0f ? 0.2f : 0.6f;
+        entry.jones_pp.real =
+            entry.jones_ss.real;
+        table.table.push_back(entry);
+    }
+    CHECK(ure::wave::is_valid(table));
+    const auto interpolated =
+        ure::wave::diffractive_orders(
+            table,
+            550.0,
+            0.0);
+    CHECK(interpolated.size() == 1);
+    CHECK_NEAR(
+        interpolated[0].amplitude.ss.real,
+        0.4,
+        1.0e-7);
+    CHECK_NEAR(
+        interpolated[0].unpolarized_efficiency,
+        0.16,
+        1.0e-7);
+
+    ure::scene_ir::DiffractiveOperator polarized;
+    polarized.kind =
+        ure::scene_ir::DiffractiveOperatorKind::
+            ScatteringTable;
+    polarized.table_id = "rcwa/non-passive";
+    polarized.max_order = 0;
+    for (int side = 0; side < 2; ++side) {
+        ure::scene_ir::DiffractiveScatteringEntry entry;
+        entry.wavelength_nm = 550.0f;
+        entry.incident_cosine = 1.0f;
+        entry.order = 0;
+        entry.side =
+            static_cast<
+                ure::scene_ir::DiffractiveScatterSide>(
+                side);
+        entry.jones_ss.real = 0.8f;
+        polarized.table.push_back(entry);
+    }
+    CHECK(!ure::wave::is_valid(polarized));
+
+    auto incomplete = table;
+    incomplete.table.push_back(incomplete.table[0]);
+    incomplete.table.back().order = 1;
+    incomplete.max_order = 1;
+    CHECK(!ure::wave::is_valid(incomplete));
+
+    auto oversized = table;
+    oversized.table.resize(
+        ure::scene_ir::kMaxDiffractiveScatteringEntries +
+        1,
+        oversized.table.front());
+    CHECK(!ure::wave::is_valid(oversized));
+    return 0;
+}
+
+static int test_diffractive_config_boundary() {
+    ure::RenderConfig config;
+    CHECK(!ure::wave::
+              is_supported_diffractive_material_config(
+                  config));
+    config.wave_optics.diffractive_materials_enabled =
+        true;
+    CHECK(ure::wave::
+              is_supported_diffractive_material_config(
+                  config));
+    config.restir_di.enabled = true;
+    CHECK(!ure::wave::
+              is_supported_diffractive_material_config(
+                  config));
+    return 0;
+}
+
 static int test_gpu_renderer_rejects_unsupported_wave_combination() {
     ure::RenderConfig config;
     config.wave_optics.mode = ure::WaveOpticsMode::CameraDiffraction;
@@ -1003,6 +1169,9 @@ int main() {
     failed += run("test_diffraction_psf_bank_normalization_and_scaling", test_diffraction_psf_bank_normalization_and_scaling);
     failed += run("test_diffraction_psf_bank_blades_and_defocus", test_diffraction_psf_bank_blades_and_defocus);
     failed += run("test_diffraction_psf_bank_invalid_fails_closed", test_diffraction_psf_bank_invalid_fails_closed);
+    failed += run("test_diffractive_analytic_orders", test_diffractive_analytic_orders);
+    failed += run("test_diffractive_scattering_table_contract", test_diffractive_scattering_table_contract);
+    failed += run("test_diffractive_config_boundary", test_diffractive_config_boundary);
     failed += run("test_gpu_renderer_rejects_unsupported_wave_combination", test_gpu_renderer_rejects_unsupported_wave_combination);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);

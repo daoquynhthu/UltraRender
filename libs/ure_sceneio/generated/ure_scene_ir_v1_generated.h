@@ -23,6 +23,8 @@ struct Vec3;
 
 struct Quat;
 
+struct ComplexCoefficient;
+
 struct ResourceReference;
 struct ResourceReferenceBuilder;
 struct ResourceReferenceT;
@@ -30,6 +32,14 @@ struct ResourceReferenceT;
 struct MaterialGraphInput;
 struct MaterialGraphInputBuilder;
 struct MaterialGraphInputT;
+
+struct DiffractiveScatteringEntry;
+struct DiffractiveScatteringEntryBuilder;
+struct DiffractiveScatteringEntryT;
+
+struct DiffractiveOperator;
+struct DiffractiveOperatorBuilder;
+struct DiffractiveOperatorT;
 
 struct MaterialGraphNode;
 struct MaterialGraphNodeBuilder;
@@ -209,11 +219,16 @@ enum class MaterialGraphNodeKind : uint8_t {
   BsdfMix = 12,
   BsdfLayer = 13,
   OutputSurface = 14,
+  BsdfGrating = 15,
+  BsdfPhaseMask = 16,
+  BsdfZonePlate = 17,
+  BsdfDoe = 18,
+  BsdfScatteringTable = 19,
   MIN = ConstantColor,
-  MAX = OutputSurface
+  MAX = BsdfScatteringTable
 };
 
-inline const MaterialGraphNodeKind (&EnumValuesMaterialGraphNodeKind())[15] {
+inline const MaterialGraphNodeKind (&EnumValuesMaterialGraphNodeKind())[20] {
   static const MaterialGraphNodeKind values[] = {
     MaterialGraphNodeKind::ConstantColor,
     MaterialGraphNodeKind::ConstantFloat,
@@ -229,13 +244,18 @@ inline const MaterialGraphNodeKind (&EnumValuesMaterialGraphNodeKind())[15] {
     MaterialGraphNodeKind::BsdfLight,
     MaterialGraphNodeKind::BsdfMix,
     MaterialGraphNodeKind::BsdfLayer,
-    MaterialGraphNodeKind::OutputSurface
+    MaterialGraphNodeKind::OutputSurface,
+    MaterialGraphNodeKind::BsdfGrating,
+    MaterialGraphNodeKind::BsdfPhaseMask,
+    MaterialGraphNodeKind::BsdfZonePlate,
+    MaterialGraphNodeKind::BsdfDoe,
+    MaterialGraphNodeKind::BsdfScatteringTable
   };
   return values;
 }
 
 inline const char * const *EnumNamesMaterialGraphNodeKind() {
-  static const char * const names[16] = {
+  static const char * const names[21] = {
     "ConstantColor",
     "ConstantFloat",
     "Texture2D",
@@ -251,15 +271,89 @@ inline const char * const *EnumNamesMaterialGraphNodeKind() {
     "BsdfMix",
     "BsdfLayer",
     "OutputSurface",
+    "BsdfGrating",
+    "BsdfPhaseMask",
+    "BsdfZonePlate",
+    "BsdfDoe",
+    "BsdfScatteringTable",
     nullptr
   };
   return names;
 }
 
 inline const char *EnumNameMaterialGraphNodeKind(MaterialGraphNodeKind e) {
-  if (::flatbuffers::IsOutRange(e, MaterialGraphNodeKind::ConstantColor, MaterialGraphNodeKind::OutputSurface)) return "";
+  if (::flatbuffers::IsOutRange(e, MaterialGraphNodeKind::ConstantColor, MaterialGraphNodeKind::BsdfScatteringTable)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesMaterialGraphNodeKind()[index];
+}
+
+enum class DiffractiveOperatorKind : uint8_t {
+  Grating = 0,
+  PhaseMask = 1,
+  ZonePlate = 2,
+  Doe = 3,
+  ScatteringTable = 4,
+  MIN = Grating,
+  MAX = ScatteringTable
+};
+
+inline const DiffractiveOperatorKind (&EnumValuesDiffractiveOperatorKind())[5] {
+  static const DiffractiveOperatorKind values[] = {
+    DiffractiveOperatorKind::Grating,
+    DiffractiveOperatorKind::PhaseMask,
+    DiffractiveOperatorKind::ZonePlate,
+    DiffractiveOperatorKind::Doe,
+    DiffractiveOperatorKind::ScatteringTable
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesDiffractiveOperatorKind() {
+  static const char * const names[6] = {
+    "Grating",
+    "PhaseMask",
+    "ZonePlate",
+    "Doe",
+    "ScatteringTable",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameDiffractiveOperatorKind(DiffractiveOperatorKind e) {
+  if (::flatbuffers::IsOutRange(e, DiffractiveOperatorKind::Grating, DiffractiveOperatorKind::ScatteringTable)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesDiffractiveOperatorKind()[index];
+}
+
+enum class DiffractiveScatterSide : uint8_t {
+  Reflection = 0,
+  Transmission = 1,
+  MIN = Reflection,
+  MAX = Transmission
+};
+
+inline const DiffractiveScatterSide (&EnumValuesDiffractiveScatterSide())[2] {
+  static const DiffractiveScatterSide values[] = {
+    DiffractiveScatterSide::Reflection,
+    DiffractiveScatterSide::Transmission
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesDiffractiveScatterSide() {
+  static const char * const names[3] = {
+    "Reflection",
+    "Transmission",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameDiffractiveScatterSide(DiffractiveScatterSide e) {
+  if (::flatbuffers::IsOutRange(e, DiffractiveScatterSide::Reflection, DiffractiveScatterSide::Transmission)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesDiffractiveScatterSide()[index];
 }
 
 FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) Vec2 FLATBUFFERS_FINAL_CLASS {
@@ -362,6 +456,34 @@ FLATBUFFERS_STRUCT_END(Quat, 16);
 
 struct Quat::Traits {
   using type = Quat;
+};
+
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ComplexCoefficient FLATBUFFERS_FINAL_CLASS {
+ private:
+  float real_;
+  float imag_;
+
+ public:
+  struct Traits;
+  ComplexCoefficient()
+      : real_(0),
+        imag_(0) {
+  }
+  ComplexCoefficient(float _real, float _imag)
+      : real_(::flatbuffers::EndianScalar(_real)),
+        imag_(::flatbuffers::EndianScalar(_imag)) {
+  }
+  float real() const {
+    return ::flatbuffers::EndianScalar(real_);
+  }
+  float imag() const {
+    return ::flatbuffers::EndianScalar(imag_);
+  }
+};
+FLATBUFFERS_STRUCT_END(ComplexCoefficient, 8);
+
+struct ComplexCoefficient::Traits {
+  using type = ComplexCoefficient;
 };
 
 struct ResourceReferenceT : public ::flatbuffers::NativeTable {
@@ -545,6 +667,365 @@ inline ::flatbuffers::Offset<MaterialGraphInput> CreateMaterialGraphInputDirect(
 
 ::flatbuffers::Offset<MaterialGraphInput> CreateMaterialGraphInput(::flatbuffers::FlatBufferBuilder &_fbb, const MaterialGraphInputT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
+struct DiffractiveScatteringEntryT : public ::flatbuffers::NativeTable {
+  typedef DiffractiveScatteringEntry TableType;
+  float wavelength_nm = 0.0f;
+  float incident_cosine = 0.0f;
+  int32_t order = 0;
+  ure::native::schema::DiffractiveScatterSide side = ure::native::schema::DiffractiveScatterSide::Reflection;
+  std::unique_ptr<ure::native::schema::ComplexCoefficient> jones_ss{};
+  std::unique_ptr<ure::native::schema::ComplexCoefficient> jones_sp{};
+  std::unique_ptr<ure::native::schema::ComplexCoefficient> jones_ps{};
+  std::unique_ptr<ure::native::schema::ComplexCoefficient> jones_pp{};
+  DiffractiveScatteringEntryT() = default;
+  DiffractiveScatteringEntryT(const DiffractiveScatteringEntryT &o);
+  DiffractiveScatteringEntryT(DiffractiveScatteringEntryT&&) FLATBUFFERS_NOEXCEPT = default;
+  DiffractiveScatteringEntryT &operator=(DiffractiveScatteringEntryT o) FLATBUFFERS_NOEXCEPT;
+};
+
+struct DiffractiveScatteringEntry FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef DiffractiveScatteringEntryT NativeTableType;
+  typedef DiffractiveScatteringEntryBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_WAVELENGTH_NM = 4,
+    VT_INCIDENT_COSINE = 6,
+    VT_ORDER = 8,
+    VT_SIDE = 10,
+    VT_JONES_SS = 12,
+    VT_JONES_SP = 14,
+    VT_JONES_PS = 16,
+    VT_JONES_PP = 18
+  };
+  float wavelength_nm() const {
+    return GetField<float>(VT_WAVELENGTH_NM, 0.0f);
+  }
+  float incident_cosine() const {
+    return GetField<float>(VT_INCIDENT_COSINE, 0.0f);
+  }
+  int32_t order() const {
+    return GetField<int32_t>(VT_ORDER, 0);
+  }
+  ure::native::schema::DiffractiveScatterSide side() const {
+    return static_cast<ure::native::schema::DiffractiveScatterSide>(GetField<uint8_t>(VT_SIDE, 0));
+  }
+  const ure::native::schema::ComplexCoefficient *jones_ss() const {
+    return GetStruct<const ure::native::schema::ComplexCoefficient *>(VT_JONES_SS);
+  }
+  const ure::native::schema::ComplexCoefficient *jones_sp() const {
+    return GetStruct<const ure::native::schema::ComplexCoefficient *>(VT_JONES_SP);
+  }
+  const ure::native::schema::ComplexCoefficient *jones_ps() const {
+    return GetStruct<const ure::native::schema::ComplexCoefficient *>(VT_JONES_PS);
+  }
+  const ure::native::schema::ComplexCoefficient *jones_pp() const {
+    return GetStruct<const ure::native::schema::ComplexCoefficient *>(VT_JONES_PP);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<float>(verifier, VT_WAVELENGTH_NM, 4) &&
+           VerifyField<float>(verifier, VT_INCIDENT_COSINE, 4) &&
+           VerifyField<int32_t>(verifier, VT_ORDER, 4) &&
+           VerifyField<uint8_t>(verifier, VT_SIDE, 1) &&
+           VerifyField<ure::native::schema::ComplexCoefficient>(verifier, VT_JONES_SS, 4) &&
+           VerifyField<ure::native::schema::ComplexCoefficient>(verifier, VT_JONES_SP, 4) &&
+           VerifyField<ure::native::schema::ComplexCoefficient>(verifier, VT_JONES_PS, 4) &&
+           VerifyField<ure::native::schema::ComplexCoefficient>(verifier, VT_JONES_PP, 4) &&
+           verifier.EndTable();
+  }
+  DiffractiveScatteringEntryT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(DiffractiveScatteringEntryT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<DiffractiveScatteringEntry> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const DiffractiveScatteringEntryT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct DiffractiveScatteringEntryBuilder {
+  typedef DiffractiveScatteringEntry Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_wavelength_nm(float wavelength_nm) {
+    fbb_.AddElement<float>(DiffractiveScatteringEntry::VT_WAVELENGTH_NM, wavelength_nm, 0.0f);
+  }
+  void add_incident_cosine(float incident_cosine) {
+    fbb_.AddElement<float>(DiffractiveScatteringEntry::VT_INCIDENT_COSINE, incident_cosine, 0.0f);
+  }
+  void add_order(int32_t order) {
+    fbb_.AddElement<int32_t>(DiffractiveScatteringEntry::VT_ORDER, order, 0);
+  }
+  void add_side(ure::native::schema::DiffractiveScatterSide side) {
+    fbb_.AddElement<uint8_t>(DiffractiveScatteringEntry::VT_SIDE, static_cast<uint8_t>(side), 0);
+  }
+  void add_jones_ss(const ure::native::schema::ComplexCoefficient *jones_ss) {
+    fbb_.AddStruct(DiffractiveScatteringEntry::VT_JONES_SS, jones_ss);
+  }
+  void add_jones_sp(const ure::native::schema::ComplexCoefficient *jones_sp) {
+    fbb_.AddStruct(DiffractiveScatteringEntry::VT_JONES_SP, jones_sp);
+  }
+  void add_jones_ps(const ure::native::schema::ComplexCoefficient *jones_ps) {
+    fbb_.AddStruct(DiffractiveScatteringEntry::VT_JONES_PS, jones_ps);
+  }
+  void add_jones_pp(const ure::native::schema::ComplexCoefficient *jones_pp) {
+    fbb_.AddStruct(DiffractiveScatteringEntry::VT_JONES_PP, jones_pp);
+  }
+  explicit DiffractiveScatteringEntryBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<DiffractiveScatteringEntry> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<DiffractiveScatteringEntry>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<DiffractiveScatteringEntry> CreateDiffractiveScatteringEntry(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    float wavelength_nm = 0.0f,
+    float incident_cosine = 0.0f,
+    int32_t order = 0,
+    ure::native::schema::DiffractiveScatterSide side = ure::native::schema::DiffractiveScatterSide::Reflection,
+    const ure::native::schema::ComplexCoefficient *jones_ss = nullptr,
+    const ure::native::schema::ComplexCoefficient *jones_sp = nullptr,
+    const ure::native::schema::ComplexCoefficient *jones_ps = nullptr,
+    const ure::native::schema::ComplexCoefficient *jones_pp = nullptr) {
+  DiffractiveScatteringEntryBuilder builder_(_fbb);
+  builder_.add_jones_pp(jones_pp);
+  builder_.add_jones_ps(jones_ps);
+  builder_.add_jones_sp(jones_sp);
+  builder_.add_jones_ss(jones_ss);
+  builder_.add_order(order);
+  builder_.add_incident_cosine(incident_cosine);
+  builder_.add_wavelength_nm(wavelength_nm);
+  builder_.add_side(side);
+  return builder_.Finish();
+}
+
+struct DiffractiveScatteringEntry::Traits {
+  using type = DiffractiveScatteringEntry;
+  static auto constexpr Create = CreateDiffractiveScatteringEntry;
+};
+
+::flatbuffers::Offset<DiffractiveScatteringEntry> CreateDiffractiveScatteringEntry(::flatbuffers::FlatBufferBuilder &_fbb, const DiffractiveScatteringEntryT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct DiffractiveOperatorT : public ::flatbuffers::NativeTable {
+  typedef DiffractiveOperator TableType;
+  ure::native::schema::DiffractiveOperatorKind kind = ure::native::schema::DiffractiveOperatorKind::Grating;
+  ure::native::schema::DiffractiveScatterSide side = ure::native::schema::DiffractiveScatterSide::Reflection;
+  double period_m = 0.000001;
+  double orientation_rad = 0.0;
+  double duty_cycle = 0.5;
+  double phase_depth_rad = 0.0;
+  double design_wavelength_nm = 550.0;
+  double focal_length_m = 0.1;
+  double aperture_radius_m = 0.01;
+  int32_t max_order = 1;
+  std::string table_id{};
+  std::vector<std::unique_ptr<ure::native::schema::DiffractiveScatteringEntryT>> table{};
+  DiffractiveOperatorT() = default;
+  DiffractiveOperatorT(const DiffractiveOperatorT &o);
+  DiffractiveOperatorT(DiffractiveOperatorT&&) FLATBUFFERS_NOEXCEPT = default;
+  DiffractiveOperatorT &operator=(DiffractiveOperatorT o) FLATBUFFERS_NOEXCEPT;
+};
+
+struct DiffractiveOperator FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef DiffractiveOperatorT NativeTableType;
+  typedef DiffractiveOperatorBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_KIND = 4,
+    VT_SIDE = 6,
+    VT_PERIOD_M = 8,
+    VT_ORIENTATION_RAD = 10,
+    VT_DUTY_CYCLE = 12,
+    VT_PHASE_DEPTH_RAD = 14,
+    VT_DESIGN_WAVELENGTH_NM = 16,
+    VT_FOCAL_LENGTH_M = 18,
+    VT_APERTURE_RADIUS_M = 20,
+    VT_MAX_ORDER = 22,
+    VT_TABLE_ID = 24,
+    VT_TABLE = 26
+  };
+  ure::native::schema::DiffractiveOperatorKind kind() const {
+    return static_cast<ure::native::schema::DiffractiveOperatorKind>(GetField<uint8_t>(VT_KIND, 0));
+  }
+  ure::native::schema::DiffractiveScatterSide side() const {
+    return static_cast<ure::native::schema::DiffractiveScatterSide>(GetField<uint8_t>(VT_SIDE, 0));
+  }
+  double period_m() const {
+    return GetField<double>(VT_PERIOD_M, 0.000001);
+  }
+  double orientation_rad() const {
+    return GetField<double>(VT_ORIENTATION_RAD, 0.0);
+  }
+  double duty_cycle() const {
+    return GetField<double>(VT_DUTY_CYCLE, 0.5);
+  }
+  double phase_depth_rad() const {
+    return GetField<double>(VT_PHASE_DEPTH_RAD, 0.0);
+  }
+  double design_wavelength_nm() const {
+    return GetField<double>(VT_DESIGN_WAVELENGTH_NM, 550.0);
+  }
+  double focal_length_m() const {
+    return GetField<double>(VT_FOCAL_LENGTH_M, 0.1);
+  }
+  double aperture_radius_m() const {
+    return GetField<double>(VT_APERTURE_RADIUS_M, 0.01);
+  }
+  int32_t max_order() const {
+    return GetField<int32_t>(VT_MAX_ORDER, 1);
+  }
+  const ::flatbuffers::String *table_id() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_TABLE_ID);
+  }
+  const ::flatbuffers::Vector<::flatbuffers::Offset<ure::native::schema::DiffractiveScatteringEntry>> *table() const {
+    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<ure::native::schema::DiffractiveScatteringEntry>> *>(VT_TABLE);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint8_t>(verifier, VT_KIND, 1) &&
+           VerifyField<uint8_t>(verifier, VT_SIDE, 1) &&
+           VerifyField<double>(verifier, VT_PERIOD_M, 8) &&
+           VerifyField<double>(verifier, VT_ORIENTATION_RAD, 8) &&
+           VerifyField<double>(verifier, VT_DUTY_CYCLE, 8) &&
+           VerifyField<double>(verifier, VT_PHASE_DEPTH_RAD, 8) &&
+           VerifyField<double>(verifier, VT_DESIGN_WAVELENGTH_NM, 8) &&
+           VerifyField<double>(verifier, VT_FOCAL_LENGTH_M, 8) &&
+           VerifyField<double>(verifier, VT_APERTURE_RADIUS_M, 8) &&
+           VerifyField<int32_t>(verifier, VT_MAX_ORDER, 4) &&
+           VerifyOffset(verifier, VT_TABLE_ID) &&
+           verifier.VerifyString(table_id()) &&
+           VerifyOffset(verifier, VT_TABLE) &&
+           verifier.VerifyVector(table()) &&
+           verifier.VerifyVectorOfTables(table()) &&
+           verifier.EndTable();
+  }
+  DiffractiveOperatorT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(DiffractiveOperatorT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<DiffractiveOperator> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const DiffractiveOperatorT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct DiffractiveOperatorBuilder {
+  typedef DiffractiveOperator Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_kind(ure::native::schema::DiffractiveOperatorKind kind) {
+    fbb_.AddElement<uint8_t>(DiffractiveOperator::VT_KIND, static_cast<uint8_t>(kind), 0);
+  }
+  void add_side(ure::native::schema::DiffractiveScatterSide side) {
+    fbb_.AddElement<uint8_t>(DiffractiveOperator::VT_SIDE, static_cast<uint8_t>(side), 0);
+  }
+  void add_period_m(double period_m) {
+    fbb_.AddElement<double>(DiffractiveOperator::VT_PERIOD_M, period_m, 0.000001);
+  }
+  void add_orientation_rad(double orientation_rad) {
+    fbb_.AddElement<double>(DiffractiveOperator::VT_ORIENTATION_RAD, orientation_rad, 0.0);
+  }
+  void add_duty_cycle(double duty_cycle) {
+    fbb_.AddElement<double>(DiffractiveOperator::VT_DUTY_CYCLE, duty_cycle, 0.5);
+  }
+  void add_phase_depth_rad(double phase_depth_rad) {
+    fbb_.AddElement<double>(DiffractiveOperator::VT_PHASE_DEPTH_RAD, phase_depth_rad, 0.0);
+  }
+  void add_design_wavelength_nm(double design_wavelength_nm) {
+    fbb_.AddElement<double>(DiffractiveOperator::VT_DESIGN_WAVELENGTH_NM, design_wavelength_nm, 550.0);
+  }
+  void add_focal_length_m(double focal_length_m) {
+    fbb_.AddElement<double>(DiffractiveOperator::VT_FOCAL_LENGTH_M, focal_length_m, 0.1);
+  }
+  void add_aperture_radius_m(double aperture_radius_m) {
+    fbb_.AddElement<double>(DiffractiveOperator::VT_APERTURE_RADIUS_M, aperture_radius_m, 0.01);
+  }
+  void add_max_order(int32_t max_order) {
+    fbb_.AddElement<int32_t>(DiffractiveOperator::VT_MAX_ORDER, max_order, 1);
+  }
+  void add_table_id(::flatbuffers::Offset<::flatbuffers::String> table_id) {
+    fbb_.AddOffset(DiffractiveOperator::VT_TABLE_ID, table_id);
+  }
+  void add_table(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<ure::native::schema::DiffractiveScatteringEntry>>> table) {
+    fbb_.AddOffset(DiffractiveOperator::VT_TABLE, table);
+  }
+  explicit DiffractiveOperatorBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<DiffractiveOperator> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<DiffractiveOperator>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<DiffractiveOperator> CreateDiffractiveOperator(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ure::native::schema::DiffractiveOperatorKind kind = ure::native::schema::DiffractiveOperatorKind::Grating,
+    ure::native::schema::DiffractiveScatterSide side = ure::native::schema::DiffractiveScatterSide::Reflection,
+    double period_m = 0.000001,
+    double orientation_rad = 0.0,
+    double duty_cycle = 0.5,
+    double phase_depth_rad = 0.0,
+    double design_wavelength_nm = 550.0,
+    double focal_length_m = 0.1,
+    double aperture_radius_m = 0.01,
+    int32_t max_order = 1,
+    ::flatbuffers::Offset<::flatbuffers::String> table_id = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<ure::native::schema::DiffractiveScatteringEntry>>> table = 0) {
+  DiffractiveOperatorBuilder builder_(_fbb);
+  builder_.add_aperture_radius_m(aperture_radius_m);
+  builder_.add_focal_length_m(focal_length_m);
+  builder_.add_design_wavelength_nm(design_wavelength_nm);
+  builder_.add_phase_depth_rad(phase_depth_rad);
+  builder_.add_duty_cycle(duty_cycle);
+  builder_.add_orientation_rad(orientation_rad);
+  builder_.add_period_m(period_m);
+  builder_.add_table(table);
+  builder_.add_table_id(table_id);
+  builder_.add_max_order(max_order);
+  builder_.add_side(side);
+  builder_.add_kind(kind);
+  return builder_.Finish();
+}
+
+struct DiffractiveOperator::Traits {
+  using type = DiffractiveOperator;
+  static auto constexpr Create = CreateDiffractiveOperator;
+};
+
+inline ::flatbuffers::Offset<DiffractiveOperator> CreateDiffractiveOperatorDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ure::native::schema::DiffractiveOperatorKind kind = ure::native::schema::DiffractiveOperatorKind::Grating,
+    ure::native::schema::DiffractiveScatterSide side = ure::native::schema::DiffractiveScatterSide::Reflection,
+    double period_m = 0.000001,
+    double orientation_rad = 0.0,
+    double duty_cycle = 0.5,
+    double phase_depth_rad = 0.0,
+    double design_wavelength_nm = 550.0,
+    double focal_length_m = 0.1,
+    double aperture_radius_m = 0.01,
+    int32_t max_order = 1,
+    const char *table_id = nullptr,
+    const std::vector<::flatbuffers::Offset<ure::native::schema::DiffractiveScatteringEntry>> *table = nullptr) {
+  auto table_id__ = table_id ? _fbb.CreateString(table_id) : 0;
+  auto table__ = table ? _fbb.CreateVector<::flatbuffers::Offset<ure::native::schema::DiffractiveScatteringEntry>>(*table) : 0;
+  return ure::native::schema::CreateDiffractiveOperator(
+      _fbb,
+      kind,
+      side,
+      period_m,
+      orientation_rad,
+      duty_cycle,
+      phase_depth_rad,
+      design_wavelength_nm,
+      focal_length_m,
+      aperture_radius_m,
+      max_order,
+      table_id__,
+      table__);
+}
+
+::flatbuffers::Offset<DiffractiveOperator> CreateDiffractiveOperator(::flatbuffers::FlatBufferBuilder &_fbb, const DiffractiveOperatorT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
 struct MaterialGraphNodeT : public ::flatbuffers::NativeTable {
   typedef MaterialGraphNode TableType;
   uint32_t id = 4294967295;
@@ -554,6 +1035,7 @@ struct MaterialGraphNodeT : public ::flatbuffers::NativeTable {
   float value = 0.0f;
   std::string texture_id{};
   std::vector<std::unique_ptr<ure::native::schema::MaterialGraphInputT>> inputs{};
+  std::unique_ptr<ure::native::schema::DiffractiveOperatorT> diffraction{};
   MaterialGraphNodeT() = default;
   MaterialGraphNodeT(const MaterialGraphNodeT &o);
   MaterialGraphNodeT(MaterialGraphNodeT&&) FLATBUFFERS_NOEXCEPT = default;
@@ -571,7 +1053,8 @@ struct MaterialGraphNode FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table 
     VT_COLOR = 10,
     VT_VALUE = 12,
     VT_TEXTURE_ID = 14,
-    VT_INPUTS = 16
+    VT_INPUTS = 16,
+    VT_DIFFRACTION = 18
   };
   uint32_t id() const {
     return GetField<uint32_t>(VT_ID, 4294967295);
@@ -594,6 +1077,9 @@ struct MaterialGraphNode FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table 
   const ::flatbuffers::Vector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>> *inputs() const {
     return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>> *>(VT_INPUTS);
   }
+  const ure::native::schema::DiffractiveOperator *diffraction() const {
+    return GetPointer<const ure::native::schema::DiffractiveOperator *>(VT_DIFFRACTION);
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -608,6 +1094,8 @@ struct MaterialGraphNode FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table 
            VerifyOffset(verifier, VT_INPUTS) &&
            verifier.VerifyVector(inputs()) &&
            verifier.VerifyVectorOfTables(inputs()) &&
+           VerifyOffset(verifier, VT_DIFFRACTION) &&
+           verifier.VerifyTable(diffraction()) &&
            verifier.EndTable();
   }
   MaterialGraphNodeT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -640,6 +1128,9 @@ struct MaterialGraphNodeBuilder {
   void add_inputs(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>>> inputs) {
     fbb_.AddOffset(MaterialGraphNode::VT_INPUTS, inputs);
   }
+  void add_diffraction(::flatbuffers::Offset<ure::native::schema::DiffractiveOperator> diffraction) {
+    fbb_.AddOffset(MaterialGraphNode::VT_DIFFRACTION, diffraction);
+  }
   explicit MaterialGraphNodeBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -659,8 +1150,10 @@ inline ::flatbuffers::Offset<MaterialGraphNode> CreateMaterialGraphNode(
     const ure::native::schema::Vec3 *color = nullptr,
     float value = 0.0f,
     ::flatbuffers::Offset<::flatbuffers::String> texture_id = 0,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>>> inputs = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>>> inputs = 0,
+    ::flatbuffers::Offset<ure::native::schema::DiffractiveOperator> diffraction = 0) {
   MaterialGraphNodeBuilder builder_(_fbb);
+  builder_.add_diffraction(diffraction);
   builder_.add_inputs(inputs);
   builder_.add_texture_id(texture_id);
   builder_.add_value(value);
@@ -684,7 +1177,8 @@ inline ::flatbuffers::Offset<MaterialGraphNode> CreateMaterialGraphNodeDirect(
     const ure::native::schema::Vec3 *color = nullptr,
     float value = 0.0f,
     const char *texture_id = nullptr,
-    const std::vector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>> *inputs = nullptr) {
+    const std::vector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>> *inputs = nullptr,
+    ::flatbuffers::Offset<ure::native::schema::DiffractiveOperator> diffraction = 0) {
   auto name__ = name ? _fbb.CreateString(name) : 0;
   auto texture_id__ = texture_id ? _fbb.CreateString(texture_id) : 0;
   auto inputs__ = inputs ? _fbb.CreateVector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>>(*inputs) : 0;
@@ -696,7 +1190,8 @@ inline ::flatbuffers::Offset<MaterialGraphNode> CreateMaterialGraphNodeDirect(
       color,
       value,
       texture_id__,
-      inputs__);
+      inputs__,
+      diffraction);
 }
 
 ::flatbuffers::Offset<MaterialGraphNode> CreateMaterialGraphNode(::flatbuffers::FlatBufferBuilder &_fbb, const MaterialGraphNodeT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
@@ -3012,13 +3507,175 @@ inline ::flatbuffers::Offset<MaterialGraphInput> MaterialGraphInput::Pack(::flat
       _output);
 }
 
+inline DiffractiveScatteringEntryT::DiffractiveScatteringEntryT(const DiffractiveScatteringEntryT &o)
+      : wavelength_nm(o.wavelength_nm),
+        incident_cosine(o.incident_cosine),
+        order(o.order),
+        side(o.side),
+        jones_ss((o.jones_ss) ? new ure::native::schema::ComplexCoefficient(*o.jones_ss) : nullptr),
+        jones_sp((o.jones_sp) ? new ure::native::schema::ComplexCoefficient(*o.jones_sp) : nullptr),
+        jones_ps((o.jones_ps) ? new ure::native::schema::ComplexCoefficient(*o.jones_ps) : nullptr),
+        jones_pp((o.jones_pp) ? new ure::native::schema::ComplexCoefficient(*o.jones_pp) : nullptr) {
+}
+
+inline DiffractiveScatteringEntryT &DiffractiveScatteringEntryT::operator=(DiffractiveScatteringEntryT o) FLATBUFFERS_NOEXCEPT {
+  std::swap(wavelength_nm, o.wavelength_nm);
+  std::swap(incident_cosine, o.incident_cosine);
+  std::swap(order, o.order);
+  std::swap(side, o.side);
+  std::swap(jones_ss, o.jones_ss);
+  std::swap(jones_sp, o.jones_sp);
+  std::swap(jones_ps, o.jones_ps);
+  std::swap(jones_pp, o.jones_pp);
+  return *this;
+}
+
+inline DiffractiveScatteringEntryT *DiffractiveScatteringEntry::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<DiffractiveScatteringEntryT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void DiffractiveScatteringEntry::UnPackTo(DiffractiveScatteringEntryT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = wavelength_nm(); _o->wavelength_nm = _e; }
+  { auto _e = incident_cosine(); _o->incident_cosine = _e; }
+  { auto _e = order(); _o->order = _e; }
+  { auto _e = side(); _o->side = _e; }
+  { auto _e = jones_ss(); if (_e) _o->jones_ss = std::unique_ptr<ure::native::schema::ComplexCoefficient>(new ure::native::schema::ComplexCoefficient(*_e)); }
+  { auto _e = jones_sp(); if (_e) _o->jones_sp = std::unique_ptr<ure::native::schema::ComplexCoefficient>(new ure::native::schema::ComplexCoefficient(*_e)); }
+  { auto _e = jones_ps(); if (_e) _o->jones_ps = std::unique_ptr<ure::native::schema::ComplexCoefficient>(new ure::native::schema::ComplexCoefficient(*_e)); }
+  { auto _e = jones_pp(); if (_e) _o->jones_pp = std::unique_ptr<ure::native::schema::ComplexCoefficient>(new ure::native::schema::ComplexCoefficient(*_e)); }
+}
+
+inline ::flatbuffers::Offset<DiffractiveScatteringEntry> CreateDiffractiveScatteringEntry(::flatbuffers::FlatBufferBuilder &_fbb, const DiffractiveScatteringEntryT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return DiffractiveScatteringEntry::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<DiffractiveScatteringEntry> DiffractiveScatteringEntry::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const DiffractiveScatteringEntryT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const DiffractiveScatteringEntryT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _wavelength_nm = _o->wavelength_nm;
+  auto _incident_cosine = _o->incident_cosine;
+  auto _order = _o->order;
+  auto _side = _o->side;
+  auto _jones_ss = _o->jones_ss ? _o->jones_ss.get() : nullptr;
+  auto _jones_sp = _o->jones_sp ? _o->jones_sp.get() : nullptr;
+  auto _jones_ps = _o->jones_ps ? _o->jones_ps.get() : nullptr;
+  auto _jones_pp = _o->jones_pp ? _o->jones_pp.get() : nullptr;
+  return ure::native::schema::CreateDiffractiveScatteringEntry(
+      _fbb,
+      _wavelength_nm,
+      _incident_cosine,
+      _order,
+      _side,
+      _jones_ss,
+      _jones_sp,
+      _jones_ps,
+      _jones_pp);
+}
+
+inline DiffractiveOperatorT::DiffractiveOperatorT(const DiffractiveOperatorT &o)
+      : kind(o.kind),
+        side(o.side),
+        period_m(o.period_m),
+        orientation_rad(o.orientation_rad),
+        duty_cycle(o.duty_cycle),
+        phase_depth_rad(o.phase_depth_rad),
+        design_wavelength_nm(o.design_wavelength_nm),
+        focal_length_m(o.focal_length_m),
+        aperture_radius_m(o.aperture_radius_m),
+        max_order(o.max_order),
+        table_id(o.table_id) {
+  table.reserve(o.table.size());
+  for (const auto &table_ : o.table) { table.emplace_back((table_) ? new ure::native::schema::DiffractiveScatteringEntryT(*table_) : nullptr); }
+}
+
+inline DiffractiveOperatorT &DiffractiveOperatorT::operator=(DiffractiveOperatorT o) FLATBUFFERS_NOEXCEPT {
+  std::swap(kind, o.kind);
+  std::swap(side, o.side);
+  std::swap(period_m, o.period_m);
+  std::swap(orientation_rad, o.orientation_rad);
+  std::swap(duty_cycle, o.duty_cycle);
+  std::swap(phase_depth_rad, o.phase_depth_rad);
+  std::swap(design_wavelength_nm, o.design_wavelength_nm);
+  std::swap(focal_length_m, o.focal_length_m);
+  std::swap(aperture_radius_m, o.aperture_radius_m);
+  std::swap(max_order, o.max_order);
+  std::swap(table_id, o.table_id);
+  std::swap(table, o.table);
+  return *this;
+}
+
+inline DiffractiveOperatorT *DiffractiveOperator::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<DiffractiveOperatorT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void DiffractiveOperator::UnPackTo(DiffractiveOperatorT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = kind(); _o->kind = _e; }
+  { auto _e = side(); _o->side = _e; }
+  { auto _e = period_m(); _o->period_m = _e; }
+  { auto _e = orientation_rad(); _o->orientation_rad = _e; }
+  { auto _e = duty_cycle(); _o->duty_cycle = _e; }
+  { auto _e = phase_depth_rad(); _o->phase_depth_rad = _e; }
+  { auto _e = design_wavelength_nm(); _o->design_wavelength_nm = _e; }
+  { auto _e = focal_length_m(); _o->focal_length_m = _e; }
+  { auto _e = aperture_radius_m(); _o->aperture_radius_m = _e; }
+  { auto _e = max_order(); _o->max_order = _e; }
+  { auto _e = table_id(); if (_e) _o->table_id = _e->str(); }
+  { auto _e = table(); if (_e) { _o->table.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->table[_i]) { _e->Get(_i)->UnPackTo(_o->table[_i].get(), _resolver); } else { _o->table[_i] = std::unique_ptr<ure::native::schema::DiffractiveScatteringEntryT>(_e->Get(_i)->UnPack(_resolver)); } } } else { _o->table.resize(0); } }
+}
+
+inline ::flatbuffers::Offset<DiffractiveOperator> CreateDiffractiveOperator(::flatbuffers::FlatBufferBuilder &_fbb, const DiffractiveOperatorT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return DiffractiveOperator::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<DiffractiveOperator> DiffractiveOperator::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const DiffractiveOperatorT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const DiffractiveOperatorT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _kind = _o->kind;
+  auto _side = _o->side;
+  auto _period_m = _o->period_m;
+  auto _orientation_rad = _o->orientation_rad;
+  auto _duty_cycle = _o->duty_cycle;
+  auto _phase_depth_rad = _o->phase_depth_rad;
+  auto _design_wavelength_nm = _o->design_wavelength_nm;
+  auto _focal_length_m = _o->focal_length_m;
+  auto _aperture_radius_m = _o->aperture_radius_m;
+  auto _max_order = _o->max_order;
+  auto _table_id = _o->table_id.empty() ? 0 : _fbb.CreateString(_o->table_id);
+  auto _table = _o->table.size() ? _fbb.CreateVector<::flatbuffers::Offset<ure::native::schema::DiffractiveScatteringEntry>> (_o->table.size(), [](size_t i, _VectorArgs *__va) { return CreateDiffractiveScatteringEntry(*__va->__fbb, __va->__o->table[i].get(), __va->__rehasher); }, &_va ) : 0;
+  return ure::native::schema::CreateDiffractiveOperator(
+      _fbb,
+      _kind,
+      _side,
+      _period_m,
+      _orientation_rad,
+      _duty_cycle,
+      _phase_depth_rad,
+      _design_wavelength_nm,
+      _focal_length_m,
+      _aperture_radius_m,
+      _max_order,
+      _table_id,
+      _table);
+}
+
 inline MaterialGraphNodeT::MaterialGraphNodeT(const MaterialGraphNodeT &o)
       : id(o.id),
         kind(o.kind),
         name(o.name),
         color((o.color) ? new ure::native::schema::Vec3(*o.color) : nullptr),
         value(o.value),
-        texture_id(o.texture_id) {
+        texture_id(o.texture_id),
+        diffraction((o.diffraction) ? new ure::native::schema::DiffractiveOperatorT(*o.diffraction) : nullptr) {
   inputs.reserve(o.inputs.size());
   for (const auto &inputs_ : o.inputs) { inputs.emplace_back((inputs_) ? new ure::native::schema::MaterialGraphInputT(*inputs_) : nullptr); }
 }
@@ -3031,6 +3688,7 @@ inline MaterialGraphNodeT &MaterialGraphNodeT::operator=(MaterialGraphNodeT o) F
   std::swap(value, o.value);
   std::swap(texture_id, o.texture_id);
   std::swap(inputs, o.inputs);
+  std::swap(diffraction, o.diffraction);
   return *this;
 }
 
@@ -3050,6 +3708,7 @@ inline void MaterialGraphNode::UnPackTo(MaterialGraphNodeT *_o, const ::flatbuff
   { auto _e = value(); _o->value = _e; }
   { auto _e = texture_id(); if (_e) _o->texture_id = _e->str(); }
   { auto _e = inputs(); if (_e) { _o->inputs.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->inputs[_i]) { _e->Get(_i)->UnPackTo(_o->inputs[_i].get(), _resolver); } else { _o->inputs[_i] = std::unique_ptr<ure::native::schema::MaterialGraphInputT>(_e->Get(_i)->UnPack(_resolver)); } } } else { _o->inputs.resize(0); } }
+  { auto _e = diffraction(); if (_e) { if(_o->diffraction) { _e->UnPackTo(_o->diffraction.get(), _resolver); } else { _o->diffraction = std::unique_ptr<ure::native::schema::DiffractiveOperatorT>(_e->UnPack(_resolver)); } } else if (_o->diffraction) { _o->diffraction.reset(); } }
 }
 
 inline ::flatbuffers::Offset<MaterialGraphNode> CreateMaterialGraphNode(::flatbuffers::FlatBufferBuilder &_fbb, const MaterialGraphNodeT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -3067,6 +3726,7 @@ inline ::flatbuffers::Offset<MaterialGraphNode> MaterialGraphNode::Pack(::flatbu
   auto _value = _o->value;
   auto _texture_id = _o->texture_id.empty() ? 0 : _fbb.CreateString(_o->texture_id);
   auto _inputs = _o->inputs.size() ? _fbb.CreateVector<::flatbuffers::Offset<ure::native::schema::MaterialGraphInput>> (_o->inputs.size(), [](size_t i, _VectorArgs *__va) { return CreateMaterialGraphInput(*__va->__fbb, __va->__o->inputs[i].get(), __va->__rehasher); }, &_va ) : 0;
+  auto _diffraction = _o->diffraction ? CreateDiffractiveOperator(_fbb, _o->diffraction.get(), _rehasher) : 0;
   return ure::native::schema::CreateMaterialGraphNode(
       _fbb,
       _id,
@@ -3075,7 +3735,8 @@ inline ::flatbuffers::Offset<MaterialGraphNode> MaterialGraphNode::Pack(::flatbu
       _color,
       _value,
       _texture_id,
-      _inputs);
+      _inputs,
+      _diffraction);
 }
 
 inline MaterialGraphT::MaterialGraphT(const MaterialGraphT &o)

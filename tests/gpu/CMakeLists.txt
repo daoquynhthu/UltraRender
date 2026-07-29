@@ -80,7 +80,10 @@ if(CMAKE_CUDA_COMPILER)
     add_executable(gpu_test_wave_optics
         test_wave_optics_gpu.cu
     )
-    target_include_directories(gpu_test_wave_optics PRIVATE ${GPU_TEST_INCLUDES})
+    target_include_directories(gpu_test_wave_optics PRIVATE
+        ${GPU_TEST_INCLUDES}
+        "${CMAKE_SOURCE_DIR}/libs/ure_core/src"
+    )
     target_link_libraries(gpu_test_wave_optics PRIVATE ure_core CUDA::cudart)
 
     add_executable(gpu_test_cuda_runtime

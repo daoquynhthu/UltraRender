@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <ure/render_config.hpp>
+#include <ure/scene_ir.hpp>
 
 namespace ure::wave {
 
@@ -62,6 +63,24 @@ struct ComplexAmplitude {
     double imag = 0.0;
 
     double power() const;
+};
+
+struct JonesMatrix {
+    ComplexAmplitude ss;
+    ComplexAmplitude sp;
+    ComplexAmplitude ps;
+    ComplexAmplitude pp;
+};
+
+struct DiffractiveOrderResponse {
+    int order = 0;
+    scene_ir::DiffractiveScatterSide side =
+        scene_ir::DiffractiveScatterSide::Reflection;
+    bool propagating = false;
+    double tangential_sine = 0.0;
+    double evanescent_decay_per_m = 0.0;
+    JonesMatrix amplitude;
+    double unpolarized_efficiency = 0.0;
 };
 
 struct CoherenceMetadata {
@@ -239,6 +258,7 @@ bool is_valid(const DiffractionCameraConfig& config);
 bool is_valid(const CoherenceMetadata& metadata);
 bool is_valid(const ComplexSpectrum& spectrum);
 bool is_valid(const JonesSpectrum& spectrum);
+bool is_valid(const scene_ir::DiffractiveOperator& diffraction);
 bool is_ready(DiffractionCameraPlanStatus status);
 bool is_ready(PropagationStatus status);
 ComplexAmplitude add(ComplexAmplitude a, ComplexAmplitude b);
@@ -271,6 +291,11 @@ DiffractionOrder grating_order(const DiffractionGrating& grating, int order);
 std::vector<DiffractionOrder> grating_orders(const DiffractionGrating& grating,
                                              int min_order,
                                              int max_order);
+std::vector<DiffractiveOrderResponse> diffractive_orders(
+    const scene_ir::DiffractiveOperator& diffraction,
+    double wavelength_nm,
+    double incident_tangential_sine,
+    double radial_coordinate = 0.0);
 double airy_argument_from_angle(const CircularAperture& aperture, double theta_rad);
 double airy_intensity_from_argument(double x);
 double airy_intensity_at_angle(const CircularAperture& aperture, double theta_rad);
@@ -308,6 +333,8 @@ PropagationResult propagate_direct(const WaveFieldGrid& field,
 DiffractionCameraPlan make_diffraction_camera_plan(const ure::WaveOpticsConfig& wave_config,
                                                    const DiffractionCameraConfig& camera_config);
 bool is_valid_diffraction_camera_config(const ure::WaveOpticsConfig& config);
+bool is_supported_diffractive_material_config(
+    const ure::RenderConfig& config);
 DiffractionPsfBank make_diffraction_psf_bank(const ure::WaveOpticsConfig& config);
 
 }

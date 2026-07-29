@@ -2,6 +2,7 @@
 
 #include "ure/mie_phase.hpp"
 #include "ure/ure_api.hpp"
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -62,7 +63,61 @@ enum class MaterialGraphNodeKind {
     BsdfLight,
     BsdfMix,
     BsdfLayer,
-    OutputSurface
+    OutputSurface,
+    BsdfGrating,
+    BsdfPhaseMask,
+    BsdfZonePlate,
+    BsdfDoe,
+    BsdfScatteringTable
+};
+
+enum class DiffractiveOperatorKind {
+    Grating,
+    PhaseMask,
+    ZonePlate,
+    Doe,
+    ScatteringTable
+};
+
+enum class DiffractiveScatterSide {
+    Reflection,
+    Transmission
+};
+
+constexpr std::size_t kMaxDiffractiveScatteringEntries = 4096;
+
+struct ComplexCoefficient {
+    float real = 0.0f;
+    float imag = 0.0f;
+};
+
+struct DiffractiveScatteringEntry {
+    float wavelength_nm = 0.0f;
+    float incident_cosine = 0.0f;
+    int order = 0;
+    DiffractiveScatterSide side =
+        DiffractiveScatterSide::Reflection;
+    ComplexCoefficient jones_ss;
+    ComplexCoefficient jones_sp;
+    ComplexCoefficient jones_ps;
+    ComplexCoefficient jones_pp;
+};
+
+struct DiffractiveOperator {
+    DiffractiveOperatorKind kind =
+        DiffractiveOperatorKind::Grating;
+    DiffractiveScatterSide side =
+        DiffractiveScatterSide::Reflection;
+    double period_m = 1.0e-6;
+    double orientation_rad = 0.0;
+    double duty_cycle = 0.5;
+    double phase_depth_rad = 0.0;
+    double design_wavelength_nm = 550.0;
+    double focal_length_m = 0.1;
+    double aperture_radius_m = 0.01;
+    int max_order = 1;
+    std::string table_id;
+    std::vector<DiffractiveScatteringEntry> table;
 };
 
 struct MaterialGraphInput {
@@ -79,6 +134,7 @@ struct MaterialGraphNode {
     float value = 0.0f;
     std::shared_ptr<TextureResource> texture;
     std::vector<MaterialGraphInput> inputs;
+    DiffractiveOperator diffraction;
 };
 
 struct MaterialGraph {

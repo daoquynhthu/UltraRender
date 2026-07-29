@@ -119,6 +119,7 @@ __device__ inline int next_dielectric_medium_index(
     return material_idx;
 }
 
+#include "path_tracer_diffractive_material.cuh"
 #include "path_tracer_light_sampling.cuh"
 #include "bidirectional_capture.cuh"
 
@@ -1371,6 +1372,31 @@ __global__ __launch_bounds__(256) void shade_kernel(
             bool front_face = r_in.direction.dot(ng) < 0.0f;
             if (front_face && current_medium_idx >= 0) {
                 ior_outside = scene.materials[current_medium_idx].ior;
+            }
+            if (mat.type == MaterialType::Diffractive &&
+                enqueue_diffractive_material(
+                    scene,
+                    current_queue,
+                    next_queue,
+                    idx,
+                    mat,
+                    p,
+                    n,
+                    ng,
+                    surface_tangent(
+                        scene,
+                        hit_queue.hit_types[idx],
+                        hit_queue.hit_indices[idx],
+                        hit_queue.hit_primitive_indices[idx],
+                        p,
+                        n),
+                    uv,
+                    throughput,
+                    current_medium_idx,
+                    pixel_index,
+                    depth,
+                    seed)) {
+                return;
             }
             if (!is_layered && split_dispersive_dielectric_lanes(
                     current_queue,

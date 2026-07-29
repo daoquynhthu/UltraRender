@@ -81,6 +81,83 @@ float parse_float(std::string_view text, float fallback = 0.0f) {
     return value;
 }
 
+double parse_double(std::string_view text, double fallback = 0.0) {
+    if (text.empty()) return fallback;
+    double value = fallback;
+    auto result =
+        std::from_chars(
+            text.data(),
+            text.data() + text.size(),
+            value);
+    if (result.ec != std::errc() ||
+        result.ptr != text.data() + text.size()) {
+        throw std::runtime_error(
+            "MaterialX double value is invalid");
+    }
+    return value;
+}
+
+int parse_int(std::string_view text, int fallback = 0) {
+    if (text.empty()) return fallback;
+    int value = fallback;
+    auto result =
+        std::from_chars(
+            text.data(),
+            text.data() + text.size(),
+            value);
+    if (result.ec != std::errc() ||
+        result.ptr != text.data() + text.size()) {
+        throw std::runtime_error(
+            "MaterialX integer value is invalid");
+    }
+    return value;
+}
+
+std::string hex_encode(std::string_view value) {
+    constexpr char digits[] = "0123456789abcdef";
+    std::string result;
+    result.reserve(value.size() * 2);
+    for (unsigned char byte : value) {
+        result.push_back(digits[byte >> 4]);
+        result.push_back(digits[byte & 0x0f]);
+    }
+    return result;
+}
+
+std::string hex_decode(std::string_view value) {
+    if (value.size() % 2 != 0) {
+        throw std::runtime_error(
+            "MaterialX hexadecimal attribute is invalid");
+    }
+    auto nibble = [](char digit) -> int {
+        if (digit >= '0' && digit <= '9') {
+            return digit - '0';
+        }
+        if (digit >= 'a' && digit <= 'f') {
+            return digit - 'a' + 10;
+        }
+        if (digit >= 'A' && digit <= 'F') {
+            return digit - 'A' + 10;
+        }
+        return -1;
+    };
+    std::string result;
+    result.reserve(value.size() / 2);
+    for (std::size_t index = 0;
+         index < value.size();
+         index += 2) {
+        const int high = nibble(value[index]);
+        const int low = nibble(value[index + 1]);
+        if (high < 0 || low < 0) {
+            throw std::runtime_error(
+                "MaterialX hexadecimal attribute is invalid");
+        }
+        result.push_back(
+            static_cast<char>((high << 4) | low));
+    }
+    return result;
+}
+
 core::Vec3f parse_color(std::string_view text, core::Vec3f fallback = {}) {
     if (text.empty()) return fallback;
     std::string normalized(text);
@@ -122,6 +199,11 @@ std::string export_kind(scene_ir::MaterialGraphNodeKind kind) {
     case scene_ir::MaterialGraphNodeKind::BsdfMix: return "URE_bsdf_mix";
     case scene_ir::MaterialGraphNodeKind::BsdfLayer: return "URE_bsdf_layer";
     case scene_ir::MaterialGraphNodeKind::OutputSurface: return "surfacematerial";
+    case scene_ir::MaterialGraphNodeKind::BsdfGrating: return "URE_bsdf_grating";
+    case scene_ir::MaterialGraphNodeKind::BsdfPhaseMask: return "URE_bsdf_phase_mask";
+    case scene_ir::MaterialGraphNodeKind::BsdfZonePlate: return "URE_bsdf_zone_plate";
+    case scene_ir::MaterialGraphNodeKind::BsdfDoe: return "URE_bsdf_doe";
+    case scene_ir::MaterialGraphNodeKind::BsdfScatteringTable: return "URE_bsdf_scattering_table";
     }
     throw std::runtime_error("MaterialGraph node kind is not exportable to MaterialX");
 }
@@ -141,6 +223,11 @@ scene_ir::MaterialGraphNodeKind import_kind(std::string_view name) {
     if (name == "URE_bsdf_light") return scene_ir::MaterialGraphNodeKind::BsdfLight;
     if (name == "URE_bsdf_mix") return scene_ir::MaterialGraphNodeKind::BsdfMix;
     if (name == "URE_bsdf_layer") return scene_ir::MaterialGraphNodeKind::BsdfLayer;
+    if (name == "URE_bsdf_grating") return scene_ir::MaterialGraphNodeKind::BsdfGrating;
+    if (name == "URE_bsdf_phase_mask") return scene_ir::MaterialGraphNodeKind::BsdfPhaseMask;
+    if (name == "URE_bsdf_zone_plate") return scene_ir::MaterialGraphNodeKind::BsdfZonePlate;
+    if (name == "URE_bsdf_doe") return scene_ir::MaterialGraphNodeKind::BsdfDoe;
+    if (name == "URE_bsdf_scattering_table") return scene_ir::MaterialGraphNodeKind::BsdfScatteringTable;
     if (name == "surfacematerial") return scene_ir::MaterialGraphNodeKind::OutputSurface;
     throw std::runtime_error("MaterialX node is not supported by the URE MaterialGraph adapter: " + std::string(name));
 }
@@ -160,6 +247,137 @@ bool is_exported_node_id(std::string_view name) {
         if (!std::isdigit(static_cast<unsigned char>(name[i]))) return false;
     }
     return true;
+}
+
+bool is_diffractive_kind(
+    scene_ir::MaterialGraphNodeKind kind) {
+    return kind >=
+               scene_ir::MaterialGraphNodeKind::
+                   BsdfGrating &&
+           kind <=
+               scene_ir::MaterialGraphNodeKind::
+                   BsdfScatteringTable;
+}
+
+scene_ir::DiffractiveOperatorKind
+operator_kind_for_node(
+    scene_ir::MaterialGraphNodeKind kind) {
+    switch (kind) {
+    case scene_ir::MaterialGraphNodeKind::BsdfGrating:
+        return scene_ir::DiffractiveOperatorKind::Grating;
+    case scene_ir::MaterialGraphNodeKind::BsdfPhaseMask:
+        return scene_ir::DiffractiveOperatorKind::PhaseMask;
+    case scene_ir::MaterialGraphNodeKind::BsdfZonePlate:
+        return scene_ir::DiffractiveOperatorKind::ZonePlate;
+    case scene_ir::MaterialGraphNodeKind::BsdfDoe:
+        return scene_ir::DiffractiveOperatorKind::Doe;
+    case scene_ir::MaterialGraphNodeKind::BsdfScatteringTable:
+        return scene_ir::DiffractiveOperatorKind::ScatteringTable;
+    default:
+        throw std::runtime_error(
+            "MaterialX node is not a diffractive operator");
+    }
+}
+
+std::string scattering_table_string(
+    const scene_ir::DiffractiveOperator& diffraction) {
+    if (diffraction.table.size() >
+        scene_ir::kMaxDiffractiveScatteringEntries) {
+        throw std::runtime_error(
+            "MaterialX diffractive scattering table exceeds the adapter budget");
+    }
+    std::ostringstream out;
+    for (std::size_t index = 0;
+         index < diffraction.table.size();
+         ++index) {
+        if (index != 0) out << ';';
+        const auto& entry = diffraction.table[index];
+        out << std::format(
+            "{:.9g},{:.9g},{},{},{:.9g},{:.9g},{:.9g},{:.9g},{:.9g},{:.9g},{:.9g},{:.9g}",
+            entry.wavelength_nm,
+            entry.incident_cosine,
+            entry.order,
+            static_cast<int>(entry.side),
+            entry.jones_ss.real,
+            entry.jones_ss.imag,
+            entry.jones_sp.real,
+            entry.jones_sp.imag,
+            entry.jones_ps.real,
+            entry.jones_ps.imag,
+            entry.jones_pp.real,
+            entry.jones_pp.imag);
+    }
+    return out.str();
+}
+
+std::vector<scene_ir::DiffractiveScatteringEntry>
+parse_scattering_table(std::string_view text) {
+    std::vector<
+        scene_ir::DiffractiveScatteringEntry> result;
+    std::size_t row_start = 0;
+    while (row_start < text.size()) {
+        const std::size_t row_end =
+            text.find(';', row_start);
+        const std::string_view row =
+            text.substr(
+                row_start,
+                row_end == std::string_view::npos
+                    ? text.size() - row_start
+                    : row_end - row_start);
+        std::vector<std::string_view> fields;
+        std::size_t field_start = 0;
+        while (field_start <= row.size()) {
+            const std::size_t field_end =
+                row.find(',', field_start);
+            fields.push_back(
+                row.substr(
+                    field_start,
+                    field_end == std::string_view::npos
+                        ? row.size() - field_start
+                        : field_end - field_start));
+            if (field_end == std::string_view::npos) break;
+            field_start = field_end + 1;
+        }
+        if (fields.size() != 12) {
+            throw std::runtime_error(
+                "MaterialX diffractive table row must contain 12 fields");
+        }
+        scene_ir::DiffractiveScatteringEntry entry;
+        entry.wavelength_nm =
+            static_cast<float>(parse_double(fields[0]));
+        entry.incident_cosine =
+            static_cast<float>(parse_double(fields[1]));
+        entry.order = parse_int(fields[2]);
+        const int side = parse_int(fields[3]);
+        if (side < 0 || side > 1) {
+            throw std::runtime_error(
+                "MaterialX diffractive table side is invalid");
+        }
+        entry.side =
+            static_cast<
+                scene_ir::DiffractiveScatterSide>(side);
+        entry.jones_ss = {
+            static_cast<float>(parse_double(fields[4])),
+            static_cast<float>(parse_double(fields[5]))};
+        entry.jones_sp = {
+            static_cast<float>(parse_double(fields[6])),
+            static_cast<float>(parse_double(fields[7]))};
+        entry.jones_ps = {
+            static_cast<float>(parse_double(fields[8])),
+            static_cast<float>(parse_double(fields[9]))};
+        entry.jones_pp = {
+            static_cast<float>(parse_double(fields[10])),
+            static_cast<float>(parse_double(fields[11]))};
+        result.push_back(entry);
+        if (result.size() >
+            scene_ir::kMaxDiffractiveScatteringEntries) {
+            throw std::runtime_error(
+                "MaterialX diffractive scattering table exceeds the adapter budget");
+        }
+        if (row_end == std::string_view::npos) break;
+        row_start = row_end + 1;
+    }
+    return result;
 }
 
 } // namespace
@@ -192,6 +410,74 @@ scene_ir::MaterialGraph import_materialx_graph(std::string_view xml) {
             auto texture = std::make_shared<scene_ir::TextureResource>();
             texture->image = image;
             node.texture = texture;
+        } else if (is_diffractive_kind(node.kind)) {
+            const auto expected =
+                operator_kind_for_node(node.kind);
+            const int operator_kind =
+                parse_int(
+                    attr(element, "URE:operator_kind"),
+                    static_cast<int>(expected));
+            const int side =
+                parse_int(
+                    attr(element, "URE:side"),
+                    0);
+            if (operator_kind < 0 ||
+                operator_kind > 4 ||
+                static_cast<
+                    scene_ir::DiffractiveOperatorKind>(
+                    operator_kind) != expected ||
+                side < 0 ||
+                side > 1) {
+                throw std::runtime_error(
+                    "MaterialX diffractive operator enum is invalid");
+            }
+            node.diffraction.kind = expected;
+            node.diffraction.side =
+                static_cast<
+                    scene_ir::DiffractiveScatterSide>(
+                    side);
+            node.diffraction.period_m =
+                parse_double(
+                    attr(element, "URE:period_m"),
+                    node.diffraction.period_m);
+            node.diffraction.orientation_rad =
+                parse_double(
+                    attr(element, "URE:orientation_rad"),
+                    node.diffraction.orientation_rad);
+            node.diffraction.duty_cycle =
+                parse_double(
+                    attr(element, "URE:duty_cycle"),
+                    node.diffraction.duty_cycle);
+            node.diffraction.phase_depth_rad =
+                parse_double(
+                    attr(element, "URE:phase_depth_rad"),
+                    node.diffraction.phase_depth_rad);
+            node.diffraction.design_wavelength_nm =
+                parse_double(
+                    attr(
+                        element,
+                        "URE:design_wavelength_nm"),
+                    node.diffraction.design_wavelength_nm);
+            node.diffraction.focal_length_m =
+                parse_double(
+                    attr(element, "URE:focal_length_m"),
+                    node.diffraction.focal_length_m);
+            node.diffraction.aperture_radius_m =
+                parse_double(
+                    attr(
+                        element,
+                        "URE:aperture_radius_m"),
+                    node.diffraction.aperture_radius_m);
+            node.diffraction.max_order =
+                parse_int(
+                    attr(element, "URE:max_order"),
+                    node.diffraction.max_order);
+            node.diffraction.table_id =
+                hex_decode(
+                    attr(element, "URE:table_id_hex"));
+            node.diffraction.table =
+                parse_scattering_table(
+                    attr(element, "URE:table"));
         }
         name_to_id[node_name] = node.id;
         graph.nodes.push_back(std::move(node));
@@ -263,6 +549,54 @@ std::string export_materialx_graph(const scene_ir::MaterialGraph& graph, std::st
                 throw std::runtime_error("MaterialX export requires Texture2D nodes to carry an image URI");
             }
             out << " file=\"" << node.texture->image->uri << "\"";
+        }
+        if (is_diffractive_kind(node.kind)) {
+            const auto expected =
+                operator_kind_for_node(node.kind);
+            if (node.diffraction.kind != expected) {
+                throw std::runtime_error(
+                    "MaterialX diffractive node kind does not match its operator");
+            }
+            out << " URE:operator_kind=\""
+                << static_cast<int>(node.diffraction.kind)
+                << "\" URE:side=\""
+                << static_cast<int>(node.diffraction.side)
+                << "\" URE:period_m=\""
+                << std::format(
+                       "{:.17g}",
+                       node.diffraction.period_m)
+                << "\" URE:orientation_rad=\""
+                << std::format(
+                       "{:.17g}",
+                       node.diffraction.orientation_rad)
+                << "\" URE:duty_cycle=\""
+                << std::format(
+                       "{:.17g}",
+                       node.diffraction.duty_cycle)
+                << "\" URE:phase_depth_rad=\""
+                << std::format(
+                       "{:.17g}",
+                       node.diffraction.phase_depth_rad)
+                << "\" URE:design_wavelength_nm=\""
+                << std::format(
+                       "{:.17g}",
+                       node.diffraction.design_wavelength_nm)
+                << "\" URE:focal_length_m=\""
+                << std::format(
+                       "{:.17g}",
+                       node.diffraction.focal_length_m)
+                << "\" URE:aperture_radius_m=\""
+                << std::format(
+                       "{:.17g}",
+                       node.diffraction.aperture_radius_m)
+                << "\" URE:max_order=\""
+                << node.diffraction.max_order
+                << "\" URE:table_id_hex=\""
+                << hex_encode(node.diffraction.table_id)
+                << "\" URE:table=\""
+                << scattering_table_string(
+                       node.diffraction)
+                << "\"";
         }
         if (node.inputs.empty()) {
             out << " />\n";

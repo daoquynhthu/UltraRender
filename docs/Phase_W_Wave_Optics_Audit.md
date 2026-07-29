@@ -4,7 +4,7 @@ Document status: current capability boundary
 
 Last reviewed: 2026-07-29
 
-Phase W is active. W.2 integrates an explicitly enabled incoherent diffraction camera into the CUDA wavefront film, while the ordinary renderer remains a spectral/polarimetric radiometric path tracer. This does not make UltraRender a general coherent wave-optics renderer.
+Phase W is active. W.2 integrates an explicitly enabled incoherent diffraction camera into the CUDA wavefront film, and W.5 adds explicitly enabled radiometric diffractive thin-sheet materials. The ordinary renderer remains a spectral/polarimetric radiometric path tracer. These capabilities do not make UltraRender a general coherent wave-optics renderer.
 
 ## Implemented reference and contract work
 
@@ -17,10 +17,13 @@ Phase W is active. W.2 integrates an explicitly enabled incoherent diffraction c
 | Propagation references | direct Fraunhofer, Fresnel, angular-spectrum, Huygens–Fresnel and Rayleigh–Sommerfeld operators | Direct/reference implementations; not a scalable general backend |
 | CUDA reference | direct Fraunhofer GPU DFT path | Reference parity path, not optimized FFT/tiling infrastructure |
 | Diffraction camera | normalized wavelength PSF bank, circular or regular-blade pupil, defocus phase, 2x2 sensor-pixel integration and CUDA spectral film resolve | Production CUDA wavefront boundary; explicitly enabled and incoherent |
+| Diffractive materials | grating, sinusoidal phase mask, ideal zone plate, blazed DOE and bounded passive RCWA/FMM Jones tables | Production CUDA wavefront thin-sheet scattering; per-lane order sampling without cross-path coherence |
 
 ## Production renderer boundary
 
-The production wavefront queues transport spectral radiometric throughput and Stokes components. With camera diffraction enabled, terminal radiometric contributions are converted at their sampled wavelengths and accumulated into a bounded wavelength-binned XYZ film before wavelength-specific PSF convolution. The bin interpolation applies only to the PSF, so coarse wavelength banks do not approximate the CIE response. The material path is unchanged, Beauty is filtered, and geometric AOVs remain unfiltered. With the feature disabled, the original RGB accumulation path is retained.
+The production wavefront queues transport spectral radiometric throughput and Stokes components. With camera diffraction enabled, terminal radiometric contributions are converted at their sampled wavelengths and accumulated into a bounded wavelength-binned XYZ film before wavelength-specific PSF convolution. The bin interpolation applies only to the PSF, so coarse wavelength banks do not approximate the CIE response. Beauty is filtered, and geometric AOVs remain unfiltered.
+
+With diffractive materials enabled, a surface operator splits packet transport into wavelength lanes, samples a propagating diffraction order and applies its complex Jones response to Stokes state. RCWA/FMM tables are imported scattering data rather than an in-render local full-wave solve. They require a complete shared wavelength/incidence grid and joint `ΣJ†J` passivity. Thin-sheet transmission preserves the current medium. With both feature gates disabled, the original radiometric material and RGB film paths are retained.
 
 The diffraction film is currently limited to the CUDA `Wavefront` integrator. Path guiding, ReSTIR, BDPT, VCM, specular-manifold and MLT combinations reject rather than applying a post-hoc RGB blur. PSF banks cover 360–830 nm, interpolate each exact-wavelength XYZ contribution between adjacent kernels, normalize every wavelength kernel and renormalize each source footprint against valid sensor support at image edges. C ABI optical parameters use `ure_wave_optics_config_v2_t`; the original structure remains layout-compatible and selects documented defaults.
 
@@ -31,7 +34,7 @@ Consequently, the following are not implemented production capabilities:
 - a complex-field GPU path queue and coherent film;
 - distributed coherent merge with phase-reference guarantees;
 - scalable FFT, tiling, out-of-core or multi-GPU propagation backends;
-- diffractive materials, gratings and holograms as first-class scene scattering operators;
+- coherent holographic reconstruction or cross-path interference through diffractive materials;
 - birefringent/modal propagation and tensor optical materials;
 - transient/time-domain wave propagation;
 - production coupling to RCWA, FDTD, FEM, BEM, DDA or other local full-wave solvers.
@@ -62,7 +65,8 @@ Before claiming production wave-optics support, the project must provide evidenc
 ```powershell
 ctest --test-dir build_modular_x64 -C Release -R "test_wave_optics|gpu_wave_optics|gpu_polarization" --output-on-failure
 .\scripts\check_phase_w2_static.ps1
+.\scripts\check_phase_w5_static.ps1
 .\scripts\check_physics_optics.ps1
 ```
 
-Passing these tests proves the covered diffraction-camera, contract and reference boundaries only. It does not establish a complete coherent wave-optics production renderer.
+Passing these tests proves the covered diffraction-camera, radiometric diffractive-material, contract and reference boundaries only. It does not establish a complete coherent wave-optics production renderer.

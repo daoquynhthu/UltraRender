@@ -169,10 +169,44 @@ ExplodedSceneArchive write_scene_ir_text(const NativeSceneArchive& archive) {
             for (const auto& node : value.graph->nodes) {
                 Json inputs = Json::array();
                 for (const auto& input : node.inputs) inputs.push_back({{"name", input.name}, {"node_id", input.node_id}, {"output", input.output}});
-                material_graph["nodes"].push_back({{"color", vec3(node.color)}, {"id", node.id},
-                                                    {"inputs", std::move(inputs)}, {"kind", static_cast<int>(node.kind)},
-                                                    {"name", node.name}, {"texture_id", object_id(texture_ids, node.texture)},
-                                                    {"value", node.value}});
+                Json node_json{{"color", vec3(node.color)}, {"id", node.id},
+                               {"inputs", std::move(inputs)}, {"kind", static_cast<int>(node.kind)},
+                               {"name", node.name}, {"texture_id", object_id(texture_ids, node.texture)},
+                               {"value", node.value}};
+                if (node.kind >= scene_ir::MaterialGraphNodeKind::BsdfGrating &&
+                    node.kind <= scene_ir::MaterialGraphNodeKind::BsdfScatteringTable) {
+                    if (node.diffraction.table.size() >
+                        scene_ir::kMaxDiffractiveScatteringEntries) {
+                        throw std::invalid_argument(
+                            "Diffractive scattering table exceeds the text schema budget");
+                    }
+                    Json table = Json::array();
+                    for (const auto& entry : node.diffraction.table) {
+                        table.push_back({
+                            {"incident_cosine", entry.incident_cosine},
+                            {"jones_pp", {entry.jones_pp.real, entry.jones_pp.imag}},
+                            {"jones_ps", {entry.jones_ps.real, entry.jones_ps.imag}},
+                            {"jones_sp", {entry.jones_sp.real, entry.jones_sp.imag}},
+                            {"jones_ss", {entry.jones_ss.real, entry.jones_ss.imag}},
+                            {"order", entry.order},
+                            {"side", static_cast<int>(entry.side)},
+                            {"wavelength_nm", entry.wavelength_nm}});
+                    }
+                    node_json["diffraction"] = {
+                        {"aperture_radius_m", node.diffraction.aperture_radius_m},
+                        {"design_wavelength_nm", node.diffraction.design_wavelength_nm},
+                        {"duty_cycle", node.diffraction.duty_cycle},
+                        {"focal_length_m", node.diffraction.focal_length_m},
+                        {"kind", static_cast<int>(node.diffraction.kind)},
+                        {"max_order", node.diffraction.max_order},
+                        {"orientation_rad", node.diffraction.orientation_rad},
+                        {"period_m", node.diffraction.period_m},
+                        {"phase_depth_rad", node.diffraction.phase_depth_rad},
+                        {"side", static_cast<int>(node.diffraction.side)},
+                        {"table", std::move(table)},
+                        {"table_id", node.diffraction.table_id}};
+                }
+                material_graph["nodes"].push_back(std::move(node_json));
             }
             material["graph"] = std::move(material_graph);
         } else {
@@ -354,13 +388,59 @@ LoadResult<NativeSceneArchive> read_scene_ir_text(
                 for (const auto& source_node : source.at("graph").at("nodes")) {
                     scene_ir::MaterialGraphNode node;
                     const int kind = source_node.at("kind").get<int>();
-                    if (kind < 0 || kind > 14) throw std::invalid_argument("Invalid graph node kind");
+                    if (kind < 0 || kind > 19) throw std::invalid_argument("Invalid graph node kind");
                     node.id = source_node.at("id").get<std::uint32_t>();
                     node.kind = static_cast<scene_ir::MaterialGraphNodeKind>(kind);
                     node.name = source_node.at("name").get<std::string>();
                     node.color = read_vec3(source_node.at("color"));
                     node.value = source_node.at("value").get<float>();
                     node.texture = object_ref(textures, source_node.at("texture_id"));
+                    if (kind >= 15) {
+                        const auto& diffraction = source_node.at("diffraction");
+                        const int diffraction_kind = diffraction.at("kind").get<int>();
+                        const int diffraction_side = diffraction.at("side").get<int>();
+                        if (diffraction_kind < 0 || diffraction_kind > 4 ||
+                            diffraction_side < 0 || diffraction_side > 1) {
+                            throw std::invalid_argument("Invalid diffractive operator enum");
+                        }
+                        node.diffraction.kind =
+                            static_cast<scene_ir::DiffractiveOperatorKind>(diffraction_kind);
+                        node.diffraction.side =
+                            static_cast<scene_ir::DiffractiveScatterSide>(diffraction_side);
+                        node.diffraction.period_m = diffraction.at("period_m").get<double>();
+                        node.diffraction.orientation_rad = diffraction.at("orientation_rad").get<double>();
+                        node.diffraction.duty_cycle = diffraction.at("duty_cycle").get<double>();
+                        node.diffraction.phase_depth_rad = diffraction.at("phase_depth_rad").get<double>();
+                        node.diffraction.design_wavelength_nm = diffraction.at("design_wavelength_nm").get<double>();
+                        node.diffraction.focal_length_m = diffraction.at("focal_length_m").get<double>();
+                        node.diffraction.aperture_radius_m = diffraction.at("aperture_radius_m").get<double>();
+                        node.diffraction.max_order = diffraction.at("max_order").get<int>();
+                        node.diffraction.table_id = diffraction.at("table_id").get<std::string>();
+                        if (diffraction.at("table").size() >
+                            scene_ir::kMaxDiffractiveScatteringEntries) {
+                            throw std::invalid_argument(
+                                "Diffractive scattering table exceeds the text schema budget");
+                        }
+                        for (const auto& source_entry : diffraction.at("table")) {
+                            scene_ir::DiffractiveScatteringEntry entry;
+                            entry.wavelength_nm = source_entry.at("wavelength_nm").get<float>();
+                            entry.incident_cosine = source_entry.at("incident_cosine").get<float>();
+                            entry.order = source_entry.at("order").get<int>();
+                            const int side = source_entry.at("side").get<int>();
+                            if (side < 0 || side > 1) throw std::invalid_argument("Invalid diffractive table side");
+                            entry.side = static_cast<scene_ir::DiffractiveScatterSide>(side);
+                            auto coefficient = [](const Json& source) {
+                                return scene_ir::ComplexCoefficient{
+                                    source.at(0).get<float>(),
+                                    source.at(1).get<float>()};
+                            };
+                            entry.jones_ss = coefficient(source_entry.at("jones_ss"));
+                            entry.jones_sp = coefficient(source_entry.at("jones_sp"));
+                            entry.jones_ps = coefficient(source_entry.at("jones_ps"));
+                            entry.jones_pp = coefficient(source_entry.at("jones_pp"));
+                            node.diffraction.table.push_back(entry);
+                        }
+                    }
                     for (const auto& source_input : source_node.at("inputs")) {
                         node.inputs.push_back({source_input.at("name").get<std::string>(),
                                                source_input.at("node_id").get<std::uint32_t>(),

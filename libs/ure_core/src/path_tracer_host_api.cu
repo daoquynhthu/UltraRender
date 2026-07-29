@@ -579,6 +579,10 @@ static void upload_material_expression_graphs(GpuContext* ctx,
                                               std::vector<GpuMaterial>& host_headers) {
     std::vector<SpectralExpressionNode> nodes;
     std::vector<GpuMaterialBsdfLobe> lobes;
+    std::vector<GpuDiffractiveOperator>
+        diffraction_operators;
+    std::vector<GpuDiffractiveTableEntry>
+        diffraction_entries;
     for (size_t mat_idx = 0; mat_idx < host_materials.size(); ++mat_idx) {
         GpuMaterialData& material = host_materials[mat_idx];
         GpuMaterial& header = host_headers[mat_idx];
@@ -601,6 +605,47 @@ static void upload_material_expression_graphs(GpuContext* ctx,
         header.bsdf_mix_expression_root = root(material.header.bsdf_mix_expression_root);
         header.layer_thickness_expression_root = root(material.header.layer_thickness_expression_root);
         header.layer_absorption_expression_root = root(material.header.layer_absorption_expression_root);
+        if (material.diffraction_table.size() >
+                scene_ir::kMaxDiffractiveScatteringEntries ||
+            diffraction_entries.size() >
+                scene_ir::kMaxDiffractiveScatteringEntries -
+                    material.diffraction_table.size()) {
+            throw std::runtime_error(
+                "material diffraction tables exceed the bounded scene resource budget");
+        }
+        if (header.type == MaterialType::Diffractive) {
+            if (diffraction_operators.size() >=
+                static_cast<std::size_t>(
+                    std::numeric_limits<int>::max())) {
+                throw std::runtime_error(
+                    "material diffraction operator count exceeds the GPU index range");
+            }
+            GpuDiffractiveOperator diffraction =
+                material.diffraction_operator;
+            diffraction.table_start =
+                material.diffraction_table.empty()
+                ? -1
+                : static_cast<int>(
+                      diffraction_entries.size());
+            diffraction.table_count =
+                static_cast<int>(
+                    material.diffraction_table.size());
+            header.diffraction_operator_index =
+                static_cast<int>(
+                    diffraction_operators.size());
+            diffraction_operators.push_back(
+                diffraction);
+        } else {
+            if (!material.diffraction_table.empty()) {
+                throw std::runtime_error(
+                    "non-diffractive material carries a diffraction table");
+            }
+            header.diffraction_operator_index = -1;
+        }
+        diffraction_entries.insert(
+            diffraction_entries.end(),
+            material.diffraction_table.begin(),
+            material.diffraction_table.end());
         if (material.bsdf_lobes.size() != static_cast<size_t>(header.bsdf_lobe_count) ||
             header.bsdf_lobe_count > kMaxMaterialBsdfLobes) {
             throw std::runtime_error("material BSDF lobe descriptor count is invalid");
@@ -651,6 +696,47 @@ static void upload_material_expression_graphs(GpuContext* ctx,
     } else {
         ctx->d_material_bsdf_lobes = nullptr;
     }
+
+    ctx->material_diffraction_operator_count =
+        static_cast<int>(diffraction_operators.size());
+    if (!diffraction_operators.empty()) {
+        const size_t bytes =
+            diffraction_operators.size() *
+            sizeof(GpuDiffractiveOperator);
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_material_diffraction_operators,
+            bytes));
+        UR_CUDA_CHECK(cudaMemcpy(
+            ctx->d_material_diffraction_operators,
+            diffraction_operators.data(),
+            bytes,
+            cudaMemcpyHostToDevice));
+        ctx->resources->retain_allocation(
+            ctx->d_material_diffraction_operators);
+    } else {
+        ctx->d_material_diffraction_operators =
+            nullptr;
+    }
+
+    ctx->material_diffraction_table_count =
+        static_cast<int>(diffraction_entries.size());
+    if (!diffraction_entries.empty()) {
+        const size_t bytes =
+            diffraction_entries.size() *
+            sizeof(GpuDiffractiveTableEntry);
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_material_diffraction_table,
+            bytes));
+        UR_CUDA_CHECK(cudaMemcpy(
+            ctx->d_material_diffraction_table,
+            diffraction_entries.data(),
+            bytes,
+            cudaMemcpyHostToDevice));
+        ctx->resources->retain_allocation(
+            ctx->d_material_diffraction_table);
+    } else {
+        ctx->d_material_diffraction_table = nullptr;
+    }
 }
 
 static void free_material_resource_tables(GpuContext* ctx) {
@@ -660,6 +746,13 @@ static void free_material_resource_tables(GpuContext* ctx) {
 static bool contains_material_expression_graph(const GpuMaterialData* materials, int count) {
     for (int i = 0; i < count; ++i) {
         if (!materials[i].expression_nodes.empty()) return true;
+    }
+    return false;
+}
+
+static bool contains_diffractive_material(const GpuMaterialData* materials, int count) {
+    for (int i = 0; i < count; ++i) {
+        if (materials[i].header.type == MaterialType::Diffractive) return true;
     }
     return false;
 }
@@ -2889,7 +2982,10 @@ GpuContext* init_gpu_renderer(int width, int height,
             }
         }
     } else if (!ure::wave_optics_is_radiometric_only(
-                   config.wave_optics)) {
+                   config.wave_optics) &&
+               !ure::wave::
+                    is_supported_diffractive_material_config(
+                        config)) {
         throw std::invalid_argument(
             "requested wave-optics mode is not implemented by the GPU renderer");
     }
@@ -4329,6 +4425,14 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.material_expression_node_count = ctx->material_expression_node_count;
     scene.material_bsdf_lobes = ctx->d_material_bsdf_lobes;
     scene.material_bsdf_lobe_count = ctx->material_bsdf_lobe_count;
+    scene.material_diffraction_table =
+        ctx->d_material_diffraction_table;
+    scene.material_diffraction_table_count =
+        ctx->material_diffraction_table_count;
+    scene.material_diffraction_operators =
+        ctx->d_material_diffraction_operators;
+    scene.material_diffraction_operator_count =
+        ctx->material_diffraction_operator_count;
     scene.num_spectral_channels = ctx->num_spectral_channels;
     scene.diffraction_spectral_accum =
         ctx->d_diffraction_spectral_accum;
@@ -5272,6 +5376,15 @@ void update_materials_gpu(GpuContext* ctx,
     if (contains_material_expression_graph(materials, count)) {
         throw std::runtime_error("material expression graph updates require a full scene reload");
     }
+    if (ctx->host_materials_for_light_distribution.size() != static_cast<size_t>(ctx->material_count)) {
+        throw std::runtime_error("update_materials_gpu: host material cache missing for light distribution rebuild");
+    }
+    const auto* cached_materials =
+        ctx->host_materials_for_light_distribution.data() + first_material_index;
+    if (contains_diffractive_material(materials, count) ||
+        contains_diffractive_material(cached_materials, count)) {
+        throw std::runtime_error("diffractive material updates require a full scene reload");
+    }
     if (full_material_update) {
         free_material_resource_tables(ctx);
     }
@@ -5280,10 +5393,6 @@ void update_materials_gpu(GpuContext* ctx,
             throw std::runtime_error("partial sampled spectral resource material updates require a full scene reload");
         }
     }
-    if (ctx->host_materials_for_light_distribution.size() != static_cast<size_t>(ctx->material_count)) {
-        throw std::runtime_error("update_materials_gpu: host material cache missing for light distribution rebuild");
-    }
-
     std::vector<GpuMaterial> headers(count);
     for (int i = 0; i < count; ++i) {
         headers[i] = materials[i].header;
