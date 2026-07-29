@@ -13,6 +13,7 @@
 #include "ure/scene_ir.hpp"
 #include "ure/wave_optics.hpp"
 #include "ure/anisotropic_optics.hpp"
+#include "ure/local_fullwave.hpp"
 
 namespace ure::gpu {
 
@@ -457,6 +458,83 @@ static float center_framebuffer_sum(
     return sum;
 }
 
+static ure::wave::LocalFullWaveArtifact
+make_verified_gpu_fullwave_artifact() {
+    ure::wave::LocalFullWaveRequest request;
+    request.request_id = "gpu/wave/cell";
+    request.provider_id = "ure.test.gpu-fullwave";
+    request.minimum_provider_version = {1, 0, 0};
+    request.solver_kind =
+        ure::wave::LocalFullWaveSolverKind::Rcwa;
+    request.geometry_payload = {1, 2, 3, 4};
+    request.material_payload = {5, 6, 7, 8};
+    request.geometry_digest =
+        "9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a";
+    request.material_digest =
+        "55e5509f8052998294266ee5b50cb592938191fb5d67f73cac2e60b0276b1bdd";
+    request.wavelengths_nm = {400.0f, 800.0f};
+    request.incident_cosines = {1.0f};
+    request.minimum_order = 0;
+    request.maximum_order = 0;
+    request.reflection = true;
+    request.transmission = false;
+    request.period_m = 1.0e-6;
+    request.memory_budget_bytes = 1024 * 1024;
+    request.iteration_budget = 1024;
+
+    ure::wave::LocalFullWaveProviderDescriptor
+        descriptor;
+    descriptor.provider_id = request.provider_id;
+    descriptor.version = {1, 0, 0};
+    descriptor.executable_digest =
+        "ba7c83bf49d98d20e7762a7eb9cc5796893f8a0b08bb1eff0b23f848592de60e";
+    descriptor.semantic_digest =
+        "52ce5029c72446ac4f684946be0f65e275af436578108ae3cd17f630c1c5b243";
+    descriptor.solver_kinds = {
+        ure::wave::LocalFullWaveSolverKind::Rcwa};
+    descriptor.maximum_wavelength_samples = 2;
+    descriptor.maximum_incidence_samples = 1;
+    descriptor.maximum_scattering_entries = 2;
+    descriptor.maximum_memory_bytes =
+        request.memory_budget_bytes;
+    descriptor.deterministic = true;
+
+    ure::scene_ir::DiffractiveOperator table;
+    table.kind =
+        ure::scene_ir::DiffractiveOperatorKind::
+            ScatteringTable;
+    table.period_m = request.period_m;
+    table.max_order = 0;
+    table.table_id = "gpu/rcwa";
+    for (const float wavelength :
+         request.wavelengths_nm) {
+        ure::scene_ir::DiffractiveScatteringEntry
+            entry;
+        entry.wavelength_nm = wavelength;
+        entry.incident_cosine = 1.0f;
+        entry.jones_ss.real =
+            wavelength == 400.0f ? 0.4f : 0.7f;
+        entry.jones_pp.real =
+            entry.jones_ss.real;
+        table.table.push_back(entry);
+    }
+
+    ure::wave::LocalFullWaveEvidence evidence;
+    evidence.converged = true;
+    evidence.iterations = 32;
+    evidence.peak_memory_bytes = 4096;
+    evidence.residual = 1.0e-7;
+    evidence.reciprocity_error = 1.0e-6;
+    evidence.energy_error = 1.0e-6;
+    evidence.solver_artifact_digest =
+        "7280ce41975543e7cda0ca68894eca8d1c5faa51bda65e5cd0f0963db3abbc05";
+    return ure::wave::make_local_fullwave_artifact(
+        request,
+        descriptor,
+        std::move(table),
+        std::move(evidence));
+}
+
 static int test_gpu_diffractive_material_transport() {
     REQUIRE_GPU();
     ure::scene_ir::DiffractiveOperator phase;
@@ -488,25 +566,17 @@ static int test_gpu_diffractive_material_transport() {
             make_diffractive_scene(grating),
             24);
 
-    ure::scene_ir::DiffractiveOperator table;
-    table.kind =
-        ure::scene_ir::DiffractiveOperatorKind::
-            ScatteringTable;
-    table.table_id = "gpu/rcwa";
-    table.max_order = 0;
-    for (float wavelength : {400.0f, 800.0f}) {
-        ure::scene_ir::DiffractiveScatteringEntry entry;
-        entry.wavelength_nm = wavelength;
-        entry.incident_cosine = 1.0f;
-        entry.jones_ss.real =
-            wavelength == 400.0f ? 0.4f : 0.7f;
-        entry.jones_pp.real =
-            entry.jones_ss.real;
-        table.table.push_back(entry);
-    }
+    const auto fullwave_artifact =
+        make_verified_gpu_fullwave_artifact();
+    CHECK(
+        fullwave_artifact.schema_identity ==
+        "ure.local-fullwave.scattering/1.0");
+    CHECK(fullwave_artifact.scattering.table.size() ==
+          2);
     const auto table_frame =
         render_diffractive_scene(
-            make_diffractive_scene(table),
+            make_diffractive_scene(
+                fullwave_artifact.scattering),
             24);
 
     CHECK(phase_frame.size() == 16 * 16 * 3);

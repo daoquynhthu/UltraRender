@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-07-29 (W.9 closure and W.10 cursor)
+最后更新: 2026-07-29 (W.10 closure and W.11 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -60,7 +60,7 @@ Phase T complete [done]
 Phase V complete [done]
    │
    ▼
-当前游标: W.10
+当前游标: W.11
    │
    ▼
 Phase W complete
@@ -81,7 +81,7 @@ Phase X complete
 - **R-P4 已闭环**: GPU specular-manifold、BDPT/VCM、独立 anchored-delta technique AOV、精确 estimator support partition，以及 glass/SDS/small-emitter/mixed-specular bias/variance/time-to-error suite 已进入生产与验证路径。
 - **Phase T 已闭环**: T.0-T.11 已冻结 coupling、backend identity、共享 Slang 工具链、SDK-free runtime/resource/execution/acceleration/scheduling contract、CUDA production lowering、Vulkan compute/acceleration foundation、Windows optional D3D12/DXR backend、heterogeneous sample-shard negotiation 和 cross-backend validation/performance suite。
 - **Phase V 已闭环**: V.0-V.11 已完成 acceleration audit/config、self-compute/native provider、TLAS/BLAS、wide BVH、cluster/LoD/dynamic lifecycle 与统一 validation suite。
-- **当前唯一施工项 — Phase W**: W.9 anisotropic/modal media reference contract 已闭环；W.3/W.4/W.8 reference contract 已保留，当前游标进入 W.10 local full-wave coupling。
+- **当前唯一施工项 — Phase W**: W.10 local full-wave coupling contract 已闭环；W.3/W.4/W.8 reference contract 已保留，当前游标进入 W.11 coherent distributed contract。
 - **Phase U/X**: 只在核心 scene/runtime/acceleration/wave contracts 稳定后暴露外部生态和插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
 - 文档中的“进行中”表示已有未闭环成果，不等于允许并行施工。发生冲突时，以本节当前游标为准。
@@ -2158,7 +2158,7 @@ V.11 closure（2026-07-29）：新增本地可执行的 `scripts/run_phase_v_val
 
 ### Phase W — 波动光学求解器 / Wave Optics Solver
 
-**状态**: 进行中，当前游标 W.10。
+**状态**: 进行中，当前游标 W.11。
 
 **目标**: 将 UltraRender 从“高级光谱偏振路径追踪器 + 局部边界波动效应”扩展为具备可选波动光学求解器的渲染系统。Phase W 不等价于全局 Maxwell/FDTD；宏观场景仍默认使用 radiometric spectral path tracing，波动能力通过显式 feature switch opt-in，并在 unsupported solver/film/merge/material/API path 上 fail-loud。
 
@@ -2206,7 +2206,7 @@ V.11 closure（2026-07-29）：新增本地可执行的 `scripts/run_phase_v_val
 | W.7 | Partial coherence/generalized transport：引入 bounded Hermitian PSD `CrossSpectralDensity`、Gaussian-Schell extended source、deterministic coherent realization 与 Jones/OPL `GeneralizedRay`；host/CUDA 以同一 weighted outer-product estimator 从最多 65,536 个 realization 归约 mutual intensity，invalid/non-PSD/overflow fail-closed。Gaussian temporal coherence 与 two-beam power 提供 OCT/coherent-lidar/interferometry reference，单点 realization 门禁验证 fully developed speckle 的 mean/contrast。`PartialCoherenceFilm` 固定 coherent amplitude sum → realization power → weighted realization average → incoherent source/group sum 的顺序；transactional raw-field merge 在平方前合并同一 realization 并拒绝 layout/weight/budget mismatch。该 in-memory sufficient-statistics boundary 不改 distributed file schema，phase-reference provenance 与 complex/mutual-intensity shard serialization 仍归 W.11；production renderer 的 partial-coherence session 继续在 scene allocation 前 fail-loud，不虚报 scene-integrated complex queue/film。Release 54/54、host/CUDA parity、C/native/pyure rejection 与 W.7 static gate 通过 | 已完成 |
 | W.8 | Edge/aperture diffraction：先实现 knife-edge/slit/circular/rectangular aperture analytic references，再评估 GTD/UTD/Keller cone 或 generalized region transport | 已完成解析 reference 层：圆孔由 W.2 Airy/MTF oracle 覆盖；本阶段新增 knife-edge Fresnel half-plane、single-slit sinc^2、rectangular aperture separable sinc^2、finite grating order/grating equation + single-slit envelope references，并测试第一零点、对称性、矩形孔径乘积分离、传播/evanescent order 分类和非法几何 fail-closed。GTD/UTD/Keller cone 与生产 visibility/edge event 接入仍是后续集成，不作为本 reference 阶段闭环 |
 | W.9 | Anisotropic/modal media：新增最多 256 个 spectral sample 的 `AnisotropicMedium`，每个 sample 以 real symmetric positive-definite dielectric-impermeability tensor、positive-semidefinite extinction tensor 和 optical activity 表达材料，不扩展 radiometric scalar `ior`。Principal/biaxial、uniaxial、liquid-crystal director 与 deviatoric stress-optic factories 均 strict validation；多 sample 在 tensor 空间插值并拒绝范围外 wavelength。给定传播方向后，以 transverse projected impermeability eigenproblem 求 ordinary/extraordinary displacement modes、effective index、extinction 与 degeneracy；homogeneous segment 对明确命名的 transverse electric-displacement carrier 使用单一 exact 2×2 complex exponential `exp[(i k0 N - k0 K + ωJ)d]`，同时处理 birefringence、non-commuting dichroism 与 optical activity。CUDA bounded batch 独立重建 mode/generator，并由 runtime-owned buffer/queue/fence/timeline 执行 host/device parity。quarter-wave retardance、pure optical rotation、analytic dichroic attenuation、optic-axis degeneracy、LC、stress splitting、spectral interpolation、invalid tensor 和 SDK-free installed header 均有门禁。该阶段是 homogeneous segment reference，不虚报 SceneIR attachment、anisotropic Fresnel boundary、walk-off/ray splitting 或 production Jones queue。Release 54/54、W.9 static/documentation/physics-optics gates 通过 | 已完成 |
-| W.10 | Local full-wave coupling：定义 local solver plugin/cache contract，消费 RCWA/FDTD/FEM/BEM/FMM/DDA/S-matrix/scattering table，不做 scene-scale global Maxwell discretization | W.5 + Phase X |
+| W.10 | Local full-wave coupling：新增 SDK-free、versioned little-endian request/result byte envelope，覆盖 RCWA/FDTD/FEM/BEM/FMM/DDA/S-matrix import；geometry/material payload 以 SHA-256 校验，provider 以 exact id、minimum version、executable/semantic digest、solver kind、sample/table/memory/determinism capability 协商。结果必须精确覆盖请求的 wavelength/incidence/order/side grid，携带 convergence/iteration/memory/residual/reciprocity/energy/native-artifact evidence，并通过 W.5 joint Jones passivity/completeness 复核后才能进入 CUDA diffractive material。deterministic cache key 绑定物理请求与 provider binary/semantics，byte-budget cache 只接收 request/descriptor-compatible 且 binary roundtrip 有效的 artifact；冲突/容量不足 fail-loud。core 仅调用 injected byte provider，不搜索或启动外部进程；Phase X 后续可映射 stable dynamic ABI/isolated runner。本阶段不捆绑 solver、不持久化 proprietary native artifact、不做 scene-scale global Maxwell discretization。host 覆盖七类 solver negotiation、serialization/cache/invalidation/budget/corruption，GPU E2E 消费 verified artifact；Release 55/55 与 W.10/SDK-free/documentation/physics-optics gates 通过 | 已完成 |
 | W.11 | Coherent distributed contract：扩展 distributed shard metadata，区分 radiance frame、complex field frame、mutual intensity frame、coherent realization merge；禁止把 coherent frame 当 RGB radiance 直接加和 | W.3 + Phase C/D |
 | W.12 | 验证和静态审计：Airy first zero、slit/grating diffraction angles、two-beam interference、thin-film phase oracle、rough dielectric spectral/UV PDF consistency、Stokes/Jones conversion、fluorescence Stokes shift、energy/PDF conservation、coherent merge order、unsupported wave node fail-loud、config/API parity | W.1-W.11 |
 

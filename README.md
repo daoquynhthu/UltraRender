@@ -6,7 +6,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- Phase Q、Phase R、Phase T 与 Phase V 已完成。Phase W.2 的 diffraction camera、W.5 的 diffractive MaterialGraph operators 与 W.6 的 fluorescence material 已接入显式启用的 CUDA wavefront 路径；W.7 与 W.9 已分别建立部分相干统计和各向异性模态传播参考合同，当前施工游标是 `W.10`。
+- Phase Q、Phase R、Phase T 与 Phase V 已完成。Phase W.2 的 diffraction camera、W.5 的 diffractive MaterialGraph operators 与 W.6 的 fluorescence material 已接入显式启用的 CUDA wavefront 路径；W.7 与 W.9 已分别建立部分相干统计和各向异性模态传播参考合同，W.10 已建立局部全波求解器交换与缓存合同，当前施工游标是 `W.11`。
 - 默认完整场景渲染后端仍是 CUDA。Vulkan RT 与 DXR 已具备多 BLAS/TLAS build、compaction、transform refit/rebuild、scratch budget 和 telemetry；OptiX SDK 保持可选，存在时启用同一构建合同和实际 raygen/miss/closest-hit pipeline，缺失时不影响 CUDA self-compute、Vulkan 或 D3D12。一个由同一 SceneIR lower 的固定 fixture 已对齐四类 provider 的 shadow/closest hit、transform、material、UV/normal/tangent metadata 和小型 AOV；这不等同于任意 SceneIR 的完整 radiometric integrator 已迁移到 native provider。
 - 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure。Acceleration provider、build quality、update policy、cluster gate、stats gate 与 scratch budget 使用独立的向后兼容配置合同；CUDA `self_compute` 的质量预设、auto/static/refit/rebuild update、scratch-budget enforcement 与 versioned acceleration stats 已可执行。Native construction 与 traversal parity fixture 已完成。V.8-V.10 已加入 SDK-free clustered geometry resource、host/CUDA physical-error selector，以及 rigid/deforming/topology-change lifecycle planner；SceneDiff mesh mutation会校验并事务回滚。当前 CUDA 对 deformation/topology 采取正确但保守的完整 BLAS/TLAS rebuild，显式请求尚不可用的 BLAS refit 会失败。主 renderer 的 cluster flag 在完整 SceneIR traversal lowering 前继续明确失败。
 - Slang 2026.14 已完成固定版本、多目标编译、反射、debug mapping、CUDA 占用率及数值执行验证。Vulkan SPIR-V 与 D3D12 DXIL 复用共享光谱/偏振及加速语义；D3D12 release DXIL 由固定 Windows SDK DXC 确定性生成，debug artifact 单独生成。现有 CUDA production kernels 仍是私有 `.cu` fast path，Slang RHI 未被引入。
@@ -16,10 +16,10 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 - SDK-free scheduler 会在执行前校验 worker feature、float precision、coherence mode、显存下限和共享 kernel semantics，以稳定整数权重划分 sample ranges；distributed file v5 保存 backend/adapter、driver/compiler、executable digest 和 resource-cache provenance。兼容 CUDA/Vulkan/D3D12 sample shards 可合并，不兼容或重叠分片会拒绝。
 - `run_phase_t_validation_suite.ps1` 以机器可读报告统一检查物理 unit oracle、hit/framebuffer fixture、CUDA reference render、variance/MSE、device loss、budget、cache、cold/warm launch、VRAM 和 throughput。CUDA/Vulkan 必测，DXR 按实际 capability 执行；不同后端或工作负载的差异必须带阈值和原因分类。
 - `run_phase_v_validation_suite.ps1` 输出稳定的 `ure.phase_v.validation.v1` 报告，聚合 dense build/trace/VRAM、async construction、provider parity、cluster LoD、dynamic update、distributed v5 resource/worker/cache provenance 和完整 CTest。farm worker 入口要求 clean tree 并记录 run/shard/sample coverage；这类证据不扩大 native renderer 或 clustered traversal 的已实现范围。
-- 当前 Release 构建注册 54 个 CTest；测试数量只表示已登记门禁规模，不等同于功能覆盖率或发布成熟度。
+- 当前 Release 构建注册 55 个 CTest；测试数量只表示已登记门禁规模，不等同于功能覆盖率或发布成熟度。
 - 当前 CUDA self-compute acceleration 使用每 mesh object-space BLAS 和独立 world-space instance TLAS。默认/`fast_build` 保留兼容的 median BVH2；`balanced` 使用 binned object SAH 与 72-byte quantized BVH4，`high_quality` 使用受引用预算约束的 spatial SAH/SBVH 与 116-byte quantized BVH8。transform hot update 可按 policy refit 或 rebuild TLAS；deforming/topology-changing mesh mutation 会重建 BLAS/TLAS并输出 timing/correctness telemetry。bounded async build、pinned-stream compact upload 和 scratch/device budget preflight 已执行。Vulkan RT、DXR 和可选 OptiX 已完成 native construction lifecycle，并通过同一 SceneIR fixture 的 cross-provider traversal/hit/AOV 门禁；通用 native integrator lowering与 clustered SceneIR traversal 仍未完成。
 - 默认积分器是 spectral/polarimetric radiometric wavefront path tracer。
-- 显式启用的 camera diffraction 支持圆孔或规则叶片 pupil、defocus phase、sensor-pixel integration 与 wavelength-binned PSF resolve。独立的材质开关支持 grating、sinusoidal phase mask、ideal zone plate、blazed DOE、有界 RCWA/FMM Jones table，以及有界 Stokes-shift excitation-emission fluorescence resource；它们都限制在各自校验过的普通 CUDA wavefront 组合。fluorescence 使用相机路径的 adjoint wavelength transition，并保留 detector wavelength 与 phosphorescence delay；当前 Beauty film 仍是 steady-state。partial coherence 目前仅提供 cross-spectral-density、Gaussian-Schell source、coherent realization、generalized ray、host/CUDA ensemble reduction 与正确平均顺序的参考合同，生产 session 仍明确拒绝；coherent scene transport 和局部全波求解尚未实现。
+- 显式启用的 camera diffraction 支持圆孔或规则叶片 pupil、defocus phase、sensor-pixel integration 与 wavelength-binned PSF resolve。独立的材质开关支持 grating、sinusoidal phase mask、ideal zone plate、blazed DOE、有界 Jones scattering table，以及有界 Stokes-shift excitation-emission fluorescence resource；它们都限制在各自校验过的普通 CUDA wavefront 组合。fluorescence 使用相机路径的 adjoint wavelength transition，并保留 detector wavelength 与 phosphorescence delay；当前 Beauty film 仍是 steady-state。partial coherence 目前仅提供 cross-spectral-density、Gaussian-Schell source、coherent realization、generalized ray、host/CUDA ensemble reduction 与正确平均顺序的参考合同，生产 session 仍明确拒绝。W.10 可通过版本化 byte provider 合同消费 RCWA/FDTD/FEM/BEM/FMM/DDA/S-matrix 结果，并按求解器二进制、语义和物理请求建立确定性缓存；项目不捆绑这些求解器，也不执行 scene-scale global Maxwell 求解。
 - production unbiased/spatial ReSTIR DI 与受限 ReSTIR PT suffix reuse 已完成验证。GPU specular-manifold、BDPT、VCM 和独立 PSSMLT 已通过各自统计门禁；MLT 与 bidirectional/VCM/manifold 的组合仍明确拒绝。
 - 完整 CUDA 渲染基线为 Windows 11、Visual Studio 2022 Build Tools、CUDA 13.0 和 NVIDIA compute capability 12.0。Vulkan foundation 另有 Linux GCC/Ninja、Windows NVIDIA native ray-query 及 NVIDIA/Intel compute-BVH 证据；D3D12 foundation 有 Windows NVIDIA DXR 1.1、compute fallback、texture/descriptor 与 cross-queue fence 证据。这些门禁不等同于完整 Linux、D3D12 或非 NVIDIA 场景渲染支持。
 
@@ -31,6 +31,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 - CIE 1931 2° observer、显式 wavelength PDF、色散、导体复折射率和局部单层薄膜边界模型。
 - CUDA wavefront diffraction camera：归一化的 360–830 nm PSF bank、仅对 PSF 插值分 bin 的精确波长 XYZ film、圆形/规则多叶片光阑、离焦相位和 2x2 sensor aperture integration；普通 material path 与关闭状态保持不变。
 - CUDA diffractive material operators：按 wavelength lane 采样传播级次并传输完整 2×2 complex Jones response；RCWA/FMM table 受 4,096-entry 预算、完整采样网格和联合被动性校验约束。该路径是非相干 radiometric thin-sheet scattering，不等同于 coherent field propagation。
+- 局部全波耦合合同：有界、SDK-free 的 RCWA/FDTD/FEM/BEM/FMM/DDA/S-matrix request/result envelope，严格 capability/version/digest 协商、收敛/互易/能量/预算证据，以及绑定 provider executable/semantic identity 的确定性缓存。验证后的完整 Jones table 可直接进入 W.5 CUDA 路径；外部求解器实现、进程隔离和稳定动态 ABI 不在本阶段虚报。
 - 部分相干参考层：有界 Hermitian PSD cross-spectral density、Gaussian-Schell 扩展光源、确定性 coherent realizations、Jones/OPL generalized rays、OCT/interferometry coherence oracle、speckle 统计门禁，以及保持 coherent-before-incoherent 顺序的事务式 raw-field merge。CUDA 只执行 ensemble-to-CSD reference reduction，不表示主 path tracer 已支持部分相干场。
 - 各向异性介质参考层：有界 spectral dielectric-impermeability/extinction tensor、ordinary/extraordinary eigenmodes、birefringence、dichroism、optical activity、liquid-crystal director 与 stress-optic response。host/CUDA 使用同一 homogeneous transverse-displacement complex generator；该合同没有被压平为 scalar `ior`，也不表示 SceneIR path tracer 已接入 tensor interface、walk-off 或 ray splitting。
 - Stokes 状态与若干 Mueller 边界变换。它们属于强度域偏振传输，不等同于跨路径相干场求解。
@@ -105,7 +106,7 @@ Ninja 可并行构建宿主代码和独立目标；高内存 CUDA 编译由工�
 ctest --test-dir build_modular_x64 -C Release --output-on-failure
 ```
 
-当前构建树注册 54 个 CTest。这个数字是当前快照，不应用作长期固定接口；以 `ctest -N` 的输出为准。
+当前构建树注册 55 个 CTest。这个数字是当前快照，不应用作长期固定接口；以 `ctest -N` 的输出为准。
 
 仅构建不依赖 GPU SDK 的公共基础库时，可关闭 CUDA backend：
 

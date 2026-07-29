@@ -84,6 +84,16 @@ add_executable(test_wave_optics test_wave_optics.cpp)
 target_link_libraries(test_wave_optics PRIVATE ure_core ure_diag)
 add_test(NAME test_wave_optics COMMAND test_wave_optics)
 
+add_executable(
+    test_local_fullwave
+    test_local_fullwave.cpp)
+target_link_libraries(
+    test_local_fullwave
+    PRIVATE ure_core ure_sceneio ure_diag)
+add_test(
+    NAME test_local_fullwave
+    COMMAND test_local_fullwave)
+
 add_executable(test_integrator test_integrator.cpp)
 target_link_libraries(test_integrator PRIVATE ure_core ure_diag)
 add_test(NAME test_integrator COMMAND test_integrator)

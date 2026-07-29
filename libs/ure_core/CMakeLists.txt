@@ -34,6 +34,7 @@ add_library(ure_core STATIC
     src/specular_manifold.cpp
     src/anisotropic_optics.cpp
     src/anisotropic_optics_gpu.cu
+    src/local_fullwave.cpp
     src/wave_optics.cpp
     src/wave_optics_gpu.cu
 )

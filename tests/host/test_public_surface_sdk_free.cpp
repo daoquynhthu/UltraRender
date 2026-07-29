@@ -9,6 +9,7 @@
 #include "ure/ure_c_api.h"
 #include "ure/wave_optics.hpp"
 #include "ure/anisotropic_optics.hpp"
+#include "ure/local_fullwave.hpp"
 
 int main() {
     static_assert(std::is_enum_v<ure::BackendKind>);

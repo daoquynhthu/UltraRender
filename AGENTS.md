@@ -52,7 +52,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | Q.0-Q.12 (Native Scene) | Done | Native schema/serialization, procedural/script, resources/solvers/simulation, tooling/adapters/cache/farm, validation suite |
 | T (Portable GPU Runtime) | Done | T.0-T.11 complete; portable runtime, optional backends, multi-backend scheduling and unified validation closed |
 | V (GPU Acceleration) | Done | V.0-V.11 complete; unified local/farm validation freezes construction, traversal, memory, parity, dynamic and distributed evidence |
-| W (Wave Optics Solver) | In progress | W.2 diffraction camera, W.5 diffractive materials, W.6 fluorescence, W.7 partial coherence and W.9 anisotropic modal references are complete; W.3/W.4/W.8 reference layers exist; W.10 local full-wave coupling is the authoritative cursor |
+| W (Wave Optics Solver) | In progress | W.2 diffraction camera, W.5 diffractive materials, W.6 fluorescence, W.7 partial coherence, W.9 anisotropic modal references and W.10 local full-wave coupling are complete; W.3/W.4/W.8 reference layers exist; W.11 coherent distributed contract is the authoritative cursor |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -211,13 +211,13 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 |-------|--------------------------|
 | GPU core | `gpu_device`, `gpu_math`, `gpu_spectral`, `gpu_spectral_soa`, `gpu_hardware`, `gpu_render`, `gpu_instance`, `gpu_tangents`, `gpu_denoise`, `gpu_cuda_runtime`, `gpu_acceleration_contract`, `gpu_clustered_geometry`, `gpu_cluster_lod`, `gpu_dynamic_geometry` |
 | GPU physics/contracts | `gpu_polarization`, `gpu_volume`, `gpu_contract`, `gpu_wave_optics` |
-| Host core | `test_world`, `test_asset_pipeline`, `test_config`, `test_runtime_contract`, `test_acceleration_contract`, `test_clustered_geometry`, `test_cluster_lod`, `test_dynamic_geometry`, `test_resource_plan`, `test_execution_graph`, `test_multi_backend_schedule`, `test_spectral_oracle`, `test_wave_optics`, `test_integrator`, `test_mie_phase` |
+| Host core | `test_world`, `test_asset_pipeline`, `test_config`, `test_runtime_contract`, `test_acceleration_contract`, `test_clustered_geometry`, `test_cluster_lod`, `test_dynamic_geometry`, `test_resource_plan`, `test_execution_graph`, `test_multi_backend_schedule`, `test_spectral_oracle`, `test_wave_optics`, `test_local_fullwave`, `test_integrator`, `test_mie_phase` |
 | Host scene/material/session | `test_native_scene`, `test_native_scene_ir`, `test_native_procedural_graph`, `test_native_script_build`, `test_native_resource_catalog`, `test_native_solver_contract`, `test_native_simulation_contract`, `test_native_tooling`, `test_native_adapter`, `test_native_compiled_cache`, `test_native_validation_suite`, `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io` |
 | Python | `test_pyure_smoke` |
 | Vulkan | `vulkan_runtime`, `vulkan_acceleration` |
 | D3D12 | `d3d12_runtime` |
 | Multi-backend | `multi_backend_inventory` |
-| **CTest total** | **54 registered tests** in `build_modular_x64` |
+| **CTest total** | **55 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -437,10 +437,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 43 | 2026-07-29 W.6 | Added bounded fluorescence and phosphorescence transport | SceneIR/native/MaterialX preserve normalized Stokes-shift excitation-emission resources. Forward host sampling and adjoint CUDA camera transport conserve radiant energy, update joint wavelength PDFs, preserve detector wavelength separately from transport wavelength, depolarize, retain medium identity and carry exponential lifetime delay. Unsupported modes and immutable hot updates fail loudly; cursor advanced to W.7. |
 | 44 | 2026-07-29 W.7 | Established bounded partial-coherence reference transport | Hermitian PSD cross-spectral density, Gaussian-Schell sources, deterministic coherent realizations, Jones/OPL generalized rays, temporal/interferometric oracles and speckle statistics now share a bounded host contract. CUDA reduces weighted ensembles to mutual intensity, while raw-field film merge preserves coherent-before-incoherent averaging. Production partial-coherence sessions and serialized coherent farm frames remain fail-loud; cursor advanced to W.9. |
 | 45 | 2026-07-29 W.9 | Established spectral anisotropic modal-segment transport | Positive-definite dielectric-impermeability and passive extinction tensors now drive transverse displacement eigenmodes and one exact complex generator for birefringence, dichroism and optical activity. Principal/biaxial, uniaxial, liquid-crystal and stress-optic factories, spectral interpolation and CUDA parity are bounded and fail closed. Scene-integrated interfaces, walk-off/ray splitting and production Jones queues remain unavailable; cursor advanced to W.10. |
+| 46 | 2026-07-29 W.10 | Established bounded local full-wave coupling | Versioned SDK-free byte envelopes negotiate RCWA/FDTD/FEM/BEM/FMM/DDA/S-matrix providers by capability, binary and semantic identity. Exact-grid passive Jones tables, solver convergence/error/budget evidence and request/provider-bound deterministic cache entries fail closed before W.5 host/CUDA consumption. No solver, ambient subprocess policy or scene-scale Maxwell discretization is claimed; cursor advanced to W.11. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, and Phase V are complete; Phase W.2, W.5, W.6, W.7 and W.9 are complete and the authoritative construction cursor is W.10.
+- Phase Q, Phase M, Phase R, Phase T, and Phase V are complete; Phase W.2, W.5, W.6, W.7, W.9 and W.10 are complete and the authoritative construction cursor is W.11.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 2); a 2026-07-28 stress run on the 16 GiB CUDA 13 workstation reduced the three heaviest translation-unit critical path from about 602 seconds serial to 362 seconds, while depth 3 was slower. Host and unrelated targets remain globally parallel.
