@@ -30,6 +30,7 @@ $currentDocuments = @(
     "docs/HO_1_Unified_Semantics.md",
     "docs/HO_2_Executable_Research_Substrate.md",
     "docs/HT_0_Legacy_Technique_Graph.md",
+    "docs/HR_0_Measurement_Bundle.md",
     "docs/Phase_R_P6_Mie_Volume_Resources.md", "docs/Phase_W_Wave_Optics_Audit.md",
     "docs/Phase_W_W12_Validation.md"
 )
@@ -57,6 +58,7 @@ foreach ($file in $executionRecords) {
 & (Join-Path $root "scripts/check_phase_ho1_semantics.ps1") -RepoRoot $root
 & (Join-Path $root "scripts/check_phase_ho2_research_substrate.ps1") -RepoRoot $root
 & (Join-Path $root "scripts/check_phase_ht0_technique_graph.ps1") -RepoRoot $root
+& (Join-Path $root "scripts/check_phase_hr0_measurement_bundle.ps1") -RepoRoot $root
 
 $markdownFiles = @(Get-ChildItem -LiteralPath $root -File -Recurse -Filter "*.md" | Where-Object {
     $_.FullName -notmatch '[\\/]third_party[\\/]' -and

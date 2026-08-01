@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HR.0 — MeasurementBundle / Feature Film
+当前游标: HT.1 — Support/Measure Graph 与组合器
 
 ### 0.1 唯一生产施工队列
 
@@ -34,7 +34,7 @@ HO.2 executable research substrate                      [done]
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
 HT transport     HR reconstruction HW physical world HD differentiation
-[HT.0 done]      [HR.0 current]
+[HT.1 current]   [HR.0 done]
     │              │                │                │
     └──────────────┴────────┬───────┴────────────────┘
                             ▼
@@ -404,6 +404,8 @@ MCMC 链、相关复用、biased preview 和不同 observable 必须使用各自
 ### HR.0 — MeasurementBundle / Feature Film
 
 **依赖**: HO.1、HO.2；必须在大规模积分器改造前稳定第一版。
+
+**状态**: 已完成（2026-08-01）。新增 SDK-free `ure_reconstruction`，冻结 typed plane、SI unit、observable、validity、provenance、retention/budget loss 与 schema identity；实现按 sample range/producer canonical ordering 的 additive/invariant/append/derived merge，使用 count/raw moments 重算 ESS、sample variance/covariance，并以 HO.2 `UREM` 提供自包含 checkpoint、前置索引、逐 plane authenticated partial read 和 bounded RLE。现有 CUDA framebuffer/AOV producer 保持不变，不虚报尚未接入的高阶 plane。独立 SDK-free 8/8、installed package consumer 与 Release 61/61 CTest 通过。详见 `docs/HR_0_Measurement_Bundle.md`。
 
 MeasurementBundle 至少支持可预算选择的以下层次：
 

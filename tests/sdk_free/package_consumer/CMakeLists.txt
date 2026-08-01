@@ -3,7 +3,7 @@ project(UltraRenderSdkFreeConsumer LANGUAGES CXX)
 
 find_package(
     UltraRender REQUIRED
-    COMPONENTS ure_types ure_runtime ure_transport ure_research ure_sceneio ure_config)
+    COMPONENTS ure_types ure_runtime ure_transport ure_research ure_reconstruction ure_sceneio ure_config)
 
 add_executable(ultrarender_sdk_free_consumer main.cpp)
 target_compile_features(
@@ -14,6 +14,7 @@ target_link_libraries(
     UltraRender::ure_runtime
     UltraRender::ure_transport
     UltraRender::ure_research
+    UltraRender::ure_reconstruction
     UltraRender::ure_sceneio
     UltraRender::ure_config)
 

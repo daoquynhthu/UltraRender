@@ -52,6 +52,23 @@ target_link_libraries(ure_research_sdk_free PUBLIC
     ure_transport_sdk_free
 )
 
+add_library(ure_reconstruction_sdk_free STATIC
+    "${URE_ROOT}/libs/ure_reconstruction/src/checkpoint.cpp"
+    "${URE_ROOT}/libs/ure_reconstruction/src/measurement.cpp"
+)
+target_include_directories(ure_reconstruction_sdk_free PUBLIC
+    "${URE_ROOT}/libs/ure_types/include"
+    "${URE_ROOT}/libs/ure_runtime/include"
+    "${URE_ROOT}/libs/ure_transport/include"
+    "${URE_ROOT}/libs/ure_research/include"
+    "${URE_ROOT}/libs/ure_reconstruction/include"
+)
+target_link_libraries(ure_reconstruction_sdk_free PUBLIC
+    ure_runtime_sdk_free
+    ure_transport_sdk_free
+    ure_research_sdk_free
+)
+
 add_executable(test_resource_plan_sdk_free
     "${URE_ROOT}/tests/host/test_resource_plan.cpp"
 )
@@ -104,6 +121,12 @@ add_executable(test_research_substrate_sdk_free
 target_link_libraries(test_research_substrate_sdk_free PRIVATE
     ure_research_sdk_free
 )
+add_executable(test_measurement_bundle_sdk_free
+    "${URE_ROOT}/tests/host/test_measurement_bundle.cpp"
+)
+target_link_libraries(test_measurement_bundle_sdk_free PRIVATE
+    ure_reconstruction_sdk_free
+)
 target_include_directories(test_public_surface_sdk_free PRIVATE
     "${URE_ROOT}/libs/ure_core/include"
     "${URE_ROOT}/libs/ure_sceneio/include"
@@ -142,6 +165,12 @@ if(MSVC)
     target_compile_options(test_research_substrate_sdk_free PRIVATE
         /W4 /WX /utf-8 /EHsc /wd4819
     )
+    target_compile_options(ure_reconstruction_sdk_free PRIVATE
+        /W4 /WX /utf-8 /EHsc /wd4819
+    )
+    target_compile_options(test_measurement_bundle_sdk_free PRIVATE
+        /W4 /WX /utf-8 /EHsc /wd4819
+    )
 else()
     target_compile_options(ure_runtime_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
@@ -173,6 +202,12 @@ else()
     target_compile_options(test_research_substrate_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
     )
+    target_compile_options(ure_reconstruction_sdk_free PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+    )
+    target_compile_options(test_measurement_bundle_sdk_free PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+    )
 endif()
 
 enable_testing()
@@ -183,3 +218,4 @@ add_test(NAME public_surface_sdk_free COMMAND test_public_surface_sdk_free)
 add_test(NAME high_order_semantics_sdk_free COMMAND test_high_order_semantics_sdk_free)
 add_test(NAME technique_graph_sdk_free COMMAND test_technique_graph_sdk_free)
 add_test(NAME research_substrate_sdk_free COMMAND test_research_substrate_sdk_free)
+add_test(NAME measurement_bundle_sdk_free COMMAND test_measurement_bundle_sdk_free)

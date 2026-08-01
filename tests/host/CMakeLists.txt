@@ -39,6 +39,16 @@ add_test(
     COMMAND test_technique_graph)
 
 add_executable(
+    test_measurement_bundle
+    test_measurement_bundle.cpp)
+target_link_libraries(
+    test_measurement_bundle PRIVATE
+    ure_reconstruction ure_runtime)
+add_test(
+    NAME test_measurement_bundle
+    COMMAND test_measurement_bundle)
+
+add_executable(
     test_research_substrate
     test_research_substrate.cpp)
 target_link_libraries(
