@@ -1,0 +1,162 @@
+{
+  "schema": "ure.research.measurement-gap-matrix/1.0",
+  "snapshot_date": "2026-08-01",
+  "current_contract": {
+    "framebuffer": "linear RGB float vector",
+    "aov_source": "libs/ure_core/include/ure/render.hpp",
+    "planes": [
+      {"name": "Beauty", "channels": 3, "semantic": "linear_rgb", "validity": "all_pixels"},
+      {"name": "Normal", "channels": 3, "semantic": "first_hit_shading_normal", "validity": "surface_hit"},
+      {"name": "Albedo", "channels": 3, "semantic": "first_hit_display_domain_albedo", "validity": "surface_hit"},
+      {"name": "Depth", "channels": 1, "semantic": "camera_visible_hit_distance", "validity": "surface_hit"},
+      {"name": "Uv", "channels": 2, "semantic": "first_hit_texture_coordinate", "validity": "surface_hit"},
+      {"name": "MotionVector", "channels": 2, "semantic": "current_minus_previous_screen_delta", "validity": "camera_motion_only"}
+    ],
+    "source_assertions": [
+      {"path": "libs/ure_core/include/ure/render.hpp", "pattern": "enum class AovType"},
+      {"path": "libs/ure_core/include/ure/session.hpp", "pattern": "const std::vector<float>& get_aov"},
+      {"path": "libs/ure_core/src/gpu_engine_impl.cpp", "pattern": "const std::vector<float>& get_framebuffer"}
+    ]
+  },
+  "gaps": [
+    {
+      "id": "HO-MEAS-001",
+      "field": "spectral_stokes_contribution",
+      "producer": "terminal_transport_accumulation",
+      "consumers": ["HT.1", "HR.1", "HR.2", "HD.3"],
+      "cost_class": "high_packet_or_sufficient_statistics",
+      "retention": "required_typed_plane",
+      "loss_if_omitted": "spectral and polarization reconstruction becomes impossible after RGB resolve",
+      "current_evidence": "Gpu path state carries spectral/Stokes data but the public film resolves to RGB",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/render.hpp", "pattern": "Linear RGB float"},
+        {"path": "libs/ure_core/include/ure/detail/cuda_structs.cuh", "pattern": "stokes"}
+      ]
+    },
+    {
+      "id": "HO-MEAS-002",
+      "field": "detector_transport_wavelength_and_joint_pdf",
+      "producer": "spectral_sampling_and_fluorescence_transition",
+      "consumers": ["HT.1", "HR.2", "HD.3"],
+      "cost_class": "medium_per_sample_or_binned",
+      "retention": "required_for_shifted_wavelength_paths",
+      "loss_if_omitted": "cannot distinguish detector response from transport wavelength or audit spectral weights",
+      "current_evidence": "Fluorescence transport retains the distinction internally but session output does not",
+      "source_assertions": [
+        {"path": "libs/ure_core/src/path_tracer_fluorescence_material.cuh", "pattern": "copy_film_wavelengths"},
+        {"path": "libs/ure_core/include/ure/render.hpp", "pattern": "enum class AovType"}
+      ]
+    },
+    {
+      "id": "HO-MEAS-003",
+      "field": "technique_support_and_combination_weight",
+      "producer": "Technique_Graph_estimator_nodes",
+      "consumers": ["HT.2", "HT.3", "HR.3", "HD.1"],
+      "cost_class": "low_strata_plus_optional_per_sample",
+      "retention": "required_for_portfolio_attribution",
+      "loss_if_omitted": "variance and bias cannot be attributed to a technique or recombined safely",
+      "current_evidence": "Only one IntegratorEstimatorMetadata mode/policy is public",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/render.hpp", "pattern": "struct IntegratorEstimatorMetadata"},
+        {"path": "libs/ure_core/src/gpu_engine_impl.cpp", "pattern": "metadata.mode = config.integrator.mode"}
+      ]
+    },
+    {
+      "id": "HO-MEAS-004",
+      "field": "path_event_signature_and_depth",
+      "producer": "wavefront_and_advanced_path_queues",
+      "consumers": ["HT.2", "HR.2", "HD.1", "HD.2"],
+      "cost_class": "bounded_signature",
+      "retention": "required_compact_signature_optional_full_record",
+      "loss_if_omitted": "reconstruction and differentiation cannot separate diffuse, delta, volume and wavelength-shift events",
+      "current_evidence": "Path events exist in private GPU queues and replay records only",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/detail/cuda_structs.cuh", "pattern": "depths = nullptr"},
+        {"path": "libs/ure_core/include/ure/integrator/restir_pt.cuh", "pattern": "GpuRestirPathVertexKind"}
+      ]
+    },
+    {
+      "id": "HO-MEAS-005",
+      "field": "sample_range_chain_and_replay_identity",
+      "producer": "global_scheduler_and_rng",
+      "consumers": ["HT.3", "HD.0", "HO.2"],
+      "cost_class": "low_per_stratum",
+      "retention": "mandatory_provenance",
+      "loss_if_omitted": "independence, replay and distributed overlap cannot be proven",
+      "current_evidence": "Distributed and MLT paths own identities but framebuffer/AOV access does not expose one common record",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/distributed_contract.hpp", "pattern": "SampleRange"},
+        {"path": "libs/ure_types/include/ure/render_config.hpp", "pattern": "chain_id_offset"}
+      ]
+    },
+    {
+      "id": "HO-MEAS-006",
+      "field": "moments_cross_moments_variance_covariance",
+      "producer": "typed_measurement_accumulators",
+      "consumers": ["HT.2", "HT.3", "HR.1", "HR.5"],
+      "cost_class": "medium_configurable",
+      "retention": "mandatory_first_second_moments_optional_cross_moments",
+      "loss_if_omitted": "automatic allocation and uncertainty estimates must infer statistics from resolved images",
+      "current_evidence": "Public session returns accumulated values without general moment planes",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/session.hpp", "pattern": "get_framebuffer"},
+        {"path": "libs/ure_core/include/ure/render.hpp", "pattern": "enum class AovType"}
+      ]
+    },
+    {
+      "id": "HO-MEAS-007",
+      "field": "world_state_time_and_observation_snapshot_identity",
+      "producer": "HW.0_snapshot_compiler",
+      "consumers": ["HT.3", "HR.4", "HD.0", "HW.7"],
+      "cost_class": "low_per_bundle",
+      "retention": "mandatory_provenance",
+      "loss_if_omitted": "history and distributed results can combine different physical states",
+      "current_evidence": "Estimator metadata has scene_epoch but no world/state/time/snapshot identity",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/render.hpp", "pattern": "scene_epoch"},
+        {"path": "libs/ure_sceneio/include/ure/native_simulation_contract.hpp", "pattern": "TimeSamplingContract"}
+      ]
+    },
+    {
+      "id": "HO-MEAS-008",
+      "field": "bounded_sample_records_or_compressed_sufficient_statistics",
+      "producer": "transport_and_sensor_nodes",
+      "consumers": ["HR.2", "HR.3", "HD.0"],
+      "cost_class": "high_budgeted_tier",
+      "retention": "optional_but_schema_required",
+      "loss_if_omitted": "sample-level reconstruction and replay research require ad-hoc private dumps",
+      "current_evidence": "ReSTIR and MLT own specialized private records with no shared measurement container",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/integrator/restir_pt.cuh", "pattern": "struct GpuRestirPathSuffix"},
+        {"path": "libs/ure_core/include/ure/detail/cuda_context.cuh", "pattern": "mlt_primary"}
+      ]
+    },
+    {
+      "id": "HO-MEAS-009",
+      "field": "typed_complex_jones_and_mutual_intensity_planes",
+      "producer": "coherent_or_generalized_transport",
+      "consumers": ["HR.2", "HD.3"],
+      "cost_class": "high_separate_observable",
+      "retention": "mandatory_when_observable_is_enabled",
+      "loss_if_omitted": "phase and coherence are irreversibly destroyed by RGB accumulation",
+      "current_evidence": "Distributed v6 has typed files but RenderSession has no typed coherent film",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/distributed_contract.hpp", "pattern": "ComplexField"},
+        {"path": "libs/ure_core/include/ure/render.hpp", "pattern": "Linear RGB float"}
+      ]
+    },
+    {
+      "id": "HO-MEAS-010",
+      "field": "uncertainty_confidence_and_out_of_distribution_status",
+      "producer": "statistical_and_learned_reconstruction",
+      "consumers": ["HR.5", "HD.5", "HO.C4"],
+      "cost_class": "low_output_planes_plus_model_evidence",
+      "retention": "mandatory_for_reconstructed_output",
+      "loss_if_omitted": "a plausible reconstruction cannot be distinguished from supported inference",
+      "current_evidence": "No current AOV represents uncertainty, confidence or OOD",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/render.hpp", "pattern": "MotionVector = 5"}
+      ]
+    }
+  ]
+}

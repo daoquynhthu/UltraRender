@@ -1,0 +1,43 @@
+{
+  "schema": "ure.research.capsule/1.0",
+  "id": "ho0-boundary-taxonomy-coverage-2026-08-01",
+  "maturity": "Research",
+  "question": "Can the explicit fail-loud diagnostic surface be classified without treating every rejection as accidental debt?",
+  "hypothesis": "The expanded taxonomy, including SchemaIdentityBoundary, classifies every scanned explicit diagnostic exactly once.",
+  "inputs": {
+    "source_identity": "current committed source plus HO.0 ledger",
+    "configuration": {
+      "ledger": "docs/research/ho0/capability_boundary_ledger.json",
+      "scan_kind": "quoted diagnostic lexical scan"
+    },
+    "source_assertions": [
+      {"path": "PLAN.md", "pattern": "Schema/Identity Boundary"},
+      {"path": "docs/research/ho0/capability_boundary_ledger.json", "pattern": "expected_total_matches"}
+    ]
+  },
+  "reproducibility": {
+    "seed_policy": "No random input; repository source is content-addressed by the Git commit used for replay.",
+    "replay_command": ".\\scripts\\check_phase_ho0_baseline.ps1 -ReportPath build_modular_x64\\ho0_baseline_report.json",
+    "determinism": "The same source tree and PowerShell JSON parser produce the same classified line inventory."
+  },
+  "baseline": "An undifferentiated unsupported/unavailable keyword count that conflates physical, schema, backend and accidental boundaries.",
+  "candidate": "Ordered, non-overlapping ledger coverage rules with an expected count and owner for each boundary class.",
+  "metrics": [
+    {"name": "discovered_boundary_lines", "expected": 92},
+    {"name": "unclassified_boundary_lines", "expected": 0},
+    {"name": "multiply_classified_boundary_lines", "expected": 0}
+  ],
+  "artifacts": [
+    {"kind": "machine_readable_report", "path": "build_modular_x64/ho0_baseline_report.json", "retention": "regenerable_not_committed"},
+    {"kind": "classification_ledger", "path": "docs/research/ho0/capability_boundary_ledger.json", "retention": "committed_authoritative_baseline"}
+  ],
+  "result": {
+    "outcome": "positive",
+    "conclusion": "The explicit quoted diagnostic snapshot is completely classified; schema incompatibility is a distinct durable boundary, not accidental implementation debt."
+  },
+  "known_failure_domain": [
+    "Typed status values without diagnostic strings are outside the lexical count.",
+    "A broad semantic boundary expressed only by control flow still needs a manual ledger anchor.",
+    "Source changes intentionally fail the snapshot until the ledger is reviewed."
+  ]
+}

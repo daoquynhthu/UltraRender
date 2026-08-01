@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HO.0 — 能力债务普查与研究基线
+当前游标: HO.1 — 统一语义与架构合同
 
 ### 0.1 唯一生产施工队列
 
@@ -23,10 +23,10 @@
 Legacy construction plan Q/R/T/V/W/U                    [done]
     │
     ▼
-HO.0 capability debt and research baseline              [current]
+HO.0 capability debt and research baseline              [done]
     │
     ▼
-HO.1 unified semantics and architectural contracts      [planned]
+HO.1 unified semantics and architectural contracts      [current]
     │
     ▼
 HO.2 executable research substrate                      [planned]
@@ -185,6 +185,7 @@ Research Capsule 不强制一种论文目录格式。HO.0 将冻结最小机器�
 | Resource/Budget Boundary | 内存、队列、栈、时间或精度不足 | 预检、分块或显式有损模式；禁止 OOM 后碰运气 |
 | Insufficient Evidence | 路径存在但证据不足 | 保持 Experimental，不等于算法错误 |
 | Explicit Lossy Projection | adapter/preview 主动丢失语义 | 必须有 loss report、可发现标记和非默认策略 |
+| Schema/Identity Boundary | 输入版本、编码、observable 或 artifact identity 不相容 | 保留版本化拒绝或显式迁移；不能把未知数据按当前布局解释 |
 | Accidental Debt | 无架构理由的互斥、重复状态、弱数据合同 | 排入修复队列并定义移除证据 |
 
 路线目标不是机械减少异常数量，而是消灭未分类、不可追踪和本可组合却因旧结构造成的 accidental debt。
@@ -204,7 +205,7 @@ Research Capsule 不强制一种论文目录格式。HO.0 将冻结最小机器�
 
 ### HO.0 — 能力债务普查与研究基线
 
-**状态**: 当前施工项。
+**状态**: 已完成（2026-08-01）。机器可读 ledger、八种积分器 inventory、十类 measurement gap、十一项 state ownership、Research Capsule v1 和七类 benchmark family 已由 `scripts/check_phase_ho0_baseline.ps1` 闭环；详见 `docs/HO_0_Capability_Baseline.md`。
 
 **目标**: 在改变核心 API 前，把真实能力、组合禁区、缺失信息和研究证据统一为可查询的事实。
 

@@ -1,0 +1,173 @@
+{
+  "schema": "ure.research.state-ownership-map/1.0",
+  "snapshot_date": "2026-08-01",
+  "target_layers": [
+    "AuthoringState",
+    "CanonicalDynamicState",
+    "SolverPrivateState",
+    "CouplingTransferState",
+    "ObservationSnapshot",
+    "DerivedBackendState"
+  ],
+  "nodes": [
+    {
+      "id": "native_scene_authoring",
+      "current_owner": "ure_sceneio_native_scene",
+      "authority": "authoritative_source",
+      "mutability": "immutable_after_load_or_transactional_rebuild",
+      "time_semantics": "simulation_contract_rational_ticks_but_scene_payload_is_mostly_static",
+      "target_layer": "AuthoringState",
+      "risk": "solver_and_observation_identity_are_not_unified_with_scene_identity",
+      "owner_phase": "HW.0",
+      "source_assertions": [
+        {"path": "libs/ure_types/include/ure/native_scene.hpp", "pattern": "struct SceneDocument"},
+        {"path": "libs/ure_sceneio/include/ure/native_simulation_contract.hpp", "pattern": "NativeSimulationContract"}
+      ]
+    },
+    {
+      "id": "scene_ir_retained_snapshot",
+      "current_owner": "RenderSession.current_scene_ir_",
+      "authority": "retained_compiled_input",
+      "mutability": "transactional_scene_diff_then_reload_or_hot_update",
+      "time_semantics": "scene_epoch_only",
+      "target_layer": "ObservationSnapshot",
+      "risk": "compiled scene snapshot is not identified as a physical world state or shutter interval",
+      "owner_phase": "HW.0",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/session.hpp", "pattern": "current_scene_ir_"},
+        {"path": "libs/ure_core/include/ure/scene_diff.hpp", "pattern": "struct SceneDiff"}
+      ]
+    },
+    {
+      "id": "legacy_world_ecs",
+      "current_owner": "ure_types.World",
+      "authority": "secondary_scene_and_runtime_container",
+      "mutability": "direct_mutable_vectors",
+      "time_semantics": "none",
+      "target_layer": "CanonicalDynamicState",
+      "risk": "duplicates camera_render_config_material_geometry_and_physics_config_without state identity or transactions",
+      "owner_phase": "HW.0",
+      "source_assertions": [
+        {"path": "libs/ure_types/include/ure/world.hpp", "pattern": "struct World"},
+        {"path": "libs/ure_types/include/ure/world.hpp", "pattern": "PhysicsConfig physics_config"}
+      ]
+    },
+    {
+      "id": "physics_config",
+      "current_owner": "SceneIR_and_World_configuration",
+      "authority": "authoring_configuration",
+      "mutability": "copied_value",
+      "time_semantics": "dt_and_total_frames_only",
+      "target_layer": "AuthoringState",
+      "risk": "cannot identify solver semantics_boundary_conditions_or_multi_rate_time",
+      "owner_phase": "HW.1",
+      "source_assertions": [
+        {"path": "libs/ure_types/include/ure/ure_api.hpp", "pattern": "struct PhysicsConfig"}
+      ]
+    },
+    {
+      "id": "physics_world_runtime",
+      "current_owner": "ure_physics.PhysicsWorld",
+      "authority": "mutable_solver_runtime",
+      "mutability": "in_place_step",
+      "time_semantics": "caller_supplied_float_dt",
+      "target_layer": "SolverPrivateState",
+      "risk": "bodies_colliders_fluid_acoustic_and_listeners mutate without canonical state publication_checkpoint_or identity",
+      "owner_phase": "HW.2",
+      "source_assertions": [
+        {"path": "libs/ure_physics/include/ure/physics/physics_world.hpp", "pattern": "void step"},
+        {"path": "libs/ure_physics/include/ure/physics/physics_world.hpp", "pattern": "std::shared_ptr<FluidSystem> fluid_system"}
+      ]
+    },
+    {
+      "id": "fluid_system_runtime",
+      "current_owner": "ure_physics.FluidSystem",
+      "authority": "solver_private_particle_state",
+      "mutability": "in_place_step_and_particle_vectors",
+      "time_semantics": "float_dt",
+      "target_layer": "SolverPrivateState",
+      "risk": "density_temperature_composition_and optical transfer fields are absent",
+      "owner_phase": "HW.5",
+      "source_assertions": [
+        {"path": "libs/ure_physics/include/ure/physics/fluid_system.hpp", "pattern": "class FluidSystem"}
+      ]
+    },
+    {
+      "id": "acoustic_runtime",
+      "current_owner": "ure_physics.AcousticSystem",
+      "authority": "solver_private_audio_state",
+      "mutability": "independent_runtime_state",
+      "time_semantics": "audio_or_frame_specific_internal_state",
+      "target_layer": "SolverPrivateState",
+      "risk": "coupling uses direct object references/events rather than versioned fields and transfer operators",
+      "owner_phase": "HW.2",
+      "source_assertions": [
+        {"path": "libs/ure_physics/include/ure/physics/acoustic/acoustic_system.hpp", "pattern": "class AcousticSystem"},
+        {"path": "libs/ure_physics/include/ure/physics/physics_world.hpp", "pattern": "register_listener"}
+      ]
+    },
+    {
+      "id": "native_simulation_contract",
+      "current_owner": "ure_sceneio.NativeSimulationContract",
+      "authority": "authoritative_solver_request_contract",
+      "mutability": "versioned_serialized_value",
+      "time_semantics": "rational_tick_interval_step_and_synchronization_epoch",
+      "target_layer": "AuthoringState",
+      "risk": "compiler lowers only coarse PhysicsConfig and retains unsupported domains; coupling has semantics but no executable transfer operator",
+      "owner_phase": "HW.2",
+      "source_assertions": [
+        {"path": "libs/ure_sceneio/include/ure/native_simulation_contract.hpp", "pattern": "struct TimeSamplingContract"},
+        {"path": "libs/ure_sceneio/src/native_simulation_contract.cpp", "pattern": "CompiledSimulationContract compile_simulation_contract"}
+      ]
+    },
+    {
+      "id": "scene_diff_mutation",
+      "current_owner": "ure_core.SceneDiff",
+      "authority": "mutation_request",
+      "mutability": "transactional_for_selected_mesh_material_transform_paths",
+      "time_semantics": "none_beyond_accumulation_reset",
+      "target_layer": "CanonicalDynamicState",
+      "risk": "does_not_express_field_dependencies_solver_events_or_partial_observation_invalidation",
+      "owner_phase": "HW.0",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/scene_diff.hpp", "pattern": "struct SceneDiff"},
+        {"path": "libs/ure_core/src/session.cpp", "pattern": "mutate_scene"}
+      ]
+    },
+    {
+      "id": "gpu_scene_context",
+      "current_owner": "ure_core_private_backend",
+      "authority": "derived_backend_state",
+      "mutability": "uploads_hot_updates_and_rebuilds",
+      "time_semantics": "scene_epoch_and_progressive_pass",
+      "target_layer": "DerivedBackendState",
+      "risk": "backend allocation identity is not bound to world_state_time_and_observation_snapshot",
+      "owner_phase": "HW.0",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/detail/cuda_context.cuh", "pattern": "struct GpuContext"},
+        {"path": "libs/ure_core/include/ure/render.hpp", "pattern": "scene_epoch"}
+      ]
+    },
+    {
+      "id": "distributed_frame_state",
+      "current_owner": "ure_core_distributed_contract",
+      "authority": "derived_measurement_shard",
+      "mutability": "immutable_file_then_transactional_merge",
+      "time_semantics": "frame_and_sample_range_provenance_without_canonical_world_snapshot",
+      "target_layer": "ObservationSnapshot",
+      "risk": "worker_result_can_prove_resource_and_estimator_identity_but_not_yet_full_dynamic_world_state_identity",
+      "owner_phase": "HW.0",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/distributed_contract.hpp", "pattern": "DistributedFrameBuffer"},
+        {"path": "libs/ure_core/include/ure/distributed_contract.hpp", "pattern": "ResourceSetMetadata resources"}
+      ]
+    }
+  ],
+  "critical_findings": [
+    "World is a mutable secondary scene container, not a canonical dynamic state.",
+    "PhysicsWorld, FluidSystem and AcousticSystem own solver-private state without versioned publication.",
+    "NativeSimulationContract has useful rational time and coupling semantics but no executable transfer graph.",
+    "RenderSession retains SceneIR and scene_epoch but no world_state/time/observation_snapshot identity.",
+    "SceneDiff is the correct transactional seed but its dependency and invalidation model is too narrow."
+  ]
+}

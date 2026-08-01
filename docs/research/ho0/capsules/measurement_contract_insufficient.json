@@ -1,0 +1,44 @@
+{
+  "schema": "ure.research.capsule/1.0",
+  "id": "ho0-current-measurement-contract-insufficient-2026-08-01",
+  "maturity": "Research",
+  "question": "Can the current framebuffer and six AOVs support technique-aware spectral/polarimetric reconstruction and replay without a new measurement contract?",
+  "hypothesis": "The current public output contract is insufficient because it omits at least the ten independently required information classes in the Measurement Gap Matrix.",
+  "inputs": {
+    "source_identity": "current RenderSession and IRenderEngine public surface",
+    "configuration": {
+      "current_contract": "libs/ure_core/include/ure/render.hpp",
+      "gap_matrix": "docs/research/ho0/measurement_gap_matrix.json"
+    },
+    "source_assertions": [
+      {"path": "libs/ure_core/include/ure/render.hpp", "pattern": "MotionVector = 5"},
+      {"path": "libs/ure_core/include/ure/render.hpp", "pattern": "Linear RGB float"},
+      {"path": "docs/research/ho0/measurement_gap_matrix.json", "pattern": "typed_complex_jones_and_mutual_intensity_planes"}
+    ]
+  },
+  "reproducibility": {
+    "seed_policy": "No random input; compare the public enum and API surface against the versioned gap matrix.",
+    "replay_command": ".\\scripts\\check_phase_ho0_baseline.ps1 -ReportPath build_modular_x64\\ho0_baseline_report.json",
+    "determinism": "The source and matrix cardinalities are deterministic."
+  },
+  "baseline": "Beauty, Normal, Albedo, Depth, UV and MotionVector vectors exposed by RenderSession.",
+  "candidate": "A future typed MeasurementBundle carrying observable, estimator, moment, state and replay provenance under explicit budgets.",
+  "metrics": [
+    {"name": "current_aov_planes", "expected": 6},
+    {"name": "required_measurement_gap_classes", "expected": 10},
+    {"name": "current_typed_spectral_stokes_planes", "expected": 0}
+  ],
+  "artifacts": [
+    {"kind": "machine_readable_report", "path": "build_modular_x64/ho0_baseline_report.json", "retention": "regenerable_not_committed"},
+    {"kind": "gap_matrix", "path": "docs/research/ho0/measurement_gap_matrix.json", "retention": "committed_authoritative_baseline"}
+  ],
+  "result": {
+    "outcome": "negative",
+    "conclusion": "The current output surface cannot recover information already destroyed by RGB resolve; HR.0 must precede production neural or spectral/polarimetric reconstruction."
+  },
+  "known_failure_domain": [
+    "Private GPU records can support isolated experiments but do not form a stable cross-integrator measurement contract.",
+    "Distributed coherent files preserve some typed observables but are not RenderSession films.",
+    "The cardinality comparison proves contract absence, not the final optimal MeasurementBundle layout."
+  ]
+}

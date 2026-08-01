@@ -1,0 +1,167 @@
+{
+  "schema": "ure.research.integrator-inventory/1.0",
+  "snapshot_date": "2026-08-01",
+  "authoritative_source": "libs/ure_types/include/ure/render_config.hpp",
+  "central_debt": {
+    "summary": "IntegratorMode is a single authoritative selector while guiding, reuse, manifold, bidirectional, VCM and MLT also own independent enable/config state.",
+    "owner_phase": "HT.0",
+    "source_assertions": [
+      {"path": "libs/ure_types/include/ure/render_config.hpp", "pattern": "IntegratorMode mode = IntegratorMode::Wavefront"},
+      {"path": "libs/ure_core/src/gpu_engine_impl.cpp", "pattern": "metadata.mode = config.integrator.mode"}
+    ]
+  },
+  "techniques": [
+    {
+      "id": "wavefront_pt",
+      "legacy_mode": "Wavefront",
+      "target_role": "defensive_full_support_baseline",
+      "observable": "spectral_stokes_radiance_resolved_to_linear_rgb",
+      "sample_space": "camera_path_dimensions",
+      "support": "ordinary_surface_and_volume_camera_paths_with_declared_wave_boundaries",
+      "density_contract": "forward_path_pdf_with_explicit_wavelength_pdf",
+      "normalization": "iid_sample_mean",
+      "correlation": "independent_counter_based_sample_ranges",
+      "bias_class": "unbiased_within_declared_transport_model",
+      "persistent_state": "film_and_wavefront_queues",
+      "differentiability": "replay_dimensions_exist_but_no_parameter_or_adjoint_contract",
+      "combination_status": "baseline_only_until_HT.1",
+      "source_assertions": [
+        {"path": "libs/ure_types/include/ure/render_config.hpp", "pattern": "Wavefront"},
+        {"path": "libs/ure_core/src/path_tracer_host_api.cu", "pattern": "render_pass_gpu"}
+      ]
+    },
+    {
+      "id": "path_guiding",
+      "legacy_mode": "PathGuided",
+      "target_role": "shared_directional_and_light_proposal_service",
+      "observable": "same_as_wavefront_pt",
+      "sample_space": "wavefront_camera_paths_with_learned_spatial_directional_proposal",
+      "support": "wavefront_support_with_defensive_mixture",
+      "density_contract": "proposal_and_matching_mixture_pdf_are_present",
+      "normalization": "iid_sample_mean_with_adaptive_history",
+      "correlation": "history_adaptive_epoch_state",
+      "bias_class": "intended_unbiased_under_matching_pdf_and_epoch_validity",
+      "persistent_state": "spatial_directional_guide_cache",
+      "differentiability": "guide_selection_derivative_and_stop_gradient_policy_missing",
+      "combination_status": "manually_selected_mode_and_enabled_flag",
+      "source_assertions": [
+        {"path": "libs/ure_types/include/ure/render_config.hpp", "pattern": "struct PathGuidingConfig"},
+        {"path": "libs/ure_core/src/path_tracer_host_api.cu", "pattern": "plan_path_guiding_memory"}
+      ]
+    },
+    {
+      "id": "restir_di",
+      "legacy_mode": "RestirDI",
+      "target_role": "direct_light_candidate_reuse_layer",
+      "observable": "surface_or_volume_direct_spectral_stokes_radiance",
+      "sample_space": "current_temporal_and_spatial_light_candidates",
+      "support": "declared_surface_and_volume_reconnection_domains",
+      "density_contract": "GRIS_reservoir_weight_and_defensive_pairwise_MIS",
+      "normalization": "reservoir_effective_candidate_normalization",
+      "correlation": "temporal_spatial_reservoir_history",
+      "bias_class": "preview_biased_or_production_unbiased_variant",
+      "persistent_state": "double_buffered_per_pixel_reservoirs",
+      "differentiability": "reservoir_choice_and_history_derivative_missing",
+      "combination_status": "DI_and_PT_are_mutually_exclusive_in_estimator_metadata",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/integrator/restir_di.cuh", "pattern": "finalize_restir_di_gris_reservoir"},
+        {"path": "libs/ure_core/src/gpu_engine_impl.cpp", "pattern": "RestirDIUnbiasedProduction"}
+      ]
+    },
+    {
+      "id": "restir_pt",
+      "legacy_mode": "RestirPT",
+      "target_role": "bounded_path_suffix_reuse_layer",
+      "observable": "bounded_surface_or_scalar_depolarizing_volume_suffix_contribution",
+      "sample_space": "versioned_replay_dimension_interval_and_suffix_candidates",
+      "support": "diffuse_surface_and_scalar_depolarizing_volume_suffixes_up_to_configured_depth",
+      "density_contract": "stored_forward_reverse_pdf_and_shared_measure_conversion",
+      "normalization": "reservoir_normalization",
+      "correlation": "temporal_spatial_suffix_history",
+      "bias_class": "unbiased_only_inside_bounded_replay_contract",
+      "persistent_state": "reservoirs_suffix_candidates_and_telemetry",
+      "differentiability": "suffix_replay_seed_exists_but_selection_derivative_missing",
+      "combination_status": "specular_suffix_without_manifold_shift_rejected",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/integrator/restir_pt.cuh", "pattern": "forward_pdf"},
+        {"path": "libs/ure_core/src/restir_pt_runtime.cu", "pattern": "finalize_restir_pt_reservoir_kernel"}
+      ]
+    },
+    {
+      "id": "specular_manifold",
+      "legacy_mode": "SpecularManifold",
+      "target_role": "delta_chain_solver_and_proposal_provider",
+      "observable": "anchored_delta_path_spectral_stokes_contribution",
+      "sample_space": "root_seed_and_bounded_specular_chain",
+      "support": "anchored_delta_chains_with_supported_smooth_dielectric_materials",
+      "density_contract": "endpoint_area_Jacobian_and_reconstructed_strategy_probabilities",
+      "normalization": "independent_technique_accumulator_with_support_partition",
+      "correlation": "root_solve_candidates_per_camera_path",
+      "bias_class": "unbiased_within_bounded_support_and_root_selection_contract",
+      "persistent_state": "manifold_solutions_and_technique_AOV",
+      "differentiability": "Newton_differentials_exist_but_parameter_gradient_contract_missing",
+      "combination_status": "standalone_scheduled_mode_with_explicit_wavefront_partition",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/integrator/specular_manifold.cuh", "pattern": "endpoint_area_jacobian"},
+        {"path": "libs/ure_core/src/path_tracer_wavefront.cuh", "pattern": "manifold_sms_partition"}
+      ]
+    },
+    {
+      "id": "bdpt",
+      "legacy_mode": "BDPT",
+      "target_role": "bidirectional_connection_technique_family",
+      "observable": "spectral_stokes_sensor_measure_contribution",
+      "sample_space": "camera_and_light_subpaths_with_bounded_strategy_selection",
+      "support": "non_camera_delta_connection_strategies_inside_current_vertex_bounds",
+      "density_contract": "complete_path_forward_reverse_densities_and_power_heuristic",
+      "normalization": "bounded_strategy_probability_compensation",
+      "correlation": "iid_paths_with_rotating_deeper_strategy_selection",
+      "bias_class": "unbiased_for_declared_bounded_strategy_estimator",
+      "persistent_state": "camera_light_subpaths_and_connection_accumulator",
+      "differentiability": "reverse_pdf_data_exists_but_adjoint_contract_missing",
+      "combination_status": "selected_as_single_runtime_mode",
+      "source_assertions": [
+        {"path": "libs/ure_core/src/bidirectional_runtime.cu", "pattern": "connect_bidirectional_subpaths_kernel"},
+        {"path": "libs/ure_core/include/ure/integrator/bidirectional.cuh", "pattern": "GpuBidirectionalPathVertex"}
+      ]
+    },
+    {
+      "id": "vcm",
+      "legacy_mode": "VCM",
+      "target_role": "bidirectional_connection_and_vertex_merge_family",
+      "observable": "spectral_stokes_sensor_measure_contribution",
+      "sample_space": "BDPT_subpaths_plus_surface_or_volume_merge_neighborhood",
+      "support": "declared_connection_and_progressive_merge_domains",
+      "density_contract": "shared_connection_merge_MIS_denominator_and_dimensional_kernel",
+      "normalization": "progressive_radius_and_kernel_normalization",
+      "correlation": "iid_subpaths_with_progressive_iteration_state",
+      "bias_class": "consistent_progressive_estimator_inside_current_merge_contract",
+      "persistent_state": "light_vertices_spatial_hash_and_merge_accumulator",
+      "differentiability": "merge_radius_and_neighbor_selection_derivative_missing",
+      "combination_status": "selected_as_single_runtime_mode_or_enable_flag",
+      "source_assertions": [
+        {"path": "libs/ure_core/include/ure/integrator/bidirectional.cuh", "pattern": "bidirectional_connection_vcm_mis_weight"},
+        {"path": "libs/ure_core/src/bidirectional_runtime.cu", "pattern": "vcm_complete_path_merge_mis_weight"}
+      ]
+    },
+    {
+      "id": "pssmlt",
+      "legacy_mode": "MLT",
+      "target_role": "independent_markov_chain_estimator_family",
+      "observable": "spectral_stokes_sensor_measure_contribution",
+      "sample_space": "versioned_primary_sample_vector_and_chain_identity",
+      "support": "wavefront_replay_paths_inside_bounded_primary_dimension_layout",
+      "density_contract": "Metropolis_acceptance_with_bootstrap_importance_normalization",
+      "normalization": "per_chain_bootstrap_and_independent_replicate_aggregation",
+      "correlation": "Markov_chains_not_iid_samples",
+      "bias_class": "asymptotic_with_burn_in_and_finite_chain_diagnostics",
+      "persistent_state": "independent_chain_primary_samples_bootstrap_and_diagnostics",
+      "differentiability": "mutation_replay_exists_but_correlated_gradient_estimator_missing",
+      "combination_status": "owns_scheduler_and_rejects_reuse_VCM_manifold_or_bidirectional_without_shared_spectral_primary_sample",
+      "source_assertions": [
+        {"path": "libs/ure_core/src/path_tracer_host_api.cu", "pattern": "render_mlt_pass"},
+        {"path": "libs/ure_core/src/mlt_runtime.cu", "pattern": "accept_and_deposit_mlt_kernel"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "schema": "ure.research.high-order-benchmark-family/1.0",
+  "snapshot_date": "2026-08-01",
+  "license_policy": "Project-authored fixtures are covered by the repository license; imported resources require an explicit source URL, license and immutable digest before promotion.",
+  "families": [
+    {
+      "id": "ordinary_diffuse_and_multilight",
+      "category": "ordinary_diffuse",
+      "maturity": "existing_executable",
+      "input": "scenes/benchmarks/phase_r_multi_light_sampling.gltf",
+      "provenance": "project_authored_deterministic_generator",
+      "reference_strategy": "high_spp_disjoint_wavefront_shards_plus_light_sampling_oracle",
+      "metrics": ["bias", "variance", "normalized_mse", "time_to_error", "throughput"],
+      "source_assertions": [
+        {"path": "scenes/benchmarks/phase_r_multi_light_sampling.gltf", "pattern": "phase_r_emissive_quad"},
+        {"path": "tools/benchmarks/run_phase_r_light_sampling_suite.ps1", "pattern": "light_sampling_variance_mse_local"}
+      ]
+    },
+    {
+      "id": "sds_caustic_and_small_emitters",
+      "category": "sds_caustic",
+      "maturity": "existing_executable",
+      "input": "procedural fixtures in the Phase R manifold/MLT suites",
+      "provenance": "project_authored_in_source_fixture",
+      "reference_strategy": "independent_high_spp_wavefront_ranges_and_per_technique_energy_moments",
+      "metrics": ["support_coverage", "relative_bias_95_bound", "variance", "time_to_error", "tail_frequency"],
+      "source_assertions": [
+        {"path": "tools/benchmarks/run_phase_r_manifold_suite.ps1", "pattern": "specular_emitter"},
+        {"path": "tools/benchmarks/run_phase_r_mlt_suite.ps1", "pattern": "ReferenceBaseSample"}
+      ]
+    },
+    {
+      "id": "participating_media_and_mie",
+      "category": "participating_media",
+      "maturity": "existing_executable",
+      "input": "tests/assets/mie/isotropic_v1.mie.json and Phase R guiding volume fixture",
+      "provenance": "project_authored_analytic_and_generated_resource",
+      "reference_strategy": "analytic_phase_normalization_CDF_oracle_plus_independent_GPU_transport_reference",
+      "metrics": ["phase_normalization", "cdf_monotonicity", "energy", "variance", "time_to_error"],
+      "source_assertions": [
+        {"path": "tests/assets/mie/isotropic_v1.mie.json", "pattern": "ure.mie-phase-table"},
+        {"path": "tests/gpu/phase_r_guiding_benchmark.cu", "pattern": "update_medium_gpu"}
+      ]
+    },
+    {
+      "id": "spectral_polarization",
+      "category": "polarization",
+      "maturity": "existing_executable",
+      "input": "analytic Mueller/Jones and thin-film GPU fixtures",
+      "provenance": "project_authored_analytic_fixture",
+      "reference_strategy": "closed_form_Fresnel_Mueller_energy_and_physical_realizability_oracles",
+      "metrics": ["stokes_error", "energy", "passivity", "reciprocity", "packet_lane_parity"],
+      "source_assertions": [
+        {"path": "tests/gpu/test_gpu_polarization.cu", "pattern": "test_thin_film_sp_energy_grid"},
+        {"path": "tests/gpu/test_spectral_pipeline.cu", "pattern": "wavelength"}
+      ]
+    },
+    {
+      "id": "fluorescence_diffraction_and_coherence",
+      "category": "wave_and_fluorescence",
+      "maturity": "bounded_reference_and_production_slices",
+      "input": "Phase W analytic and CUDA fixtures",
+      "provenance": "project_authored_analytic_fixture",
+      "reference_strategy": "analytic_diffraction_complex_phase_joint_wavelength_pdf_and_merge_order_oracles",
+      "metrics": ["energy", "phase", "joint_pdf", "stokes", "coherence_merge_order", "fail_loud_boundary"],
+      "source_assertions": [
+        {"path": "scripts/run_phase_w_validation_suite.ps1", "pattern": "ure.phase_w.validation.v1"},
+        {"path": "tests/gpu/test_wave_optics_gpu.cu", "pattern": "fluorescence"}
+      ]
+    },
+    {
+      "id": "dynamic_multiphysics_coupling",
+      "category": "dynamic_coupling",
+      "maturity": "contract_seed",
+      "input": "native simulation contract fixtures before executable WorldState coupling",
+      "provenance": "project_authored_contract_fixture",
+      "reference_strategy": "rational_time_graph_validation_then_analytic_conservation_and_small_solver_oracles_in_HW",
+      "metrics": ["time_alignment", "state_identity", "conservation", "coupling_residual", "replay"],
+      "source_assertions": [
+        {"path": "tests/host/test_native_simulation_contract.cpp", "pattern": "coupling"},
+        {"path": "libs/ure_sceneio/include/ure/native_simulation_contract.hpp", "pattern": "TimeSamplingContract"}
+      ]
+    },
+    {
+      "id": "inverse_small_problem",
+      "category": "inverse_problem",
+      "maturity": "planned_fixture_with_existing_forward_oracles",
+      "input": "small Fresnel/manifold/spectral parameters derived from current analytic tests",
+      "provenance": "project_authored_analytic_fixture",
+      "reference_strategy": "central_finite_difference_plus_closed_form_derivative_and_actual_loss_descent",
+      "metrics": ["relative_gradient_error", "directional_derivative", "loss_decrease", "identifiability", "memory"],
+      "source_assertions": [
+        {"path": "tests/host/test_integrator.cpp", "pattern": "test_specular_interface_oblique_jacobian_reciprocity"},
+        {"path": "tests/host/test_wave_optics.cpp", "pattern": "test_complex_spectrum_optical_path_phase_accumulation"}
+      ]
+    }
+  ]
+}

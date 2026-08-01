@@ -1,0 +1,194 @@
+{
+  "schema": "ure.research.capability-boundary-ledger/1.0",
+  "snapshot_date": "2026-08-01",
+  "scan": {
+    "roots": [
+      "libs/ure_core",
+      "libs/ure_sceneio",
+      "libs/ure_runtime",
+      "libs/ure_hydra",
+      "libs/ure_d3d12",
+      "libs/ure_vulkan",
+      "libs/ure_physics"
+    ],
+    "extensions": [".h", ".hpp", ".cpp", ".cu", ".cuh"],
+    "pattern": "\"[^\"\\r\\n]*(unsupported|unavailable|not implemented|cannot currently|fail-loud|requires [^\"\\r\\n]*before|mutually exclusive)[^\"\\r\\n]*\"",
+    "expected_total_matches": 92,
+    "limitations": "Lexical inventory of explicit string diagnostics. Typed status-only boundaries are tracked by anchors but are not counted as discovered string diagnostics."
+  },
+  "categories": [
+    "PhysicalMathematicalBoundary",
+    "MissingEstimatorMeasure",
+    "MissingLoweringBackend",
+    "ResourceBudgetBoundary",
+    "InsufficientEvidence",
+    "ExplicitLossyProjection",
+    "SchemaIdentityBoundary",
+    "AccidentalDebt"
+  ],
+  "boundaries": [
+    {
+      "id": "HO-BND-001",
+      "category": "AccidentalDebt",
+      "owner_phase": "HT.0",
+      "accidental": true,
+      "disposition": "replace_with_technique_graph",
+      "summary": "The engine selects one estimator metadata mode and rejects simultaneous ReSTIR DI/PT before graph-level support analysis.",
+      "expected_match_count": 1,
+      "coverage": [
+        {"path_regex": "^libs/ure_core/src/gpu_engine_impl\\.cpp$", "line_regex": "ReSTIR DI and ReSTIR PT estimator modes are mutually exclusive"}
+      ],
+      "anchors": [
+        {"path": "libs/ure_core/src/gpu_engine_impl.cpp", "pattern": "make_integrator_estimator_metadata"},
+        {"path": "libs/ure_types/include/ure/render_config.hpp", "pattern": "enum class IntegratorMode"}
+      ]
+    },
+    {
+      "id": "HO-BND-002",
+      "category": "MissingEstimatorMeasure",
+      "owner_phase": "HT.1",
+      "accidental": false,
+      "disposition": "retain_until_observable_and_measure_contract_exists",
+      "summary": "Wave/coherent configurations are rejected where the production radiometric estimator has no compatible observable or path measure.",
+      "expected_match_count": 2,
+      "coverage": [
+        {"path_regex": "^libs/ure_core/src/gpu_engine_impl\\.cpp$", "line_regex": "wave-optics configuration is unsupported"},
+        {"path_regex": "^libs/ure_core/src/path_tracer_host_api\\.cu$", "line_regex": "wave-optics mode is not implemented"}
+      ],
+      "anchors": [
+        {"path": "libs/ure_types/include/ure/render_config.hpp", "pattern": "enum class WaveOpticsMode"},
+        {"path": "libs/ure_core/include/ure/wave_optics.hpp", "pattern": "PropagationStatus"}
+      ]
+    },
+    {
+      "id": "HO-BND-003",
+      "category": "MissingLoweringBackend",
+      "owner_phase": "HT.5",
+      "accidental": false,
+      "disposition": "capability_negotiate_and_implement_by_backend_owner",
+      "summary": "Backend, acceleration, image, dispatch and provider capabilities have explicit unavailable or unsupported paths.",
+      "expected_match_count": 30,
+      "coverage": [
+        {"path_regex": "^(libs/ure_core/src/(backend_cuda\\.cu|cuda_runtime_device\\.cu|optix_acceleration_provider\\.cpp|local_fullwave\\.cpp)|libs/ure_runtime/src/(acceleration|dynamic_geometry)\\.cpp|libs/ure_(d3d12|vulkan)/src/.*)$", "line_regex": ".*"}
+      ],
+      "anchors": [
+        {"path": "libs/ure_core/src/backend_cuda.cu", "pattern": "requested backend is unavailable"},
+        {"path": "libs/ure_runtime/src/dynamic_geometry.cpp", "pattern": "requested deforming BLAS refit is unavailable"},
+        {"path": "libs/ure_vulkan/src/vulkan_runtime_device.cpp", "pattern": "Vulkan ray query acceleration is unavailable"},
+        {"path": "libs/ure_d3d12/src/d3d12_runtime_device.cpp", "pattern": "D3D12 inline ray query is unavailable"}
+      ]
+    },
+    {
+      "id": "HO-BND-004",
+      "category": "SchemaIdentityBoundary",
+      "owner_phase": "HO.1",
+      "accidental": false,
+      "disposition": "retain_versioned_rejection_and_define_migration",
+      "summary": "Runtime execution and estimator graph schemas reject unknown versions instead of interpreting incompatible layouts.",
+      "expected_match_count": 2,
+      "coverage": [
+        {"path_regex": "^libs/ure_runtime/src/execution_graph\\.cpp$", "line_regex": ".*"}
+      ],
+      "anchors": [
+        {"path": "libs/ure_runtime/src/execution_graph.cpp", "pattern": "execution graph schema version is unsupported"},
+        {"path": "libs/ure_runtime/src/execution_graph.cpp", "pattern": "estimator contract version is unsupported"}
+      ]
+    },
+    {
+      "id": "HO-BND-005",
+      "category": "SchemaIdentityBoundary",
+      "owner_phase": "HR.0",
+      "accidental": false,
+      "disposition": "retain_and_extend_with_measurement_schema_identity",
+      "summary": "Distributed radiance, complex-field and mutual-intensity files reject incompatible versions and byte order.",
+      "expected_match_count": 6,
+      "coverage": [
+        {"path_regex": "^libs/ure_core/src/distributed_file_io\\.cpp$", "line_regex": ".*"}
+      ],
+      "anchors": [
+        {"path": "libs/ure_core/src/distributed_file_io.cpp", "pattern": "unsupported distributed framebuffer file version"},
+        {"path": "libs/ure_core/src/distributed_file_io.cpp", "pattern": "distributed complex-field byte order is unsupported"}
+      ]
+    },
+    {
+      "id": "HO-BND-006",
+      "category": "SchemaIdentityBoundary",
+      "owner_phase": "HO.1",
+      "accidental": false,
+      "disposition": "retain_and_register_explicit_migrations",
+      "summary": "Native containers, caches, solvers, simulations, resources and frontends reject unsupported schemas, features and formats.",
+      "expected_match_count": 25,
+      "coverage": [
+        {"path_regex": "^libs/ure_sceneio/src/(native_compiled_cache|native_procedural_model|native_scene_container|native_resource_catalog|native_script_build|native_scene_validation|native_solver_contract|native_simulation_contract|scene_frontend)\\.cpp$", "line_regex": ".*"},
+        {"path_regex": "^libs/ure_sceneio/src/mie_phase_io\\.cpp$", "line_regex": "(format or version|table units)"}
+      ],
+      "anchors": [
+        {"path": "libs/ure_sceneio/src/native_scene_validation.cpp", "pattern": "Required feature is unsupported"},
+        {"path": "libs/ure_sceneio/src/native_solver_contract.cpp", "pattern": "Unsupported integrator mode"},
+        {"path": "libs/ure_sceneio/src/native_simulation_contract.cpp", "pattern": "Unsupported coupling semantic retained"}
+      ]
+    },
+    {
+      "id": "HO-BND-007",
+      "category": "PhysicalMathematicalBoundary",
+      "owner_phase": "HT.4",
+      "accidental": false,
+      "disposition": "retain_until_a_valid_polarized_mie_model_is_selected",
+      "summary": "Imported Mie tables only accept the implemented polarization model; unsupported models cannot be silently scalarized.",
+      "expected_match_count": 1,
+      "coverage": [
+        {"path_regex": "^libs/ure_sceneio/src/mie_phase_io\\.cpp$", "line_regex": "polarization model"}
+      ],
+      "anchors": [
+        {"path": "libs/ure_sceneio/src/mie_phase_io.cpp", "pattern": "Unsupported Mie polarization model"},
+        {"path": "libs/ure_types/include/ure/mie_phase_validation.hpp", "pattern": "validate_mie_phase_resource"}
+      ]
+    },
+    {
+      "id": "HO-BND-008",
+      "category": "ResourceBudgetBoundary",
+      "owner_phase": "HO.2",
+      "accidental": false,
+      "disposition": "separate_unavailable_from_budget_and_preserve_preflight",
+      "summary": "Native asset reads currently combine unavailable and read-budget failure into one diagnostic.",
+      "expected_match_count": 2,
+      "coverage": [
+        {"path_regex": "^libs/ure_sceneio/src/(native_scene_ir_io|native_scene_tooling)\\.cpp$", "line_regex": ".*"}
+      ],
+      "anchors": [
+        {"path": "libs/ure_sceneio/src/native_scene_ir_io.cpp", "pattern": "exceeds read budget or is unavailable"},
+        {"path": "libs/ure_sceneio/src/native_scene_tooling.cpp", "pattern": "unavailable or exceeds the read budget"}
+      ]
+    },
+    {
+      "id": "HO-BND-009",
+      "category": "ExplicitLossyProjection",
+      "owner_phase": "HO.C4",
+      "accidental": false,
+      "disposition": "retain_with_structured_loss_reports",
+      "summary": "USD/Hydra adapters reject material, geometry, camera, AOV and export semantics outside the documented projection.",
+      "expected_match_count": 23,
+      "coverage": [
+        {"path_regex": "^libs/ure_sceneio/src/(usd_scene_export|usd_schema_adapter)\\.cpp$", "line_regex": ".*"},
+        {"path_regex": "^libs/ure_hydra/src/(material_network|mesh_rprim|render_pass|render_delegate)\\.cpp$", "line_regex": ".*"}
+      ],
+      "anchors": [
+        {"path": "libs/ure_hydra/src/material_network.cpp", "pattern": "USD material node is unsupported"},
+        {"path": "libs/ure_hydra/src/mesh_rprim.cpp", "pattern": "Hydra projective transforms are unsupported"},
+        {"path": "libs/ure_sceneio/src/usd_scene_export.cpp", "pattern": "remove the unsupported semantics"}
+      ]
+    }
+  ],
+  "resolved_boundaries": [
+    {
+      "id": "HO-BND-010",
+      "category": "AccidentalDebt",
+      "owner_phase": "HO.0",
+      "resolution": "Replaced three stale pre-U.5 lifecycle diagnostics with build-capability diagnostics; unsupported RPrim/SPrim types remain classified as explicit adapter boundaries.",
+      "anchors": [
+        {"path": "libs/ure_hydra/src/render_delegate.cpp", "pattern": "built without optional RenderSession execution support"},
+        {"path": "libs/ure_hydra/src/render_delegate.cpp", "pattern": "built without optional render-buffer support"}
+      ]
+    }
+  ]
+}

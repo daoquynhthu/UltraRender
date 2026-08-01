@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ure.research.capsule/1.0",
+  "title": "UltraRender Research Capsule v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "maturity",
+    "question",
+    "hypothesis",
+    "inputs",
+    "reproducibility",
+    "baseline",
+    "candidate",
+    "metrics",
+    "artifacts",
+    "result",
+    "known_failure_domain"
+  ],
+  "properties": {
+    "schema": {"const": "ure.research.capsule/1.0"},
+    "id": {"type": "string", "minLength": 1},
+    "maturity": {"enum": ["Research", "Experimental", "Production"]},
+    "question": {"type": "string", "minLength": 1},
+    "hypothesis": {"type": "string", "minLength": 1},
+    "inputs": {
+      "type": "object",
+      "required": ["source_identity", "configuration"],
+      "properties": {
+        "source_identity": {"type": "string", "minLength": 1},
+        "configuration": {"type": "object"},
+        "source_assertions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "pattern"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "pattern": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "reproducibility": {
+      "type": "object",
+      "required": ["seed_policy", "replay_command", "determinism"],
+      "properties": {
+        "seed_policy": {"type": "string", "minLength": 1},
+        "replay_command": {"type": "string", "minLength": 1},
+        "determinism": {"type": "string", "minLength": 1}
+      }
+    },
+    "baseline": {"type": "string", "minLength": 1},
+    "candidate": {"type": "string", "minLength": 1},
+    "metrics": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "expected"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "expected": {"type": ["number", "integer", "string", "boolean"]}
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["kind", "path", "retention"],
+        "properties": {
+          "kind": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "minLength": 1},
+          "retention": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": ["outcome", "conclusion"],
+      "properties": {
+        "outcome": {"enum": ["positive", "negative", "inconclusive"]},
+        "conclusion": {"type": "string", "minLength": 1}
+      }
+    },
+    "known_failure_domain": {"type": "array", "items": {"type": "string"}}
+  }
+}

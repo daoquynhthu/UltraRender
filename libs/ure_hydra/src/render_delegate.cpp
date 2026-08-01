@@ -166,7 +166,7 @@ HdRenderPassSharedPtr HdURE::CreateRenderPass(
     static_cast<void>(index);
     static_cast<void>(collection);
     TF_CODING_ERROR(
-        "HdURE render execution is unavailable until the U.5 session path is active");
+        "HdURE was built without optional RenderSession execution support");
     return {};
 #endif
 }
@@ -252,7 +252,7 @@ HdBprim* HdURE::CreateBprim(
     static_cast<void>(type_id);
     static_cast<void>(bprim_id);
     TF_CODING_ERROR(
-        "HdURE BPrims are unavailable before U.5");
+        "HdURE was built without optional render-buffer support");
     return nullptr;
 }
 
@@ -266,7 +266,7 @@ HdBprim* HdURE::CreateFallbackBprim(
 #endif
     static_cast<void>(type_id);
     TF_CODING_ERROR(
-        "HdURE fallback BPrims are unavailable before U.5");
+        "HdURE was built without optional fallback render-buffer support");
     return nullptr;
 }
 
