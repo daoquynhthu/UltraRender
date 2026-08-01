@@ -21,6 +21,15 @@ target_link_libraries(test_runtime_contract PRIVATE ure_runtime)
 add_test(NAME test_runtime_contract COMMAND test_runtime_contract)
 
 add_executable(
+    test_high_order_semantics
+    test_high_order_semantics.cpp)
+target_link_libraries(
+    test_high_order_semantics PRIVATE ure_transport ure_runtime)
+add_test(
+    NAME test_high_order_semantics
+    COMMAND test_high_order_semantics)
+
+add_executable(
     test_acceleration_contract
     test_acceleration_contract.cpp)
 target_link_libraries(

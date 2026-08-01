@@ -13,6 +13,7 @@ This index separates current references from historical records. The root `PLAN.
 | [`../PLAN.md`](../PLAN.md) | Authoritative HO/HT/HR/HW/HD queue, research maturity, dependencies and completion criteria |
 | [`../AGENTS.md`](../AGENTS.md) | Agent governance and workflow |
 | [`HO_0_Capability_Baseline.md`](HO_0_Capability_Baseline.md) | Current executable inventory of capability boundaries, integrators, measurement gaps, state ownership, research capsules and benchmark families |
+| [`HO_1_Unified_Semantics.md`](HO_1_Unified_Semantics.md) | Current backend-neutral observable, measure, time, identity, uncertainty and compatibility architecture |
 | [`reference/Backend_API.md`](reference/Backend_API.md) | Implemented engine/session/C/Python API boundary |
 | [`Spectral_Semantics_Guide.md`](Spectral_Semantics_Guide.md) | Current semantic reference for spectral quantities |
 | [`Phase_Q_Native_Scene_Format.md`](Phase_Q_Native_Scene_Format.md) | Completed native scene architecture and closure record |

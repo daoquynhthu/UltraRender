@@ -15,6 +15,7 @@ This file defines the rules, conventions, and workflow that any AI agent must fo
 ```
 ure_types     — Header-only type library (INTERFACE). Vec3, Mat4, Quat, Ray, SceneIR, RenderConfig, World.
 ure_runtime   — Backend-neutral GPU runtime contracts (STATIC, pure C++).
+ure_transport — Backend-neutral observable, measure, estimator, uncertainty and compatibility contracts (STATIC, pure C++).
 ure_vulkan    — Vulkan 1.3 compute/acceleration runtime (STATIC, SDK-neutral public surface).
 ure_d3d12     — Windows D3D12/DXR compute/acceleration runtime (STATIC, SDK-neutral public surface).
 ure_core      — GPU rendering core (STATIC, CUDA 13+). Path tracer kernel, BVH, GPU driver, scene compiler.
@@ -55,7 +56,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | V (GPU Acceleration) | Done | V.0-V.11 complete; unified local/farm validation freezes construction, traversal, memory, parity, dynamic and distributed evidence |
 | W (Wave Optics Solver) | Done | W.0-W.12 complete within the declared production/reference boundary; unified physical, API, fail-loud, distributed and static validation closed |
 | U (USD/Hydra Adapter) | Done | U.1-U.6 complete; schema adapter, actual-OpenUSD delegate, mesh/material conversion, progressive RenderSession bridge and strict native-to-USDA export closed |
-| HO (High-order capabilities) | In progress | Current cursor: `HO.1 — 统一语义与架构合同`; foundation for transport portfolios, reconstruction, physical world and differentiation |
+| HO (High-order capabilities) | In progress | HO.0-HO.1 complete; current cursor: `HO.2 — 可执行研究底座` |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -136,6 +137,9 @@ E:\Render Engine\
 │   ├── ure_runtime/                 # SDK-free runtime contracts (STATIC, pure C++)
 │   │   ├── include/ure/runtime/      # device, resource, synchronization and upload contracts
 │   │   └── src/                     # SDK-free descriptor and graph validation
+│   ├── ure_transport/               # SDK-free high-order transport semantics (STATIC, pure C++)
+│   │   ├── include/ure/transport/   # observable, measure, estimator, uncertainty and compatibility contracts
+│   │   └── src/                     # semantic validation and compatibility classification
 │   ├── ure_vulkan/                  # Vulkan 1.3 compute/acceleration runtime (STATIC)
 │   │   ├── include/ure/             # SDK-neutral Vulkan runtime factory
 │   │   └── src/                     # private Volk/Vulkan implementation
@@ -226,7 +230,7 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | D3D12 | `d3d12_runtime` |
 | Multi-backend | `multi_backend_inventory` |
 | Optional Hydra build | `test_hydra_render_delegate`, `test_hydra_plugin_discovery`, `test_hydra_mesh_rprim`, `test_hydra_material_sprim`, `test_hydra_render_buffer`, `test_hydra_progressive_render`, plus SDK-only `test_usda_export` |
-| **CTest total** | **57 registered tests** in `build_modular_x64` |
+| **CTest total** | **58 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -468,10 +472,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 54 | 2026-08-01 U.6 | Closed Phase U with deterministic native-to-USDA export | SDK-free export maps bounded Preview Surface materials, shared mesh prototypes/instances, spheres, camera and rigid metadata to canonical USDA. Strict mode rejects every loss; documented-loss mode requires a durable JSON report, and unsupported native semantics remain errors. `.ure/.urescene` and explicitly selected `.urepkg` scenes, actual CLI execution, atomic publication and real OpenUSD resolution are gated; the unified Phase U suite advances the cursor to Phase X. |
 | 55 | 2026-08-01 HO route switch | Replaced the completed construction roadmap with the high-order research and implementation program | The legacy PLAN is archived. The new authority begins at `HO.0 — 能力债务普查与研究基线`, keeps Phase X frozen, and coordinates automatic transport portfolios, MeasurementBundle/reconstruction, unified WorldState/coupling, and differentiable inverse workflows under Research/Experimental/Production maturity. |
 | 56 | 2026-08-01 HO.0 | Closed the executable capability and research baseline | A source-bound ledger uniquely classifies 92 explicit diagnostics into nine active groups and records one resolved stale Hydra group. Eight integrators, ten measurement gaps, eleven state owners, Research Capsule v1 positive/negative examples and seven benchmark families are machine-validated; the cursor advances to `HO.1 — 统一语义与架构合同`. |
+| 57 | 2026-08-01 HO.1 | Established executable unified semantic contracts | Shared semantic identities, SI dimensions/units and rational time values plus the SDK-free `ure_transport` module define typed observables, canonical measures/support, estimator density/normalization/correlation/bias, uncertainty and five-state compatibility. Static, host, independent SDK-free, installed-package and Release 58/58 gates pass; the cursor advances to `HO.2 — 可执行研究底座`. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the Visual Studio 2026 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, and HO.0 are complete. The authoritative cursor is `HO.1 — 统一语义与架构合同`; the former Phase X plugin ABI is frozen until the new world/transport/measurement/solver boundaries mature.
+- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0, and HO.1 are complete. The authoritative cursor is `HO.2 — 可执行研究底座`; the former Phase X plugin ABI is frozen until the new world/transport/measurement/solver boundaries mature.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool. The default is memory-aware: depth 1 below 24 GiB and depth 2 otherwise. CUDA 13.3 exposed multi-`ptxas` allocation failure on the 16 GiB workstation, so its current stable default is 1 while host and unrelated targets remain globally parallel. CUDA architecture defaults to the local native GPU unless explicitly overridden for release or farm builds.

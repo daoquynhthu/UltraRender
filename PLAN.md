@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HO.1 — 统一语义与架构合同
+当前游标: HO.2 — 可执行研究底座
 
 ### 0.1 唯一生产施工队列
 
@@ -26,10 +26,10 @@ Legacy construction plan Q/R/T/V/W/U                    [done]
 HO.0 capability debt and research baseline              [done]
     │
     ▼
-HO.1 unified semantics and architectural contracts      [current]
+HO.1 unified semantics and architectural contracts      [done]
     │
     ▼
-HO.2 executable research substrate                      [planned]
+HO.2 executable research substrate                      [current]
     │
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
@@ -237,6 +237,8 @@ Research Capsule 不强制一种论文目录格式。HO.0 将冻结最小机器�
 ### HO.1 — 统一语义与架构合同
 
 **依赖**: HO.0。
+
+**状态**: 已完成（2026-08-01）。新增 SDK-free `ure_transport` 与共享 `ure::semantic` value types，冻结 observable、measure/support、estimator、unit/time、provenance、uncertainty 和五态 compatibility algebra；独立 SDK-free 5/5、installed package consumer 与 Release 58/58 CTest 通过。详见 `docs/HO_1_Unified_Semantics.md`。
 
 **目标**: 在实现自动组合和统一世界前冻结最小公共词汇，而不是冻结具体算法。
 

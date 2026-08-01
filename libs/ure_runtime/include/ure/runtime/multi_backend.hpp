@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ure/semantic_types.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -13,7 +15,7 @@
 
 namespace ure::runtime {
 
-using IdentityDigest = std::array<std::uint8_t, 32>;
+using IdentityDigest = semantic::IdentityDigest;
 
 constexpr std::uint32_t kMultiBackendScheduleVersion = 1;
 constexpr std::uint32_t kResourceCacheSchemaVersion = 1;

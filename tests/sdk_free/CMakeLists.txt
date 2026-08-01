@@ -20,6 +20,14 @@ target_include_directories(ure_runtime_sdk_free PUBLIC
     "${URE_ROOT}/libs/ure_runtime/include"
 )
 
+add_library(ure_transport_sdk_free STATIC
+    "${URE_ROOT}/libs/ure_transport/src/semantics.cpp"
+)
+target_include_directories(ure_transport_sdk_free PUBLIC
+    "${URE_ROOT}/libs/ure_types/include"
+    "${URE_ROOT}/libs/ure_transport/include"
+)
+
 add_executable(test_resource_plan_sdk_free
     "${URE_ROOT}/tests/host/test_resource_plan.cpp"
 )
@@ -47,6 +55,16 @@ target_link_libraries(test_multi_backend_sdk_free PRIVATE
 add_executable(test_public_surface_sdk_free
     "${URE_ROOT}/tests/host/test_public_surface_sdk_free.cpp"
 )
+
+add_executable(test_high_order_semantics_sdk_free
+    "${URE_ROOT}/tests/host/test_high_order_semantics.cpp"
+)
+target_include_directories(test_high_order_semantics_sdk_free PRIVATE
+    "${URE_ROOT}/libs/ure_runtime/include"
+)
+target_link_libraries(test_high_order_semantics_sdk_free PRIVATE
+    ure_transport_sdk_free
+)
 target_include_directories(test_public_surface_sdk_free PRIVATE
     "${URE_ROOT}/libs/ure_core/include"
     "${URE_ROOT}/libs/ure_sceneio/include"
@@ -70,6 +88,12 @@ if(MSVC)
     target_compile_options(test_public_surface_sdk_free PRIVATE
         /W4 /WX /utf-8 /EHsc /wd4819
     )
+    target_compile_options(ure_transport_sdk_free PRIVATE
+        /W4 /WX /utf-8 /EHsc /wd4819
+    )
+    target_compile_options(test_high_order_semantics_sdk_free PRIVATE
+        /W4 /WX /utf-8 /EHsc /wd4819
+    )
 else()
     target_compile_options(ure_runtime_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
@@ -86,6 +110,12 @@ else()
     target_compile_options(test_public_surface_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
     )
+    target_compile_options(ure_transport_sdk_free PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+    )
+    target_compile_options(test_high_order_semantics_sdk_free PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+    )
 endif()
 
 enable_testing()
@@ -93,3 +123,4 @@ add_test(NAME resource_plan_sdk_free COMMAND test_resource_plan_sdk_free)
 add_test(NAME execution_graph_sdk_free COMMAND test_execution_graph_sdk_free)
 add_test(NAME multi_backend_sdk_free COMMAND test_multi_backend_sdk_free)
 add_test(NAME public_surface_sdk_free COMMAND test_public_surface_sdk_free)
+add_test(NAME high_order_semantics_sdk_free COMMAND test_high_order_semantics_sdk_free)
