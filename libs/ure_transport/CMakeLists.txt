@@ -1,6 +1,8 @@
 add_library(ure_transport STATIC
+    src/composition.cpp
     src/legacy_technique_preset.cpp
     src/semantics.cpp
+    src/support_measure_graph.cpp
     src/technique_graph.cpp
 )
 

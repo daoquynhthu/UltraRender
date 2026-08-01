@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative cursor is `HT.1 — Support/Measure Graph 与组合器`. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0 and HR.0 are complete. `ure_transport` describes current estimator routes; `ure_reconstruction` provides typed, budgeted MeasurementBundle schemas, canonical distributed merge, derived sufficient statistics and authenticated partial checkpoints. Existing CUDA framebuffer/AOV producers do not yet populate every high-order plane, and automatic technique composition remains unavailable. The former Phase X plugin ABI remains frozen. Production coherent and partially coherent sessions still reject before GPU allocation.
+The authoritative cursor is `HT.2 — Pilot 统计与自动资格判定`. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.1 and HR.0 are complete. `ure_transport` now describes current estimator routes and compiles bounded path support, exact overlap partitions, canonical-measure transforms and layered MIS/GRIS/MCMC composition plans; `ure_reconstruction` provides typed, budgeted MeasurementBundle schemas, canonical distributed merge, derived sufficient statistics and authenticated partial checkpoints. Existing CUDA kernels do not yet run every technique concurrently or populate every high-order plane, and pilot-based automatic qualification remains HT.2 work. The former Phase X plugin ABI remains frozen. Production coherent and partially coherent sessions still reject before GPU allocation.
 
 Research, Experimental and Production are now separate maturity levels. Research may use provisional implementations when it preserves a reproducible hypothesis, input/seed, baseline, metric, artifact and failure domain. This does not upgrade the capability matrix below; default paths still require the relevant production gates.
 
@@ -21,7 +21,7 @@ Research, Experimental and Production are now separate maturity levels. Research
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
 | Build tree | `build_modular_x64` using Ninja |
 | Primary executable | `build_modular_x64/apps/ure_cli/ure_cli.exe` |
-| Registered tests | 61 CTest entries at this snapshot |
+| Registered tests | 63 CTest entries at this snapshot |
 
 The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remains unavailable on the portable native backends. Vulkan additionally has a Linux GCC/Ninja gate, Windows NVIDIA native ray-query evidence, and Windows NVIDIA/Intel compute-BVH evidence. D3D12 additionally has Windows NVIDIA DXR 1.1, compute fallback, typed texture/descriptor and cross-queue fence evidence. macOS, older CUDA architectures, and complete Linux/non-NVIDIA/D3D12 scene rendering do not have equivalent evidence.
 
@@ -31,7 +31,7 @@ The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remai
 |---|---|---|
 | `ure_types` | Backend-neutral types, SceneIR, native contracts | Active |
 | `ure_runtime` | SDK-free device/resource/synchronization/dispatch/execution/acceleration/scheduling contracts | Active; implemented by CUDA and bounded Vulkan/D3D12 foundations |
-| `ure_transport` | SDK-free observable, measure, estimator, Technique Graph, uncertainty and compatibility contracts | HO.1 semantics and HT.0 legacy preset mapping implemented; automatic composition is not implemented |
+| `ure_transport` | SDK-free observable, measure, estimator, Technique Graph, support grammar, partition and composition contracts | HO.1, HT.0 and HT.1 implemented; pilot qualification and online scheduling remain HT.2-HT.3 |
 | `ure_research` | SDK-free research execution, artifact, comparison, capability, oracle and promotion contracts | HO.2 substrate implemented; research callbacks and C++ object layout are not a stable production ABI |
 | `ure_reconstruction` | SDK-free typed measurement schemas, budget loss, sufficient statistics, canonical merge and checkpoint contracts | HR.0 data boundary implemented; general CUDA high-order plane production and reconstruction algorithms remain later work |
 | `ure_vulkan` | Vulkan 1.3 adapter/resource/compute/synchronization/acceleration backend | Active foundation; full SceneIR renderer not yet lowered |

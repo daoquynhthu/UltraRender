@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HT.1 — Support/Measure Graph 与组合器
+当前游标: HT.2 — Pilot 统计与自动资格判定
 
 ### 0.1 唯一生产施工队列
 
@@ -34,7 +34,7 @@ HO.2 executable research substrate                      [done]
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
 HT transport     HR reconstruction HW physical world HD differentiation
-[HT.1 current]   [HR.0 done]
+[HT.2 current]   [HR.0 done]
     │              │                │                │
     └──────────────┴────────┬───────┴────────────────┘
                             ▼
@@ -334,6 +334,8 @@ MCMC 链、相关复用、biased preview 和不同 observable 必须使用各自
 ### HT.1 — Support/Measure Graph 与组合器
 
 **依赖**: HT.0。
+
+**状态**: 已完成（2026-08-01）。SDK-free `ure_transport` 新增 bounded path-event grammar、epsilon-NFA 到 deterministic automaton 编译和 target/technique product partition；精确拒绝 support hole、target 外支持及状态/partition 超预算并保留 witness。组合计划显式转换 canonical measure/Jacobian，提供 balance/power MIS、GRIS provenance、独立 contribution、MCMC replicate aggregation 与 unbiased/asymptotic/consistent/preview/research 分层；preview 不得满足 unbiased coverage。解析积分、有限路径空间枚举与 CUDA packed-program E2E 通过，独立 SDK-free 9/9、installed package consumer 与 Release 63/63 CTest 通过。当前 legacy preset 仍由配置选择，HT.2 才开始 pilot 资格判定。详见 `docs/HT_1_Support_Measure_Composition.md`。
 
 - 编译 path-event grammar、technique support 与 overlap partition；
 - 对同测度技术提供 MIS family；对可转换测度显式提供 Jacobian/shift；

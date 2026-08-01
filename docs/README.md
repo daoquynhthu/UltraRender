@@ -16,6 +16,7 @@ This index separates current references from historical records. The root `PLAN.
 | [`HO_1_Unified_Semantics.md`](HO_1_Unified_Semantics.md) | Current backend-neutral observable, measure, time, identity, uncertainty and compatibility architecture |
 | [`HO_2_Executable_Research_Substrate.md`](HO_2_Executable_Research_Substrate.md) | Current deterministic research execution, artifact, comparison, capability, oracle and promotion-evidence architecture |
 | [`HT_0_Legacy_Technique_Graph.md`](HT_0_Legacy_Technique_Graph.md) | Current descriptor graph, legacy-integrator preset mapping, structured rejection and mode-switch freeze architecture |
+| [`HT_1_Support_Measure_Composition.md`](HT_1_Support_Measure_Composition.md) | Current bounded path grammar, exact support partition, measure-transform and layered MIS/GRIS/MCMC composition architecture |
 | [`HR_0_Measurement_Bundle.md`](HR_0_Measurement_Bundle.md) | Current typed feature-film schema, budget loss, canonical merge, derived statistics and partial checkpoint architecture |
 | [`reference/Backend_API.md`](reference/Backend_API.md) | Implemented engine/session/C/Python API boundary |
 | [`Spectral_Semantics_Guide.md`](Spectral_Semantics_Guide.md) | Current semantic reference for spectral quantities |
@@ -54,7 +55,7 @@ These documents preserve design rationale and closure evidence. Dates, test coun
 
 Files under [`archive/`](archive/) are retained for historical context and are not maintained as current specifications. This includes former root handover/roadmap/progress documents and early physics/acoustic assessments.
 
-[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. It is useful for design history but cannot override the current `HT.1 — Support/Measure Graph 与组合器` cursor.
+[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. It is useful for design history but cannot override the current `HT.2 — Pilot 统计与自动资格判定` cursor.
 
 Files under [`superpowers/specs/`](superpowers/specs/) and [`superpowers/plans/`](superpowers/plans/) are archived design and execution records. They intentionally preserve proposed paths, old test counts and unchecked implementation steps. They do not override the completed implementation or current PLAN cursor.
 

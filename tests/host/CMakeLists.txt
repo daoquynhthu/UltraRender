@@ -39,6 +39,16 @@ add_test(
     COMMAND test_technique_graph)
 
 add_executable(
+    test_support_measure_graph
+    test_support_measure_graph.cpp)
+target_link_libraries(
+    test_support_measure_graph PRIVATE
+    ure_transport ure_runtime)
+add_test(
+    NAME test_support_measure_graph
+    COMMAND test_support_measure_graph)
+
+add_executable(
     test_measurement_bundle
     test_measurement_bundle.cpp)
 target_link_libraries(

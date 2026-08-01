@@ -157,6 +157,20 @@ if(CMAKE_CUDA_COMPILER)
         ure_core CUDA::cudart
     )
 
+    add_executable(
+        gpu_test_support_measure_composition
+        test_support_measure_composition.cu
+    )
+    target_include_directories(
+        gpu_test_support_measure_composition PRIVATE
+        ${GPU_TEST_INCLUDES}
+        "${CMAKE_SOURCE_DIR}/libs/ure_core/src"
+    )
+    target_link_libraries(
+        gpu_test_support_measure_composition PRIVATE
+        ure_transport ure_runtime CUDA::cudart
+    )
+
     add_executable(gpu_phase_r_guiding_benchmark
         phase_r_guiding_benchmark.cu
     )
@@ -172,6 +186,7 @@ if(CMAKE_CUDA_COMPILER)
         gpu_test_clustered_geometry
         gpu_test_cluster_lod
         gpu_test_dynamic_geometry
+        gpu_test_support_measure_composition
         gpu_phase_r_guiding_benchmark
     )
     foreach(gpu_test IN LISTS GPU_TEST_TARGETS)
@@ -210,6 +225,9 @@ if(CMAKE_CUDA_COMPILER)
     add_test(
         NAME gpu_dynamic_geometry
         COMMAND gpu_test_dynamic_geometry)
+    add_test(
+        NAME gpu_support_measure_composition
+        COMMAND gpu_test_support_measure_composition)
 
     add_custom_target(gpu_tests
         COMMAND gpu_test_device
@@ -228,7 +246,8 @@ if(CMAKE_CUDA_COMPILER)
         COMMAND gpu_test_cuda_runtime
         COMMAND gpu_test_acceleration_contract
         COMMAND gpu_test_clustered_geometry
-        DEPENDS gpu_test_device gpu_test_math gpu_test_spectral gpu_test_spectral_soa gpu_test_hardware gpu_test_render gpu_test_instance gpu_test_tangents gpu_test_denoise gpu_test_polarization gpu_test_volume gpu_test_contract gpu_test_wave_optics gpu_test_cuda_runtime gpu_test_acceleration_contract gpu_test_clustered_geometry
+        COMMAND gpu_test_support_measure_composition
+        DEPENDS gpu_test_device gpu_test_math gpu_test_spectral gpu_test_spectral_soa gpu_test_hardware gpu_test_render gpu_test_instance gpu_test_tangents gpu_test_denoise gpu_test_polarization gpu_test_volume gpu_test_contract gpu_test_wave_optics gpu_test_cuda_runtime gpu_test_acceleration_contract gpu_test_clustered_geometry gpu_test_support_measure_composition
         COMMENT "Running all GPU tests"
     )
 endif()
