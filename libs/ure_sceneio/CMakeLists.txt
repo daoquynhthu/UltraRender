@@ -30,6 +30,7 @@ add_library(ure_sceneio STATIC
     src/native_scene_tooling.cpp
     src/native_adapter.cpp
     src/usd_schema_adapter.cpp
+    src/usd_scene_export.cpp
     src/native_compiled_cache.cpp
     src/wav_saver.cpp
     src/scene_ir.cpp

@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 
 #include <ure/native_scene_tooling.hpp>
@@ -36,6 +37,14 @@ int main() {
     std::filesystem::copy_file(package, damaged);
     std::filesystem::resize_file(damaged, 64);
     check(!inspect_native_asset(damaged).ok(), "truncated package was accepted");
+    const auto selected = load_native_package_scene(
+        package,
+        loaded.value ? loaded.value->document.id : "");
+    const auto missing = load_native_package_scene(
+        package,
+        "missing_scene");
+    check(selected.ok() && !missing.ok(),
+          "package scene selection contract is incorrect");
     std::filesystem::remove_all(root);
     std::cout << "Phase Q.9 native tooling checks: " << (failures ? "FAILED" : "PASSED") << '\n';
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

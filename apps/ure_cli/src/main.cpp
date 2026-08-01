@@ -658,6 +658,19 @@ int cmd_native_tool(const ure::config::CliResult& cli) {
             if (!inspection.ok()) return 1;
             break;
         }
+        case ure::config::CliCommand::Export:
+            ure::native_scene::export_native_scene_usda(
+                cli.scene_path,
+                cli.output_path,
+                cli.allow_lossy
+                    ? ure::native_scene::
+                          UsdExportPolicy::
+                              AllowDocumentedLoss
+                    : ure::native_scene::
+                          UsdExportPolicy::Strict,
+                cli.loss_report_path,
+                cli.scene_id);
+            break;
         default:
             return 1;
         }
@@ -692,6 +705,7 @@ int main(int argc, char* argv[]) {
     case ure::config::CliCommand::Unpack:
     case ure::config::CliCommand::Inspect:
     case ure::config::CliCommand::Migrate:
+    case ure::config::CliCommand::Export:
         return cmd_native_tool(cli);
     }
     return 0;

@@ -33,6 +33,9 @@ set(_ur_openusd_targets
     Houdini::Dep::pxr_sdf
     Houdini::Dep::pxr_tf
     Houdini::Dep::pxr_trace
+    Houdini::Dep::pxr_usd
+    Houdini::Dep::pxr_usdGeom
+    Houdini::Dep::pxr_usdShade
     Houdini::Dep::pxr_vt
     Houdini::Dep::pxr_work
     Houdini::Dep::python3.11

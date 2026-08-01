@@ -197,7 +197,8 @@ enum class CliCommand {
     Pack,
     Unpack,
     Inspect,
-    Migrate
+    Migrate,
+    Export
 };
 
 struct CliResult {
@@ -207,6 +208,9 @@ struct CliResult {
     std::string config_path;
     std::string output_path;
     std::vector<std::string> input_paths;
+    std::string loss_report_path;
+    std::string scene_id;
+    bool allow_lossy = false;
     bool verbose = false;
     bool quiet = false;
 };

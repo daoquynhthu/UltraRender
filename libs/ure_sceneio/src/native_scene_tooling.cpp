@@ -70,6 +70,99 @@ const ContainerChunk* embedded_scene(const NativeContainer& container, std::stri
     return found == container.chunks.end() ? nullptr : &*found;
 }
 
+LoadResult<NativeSceneArchive> load_package_scene(
+    const std::filesystem::path& path,
+    std::string_view scene_id,
+    const ValidationLimits& limits,
+    bool require_unambiguous) {
+    try {
+        const auto bytes = read_file(
+            path,
+            limits.max_total_stored_bytes);
+        const auto registry = native_tool_capabilities();
+        const auto container = read_container(
+            bytes,
+            registry,
+            limits);
+        const auto manifest = read_package_binary(
+            bytes,
+            registry,
+            limits);
+        if (!container.ok() || !container.value ||
+            !manifest.ok() || !manifest.value) {
+            LoadResult<NativeSceneArchive> result;
+            result.diagnostics = container.diagnostics;
+            result.diagnostics.insert(
+                result.diagnostics.end(),
+                manifest.diagnostics.begin(),
+                manifest.diagnostics.end());
+            return result;
+        }
+        if (manifest.value->scenes.empty()) {
+            return failure(
+                "URE-Q9-PACKAGE-001",
+                path,
+                "Package contains no scene");
+        }
+        if (scene_id.empty() && require_unambiguous &&
+            manifest.value->scenes.size() != 1) {
+            return failure(
+                "URE-Q9-PACKAGE-009",
+                path,
+                "Multi-scene package operation requires an explicit scene ID");
+        }
+        auto selected = manifest.value->scenes.begin();
+        if (!scene_id.empty()) {
+            selected = std::ranges::find(
+                manifest.value->scenes,
+                scene_id,
+                &SceneReference::id);
+            if (selected == manifest.value->scenes.end()) {
+                return failure(
+                    "URE-Q9-PACKAGE-006",
+                    path,
+                    "Package scene ID was not found: " +
+                        std::string(scene_id));
+            }
+        }
+        const auto* chunk = embedded_scene(
+            *container.value,
+            selected->id);
+        if (!chunk) {
+            return failure(
+                "URE-Q9-PACKAGE-002",
+                path,
+                "Package scene payload is missing");
+        }
+        if (selected->uri !=
+            std::string("ure+sha256://") +
+                sha256_hex(chunk->payload)) {
+            return failure(
+                "URE-Q9-PACKAGE-005",
+                path,
+                "Package scene payload content hash mismatch");
+        }
+        auto scene = read_scene_ir_binary(
+            chunk->payload,
+            registry,
+            limits);
+        if (scene.value &&
+            scene_ir_semantic_hash(*scene.value) !=
+                selected->content_hash) {
+            return failure(
+                "URE-Q9-PACKAGE-003",
+                path,
+                "Package scene semantic hash mismatch");
+        }
+        return scene;
+    } catch (const std::exception& error) {
+        return failure(
+            "URE-Q9-PACKAGE-004",
+            path,
+            error.what());
+    }
+}
+
 }
 
 bool NativeInspection::ok() const {
@@ -94,33 +187,34 @@ CapabilityRegistry native_tool_capabilities() {
 
 LoadResult<NativeSceneArchive> load_native_asset(const std::filesystem::path& path,
                                                  const ValidationLimits& limits) {
-    if (path.extension() != ".urepkg") return load_native_scene(path, native_tool_capabilities(), limits);
-    try {
-        const auto bytes = read_file(path, limits.max_total_stored_bytes);
-        const auto registry = native_tool_capabilities();
-        const auto container = read_container(bytes, registry, limits);
-        const auto manifest = read_package_binary(bytes, registry, limits);
-        if (!container.ok() || !container.value || !manifest.ok() || !manifest.value) {
-            LoadResult<NativeSceneArchive> result;
-            result.diagnostics = container.diagnostics;
-            result.diagnostics.insert(result.diagnostics.end(), manifest.diagnostics.begin(), manifest.diagnostics.end());
-            return result;
-        }
-        if (manifest.value->scenes.empty()) return failure("URE-Q9-PACKAGE-001", path, "Package contains no scene");
-        const auto& reference = manifest.value->scenes.front();
-        const auto* chunk = embedded_scene(*container.value, reference.id);
-        if (!chunk) return failure("URE-Q9-PACKAGE-002", path, "Package scene payload is missing");
-        if (reference.uri != std::string("ure+sha256://") + sha256_hex(chunk->payload)) {
-            return failure("URE-Q9-PACKAGE-005", path, "Package scene payload content hash mismatch");
-        }
-        auto scene = read_scene_ir_binary(chunk->payload, registry, limits);
-        if (scene.value && scene_ir_semantic_hash(*scene.value) != reference.content_hash) {
-            return failure("URE-Q9-PACKAGE-003", path, "Package scene semantic hash mismatch");
-        }
-        return scene;
-    } catch (const std::exception& error) {
-        return failure("URE-Q9-PACKAGE-004", path, error.what());
+    if (path.extension() != ".urepkg") {
+        return load_native_scene(
+            path,
+            native_tool_capabilities(),
+            limits);
     }
+    return load_package_scene(
+        path,
+        {},
+        limits,
+        false);
+}
+
+LoadResult<NativeSceneArchive> load_native_package_scene(
+    const std::filesystem::path& path,
+    std::string_view scene_id,
+    const ValidationLimits& limits) {
+    if (path.extension() != ".urepkg") {
+        return failure(
+            "URE-Q9-PACKAGE-007",
+            path,
+            "Explicit package scene selection requires a .urepkg input");
+    }
+    return load_package_scene(
+        path,
+        scene_id,
+        limits,
+        true);
 }
 
 NativeInspection inspect_native_asset(const std::filesystem::path& path,
@@ -227,6 +321,40 @@ void migrate_native_scene(const std::filesystem::path& input,
                           const std::filesystem::path& output,
                           const ValidationLimits& limits) {
     build_native_scene(input, output, limits);
+}
+
+void export_native_scene_usda(
+    const std::filesystem::path& input,
+    const std::filesystem::path& output,
+    UsdExportPolicy policy,
+    const std::filesystem::path& loss_report_path,
+    std::string_view scene_id,
+    const ValidationLimits& limits) {
+    LoadResult<NativeSceneArchive> loaded;
+    if (input.extension() == ".urepkg") {
+        loaded = load_native_package_scene(
+            input,
+            scene_id,
+            limits);
+    } else {
+        if (!scene_id.empty()) {
+            throw std::invalid_argument(
+                "A package scene ID is valid only for .urepkg input");
+        }
+        loaded = load_native_asset(input, limits);
+    }
+    if (!loaded.ok() || !loaded.value) {
+        throw std::invalid_argument(
+            loaded.diagnostics.empty()
+            ? "Native scene export load failed"
+            : loaded.diagnostics.front().message);
+    }
+    save_usda_native(
+        output,
+        *loaded.value,
+        policy,
+        loss_report_path,
+        limits);
 }
 
 }

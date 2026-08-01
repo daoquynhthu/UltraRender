@@ -721,6 +721,23 @@ static int test_native_tool_commands() {
     CHECK(migrate.command == ure::config::CliCommand::Migrate);
     CHECK(migrate.scene_path == "old.ure");
     CHECK(migrate.output_path == "new.ure");
+    const char* export_argv[] = {
+        "ure_cli", "export", "scene.urescene",
+        "--output", "scene.usda", "--allow-lossy",
+        "--loss-report", "scene.loss.json",
+        "--scene-id", "shot_010"};
+    auto export_result = ure::config::parse_cli(
+        static_cast<int>(sizeof(export_argv) /
+                         sizeof(export_argv[0])),
+        const_cast<char**>(export_argv));
+    CHECK(export_result.command ==
+          ure::config::CliCommand::Export);
+    CHECK(export_result.scene_path == "scene.urescene");
+    CHECK(export_result.output_path == "scene.usda");
+    CHECK(export_result.allow_lossy);
+    CHECK(export_result.loss_report_path ==
+          "scene.loss.json");
+    CHECK(export_result.scene_id == "shot_010");
     return 0;
 }
 

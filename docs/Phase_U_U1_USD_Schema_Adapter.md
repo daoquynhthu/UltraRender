@@ -67,7 +67,7 @@ U.1 rejects:
 - invalid, weak or over-budget spectral resources;
 - archives that fail Phase Q resource or SceneIR validation.
 
-Unknown optional schemas produce a standardized adapter warning and keep the result exportable. Multiple cameras preserve only the selected static camera and report the loss. U.4 subsequently added bounded USDShade conversion and U.5 added retained Hydra progressive execution; time-sampled stage orchestration remains unavailable. SceneIR-to-USD output is the U.6 cursor.
+Unknown optional schemas produce a standardized adapter warning and keep the result exportable. Multiple cameras preserve only the selected static camera and report the loss. U.4 subsequently added bounded USDShade conversion, U.5 added retained Hydra progressive execution, and U.6 added the strict native-to-USDA projection. Time-sampled stage orchestration remains unavailable.
 
 ## Verification
 

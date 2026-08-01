@@ -153,7 +153,9 @@ add_executable(test_native_adapter test_native_adapter.cpp)
 target_link_libraries(test_native_adapter PRIVATE ure_sceneio ure_diag)
 target_compile_definitions(test_native_adapter PRIVATE
     URE_TEST_SCENE_DIR="${CMAKE_SOURCE_DIR}/scenes"
+    URE_TEST_CLI="$<TARGET_FILE:ure_cli>"
 )
+add_dependencies(test_native_adapter ure_cli)
 add_test(NAME test_native_adapter COMMAND test_native_adapter)
 
 add_executable(

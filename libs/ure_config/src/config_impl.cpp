@@ -494,6 +494,34 @@ CliResult parse_cli(int argc, char** argv) {
     migrate_cmd->add_option("input", migrate_input, "Input .ure or .urescene")->required();
     migrate_cmd->add_option("-o,--output", migrate_output, "Migrated .ure or .urescene")->required();
 
+    auto* export_cmd = app.add_subcommand(
+        "export",
+        "Export one native scene through a documented adapter");
+    std::string export_input, export_output;
+    std::string export_loss_report;
+    std::string export_scene_id;
+    bool export_allow_lossy = false;
+    export_cmd->add_option(
+        "input",
+        export_input,
+        "Input .ure or .urescene")->required();
+    export_cmd->add_option(
+        "-o,--output",
+        export_output,
+        "Output .usda")->required();
+    export_cmd->add_flag(
+        "--allow-lossy",
+        export_allow_lossy,
+        "Allow documented adapter loss");
+    export_cmd->add_option(
+        "--loss-report",
+        export_loss_report,
+        "Required JSON report path for lossy output");
+    export_cmd->add_option(
+        "--scene-id",
+        export_scene_id,
+        "Scene ID when exporting a multi-scene .urepkg");
+
     try {
         app.parse(argc, argv);
     } catch (const CLI::ParseError& e) {
@@ -653,6 +681,13 @@ CliResult parse_cli(int argc, char** argv) {
         result.command = CliCommand::Migrate;
         result.scene_path = migrate_input;
         result.output_path = migrate_output;
+    } else if (*export_cmd) {
+        result.command = CliCommand::Export;
+        result.scene_path = export_input;
+        result.output_path = export_output;
+        result.allow_lossy = export_allow_lossy;
+        result.loss_report_path = export_loss_report;
+        result.scene_id = export_scene_id;
     } else {
         result.command = CliCommand::ListDevices;
     }

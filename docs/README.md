@@ -33,6 +33,7 @@ This index separates current references from historical records. `PLAN.md` is th
 | [`Phase_U_U3_Hydra_Mesh_RPrim.md`](Phase_U_U3_Hydra_Mesh_RPrim.md) | U.3 actual `HdMesh` RPrim, SceneIR geometry mapping, updates and rejection boundary |
 | [`Phase_U_U4_Hydra_Material_Conversion.md`](Phase_U_U4_Hydra_Material_Conversion.md) | U.4 actual `HdMaterial` SPrim, MaterialGraph conversion and structured loss report |
 | [`Phase_U_U5_Hydra_Progressive_Render.md`](Phase_U_U5_Hydra_Progressive_Render.md) | U.5 actual camera/render-buffer/render-pass bridge to CUDA `RenderSession` progressive execution |
+| [`Phase_U_U6_USDA_Export.md`](Phase_U_U6_USDA_Export.md) | U.6 deterministic native-scene to USDA projection, strict loss policy and actual OpenUSD validation |
 
 ## Completed-phase evidence records
 

@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `U.6`. Phase Q, Phase R, Phase T, Phase V and the declared bounded scope of Phase W are complete. U.1-U.5 establish the normalized USD snapshot, optional actual-OpenUSD delegate/plugin, polygonal mesh and bounded material conversion, plus a GPU-enabled Hydra camera/render-buffer/render-pass bridge that executes one synchronous CUDA `RenderSession` pass per Hydra execute. Production coherent and partially coherent sessions still reject before GPU allocation.
+The authoritative construction cursor is `Phase X`. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, and Phase U are complete. Phase U establishes the normalized USD snapshot, optional actual-OpenUSD delegate/plugin, polygonal mesh and bounded material conversion, a GPU-enabled progressive `RenderSession` bridge, and deterministic native-scene to USDA export with strict loss accounting. Production coherent and partially coherent sessions still reject before GPU allocation.
 
 ## Supported execution baseline
 
@@ -89,10 +89,10 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | `.urescene` binary scene | Implemented | Native production source container |
 | `.urepkg` package | Implemented | Indexed package and embedded scene payloads |
 | `.urecache` compiled cache | Implemented contract | Disposable, identity-checked, non-authoritative |
-| Native validate/build/pack/unpack/inspect/migrate | Implemented in `ure_cli` | Validation remains capability-aware |
+| Native validate/build/pack/unpack/inspect/migrate/export | Implemented in `ure_cli` | USDA export is strict by default; multi-scene packages require an explicit scene ID and lossy output requires a durable report |
 | glTF/GLB import | Implemented through native validation boundary | glTF is an adapter, not core schema |
 | MaterialX import/export | Implemented for accepted subset | Unsupported nodes fail; URE graph remains authoritative |
-| USD/Hydra | U.1-U.5 schema adapter, delegate/plugin, polygonal mesh, bounded material conversion and progressive CUDA RenderSession bridge implemented | GPU-enabled plugin supports camera, float render buffers, Beauty and existing AOVs without a graphics context; subdivision/instancing, file/stage integration, complete USDShade, time-sampled stage integration and export remain unavailable |
+| USD/Hydra | U.1-U.6 schema adapter, delegate/plugin, polygonal mesh, bounded material conversion, progressive CUDA RenderSession bridge and native-to-USDA export implemented | GPU-enabled plugin supports camera, float render buffers, Beauty and existing AOVs without a graphics context. USDA export covers the documented Preview Surface/mesh-instance/sphere/camera/rigid subset; subdivision, Hydra instancing, file/stage ingestion, complete USDShade and time-sampled stage integration remain unavailable |
 | RenderSession / C ABI / pyure | Implemented and tested | ABI/version stability is not promised yet |
 | Native procedural graph | Implemented | Deterministic build graph, not runtime GPU interpretation |
 | Script build hook | Contract implemented, disabled by default | Requires explicit opt-in and attestable external runner |
@@ -110,7 +110,7 @@ The following must not be described as production capabilities merely because en
 - bundled local full-wave solvers, engine-owned process discovery/execution and a stable Phase X dynamic provider ABI;
 - transient fluorescence film output, anti-Stokes resources, fluorescent participating media and advanced-integrator fluorescence;
 - Vulkan/D3D12/OptiX arbitrary-scene radiometric integrator lowering and DispatchRays;
-- OpenUSD file/stage ingestion, Hydra subdivision/instancing, complete USDShade conversion, time-sampled stage integration, export and the general plugin ecosystem;
+- OpenUSD file/stage ingestion, Hydra subdivision/instancing, complete USDShade conversion, time-sampled stage integration and the general plugin ecosystem; USDA adapter output exists only for the documented native subset;
 - production-grade general fluid or acoustic simulation.
 
 ## Verification

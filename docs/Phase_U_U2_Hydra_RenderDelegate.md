@@ -54,4 +54,4 @@ The isolated SDK build verifies:
 - discovery from both the build tree and an isolated installed plugin layout;
 - actual OpenUSD/Hydra linkage without a graphics context.
 
-`check_phase_u2_static.ps1` freezes the explicit SDK opt-in, U.1 native boundary, plugin registration and original fail-loud readiness contract. U.3 owns mesh RPrims, U.4 owns USD material translation, and the current U.5 execution contract is documented separately.
+`check_phase_u2_static.ps1` freezes the explicit SDK opt-in, U.1 native boundary, plugin registration and original fail-loud readiness contract. U.3 owns mesh RPrims, U.4 owns USD material translation, U.5 owns progressive execution, and U.6 owns native-to-USDA output; each contract is documented separately.

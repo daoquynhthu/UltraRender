@@ -140,6 +140,27 @@ add_test(
     COMMAND test_hydra_render_buffer
 )
 
+add_executable(test_usda_export
+    test_usda_export.cpp
+)
+target_link_libraries(test_usda_export
+    PRIVATE ure_sceneio ur_openusd_hydra_sdk
+)
+target_compile_definitions(test_usda_export
+    PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
+)
+if(MSVC)
+    target_compile_options(test_usda_export
+        PRIVATE /W4 /WX /utf-8 /EHsc /wd4819)
+else()
+    target_compile_options(test_usda_export
+        PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(
+    NAME test_usda_export
+    COMMAND test_usda_export
+)
+
 if(UR_ENABLE_CUDA)
     add_executable(test_hydra_progressive_render
         test_hydra_progressive_render.cpp
@@ -174,6 +195,7 @@ set_tests_properties(
     test_hydra_mesh_rprim
     test_hydra_material_sprim
     test_hydra_render_buffer
+    test_usda_export
     PROPERTIES
     ENVIRONMENT_MODIFICATION
         "PATH=path_list_prepend:${UR_OPENUSD_ROOT}/bin;PXR_PLUGINPATH_NAME=set:$<TARGET_FILE_DIR:ure_hydra>/resources"

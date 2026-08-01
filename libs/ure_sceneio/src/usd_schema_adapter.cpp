@@ -383,8 +383,8 @@ UsdSchemaAdapterResult import_usd_schema_stage(
             result,
             "URE-U1-TIME-001",
             "/stage/time_samples",
-            "Animated USD samples require the U.5 session adapter",
-            "Bake one time sample or use the future Hydra session path");
+            "Animated USD samples require time-sampled stage orchestration beyond the retained U.5 session bridge",
+            "Bake one time sample or drive explicit static snapshots through the Hydra session bridge");
     }
     for (const auto& schema :
          stage.required_schemas) {

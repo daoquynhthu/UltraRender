@@ -14,7 +14,7 @@ $status = Get-Content -LiteralPath (Join-Path $root "STATUS.md") -Raw
 $agents = Get-Content -LiteralPath (Join-Path $root "AGENTS.md") -Raw
 $planCursor = Select-String -LiteralPath (Join-Path $root "PLAN.md") -Pattern '^当前游标:\s*(.+)$' | Select-Object -First 1
 if (-not $planCursor) { throw "PLAN authoritative cursor is missing" }
-$cursor = $planCursor.Matches[0].Groups[1].Value.Split(' ')[0]
+$cursor = $planCursor.Matches[0].Groups[1].Value.Trim()
 foreach ($entry in @(@("README.md", $readme), @("STATUS.md", $status), @("AGENTS.md", $agents))) {
     if ($entry[1] -notmatch [regex]::Escape($cursor)) { throw "$($entry[0]) does not name the PLAN cursor $cursor" }
 }

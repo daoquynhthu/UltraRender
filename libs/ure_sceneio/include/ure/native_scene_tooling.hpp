@@ -2,9 +2,10 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include <ure/native_scene_ir.hpp>
+#include <ure/native_adapter.hpp>
 
 namespace ure::native_scene {
 
@@ -25,6 +26,10 @@ struct NativeInspection {
 CapabilityRegistry native_tool_capabilities();
 LoadResult<NativeSceneArchive> load_native_asset(const std::filesystem::path& path,
                                                  const ValidationLimits& limits = {});
+LoadResult<NativeSceneArchive> load_native_package_scene(
+    const std::filesystem::path& path,
+    std::string_view scene_id,
+    const ValidationLimits& limits = {});
 NativeInspection inspect_native_asset(const std::filesystem::path& path,
                                       const ValidationLimits& limits = {});
 void build_native_scene(const std::filesystem::path& input,
@@ -39,5 +44,12 @@ void unpack_native_package(const std::filesystem::path& input,
 void migrate_native_scene(const std::filesystem::path& input,
                           const std::filesystem::path& output,
                           const ValidationLimits& limits = {});
+void export_native_scene_usda(
+    const std::filesystem::path& input,
+    const std::filesystem::path& output,
+    UsdExportPolicy policy = UsdExportPolicy::Strict,
+    const std::filesystem::path& loss_report_path = {},
+    std::string_view scene_id = {},
+    const ValidationLimits& limits = {});
 
 }
