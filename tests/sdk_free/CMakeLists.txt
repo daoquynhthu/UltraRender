@@ -28,6 +28,25 @@ target_include_directories(ure_transport_sdk_free PUBLIC
     "${URE_ROOT}/libs/ure_transport/include"
 )
 
+add_library(ure_research_sdk_free STATIC
+    "${URE_ROOT}/libs/ure_research/src/artifact.cpp"
+    "${URE_ROOT}/libs/ure_research/src/capability.cpp"
+    "${URE_ROOT}/libs/ure_research/src/execution.cpp"
+    "${URE_ROOT}/libs/ure_research/src/experiment.cpp"
+    "${URE_ROOT}/libs/ure_research/src/promotion.cpp"
+    "${URE_ROOT}/libs/ure_research/src/reference.cpp"
+)
+target_include_directories(ure_research_sdk_free PUBLIC
+    "${URE_ROOT}/libs/ure_types/include"
+    "${URE_ROOT}/libs/ure_runtime/include"
+    "${URE_ROOT}/libs/ure_transport/include"
+    "${URE_ROOT}/libs/ure_research/include"
+)
+target_link_libraries(ure_research_sdk_free PUBLIC
+    ure_runtime_sdk_free
+    ure_transport_sdk_free
+)
+
 add_executable(test_resource_plan_sdk_free
     "${URE_ROOT}/tests/host/test_resource_plan.cpp"
 )
@@ -65,6 +84,13 @@ target_include_directories(test_high_order_semantics_sdk_free PRIVATE
 target_link_libraries(test_high_order_semantics_sdk_free PRIVATE
     ure_transport_sdk_free
 )
+
+add_executable(test_research_substrate_sdk_free
+    "${URE_ROOT}/tests/host/test_research_substrate.cpp"
+)
+target_link_libraries(test_research_substrate_sdk_free PRIVATE
+    ure_research_sdk_free
+)
 target_include_directories(test_public_surface_sdk_free PRIVATE
     "${URE_ROOT}/libs/ure_core/include"
     "${URE_ROOT}/libs/ure_sceneio/include"
@@ -94,6 +120,12 @@ if(MSVC)
     target_compile_options(test_high_order_semantics_sdk_free PRIVATE
         /W4 /WX /utf-8 /EHsc /wd4819
     )
+    target_compile_options(ure_research_sdk_free PRIVATE
+        /W4 /WX /utf-8 /EHsc /wd4819
+    )
+    target_compile_options(test_research_substrate_sdk_free PRIVATE
+        /W4 /WX /utf-8 /EHsc /wd4819
+    )
 else()
     target_compile_options(ure_runtime_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
@@ -116,6 +148,12 @@ else()
     target_compile_options(test_high_order_semantics_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
     )
+    target_compile_options(ure_research_sdk_free PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+    )
+    target_compile_options(test_research_substrate_sdk_free PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+    )
 endif()
 
 enable_testing()
@@ -124,3 +162,4 @@ add_test(NAME execution_graph_sdk_free COMMAND test_execution_graph_sdk_free)
 add_test(NAME multi_backend_sdk_free COMMAND test_multi_backend_sdk_free)
 add_test(NAME public_surface_sdk_free COMMAND test_public_surface_sdk_free)
 add_test(NAME high_order_semantics_sdk_free COMMAND test_high_order_semantics_sdk_free)
+add_test(NAME research_substrate_sdk_free COMMAND test_research_substrate_sdk_free)

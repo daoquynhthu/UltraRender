@@ -70,7 +70,7 @@ Require-Text "tests/host/test_high_order_semantics.cpp" @(
     "test_correlation_and_preview_compatibility",
     "test_context_compatibility")
 Require-Text "tests/sdk_free/package_consumer/CMakeLists.txt" @(
-    "COMPONENTS ure_types ure_runtime ure_transport ure_sceneio ure_config",
+    "COMPONENTS ure_types ure_runtime ure_transport",
     "UltraRender::ure_transport")
 Require-Text "CMakeLists.txt" @("add_subdirectory\(libs/ure_transport\)")
 Require-Text "libs/ure_transport/CMakeLists.txt" @(

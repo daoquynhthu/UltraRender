@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative cursor is `HO.2 — 可执行研究底座`. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0, and HO.1 are complete. HO.0 machine-validates the capability/research inventory. HO.1 adds shared identity/unit/time values and the SDK-free `ure_transport` contract for observable, measure, support, estimator, uncertainty and compatibility semantics; current integrators are not migrated yet. HO.2 now owns experiment manifests, artifact containers, deterministic comparison and promotion evidence. The former Phase X plugin ABI remains frozen. Production coherent and partially coherent sessions still reject before GPU allocation.
+The authoritative cursor is `HT.0 — 现有积分器描述化`. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, and HO.0-HO.2 are complete. HO.1 provides shared semantic identity/unit/time and `ure_transport`; HO.2 adds the SDK-free `ure_research` execution/evidence substrate with deterministic shards, indexed artifacts, replicated comparison, maturity-aware capability negotiation, bounded oracle hooks and promotion reports. Existing integrators are not automatically composed yet. The former Phase X plugin ABI remains frozen. Production coherent and partially coherent sessions still reject before GPU allocation.
 
 Research, Experimental and Production are now separate maturity levels. Research may use provisional implementations when it preserves a reproducible hypothesis, input/seed, baseline, metric, artifact and failure domain. This does not upgrade the capability matrix below; default paths still require the relevant production gates.
 
@@ -21,7 +21,7 @@ Research, Experimental and Production are now separate maturity levels. Research
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
 | Build tree | `build_modular_x64` using Ninja |
 | Primary executable | `build_modular_x64/apps/ure_cli/ure_cli.exe` |
-| Registered tests | 58 CTest entries at this snapshot |
+| Registered tests | 59 CTest entries at this snapshot |
 
 The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remains unavailable on the portable native backends. Vulkan additionally has a Linux GCC/Ninja gate, Windows NVIDIA native ray-query evidence, and Windows NVIDIA/Intel compute-BVH evidence. D3D12 additionally has Windows NVIDIA DXR 1.1, compute fallback, typed texture/descriptor and cross-queue fence evidence. macOS, older CUDA architectures, and complete Linux/non-NVIDIA/D3D12 scene rendering do not have equivalent evidence.
 
@@ -32,6 +32,7 @@ The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remai
 | `ure_types` | Backend-neutral types, SceneIR, native contracts | Active |
 | `ure_runtime` | SDK-free device/resource/synchronization/dispatch/execution/acceleration/scheduling contracts | Active; implemented by CUDA and bounded Vulkan/D3D12 foundations |
 | `ure_transport` | SDK-free observable, measure, support, estimator, uncertainty and compatibility contracts | HO.1 contract implemented; existing integrators are not migrated yet |
+| `ure_research` | SDK-free research execution, artifact, comparison, capability, oracle and promotion contracts | HO.2 substrate implemented; research callbacks and C++ object layout are not a stable production ABI |
 | `ure_vulkan` | Vulkan 1.3 adapter/resource/compute/synchronization/acceleration backend | Active foundation; full SceneIR renderer not yet lowered |
 | `ure_d3d12` | Windows D3D12/DXR adapter/resource/compute/synchronization/acceleration backend | Active optional foundation; full SceneIR renderer not yet lowered |
 | `ure_core` | Renderer/session/C ABI plus private CUDA backend | Active |

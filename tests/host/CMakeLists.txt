@@ -30,6 +30,15 @@ add_test(
     COMMAND test_high_order_semantics)
 
 add_executable(
+    test_research_substrate
+    test_research_substrate.cpp)
+target_link_libraries(
+    test_research_substrate PRIVATE ure_research)
+add_test(
+    NAME test_research_substrate
+    COMMAND test_research_substrate)
+
+add_executable(
     test_acceleration_contract
     test_acceleration_contract.cpp)
 target_link_libraries(

@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HO.2 — 可执行研究底座
+当前游标: HT.0 — 现有积分器描述化
 
 ### 0.1 唯一生产施工队列
 
@@ -29,11 +29,12 @@ HO.0 capability debt and research baseline              [done]
 HO.1 unified semantics and architectural contracts      [done]
     │
     ▼
-HO.2 executable research substrate                      [current]
+HO.2 executable research substrate                      [done]
     │
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
 HT transport     HR reconstruction HW physical world HD differentiation
+[HT.0 current]
     │              │                │                │
     └──────────────┴────────┬───────┴────────────────┘
                             ▼
@@ -264,6 +265,8 @@ Research Capsule 不强制一种论文目录格式。HO.0 将冻结最小机器�
 ### HO.2 — 可执行研究底座
 
 **依赖**: HO.1。
+
+**状态**: 已完成（2026-08-01）。新增 SDK-free `ure_research`，统一 deterministic manifest/sample-counter shard、前置目录与逐 chunk digest 的 measurement artifact、replicated comparison、maturity-aware capability negotiation、bounded host/small-GPU oracle hook 和机器化 promotion evidence；独立 SDK-free、installed package consumer 与 Release 59/59 CTest 通过。详见 `docs/HO_2_Executable_Research_Substrate.md`。
 
 **目标**: 让新研究共享编译、执行、记录和比较基础，不强迫研究代码立即满足生产 ABI。
 
