@@ -20,6 +20,7 @@ This index separates current references from historical records. The root `PLAN.
 | [`HT_2_Pilot_Qualification.md`](HT_2_Pilot_Qualification.md) | Current pilot cost/variance/covariance/tail/ESS/memory evidence, adaptive-selection bias protection and automatic technique qualification architecture |
 | [`HT_3_Online_Portfolio_Scheduling.md`](HT_3_Online_Portfolio_Scheduling.md) | Current cost/covariance-aware online allocation, exploration/starvation, drift re-pilot, distributed coverage and MeasurementBundle schedule-provenance architecture |
 | [`HT_4_Transport_Research_Platform.md`](HT_4_Transport_Research_Platform.md) | Current capsule-bound transport research descriptors, joint-sample/reuse contracts, opt-in graph materialization and replicated assessment architecture |
+| [`HT_5_Automatic_Integration_Closure.md`](HT_5_Automatic_Integration_Closure.md) | Completed objective-driven automatic plan, defensive CUDA endpoint ensemble, provenance, budget and multi-scene statistical closure |
 | [`HR_0_Measurement_Bundle.md`](HR_0_Measurement_Bundle.md) | Current typed feature-film schema, budget loss, canonical merge, derived statistics and partial checkpoint architecture |
 | [`reference/Backend_API.md`](reference/Backend_API.md) | Implemented engine/session/C/Python API boundary |
 | [`Spectral_Semantics_Guide.md`](Spectral_Semantics_Guide.md) | Current semantic reference for spectral quantities |
@@ -58,7 +59,7 @@ These documents preserve design rationale and closure evidence. Dates, test coun
 
 Files under [`archive/`](archive/) are retained for historical context and are not maintained as current specifications. This includes former root handover/roadmap/progress documents and early physics/acoustic assessments.
 
-[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. It is useful for design history but cannot override the current `HT.5 — 自动积分系统闭环` cursor.
+[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. It is useful for design history but cannot override the current `HR.1 — 统计重建基线` cursor.
 
 Files under [`superpowers/specs/`](superpowers/specs/) and [`superpowers/plans/`](superpowers/plans/) are archived design and execution records. They intentionally preserve proposed paths, old test counts and unchecked implementation steps. They do not override the completed implementation or current PLAN cursor.
 

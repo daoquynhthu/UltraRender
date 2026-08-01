@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace ure {
@@ -15,7 +16,8 @@ enum class IntegratorEstimatorPolicy : std::uint32_t {
     Standard = 0,
     RestirDIBiasedPreview = 1,
     RestirDIUnbiasedProduction = 2,
-    RestirPTPathReuse = 3
+    RestirPTPathReuse = 3,
+    AutomaticPortfolio = 4
 };
 
 struct IntegratorEstimatorMetadata {
@@ -30,6 +32,42 @@ struct IntegratorEstimatorMetadata {
 
 constexpr std::uint32_t kRestirDISampleSpaceVersion = 1;
 constexpr std::uint32_t kRestirPTSampleSpaceVersion = 1;
+constexpr std::uint32_t kAutomaticPortfolioSampleSpaceVersion = 1;
+
+struct AutomaticTechniqueReport {
+    IntegratorMode mode = IntegratorMode::Wavefront;
+    bool qualified = false;
+    bool selected = false;
+    std::string reason;
+    int pilot_spp = 0;
+    int allocated_spp = 0;
+    double pilot_mean = 0.0;
+    double pilot_variance = 0.0;
+    double maximum_absolute_pilot_contribution = 0.0;
+    double nanoseconds_per_sample = 0.0;
+    double aggregation_weight = 0.0;
+};
+
+struct AutomaticIntegratorReport {
+    bool automatic = false;
+    bool complete = false;
+    bool quality_target_met = false;
+    bool time_budget_met = false;
+    bool memory_budget_met = false;
+    int requested_spp = 0;
+    int total_allocated_spp = 0;
+    double estimated_relative_standard_error = 0.0;
+    std::uint64_t elapsed_nanoseconds = 0;
+    std::uint64_t peak_memory_budget_bytes = 0;
+    std::uint64_t measured_peak_resident_device_bytes = 0;
+    std::uint64_t estimated_peak_device_bytes = 0;
+    std::uint64_t technique_coverage_mask = 0;
+    bool independent_endpoint_ensemble = false;
+    bool pilot_precision_weighted = false;
+    bool conservative_uncertainty_bound = false;
+    bool auxiliary_outputs_wavefront_only = false;
+    std::vector<AutomaticTechniqueReport> techniques;
+};
 
 IntegratorEstimatorMetadata make_integrator_estimator_metadata(
     const RenderConfig& config,
@@ -113,6 +151,9 @@ public:
     virtual AccelerationStats get_acceleration_stats() const = 0;
     virtual runtime::DynamicGeometryStats
         get_dynamic_geometry_stats() const = 0;
+
+    virtual AutomaticIntegratorReport
+        get_automatic_integrator_report() const { return {}; }
 
     // Backward compatibility alias
     const std::vector<float>& get_frame_buffer() const { return get_framebuffer(); }

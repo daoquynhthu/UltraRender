@@ -4964,7 +4964,16 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     }
 
     for (int s = 0; s < samples_per_pass; ++s) {
-        int current_global_sample = ctx->current_spp + s;
+        const auto global_sample =
+            ctx->render_config.sample_index_offset +
+            static_cast<std::uint64_t>(ctx->current_spp + s);
+        if (global_sample >
+            static_cast<std::uint64_t>(std::numeric_limits<int>::max())) {
+            throw std::overflow_error(
+                "render sample identity exceeds the current CUDA index range");
+        }
+        const int current_global_sample =
+            static_cast<int>(global_sample);
         const bool restir_pt = ctx->render_config.restir_pt.enabled;
         const int restir_pt_input_index = ctx->restir_pt_input_index;
         const int restir_pt_output_index = 1 - restir_pt_input_index;

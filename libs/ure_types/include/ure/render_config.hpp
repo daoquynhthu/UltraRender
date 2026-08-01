@@ -31,7 +31,8 @@ enum class IntegratorMode {
     MLT,
     RestirPT,
     BDPT,
-    VCM
+    VCM,
+    Automatic
 };
 
 enum class IntegratorSampler {
@@ -225,6 +226,17 @@ struct IntegratorRuntimeConfig {
     bool allow_biased_reuse = false;
 };
 
+struct AutomaticIntegratorConfig {
+    bool enabled = false;
+    double target_relative_standard_error = 0.02;
+    std::uint64_t time_budget_milliseconds = 0;
+    int memory_budget_mb = 0;
+    int pilot_spp = 4;
+    int maximum_techniques = 4;
+    float minimum_wavefront_fraction = 0.1f;
+    bool allow_experimental = false;
+};
+
 struct RenderConfig {
     BackendSelectionConfig backend;
     AccelerationConfig acceleration;
@@ -237,6 +249,7 @@ struct RenderConfig {
     SpectralSamplingMode spectral_sampling_mode = SpectralSamplingMode::PacketUniform;
     WaveOpticsConfig wave_optics;
     IntegratorRuntimeConfig integrator;
+    AutomaticIntegratorConfig automatic_integrator;
     PathGuidingConfig path_guiding;
     EnvironmentLightConfig environment_light;
     RestirDirectConfig restir_di;
@@ -248,6 +261,7 @@ struct RenderConfig {
     int wg_size = 32;
     int rays_per_block = 256;
     int samples_per_pass = 1;
+    std::uint64_t sample_index_offset = 0;
     int num_gpus_to_use = 1;
 };
 

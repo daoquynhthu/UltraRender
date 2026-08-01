@@ -69,6 +69,16 @@ add_test(
     COMMAND test_portfolio_scheduler)
 
 add_executable(
+    test_automatic_integrator
+    test_automatic_integrator.cpp)
+target_link_libraries(
+    test_automatic_integrator PRIVATE
+    ure_transport ure_runtime)
+add_test(
+    NAME test_automatic_integrator
+    COMMAND test_automatic_integrator)
+
+add_executable(
     test_measurement_bundle
     test_measurement_bundle.cpp)
 target_link_libraries(

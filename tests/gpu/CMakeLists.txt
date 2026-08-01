@@ -184,6 +184,23 @@ if(CMAKE_CUDA_COMPILER)
         ure_transport ure_runtime CUDA::cudart
     )
 
+    add_executable(
+        gpu_test_automatic_integrator
+        test_automatic_integrator.cpp
+    )
+    target_include_directories(
+        gpu_test_automatic_integrator PRIVATE
+        ${GPU_TEST_INCLUDES}
+    )
+    target_link_libraries(
+        gpu_test_automatic_integrator PRIVATE
+        ure_core ure_sceneio CUDA::cudart
+    )
+    target_compile_definitions(
+        gpu_test_automatic_integrator PRIVATE
+        URE_TEST_SCENE_DIR="${CMAKE_SOURCE_DIR}/scenes"
+    )
+
     add_executable(gpu_phase_r_guiding_benchmark
         phase_r_guiding_benchmark.cu
     )
@@ -201,6 +218,7 @@ if(CMAKE_CUDA_COMPILER)
         gpu_test_dynamic_geometry
         gpu_test_support_measure_composition
         gpu_test_pilot_statistics
+        gpu_test_automatic_integrator
         gpu_phase_r_guiding_benchmark
     )
     foreach(gpu_test IN LISTS GPU_TEST_TARGETS)
@@ -245,6 +263,9 @@ if(CMAKE_CUDA_COMPILER)
     add_test(
         NAME gpu_pilot_statistics
         COMMAND gpu_test_pilot_statistics)
+    add_test(
+        NAME gpu_automatic_integrator
+        COMMAND gpu_test_automatic_integrator)
 
     add_custom_target(gpu_tests
         COMMAND gpu_test_device
@@ -265,7 +286,8 @@ if(CMAKE_CUDA_COMPILER)
         COMMAND gpu_test_clustered_geometry
         COMMAND gpu_test_support_measure_composition
         COMMAND gpu_test_pilot_statistics
-        DEPENDS gpu_test_device gpu_test_math gpu_test_spectral gpu_test_spectral_soa gpu_test_hardware gpu_test_render gpu_test_instance gpu_test_tangents gpu_test_denoise gpu_test_polarization gpu_test_volume gpu_test_contract gpu_test_wave_optics gpu_test_cuda_runtime gpu_test_acceleration_contract gpu_test_clustered_geometry gpu_test_support_measure_composition gpu_test_pilot_statistics
+        COMMAND gpu_test_automatic_integrator
+        DEPENDS gpu_test_device gpu_test_math gpu_test_spectral gpu_test_spectral_soa gpu_test_hardware gpu_test_render gpu_test_instance gpu_test_tangents gpu_test_denoise gpu_test_polarization gpu_test_volume gpu_test_contract gpu_test_wave_optics gpu_test_cuda_runtime gpu_test_acceleration_contract gpu_test_clustered_geometry gpu_test_support_measure_composition gpu_test_pilot_statistics gpu_test_automatic_integrator
         COMMENT "Running all GPU tests"
     )
 endif()

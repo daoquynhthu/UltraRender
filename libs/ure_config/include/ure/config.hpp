@@ -152,10 +152,18 @@ struct MltIntegratorConfig {
 };
 
 struct IntegratorConfig {
-    std::string mode = "wavefront";
+    std::string mode = "automatic";
     std::string sampler = "default";
     std::string quality_preset = "default";
     bool allow_biased_reuse = false;
+    double target_relative_standard_error = 0.02;
+    std::uint64_t time_budget_milliseconds = 0;
+    int memory_budget_mb = 0;
+    int pilot_spp = 4;
+    int maximum_techniques = 4;
+    double minimum_wavefront_fraction = 0.1;
+    bool allow_experimental = false;
+    std::uint64_t sample_index_offset = 0;
     SpecularManifoldConfig specular_manifold;
     BidirectionalConfig bidirectional;
     VcmConfig vcm;

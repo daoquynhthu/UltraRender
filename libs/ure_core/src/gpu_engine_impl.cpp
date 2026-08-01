@@ -1,4 +1,5 @@
 #include "ure/render.hpp"
+#include "automatic_render_engine.hpp"
 #include "ure/transport/legacy_technique_preset.hpp"
 #include "ure/backend.hpp"
 #include "ure/detail/cuda_context.cuh"
@@ -177,6 +178,12 @@ bool validate_integrator_estimator_metadata(
         return metadata.mode == IntegratorMode::RestirPT && !metadata.biased &&
                (metadata.temporal_reuse || metadata.spatial_reuse) &&
                metadata.sample_space_version == kRestirPTSampleSpaceVersion;
+    case IntegratorEstimatorPolicy::AutomaticPortfolio:
+        return metadata.mode == IntegratorMode::Automatic &&
+               !metadata.biased && !metadata.temporal_reuse &&
+               !metadata.spatial_reuse &&
+               metadata.sample_space_version ==
+                   kAutomaticPortfolioSampleSpaceVersion;
     }
     return false;
 }
@@ -685,6 +692,10 @@ std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_renderer() {
 }
 
 std::unique_ptr<IRenderEngine> RenderEngineFactory::create_gpu_renderer(const RenderConfig& config) {
+    if (config.integrator.mode == IntegratorMode::Automatic ||
+        config.automatic_integrator.enabled) {
+        return create_automatic_render_engine(config);
+    }
     return std::make_unique<GpuRenderEngine>(config);
 }
 

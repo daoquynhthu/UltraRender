@@ -30,6 +30,7 @@ class EstimatorPolicy(IntEnum):
     RESTIR_DI_BIASED_PREVIEW = 1
     RESTIR_DI_UNBIASED_PRODUCTION = 2
     RESTIR_PT_PATH_REUSE = 3
+    AUTOMATIC_PORTFOLIO = 4
 
 
 class LogLevel(IntEnum):
@@ -320,6 +321,62 @@ class _IntegratorConfig(ctypes.Structure):
     ]
 
 
+class _AutomaticIntegratorConfig(ctypes.Structure):
+    _fields_ = [
+        ("version", ctypes.c_uint32),
+        ("struct_size", ctypes.c_uint32),
+        ("target_relative_standard_error", ctypes.c_double),
+        ("time_budget_milliseconds", ctypes.c_uint64),
+        ("memory_budget_mb", ctypes.c_int),
+        ("pilot_spp", ctypes.c_int),
+        ("maximum_techniques", ctypes.c_int),
+        ("minimum_wavefront_fraction", ctypes.c_float),
+        ("allow_experimental", ctypes.c_int),
+        ("sample_index_offset", ctypes.c_uint64),
+    ]
+
+
+class _AutomaticTechniqueReport(ctypes.Structure):
+    _fields_ = [
+        ("mode", ctypes.c_int),
+        ("qualified", ctypes.c_int),
+        ("selected", ctypes.c_int),
+        ("reason", ctypes.c_char * 160),
+        ("pilot_spp", ctypes.c_int),
+        ("allocated_spp", ctypes.c_int),
+        ("pilot_mean", ctypes.c_double),
+        ("pilot_variance", ctypes.c_double),
+        ("maximum_absolute_pilot_contribution", ctypes.c_double),
+        ("nanoseconds_per_sample", ctypes.c_double),
+        ("aggregation_weight", ctypes.c_double),
+    ]
+
+
+class _AutomaticIntegratorReport(ctypes.Structure):
+    _fields_ = [
+        ("version", ctypes.c_uint32),
+        ("struct_size", ctypes.c_uint32),
+        ("automatic", ctypes.c_int),
+        ("complete", ctypes.c_int),
+        ("quality_target_met", ctypes.c_int),
+        ("time_budget_met", ctypes.c_int),
+        ("memory_budget_met", ctypes.c_int),
+        ("requested_spp", ctypes.c_int),
+        ("total_allocated_spp", ctypes.c_int),
+        ("estimated_relative_standard_error", ctypes.c_double),
+        ("elapsed_nanoseconds", ctypes.c_uint64),
+        ("peak_memory_budget_bytes", ctypes.c_uint64),
+        ("measured_peak_resident_device_bytes", ctypes.c_uint64),
+        ("estimated_peak_device_bytes", ctypes.c_uint64),
+        ("technique_coverage_mask", ctypes.c_uint64),
+        ("independent_endpoint_ensemble", ctypes.c_int),
+        ("pilot_precision_weighted", ctypes.c_int),
+        ("conservative_uncertainty_bound", ctypes.c_int),
+        ("auxiliary_outputs_wavefront_only", ctypes.c_int),
+        ("technique_count", ctypes.c_uint32),
+    ]
+
+
 @dataclass(frozen=True)
 class Progress:
     spp: int
@@ -336,6 +393,43 @@ class EstimatorMetadata:
     spatial_reuse: bool
     sample_space_version: int
     scene_epoch: int
+
+
+@dataclass(frozen=True)
+class AutomaticTechniqueReport:
+    mode: int
+    qualified: bool
+    selected: bool
+    reason: str
+    pilot_spp: int
+    allocated_spp: int
+    pilot_mean: float
+    pilot_variance: float
+    maximum_absolute_pilot_contribution: float
+    nanoseconds_per_sample: float
+    aggregation_weight: float
+
+
+@dataclass(frozen=True)
+class AutomaticIntegratorReport:
+    automatic: bool
+    complete: bool
+    quality_target_met: bool
+    time_budget_met: bool
+    memory_budget_met: bool
+    requested_spp: int
+    total_allocated_spp: int
+    estimated_relative_standard_error: float
+    elapsed_nanoseconds: int
+    peak_memory_budget_bytes: int
+    measured_peak_resident_device_bytes: int
+    estimated_peak_device_bytes: int
+    technique_coverage_mask: int
+    independent_endpoint_ensemble: bool
+    pilot_precision_weighted: bool
+    conservative_uncertainty_bound: bool
+    auxiliary_outputs_wavefront_only: bool
+    techniques: tuple[AutomaticTechniqueReport, ...]
 
 
 @dataclass(frozen=True)
@@ -464,6 +558,15 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(_AccelerationConfig),
     ]
     lib.ure_session_create_execution_config_v2.restype = ctypes.c_void_p
+    lib.ure_session_create_execution_config_v3.argtypes = [
+        ctypes.POINTER(_SpectralConfig),
+        ctypes.POINTER(_WaveOpticsConfigV2),
+        ctypes.POINTER(_IntegratorConfig),
+        ctypes.POINTER(_BackendConfig),
+        ctypes.POINTER(_AccelerationConfig),
+        ctypes.POINTER(_AutomaticIntegratorConfig),
+    ]
+    lib.ure_session_create_execution_config_v3.restype = ctypes.c_void_p
     lib.ure_backend_adapter_count.argtypes = [ctypes.c_int]
     lib.ure_backend_adapter_count.restype = ctypes.c_int
     lib.ure_backend_get_adapter_info.argtypes = [
@@ -520,6 +623,13 @@ def _configure_abi(lib: ctypes.CDLL) -> None:
     lib.ure_session_get_progress.restype = _Progress
     lib.ure_session_get_estimator_metadata.argtypes = [ctypes.c_void_p]
     lib.ure_session_get_estimator_metadata.restype = _EstimatorMetadata
+    lib.ure_session_get_automatic_integrator_report.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(_AutomaticIntegratorReport),
+        ctypes.POINTER(_AutomaticTechniqueReport),
+        ctypes.c_uint32,
+    ]
+    lib.ure_session_get_automatic_integrator_report.restype = ctypes.c_int
     lib.ure_session_get_acceleration_stats.argtypes = [
         ctypes.c_void_p,
         ctypes.POINTER(_AccelerationStats),
@@ -623,6 +733,8 @@ def _integrator_mode_id(mode: str) -> int:
         "restir_pt": 5,
         "bdpt": 6,
         "vcm": 7,
+        "automatic": 8,
+        "auto": 8,
     }
     try:
         return modes[mode]
@@ -797,10 +909,18 @@ class RenderSession:
         camera_psf_radius_pixels: int = 8,
         camera_wavelength_bin_count: int = 16,
         camera_pupil_sample_count: int = 32,
-        integrator_mode: str = "wavefront",
+        integrator_mode: str = "automatic",
         integrator_sampler: str = "default",
         integrator_quality_preset: str = "default",
         allow_biased_integrator_reuse: bool = False,
+        target_relative_standard_error: float = 0.02,
+        integrator_time_budget_ms: int = 0,
+        integrator_memory_budget_mb: int = 0,
+        integrator_pilot_spp: int = 4,
+        integrator_maximum_techniques: int = 4,
+        integrator_minimum_wavefront_fraction: float = 0.1,
+        allow_experimental_integrators: bool = False,
+        sample_index_offset: int = 0,
         path_guiding: bool = False,
         path_guiding_light_mixture: float = 0.5,
         path_guiding_learning_rate: float = 0.25,
@@ -887,6 +1007,32 @@ class RenderSession:
             or acceleration_clustered_geometry
             or acceleration_collect_stats
             or acceleration_scratch_budget_bytes != 0
+        )
+        automatic_requested = integrator_mode in ("automatic", "auto")
+        if automatic_requested and (
+            target_relative_standard_error <= 0.0
+            or integrator_time_budget_ms < 0
+            or integrator_memory_budget_mb < 0
+            or integrator_pilot_spp < 2
+            or integrator_maximum_techniques < 1
+            or not 0.0 < integrator_minimum_wavefront_fraction <= 1.0
+            or sample_index_offset < 0
+        ):
+            raise ValueError("invalid automatic integrator objective")
+        automatic_config = _AutomaticIntegratorConfig(
+            1,
+            ctypes.sizeof(_AutomaticIntegratorConfig),
+            float(target_relative_standard_error),
+            int(integrator_time_budget_ms),
+            int(integrator_memory_budget_mb),
+            int(integrator_pilot_spp),
+            int(integrator_maximum_techniques),
+            float(integrator_minimum_wavefront_fraction),
+            int(allow_experimental_integrators),
+            int(sample_index_offset),
+        )
+        automatic_ptr = (
+            ctypes.byref(automatic_config) if automatic_requested else None
         )
         if backend_requested or acceleration_requested:
             cfg = _SpectralConfig(
@@ -991,22 +1137,14 @@ class RenderSession:
                     0.9,
                 )
                 integrator_ptr = ctypes.byref(integrator)
-            if diffraction_requested:
-                handle = native().ure_session_create_execution_config_v2(
-                    ctypes.byref(cfg),
-                    ctypes.byref(wave_v2),
-                    integrator_ptr,
-                    ctypes.byref(backend_config),
-                    ctypes.byref(acceleration_config),
-                )
-            else:
-                handle = native().ure_session_create_execution_config(
-                    ctypes.byref(cfg),
-                    ctypes.byref(wave),
-                    integrator_ptr,
-                    ctypes.byref(backend_config),
-                    ctypes.byref(acceleration_config),
-                )
+            handle = native().ure_session_create_execution_config_v3(
+                ctypes.byref(cfg),
+                ctypes.byref(wave_v2),
+                integrator_ptr,
+                ctypes.byref(backend_config),
+                ctypes.byref(acceleration_config),
+                automatic_ptr,
+            )
         elif integrator_requested:
             cfg = _SpectralConfig(
                 int(domain_bins),
@@ -1087,7 +1225,16 @@ class RenderSession:
                 0.01,
                 0.9,
             )
-            if diffraction_requested:
+            if automatic_requested:
+                handle = native().ure_session_create_execution_config_v3(
+                    ctypes.byref(cfg),
+                    ctypes.byref(wave_v2),
+                    ctypes.byref(integrator),
+                    None,
+                    None,
+                    automatic_ptr,
+                )
+            elif diffraction_requested:
                 handle = native().ure_session_create_execution_config_v2(
                     ctypes.byref(cfg),
                     ctypes.byref(wave_v2),
@@ -1297,6 +1444,57 @@ class RenderSession:
             raw.scene_epoch,
         )
 
+    def automatic_integrator_report(self) -> AutomaticIntegratorReport:
+        raw = _AutomaticIntegratorReport()
+        capacity = 16
+        values = (_AutomaticTechniqueReport * capacity)()
+        result = native().ure_session_get_automatic_integrator_report(
+            self.handle,
+            ctypes.byref(raw),
+            values,
+            capacity,
+        )
+        if result != 0:
+            raise RuntimeError("automatic integrator report is unavailable")
+        techniques = tuple(
+            AutomaticTechniqueReport(
+                values[index].mode,
+                bool(values[index].qualified),
+                bool(values[index].selected),
+                bytes(values[index].reason).split(b"\0", 1)[0].decode(
+                    errors="replace"
+                ),
+                values[index].pilot_spp,
+                values[index].allocated_spp,
+                values[index].pilot_mean,
+                values[index].pilot_variance,
+                values[index].maximum_absolute_pilot_contribution,
+                values[index].nanoseconds_per_sample,
+                values[index].aggregation_weight,
+            )
+            for index in range(raw.technique_count)
+        )
+        return AutomaticIntegratorReport(
+            bool(raw.automatic),
+            bool(raw.complete),
+            bool(raw.quality_target_met),
+            bool(raw.time_budget_met),
+            bool(raw.memory_budget_met),
+            raw.requested_spp,
+            raw.total_allocated_spp,
+            raw.estimated_relative_standard_error,
+            raw.elapsed_nanoseconds,
+            raw.peak_memory_budget_bytes,
+            raw.measured_peak_resident_device_bytes,
+            raw.estimated_peak_device_bytes,
+            raw.technique_coverage_mask,
+            bool(raw.independent_endpoint_ensemble),
+            bool(raw.pilot_precision_weighted),
+            bool(raw.conservative_uncertainty_bound),
+            bool(raw.auxiliary_outputs_wavefront_only),
+            techniques,
+        )
+
     def acceleration_stats(self) -> AccelerationStats:
         raw = _AccelerationStatsV4()
         if native().ure_session_get_acceleration_stats_v4(
@@ -1413,10 +1611,18 @@ def create_session(
     camera_psf_radius_pixels: int = 8,
     camera_wavelength_bin_count: int = 16,
     camera_pupil_sample_count: int = 32,
-    integrator_mode: str = "wavefront",
+    integrator_mode: str = "automatic",
     integrator_sampler: str = "default",
     integrator_quality_preset: str = "default",
     allow_biased_integrator_reuse: bool = False,
+    target_relative_standard_error: float = 0.02,
+    integrator_time_budget_ms: int = 0,
+    integrator_memory_budget_mb: int = 0,
+    integrator_pilot_spp: int = 4,
+    integrator_maximum_techniques: int = 4,
+    integrator_minimum_wavefront_fraction: float = 0.1,
+    allow_experimental_integrators: bool = False,
+    sample_index_offset: int = 0,
     path_guiding: bool = False,
     path_guiding_light_mixture: float = 0.5,
     path_guiding_learning_rate: float = 0.25,
@@ -1483,6 +1689,15 @@ def create_session(
         integrator_sampler=integrator_sampler,
         integrator_quality_preset=integrator_quality_preset,
         allow_biased_integrator_reuse=allow_biased_integrator_reuse,
+        target_relative_standard_error=target_relative_standard_error,
+        integrator_time_budget_ms=integrator_time_budget_ms,
+        integrator_memory_budget_mb=integrator_memory_budget_mb,
+        integrator_pilot_spp=integrator_pilot_spp,
+        integrator_maximum_techniques=integrator_maximum_techniques,
+        integrator_minimum_wavefront_fraction=
+            integrator_minimum_wavefront_fraction,
+        allow_experimental_integrators=allow_experimental_integrators,
+        sample_index_offset=sample_index_offset,
         path_guiding=path_guiding,
         path_guiding_light_mixture=path_guiding_light_mixture,
         path_guiding_learning_rate=path_guiding_learning_rate,

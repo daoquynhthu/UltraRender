@@ -21,7 +21,8 @@ typedef enum ure_integrator_estimator_policy_t {
     URE_ESTIMATOR_STANDARD = 0,
     URE_ESTIMATOR_RESTIR_DI_BIASED_PREVIEW = 1,
     URE_ESTIMATOR_RESTIR_DI_UNBIASED_PRODUCTION = 2,
-    URE_ESTIMATOR_RESTIR_PT_PATH_REUSE = 3
+    URE_ESTIMATOR_RESTIR_PT_PATH_REUSE = 3,
+    URE_ESTIMATOR_AUTOMATIC_PORTFOLIO = 4
 } ure_integrator_estimator_policy_t;
 
 typedef struct ure_integrator_estimator_metadata_t {
@@ -33,6 +34,43 @@ typedef struct ure_integrator_estimator_metadata_t {
     uint32_t sample_space_version;
     uint32_t scene_epoch;
 } ure_integrator_estimator_metadata_t;
+
+typedef struct ure_automatic_technique_report_t {
+    int mode;
+    int qualified;
+    int selected;
+    char reason[160];
+    int pilot_spp;
+    int allocated_spp;
+    double pilot_mean;
+    double pilot_variance;
+    double maximum_absolute_pilot_contribution;
+    double nanoseconds_per_sample;
+    double aggregation_weight;
+} ure_automatic_technique_report_t;
+
+typedef struct ure_automatic_integrator_report_t {
+    uint32_t version;
+    uint32_t struct_size;
+    int automatic;
+    int complete;
+    int quality_target_met;
+    int time_budget_met;
+    int memory_budget_met;
+    int requested_spp;
+    int total_allocated_spp;
+    double estimated_relative_standard_error;
+    uint64_t elapsed_nanoseconds;
+    uint64_t peak_memory_budget_bytes;
+    uint64_t measured_peak_resident_device_bytes;
+    uint64_t estimated_peak_device_bytes;
+    uint64_t technique_coverage_mask;
+    int independent_endpoint_ensemble;
+    int pilot_precision_weighted;
+    int conservative_uncertainty_bound;
+    int auxiliary_outputs_wavefront_only;
+    uint32_t technique_count;
+} ure_automatic_integrator_report_t;
 
 typedef struct ure_spectral_config_t {
     uint64_t domain_bins;
@@ -217,7 +255,8 @@ typedef enum ure_integrator_mode_t {
     URE_INTEGRATOR_MLT = 4,
     URE_INTEGRATOR_RESTIR_PT = 5,
     URE_INTEGRATOR_BDPT = 6,
-    URE_INTEGRATOR_VCM = 7
+    URE_INTEGRATOR_VCM = 7,
+    URE_INTEGRATOR_AUTOMATIC = 8
 } ure_integrator_mode_t;
 
 typedef enum ure_integrator_sampler_t {
@@ -294,6 +333,19 @@ typedef struct ure_integrator_config_t {
     int vcm_merge_surfaces;
     int vcm_merge_volumes;
 } ure_integrator_config_t;
+
+typedef struct ure_automatic_integrator_config_t {
+    uint32_t version;
+    uint32_t struct_size;
+    double target_relative_standard_error;
+    uint64_t time_budget_milliseconds;
+    int memory_budget_mb;
+    int pilot_spp;
+    int maximum_techniques;
+    float minimum_wavefront_fraction;
+    int allow_experimental;
+    uint64_t sample_index_offset;
+} ure_automatic_integrator_config_t;
 
 typedef enum ure_aov_type_t {
     URE_AOV_BEAUTY = 0,
@@ -413,6 +465,13 @@ ure_session_t* ure_session_create_execution_config_v2(
     const ure_integrator_config_t* integrator_config,
     const ure_backend_config_t* backend_config,
     const ure_acceleration_config_t* acceleration_config);
+ure_session_t* ure_session_create_execution_config_v3(
+    const ure_spectral_config_t* spectral_config,
+    const ure_wave_optics_config_v2_t* wave_config,
+    const ure_integrator_config_t* integrator_config,
+    const ure_backend_config_t* backend_config,
+    const ure_acceleration_config_t* acceleration_config,
+    const ure_automatic_integrator_config_t* automatic_config);
 void ure_session_destroy(ure_session_t* session);
 int ure_session_load_scene_file(ure_session_t* session, const char* path);
 int ure_session_start(ure_session_t* session, int progressive);
@@ -445,6 +504,11 @@ int ure_session_update_material_texture(ure_session_t* session,
 ure_session_progress_t ure_session_get_progress(const ure_session_t* session);
 ure_integrator_estimator_metadata_t ure_session_get_estimator_metadata(
     const ure_session_t* session);
+int ure_session_get_automatic_integrator_report(
+    const ure_session_t* session,
+    ure_automatic_integrator_report_t* out_report,
+    ure_automatic_technique_report_t* out_techniques,
+    uint32_t technique_capacity);
 int ure_session_get_acceleration_stats(
     const ure_session_t* session,
     ure_acceleration_stats_t* out_stats);

@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HT.5 — 自动积分系统闭环
+当前游标: HR.1 — 统计重建基线
 
 ### 0.1 唯一生产施工队列
 
@@ -34,7 +34,7 @@ HO.2 executable research substrate                      [done]
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
 HT transport     HR reconstruction HW physical world HD differentiation
-[HT.5 current]   [HR.0 done]
+[HT.5 done]      [HR.1 current]
     │              │                │                │
     └──────────────┴────────┬───────┴────────────────┘
                             ▼
@@ -390,6 +390,8 @@ MCMC 链、相关复用、biased preview 和不同 observable 必须使用各自
 ### HT.5 — 自动积分系统闭环
 
 **依赖**: HT.3，并吸收有价值的 HT.4 成果。
+
+**状态**: 已完成（2026-08-01）。SDK-free `ure_transport` 将质量、deadline、resident/scratch 与 sample 目标编译为绑定 Technique Graph、support/measure composition、pilot qualification、portfolio schedule、world/snapshot 的自动计划；每个 partition observation 和最终 output trace 保留 coverage、weight rule、normalization、uncertainty、time、resident/scratch 与 measurement identity。实际 CUDA bridge 使用与 production 不重叠的 pilot range 自动资格判定完整无偏 endpoint，始终保留 wavefront 防御性份额，按 pilot precision 分配并顺序执行候选以限制同时驻留显存，再以保守 uncertainty bound 合并 Beauty。CLI/JSON 与 pyure 默认接受目标而非积分器名；C++ 默认构造继续保留 wavefront 源兼容。手工 mode 长期保留为 compatibility/reproducibility preset。固定三场景、三独立重复 suite 覆盖 unresolved bias、variance、tail、time-to-error、实测 resident/估计 construction peak、权重归一化与乱序 shard merge；独立 SDK-free 13/13、installed package 与 Release 69/69 CTest 通过。细粒度 graph node 的单一联合 CUDA dispatch、自动高阶 plane 与 experimental ResearchExtension 默认执行仍未宣称完成。详见 `docs/HT_5_Automatic_Integration_Closure.md`。
 
 完成条件：
 

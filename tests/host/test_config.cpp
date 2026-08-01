@@ -741,6 +741,51 @@ static int test_native_tool_commands() {
     return 0;
 }
 
+static int test_automatic_integrator_objective() {
+    const char* path = "test_config_automatic_integrator.json";
+    {
+        std::ofstream out(path);
+        out << R"({"integrator":{"mode":"automatic","target_relative_standard_error":0.015,"time_budget_milliseconds":2500,"memory_budget_mb":1024,"pilot_spp":8,"maximum_techniques":5,"minimum_wavefront_fraction":0.2,"allow_experimental":false,"sample_index_offset":4096}})";
+    }
+    const auto json = ure::config::load_config(path);
+    std::remove(path);
+    CHECK(json.integrator.mode == "automatic");
+    CHECK(std::fabs(
+        json.integrator.target_relative_standard_error - 0.015) < 1e-12);
+    CHECK(json.integrator.time_budget_milliseconds == 2500u);
+    CHECK(json.integrator.memory_budget_mb == 1024);
+    CHECK(json.integrator.pilot_spp == 8);
+    CHECK(json.integrator.maximum_techniques == 5);
+    CHECK(json.integrator.sample_index_offset == 4096u);
+    CHECK(std::fabs(
+        json.integrator.minimum_wavefront_fraction - 0.2) < 1e-12);
+    const char* argv[] = {
+        "ure_cli", "render", "scene.gltf",
+        "--integrator-mode", "automatic",
+        "--target-relative-standard-error", "0.01",
+        "--integrator-time-budget-ms", "5000",
+        "--integrator-memory-budget-mb", "2048",
+        "--integrator-pilot-spp", "6",
+        "--integrator-maximum-techniques", "4",
+        "--integrator-minimum-wavefront-fraction", "0.15",
+        "--sample-index-offset", "8192"};
+    const auto cli = ure::config::parse_cli(
+        static_cast<int>(sizeof(argv) / sizeof(argv[0])),
+        const_cast<char**>(argv));
+    CHECK(cli.config.integrator.mode == "automatic");
+    CHECK(std::fabs(
+        cli.config.integrator.target_relative_standard_error - 0.01) <
+        1e-12);
+    CHECK(cli.config.integrator.time_budget_milliseconds == 5000u);
+    CHECK(cli.config.integrator.memory_budget_mb == 2048);
+    CHECK(cli.config.integrator.pilot_spp == 6);
+    CHECK(cli.config.integrator.maximum_techniques == 4);
+    CHECK(cli.config.integrator.sample_index_offset == 8192u);
+    CHECK(std::fabs(
+        cli.config.integrator.minimum_wavefront_fraction - 0.15) < 1e-12);
+    return 0;
+}
+
 int main() {
     std::fprintf(stderr, "[Config Test]\n");
     auto run = [](const char* name, int (*fn)()) {
@@ -775,6 +820,7 @@ int main() {
     failed += run("test_backend_cli_overrides", test_backend_cli_overrides);
     failed += run("test_acceleration_json_fields", test_acceleration_json_fields);
     failed += run("test_acceleration_cli_overrides", test_acceleration_cli_overrides);
+    failed += run("test_automatic_integrator_objective", test_automatic_integrator_objective);
     failed += run("test_native_tool_commands", test_native_tool_commands);
 
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);

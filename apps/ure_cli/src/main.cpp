@@ -124,7 +124,11 @@ bool parse_wave_optics_mode(const std::string& mode, ure::WaveOpticsMode& out) {
 
 bool parse_integrator_mode(const std::string& mode, ure::IntegratorMode& out) {
     const std::string value = lowercase(mode);
-    if (value == "wavefront" || value.empty()) {
+    if (value == "automatic" || value == "auto" || value.empty()) {
+        out = ure::IntegratorMode::Automatic;
+        return true;
+    }
+    if (value == "wavefront") {
         out = ure::IntegratorMode::Wavefront;
         return true;
     }
@@ -157,6 +161,21 @@ bool parse_integrator_mode(const std::string& mode, ure::IntegratorMode& out) {
         return true;
     }
     return false;
+}
+
+const char* integrator_mode_name(ure::IntegratorMode mode) {
+    switch (mode) {
+    case ure::IntegratorMode::Wavefront: return "wavefront";
+    case ure::IntegratorMode::PathGuided: return "path_guided";
+    case ure::IntegratorMode::RestirDI: return "restir_di";
+    case ure::IntegratorMode::SpecularManifold: return "specular_manifold";
+    case ure::IntegratorMode::MLT: return "mlt";
+    case ure::IntegratorMode::RestirPT: return "restir_pt";
+    case ure::IntegratorMode::BDPT: return "bdpt";
+    case ure::IntegratorMode::VCM: return "vcm";
+    case ure::IntegratorMode::Automatic: return "automatic";
+    }
+    return "unknown";
 }
 
 bool parse_integrator_sampler(const std::string& sampler, ure::IntegratorSampler& out) {
@@ -295,6 +314,31 @@ bool make_integrator_config(const ure::config::IntegratorConfig& app_config, ure
         return false;
     }
     cfg.integrator.allow_biased_reuse = app_config.allow_biased_reuse;
+    cfg.automatic_integrator.enabled =
+        cfg.integrator.mode == ure::IntegratorMode::Automatic;
+    cfg.automatic_integrator.target_relative_standard_error =
+        app_config.target_relative_standard_error;
+    cfg.automatic_integrator.time_budget_milliseconds =
+        app_config.time_budget_milliseconds;
+    cfg.automatic_integrator.memory_budget_mb = app_config.memory_budget_mb;
+    cfg.automatic_integrator.pilot_spp = app_config.pilot_spp;
+    cfg.automatic_integrator.maximum_techniques =
+        app_config.maximum_techniques;
+    cfg.automatic_integrator.minimum_wavefront_fraction =
+        static_cast<float>(app_config.minimum_wavefront_fraction);
+    cfg.automatic_integrator.allow_experimental =
+        app_config.allow_experimental;
+    cfg.sample_index_offset = app_config.sample_index_offset;
+    if (cfg.integrator.mode == ure::IntegratorMode::Automatic &&
+        (!(app_config.target_relative_standard_error > 0.0) ||
+         app_config.memory_budget_mb < 0 ||
+         app_config.pilot_spp < 2 ||
+         app_config.maximum_techniques < 1 ||
+         !(app_config.minimum_wavefront_fraction > 0.0) ||
+         app_config.minimum_wavefront_fraction > 1.0)) {
+        std::cerr << "Error: invalid automatic integrator objective\n";
+        return false;
+    }
     if (cfg.integrator.mode == ure::IntegratorMode::PathGuided) {
         cfg.path_guiding.enabled = true;
     } else if (cfg.integrator.mode == ure::IntegratorMode::RestirDI) {
@@ -318,6 +362,12 @@ bool make_integrator_config(const ure::config::IntegratorConfig& app_config, ure
 
 bool validate_supported_wave_optics(
     const ure::RenderConfig& config) {
+    if (config.integrator.mode == ure::IntegratorMode::Automatic) {
+        auto baseline = config;
+        baseline.integrator.mode = ure::IntegratorMode::Wavefront;
+        baseline.automatic_integrator.enabled = false;
+        return validate_supported_wave_optics(baseline);
+    }
     const auto& cfg = config.wave_optics;
     if (ure::wave_optics_is_radiometric_only(cfg)) return true;
     if (ure::wave::
@@ -497,11 +547,47 @@ int cmd_render(const ure::config::CliResult& cli) {
     }
     const std::string output_path = (output_dir / output_filename).string();
 
+    if (gpu_config.integrator.mode == ure::IntegratorMode::Automatic) {
+        ure::RenderSettings settings;
+        settings.width = scene_ir.width;
+        settings.height = scene_ir.height;
+        settings.spp = spp;
+        settings.output_path = output_path;
+        engine->render(settings);
+        if (!save_frame(*engine, scene_ir.width, scene_ir.height,
+                        output_path, app_config.output.format)) {
+            std::cerr << "Error: failed to save output: "
+                      << output_path << "\n";
+            return 1;
+        }
+        const auto report = engine->get_automatic_integrator_report();
+        std::cout << "Automatic portfolio: "
+                  << report.total_allocated_spp << " samples, relative SE "
+                  << report.estimated_relative_standard_error
+                  << ", quality/time/memory targets "
+                  << (report.quality_target_met ? "met" : "missed") << "/"
+                  << (report.time_budget_met ? "met" : "missed") << "/"
+                  << (report.memory_budget_met ? "met" : "missed") << "\n";
+        for (const auto& technique : report.techniques) {
+            std::cout << "  " << integrator_mode_name(technique.mode)
+                      << ": " << technique.reason;
+            if (technique.selected) {
+                std::cout << ", " << technique.allocated_spp
+                          << " samples, weight "
+                          << technique.aggregation_weight;
+            }
+            std::cout << "\n";
+        }
+        UR_LOG_INFO(CLI, "Render Finished!");
+        UR_LOG_INFO(CLI, "Output: {}", output_path);
+        return 0;
+    }
+
     auto last_save_time = std::chrono::steady_clock::now();
     int current_spp = 0;
     while (current_spp < spp) {
         current_spp = engine->render_pass();
-        if (current_spp % 10 == 0 || current_spp == spp) {
+        if (current_spp % 10 == 0 || current_spp >= spp) {
             std::cout << "\r[Main] Progress: " << current_spp << "/" << spp << " SPP" << std::flush;
         }
 
@@ -509,7 +595,7 @@ int cmd_render(const ure::config::CliResult& cli) {
         if (std::chrono::duration_cast<std::chrono::seconds>(now - last_save_time).count() >= 1 ||
             current_spp == 1 ||
             current_spp == 10 ||
-            current_spp == spp) {
+            current_spp >= spp) {
             if (!save_frame(*engine, scene_ir.width, scene_ir.height, output_path, app_config.output.format)) {
                 std::cerr << "Error: failed to save output: " << output_path << "\n";
                 return 1;

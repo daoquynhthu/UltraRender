@@ -9,6 +9,7 @@
 #include "ure/spectral_limits.hpp"
 #include "ure/wave_optics.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <ure/log.hpp>
@@ -99,6 +100,9 @@ bool c_integrator_mode(int mode, IntegratorMode& out) {
     case URE_INTEGRATOR_VCM:
         out = IntegratorMode::VCM;
         return true;
+    case URE_INTEGRATOR_AUTOMATIC:
+        out = IntegratorMode::Automatic;
+        return true;
     default:
         return false;
     }
@@ -188,6 +192,12 @@ bool make_wave_optics_config(
 
 bool supported_wave_optics_config(
     const RenderConfig& config) {
+    if (config.integrator.mode == IntegratorMode::Automatic) {
+        auto baseline = config;
+        baseline.integrator.mode = IntegratorMode::Wavefront;
+        baseline.automatic_integrator.enabled = false;
+        return supported_wave_optics_config(baseline);
+    }
     if (wave_optics_is_radiometric_only(
             config.wave_optics)) {
         return true;
@@ -225,6 +235,8 @@ bool make_integrator_config(const ure_integrator_config_t* integrator_config, Re
     if (!c_integrator_sampler(integrator_config->sampler, cfg.integrator.sampler)) return false;
     if (!c_integrator_quality(integrator_config->quality_preset, cfg.integrator.quality_preset)) return false;
     cfg.integrator.allow_biased_reuse = integrator_config->allow_biased_reuse != 0;
+    cfg.automatic_integrator.enabled =
+        cfg.integrator.mode == IntegratorMode::Automatic;
     cfg.path_guiding.enabled = integrator_config->path_guiding_enabled != 0;
     if (integrator_config->path_guiding_light_mixture > 0.0f) cfg.path_guiding.light_mixture = integrator_config->path_guiding_light_mixture;
     if (integrator_config->path_guiding_learning_rate > 0.0f) cfg.path_guiding.learning_rate = integrator_config->path_guiding_learning_rate;
@@ -301,6 +313,44 @@ bool make_integrator_config(const ure_integrator_config_t* integrator_config, Re
         cfg.mlt.enabled = true;
         cfg.integrator.sampler = IntegratorSampler::PrimarySampleSpace;
     }
+    return true;
+}
+
+bool apply_automatic_integrator_config(
+    RenderConfig& config,
+    const ure_automatic_integrator_config_t* automatic_config) {
+    if (!automatic_config) return true;
+    if (automatic_config->version != 1 ||
+        automatic_config->struct_size <
+            sizeof(ure_automatic_integrator_config_t) ||
+        config.integrator.mode != IntegratorMode::Automatic ||
+        !(automatic_config->target_relative_standard_error > 0.0) ||
+        !std::isfinite(
+            automatic_config->target_relative_standard_error) ||
+        automatic_config->memory_budget_mb < 0 ||
+        automatic_config->pilot_spp < 2 ||
+        automatic_config->maximum_techniques < 1 ||
+        !(automatic_config->minimum_wavefront_fraction > 0.0f) ||
+        automatic_config->minimum_wavefront_fraction > 1.0f) {
+        return false;
+    }
+    config.automatic_integrator.enabled = true;
+    config.automatic_integrator.target_relative_standard_error =
+        automatic_config->target_relative_standard_error;
+    config.automatic_integrator.time_budget_milliseconds =
+        automatic_config->time_budget_milliseconds;
+    config.automatic_integrator.memory_budget_mb =
+        automatic_config->memory_budget_mb;
+    config.automatic_integrator.pilot_spp =
+        automatic_config->pilot_spp;
+    config.automatic_integrator.maximum_techniques =
+        automatic_config->maximum_techniques;
+    config.automatic_integrator.minimum_wavefront_fraction =
+        automatic_config->minimum_wavefront_fraction;
+    config.automatic_integrator.allow_experimental =
+        automatic_config->allow_experimental != 0;
+    config.sample_index_offset =
+        automatic_config->sample_index_offset;
     return true;
 }
 
@@ -1054,6 +1104,35 @@ ure_session_t* ure_session_create_execution_config_v2(
     }
 }
 
+ure_session_t* ure_session_create_execution_config_v3(
+    const ure_spectral_config_t* spectral_config,
+    const ure_wave_optics_config_v2_t* wave_config,
+    const ure_integrator_config_t* integrator_config,
+    const ure_backend_config_t* backend_config,
+    const ure_acceleration_config_t* acceleration_config,
+    const ure_automatic_integrator_config_t* automatic_config) {
+    try {
+        RenderConfig config;
+        if (!apply_spectral_config(config, spectral_config) ||
+            (wave_config && !make_wave_optics_config(
+                wave_config, config.wave_optics)) ||
+            (integrator_config && !make_integrator_config(
+                integrator_config, config)) ||
+            !apply_automatic_integrator_config(
+                config, automatic_config) ||
+            !apply_backend_config(config, backend_config) ||
+            !apply_acceleration_config(config, acceleration_config) ||
+            !supported_wave_optics_config(config)) {
+            return nullptr;
+        }
+        auto session = std::make_unique<RenderSession>(
+            RenderSession::create(config));
+        return reinterpret_cast<ure_session_t*>(session.release());
+    } catch (...) {
+        return nullptr;
+    }
+}
+
 void ure_session_destroy(ure_session_t* session) {
     delete reinterpret_cast<RenderSession*>(session);
 }
@@ -1234,6 +1313,83 @@ ure_integrator_estimator_metadata_t ure_session_get_estimator_metadata(
     } catch (...) {
     }
     return out;
+}
+
+int ure_session_get_automatic_integrator_report(
+    const ure_session_t* session,
+    ure_automatic_integrator_report_t* out_report,
+    ure_automatic_technique_report_t* out_techniques,
+    uint32_t technique_capacity) {
+    if (!session || !out_report) return -1;
+    try {
+        const auto report = reinterpret_cast<const RenderSession*>(session)
+            ->get_automatic_integrator_report();
+        *out_report = {};
+        out_report->version = 1;
+        out_report->struct_size = sizeof(*out_report);
+        out_report->automatic = report.automatic ? 1 : 0;
+        out_report->complete = report.complete ? 1 : 0;
+        out_report->quality_target_met =
+            report.quality_target_met ? 1 : 0;
+        out_report->time_budget_met = report.time_budget_met ? 1 : 0;
+        out_report->memory_budget_met =
+            report.memory_budget_met ? 1 : 0;
+        out_report->requested_spp = report.requested_spp;
+        out_report->total_allocated_spp = report.total_allocated_spp;
+        out_report->estimated_relative_standard_error =
+            report.estimated_relative_standard_error;
+        out_report->elapsed_nanoseconds = report.elapsed_nanoseconds;
+        out_report->peak_memory_budget_bytes =
+            report.peak_memory_budget_bytes;
+        out_report->measured_peak_resident_device_bytes =
+            report.measured_peak_resident_device_bytes;
+        out_report->estimated_peak_device_bytes =
+            report.estimated_peak_device_bytes;
+        out_report->technique_coverage_mask =
+            report.technique_coverage_mask;
+        out_report->independent_endpoint_ensemble =
+            report.independent_endpoint_ensemble ? 1 : 0;
+        out_report->pilot_precision_weighted =
+            report.pilot_precision_weighted ? 1 : 0;
+        out_report->conservative_uncertainty_bound =
+            report.conservative_uncertainty_bound ? 1 : 0;
+        out_report->auxiliary_outputs_wavefront_only =
+            report.auxiliary_outputs_wavefront_only ? 1 : 0;
+        out_report->technique_count = static_cast<uint32_t>(
+            report.techniques.size());
+        if (report.techniques.size() > technique_capacity ||
+            (!report.techniques.empty() && !out_techniques)) {
+            return -2;
+        }
+        for (std::size_t index = 0;
+             index < report.techniques.size();
+             ++index) {
+            const auto& source = report.techniques[index];
+            auto& destination = out_techniques[index];
+            destination = {};
+            destination.mode = static_cast<int>(source.mode);
+            destination.qualified = source.qualified ? 1 : 0;
+            destination.selected = source.selected ? 1 : 0;
+            const auto count = std::min(
+                source.reason.size(), sizeof(destination.reason) - 1);
+            std::copy_n(
+                source.reason.data(), count, destination.reason);
+            destination.reason[count] = '\0';
+            destination.pilot_spp = source.pilot_spp;
+            destination.allocated_spp = source.allocated_spp;
+            destination.pilot_mean = source.pilot_mean;
+            destination.pilot_variance = source.pilot_variance;
+            destination.maximum_absolute_pilot_contribution =
+                source.maximum_absolute_pilot_contribution;
+            destination.nanoseconds_per_sample =
+                source.nanoseconds_per_sample;
+            destination.aggregation_weight =
+                source.aggregation_weight;
+        }
+        return 0;
+    } catch (...) {
+        return -1;
+    }
 }
 
 int ure_session_get_acceleration_stats(

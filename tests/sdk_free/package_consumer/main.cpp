@@ -7,6 +7,7 @@
 #include "ure/transport/support_measure_graph.hpp"
 #include "ure/transport/pilot.hpp"
 #include "ure/transport/portfolio.hpp"
+#include "ure/transport/automatic_integrator.hpp"
 #include "ure/research/capability.hpp"
 #include "ure/research/transport.hpp"
 #include "ure/reconstruction/measurement.hpp"
@@ -22,6 +23,7 @@ int main() {
     const ure::transport::PackedMisProgram mis_program;
     const ure::transport::PilotSamplingProvenance pilot_provenance;
     const ure::transport::PortfolioSchedule portfolio_schedule;
+    const ure::transport::AutomaticIntegratorPlan automatic_plan;
     const ure::research::CapabilityReport report;
     const ure::research::TransportResearchDescriptor research_descriptor;
     ure::reconstruction::MeasurementSchema measurement_schema;
@@ -34,6 +36,8 @@ int main() {
                        ure::transport::kPilotContractVersion &&
                    portfolio_schedule.version ==
                        ure::transport::kPortfolioContractVersion &&
+                   automatic_plan.version ==
+                       ure::transport::kAutomaticIntegratorContractVersion &&
                    measurement_schema.version ==
                        ure::reconstruction::kMeasurementSchemaVersion &&
                    research_descriptor.version ==

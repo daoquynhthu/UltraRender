@@ -1,4 +1,5 @@
 import pyure
+import math
 import os
 import subprocess
 import tempfile
@@ -116,7 +117,7 @@ def main() -> int:
         assert progress.state == pyure.SessionState.EMPTY
         assert not progress.has_scene
         metadata = session.estimator_metadata()
-        assert metadata.policy == pyure.EstimatorPolicy.STANDARD
+        assert metadata.policy == pyure.EstimatorPolicy.AUTOMATIC_PORTFOLIO
         assert not metadata.biased
         try:
             session.render_pass()
@@ -346,6 +347,34 @@ def main() -> int:
             assert wait_until(lambda: session.progress().spp >= 1)
             framebuffer = session.framebuffer()
             assert len(framebuffer) == 8 * 8 * 3
+            assert wait_until(
+                lambda: session.automatic_integrator_report().complete
+            )
+            automatic = session.automatic_integrator_report()
+            assert automatic.automatic
+            assert automatic.total_allocated_spp >= 1
+            assert automatic.elapsed_nanoseconds > 0
+            assert automatic.measured_peak_resident_device_bytes > 0
+            assert automatic.estimated_peak_device_bytes >= (
+                automatic.measured_peak_resident_device_bytes
+            )
+            assert automatic.memory_budget_met
+            assert automatic.technique_coverage_mask & 1
+            assert automatic.independent_endpoint_ensemble
+            assert automatic.pilot_precision_weighted
+            assert automatic.conservative_uncertainty_bound
+            assert automatic.auxiliary_outputs_wavefront_only
+            assert all(
+                math.isfinite(
+                    technique.maximum_absolute_pilot_contribution
+                )
+                for technique in automatic.techniques
+                if technique.qualified
+            )
+            assert any(
+                technique.selected and technique.mode == 0
+                for technique in automatic.techniques
+            )
             hdr_path = Path(tmp) / "pyure_smoke.hdr"
             session.save_hdr(hdr_path)
             assert hdr_path.read_bytes().startswith(b"#?RADIANCE\n")

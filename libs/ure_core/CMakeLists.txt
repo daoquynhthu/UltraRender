@@ -1,4 +1,5 @@
 add_library(ure_core STATIC
+    src/automatic_render_engine.cpp
     src/mie_solver.cpp
     src/mlt.cpp
     src/restir_reservoir.cpp
@@ -48,6 +49,7 @@ target_include_directories(ure_core PUBLIC
 )
 target_link_libraries(ure_core PUBLIC ure_types ure_runtime ure_diag PRIVATE ure_sceneio "$<LINK_ONLY:ure_transport>")
 set_source_files_properties(
+    src/automatic_render_engine.cpp
     src/gpu_engine_impl.cpp
     PROPERTIES INCLUDE_DIRECTORIES
         "${CMAKE_CURRENT_SOURCE_DIR}/../ure_transport/include")
