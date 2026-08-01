@@ -49,6 +49,16 @@ add_test(
     COMMAND test_support_measure_graph)
 
 add_executable(
+    test_pilot_qualification
+    test_pilot_qualification.cpp)
+target_link_libraries(
+    test_pilot_qualification PRIVATE
+    ure_transport ure_runtime)
+add_test(
+    NAME test_pilot_qualification
+    COMMAND test_pilot_qualification)
+
+add_executable(
     test_measurement_bundle
     test_measurement_bundle.cpp)
 target_link_libraries(

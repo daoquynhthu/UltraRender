@@ -5,6 +5,7 @@
 #include "ure/transport/semantics.hpp"
 #include "ure/transport/legacy_technique_preset.hpp"
 #include "ure/transport/support_measure_graph.hpp"
+#include "ure/transport/pilot.hpp"
 #include "ure/research/capability.hpp"
 #include "ure/reconstruction/measurement.hpp"
 
@@ -16,6 +17,7 @@ int main() {
     const auto technique_preset =
         ure::transport::compile_legacy_technique_preset(config);
     const ure::transport::PackedMisProgram mis_program;
+    const ure::transport::PilotSamplingProvenance pilot_provenance;
     const ure::research::CapabilityReport report;
     ure::reconstruction::MeasurementSchema measurement_schema;
     return config.backend.kind == ure::BackendKind::Auto &&
@@ -23,6 +25,8 @@ int main() {
                    technique_preset.executable() &&
                    mis_program.version ==
                        ure::transport::kSupportMeasureGraphVersion &&
+                   pilot_provenance.version ==
+                       ure::transport::kPilotContractVersion &&
                    measurement_schema.version ==
                        ure::reconstruction::kMeasurementSchemaVersion &&
                    !report.executable &&

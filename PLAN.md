@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HT.2 — Pilot 统计与自动资格判定
+当前游标: HT.3 — 在线 portfolio 调度
 
 ### 0.1 唯一生产施工队列
 
@@ -34,7 +34,7 @@ HO.2 executable research substrate                      [done]
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
 HT transport     HR reconstruction HW physical world HD differentiation
-[HT.2 current]   [HR.0 done]
+[HT.3 current]   [HR.0 done]
     │              │                │                │
     └──────────────┴────────┬───────┴────────────────┘
                             ▼
@@ -349,6 +349,8 @@ MCMC 链、相关复用、biased preview 和不同 observable 必须使用各自
 ### HT.2 — Pilot 统计与自动资格判定
 
 **依赖**: HT.1、HO.2。
+
+**状态**: 已完成（2026-08-01）。SDK-free `ure_transport` 新增 content-bound pilot provenance、per-technique sufficient statistics、paired covariance 和自动资格报告；短 pass 统计成本、方差、tail risk、ESS 与 measured memory，并严格绑定 Technique Graph、world state、observation snapshot、support partition 和 observable。独立 holdout、cross-fitting 与 selection-probability correction 防止自适应选择偏差静默进入生产估计；scene/event/backend/budget/output-layer 资格判定不读取 `IntegratorMode`，expert override 默认关闭且不能绕过物理、后端或资源失败。实际 CUDA sample producer、host 统计/资格门禁、独立 SDK-free 10/10、installed package consumer 与 Release 65/65 CTest 通过。在线分配仍属于 HT.3。详见 `docs/HT_2_Pilot_Qualification.md`。
 
 - 从短 pilot pass 估计每技术成本、方差、协方差、tail risk、有效样本量和内存压力；
 - 资格判定基于 scene/world snapshot、observable、material/medium event 与 backend capability；
