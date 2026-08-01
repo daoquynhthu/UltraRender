@@ -186,6 +186,8 @@ bool same_merge_provenance(const MeasurementProvenance& left,
            left.exposure.basis == right.exposure.basis &&
            left.exposure.start_tick == right.exposure.start_tick &&
            left.exposure.end_tick == right.exposure.end_tick &&
+           left.portfolio_schedule_identity ==
+               right.portfolio_schedule_identity &&
            left.sample_namespace_identity ==
                right.sample_namespace_identity;
 }

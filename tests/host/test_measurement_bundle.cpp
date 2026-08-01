@@ -2,6 +2,7 @@
 
 #include "ure/runtime/multi_backend.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -146,6 +147,7 @@ static rec::MeasurementProvenance provenance(
     value.exposure.basis.clock_identity = id("clock");
     value.exposure.start_tick = 10;
     value.exposure.end_tick = 20;
+    value.portfolio_schedule_identity = id("portfolio-schedule");
     value.sample_namespace_identity = id("sample-namespace");
     value.producer_identity = id(producer);
     value.sample_ranges.push_back({start, count});
@@ -316,6 +318,18 @@ static void test_merge_rejects_invalid_semantics() {
         rejected = true;
     }
     CHECK(rejected);
+
+    right = rec::make_measurement_bundle(
+        descriptor, provenance(4, 4, "producer-b"));
+    right.provenance.portfolio_schedule_identity = id("other-schedule");
+    rejected = false;
+    try {
+        const std::vector values{left, right};
+        static_cast<void>(rec::merge_measurement_bundles(values));
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    CHECK(rejected);
 }
 
 static void test_typed_complex_plane() {
@@ -466,8 +480,50 @@ static void test_checkpoint_and_partial_read() {
     CHECK(restored.schema.schema_identity == descriptor.schema_identity);
     CHECK(restored.provenance.sample_ranges ==
           bundle.provenance.sample_ranges);
+    CHECK(restored.provenance.portfolio_schedule_identity ==
+          bundle.provenance.portfolio_schedule_identity);
     CHECK(restored.planes[0].payload == bundle.planes[0].payload);
     CHECK(restored.planes[8].payload == bundle.planes[8].payload);
+
+    auto legacy_artifact =
+        ure::research::read_measurement_artifact(bytes);
+    auto metadata = std::ranges::find_if(
+        legacy_artifact.chunks,
+        [](const ure::research::ArtifactChunk& value) {
+            return value.kind ==
+                ure::research::ArtifactChunkKind::Metadata;
+        });
+    CHECK(metadata != legacy_artifact.chunks.end());
+    if (metadata != legacy_artifact.chunks.end()) {
+        const auto schedule =
+            bundle.provenance.portfolio_schedule_identity;
+        const auto position = std::search(
+            metadata->payload.begin(), metadata->payload.end(),
+            schedule.begin(), schedule.end());
+        CHECK(position != metadata->payload.end());
+        if (position != metadata->payload.end()) {
+            metadata->payload.erase(
+                position, position + schedule.size());
+            metadata->payload[4] = 1;
+            metadata->payload[5] = 0;
+            metadata->payload[6] = 0;
+            metadata->payload[7] = 0;
+            metadata->semantic_identity =
+                id("ure.measurement-bundle.metadata.v1");
+            legacy_artifact.schema_version = 1;
+            legacy_artifact.source_identity =
+                ure::runtime::identity_digest(std::as_bytes(
+                    std::span<const std::uint8_t>(metadata->payload)));
+            const auto legacy_bytes =
+                ure::research::write_measurement_artifact(
+                    legacy_artifact);
+            const auto legacy_restored =
+                rec::read_measurement_checkpoint(legacy_bytes);
+            CHECK(ure::semantic::identity_empty(
+                legacy_restored.provenance
+                    .portfolio_schedule_identity));
+        }
+    }
 
     auto corrupt = bytes;
     corrupt[static_cast<std::size_t>(chunk.offset)] ^= 1;

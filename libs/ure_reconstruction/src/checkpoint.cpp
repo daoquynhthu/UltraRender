@@ -11,6 +11,12 @@ namespace ure::reconstruction {
 namespace {
 
 constexpr std::uint32_t kMetadataMagic = 0x4d425255;
+constexpr std::uint32_t kLegacyMeasurementCheckpointVersion = 1;
+
+bool supported_checkpoint_version(std::uint32_t version) {
+    return version >= kLegacyMeasurementCheckpointVersion &&
+        version <= kMeasurementCheckpointVersion;
+}
 
 semantic::IdentityDigest digest_payload(
     std::span<const std::uint8_t> bytes) {
@@ -195,6 +201,7 @@ std::vector<std::uint8_t> encode_metadata(
     writer.digest(bundle.provenance.exposure.basis.clock_identity);
     writer.i64(bundle.provenance.exposure.start_tick);
     writer.i64(bundle.provenance.exposure.end_tick);
+    writer.digest(bundle.provenance.portfolio_schedule_identity);
     writer.digest(bundle.provenance.sample_namespace_identity);
     writer.digest(bundle.provenance.producer_identity);
     writer.u32(static_cast<std::uint32_t>(
@@ -209,8 +216,11 @@ std::vector<std::uint8_t> encode_metadata(
 MeasurementBundle decode_metadata(
     std::span<const std::uint8_t> bytes) {
     Reader reader(bytes);
-    if (reader.u32() != kMetadataMagic ||
-        reader.u32() != kMeasurementCheckpointVersion) {
+    if (reader.u32() != kMetadataMagic) {
+        throw std::invalid_argument("Invalid measurement metadata version");
+    }
+    const auto checkpoint_version = reader.u32();
+    if (!supported_checkpoint_version(checkpoint_version)) {
         throw std::invalid_argument("Invalid measurement metadata version");
     }
     MeasurementBundle result;
@@ -251,6 +261,9 @@ MeasurementBundle decode_metadata(
     result.provenance.exposure.basis.clock_identity = reader.digest();
     result.provenance.exposure.start_tick = reader.i64();
     result.provenance.exposure.end_tick = reader.i64();
+    if (checkpoint_version >= 2) {
+        result.provenance.portfolio_schedule_identity = reader.digest();
+    }
     result.provenance.sample_namespace_identity = reader.digest();
     result.provenance.producer_identity = reader.digest();
     const auto range_count = reader.u32();
@@ -318,7 +331,7 @@ std::vector<std::uint8_t> write_measurement_checkpoint(
     artifact.chunks.push_back({
         research::ArtifactChunkKind::Metadata, 1,
         research::ArtifactCodec::None,
-        runtime::identity_digest("ure.measurement-bundle.metadata.v1"),
+        runtime::identity_digest("ure.measurement-bundle.metadata.v2"),
         metadata.size(), 1, std::move(metadata)});
     for (std::size_t index = 0; index < bundle.planes.size(); ++index) {
         const auto& descriptor = bundle.schema.planes[index];
@@ -347,8 +360,8 @@ MeasurementCheckpointIndex inspect_measurement_checkpoint(
     MeasurementCheckpointIndex result;
     result.artifact = research::inspect_measurement_artifact_index(
         index_bytes, total_container_bytes, limits);
-    if (result.artifact.schema_version !=
-            kMeasurementCheckpointVersion ||
+    if (!supported_checkpoint_version(
+            result.artifact.schema_version) ||
         result.artifact.chunks.empty()) {
         throw std::invalid_argument("Invalid measurement checkpoint");
     }
@@ -410,7 +423,7 @@ MeasurementBundle read_measurement_checkpoint(
     const research::ArtifactLimits& limits) {
     const auto artifact =
         research::read_measurement_artifact(bytes, limits);
-    if (artifact.schema_version != kMeasurementCheckpointVersion ||
+    if (!supported_checkpoint_version(artifact.schema_version) ||
         artifact.chunks.empty()) {
         throw std::invalid_argument("Invalid measurement checkpoint");
     }

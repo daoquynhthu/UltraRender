@@ -333,6 +333,7 @@ static void test_automatic_qualification_and_overrides() {
         value.graph, value.plan, pilot, context, required,
         estimates, false);
     CHECK(report.executable);
+    CHECK(tr::validate_pilot_qualification_report(report));
     CHECK(report.production_executable);
     CHECK(!report.experimental_executable);
     CHECK(report.decisions.size() == 2);

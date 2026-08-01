@@ -269,6 +269,9 @@ struct PilotQualificationReport {
     semantic::IdentityDigest report_identity = {};
     semantic::IdentityDigest composition_plan_identity = {};
     semantic::IdentityDigest pilot_provenance_identity = {};
+    semantic::IdentityDigest technique_graph_identity = {};
+    semantic::IdentityDigest world_state_identity = {};
+    semantic::IdentityDigest observation_snapshot_identity = {};
     semantic::IdentityDigest qualification_context_identity = {};
     semantic::IdentityDigest requirements_identity = {};
     semantic::IdentityDigest override_policy_identity = {};
@@ -287,5 +290,7 @@ PilotQualificationReport qualify_pilot_techniques(
     std::span<const TechniquePilotEstimate> estimates,
     bool expert_overrides_enabled,
     std::span<const TechniqueExpertOverride> overrides = {});
+bool validate_pilot_qualification_report(
+    const PilotQualificationReport& report);
 
 }

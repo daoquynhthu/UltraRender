@@ -198,6 +198,9 @@ semantic::IdentityDigest report_identity(
     encoder.u32(report.version);
     encoder.digest(report.composition_plan_identity);
     encoder.digest(report.pilot_provenance_identity);
+    encoder.digest(report.technique_graph_identity);
+    encoder.digest(report.world_state_identity);
+    encoder.digest(report.observation_snapshot_identity);
     encoder.digest(report.qualification_context_identity);
     encoder.digest(report.requirements_identity);
     encoder.digest(report.override_policy_identity);
@@ -234,6 +237,10 @@ PilotQualificationReport qualify_pilot_techniques(
     std::span<const TechniqueExpertOverride> overrides) {
     PilotQualificationReport result;
     result.composition_plan_identity = composition_plan.plan_identity;
+    result.technique_graph_identity = technique_graph.graph_identity;
+    result.world_state_identity = context.provenance.world_state;
+    result.observation_snapshot_identity =
+        context.provenance.observation_snapshot;
     result.qualification_context_identity =
         qualification_context_identity(context);
     result.requirements_identity =
@@ -433,6 +440,11 @@ PilotQualificationReport qualify_pilot_techniques(
                 decision.status =
                     QualificationStatus::ExperimentalOverride;
                 decision.reason = QualificationReason::ForcedExperimental;
+                if (estimate != estimate_map.end() &&
+                    !invalid_estimates.contains(node)) {
+                    decision.estimate_identity =
+                        estimate->second.estimate_identity;
+                }
             } else {
                 decision.status = QualificationStatus::Ineligible;
                 decision.reason = QualificationReason::OverrideDisabled;
@@ -460,6 +472,78 @@ PilotQualificationReport qualify_pilot_techniques(
         result.experimental_executable;
     result.report_identity = report_identity(result);
     return result;
+}
+
+bool validate_pilot_qualification_report(
+    const PilotQualificationReport& report) {
+    if (report.version != kPilotContractVersion ||
+        semantic::identity_empty(report.report_identity) ||
+        semantic::identity_empty(report.composition_plan_identity) ||
+        semantic::identity_empty(report.pilot_provenance_identity) ||
+        semantic::identity_empty(report.technique_graph_identity) ||
+        semantic::identity_empty(report.world_state_identity) ||
+        semantic::identity_empty(
+            report.observation_snapshot_identity) ||
+        semantic::identity_empty(
+            report.qualification_context_identity) ||
+        semantic::identity_empty(report.requirements_identity) ||
+        semantic::identity_empty(report.override_policy_identity) ||
+        report.decisions.empty()) {
+        return false;
+    }
+    bool production = false;
+    bool experimental = false;
+    std::set<std::uint32_t> nodes;
+    for (const auto& decision : report.decisions) {
+        if (!nodes.insert(decision.node_ordinal).second ||
+            decision.status < QualificationStatus::Eligible ||
+            decision.status >
+                QualificationStatus::ExcludedByOverride ||
+            decision.reason < QualificationReason::Eligible ||
+            decision.reason > QualificationReason::ForcedExclude) {
+            return false;
+        }
+        switch (decision.status) {
+        case QualificationStatus::Eligible:
+            if (decision.reason != QualificationReason::Eligible ||
+                semantic::identity_empty(decision.estimate_identity) ||
+                !semantic::identity_empty(decision.override_identity)) {
+                return false;
+            }
+            production = true;
+            break;
+        case QualificationStatus::ExperimentalOverride:
+            if (decision.reason !=
+                    QualificationReason::ForcedExperimental ||
+                semantic::identity_empty(decision.override_identity)) {
+                return false;
+            }
+            experimental = true;
+            break;
+        case QualificationStatus::ExcludedByOverride:
+            if (decision.reason != QualificationReason::ForcedExclude ||
+                semantic::identity_empty(decision.override_identity) ||
+                !semantic::identity_empty(decision.estimate_identity)) {
+                return false;
+            }
+            break;
+        case QualificationStatus::Ineligible:
+            if (decision.reason == QualificationReason::Eligible ||
+                decision.reason ==
+                    QualificationReason::ForcedExperimental ||
+                decision.reason == QualificationReason::ForcedExclude ||
+                !semantic::identity_empty(decision.estimate_identity) ||
+                (decision.reason == QualificationReason::OverrideDisabled) !=
+                    !semantic::identity_empty(decision.override_identity)) {
+                return false;
+            }
+            break;
+        }
+    }
+    return report.production_executable == production &&
+        report.experimental_executable == experimental &&
+        report.executable == (production || experimental) &&
+        report.report_identity == report_identity(report);
 }
 
 }

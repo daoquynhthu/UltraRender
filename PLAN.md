@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HT.3 — 在线 portfolio 调度
+当前游标: HT.4 — 新积分器与 proposal 研究平台
 
 ### 0.1 唯一生产施工队列
 
@@ -34,7 +34,7 @@ HO.2 executable research substrate                      [done]
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
 HT transport     HR reconstruction HW physical world HD differentiation
-[HT.3 current]   [HR.0 done]
+[HT.4 current]   [HR.0 done]
     │              │                │                │
     └──────────────┴────────┬───────┴────────────────┘
                             ▼
@@ -361,6 +361,8 @@ MCMC 链、相关复用、biased preview 和不同 observable 必须使用各自
 ### HT.3 — 在线 portfolio 调度
 
 **依赖**: HT.2。
+
+**状态**: 已完成（2026-08-01）。SDK-free `ure_transport` 新增 content-bound tile/wavelength/time/device/sample/chain work domain、budget/policy/candidate、在线 schedule、漂移与分布式 shard 合同；资格、pilot、world/snapshot、执行语义和 production sample range 均进入调度身份。调度器使用 risk/ESS 修正的 cost-aware variance/covariance 目标、PSD 与独立配对门禁、确定性整数边际收益分配、强制 exploration floor 和 starvation recovery；普通 sample covariance 不得跨入 MCMC chain。非平稳统计支持连续 breach、局部/global re-pilot，worker shard 复核 executable/device/semantics 与 sample/chain 精确覆盖。`MeasurementProvenance` 显式记录 schedule identity，checkpoint v2 保留 v1 读取兼容且 merge 拒绝跨 schedule 贡献。独立 SDK-free 11/11、installed package consumer 与 Release 66/66 CTest 通过。现有 CUDA kernels 尚未并发执行全部 graph node，自动执行闭环仍属于 HT.5。详见 `docs/HT_3_Online_Portfolio_Scheduling.md`。
 
 - 在预算约束下分配 technique、tile、wavelength、time、device 和 chain 资源；
 - 使用 cost-aware variance/covariance 目标，明确 exploration floor 和 starvation 防护；

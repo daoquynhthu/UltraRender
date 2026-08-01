@@ -6,8 +6,10 @@
 #include "ure/transport/legacy_technique_preset.hpp"
 #include "ure/transport/support_measure_graph.hpp"
 #include "ure/transport/pilot.hpp"
+#include "ure/transport/portfolio.hpp"
 #include "ure/research/capability.hpp"
 #include "ure/reconstruction/measurement.hpp"
+#include "ure/reconstruction/portfolio_measurement.hpp"
 
 int main() {
     const ure::RenderConfig config;
@@ -18,6 +20,7 @@ int main() {
         ure::transport::compile_legacy_technique_preset(config);
     const ure::transport::PackedMisProgram mis_program;
     const ure::transport::PilotSamplingProvenance pilot_provenance;
+    const ure::transport::PortfolioSchedule portfolio_schedule;
     const ure::research::CapabilityReport report;
     ure::reconstruction::MeasurementSchema measurement_schema;
     return config.backend.kind == ure::BackendKind::Auto &&
@@ -27,6 +30,8 @@ int main() {
                        ure::transport::kSupportMeasureGraphVersion &&
                    pilot_provenance.version ==
                        ure::transport::kPilotContractVersion &&
+                   portfolio_schedule.version ==
+                       ure::transport::kPortfolioContractVersion &&
                    measurement_schema.version ==
                        ure::reconstruction::kMeasurementSchemaVersion &&
                    !report.executable &&

@@ -132,6 +132,7 @@ struct MeasurementSampleRange {
 struct MeasurementProvenance {
     semantic::ProvenanceIdentitySet identities;
     semantic::TimeInterval exposure;
+    semantic::IdentityDigest portfolio_schedule_identity = {};
     semantic::IdentityDigest sample_namespace_identity = {};
     semantic::IdentityDigest producer_identity = {};
     std::vector<MeasurementSampleRange> sample_ranges;

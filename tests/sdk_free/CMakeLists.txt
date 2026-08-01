@@ -24,6 +24,9 @@ add_library(ure_transport_sdk_free STATIC
     "${URE_ROOT}/libs/ure_transport/src/composition.cpp"
     "${URE_ROOT}/libs/ure_transport/src/legacy_technique_preset.cpp"
     "${URE_ROOT}/libs/ure_transport/src/pilot_statistics.cpp"
+    "${URE_ROOT}/libs/ure_transport/src/portfolio_drift.cpp"
+    "${URE_ROOT}/libs/ure_transport/src/portfolio_schedule.cpp"
+    "${URE_ROOT}/libs/ure_transport/src/portfolio_shard.cpp"
     "${URE_ROOT}/libs/ure_transport/src/qualification.cpp"
     "${URE_ROOT}/libs/ure_transport/src/semantics.cpp"
     "${URE_ROOT}/libs/ure_transport/src/support_measure_graph.cpp"
@@ -59,6 +62,7 @@ target_link_libraries(ure_research_sdk_free PUBLIC
 add_library(ure_reconstruction_sdk_free STATIC
     "${URE_ROOT}/libs/ure_reconstruction/src/checkpoint.cpp"
     "${URE_ROOT}/libs/ure_reconstruction/src/measurement.cpp"
+    "${URE_ROOT}/libs/ure_reconstruction/src/portfolio_measurement.cpp"
 )
 target_include_directories(ure_reconstruction_sdk_free PUBLIC
     "${URE_ROOT}/libs/ure_types/include"
@@ -117,6 +121,12 @@ add_executable(test_support_measure_graph_sdk_free
 )
 add_executable(test_pilot_qualification_sdk_free
     "${URE_ROOT}/tests/host/test_pilot_qualification.cpp"
+)
+add_executable(test_portfolio_scheduler_sdk_free
+    "${URE_ROOT}/tests/host/test_portfolio_scheduler.cpp"
+)
+target_link_libraries(test_portfolio_scheduler_sdk_free PRIVATE
+    ure_reconstruction_sdk_free
 )
 target_link_libraries(test_pilot_qualification_sdk_free PRIVATE
     ure_transport_sdk_free
@@ -183,6 +193,9 @@ if(MSVC)
     target_compile_options(test_pilot_qualification_sdk_free PRIVATE
         /W4 /WX /utf-8 /EHsc /wd4819
     )
+    target_compile_options(test_portfolio_scheduler_sdk_free PRIVATE
+        /W4 /WX /utf-8 /EHsc /wd4819
+    )
     target_compile_options(ure_research_sdk_free PRIVATE
         /W4 /WX /utf-8 /EHsc /wd4819
     )
@@ -226,6 +239,9 @@ else()
     target_compile_options(test_pilot_qualification_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
     )
+    target_compile_options(test_portfolio_scheduler_sdk_free PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+    )
     target_compile_options(ure_research_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
     )
@@ -249,5 +265,6 @@ add_test(NAME high_order_semantics_sdk_free COMMAND test_high_order_semantics_sd
 add_test(NAME technique_graph_sdk_free COMMAND test_technique_graph_sdk_free)
 add_test(NAME support_measure_graph_sdk_free COMMAND test_support_measure_graph_sdk_free)
 add_test(NAME pilot_qualification_sdk_free COMMAND test_pilot_qualification_sdk_free)
+add_test(NAME portfolio_scheduler_sdk_free COMMAND test_portfolio_scheduler_sdk_free)
 add_test(NAME research_substrate_sdk_free COMMAND test_research_substrate_sdk_free)
 add_test(NAME measurement_bundle_sdk_free COMMAND test_measurement_bundle_sdk_free)

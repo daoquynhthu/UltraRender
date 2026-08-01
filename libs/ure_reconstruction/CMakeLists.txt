@@ -1,6 +1,7 @@
 add_library(ure_reconstruction STATIC
     src/checkpoint.cpp
     src/measurement.cpp
+    src/portfolio_measurement.cpp
 )
 
 target_include_directories(ure_reconstruction PUBLIC

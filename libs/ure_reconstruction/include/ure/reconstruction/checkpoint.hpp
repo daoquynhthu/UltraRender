@@ -10,7 +10,7 @@
 
 namespace ure::reconstruction {
 
-inline constexpr std::uint32_t kMeasurementCheckpointVersion = 1;
+inline constexpr std::uint32_t kMeasurementCheckpointVersion = 2;
 
 struct MeasurementCheckpointIndex {
     research::ArtifactIndex artifact;

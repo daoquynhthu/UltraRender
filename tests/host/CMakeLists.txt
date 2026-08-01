@@ -59,6 +59,16 @@ add_test(
     COMMAND test_pilot_qualification)
 
 add_executable(
+    test_portfolio_scheduler
+    test_portfolio_scheduler.cpp)
+target_link_libraries(
+    test_portfolio_scheduler PRIVATE
+    ure_reconstruction ure_runtime)
+add_test(
+    NAME test_portfolio_scheduler
+    COMMAND test_portfolio_scheduler)
+
+add_executable(
     test_measurement_bundle
     test_measurement_bundle.cpp)
 target_link_libraries(
