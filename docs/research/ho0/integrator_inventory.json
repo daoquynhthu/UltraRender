@@ -3,11 +3,11 @@
   "snapshot_date": "2026-08-01",
   "authoritative_source": "libs/ure_types/include/ure/render_config.hpp",
   "central_debt": {
-    "summary": "IntegratorMode is a single authoritative selector while guiding, reuse, manifold, bidirectional, VCM and MLT also own independent enable/config state.",
-    "owner_phase": "HT.0",
+    "summary": "IntegratorMode remains a compatibility preset input while the HT.0 Technique Graph describes guiding, reuse, manifold, bidirectional, VCM and MLT; automatic support/measure composition remains absent.",
+    "owner_phase": "HT.1",
     "source_assertions": [
       {"path": "libs/ure_types/include/ure/render_config.hpp", "pattern": "IntegratorMode mode = IntegratorMode::Wavefront"},
-      {"path": "libs/ure_core/src/gpu_engine_impl.cpp", "pattern": "metadata.mode = config.integrator.mode"}
+      {"path": "libs/ure_core/src/gpu_engine_impl.cpp", "pattern": "metadata.mode = preset.route.resolved_mode"}
     ]
   },
   "techniques": [

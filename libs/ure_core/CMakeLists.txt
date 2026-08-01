@@ -46,7 +46,11 @@ target_include_directories(ure_core PUBLIC
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/../ure_sceneio/include"
 )
-target_link_libraries(ure_core PUBLIC ure_types ure_runtime ure_diag PRIVATE ure_sceneio)
+target_link_libraries(ure_core PUBLIC ure_types ure_runtime ure_diag PRIVATE ure_sceneio "$<LINK_ONLY:ure_transport>")
+set_source_files_properties(
+    src/gpu_engine_impl.cpp
+    PROPERTIES INCLUDE_DIRECTORIES
+        "${CMAKE_CURRENT_SOURCE_DIR}/../ure_transport/include")
 if(UR_ENABLE_VULKAN)
     target_link_libraries(ure_core PRIVATE ure_vulkan)
     target_compile_definitions(ure_core PRIVATE UR_ENABLE_VULKAN=1)

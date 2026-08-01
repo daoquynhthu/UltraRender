@@ -30,6 +30,15 @@ add_test(
     COMMAND test_high_order_semantics)
 
 add_executable(
+    test_technique_graph
+    test_technique_graph.cpp)
+target_link_libraries(
+    test_technique_graph PRIVATE ure_transport ure_runtime)
+add_test(
+    NAME test_technique_graph
+    COMMAND test_technique_graph)
+
+add_executable(
     test_research_substrate
     test_research_substrate.cpp)
 target_link_libraries(

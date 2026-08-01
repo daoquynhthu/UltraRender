@@ -1,4 +1,5 @@
 #include "ure/render.hpp"
+#include "ure/transport/legacy_technique_preset.hpp"
 #include "ure/backend.hpp"
 #include "ure/detail/cuda_context.cuh"
 #include "ure/detail/cuda_scene_compiler.hpp"
@@ -110,16 +111,21 @@ float maximum_mesh_displacement(
 IntegratorEstimatorMetadata make_integrator_estimator_metadata(
     const RenderConfig& config,
     std::uint32_t scene_epoch) {
+    const auto preset =
+        transport::compile_legacy_technique_preset(config);
+    if (preset.executable() &&
+        !transport::legacy_preset_equivalent(config, preset)) {
+        throw std::logic_error(
+            "Legacy integrator preset and technique graph diverged");
+    }
     IntegratorEstimatorMetadata metadata;
     metadata.scene_epoch = scene_epoch;
-    const bool restir_di = config.integrator.mode == IntegratorMode::RestirDI ||
-                           config.restir_di.enabled;
-    const bool restir_pt = config.integrator.mode == IntegratorMode::RestirPT ||
-                           config.restir_pt.enabled;
+    const bool restir_di = preset.route.restir_direct;
+    const bool restir_pt = preset.route.restir_path;
     if (restir_di && restir_pt) {
         throw std::invalid_argument("ReSTIR DI and ReSTIR PT estimator modes are mutually exclusive");
     }
-    metadata.mode = config.integrator.mode;
+    metadata.mode = preset.route.resolved_mode;
     if (restir_di) {
         metadata.mode = IntegratorMode::RestirDI;
         metadata.policy = config.restir_di.unbiased

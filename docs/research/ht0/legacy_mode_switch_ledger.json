@@ -1,0 +1,22 @@
+{
+  "schema": "ure.transport.legacy-mode-ledger/1.0",
+  "snapshot_date": "2026-08-01",
+  "policy": "IntegratorMode is a compatibility preset. New estimator semantics must enter TechniqueGraph and may not create an unlisted mode-only decision site.",
+  "entries": [
+    {"path": "apps/ure_cli/src/main.cpp", "occurrences": 16, "role": "cli_compatibility_adapter"},
+    {"path": "libs/ure_core/include/ure/render.hpp", "occurrences": 1, "role": "legacy_metadata_surface"},
+    {"path": "libs/ure_core/src/backend_cuda.cu", "occurrences": 7, "role": "legacy_capability_lowering"},
+    {"path": "libs/ure_core/src/gpu_engine_impl.cpp", "occurrences": 9, "role": "legacy_metadata_and_route_adapter"},
+    {"path": "libs/ure_core/src/gpu_multi_driver.cu", "occurrences": 1, "role": "legacy_multi_gpu_route"},
+    {"path": "libs/ure_core/src/path_tracer_host_api.cu", "occurrences": 17, "role": "frozen_cuda_legacy_dispatch"},
+    {"path": "libs/ure_core/src/ure_c_api.cpp", "occurrences": 16, "role": "c_api_compatibility_adapter"},
+    {"path": "libs/ure_core/src/wave_optics.cpp", "occurrences": 2, "role": "wave_boundary_compatibility"},
+    {"path": "libs/ure_runtime/include/ure/runtime/execution_graph.hpp", "occurrences": 1, "role": "legacy_runtime_lowering_contract"},
+    {"path": "libs/ure_runtime/src/execution_graph.cpp", "occurrences": 3, "role": "legacy_runtime_lowering"},
+    {"path": "libs/ure_sceneio/include/ure/native_solver_contract.hpp", "occurrences": 1, "role": "native_schema_compatibility"},
+    {"path": "libs/ure_sceneio/src/native_solver_contract.cpp", "occurrences": 25, "role": "native_schema_adapter"},
+    {"path": "libs/ure_transport/include/ure/transport/legacy_technique_preset.hpp", "occurrences": 2, "role": "authoritative_legacy_adapter_contract"},
+    {"path": "libs/ure_transport/src/legacy_technique_preset.cpp", "occurrences": 21, "role": "authoritative_legacy_adapter"},
+    {"path": "libs/ure_types/include/ure/render_config.hpp", "occurrences": 1, "role": "legacy_configuration_default"}
+  ]
+}

@@ -55,10 +55,10 @@
       "cost_class": "low_strata_plus_optional_per_sample",
       "retention": "required_for_portfolio_attribution",
       "loss_if_omitted": "variance and bias cannot be attributed to a technique or recombined safely",
-      "current_evidence": "Only one IntegratorEstimatorMetadata mode/policy is public",
+      "current_evidence": "Technique descriptors exist, but the public IntegratorEstimatorMetadata remains one collapsed legacy mode/policy without per-contribution attribution",
       "source_assertions": [
         {"path": "libs/ure_core/include/ure/render.hpp", "pattern": "struct IntegratorEstimatorMetadata"},
-        {"path": "libs/ure_core/src/gpu_engine_impl.cpp", "pattern": "metadata.mode = config.integrator.mode"}
+        {"path": "libs/ure_core/src/gpu_engine_impl.cpp", "pattern": "metadata.mode = preset.route.resolved_mode"}
       ]
     },
     {

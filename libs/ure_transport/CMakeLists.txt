@@ -1,12 +1,14 @@
 add_library(ure_transport STATIC
+    src/legacy_technique_preset.cpp
     src/semantics.cpp
+    src/technique_graph.cpp
 )
 
 target_include_directories(ure_transport PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-target_link_libraries(ure_transport PUBLIC ure_types)
+target_link_libraries(ure_transport PUBLIC ure_types PRIVATE ure_runtime)
 
 if(MSVC)
     target_compile_options(

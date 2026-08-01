@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HT.0 — 现有积分器描述化
+当前游标: HR.0 — MeasurementBundle / Feature Film
 
 ### 0.1 唯一生产施工队列
 
@@ -34,7 +34,7 @@ HO.2 executable research substrate                      [done]
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
 HT transport     HR reconstruction HW physical world HD differentiation
-[HT.0 current]
+[HT.0 done]      [HR.0 current]
     │              │                │                │
     └──────────────┴────────┬───────┴────────────────┘
                             ▼
@@ -320,6 +320,8 @@ MCMC 链、相关复用、biased preview 和不同 observable 必须使用各自
 ### HT.0 — 现有积分器描述化
 
 **依赖**: HO.1。
+
+**状态**: 已完成（2026-08-01）。`ure_transport` 新增 SDK-free Technique Descriptor、资源合同、Technique Graph 验证和 legacy preset compiler；wavefront、guiding、ReSTIR DI/PT、SMS、BDPT、VCM 与 PSSMLT 已被同义映射，现有数学/资源/未实现拒绝被结构化分类，`IntegratorMode` 决策面由静态 ledger 冻结。核心 estimator metadata 通过 preset route 读取同一语义，未引入自动组合或改变默认样本路径。独立 SDK-free 7/7、installed package consumer 与 Release 60/60 CTest 通过。详见 `docs/HT_0_Legacy_Technique_Graph.md`。
 
 - 新增 SDK-free Technique Descriptor 与 graph validation；
 - 将当前 `IntegratorMode` 与各独立 enable config 映射为 legacy preset，而非继续作为权威执行模型；

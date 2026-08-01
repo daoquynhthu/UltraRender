@@ -1,0 +1,23 @@
+{
+  "schema": "ure.transport.legacy-rejection-matrix/1.0",
+  "snapshot_date": "2026-08-01",
+  "classes": ["Mathematical", "Resource", "Unimplemented"],
+  "rejections": [
+    {"code": "InvalidMode", "class": "Unimplemented", "legacy_boundary": "unknown IntegratorMode value"},
+    {"code": "MissingRequiredEnable", "class": "Unimplemented", "legacy_boundary": "selected preset lacks its required enable contract"},
+    {"code": "PrimarySampleSpaceRequiresMlt", "class": "Mathematical", "legacy_boundary": "primary-sample measure used by an IID preset"},
+    {"code": "MltRequiresPrimarySampleSpace", "class": "Mathematical", "legacy_boundary": "Markov transition lacks primary-sample measure"},
+    {"code": "RestirFamiliesMutuallyExclusive", "class": "Mathematical", "legacy_boundary": "DI and suffix reservoirs do not share one normalization contract"},
+    {"code": "RestirRequiresReuse", "class": "Mathematical", "legacy_boundary": "reservoir estimator has no temporal or spatial candidate reuse"},
+    {"code": "BiasedReuseRequiresOptIn", "class": "Mathematical", "legacy_boundary": "the selected RestirDI mode requires explicit biased-preview opt-in"},
+    {"code": "BiasedSpatialReuseUnsupported", "class": "Unimplemented", "legacy_boundary": "biased DI preview only implements temporal reuse"},
+    {"code": "InvalidProbabilityOrThreshold", "class": "Mathematical", "legacy_boundary": "PDF, probability, radius, tolerance or reconnection threshold is invalid"},
+    {"code": "InvalidHistoryOrDepth", "class": "Resource", "legacy_boundary": "bounded history, chain, vertex or suffix depth is exceeded"},
+    {"code": "InvalidResourceBudget", "class": "Resource", "legacy_boundary": "declared memory budget is invalid"},
+    {"code": "InvalidStorageDomain", "class": "Resource", "legacy_boundary": "queue, cache, launch or grid indexing domain is invalid"},
+    {"code": "LightTracingRequiresSensorMeasure", "class": "Unimplemented", "legacy_boundary": "pinhole light tracing lacks a sensor-measure estimator"},
+    {"code": "MltBidirectionalNeedsSharedSpectralSample", "class": "Unimplemented", "legacy_boundary": "camera/light subpaths do not share one spectral primary sample"},
+    {"code": "MltOwnsAdaptiveScheduler", "class": "Mathematical", "legacy_boundary": "Markov normalization cannot share adaptive reuse schedulers"},
+    {"code": "UnsupportedWaveCombination", "class": "Unimplemented", "legacy_boundary": "diffraction camera currently owns a wavefront-only observable boundary"}
+  ]
+}
