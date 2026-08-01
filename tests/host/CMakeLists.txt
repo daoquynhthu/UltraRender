@@ -88,6 +88,16 @@ add_test(
     COMMAND test_research_substrate)
 
 add_executable(
+    test_transport_research
+    test_transport_research.cpp)
+target_link_libraries(
+    test_transport_research PRIVATE
+    ure_research ure_runtime)
+add_test(
+    NAME test_transport_research
+    COMMAND test_transport_research)
+
+add_executable(
     test_acceleration_contract
     test_acceleration_contract.cpp)
 target_link_libraries(

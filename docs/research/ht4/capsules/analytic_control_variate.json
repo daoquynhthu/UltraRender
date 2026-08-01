@@ -1,0 +1,51 @@
+{
+  "schema": "ure.research.capsule/1.0",
+  "id": "ht4-analytic-control-variate-2026-08-01",
+  "maturity": "Research",
+  "question": "Can a new estimator enter the Technique Graph through a capsule-bound joint-sample contract and demonstrate a statistically resolved equal-cost variance reduction without changing a production route?",
+  "hypothesis": "For the unit-interval integral of x squared, subtracting the zero-mean control x minus one half with coefficient one reduces replicated sample variance by at least 0.01 while preserving the integral.",
+  "inputs": {
+    "source_identity": "HT.4 transport research contract and deterministic host oracle",
+    "configuration": {
+      "integrand": "x^2 on [0,1)",
+      "control": "x - 0.5",
+      "coefficient": 1.0,
+      "replicates": 8,
+      "samples_per_replicate": 4096,
+      "global_seed": "0x123456789abcdef0",
+      "metric": "replicated sample variance at equal sample cost"
+    },
+    "source_assertions": [
+      {"path": "libs/ure_research/include/ure/research/transport.hpp", "pattern": "TransportResearchMechanism::ControlVariate|ControlVariate"},
+      {"path": "tests/host/test_transport_research.cpp", "pattern": "x \\* x - \\(x - 0.5\\)"},
+      {"path": "tests/host/test_transport_research.cpp", "pattern": "samples_per_replicate = 4096"}
+    ]
+  },
+  "reproducibility": {
+    "seed_policy": "Variant and replicate namespaces are derived independently by the HO.2 runner; each invocation uses deterministic splitmix64 counters over disjoint sample ranges.",
+    "replay_command": "ctest --test-dir build_modular_x64 -C Release -R ^test_transport_research$ --output-on-failure",
+    "determinism": "The source, manifest, parameter, variant, seed namespace, replicate and sample ranges determine every sample and artifact identity."
+  },
+  "baseline": "Independent Monte Carlo samples of x squared.",
+  "candidate": "The same estimator expressed as a ResearchExtension control-variate node with an exact uniform density, sample-mean normalization and known control expectation.",
+  "metrics": [
+    {"name": "minimum_variance_improvement", "expected": 0.01},
+    {"name": "confidence_level", "expected": 0.95},
+    {"name": "integral_bias", "expected": 0.0}
+  ],
+  "artifacts": [
+    {"kind": "replicated_comparison_output", "path": "build_modular_x64/Testing/Temporary/LastTest.log", "retention": "regenerable_not_committed"},
+    {"kind": "executable_oracle", "path": "tests/host/test_transport_research.cpp", "retention": "committed_replay_source"},
+    {"kind": "transport_contract", "path": "libs/ure_research/include/ure/research/transport.hpp", "retention": "committed_contract"}
+  ],
+  "result": {
+    "outcome": "positive",
+    "conclusion": "Eight independent deterministic replicates resolve an equal-cost variance reduction beyond the declared 0.01 threshold, and the assessment becomes eligible for promotion review. The toy domain remains Research evidence and does not establish a scene-rendering speedup."
+  },
+  "known_failure_domain": [
+    "The analytic scalar integral does not establish applicability to a SceneIR workload.",
+    "A useful control and its exact expectation are assumed known.",
+    "GPU cost, memory, spectral packet behavior and path-space support benefit are not measured.",
+    "Promotion still requires the complete HO.2 Research-to-Experimental evidence set."
+  ]
+}

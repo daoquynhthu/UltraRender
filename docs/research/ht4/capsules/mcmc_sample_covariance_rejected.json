@@ -1,0 +1,45 @@
+{
+  "schema": "ure.research.capsule/1.0",
+  "id": "ht4-mcmc-sample-covariance-rejected-2026-08-01",
+  "maturity": "Research",
+  "question": "Can ordinary paired sample covariance be reused as a cross-technique covariance objective when one endpoint is a Markov-chain estimator?",
+  "hypothesis": "The ordinary sample-level covariance contract is insufficient because chain autocorrelation and chain-owned normalization require independent replicate-level evidence.",
+  "inputs": {
+    "source_identity": "HT.2 paired pilot covariance, HT.3 scheduler and HT.4 joint-sample contract",
+    "configuration": {
+      "left_correlation": "Independent",
+      "right_correlation": "MarkovChain",
+      "candidate_covariance": "ordinary paired sample covariance",
+      "required_replacement": "independent normalized chain-replicate covariance"
+    },
+    "source_assertions": [
+      {"path": "libs/ure_transport/src/portfolio_schedule.cpp", "pattern": "chain_covariance"},
+      {"path": "libs/ure_research/src/transport.cpp", "pattern": "independent_replicates"},
+      {"path": "tests/host/test_portfolio_scheduler.cpp", "pattern": "chain_covariance"}
+    ]
+  },
+  "reproducibility": {
+    "seed_policy": "No stochastic conclusion is inferred; deterministic contract validation rejects the malformed evidence class.",
+    "replay_command": ".\\scripts\\check_phase_ht4_transport_research.ps1; ctest --test-dir build_modular_x64 -C Release -R ^test_portfolio_scheduler$ --output-on-failure",
+    "determinism": "The Technique Graph correlation model and covariance-edge identities fully determine the rejection."
+  },
+  "baseline": "Keep independent estimators and normalized MCMC chain replicates as separate aggregation strata until valid replicate covariance exists.",
+  "candidate": "Insert sample-level cross covariance between an independent estimator and PSSMLT into the HT.3 objective.",
+  "metrics": [
+    {"name": "sample_level_mcmc_covariance_admitted", "expected": false},
+    {"name": "silent_chain_normalization_loss", "expected": false}
+  ],
+  "artifacts": [
+    {"kind": "negative_contract_gate", "path": "tests/host/test_portfolio_scheduler.cpp", "retention": "committed_regression"},
+    {"kind": "joint_sample_contract", "path": "libs/ure_research/include/ure/research/transport.hpp", "retention": "committed_contract"}
+  ],
+  "result": {
+    "outcome": "negative",
+    "conclusion": "The proposed shortcut is rejected. A future multiplexed MCMC experiment must provide independent chain replicate namespaces, chain normalization and a covariance statistic defined over normalized replicates."
+  },
+  "known_failure_domain": [
+    "The rejection does not prove that correlation-aware aggregation with MCMC is impossible.",
+    "A future replicated-chain covariance contract may make the combination admissible.",
+    "This capsule closes only the ordinary sample-covariance shortcut."
+  ]
+}

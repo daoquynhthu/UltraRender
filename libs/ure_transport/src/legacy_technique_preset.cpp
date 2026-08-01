@@ -126,6 +126,8 @@ semantic::IdentityDigest parameter_identity(
         encoder.u32(config.mlt.seed);
         encoder.u64(config.mlt.chain_id_offset);
         break;
+    case TechniqueFamily::ResearchExtension:
+        break;
     }
     return encoder.finish();
 }
@@ -173,6 +175,8 @@ TechniqueResourceDescriptor resource_descriptor(
         result.scaling = TechniqueResourceScaling::Chain;
         result.persistent_budget_bytes = megabytes(
             config.mlt.memory_budget_mb);
+        break;
+    case TechniqueFamily::ResearchExtension:
         break;
     }
     return result;

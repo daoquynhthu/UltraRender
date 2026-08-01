@@ -84,5 +84,8 @@ ComparisonResult run_comparison(
     const ComparisonRequest& request,
     const std::vector<FeatureCapability>& capabilities,
     const ExperimentExecutor& executor);
+bool validate_comparison_result(
+    const ComparisonResult& result,
+    double relative_tolerance = 1e-12);
 
 }

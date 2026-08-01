@@ -5,6 +5,7 @@ add_library(ure_research STATIC
     src/experiment.cpp
     src/promotion.cpp
     src/reference.cpp
+    src/transport.cpp
 )
 
 target_include_directories(ure_research PUBLIC

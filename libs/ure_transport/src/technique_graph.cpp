@@ -117,7 +117,7 @@ bool edge_less(const TechniqueEdge& left,
 
 bool valid_family(TechniqueFamily family) {
     return family >= TechniqueFamily::WavefrontPathTracing &&
-           family <= TechniqueFamily::PrimarySampleSpaceMlt;
+           family <= TechniqueFamily::ResearchExtension;
 }
 
 bool valid_role(TechniqueRole role) {
@@ -156,6 +156,9 @@ semantic::IdentityDigest compute_technique_graph_identity(
         encoder.digest(value.parameter_identity);
         encoder.digest(value.persistent_state_identity);
         encoder.digest(value.replay_layout_identity);
+        if (value.family == TechniqueFamily::ResearchExtension) {
+            encoder.digest(value.research_capsule_identity);
+        }
         encode_estimator(encoder, value.estimator);
         encoder.u8(static_cast<std::uint8_t>(value.resources.scaling));
         encoder.u8(value.resources.cost_estimate_known ? 1 : 0);
@@ -228,6 +231,9 @@ TechniqueGraphValidation validate_technique_graph(
             semantic::identity_empty(descriptor.technique_identity) ||
             semantic::identity_empty(descriptor.sample_space_identity) ||
             semantic::identity_empty(descriptor.parameter_identity) ||
+            ((descriptor.family == TechniqueFamily::ResearchExtension) !=
+             !semantic::identity_empty(
+                 descriptor.research_capsule_identity)) ||
             (descriptor.adaptive_state &&
              semantic::identity_empty(
                  descriptor.persistent_state_identity)) ||

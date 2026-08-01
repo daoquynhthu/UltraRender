@@ -17,7 +17,8 @@ enum class TechniqueFamily : std::uint8_t {
     SpecularManifold,
     BidirectionalPathTracing,
     VertexConnectionMerging,
-    PrimarySampleSpaceMlt
+    PrimarySampleSpaceMlt,
+    ResearchExtension
 };
 
 enum class TechniqueRole : std::uint8_t {
@@ -55,6 +56,7 @@ struct TechniqueDescriptor {
     semantic::IdentityDigest parameter_identity = {};
     semantic::IdentityDigest persistent_state_identity = {};
     semantic::IdentityDigest replay_layout_identity = {};
+    semantic::IdentityDigest research_capsule_identity = {};
     EstimatorDescriptor estimator = {};
     TechniqueResourceDescriptor resources = {};
     bool contributes_estimate = true;

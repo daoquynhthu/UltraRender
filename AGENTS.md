@@ -15,8 +15,8 @@ This file defines the rules, conventions, and workflow that any AI agent must fo
 ```
 ure_types     — Header-only type library (INTERFACE). Vec3, Mat4, Quat, Ray, SceneIR, RenderConfig, World.
 ure_runtime   — Backend-neutral GPU runtime contracts (STATIC, pure C++).
-ure_transport — Backend-neutral observable, measure, estimator, Technique Graph, bounded support partition, composition, pilot qualification, portfolio scheduling, uncertainty and compatibility contracts (STATIC, pure C++).
-ure_research  — SDK-free research execution, artifact, comparison, capability, oracle and promotion contracts (STATIC, pure C++).
+ure_transport — Backend-neutral observable, measure, estimator, Technique Graph, bounded support partition, composition, pilot qualification, portfolio scheduling, research-extension identity, uncertainty and compatibility contracts (STATIC, pure C++).
+ure_research  — SDK-free research execution, transport experiment, joint-sample/reuse, artifact, comparison, capability, oracle and promotion contracts (STATIC, pure C++).
 ure_reconstruction — SDK-free typed measurement, sufficient-statistics, canonical merge and checkpoint contracts (STATIC, pure C++).
 ure_vulkan    — Vulkan 1.3 compute/acceleration runtime (STATIC, SDK-neutral public surface).
 ure_d3d12     — Windows D3D12/DXR compute/acceleration runtime (STATIC, SDK-neutral public surface).
@@ -58,7 +58,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | V (GPU Acceleration) | Done | V.0-V.11 complete; unified local/farm validation freezes construction, traversal, memory, parity, dynamic and distributed evidence |
 | W (Wave Optics Solver) | Done | W.0-W.12 complete within the declared production/reference boundary; unified physical, API, fail-loud, distributed and static validation closed |
 | U (USD/Hydra Adapter) | Done | U.1-U.6 complete; schema adapter, actual-OpenUSD delegate, mesh/material conversion, progressive RenderSession bridge and strict native-to-USDA export closed |
-| HO (High-order capabilities) | In progress | HO.0-HO.2, HT.0-HT.3 and HR.0 complete; current cursor: `HT.4 — 新积分器与 proposal 研究平台` |
+| HO (High-order capabilities) | In progress | HO.0-HO.2, HT.0-HT.4 and HR.0 complete; current cursor: `HT.5 — 自动积分系统闭环` |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -143,8 +143,8 @@ E:\Render Engine\
 │   │   ├── include/ure/transport/   # semantics, Technique Graph, composition, pilot and portfolio contracts
 │   │   └── src/                     # validation, composition, pilot qualification, scheduling, drift and shards
 │   ├── ure_research/                # SDK-free executable research substrate (STATIC, pure C++)
-│   │   ├── include/ure/research/    # manifest, artifact, experiment, capability, oracle and promotion contracts
-│   │   └── src/                     # deterministic allocation, storage, comparison and validation
+│   │   ├── include/ure/research/    # manifest, artifact, experiment, transport, capability, oracle and promotion contracts
+│   │   └── src/                     # deterministic allocation, storage, transport registry, comparison and validation
 │   ├── ure_reconstruction/          # SDK-free measurement substrate (STATIC, pure C++)
 │   │   ├── include/ure/reconstruction/ # typed planes, merge and checkpoint contracts
 │   │   └── src/                     # schema validation, sufficient statistics and authenticated storage
@@ -231,14 +231,14 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 |-------|--------------------------|
 | GPU core | `gpu_device`, `gpu_math`, `gpu_spectral`, `gpu_spectral_soa`, `gpu_hardware`, `gpu_render`, `gpu_instance`, `gpu_tangents`, `gpu_denoise`, `gpu_cuda_runtime`, `gpu_acceleration_contract`, `gpu_clustered_geometry`, `gpu_cluster_lod`, `gpu_dynamic_geometry`, `gpu_support_measure_composition`, `gpu_pilot_statistics` |
 | GPU physics/contracts | `gpu_polarization`, `gpu_volume`, `gpu_contract`, `gpu_wave_optics` |
-| Host core | `test_world`, `test_asset_pipeline`, `test_config`, `test_runtime_contract`, `test_high_order_semantics`, `test_research_substrate`, `test_technique_graph`, `test_support_measure_graph`, `test_pilot_qualification`, `test_portfolio_scheduler`, `test_measurement_bundle`, `test_acceleration_contract`, `test_clustered_geometry`, `test_cluster_lod`, `test_dynamic_geometry`, `test_resource_plan`, `test_execution_graph`, `test_multi_backend_schedule`, `test_spectral_oracle`, `test_wave_optics`, `test_local_fullwave`, `test_integrator`, `test_mie_phase` |
+| Host core | `test_world`, `test_asset_pipeline`, `test_config`, `test_runtime_contract`, `test_high_order_semantics`, `test_research_substrate`, `test_technique_graph`, `test_support_measure_graph`, `test_pilot_qualification`, `test_portfolio_scheduler`, `test_transport_research`, `test_measurement_bundle`, `test_acceleration_contract`, `test_clustered_geometry`, `test_cluster_lod`, `test_dynamic_geometry`, `test_resource_plan`, `test_execution_graph`, `test_multi_backend_schedule`, `test_spectral_oracle`, `test_wave_optics`, `test_local_fullwave`, `test_integrator`, `test_mie_phase` |
 | Host scene/material/session | `test_native_scene`, `test_native_scene_ir`, `test_native_procedural_graph`, `test_native_script_build`, `test_native_resource_catalog`, `test_native_solver_contract`, `test_native_simulation_contract`, `test_native_tooling`, `test_native_adapter`, `test_usd_schema_adapter`, `test_native_compiled_cache`, `test_native_validation_suite`, `test_gltf_frontend`, `test_material_graph`, `test_materialx_io`, `test_session`, `test_distributed_file_io`, `test_distributed_wave_io` |
 | Python | `test_pyure_smoke` |
 | Vulkan | `vulkan_runtime`, `vulkan_acceleration` |
 | D3D12 | `d3d12_runtime` |
 | Multi-backend | `multi_backend_inventory` |
 | Optional Hydra build | `test_hydra_render_delegate`, `test_hydra_plugin_discovery`, `test_hydra_mesh_rprim`, `test_hydra_material_sprim`, `test_hydra_render_buffer`, `test_hydra_progressive_render`, plus SDK-only `test_usda_export` |
-| **CTest total** | **66 registered tests** in `build_modular_x64` |
+| **CTest total** | **67 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -487,10 +487,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 61 | 2026-08-01 HT.1 | Established exact bounded support and measure-aware estimator composition | Finite path grammars compile to deterministic automata and an exact target/technique product partition with witnessed hole/outside-target rejection. Canonical Jacobians, balance/power MIS, GRIS provenance, independent contributions, normalized MCMC replicates and strict output layers share one SDK-free plan plus CUDA packed execution. Independent SDK-free 9/9, installed-package and Release 63/63 gates pass; the cursor advances to `HT.2 — Pilot 统计与自动资格判定`. |
 | 62 | 2026-08-01 HT.2 | Established provenance-bound pilot statistics and automatic qualification | Per-technique cost, variance, paired covariance, tail risk, ESS and memory evidence bind graph/world/snapshot/support identity. Independent, cross-fitted and probability-corrected pilot policies protect adaptive selection; automatic scene/event/backend/budget/output-layer decisions replace user mode knowledge while bounded expert overrides remain experimental. CUDA ingestion, SDK-free 10/10, installed package and Release 65/65 gates pass; the cursor advances to `HT.3 — 在线 portfolio 调度`. |
 | 63 | 2026-08-01 HT.3 | Established deterministic online portfolio scheduling | Content-bound tile/wavelength/time/device/sample/chain domains now receive cost/covariance-aware integer allocations with exploration, starvation recovery and MCMC chain separation. Drift triggers local/global re-pilot; compatible worker shards require exact coverage; MeasurementBundle merge/checkpoint preserves the schedule identity with v1 read compatibility. SDK-free 11/11, installed package and Release 66/66 gates pass; the cursor advances to `HT.4 — 新积分器与 proposal 研究平台`. |
+| 64 | 2026-08-01 HT.4 | Established the transport research platform | Capsule-bound ResearchExtension nodes, mechanism-specific joint samples, world/reuse validity, explicit opt-in graph materialization and replicated assessments now form an SDK-free research path. An eight-replicate analytic control variate materially reduced equal-cost variance but remains Research; ordinary sample covariance across an MCMC chain is recorded as a negative result. SDK-free 12/12, installed-package and Release 67/67 gates pass; the cursor advances to `HT.5 — 自动积分系统闭环`. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the Visual Studio 2026 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.3 and HR.0 are complete. The authoritative cursor is `HT.4 — 新积分器与 proposal 研究平台`; existing CUDA kernels do not yet execute every technique concurrently or populate every high-order measurement plane, and the former Phase X plugin ABI is frozen until the new world/transport/measurement/solver boundaries mature.
+- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.4 and HR.0 are complete. The authoritative cursor is `HT.5 — 自动积分系统闭环`; existing CUDA kernels do not yet execute every technique concurrently or populate every high-order measurement plane, and the former Phase X plugin ABI is frozen until the new world/transport/measurement/solver boundaries mature.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool. The default is memory-aware: depth 1 below 24 GiB and depth 2 otherwise. CUDA 13.3 exposed multi-`ptxas` allocation failure on the 16 GiB workstation, so its current stable default is 1 while host and unrelated targets remain globally parallel. CUDA architecture defaults to the local native GPU unless explicitly overridden for release or farm builds.

@@ -8,6 +8,7 @@
 #include "ure/transport/pilot.hpp"
 #include "ure/transport/portfolio.hpp"
 #include "ure/research/capability.hpp"
+#include "ure/research/transport.hpp"
 #include "ure/reconstruction/measurement.hpp"
 #include "ure/reconstruction/portfolio_measurement.hpp"
 
@@ -22,6 +23,7 @@ int main() {
     const ure::transport::PilotSamplingProvenance pilot_provenance;
     const ure::transport::PortfolioSchedule portfolio_schedule;
     const ure::research::CapabilityReport report;
+    const ure::research::TransportResearchDescriptor research_descriptor;
     ure::reconstruction::MeasurementSchema measurement_schema;
     return config.backend.kind == ure::BackendKind::Auto &&
                    !buffer &&
@@ -34,6 +36,8 @@ int main() {
                        ure::transport::kPortfolioContractVersion &&
                    measurement_schema.version ==
                        ure::reconstruction::kMeasurementSchemaVersion &&
+                   research_descriptor.version ==
+                       ure::research::kTransportResearchContractVersion &&
                    !report.executable &&
                    ure::transport::validate_observable(observable).ok()
         ? 0

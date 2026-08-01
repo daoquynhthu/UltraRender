@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HT.4 — 新积分器与 proposal 研究平台
+当前游标: HT.5 — 自动积分系统闭环
 
 ### 0.1 唯一生产施工队列
 
@@ -34,7 +34,7 @@ HO.2 executable research substrate                      [done]
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
 HT transport     HR reconstruction HW physical world HD differentiation
-[HT.4 current]   [HR.0 done]
+[HT.5 current]   [HR.0 done]
     │              │                │                │
     └──────────────┴────────┬───────┴────────────────┘
                             ▼
@@ -373,6 +373,8 @@ MCMC 链、相关复用、biased preview 和不同 observable 必须使用各自
 ### HT.4 — 新积分器与 proposal 研究平台
 
 **依赖**: HT.1；可与 HT.2/HT.3 研究并行。
+
+**状态**: 已完成（2026-08-01）。Technique Graph 新增不枚举论文名称的 capsule-bound `ResearchExtension`，SDK-free `ure_research` 新增 transport research descriptor/registry、joint sample、world dependency/reuse validity、显式 opt-in graph materialization 与 replicated assessment 合同，覆盖 independent/Markov estimator、proposal、control variate、shift map、multifidelity 和 hybrid observable 机制。Markov transition/chain normalization/independent replicate、proposal density、control expectation、shift inverse/Jacobian 与 reweighted transport-map validity 均在实验图生成前 fail closed；Research 不能自称 Production，positive assessment 仅进入 promotion review。一个实际 8×4,096 sample 的解析 control-variate capsule 将等成本方差从 0.089368742599 降至 0.005522631813，95% improvement interval `[0.082597484992, 0.085094736580]`，但因尚无 SceneIR/GPU 适用证据保持 Research；普通 sample covariance 跨 MCMC chain 的捷径作为负结果关闭。独立 SDK-free 12/12、installed package consumer 与 Release 67/67 CTest 通过。详见 `docs/HT_4_Transport_Research_Platform.md`。
 
 允许研究而不预先指定论文答案：
 

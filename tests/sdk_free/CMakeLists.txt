@@ -47,6 +47,7 @@ add_library(ure_research_sdk_free STATIC
     "${URE_ROOT}/libs/ure_research/src/experiment.cpp"
     "${URE_ROOT}/libs/ure_research/src/promotion.cpp"
     "${URE_ROOT}/libs/ure_research/src/reference.cpp"
+    "${URE_ROOT}/libs/ure_research/src/transport.cpp"
 )
 target_include_directories(ure_research_sdk_free PUBLIC
     "${URE_ROOT}/libs/ure_types/include"
@@ -149,6 +150,12 @@ add_executable(test_research_substrate_sdk_free
 target_link_libraries(test_research_substrate_sdk_free PRIVATE
     ure_research_sdk_free
 )
+add_executable(test_transport_research_sdk_free
+    "${URE_ROOT}/tests/host/test_transport_research.cpp"
+)
+target_link_libraries(test_transport_research_sdk_free PRIVATE
+    ure_research_sdk_free
+)
 add_executable(test_measurement_bundle_sdk_free
     "${URE_ROOT}/tests/host/test_measurement_bundle.cpp"
 )
@@ -202,6 +209,9 @@ if(MSVC)
     target_compile_options(test_research_substrate_sdk_free PRIVATE
         /W4 /WX /utf-8 /EHsc /wd4819
     )
+    target_compile_options(test_transport_research_sdk_free PRIVATE
+        /W4 /WX /utf-8 /EHsc /wd4819
+    )
     target_compile_options(ure_reconstruction_sdk_free PRIVATE
         /W4 /WX /utf-8 /EHsc /wd4819
     )
@@ -248,6 +258,9 @@ else()
     target_compile_options(test_research_substrate_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
     )
+    target_compile_options(test_transport_research_sdk_free PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+    )
     target_compile_options(ure_reconstruction_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
     )
@@ -267,4 +280,5 @@ add_test(NAME support_measure_graph_sdk_free COMMAND test_support_measure_graph_
 add_test(NAME pilot_qualification_sdk_free COMMAND test_pilot_qualification_sdk_free)
 add_test(NAME portfolio_scheduler_sdk_free COMMAND test_portfolio_scheduler_sdk_free)
 add_test(NAME research_substrate_sdk_free COMMAND test_research_substrate_sdk_free)
+add_test(NAME transport_research_sdk_free COMMAND test_transport_research_sdk_free)
 add_test(NAME measurement_bundle_sdk_free COMMAND test_measurement_bundle_sdk_free)

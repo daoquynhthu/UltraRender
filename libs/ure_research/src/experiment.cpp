@@ -243,7 +243,76 @@ ComparisonResult run_comparison(
         request.confidence_level,
         result.difference_mean - quantile * result.standard_error,
         result.difference_mean + quantile * result.standard_error};
+    if (!validate_comparison_result(result)) {
+        throw std::runtime_error("Generated invalid comparison result");
+    }
     return result;
+}
+
+bool validate_comparison_result(
+    const ComparisonResult& result,
+    double relative_tolerance) {
+    if (result.baseline.size() < 2 ||
+        result.baseline.size() != result.candidate.size() ||
+        !std::isfinite(relative_tolerance) ||
+        relative_tolerance < 0.0 ||
+        !std::isfinite(result.baseline_mean) ||
+        !std::isfinite(result.candidate_mean) ||
+        !std::isfinite(result.difference_mean) ||
+        !std::isfinite(result.standard_error) ||
+        result.standard_error < 0.0 ||
+        !std::isfinite(result.difference_interval.level) ||
+        result.difference_interval.level <= 0.5 ||
+        result.difference_interval.level >= 1.0 ||
+        !std::isfinite(result.difference_interval.lower) ||
+        !std::isfinite(result.difference_interval.upper) ||
+        result.difference_interval.lower > result.difference_interval.upper) {
+        return false;
+    }
+    const auto sample_count = result.baseline.front().sample_count;
+    if (sample_count == 0) return false;
+    const auto valid_observations = [sample_count](
+        const std::vector<ExperimentObservation>& values) {
+        return std::ranges::all_of(
+            values,
+            [sample_count](const ExperimentObservation& value) {
+                return std::isfinite(value.value) &&
+                    std::isfinite(value.within_run_variance) &&
+                    value.within_run_variance >= 0.0 &&
+                    value.sample_count == sample_count &&
+                    !semantic::identity_empty(value.artifact_identity);
+            });
+    };
+    if (!valid_observations(result.baseline) ||
+        !valid_observations(result.candidate)) {
+        return false;
+    }
+    try {
+        validate_distinct_artifacts(result.baseline, result.candidate);
+    } catch (const std::invalid_argument&) {
+        return false;
+    }
+    const auto baseline_mean = mean(result.baseline);
+    const auto candidate_mean = mean(result.candidate);
+    const auto difference = candidate_mean - baseline_mean;
+    const auto count = static_cast<double>(result.baseline.size());
+    const auto standard_error = std::sqrt(
+        sample_variance(result.baseline, baseline_mean) / count +
+        sample_variance(result.candidate, candidate_mean) / count);
+    const auto quantile = normal_quantile(
+        0.5 + result.difference_interval.level * 0.5);
+    const auto lower = difference - quantile * standard_error;
+    const auto upper = difference + quantile * standard_error;
+    const auto close = [relative_tolerance](double left, double right) {
+        return std::abs(left - right) <= relative_tolerance *
+            std::max({1.0, std::abs(left), std::abs(right)});
+    };
+    return close(result.baseline_mean, baseline_mean) &&
+        close(result.candidate_mean, candidate_mean) &&
+        close(result.difference_mean, difference) &&
+        close(result.standard_error, standard_error) &&
+        close(result.difference_interval.lower, lower) &&
+        close(result.difference_interval.upper, upper);
 }
 
 }
