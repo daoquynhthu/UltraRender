@@ -6,7 +6,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- Phase Q、Phase R、Phase T、Phase V、声明范围内的 Phase W 与 Phase U 已完成。Phase U 包含 SDK-free USD snapshot、实际 OpenUSD delegate/plugin、polygonal `HdMesh`、bounded `HdMaterial` 转换、CUDA `RenderSession` 渐进路径，以及从验证后的 native scene 到 `.usda` 的确定性适配导出。当前施工游标是 `Phase X`。Hydra subdivision/instancing、OpenUSD stage/file ingestion、time-sampled stage orchestration 和完整 USDShade 仍不在已实现范围。
+- Phase Q、Phase R、Phase T、Phase V、声明范围内的 Phase W 与 Phase U 已完成。当前权威游标是 `HO.0 — 能力债务普查与研究基线`：先统一盘点积分器组合禁区、Measurement/AOV 信息缺口、物理状态所有权和 fail-loud 分类，再进入自动估计器组合、重建、统一动态物理世界与可微逆问题。原 Phase X 插件 ABI 已冻结，避免过早固化旧边界。
 - 默认完整场景渲染后端仍是 CUDA。Vulkan RT 与 DXR 已具备多 BLAS/TLAS build、compaction、transform refit/rebuild、scratch budget 和 telemetry；OptiX SDK 保持可选，存在时启用同一构建合同和实际 raygen/miss/closest-hit pipeline，缺失时不影响 CUDA self-compute、Vulkan 或 D3D12。一个由同一 SceneIR lower 的固定 fixture 已对齐四类 provider 的 shadow/closest hit、transform、material、UV/normal/tangent metadata 和小型 AOV；这不等同于任意 SceneIR 的完整 radiometric integrator 已迁移到 native provider。
 - 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure。Acceleration provider、build quality、update policy、cluster gate、stats gate 与 scratch budget 使用独立的向后兼容配置合同；CUDA `self_compute` 的质量预设、auto/static/refit/rebuild update、scratch-budget enforcement 与 versioned acceleration stats 已可执行。Native construction 与 traversal parity fixture 已完成。V.8-V.10 已加入 SDK-free clustered geometry resource、host/CUDA physical-error selector，以及 rigid/deforming/topology-change lifecycle planner；SceneDiff mesh mutation会校验并事务回滚。当前 CUDA 对 deformation/topology 采取正确但保守的完整 BLAS/TLAS rebuild，显式请求尚不可用的 BLAS refit 会失败。主 renderer 的 cluster flag 在完整 SceneIR traversal lowering 前继续明确失败。
 - Slang 2026.14 已完成固定版本、多目标编译、反射、debug mapping、CUDA 占用率及数值执行验证。Vulkan SPIR-V 与 D3D12 DXIL 复用共享光谱/偏振及加速语义；D3D12 release DXIL 由固定 Windows SDK DXC 确定性生成，debug artifact 单独生成。现有 CUDA production kernels 仍是私有 `.cu` fast path，Slang RHI 未被引入。
@@ -55,7 +55,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 - 不提供交互式 OpenGL/Vulkan viewport。
 - 不提供 OSL 编译器；MaterialX 是适配层，URE MaterialGraph 是内部权威模型。
 - Phase U 的 schema adapter、Hydra delegate/plugin、polygonal mesh、bounded material conversion、CUDA progressive session bridge 和严格 native-to-USDA adapter 已实现。USDA 只覆盖文档化子集；有损输出必须携带结构化报告，无法表达的 native 语义会拒绝。Hydra subdivision/instancing、OpenUSD stage/file ingestion、完整 USDShade 节点集与 time-sampled stage orchestration 仍未完成。
-- native procedural plugin ABI 计划在 Phase X 实现。
+- native procedural plugin ABI 已延期；只有在高阶路线冻结 world、transport、measurement 与 solver 边界后才重新设计。
 - 物理和声学模块属于可选、实验性子系统；不能把已有 SPH、碰撞或音频组件理解为经过系统验证的通用仿真器。
 - “百万级光谱域”指资源域可使用很大的采样/索引空间，不表示每条光线携带百万个波长 lane，也不表示所有百万规模工作负载均具备实时或固定性能保证。
 

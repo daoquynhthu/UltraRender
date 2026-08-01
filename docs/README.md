@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-01
 
-This index separates current references from historical records. `PLAN.md` is the only authoritative construction queue. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
+This index separates current references from historical records. The root `PLAN.md` is the only authoritative high-order research and production queue. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
 
 ## Current project references
 
@@ -10,7 +10,7 @@ This index separates current references from historical records. `PLAN.md` is th
 |---|---|
 | [`../README.md`](../README.md) | Project entry, supported baseline and build commands |
 | [`../STATUS.md`](../STATUS.md) | Current capability and limitation matrix |
-| [`../PLAN.md`](../PLAN.md) | Authoritative phase queue, dependencies and completion criteria |
+| [`../PLAN.md`](../PLAN.md) | Authoritative HO/HT/HR/HW/HD queue, research maturity, dependencies and completion criteria |
 | [`../AGENTS.md`](../AGENTS.md) | Agent governance and workflow |
 | [`reference/Backend_API.md`](reference/Backend_API.md) | Implemented engine/session/C/Python API boundary |
 | [`Spectral_Semantics_Guide.md`](Spectral_Semantics_Guide.md) | Current semantic reference for spectral quantities |
@@ -48,6 +48,8 @@ These documents preserve design rationale and closure evidence. Dates, test coun
 ## Historical and experimental archives
 
 Files under [`archive/`](archive/) are retained for historical context and are not maintained as current specifications. This includes former root handover/roadmap/progress documents and early physics/acoustic assessments.
+
+[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. It is useful for design history but cannot override the current `HO.0 — 能力债务普查与研究基线` cursor.
 
 Files under [`superpowers/specs/`](superpowers/specs/) and [`superpowers/plans/`](superpowers/plans/) are archived design and execution records. They intentionally preserve proposed paths, old test counts and unchecked implementation steps. They do not override the completed implementation or current PLAN cursor.
 

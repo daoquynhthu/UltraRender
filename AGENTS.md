@@ -8,7 +8,7 @@ This file defines the rules, conventions, and workflow that any AI agent must fo
 
 ## 1. Project Identity
 
-**UltraRender** is a physically-based spectral polarization path tracing renderer targeting CUDA GPU, refactored from a monolithic executable into a modular library/application layout (Phase F complete).
+**UltraRender** is a research-oriented spectral/polarimetric renderer whose current complete-scene reference backend is CUDA. Its forward roadmap develops automatic estimator composition, measurement reconstruction, a unified time-varying physical world, and differentiable inverse workflows without weakening the existing physically explicit boundaries.
 
 ### Architecture (Modular — Phase F Target State)
 
@@ -55,6 +55,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | V (GPU Acceleration) | Done | V.0-V.11 complete; unified local/farm validation freezes construction, traversal, memory, parity, dynamic and distributed evidence |
 | W (Wave Optics Solver) | Done | W.0-W.12 complete within the declared production/reference boundary; unified physical, API, fail-loud, distributed and static validation closed |
 | U (USD/Hydra Adapter) | Done | U.1-U.6 complete; schema adapter, actual-OpenUSD delegate, mesh/material conversion, progressive RenderSession bridge and strict native-to-USDA export closed |
+| HO (High-order capabilities) | In progress | Current cursor: `HO.0 — 能力债务普查与研究基线`; foundation for transport portfolios, reconstruction, physical world and differentiation |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -63,6 +64,8 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 - Wavefront path tracing on CUDA, SIMT-optimized
 - Physical correctness over performance tricks
 - Textures are spectral resource carriers (`HostTexture` → RGB CUDA texture object or explicit source-sample spectral grid), not display RGB
+- The high-order route preserves observable, measure, time, units, uncertainty and provenance instead of flattening them into RGB or mode enums
+- Research may explore provisional algorithms; only evidence-backed Experimental/Production results may enter default execution paths
 
 ### Non-Goals (out of scope)
 - CPU production integrator development; host code is limited to oracle, compilation, build, scheduling, and validation roles
@@ -191,10 +194,10 @@ E:\Render Engine\
 ## 4. Testing
 
 ### Mandatory Rules
-- Every code change must be verifiable
-- Test gate must be **green** before reporting completion of any phase
+- Every production code change must be verifiable; Research changes require the scoped reproducibility evidence defined by PLAN.md
+- The relevant test gate must be **green** before reporting completion or graduation of any production phase
 - GPU tests must be written for any kernel modification
-- Host tests must continue to pass after any change
+- Host tests must continue to pass after production changes; isolated Research artifacts must not break the maintained build
 
 ### Test Commands
 ```powershell
@@ -292,6 +295,16 @@ General-purpose skill templates are guardrails for weak or unfamiliar agents, no
 - Prefer direct single-agent progress when the authoritative PLAN cursor, approved design, and verification contract are clear.
 - Project governance remains binding: do not skip the authoritative PLAN scope, architecture boundaries, test evidence, self-review, REPORT approval, commit authorization, or explicit safety constraints.
 - When a skill template conflicts with this project workflow, preserve the skill's substantive engineering intent while using the shortest project-compliant process.
+
+### 6.3 Research Maturity Governance
+
+The authoritative high-order PLAN distinguishes **Research**, **Experimental**, and **Production** maturity. Engineering gates control graduation, not whether an unresolved research question may be investigated.
+
+- Research work must preserve a reproducible capsule: hypothesis, input/seed, baseline, metric, artifact identity, result and known failure domain. It does not require full ABI, backend, documentation or complete CTest closure unless it changes maintained production code.
+- Experimental work must be explicitly opt-in, state its applicability and bias class, and carry repeated independent statistical or physical evidence. It cannot be described as a default capability.
+- Production work must satisfy lifecycle, budget, fail-loud, API, backend, regression and documentation requirements relevant to its scope.
+- A negative research result is valid evidence and may close a branch. Do not add production scaffolding merely to preserve a disproven approach.
+- Existing fail-loud behavior may be permanent physical/mathematical policy, a resource boundary, missing evidence or accidental debt. Classify it through HO.0 before removal.
 
 ### Step 1: PLAN
 - Search PLAN.md for the authoritative queue/current cursor, then read only the active phase, dependencies, and relevant status sections
@@ -453,10 +466,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 52 | 2026-08-01 U.4 | Added bounded Hydra material conversion with explicit loss accounting | Actual `HdMaterial` SPrims normalize legacy/new Hydra networks and convert URE adapter nodes, Preview Surface, UV textures and primvar sets into immutable MaterialGraph resources. Accepted and rejected networks retain structured loss reports; unsupported connected semantics fail closed and dynamic updates revise state. Four actual-OpenUSD SDK tests and the 57/57 native-sm_120 main gate pass on Visual Studio 2026 18.8.2, MSVC 19.51, CUDA 13.3 and Windows SDK 10.0.28000; cursor advances to U.5. |
 | 53 | 2026-08-01 U.5 | Connected Hydra viewport execution to the native progressive session | Actual camera, float render-buffer and render-pass objects lower retained mesh/material state into validated SceneIR, bake exact affine transforms, execute one synchronous CUDA `RenderSession` pass per Hydra execute, publish Beauty/existing AOVs and reset on camera changes. The GPU-enabled plugin is selectable without OpenGL/Vulkan/window contexts; six actual-OpenUSD tests, install discovery and static gates pass; cursor advances to U.6. |
 | 54 | 2026-08-01 U.6 | Closed Phase U with deterministic native-to-USDA export | SDK-free export maps bounded Preview Surface materials, shared mesh prototypes/instances, spheres, camera and rigid metadata to canonical USDA. Strict mode rejects every loss; documented-loss mode requires a durable JSON report, and unsupported native semantics remain errors. `.ure/.urescene` and explicitly selected `.urepkg` scenes, actual CLI execution, atomic publication and real OpenUSD resolution are gated; the unified Phase U suite advances the cursor to Phase X. |
+| 55 | 2026-08-01 HO route switch | Replaced the completed construction roadmap with the high-order research and implementation program | The legacy PLAN is archived. The new authority begins at `HO.0 — 能力债务普查与研究基线`, keeps Phase X frozen, and coordinates automatic transport portfolios, MeasurementBundle/reconstruction, unified WorldState/coupling, and differentiable inverse workflows under Research/Experimental/Production maturity. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the Visual Studio 2026 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, and Phase U are complete; the authoritative construction cursor is Phase X.
+- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, and Phase U are complete. The authoritative cursor is `HO.0 — 能力债务普查与研究基线`; the former Phase X plugin ABI is frozen until the new world/transport/measurement/solver boundaries mature.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool. The default is memory-aware: depth 1 below 24 GiB and depth 2 otherwise. CUDA 13.3 exposed multi-`ptxas` allocation failure on the 16 GiB workstation, so its current stable default is 1 while host and unrelated targets remain globally parallel. CUDA architecture defaults to the local native GPU unless explicitly overridden for release or farm builds.

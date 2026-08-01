@@ -8,7 +8,9 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative construction cursor is `Phase X`. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, and Phase U are complete. Phase U establishes the normalized USD snapshot, optional actual-OpenUSD delegate/plugin, polygonal mesh and bounded material conversion, a GPU-enabled progressive `RenderSession` bridge, and deterministic native-scene to USDA export with strict loss accounting. Production coherent and partially coherent sessions still reject before GPU allocation.
+The authoritative cursor is `HO.0 — 能力债务普查与研究基线`. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, and Phase U are complete. The new route starts by classifying capability debt, integrator composition boundaries, measurement gaps and world-state ownership before changing production APIs. The former Phase X plugin ABI is frozen until the transport, reconstruction, world and solver contracts mature. Production coherent and partially coherent sessions still reject before GPU allocation.
+
+Research, Experimental and Production are now separate maturity levels. Research may use provisional implementations when it preserves a reproducible hypothesis, input/seed, baseline, metric, artifact and failure domain. This does not upgrade the capability matrix below; default paths still require the relevant production gates.
 
 ## Supported execution baseline
 
@@ -96,7 +98,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | RenderSession / C ABI / pyure | Implemented and tested | ABI/version stability is not promised yet |
 | Native procedural graph | Implemented | Deterministic build graph, not runtime GPU interpretation |
 | Script build hook | Contract implemented, disabled by default | Requires explicit opt-in and attestable external runner |
-| Native procedural plugin | Not implemented | Planned for Phase X |
+| Native procedural plugin | Not implemented | Deferred until the high-order world/transport/measurement/solver boundaries are stable |
 
 ## Explicitly incomplete algorithms
 
@@ -107,7 +109,7 @@ The following must not be described as production capabilities merely because en
 - coherent/partial-coherent production scene transport and film output;
 - production worker emission of coherent/partial-coherent distributed frames and scalable general propagation backends;
 - anisotropic interface boundary matching, walk-off/ray splitting and SceneIR material integration;
-- bundled local full-wave solvers, engine-owned process discovery/execution and a stable Phase X dynamic provider ABI;
+- bundled local full-wave solvers, engine-owned process discovery/execution and a stable general dynamic provider ABI;
 - transient fluorescence film output, anti-Stokes resources, fluorescent participating media and advanced-integrator fluorescence;
 - Vulkan/D3D12/OptiX arbitrary-scene radiometric integrator lowering and DispatchRays;
 - OpenUSD file/stage ingestion, Hydra subdivision/instancing, complete USDShade conversion, time-sampled stage integration and the general plugin ecosystem; USDA adapter output exists only for the documented native subset;
