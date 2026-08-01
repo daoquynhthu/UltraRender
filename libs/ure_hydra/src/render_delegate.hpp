@@ -50,6 +50,8 @@ public:
         HdChangeTracker* tracker) override;
     HdRenderSettingDescriptorList
     GetRenderSettingDescriptors() const override;
+    HdAovDescriptor GetDefaultAovDescriptor(
+        const TfToken& name) const override;
     TfTokenVector
     GetRenderSettingsNamespaces() const override;
     VtDictionary GetRenderStats() const override;

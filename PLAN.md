@@ -1,6 +1,6 @@
 # UltraRender 升级路线图 (PLAN.md)
 
-最后更新: 2026-08-01 (Phase U.4 closure and U.5 cursor)
+最后更新: 2026-08-01 (Phase U.5 closure and U.6 cursor)
 
 本文档是唯一的行动纲领。所有开发工作必须严格按照此计划分阶段执行。不允许跳过阶段、合并阶段或擅自引入计划外改动。
 
@@ -64,7 +64,7 @@ Phase V complete [done]
 Phase W complete [done]
    │
    ▼
-当前游标: U.5
+当前游标: U.6
    │
    ▼
 Phase U complete
@@ -87,7 +87,8 @@ Phase X complete
 - **Phase U.2 已闭环**: 可选 `ure_hydra` 以实际 OpenUSD 25.05 编译 `HdURE : HdRenderDelegate` 和可发现 plugin；显式 SDK root、resource/settings/stats 生命周期与 Windows registry section 均有门禁，且通过 `IsSupported(false)` 防止未完成后端成为黑帧路径。
 - **Phase U.3 已闭环**: 实际 `HdMesh` RPrim 将 polygon topology、indexed/face-varying primvar 和 transform/material/visibility/double-sided 更新映射为不可变 SceneIR geometry；subdivision、instancing、非法 domain 与非有限/退化输入显式拒绝，transform-only 更新不重建 geometry。
 - **Phase U.4 已闭环**: 实际 `HdMaterial` SPrim 归一化 legacy/new Hydra network，将 URE adapter nodes、bounded `UsdPreviewSurface`、UV texture/primvar set 映射为不可变 MaterialGraph；accepted/rejected 网络均保留结构化 loss report，未知 connected semantic fail-closed。
-- **当前唯一施工项 — Phase U**: 当前游标进入 U.5 Hydra 视口到渐进式 RenderSession 的交互渲染与同步；USD/Hydra 只能消费 Phase Q 原生 schema 和 Session，不能反向成为权威模型。
+- **Phase U.5 已闭环**: 实际 `HdRenderPass`、`HdRenderBuffer` 和 camera SPrim 将 retained Hydra mesh/material snapshot 降低到 SceneIR，并由 `RenderSession` 管理 CUDA 上下文、逐次执行 progressive pass、AOV 写回、相机重置、收敛与 fail-loud 诊断；不创建 OpenGL/Vulkan/window context。
+- **当前唯一施工项 — Phase U**: 当前游标进入 U.6 native scene/SceneIR 到 `.ure/.urescene/.urepkg` 或 `.usda` 的有损可见导出；无法表达的能力必须 fail-loud 或生成结构化 loss report。
 - **Phase X**: 只在稳定 Session/MaterialGraph/native scene contracts 上暴露插件 ABI。
 - **Phase K**: 不作为并行主阶段；只在对应主阶段完成时运行该阶段指定的性能测量、Nsight 和长期回归门禁。
 - 文档中的“进行中”表示已有未闭环成果，不等于允许并行施工。发生冲突时，以本节当前游标为准。
@@ -2392,7 +2393,7 @@ DCC (Maya/Houdini) → USD Stage → HdURE adapter
 | U.2 | ✅ Hydra RenderDelegate 骨架：可选 `ure_hydra` 的 `HdURE` 继承实际 OpenUSD `HdRenderDelegate`，plugin 可动态发现；U.3/U.5 前不声明 render-ready | 高 |
 | U.3 | ✅ RPrim 支持：实际 `HdMesh` polygon topology、indexed/face-varying primvar 与动态状态 → immutable URE native geometry / SceneIR；subdivision/instancing 和有损输入 fail-loud | 高 |
 | U.4 | ✅ 材质转换：实际 `HdMaterial` legacy/new network 中的 USD `Material` + URE adapter nodes → immutable URE MaterialGraph；能力损失输出 structured loss report，未知 connected semantic fail-closed | 中 |
-| U.5 | 交互渲染：Hydra 视口 → 渐进式渲染会话 | 高 |
+| U.5 | ✅ 交互渲染：实际 Hydra camera/render-buffer/render-pass → retained SceneIR → CUDA `RenderSession` 渐进执行；Beauty/normal/depth/albedo/UV/motion AOV、相机重置、收敛和错误统计均有实际 OpenUSD+GPU 门禁，且不依赖图形/窗口上下文 | 高 |
 | U.6 | 场景导出：`.ure/.urescene/.urepkg` 或 `SceneIR → .usda` adapter output；无法表达的能力必须 fail-loud 或 loss report | 低 |
 
 **USDA 示例**:

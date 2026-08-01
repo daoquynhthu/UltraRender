@@ -33,6 +33,7 @@ void HdURERenderParam::UpdateMesh(
     std::unique_lock lock(mutex_);
     const std::string path = record.path;
     record.revision = next_revision_++;
+    ++scene_revision_;
     meshes_.insert_or_assign(
         path,
         std::move(record));
@@ -45,6 +46,7 @@ void HdURERenderParam::RejectMesh(
     std::string error) {
     std::unique_lock lock(mutex_);
     meshes_.erase(path);
+    ++scene_revision_;
     const std::string last_error = error;
     rejected_meshes_.insert_or_assign(
         std::move(path),
@@ -59,6 +61,7 @@ void HdURERenderParam::RemoveMesh(
     std::unique_lock lock(mutex_);
     meshes_.erase(path);
     rejected_meshes_.erase(path);
+    ++scene_revision_;
     RefreshLastErrorLocked();
 }
 
@@ -89,6 +92,7 @@ void HdURERenderParam::UpdateMaterial(
     std::unique_lock lock(mutex_);
     const std::string path = record.path;
     record.revision = next_revision_++;
+    ++scene_revision_;
     materials_.insert_or_assign(
         path,
         std::move(record));
@@ -105,6 +109,7 @@ void HdURERenderParam::RejectMaterial(
     std::string error) {
     std::unique_lock lock(mutex_);
     materials_.erase(path);
+    ++scene_revision_;
     material_loss_reports_.insert_or_assign(
         path,
         std::move(loss_report));
@@ -123,6 +128,7 @@ void HdURERenderParam::RemoveMaterial(
     materials_.erase(path);
     rejected_materials_.erase(path);
     material_loss_reports_.erase(path);
+    ++scene_revision_;
     RefreshLastErrorLocked();
 }
 
@@ -176,6 +182,71 @@ HdURERenderParam::FindMaterialLossReport(
 std::string HdURERenderParam::LastError() const {
     std::shared_lock lock(mutex_);
     return last_error_;
+}
+
+HdURERetainedScene
+HdURERenderParam::SnapshotScene() const {
+    std::shared_lock lock(mutex_);
+    HdURERetainedScene result;
+    result.revision = scene_revision_;
+    result.rejected_mesh_count =
+        rejected_meshes_.size();
+    result.rejected_material_count =
+        rejected_materials_.size();
+    result.last_error = last_error_;
+    result.meshes.reserve(meshes_.size());
+    for (const auto& [path, mesh] : meshes_) {
+        static_cast<void>(path);
+        result.meshes.push_back(mesh);
+    }
+    result.materials.reserve(materials_.size());
+    for (const auto& [path, material] :
+         materials_) {
+        static_cast<void>(path);
+        result.materials.push_back(material);
+    }
+    return result;
+}
+
+void HdURERenderParam::RecordRenderProgress(
+    int spp,
+    bool converged,
+    std::uint64_t loss_count) {
+    std::unique_lock lock(mutex_);
+    render_spp_ = spp;
+    render_converged_ = converged;
+    render_loss_count_ = loss_count;
+    render_error_.clear();
+}
+
+void HdURERenderParam::RecordRenderError(
+    std::string error) {
+    std::unique_lock lock(mutex_);
+    render_spp_ = 0;
+    render_converged_ = true;
+    render_loss_count_ = 0;
+    render_error_ = std::move(error);
+}
+
+int HdURERenderParam::RenderSpp() const {
+    std::shared_lock lock(mutex_);
+    return render_spp_;
+}
+
+bool HdURERenderParam::RenderConverged() const {
+    std::shared_lock lock(mutex_);
+    return render_converged_;
+}
+
+std::uint64_t
+HdURERenderParam::RenderLossCount() const {
+    std::shared_lock lock(mutex_);
+    return render_loss_count_;
+}
+
+std::string HdURERenderParam::RenderError() const {
+    std::shared_lock lock(mutex_);
+    return render_error_;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -30,7 +30,7 @@ Opacity, combined emission, occlusion, normal binding, clearcoat, specular workf
 
 ## Readiness boundary
 
-U.4 does not create a Hydra render pass. The plugin remains `IsSupported(false)`, BPrims remain unavailable and no material conversion is described as interactive rendering. U.5 owns progressive session execution and synchronization.
+U.4 itself did not create a Hydra render pass and its CUDA-off closure build remained non-ready. U.5 now consumes the retained material through progressive session execution; the U.4 conversion and loss-report boundaries remain unchanged.
 
 ## Verification
 

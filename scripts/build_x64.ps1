@@ -4,6 +4,7 @@ param(
     [string]$Generator = "Ninja",
     [string]$CudaArchitectures = "",
     [int]$CudaHeavyCompileJobs = 0,
+    [string[]]$CMakeOptions = @(),
     [Alias("Target")][string[]]$Targets = @(),
     [switch]$Clean,
     [switch]$CleanOnly,
@@ -159,6 +160,7 @@ function Configure-Project {
     if ($CudaHeavyCompileJobs -gt 0) {
         $cmakeArgs += "-DUR_CUDA_HEAVY_COMPILE_JOBS=$CudaHeavyCompileJobs"
     }
+    $cmakeArgs += $CMakeOptions
 
     $configureCommand = "`"$(Find-VsCMake)`" $($cmakeArgs -join ' ')"
     Write-Info "Configuring project"
@@ -197,6 +199,7 @@ Write-Info "Configuration: $Config"
 Write-Info "Generator: $Generator"
 Write-Info "CUDA architectures: $(if ($EffectiveCudaArchitectures) { $EffectiveCudaArchitectures } else { 'project default' })"
 Write-Info "CUDA heavy compile jobs: $(if ($CudaHeavyCompileJobs -gt 0) { $CudaHeavyCompileJobs } else { 'project default' })"
+Write-Info "Additional CMake options: $($CMakeOptions -join ', ')"
 Write-Info "Targets: $($Targets -join ', ')"
 Write-Info "Clean: $Clean"
 Write-Info "SkipConfigure: $SkipConfigure"

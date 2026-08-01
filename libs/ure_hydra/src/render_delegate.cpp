@@ -2,11 +2,16 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 
+#include <pxr/base/gf/vec2f.h>
+#include <pxr/base/gf/vec3f.h>
+#include <pxr/base/gf/vec4f.h>
 #include <pxr/base/tf/diagnostic.h>
 #include <pxr/base/tf/token.h>
 #include <pxr/base/vt/value.h>
 #include <pxr/imaging/hd/bprim.h>
+#include <pxr/imaging/hd/camera.h>
 #include <pxr/imaging/hd/instancer.h>
 #include <pxr/imaging/hd/mesh.h>
 #include <pxr/imaging/hd/resourceRegistry.h>
@@ -20,6 +25,10 @@
 #include "mesh_rprim.hpp"
 #include "render_delegate.hpp"
 #include "render_param.hpp"
+#if defined(UR_HYDRA_RENDERING)
+#include "render_buffer.hpp"
+#include "render_pass.hpp"
+#endif
 
 PXR_NAMESPACE_OPEN_SCOPE
 namespace {
@@ -36,9 +45,25 @@ const TfTokenVector& rprim_types() {
 }
 
 const TfTokenVector& sprim_types() {
+#if defined(UR_HYDRA_RENDERING)
+    static const TfTokenVector value{
+        HdPrimTypeTokens->material,
+        HdPrimTypeTokens->camera};
+#else
     static const TfTokenVector value{
         HdPrimTypeTokens->material};
+#endif
     return value;
+}
+
+const TfTokenVector& bprim_types() {
+#if defined(UR_HYDRA_RENDERING)
+    static const TfTokenVector value{
+        HdPrimTypeTokens->renderBuffer};
+    return value;
+#else
+    return empty_types();
+#endif
 }
 
 }
@@ -79,7 +104,7 @@ HdURE::GetSupportedSprimTypes() const {
 
 const TfTokenVector&
 HdURE::GetSupportedBprimTypes() const {
-    return empty_types();
+    return bprim_types();
 }
 
 HdRenderParam* HdURE::GetRenderParam() const {
@@ -94,11 +119,56 @@ HdURE::GetResourceRegistry() const {
 HdRenderPassSharedPtr HdURE::CreateRenderPass(
     HdRenderIndex* index,
     const HdRprimCollection& collection) {
+#if defined(UR_HYDRA_RENDERING)
+    const VtValue backend_value = GetRenderSetting(
+        TfToken("ure:backend"));
+    const TfToken backend =
+        backend_value.IsHolding<TfToken>()
+        ? backend_value.UncheckedGet<TfToken>()
+        : TfToken("auto");
+    if (backend != TfToken("auto") &&
+        backend != TfToken("cuda")) {
+        TF_RUNTIME_ERROR(
+            "HdURE U.5 supports only the CUDA backend");
+        return {};
+    }
+    const VtValue samples_value = GetRenderSetting(
+        TfToken("ure:samplesPerPass"));
+    const VtValue max_spp_value = GetRenderSetting(
+        TfToken("ure:maxSpp"));
+    const int samples_per_pass =
+        samples_value.IsHolding<int>()
+        ? samples_value.UncheckedGet<int>()
+        : 1;
+    const int max_spp =
+        max_spp_value.IsHolding<int>()
+        ? max_spp_value.UncheckedGet<int>()
+        : 64;
+    if (samples_per_pass <= 0 || max_spp <= 0) {
+        TF_RUNTIME_ERROR(
+            "HdURE sample settings must be positive");
+        return {};
+    }
+    ure::RenderConfig config;
+    if (backend == TfToken("cuda")) {
+        config.backend.kind =
+            ure::BackendKind::Cuda;
+    }
+    config.samples_per_pass = samples_per_pass;
+    config.environment_light.direct_sampling = true;
+    return std::make_shared<HdURERenderPass>(
+        index,
+        collection,
+        &impl_->render_param,
+        std::move(config),
+        max_spp);
+#else
     static_cast<void>(index);
     static_cast<void>(collection);
     TF_CODING_ERROR(
         "HdURE render execution is unavailable until the U.5 session path is active");
     return {};
+#endif
 }
 
 HdInstancer* HdURE::CreateInstancer(
@@ -138,6 +208,11 @@ HdSprim* HdURE::CreateSprim(
         HdPrimTypeTokens->material) {
         return new HdUREMaterial(sprim_id);
     }
+#if defined(UR_HYDRA_RENDERING)
+    if (type_id == HdPrimTypeTokens->camera) {
+        return new HdCamera(sprim_id);
+    }
+#endif
     TF_CODING_ERROR(
         "HdURE received an unsupported SPrim type");
     return nullptr;
@@ -151,6 +226,12 @@ HdSprim* HdURE::CreateFallbackSprim(
             SdfPath(
                 "/__ureFallbackMaterial"));
     }
+#if defined(UR_HYDRA_RENDERING)
+    if (type_id == HdPrimTypeTokens->camera) {
+        return new HdCamera(
+            SdfPath("/__ureFallbackCamera"));
+    }
+#endif
     TF_CODING_ERROR(
         "HdURE received an unsupported fallback SPrim type");
     return nullptr;
@@ -163,6 +244,11 @@ void HdURE::DestroySprim(HdSprim* sprim) {
 HdBprim* HdURE::CreateBprim(
     const TfToken& type_id,
     const SdfPath& bprim_id) {
+#if defined(UR_HYDRA_RENDERING)
+    if (type_id == HdPrimTypeTokens->renderBuffer) {
+        return new HdURERenderBuffer(bprim_id);
+    }
+#endif
     static_cast<void>(type_id);
     static_cast<void>(bprim_id);
     TF_CODING_ERROR(
@@ -172,6 +258,12 @@ HdBprim* HdURE::CreateBprim(
 
 HdBprim* HdURE::CreateFallbackBprim(
     const TfToken& type_id) {
+#if defined(UR_HYDRA_RENDERING)
+    if (type_id == HdPrimTypeTokens->renderBuffer) {
+        return new HdURERenderBuffer(
+            SdfPath("/__ureFallbackRenderBuffer"));
+    }
+#endif
     static_cast<void>(type_id);
     TF_CODING_ERROR(
         "HdURE fallback BPrims are unavailable before U.5");
@@ -204,8 +296,50 @@ HdURE::GetRenderSettingDescriptors() const {
             TfToken("ure:nativeSchema"),
             VtValue(std::string(
                 ure::usd::kUsdSchemaAdapterIdentity))
+        },
+        {
+            "Samples per Hydra execute",
+            TfToken("ure:samplesPerPass"),
+            VtValue(1)
+        },
+        {
+            "Maximum progressive samples",
+            TfToken("ure:maxSpp"),
+            VtValue(64)
         }
     };
+}
+
+HdAovDescriptor HdURE::GetDefaultAovDescriptor(
+    const TfToken& name) const {
+    if (name == HdAovTokens->color) {
+        return {
+            HdFormatFloat32Vec4,
+            false,
+            VtValue(GfVec4f(0.0f))};
+    }
+    if (name == HdAovTokens->normal ||
+        name == TfToken("albedo")) {
+        return {
+            HdFormatFloat32Vec3,
+            false,
+            VtValue(GfVec3f(0.0f))};
+    }
+    if (name == HdAovTokens->depth ||
+        name == HdAovTokens->cameraDepth) {
+        return {
+            HdFormatFloat32,
+            false,
+            VtValue(0.0f)};
+    }
+    if (name == TfToken("uv") ||
+        name == TfToken("motionVector")) {
+        return {
+            HdFormatFloat32Vec2,
+            false,
+            VtValue(GfVec2f(0.0f))};
+    }
+    return {};
 }
 
 TfTokenVector
@@ -224,7 +358,19 @@ VtDictionary HdURE::GetRenderStats() const {
     stats["resourceEpoch"] =
         VtValue(impl_->resource_epoch.load(
             std::memory_order_acquire));
+#if defined(UR_HYDRA_RENDERING)
+    stats["renderReady"] = VtValue(true);
+#else
     stats["renderReady"] = VtValue(false);
+#endif
+    stats["renderSpp"] = VtValue(
+        impl_->render_param.RenderSpp());
+    stats["renderConverged"] = VtValue(
+        impl_->render_param.RenderConverged());
+    stats["renderLossCount"] = VtValue(
+        impl_->render_param.RenderLossCount());
+    stats["renderError"] = VtValue(
+        impl_->render_param.RenderError());
     stats["meshCount"] =
         VtValue(static_cast<std::uint64_t>(
             impl_->render_param.MeshCount()));

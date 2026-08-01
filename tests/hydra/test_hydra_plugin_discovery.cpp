@@ -43,8 +43,14 @@ int main() {
     if (!plugin) {
         return EXIT_FAILURE;
     }
+#if defined(UR_HYDRA_RENDERING)
+    check(plugin->IsSupported(true) &&
+              !plugin->IsSupported(false),
+          "U.5 plugin GPU support boundary is wrong");
+#else
     check(!plugin->IsSupported(true),
           "U.2 skeleton was advertised as render-ready");
+#endif
 
     pxr::HdRenderSettingsMap settings;
     settings[pxr::TfToken("ure:backend")] =
@@ -63,7 +69,11 @@ int main() {
             identity && ready &&
                 identity->Get<std::string>() ==
                     "ure.hydra.render-delegate/1.0" &&
+#if defined(UR_HYDRA_RENDERING)
+                ready->Get<bool>(),
+#else
                 !ready->Get<bool>(),
+#endif
             "discovered delegate boundary is wrong");
         plugin->DeleteRenderDelegate(delegate);
     }

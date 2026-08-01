@@ -48,12 +48,23 @@ int main() {
     check(
         delegate.GetSupportedRprimTypes().size() == 1 &&
             delegate.GetSupportedRprimTypes().front() ==
-                pxr::HdPrimTypeTokens->mesh &&
-            delegate.GetSupportedSprimTypes().size() == 1 &&
+                pxr::HdPrimTypeTokens->mesh,
+        "Hydra prim capability boundary is wrong");
+#if defined(UR_HYDRA_RENDERING)
+    check(
+        delegate.GetSupportedSprimTypes().size() == 2 &&
+            delegate.GetSupportedBprimTypes().size() == 1 &&
+            delegate.GetSupportedBprimTypes().front() ==
+                pxr::HdPrimTypeTokens->renderBuffer,
+        "Hydra rendering prim capabilities are wrong");
+#else
+    check(
+        delegate.GetSupportedSprimTypes().size() == 1 &&
             delegate.GetSupportedSprimTypes().front() ==
                 pxr::HdPrimTypeTokens->material &&
             delegate.GetSupportedBprimTypes().empty(),
-        "Hydra prim capability boundary is wrong");
+        "Hydra adapter-only prim capabilities are wrong");
+#endif
     check(delegate.GetRenderParam() != nullptr,
           "Hydra render param is missing");
     check(delegate.GetResourceRegistry() != nullptr,
@@ -67,8 +78,21 @@ int main() {
 
     const auto descriptors =
         delegate.GetRenderSettingDescriptors();
-    check(descriptors.size() == 2,
+    check(descriptors.size() == 4,
           "Hydra setting descriptors are incomplete");
+    const auto color_aov =
+        delegate.GetDefaultAovDescriptor(
+            pxr::HdAovTokens->color);
+    const auto depth_aov =
+        delegate.GetDefaultAovDescriptor(
+            pxr::HdAovTokens->depth);
+    check(
+        color_aov.format ==
+                pxr::HdFormatFloat32Vec4 &&
+            !color_aov.multiSampled &&
+            depth_aov.format ==
+                pxr::HdFormatFloat32,
+        "Hydra AOV descriptors are incomplete");
     const auto namespaces =
         delegate.GetRenderSettingsNamespaces();
     check(namespaces.size() == 1 &&
@@ -87,7 +111,11 @@ int main() {
         schema && ready && epoch &&
             schema->Get<std::string>() ==
                 "ure.adapter.usd-schema/1.0" &&
+#if defined(UR_HYDRA_RENDERING)
+            ready->Get<bool>() &&
+#else
             !ready->Get<bool>() &&
+#endif
             epoch->Get<std::uint64_t>() == 0,
         "Hydra delegate boundary metadata is wrong");
     delegate.CommitResources(nullptr);

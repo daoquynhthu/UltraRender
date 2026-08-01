@@ -18,17 +18,17 @@ The plugin factory derives from `HdRendererPlugin` and constructs `HdURE` with o
 
 The optional install layout keeps `ure_hydra` and its `resources/plugInfo.json` together under `lib/UltraRender/hydra/ure_hydra`; adding that resources directory to `PXR_PLUGINPATH_NAME` is sufficient for discovery.
 
-The adapter is disabled by default. Enabling it requires both `UR_ENABLE_HYDRA=ON` and an explicit `UR_OPENUSD_ROOT`; the build never searches DCC installations or mutates process-global SDK paths. The current verified provider is the Houdini HDK CMake package. CUDA, Vulkan, D3D12 and a window-system context are not dependencies of the Hydra module.
+The adapter is disabled by default. Enabling it requires both `UR_ENABLE_HYDRA=ON` and an explicit `UR_OPENUSD_ROOT`; the build never searches DCC installations or mutates process-global SDK paths. The current verified provider is the Houdini HDK CMake package. At U.2 the module was SDK-only; U.5 optionally links the CUDA core for actual rendering while still requiring no graphics or window-system context.
 
 ## Fail-loud readiness boundary
 
-At U.2 closure the delegate advertised no prim types. U.3 and U.4 now advertise the implemented mesh RPrim and material SPrim. Render pass/BPrim execution rejects until U.5, while instancing remains rejected until it has a dedicated native mapping. The plugin still returns `IsSupported(false)` so a DCC cannot select the partial delegate as if it were render-capable.
+At U.2 closure the delegate advertised no prim types and returned `IsSupported(false)`. U.3 and U.4 added mesh and material prims. U.5 subsequently adds camera/render-buffer/render-pass execution and advertises readiness only in a CUDA-enabled build; CUDA-off adapter builds remain non-ready. Instancing remains rejected until it has a dedicated native mapping.
 
 `GetRenderStats()` reports:
 
 - `ure.hydra.render-delegate/1.0`;
 - the U.1 `ure.adapter.usd-schema/1.0` native mapping boundary;
-- `renderReady = false`;
+- phase-appropriate `renderReady`, progressive SPP/convergence and execution diagnostics;
 - the current resource commit epoch.
 
 This keeps USD/Hydra subordinate to the Phase Q native schema and prevents a discoverable skeleton from becoming a silent black-frame path.
@@ -49,9 +49,9 @@ Run:
 The isolated SDK build verifies:
 
 - `HdURE` inheritance, settings, resource ownership, statistics and commit lifecycle;
-- the current phase-bounded prim capability and non-ready state;
+- the U.2 phase-bounded prim capability and CUDA-off non-ready state;
 - generated plugin metadata, dynamic module discovery and plugin factory creation;
 - discovery from both the build tree and an isolated installed plugin layout;
 - actual OpenUSD/Hydra linkage without a graphics context.
 
-`check_phase_u2_static.ps1` freezes the explicit SDK opt-in, U.1 native boundary, plugin registration and fail-loud readiness contract. U.3 owns mesh RPrims, U.4 owns USD material translation, and U.5 owns interactive render execution.
+`check_phase_u2_static.ps1` freezes the explicit SDK opt-in, U.1 native boundary, plugin registration and original fail-loud readiness contract. U.3 owns mesh RPrims, U.4 owns USD material translation, and the current U.5 execution contract is documented separately.

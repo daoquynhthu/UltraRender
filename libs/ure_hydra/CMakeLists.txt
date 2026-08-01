@@ -67,9 +67,16 @@ add_library(ure_hydra_delegate OBJECT
     src/material_network.cpp
     src/material_sprim.cpp
     src/mesh_rprim.cpp
+    src/render_buffer.cpp
     src/render_delegate.cpp
     src/render_param.cpp
+    src/scene_snapshot.cpp
 )
+if(UR_ENABLE_CUDA)
+    target_sources(ure_hydra_delegate PRIVATE
+        src/render_pass.cpp
+    )
+endif()
 target_include_directories(ure_hydra_delegate
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -81,6 +88,14 @@ target_include_directories(ure_hydra_delegate
 target_link_libraries(ure_hydra_delegate
     PRIVATE ure_sceneio ur_openusd_hydra_sdk
 )
+if(UR_ENABLE_CUDA)
+    target_link_libraries(ure_hydra_delegate
+        PRIVATE ure_core
+    )
+    target_compile_definitions(ure_hydra_delegate
+        PRIVATE UR_HYDRA_RENDERING=1
+    )
+endif()
 target_compile_definitions(ure_hydra_delegate
     PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
 )
@@ -100,6 +115,9 @@ target_include_directories(ure_hydra
 target_link_libraries(ure_hydra
     PRIVATE ure_sceneio ur_openusd_hydra_sdk
 )
+if(UR_ENABLE_CUDA)
+    target_link_libraries(ure_hydra PRIVATE ure_core)
+endif()
 target_compile_definitions(ure_hydra
     PRIVATE
         NOMINMAX
@@ -107,6 +125,11 @@ target_compile_definitions(ure_hydra
         MAKING_DSO
         MFB_ALT_PACKAGE_NAME=ure_hydra
 )
+if(UR_ENABLE_CUDA)
+    target_compile_definitions(ure_hydra
+        PRIVATE UR_HYDRA_RENDERING=1
+    )
+endif()
 set_target_properties(ure_hydra PROPERTIES
     PREFIX ""
     RUNTIME_OUTPUT_DIRECTORY

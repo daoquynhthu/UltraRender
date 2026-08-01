@@ -70,12 +70,11 @@ endif()
 
 add_subdirectory(libs/ure_config)
 add_subdirectory(libs/ure_sceneio)
-if(UR_ENABLE_HYDRA)
-    add_subdirectory(libs/ure_hydra)
-endif()
-
 if(UR_ENABLE_CUDA)
     add_subdirectory(libs/ure_core)
+endif()
+if(UR_ENABLE_HYDRA)
+    add_subdirectory(libs/ure_hydra)
 endif()
 
 if(UR_BUILD_PHYSICS)

@@ -59,7 +59,7 @@ over "Glass" (
 U.1 rejects:
 
 - unsupported required API schemas;
-- animated stages that need the U.5 session path;
+- animated stages that need time-sampled stage orchestration beyond the U.5 retained-session bridge;
 - non-triangle topology, invalid indices, degenerate faces and non-finite geometry;
 - xform stacks that cannot be represented as affine translation/rotation/scale;
 - missing material bindings and duplicate or invalid prim paths;
@@ -67,7 +67,7 @@ U.1 rejects:
 - invalid, weak or over-budget spectral resources;
 - archives that fail Phase Q resource or SceneIR validation.
 
-Unknown optional schemas produce a standardized adapter warning and keep the result exportable. Multiple cameras preserve only the selected static camera and report the loss. Rich USDShade network conversion remains U.4, interactive time-sampled synchronization remains U.5, and SceneIR-to-USD output remains U.6.
+Unknown optional schemas produce a standardized adapter warning and keep the result exportable. Multiple cameras preserve only the selected static camera and report the loss. U.4 subsequently added bounded USDShade conversion and U.5 added retained Hydra progressive execution; time-sampled stage orchestration remains unavailable. SceneIR-to-USD output is the U.6 cursor.
 
 ## Verification
 

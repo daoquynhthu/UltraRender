@@ -1,6 +1,6 @@
 # UltraRender Documentation Index
 
-Last reviewed: 2026-07-29
+Last reviewed: 2026-08-01
 
 This index separates current references from historical records. `PLAN.md` is the only authoritative construction queue. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
 
@@ -32,6 +32,7 @@ This index separates current references from historical records. `PLAN.md` is th
 | [`Phase_U_U2_Hydra_RenderDelegate.md`](Phase_U_U2_Hydra_RenderDelegate.md) | U.2 optional OpenUSD `HdURE` delegate/plugin foundation and non-ready boundary |
 | [`Phase_U_U3_Hydra_Mesh_RPrim.md`](Phase_U_U3_Hydra_Mesh_RPrim.md) | U.3 actual `HdMesh` RPrim, SceneIR geometry mapping, updates and rejection boundary |
 | [`Phase_U_U4_Hydra_Material_Conversion.md`](Phase_U_U4_Hydra_Material_Conversion.md) | U.4 actual `HdMaterial` SPrim, MaterialGraph conversion and structured loss report |
+| [`Phase_U_U5_Hydra_Progressive_Render.md`](Phase_U_U5_Hydra_Progressive_Render.md) | U.5 actual camera/render-buffer/render-pass bridge to CUDA `RenderSession` progressive execution |
 
 ## Completed-phase evidence records
 

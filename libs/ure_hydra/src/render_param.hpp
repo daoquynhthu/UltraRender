@@ -48,6 +48,15 @@ struct HdUREMaterialRecord {
     std::uint64_t revision = 0;
 };
 
+struct HdURERetainedScene {
+    std::vector<HdUREMeshRecord> meshes;
+    std::vector<HdUREMaterialRecord> materials;
+    std::uint64_t revision = 0;
+    std::uint64_t rejected_mesh_count = 0;
+    std::uint64_t rejected_material_count = 0;
+    std::string last_error;
+};
+
 class HdURERenderParam final
     : public HdRenderParam {
 public:
@@ -75,6 +84,16 @@ public:
     FindMaterialLossReport(
         const std::string& path) const;
     std::string LastError() const;
+    HdURERetainedScene SnapshotScene() const;
+    void RecordRenderProgress(
+        int spp,
+        bool converged,
+        std::uint64_t loss_count);
+    void RecordRenderError(std::string error);
+    int RenderSpp() const;
+    bool RenderConverged() const;
+    std::uint64_t RenderLossCount() const;
+    std::string RenderError() const;
 
 private:
     struct RejectionRecord {
@@ -98,7 +117,12 @@ private:
         material_loss_reports_;
     std::uint64_t next_revision_ = 1;
     std::uint64_t next_rejection_revision_ = 1;
+    std::uint64_t scene_revision_ = 0;
     std::string last_error_;
+    int render_spp_ = 0;
+    bool render_converged_ = false;
+    std::uint64_t render_loss_count_ = 0;
+    std::string render_error_;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

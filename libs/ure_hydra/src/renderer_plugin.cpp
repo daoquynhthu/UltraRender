@@ -27,8 +27,12 @@ public:
 
     bool IsSupported(
         bool gpu_enabled = true) const override {
+#if defined(UR_HYDRA_RENDERING)
+        return gpu_enabled;
+#else
         static_cast<void>(gpu_enabled);
         return false;
+#endif
     }
 };
 
