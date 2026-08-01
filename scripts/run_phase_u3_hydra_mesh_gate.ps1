@@ -15,7 +15,7 @@ $cmake = Get-Command cmake -ErrorAction Stop
 & $cmake.Source `
     -S $root `
     -B $build `
-    -G "Visual Studio 17 2022" `
+    -G "Visual Studio 18 2026" `
     -A x64 `
     -DUR_ENABLE_CUDA=OFF `
     -DUR_ENABLE_VULKAN=OFF `

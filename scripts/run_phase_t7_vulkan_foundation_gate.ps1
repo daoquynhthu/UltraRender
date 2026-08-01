@@ -149,7 +149,7 @@ try {
     }
 
     & cmake -S $RepoRoot -B $PortableBuild `
-        -G "Visual Studio 17 2022" -A x64 `
+        -G "Visual Studio 18 2026" -A x64 `
         -DUR_ENABLE_CUDA=OFF `
         -DUR_ENABLE_VULKAN=ON `
         -DUR_BUILD_TESTS=ON `
@@ -171,7 +171,7 @@ try {
         --prefix $PortableInstall
     Require-Success "T.7 Vulkan package install"
     & cmake -S $ConsumerSource -B $ConsumerBuild `
-        -G "Visual Studio 17 2022" -A x64 `
+        -G "Visual Studio 18 2026" -A x64 `
         "-DCMAKE_PREFIX_PATH=$PortableInstall"
     Require-Success "T.7 Vulkan package consumer configure"
     & cmake --build $ConsumerBuild --config Release

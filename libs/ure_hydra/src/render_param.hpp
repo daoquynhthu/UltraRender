@@ -8,6 +8,7 @@
 #include <optional>
 #include <shared_mutex>
 #include <string>
+#include <vector>
 
 #include <pxr/imaging/hd/renderDelegate.h>
 
@@ -26,6 +27,27 @@ struct HdUREMeshRecord {
     std::uint64_t revision = 0;
 };
 
+enum class HdUREMaterialLossSeverity {
+    Warning,
+    Error
+};
+
+struct HdUREMaterialLoss {
+    HdUREMaterialLossSeverity severity =
+        HdUREMaterialLossSeverity::Warning;
+    std::string code;
+    std::string path;
+    std::string message;
+};
+
+struct HdUREMaterialRecord {
+    std::string path;
+    std::shared_ptr<const ure::scene_ir::MaterialNode>
+        material;
+    std::vector<HdUREMaterialLoss> loss_report;
+    std::uint64_t revision = 0;
+};
+
 class HdURERenderParam final
     : public HdRenderParam {
 public:
@@ -38,6 +60,20 @@ public:
     FindMesh(const std::string& path) const;
     std::size_t MeshCount() const;
     std::uint64_t RejectedMeshCount() const;
+    void UpdateMaterial(HdUREMaterialRecord record);
+    void RejectMaterial(
+        std::string path,
+        std::vector<HdUREMaterialLoss> loss_report,
+        std::string error);
+    void RemoveMaterial(const std::string& path);
+    std::optional<HdUREMaterialRecord>
+    FindMaterial(const std::string& path) const;
+    std::size_t MaterialCount() const;
+    std::uint64_t RejectedMaterialCount() const;
+    std::uint64_t MaterialLossCount() const;
+    std::vector<HdUREMaterialLoss>
+    FindMaterialLossReport(
+        const std::string& path) const;
     std::string LastError() const;
 
 private:
@@ -52,6 +88,14 @@ private:
     std::map<std::string, HdUREMeshRecord> meshes_;
     std::map<std::string, RejectionRecord>
         rejected_meshes_;
+    std::map<std::string, HdUREMaterialRecord>
+        materials_;
+    std::map<std::string, RejectionRecord>
+        rejected_materials_;
+    std::map<
+        std::string,
+        std::vector<HdUREMaterialLoss>>
+        material_loss_reports_;
     std::uint64_t next_revision_ = 1;
     std::uint64_t next_rejection_revision_ = 1;
     std::string last_error_;

@@ -16,6 +16,7 @@
 
 #include <ure/usd_schema_adapter.hpp>
 
+#include "material_sprim.hpp"
 #include "mesh_rprim.hpp"
 #include "render_delegate.hpp"
 #include "render_param.hpp"
@@ -31,6 +32,12 @@ const TfTokenVector& empty_types() {
 const TfTokenVector& rprim_types() {
     static const TfTokenVector value{
         HdPrimTypeTokens->mesh};
+    return value;
+}
+
+const TfTokenVector& sprim_types() {
+    static const TfTokenVector value{
+        HdPrimTypeTokens->material};
     return value;
 }
 
@@ -67,7 +74,7 @@ HdURE::GetSupportedRprimTypes() const {
 
 const TfTokenVector&
 HdURE::GetSupportedSprimTypes() const {
-    return empty_types();
+    return sprim_types();
 }
 
 const TfTokenVector&
@@ -90,8 +97,7 @@ HdRenderPassSharedPtr HdURE::CreateRenderPass(
     static_cast<void>(index);
     static_cast<void>(collection);
     TF_CODING_ERROR(
-        "HdURE render execution is unavailable until "
-        "the U.3 RPrim and U.5 session paths are active");
+        "HdURE render execution is unavailable until the U.5 session path is active");
     return {};
 }
 
@@ -128,18 +134,25 @@ void HdURE::DestroyRprim(HdRprim* rprim) {
 HdSprim* HdURE::CreateSprim(
     const TfToken& type_id,
     const SdfPath& sprim_id) {
-    static_cast<void>(type_id);
-    static_cast<void>(sprim_id);
+    if (type_id ==
+        HdPrimTypeTokens->material) {
+        return new HdUREMaterial(sprim_id);
+    }
     TF_CODING_ERROR(
-        "HdURE Sprims are unavailable before U.4");
+        "HdURE received an unsupported SPrim type");
     return nullptr;
 }
 
 HdSprim* HdURE::CreateFallbackSprim(
     const TfToken& type_id) {
-    static_cast<void>(type_id);
+    if (type_id ==
+        HdPrimTypeTokens->material) {
+        return new HdUREMaterial(
+            SdfPath(
+                "/__ureFallbackMaterial"));
+    }
     TF_CODING_ERROR(
-        "HdURE fallback Sprims are unavailable before U.4");
+        "HdURE received an unsupported fallback SPrim type");
     return nullptr;
 }
 
@@ -222,6 +235,18 @@ VtDictionary HdURE::GetRenderStats() const {
     stats["lastError"] =
         VtValue(
             impl_->render_param.LastError());
+    stats["materialCount"] =
+        VtValue(static_cast<std::uint64_t>(
+            impl_->render_param.
+                MaterialCount()));
+    stats["rejectedMaterialCount"] =
+        VtValue(
+            impl_->render_param.
+                RejectedMaterialCount());
+    stats["materialLossCount"] =
+        VtValue(
+            impl_->render_param.
+                MaterialLossCount());
     return stats;
 }
 

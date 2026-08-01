@@ -125,7 +125,7 @@ try {
     }
 
     & cmake -S $RepoRoot -B $PortableBuild `
-        -G "Visual Studio 17 2022" -A x64 `
+        -G "Visual Studio 18 2026" -A x64 `
         -DUR_ENABLE_CUDA=OFF `
         -DUR_ENABLE_VULKAN=ON `
         -DUR_BUILD_TESTS=ON `

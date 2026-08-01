@@ -49,7 +49,9 @@ int main() {
         delegate.GetSupportedRprimTypes().size() == 1 &&
             delegate.GetSupportedRprimTypes().front() ==
                 pxr::HdPrimTypeTokens->mesh &&
-            delegate.GetSupportedSprimTypes().empty() &&
+            delegate.GetSupportedSprimTypes().size() == 1 &&
+            delegate.GetSupportedSprimTypes().front() ==
+                pxr::HdPrimTypeTokens->material &&
             delegate.GetSupportedBprimTypes().empty(),
         "Hydra prim capability boundary is wrong");
     check(delegate.GetRenderParam() != nullptr,

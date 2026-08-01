@@ -28,7 +28,7 @@ The adapter removes a rejected mesh from retained render state and records the c
 - non-finite geometry, attributes or transforms;
 - projective transforms and meshes exceeding the native signed-index domain.
 
-U.3 advertises only `HdPrimTypeTokens->mesh`. SPrim and BPrim support remains absent, and the renderer plugin continues to return `IsSupported(false)` until U.5 supplies a real progressive render path. Mesh synchronization therefore cannot be mistaken for a render-ready Hydra backend.
+U.3 introduced `HdPrimTypeTokens->mesh`; U.4 subsequently adds only the material SPrim. BPrim support remains absent, and the renderer plugin continues to return `IsSupported(false)` until U.5 supplies a real progressive render path. Mesh synchronization therefore cannot be mistaken for a render-ready Hydra backend.
 
 ## Update and lifetime model
 

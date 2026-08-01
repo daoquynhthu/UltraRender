@@ -1,6 +1,6 @@
 param(
     [string]$OpenUsdRoot = $env:HFS,
-    [string]$BuildDir = ".build/phase_u2_hydra"
+    [string]$BuildDir = ".build/phase_u4_hydra"
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,24 +26,26 @@ $cmake = Get-Command cmake -ErrorAction Stop
     -DUR_BUILD_PHYSICS=OFF `
     -DUR_BUILD_TESTS=ON
 if ($LASTEXITCODE -ne 0) {
-    throw "U.2 Hydra configuration failed"
+    throw "U.4 Hydra configuration failed"
 }
 
 & $cmake.Source --build $build `
     --config Release `
     --target ure_hydra `
         test_hydra_render_delegate `
-        test_hydra_plugin_discovery
+        test_hydra_plugin_discovery `
+        test_hydra_mesh_rprim `
+        test_hydra_material_sprim
 if ($LASTEXITCODE -ne 0) {
-    throw "U.2 Hydra build failed"
+    throw "U.4 Hydra build failed"
 }
 
 & ctest --test-dir $build `
     -C Release `
-    -R "^test_hydra_(render_delegate|plugin_discovery)$" `
+    -R "^test_hydra_(render_delegate|plugin_discovery|mesh_rprim|material_sprim)$" `
     --output-on-failure
 if ($LASTEXITCODE -ne 0) {
-    throw "U.2 Hydra runtime gate failed"
+    throw "U.4 Hydra runtime gate failed"
 }
 
 $install = Join-Path $build "install"
@@ -52,7 +54,7 @@ $install = Join-Path $build "install"
     --component Hydra `
     --prefix $install
 if ($LASTEXITCODE -ne 0) {
-    throw "U.2 Hydra install failed"
+    throw "U.4 Hydra install failed"
 }
 
 $pluginResources = Join-Path $install `
@@ -66,7 +68,7 @@ try {
     $env:PATH = "$(Join-Path $openUsd 'bin');$savedPath"
     & $discoveryTest
     if ($LASTEXITCODE -ne 0) {
-        throw "Installed U.2 Hydra plugin discovery failed"
+        throw "Installed U.4 Hydra plugin discovery failed"
     }
 }
 finally {
@@ -74,4 +76,4 @@ finally {
     $env:PATH = $savedPath
 }
 
-Write-Host "Phase U.2 Hydra gate passed."
+Write-Host "Phase U.4 Hydra material gate passed."

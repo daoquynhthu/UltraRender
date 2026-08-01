@@ -22,7 +22,7 @@ The adapter is disabled by default. Enabling it requires both `UR_ENABLE_HYDRA=O
 
 ## Fail-loud readiness boundary
 
-At U.2 closure the delegate advertised no prim types. U.3 now advertises only the implemented mesh RPrim. Material and related SPrim creation rejects until U.4, and render pass/BPrim execution rejects until U.5. Instancing remains rejected until it has a dedicated native mapping. The plugin still returns `IsSupported(false)` so a DCC cannot select the partial delegate as if it were render-capable.
+At U.2 closure the delegate advertised no prim types. U.3 and U.4 now advertise the implemented mesh RPrim and material SPrim. Render pass/BPrim execution rejects until U.5, while instancing remains rejected until it has a dedicated native mapping. The plugin still returns `IsSupported(false)` so a DCC cannot select the partial delegate as if it were render-capable.
 
 `GetRenderStats()` reports:
 

@@ -19,10 +19,22 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(UR_ENABLE_CUDA)
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES "native" CACHE STRING
+            "CUDA architectures to compile")
+    endif()
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 20)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    set(UR_CUDA_HEAVY_COMPILE_JOBS 2 CACHE STRING
+    cmake_host_system_information(
+        RESULT UR_HOST_PHYSICAL_MEMORY_MIB
+        QUERY TOTAL_PHYSICAL_MEMORY)
+    set(UR_CUDA_HEAVY_COMPILE_JOBS_DEFAULT 2)
+    if(UR_HOST_PHYSICAL_MEMORY_MIB LESS 24576)
+        set(UR_CUDA_HEAVY_COMPILE_JOBS_DEFAULT 1)
+    endif()
+    set(UR_CUDA_HEAVY_COMPILE_JOBS
+        ${UR_CUDA_HEAVY_COMPILE_JOBS_DEFAULT} CACHE STRING
         "Maximum concurrent high-memory CUDA target compilations under Ninja")
     if(CMAKE_GENERATOR MATCHES "Ninja")
         if(NOT UR_CUDA_HEAVY_COMPILE_JOBS MATCHES "^[1-9][0-9]*$")
@@ -30,11 +42,11 @@ if(UR_ENABLE_CUDA)
         endif()
         set_property(GLOBAL PROPERTY JOB_POOLS
             ur_cuda_heavy_compile=${UR_CUDA_HEAVY_COMPILE_JOBS})
+        message(STATUS
+            "CUDA high-memory compile pool depth: ${UR_CUDA_HEAVY_COMPILE_JOBS} (${UR_HOST_PHYSICAL_MEMORY_MIB} MiB host memory)")
     endif()
-
-    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES "all-major")
-    endif()
+    message(STATUS
+        "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
     if(MSVC)
         set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler /wd4819")

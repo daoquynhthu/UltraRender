@@ -64,6 +64,8 @@ target_compile_definitions(ur_openusd_hydra_sdk
 )
 
 add_library(ure_hydra_delegate OBJECT
+    src/material_network.cpp
+    src/material_sprim.cpp
     src/mesh_rprim.cpp
     src/render_delegate.cpp
     src/render_param.cpp

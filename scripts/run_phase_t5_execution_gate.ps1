@@ -4,7 +4,7 @@ $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $SourceDir = Join-Path $RepoRoot "tests\sdk_free"
 $BuildDir = Join-Path $RepoRoot ".build\phase_t5_sdk_free"
 
-& cmake -S $SourceDir -B $BuildDir -G "Visual Studio 17 2022" -A x64
+& cmake -S $SourceDir -B $BuildDir -G "Visual Studio 18 2026" -A x64
 if ($LASTEXITCODE -ne 0) {
     throw "T.5 SDK-free configure failed"
 }

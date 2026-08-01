@@ -6,7 +6,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- Phase Q、Phase R、Phase T、Phase V 与声明范围内的 Phase W 已完成。U.1 已加入 SDK-free USD authored-stage snapshot adapter；U.2 已加入以实际 OpenUSD 25.05 验证的可选 `HdURE : HdRenderDelegate` 和动态 plugin；U.3 已将实际 `HdMesh` 的多边形拓扑、索引/face-varying primvar 与更新状态映射为 SceneIR geometry。plugin 在材质/session 尚未接入时仍明确报告 non-ready，不会成为静默黑帧后端。当前施工游标是 `U.4`。
+- Phase Q、Phase R、Phase T、Phase V 与声明范围内的 Phase W 已完成。U.1-U.3 已建立 SDK-free USD snapshot、实际 OpenUSD delegate/plugin 与 polygonal `HdMesh` 映射；U.4 已加入实际 `HdMaterial` SPrim，将 URE adapter nodes、`UsdPreviewSurface`、UV texture 和 legacy/new Hydra network 转换为 MaterialGraph，并对能力损失输出结构化报告。plugin 在 session 尚未接入时仍明确报告 non-ready。当前施工游标是 `U.5`。
 - 默认完整场景渲染后端仍是 CUDA。Vulkan RT 与 DXR 已具备多 BLAS/TLAS build、compaction、transform refit/rebuild、scratch budget 和 telemetry；OptiX SDK 保持可选，存在时启用同一构建合同和实际 raygen/miss/closest-hit pipeline，缺失时不影响 CUDA self-compute、Vulkan 或 D3D12。一个由同一 SceneIR lower 的固定 fixture 已对齐四类 provider 的 shadow/closest hit、transform、material、UV/normal/tangent metadata 和小型 AOV；这不等同于任意 SceneIR 的完整 radiometric integrator 已迁移到 native provider。
 - 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure。Acceleration provider、build quality、update policy、cluster gate、stats gate 与 scratch budget 使用独立的向后兼容配置合同；CUDA `self_compute` 的质量预设、auto/static/refit/rebuild update、scratch-budget enforcement 与 versioned acceleration stats 已可执行。Native construction 与 traversal parity fixture 已完成。V.8-V.10 已加入 SDK-free clustered geometry resource、host/CUDA physical-error selector，以及 rigid/deforming/topology-change lifecycle planner；SceneDiff mesh mutation会校验并事务回滚。当前 CUDA 对 deformation/topology 采取正确但保守的完整 BLAS/TLAS rebuild，显式请求尚不可用的 BLAS refit 会失败。主 renderer 的 cluster flag 在完整 SceneIR traversal lowering 前继续明确失败。
 - Slang 2026.14 已完成固定版本、多目标编译、反射、debug mapping、CUDA 占用率及数值执行验证。Vulkan SPIR-V 与 D3D12 DXIL 复用共享光谱/偏振及加速语义；D3D12 release DXIL 由固定 Windows SDK DXC 确定性生成，debug artifact 单独生成。现有 CUDA production kernels 仍是私有 `.cu` fast path，Slang RHI 未被引入。
@@ -22,7 +22,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 - 默认积分器是 spectral/polarimetric radiometric wavefront path tracer。
 - 显式启用的 camera diffraction 支持圆孔或规则叶片 pupil、defocus phase、sensor-pixel integration 与 wavelength-binned PSF resolve。独立的材质开关支持 grating、sinusoidal phase mask、ideal zone plate、blazed DOE、有界 Jones scattering table，以及有界 Stokes-shift excitation-emission fluorescence resource；它们都限制在各自校验过的普通 CUDA wavefront 组合。fluorescence 使用相机路径的 adjoint wavelength transition，并保留 detector wavelength 与 phosphorescence delay；当前 Beauty film 仍是 steady-state。partial coherence 提供 cross-spectral-density、Gaussian-Schell source、coherent realization、generalized ray、host/CUDA ensemble reduction、正确平均顺序，以及区分 radiance/complex field/mutual intensity/coherent realization 的 v6 分布式充分统计文件与合并合同；生产 coherent session 仍明确拒绝。W.10 可通过版本化 byte provider 合同消费 RCWA/FDTD/FEM/BEM/FMM/DDA/S-matrix 结果，并按求解器二进制、语义和物理请求建立确定性缓存；项目不捆绑这些求解器，也不执行 scene-scale global Maxwell 求解。
 - production unbiased/spatial ReSTIR DI 与受限 ReSTIR PT suffix reuse 已完成验证。GPU specular-manifold、BDPT、VCM 和独立 PSSMLT 已通过各自统计门禁；MLT 与 bidirectional/VCM/manifold 的组合仍明确拒绝。
-- 完整 CUDA 渲染基线为 Windows 11、Visual Studio 2022 Build Tools、CUDA 13.0 和 NVIDIA compute capability 12.0。Vulkan foundation 另有 Linux GCC/Ninja、Windows NVIDIA native ray-query 及 NVIDIA/Intel compute-BVH 证据；D3D12 foundation 有 Windows NVIDIA DXR 1.1、compute fallback、texture/descriptor 与 cross-queue fence 证据。这些门禁不等同于完整 Linux、D3D12 或非 NVIDIA 场景渲染支持。
+- 完整 CUDA 渲染基线为 Windows 11、Visual Studio 2026、MSVC 19.51、CUDA 13.3 和 NVIDIA compute capability 12.0。Vulkan foundation 另有 Linux GCC/Ninja、Windows NVIDIA native ray-query 及 NVIDIA/Intel compute-BVH 证据；D3D12 foundation 有 Windows NVIDIA DXR 1.1、compute fallback、texture/descriptor 与 cross-queue fence 证据。这些门禁不等同于完整 Linux、D3D12 或非 NVIDIA 场景渲染支持。
 
 ## 已验证的能力
 
@@ -53,7 +53,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 - 不提供 CPU production integrator。
 - 不提供交互式 OpenGL/Vulkan viewport。
 - 不提供 OSL 编译器；MaterialX 是适配层，URE MaterialGraph 是内部权威模型。
-- U.1 USD schema adapter、U.2 Hydra delegate/plugin foundation 与 U.3 polygonal mesh RPrim 已实现；subdivision/instancing、OpenUSD stage/file bridge、USDShade 完整转换、交互渲染与 USD 导出仍未完成，当前 plugin 和导出边界都会显式报告未就绪。
+- U.1 USD schema adapter、U.2 Hydra delegate/plugin foundation、U.3 polygonal mesh RPrim 与 U.4 bounded material conversion 已实现；subdivision/instancing、OpenUSD stage/file bridge、完整 USDShade 节点集、交互渲染与 USD 导出仍未完成，当前 plugin 和导出边界都会显式报告未就绪。
 - native procedural plugin ABI 计划在 Phase X 实现。
 - 物理和声学模块属于可选、实验性子系统；不能把已有 SPH、碰撞或音频组件理解为经过系统验证的通用仿真器。
 - “百万级光谱域”指资源域可使用很大的采样/索引空间，不表示每条光线携带百万个波长 lane，也不表示所有百万规模工作负载均具备实时或固定性能保证。
@@ -84,9 +84,9 @@ Render Engine/
 仓库当前维护的构建路径是 Windows x64：
 
 - Windows 11
-- Visual Studio 2022 Build Tools
+- Visual Studio 2026 with MSVC 19.51
 - CMake 与 Ninja（构建脚本负责定位）
-- CUDA Toolkit 13.0
+- CUDA Toolkit 13.3
 - 支持 C++23 的 MSVC host compiler
 
 配置并构建 Release：
@@ -96,11 +96,13 @@ Render Engine/
 ```
 
 Ninja 可并行构建宿主代码和独立目标；高内存 CUDA 编译由工程内的
-`ur_cuda_heavy_compile` job pool 单独限流。当前 16 GiB Windows/CUDA 13 开发机的
-实测稳定最优深度为 2：三个最重 CUDA translation units 的重编译关键路径由约
-602 秒降至 362 秒，深度 3 未继续缩短关键路径。不要为常规构建全局指定
-`--parallel 1`。低内存或不同工具链环境可通过
+`ur_cuda_heavy_compile` job pool 单独限流。默认值按物理内存选择：低于 24 GiB
+使用深度 1，其余环境使用深度 2。CUDA 13.3 下单个 `ptxas` 已可占用数 GiB，
+因此当前 16 GiB 开发机采用深度 1；宿主代码和无关目标仍保持并行。不要为常规
+构建全局指定 `--parallel 1`。不同工具链环境可通过
 `.\scripts\build_x64.ps1 -CudaHeavyCompileJobs <N>` 显式覆盖并重新配置。
+未显式指定时只编译当前本机 GPU 架构；发布或 farm 构建应通过
+`-CudaArchitectures <list>` 明确给出目标架构。
 
 运行完整注册测试：
 
@@ -108,7 +110,7 @@ Ninja 可并行构建宿主代码和独立目标；高内存 CUDA 编译由工�
 ctest --test-dir build_modular_x64 -C Release --output-on-failure
 ```
 
-当前构建树注册 56 个 CTest。这个数字是当前快照，不应用作长期固定接口；以 `ctest -N` 的输出为准。
+当前构建树注册 57 个 CTest。这个数字是当前快照，不应用作长期固定接口；以 `ctest -N` 的输出为准。
 
 仅构建不依赖 GPU SDK 的公共基础库时，可关闭 CUDA backend：
 

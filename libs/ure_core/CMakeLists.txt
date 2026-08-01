@@ -77,6 +77,27 @@ if(UR_ENABLE_OPTIX AND UR_OPTIX_INCLUDE_DIR)
             COMPILE_DEFINITIONS UR_HAS_OPTIX=1
             INCLUDE_DIRECTORIES "${UR_OPTIX_INCLUDE_DIR}")
     list(GET CMAKE_CUDA_ARCHITECTURES 0 UR_OPTIX_PTX_ARCH)
+    string(REGEX REPLACE "-(real|virtual)$" ""
+        UR_OPTIX_PTX_ARCH "${UR_OPTIX_PTX_ARCH}")
+    if(UR_OPTIX_PTX_ARCH STREQUAL "native")
+        find_program(UR_NVIDIA_SMI_EXECUTABLE nvidia-smi REQUIRED)
+        execute_process(
+            COMMAND "${UR_NVIDIA_SMI_EXECUTABLE}"
+                --query-gpu=compute_cap
+                --format=csv,noheader,nounits
+            OUTPUT_VARIABLE UR_OPTIX_NATIVE_COMPUTE_CAPABILITY
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            COMMAND_ERROR_IS_FATAL ANY)
+        string(REGEX MATCH "^[0-9]+\\.[0-9]+"
+            UR_OPTIX_NATIVE_COMPUTE_CAPABILITY
+            "${UR_OPTIX_NATIVE_COMPUTE_CAPABILITY}")
+        string(REPLACE "." "" UR_OPTIX_PTX_ARCH
+            "${UR_OPTIX_NATIVE_COMPUTE_CAPABILITY}")
+    endif()
+    if(NOT UR_OPTIX_PTX_ARCH MATCHES "^[0-9]+$")
+        message(FATAL_ERROR
+            "OptiX requires a concrete CUDA architecture; set CMAKE_CUDA_ARCHITECTURES to a numeric list")
+    endif()
     set(UR_OPTIX_TRACE_MODULE
         "${CMAKE_BINARY_DIR}/shaders/optix/phase_v7_acceleration.optixir"
         CACHE INTERNAL "Phase V.7 OptiX traversal module" FORCE)

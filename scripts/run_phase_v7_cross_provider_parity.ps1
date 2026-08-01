@@ -167,6 +167,17 @@ if ($OptixRoot -and
     ).Trim()
 }
 $OptixModule = Join-Path $BuildPath "shaders\optix\phase_v7_acceleration.optixir"
+$OptixCompiler = $null
+if ($optixExecuted) {
+    $nvccVersion = (& nvcc.exe --version 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0 -or
+        $nvccVersion -notmatch
+            'release\s+([0-9]+\.[0-9]+)') {
+        throw "Unable to determine the CUDA compiler used for OptiX IR"
+    }
+    $OptixCompiler =
+        "CUDA $($Matches[1]) OptiX IR"
+}
 
 $providers = @(
     [ordered]@{
@@ -187,11 +198,7 @@ $providers = @(
         workers = @(
             $cudaWorkers |
                 Where-Object { $optixExecuted })
-        compiler = if ($optixExecuted) {
-            "CUDA 13.0 OptiX IR"
-        } else {
-            $null
-        }
+        compiler = $OptixCompiler
         sdk_commit = $OptixCommit
         module_sha256 = File-Hash $OptixModule
         elapsed_ms = $cudaOptix.elapsed_ms

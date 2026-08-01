@@ -65,7 +65,7 @@ Require-Text "libs/ure_hydra/src/render_delegate.cpp" @(
     "renderReady",
     "return empty_types()",
     "unavailable until",
-    "unavailable before U.4",
+    "unavailable before U.5",
     "resource_epoch"
 )
 Require-Text "libs/ure_hydra/src/renderer_plugin.cpp" @(

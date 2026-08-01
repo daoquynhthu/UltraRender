@@ -54,7 +54,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | T (Portable GPU Runtime) | Done | T.0-T.11 complete; portable runtime, optional backends, multi-backend scheduling and unified validation closed |
 | V (GPU Acceleration) | Done | V.0-V.11 complete; unified local/farm validation freezes construction, traversal, memory, parity, dynamic and distributed evidence |
 | W (Wave Optics Solver) | Done | W.0-W.12 complete within the declared production/reference boundary; unified physical, API, fail-loud, distributed and static validation closed |
-| U (USD/Hydra Adapter) | In progress | U.1 schema adapter, U.2 actual-OpenUSD delegate/plugin and U.3 mesh RPrim complete; U.4 material conversion is the authoritative cursor |
+| U (USD/Hydra Adapter) | In progress | U.1-U.4 schema, actual-OpenUSD delegate, mesh and material conversion complete; U.5 interactive rendering is the authoritative cursor |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -222,7 +222,7 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | Vulkan | `vulkan_runtime`, `vulkan_acceleration` |
 | D3D12 | `d3d12_runtime` |
 | Multi-backend | `multi_backend_inventory` |
-| Optional Hydra build | `test_hydra_render_delegate`, `test_hydra_plugin_discovery`, `test_hydra_mesh_rprim` in the dedicated SDK build |
+| Optional Hydra build | `test_hydra_render_delegate`, `test_hydra_plugin_discovery`, `test_hydra_mesh_rprim`, `test_hydra_material_sprim` in the dedicated SDK build |
 | **CTest total** | **57 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
@@ -367,10 +367,11 @@ General-purpose skill templates are guardrails for weak or unfamiliar agents, no
 ## 9. Build Environment
 
 - **OS**: Windows 11
-- **Compiler**: VS 2022 BuildTools (`vcvarsall.bat x64`)
-- **CUDA**: 13.0
+- **Compiler**: MSVC 19.51 through Visual Studio 2026 18.8.2
+- **Windows SDK**: 10.0.28000
+- **CUDA**: 13.3
 - **GPU**: RTX 5060 Laptop (CC 12.0, 8 GB VRAM, 26 SMs)
-- **Generator**: Ninja through `scripts/build_x64.ps1` with the VS 2022 x64 toolchain
+- **Generator**: Ninja through `scripts/build_x64.ps1` with the Visual Studio 2026 x64 toolchain
 - **Build directory**: `build_modular_x64/`
 - **Build config**: `Release` (for tests), `Debug` (for development)
 
@@ -449,10 +450,11 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 49 | 2026-07-29 U.1 | Established the USD-to-native schema adapter boundary | SDK-free normalized stage snapshots map units, axes, static meshes/spheres, cameras, basic MaterialGraph nodes, mesh rigid bodies and strong spectral resource metadata into validated Phase Q archives. Unsupported schemas, animation, non-TRS transforms and lossy geometry fail loudly; OpenUSD/Hydra integration remains U.2 onward. |
 | 50 | 2026-07-29 U.2 | Established the actual OpenUSD Hydra delegate/plugin foundation | Optional `HdURE` derives from OpenUSD 25.05 `HdRenderDelegate`, owns resource/settings/stats lifecycle and is dynamically discovered through plugInfo. Explicit SDK roots prevent ambient coupling; the plugin advertises non-ready with no prim types until U.3/U.5, and two isolated SDK tests pass. |
 | 51 | 2026-07-29 U.3 | Added the actual Hydra mesh RPrim mapping | `HdUREMesh` triangulates polygonal topology through OpenUSD, resolves indexed constant/uniform/vertex/varying/face-varying normals and UVs into immutable SceneIR geometry, retains exact affine transform/material/visibility/double-sided state, and updates revisions without rebuilding geometry for transform-only changes. Subdivision, instancing, invalid domains and non-finite or degenerate inputs reject explicitly; the optional SDK gate now has three tests and the cursor advances to U.4. |
+| 52 | 2026-08-01 U.4 | Added bounded Hydra material conversion with explicit loss accounting | Actual `HdMaterial` SPrims normalize legacy/new Hydra networks and convert URE adapter nodes, Preview Surface, UV textures and primvar sets into immutable MaterialGraph resources. Accepted and rejected networks retain structured loss reports; unsupported connected semantics fail closed and dynamic updates revise state. Four actual-OpenUSD SDK tests and the 57/57 native-sm_120 main gate pass on Visual Studio 2026 18.8.2, MSVC 19.51, CUDA 13.3 and Windows SDK 10.0.28000; cursor advances to U.5. |
 
 ### Consolidated Truth
 
-- The authoritative build tree is `build_modular_x64` using Ninja and the VS 2022 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, Phase V, and the declared bounded scope of Phase W are complete; U.1-U.3 are complete and the authoritative construction cursor is U.4.
+- The authoritative build tree is `build_modular_x64` using Ninja and the Visual Studio 2026 x64 toolchain.
+- Phase Q, Phase M, Phase R, Phase T, Phase V, and the declared bounded scope of Phase W are complete; U.1-U.4 are complete and the authoritative construction cursor is U.5.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
-- High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool (default depth 2); a 2026-07-28 stress run on the 16 GiB CUDA 13 workstation reduced the three heaviest translation-unit critical path from about 602 seconds serial to 362 seconds, while depth 3 was slower. Host and unrelated targets remain globally parallel.
+- High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool. The default is memory-aware: depth 1 below 24 GiB and depth 2 otherwise. CUDA 13.3 exposed multi-`ptxas` allocation failure on the 16 GiB workstation, so its current stable default is 1 while host and unrelated targets remain globally parallel. CUDA architecture defaults to the local native GPU unless explicitly overridden for release or farm builds.

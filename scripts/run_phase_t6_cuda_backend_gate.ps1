@@ -128,7 +128,7 @@ $PortableInstall = Join-Path $RepoRoot ".build\phase_t6_install"
 $ConsumerSource = Join-Path $RepoRoot "tests\sdk_free\package_consumer"
 $ConsumerBuild = Join-Path $RepoRoot ".build\phase_t6_package_consumer"
 & cmake -S $RepoRoot -B $PortableBuild `
-    -G "Visual Studio 17 2022" -A x64 `
+    -G "Visual Studio 18 2026" -A x64 `
     -DUR_ENABLE_CUDA=OFF `
     -DUR_ENABLE_VULKAN=OFF `
     -DUR_ENABLE_D3D12=OFF `
@@ -155,7 +155,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "T.6 SDK-free package install failed"
 }
 & cmake -S $ConsumerSource -B $ConsumerBuild `
-    -G "Visual Studio 17 2022" -A x64 `
+    -G "Visual Studio 18 2026" -A x64 `
     "-DCMAKE_PREFIX_PATH=$PortableInstall"
 if ($LASTEXITCODE -ne 0) {
     throw "T.6 SDK-free package consumer configure failed"
