@@ -1,0 +1,47 @@
+{
+  "schema": "ure.research.capsule/1.0",
+  "id": "hr2-unbound-external-model-rejected-2026-08-08",
+  "maturity": "Research",
+  "question": "May a kernel-prediction, sample-transformer or hybrid candidate execute without explicit opt-in and provider/artifact-bound per-sample outputs?",
+  "hypothesis": "Allowing an unbound model result would destroy reproducibility, applicability and permutation semantics, so every external candidate must fail before reconstruction unless its capsule, provider, artifact and sample identities match.",
+  "inputs": {
+    "source_identity": "HR.2 external research candidate contract",
+    "configuration": {
+      "methods": ["ExternalKernelPrediction", "ExternalSampleTransformer", "ExternalHybrid"],
+      "maturity": "Research",
+      "explicit_opt_in": false,
+      "external_weights": "provider and artifact bound when supplied"
+    },
+    "source_assertions": [
+      {"path": "libs/ure_reconstruction/src/sample_reconstruction.cpp", "pattern": "explicit_research_opt_in"},
+      {"path": "libs/ure_reconstruction/src/sample_reconstruction.cpp", "pattern": "provider_identity"},
+      {"path": "tests/host/test_sample_reconstruction.cpp", "pattern": "test_external_research_methods_and_ood"}
+    ]
+  },
+  "reproducibility": {
+    "seed_policy": "No stochastic inference is performed; deterministic validation decides admission from content identities and applicability.",
+    "replay_command": "ctest --test-dir build_modular_x64 -C Release -R ^test_sample_reconstruction$ --output-on-failure",
+    "determinism": "Candidate and external-weight identities include the capsule, algorithm, provider, artifact, applicability and sorted sample identity mapping."
+  },
+  "baseline": "Use the analytic sample-splat baseline or leave the raw estimate unchanged.",
+  "candidate": "Execute externally supplied kernel-prediction, point-set/transformer or hybrid sample weights without complete provenance.",
+  "metrics": [
+    {"name": "unbound_external_execution_admitted", "expected": false},
+    {"name": "implicit_production_maturity_admitted", "expected": false},
+    {"name": "silent_ood_execution_admitted", "expected": false}
+  ],
+  "artifacts": [
+    {"kind": "negative_contract_gate", "path": "tests/host/test_sample_reconstruction.cpp", "retention": "committed_regression"},
+    {"kind": "candidate_contract", "path": "libs/ure_reconstruction/include/ure/reconstruction/sample_reconstruction.hpp", "retention": "committed_contract"}
+  ],
+  "result": {
+    "outcome": "negative",
+    "conclusion": "The shortcut is rejected. External model families are executable only as explicitly opted-in Research candidates with provider/artifact/sample-bound outputs; no model file format or trained capability is promoted."
+  },
+  "known_failure_domain": [
+    "The rejection does not disprove kernel-prediction, sample-transformer or hybrid reconstruction.",
+    "No trained artifact is shipped or benchmarked by HR.2.",
+    "A future provider may define a separately versioned model and inference ABI after evidence exists.",
+    "OOD override remains Research-only and reduces reported confidence while retaining the OOD mask."
+  ]
+}

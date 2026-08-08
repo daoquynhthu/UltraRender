@@ -65,6 +65,7 @@ add_library(ure_reconstruction_sdk_free STATIC
     "${URE_ROOT}/libs/ure_reconstruction/src/checkpoint.cpp"
     "${URE_ROOT}/libs/ure_reconstruction/src/measurement.cpp"
     "${URE_ROOT}/libs/ure_reconstruction/src/portfolio_measurement.cpp"
+    "${URE_ROOT}/libs/ure_reconstruction/src/sample_reconstruction.cpp"
     "${URE_ROOT}/libs/ure_reconstruction/src/statistical_reconstruction.cpp"
 )
 target_include_directories(ure_reconstruction_sdk_free PUBLIC
@@ -177,6 +178,12 @@ add_executable(test_statistical_reconstruction_sdk_free
 target_link_libraries(test_statistical_reconstruction_sdk_free PRIVATE
     ure_reconstruction_sdk_free
 )
+add_executable(test_sample_reconstruction_sdk_free
+    "${URE_ROOT}/tests/host/test_sample_reconstruction.cpp"
+)
+target_link_libraries(test_sample_reconstruction_sdk_free PRIVATE
+    ure_reconstruction_sdk_free
+)
 target_include_directories(test_public_surface_sdk_free PRIVATE
     "${URE_ROOT}/libs/ure_core/include"
     "${URE_ROOT}/libs/ure_sceneio/include"
@@ -239,6 +246,9 @@ if(MSVC)
     target_compile_options(test_statistical_reconstruction_sdk_free PRIVATE
         /W4 /WX /utf-8 /EHsc /wd4819
     )
+    target_compile_options(test_sample_reconstruction_sdk_free PRIVATE
+        /W4 /WX /utf-8 /EHsc /wd4819
+    )
 else()
     target_compile_options(ure_runtime_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
@@ -294,6 +304,9 @@ else()
     target_compile_options(test_statistical_reconstruction_sdk_free PRIVATE
         -Wall -Wextra -Wpedantic -Werror
     )
+    target_compile_options(test_sample_reconstruction_sdk_free PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+    )
 endif()
 
 enable_testing()
@@ -311,3 +324,4 @@ add_test(NAME research_substrate_sdk_free COMMAND test_research_substrate_sdk_fr
 add_test(NAME transport_research_sdk_free COMMAND test_transport_research_sdk_free)
 add_test(NAME measurement_bundle_sdk_free COMMAND test_measurement_bundle_sdk_free)
 add_test(NAME statistical_reconstruction_sdk_free COMMAND test_statistical_reconstruction_sdk_free)
+add_test(NAME sample_reconstruction_sdk_free COMMAND test_sample_reconstruction_sdk_free)

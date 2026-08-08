@@ -1,6 +1,6 @@
 # UltraRender 高阶能力研究与实施路线图
 
-最后更新: 2026-08-01（HR.1 统计重建基线完成）
+最后更新: 2026-08-08（HR.2 sample-level 重建研究边界完成）
 
 本文档是 UltraRender 当前唯一的行动纲领。2026-08-01 以前的主体建设路线已归档为
 [`docs/archive/Legacy_Construction_PLAN_2026-08-01.md`](docs/archive/Legacy_Construction_PLAN_2026-08-01.md)，
@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HR.2 — Sample-level 与光谱/偏振重建
+当前游标: HR.3 — Learned proposal 与 neural control variate
 
 ### 0.1 唯一生产施工队列
 
@@ -34,7 +34,7 @@ HO.2 executable research substrate                      [done]
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
 HT transport     HR reconstruction HW physical world HD differentiation
-[HT.5 done]      [HR.2 current]
+[HT.5 done]      [HR.3 current]
     │              │                │                │
     └──────────────┴────────┬───────┴────────────────┘
                             ▼
@@ -446,6 +446,8 @@ MeasurementBundle 至少支持可预算选择的以下层次：
 ### HR.2 — Sample-level 与光谱/偏振重建
 
 **依赖**: HR.0、HR.1。
+
+**状态**: 已完成 Research 边界（2026-08-08）。SDK-free `ure_reconstruction` 新增 content-bound sample/batch/candidate/external-weight/output/evaluation 合同，record 保留 sample/technique/path/material/medium/spectral resource、raster/time、detector/transport wavelength、joint PDF、estimator weight、geometry 与 phase reference；canonical sample-identity reduction 保证 permutation invariance。可执行 analytic sample splat 与显式 opt-in 的 external kernel-prediction、sample-transformer/point-set、hybrid provider 输出共享同一物理边界，外部结果绑定 exact batch/capsule/provider/artifact/sample identities，且所有输出保持 Research maturity，不冻结模型格式。Spectrum 执行非负与 sensor-observation 一致投影，Stokes 执行 second-order physical cone 投影，Complex Jones 保持 gauge covariance 和 phase-reference 一致；projection delta 进入保守 uncertainty。OOD 覆盖 observable/component/world/schema/wavelength/technique/material/sample-count/polarization，评估记录 raw/reconstructed MSE、1σ/2σ coverage 与 calibration error、observation residual、permutation error 和 physical violations。固定 positive/negative Research Capsules、跨世界/材质/光谱与 adversarial fixtures 通过；独立 SDK-free 15/15、installed package consumer 与 Release 71/71 CTest 通过。未训练或宣称通用模型、未建立 complete-scene GPU sample producer，也未将 reconstruction 结果混入无偏 estimator。详见 `docs/HR_2_Sample_Reconstruction.md`。
 
 - 研究 sample-space splatting、kernel prediction、sample transformer/point-set 模型与混合架构；
 - 使用 technique/path/spectral metadata，而非只消费 noisy RGB+normal+albedo；

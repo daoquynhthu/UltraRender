@@ -1,0 +1,51 @@
+{
+  "schema": "ure.research.capsule/1.0",
+  "id": "hr2-analytic-spectral-sample-splat-2026-08-08",
+  "maturity": "Research",
+  "question": "Can permutation-invariant sample-space splatting use path, spectral and geometric metadata while preserving a raw estimate and enforcing physical spectral observation constraints?",
+  "hypothesis": "On a deterministic five-pixel constant-spectrum fixture with alternating per-pixel noise, metadata-aware sample splatting reduces MSE relative to the raw estimate, is invariant to record order and preserves the declared sensor observation.",
+  "inputs": {
+    "source_identity": "HR.2 SDK-free sample reconstruction fixture",
+    "configuration": {
+      "pixels": 5,
+      "spectral_components": 3,
+      "samples_per_pixel": 2,
+      "noise": "alternating plus or minus 0.75",
+      "sensor_response": [0.2, 0.3, 0.5],
+      "sensor_observation": 2.3,
+      "kernel_radius": 2.0
+    },
+    "source_assertions": [
+      {"path": "tests/host/test_sample_reconstruction.cpp", "pattern": "evaluation.reconstructed_mse < evaluation.raw_mse"},
+      {"path": "tests/host/test_sample_reconstruction.cpp", "pattern": "maximum_permutation_error == 0.0"},
+      {"path": "tests/host/test_sample_reconstruction.cpp", "pattern": "maximum_observation_residual < 1e-8"}
+    ]
+  },
+  "reproducibility": {
+    "seed_policy": "No RNG is used; sample identities and values are fixed and canonical record ordering determines reduction order.",
+    "replay_command": "ctest --test-dir build_modular_x64 -C Release -R ^test_sample_reconstruction$ --output-on-failure",
+    "determinism": "Batch, config, sample, output and evaluation identities bind every input and result field."
+  },
+  "baseline": "Per-pixel raw average of the same sample records.",
+  "candidate": "Analytic metadata-aware Gaussian sample splat followed by nonnegative observation-consistent spectral projection.",
+  "metrics": [
+    {"name": "reconstructed_mse_below_raw_mse", "expected": true},
+    {"name": "maximum_permutation_error", "expected": 0.0},
+    {"name": "maximum_sensor_observation_residual", "expected": 1e-8},
+    {"name": "physical_violation_count", "expected": 0}
+  ],
+  "artifacts": [
+    {"kind": "executable_fixture", "path": "tests/host/test_sample_reconstruction.cpp", "retention": "committed_replay_source"},
+    {"kind": "sample_reconstruction_contract", "path": "libs/ure_reconstruction/include/ure/reconstruction/sample_reconstruction.hpp", "retention": "committed_contract"}
+  ],
+  "result": {
+    "outcome": "positive",
+    "conclusion": "The fixed fixture satisfies the declared MSE, permutation, observation and physical-domain gates. This establishes an executable Research baseline, not general scene-quality or learned-model evidence."
+  },
+  "known_failure_domain": [
+    "The fixture is spatially constant and does not establish production edge/detail quality.",
+    "The analytic kernel is not a trained kernel-prediction or transformer model.",
+    "Host execution is a research/oracle path and does not establish complete-scene GPU throughput.",
+    "Projection changes the reconstructed layer and is never substituted for raw estimator bias evidence."
+  ]
+}

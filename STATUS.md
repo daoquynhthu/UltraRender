@@ -1,6 +1,6 @@
 # UltraRender Current Status
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-08
 
 This document summarizes the current repository state for users and integrators. `PLAN.md` remains authoritative for construction order and phase completion criteria. Source, CMake registration, and fresh test output take precedence over prose when they disagree.
 
@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative cursor is `HR.2 — Sample-level 与光谱/偏振重建`. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5 and HR.0-HR.1 are complete. The transport layer closes objective-driven automatic plans with defensive wavefront coverage and traceable weights, normalization, uncertainty and budgets. The reconstruction layer now has a raw-preserving, variance/tail-aware spatial-temporal baseline for Spectrum and Stokes plus bounded host/CUDA parity. The current complete-scene CUDA bridge still does not populate every high-order plane, so statistical reconstruction is not silently enabled with fabricated inputs. CLI/JSON and pyure default to automatic integration objectives, while the low-level C++ default and named manual modes remain compatibility/reproducibility presets. The former Phase X plugin ABI remains frozen. Production coherent and partially coherent sessions still reject before GPU allocation.
+The authoritative cursor is `HR.3 — Learned proposal 与 neural control variate`. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 are complete. The reconstruction layer has a raw-preserving statistical baseline plus a sample/technique/path/spectral/phase-aware Research boundary. Analytic splatting and provider-bound kernel/point-set/hybrid outputs are executable in the SDK-free oracle, with Spectrum/Stokes/Complex physical policies, OOD masks and calibration diagnostics. No trained model or production model ABI is shipped, and the current complete-scene CUDA bridge still does not populate every high-order plane. CLI/JSON and pyure default to automatic integration objectives, while the low-level C++ default and named manual modes remain compatibility/reproducibility presets. The former Phase X plugin ABI remains frozen. Production coherent and partially coherent sessions still reject before GPU allocation.
 
 Research, Experimental and Production are now separate maturity levels. Research may use provisional implementations when it preserves a reproducible hypothesis, input/seed, baseline, metric, artifact and failure domain. This does not upgrade the capability matrix below; default paths still require the relevant production gates.
 
@@ -21,7 +21,7 @@ Research, Experimental and Production are now separate maturity levels. Research
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
 | Build tree | `build_modular_x64` using Ninja |
 | Primary executable | `build_modular_x64/apps/ure_cli/ure_cli.exe` |
-| Registered tests | 70 CTest entries at this snapshot |
+| Registered tests | 71 CTest entries at this snapshot |
 
 The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remains unavailable on the portable native backends. Vulkan additionally has a Linux GCC/Ninja gate, Windows NVIDIA native ray-query evidence, and Windows NVIDIA/Intel compute-BVH evidence. D3D12 additionally has Windows NVIDIA DXR 1.1, compute fallback, typed texture/descriptor and cross-queue fence evidence. macOS, older CUDA architectures, and complete Linux/non-NVIDIA/D3D12 scene rendering do not have equivalent evidence.
 
@@ -33,7 +33,7 @@ The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remai
 | `ure_runtime` | SDK-free device/resource/synchronization/dispatch/execution/acceleration/scheduling contracts | Active; implemented by CUDA and bounded Vulkan/D3D12 foundations |
 | `ure_transport` | SDK-free observable, measure, estimator, Technique Graph, support grammar, composition, pilot qualification, portfolio scheduling and automatic closure contracts | HO.1 and HT.0-HT.5 implemented; ResearchExtension remains opt-in |
 | `ure_research` | SDK-free research execution, transport experiment, artifact, comparison, capability, oracle and promotion contracts | HO.2 and HT.4 platform implemented; research callbacks and C++ object layout are not a stable production ABI |
-| `ure_reconstruction` | SDK-free typed measurement schemas, budget loss, sufficient statistics, canonical merge, checkpoint and statistical reconstruction contracts | HR.0-HR.1 implemented; bounded CUDA filtering is verified, while complete-scene high-order plane production and HR.2 sample/phase-aware reconstruction remain later work |
+| `ure_reconstruction` | SDK-free typed measurement schemas, sufficient statistics, canonical merge/checkpoint, statistical reconstruction and sample-level Research contracts | HR.0-HR.2 implemented; bounded HR.1 CUDA filtering and HR.2 SDK-free sample oracle are verified, while complete-scene sample-plane production, trained inference and estimator use remain unavailable |
 | `ure_vulkan` | Vulkan 1.3 adapter/resource/compute/synchronization/acceleration backend | Active foundation; full SceneIR renderer not yet lowered |
 | `ure_d3d12` | Windows D3D12/DXR adapter/resource/compute/synchronization/acceleration backend | Active optional foundation; full SceneIR renderer not yet lowered |
 | `ure_core` | Renderer/session/C ABI plus private CUDA backend | Active |
@@ -76,6 +76,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | Industrial validation | R-P7 complete | Clean-tree versioned eight-category report, artifact hashes, runtime boundaries, independent BDPT/VCM and MLT benefit/boundary evidence, disjoint 4,096-SPP farm merge, measured Nsight/VRAM evidence, and strict Closure validator passed |
 | Multi-GPU/farm sample scheduling and merge | Implemented contract | CUDA private multi-GPU uses the shared scheduler; heterogeneous compatible sample shards preserve backend/compiler/cache provenance. Cross-machine transport and worker orchestration remain outside this closure |
 | Statistical reconstruction | HR.1 host/CUDA baseline implemented and tested | Training-free variance/tail-aware spatial-temporal filtering preserves raw Spectrum/Stokes estimates, uncertainty, support and rejection provenance; it is not auto-enabled without the required planes and does not cover complex/Jones/CSD data |
+| Sample-level reconstruction research | HR.2 SDK-free Research boundary implemented and tested | Permutation-invariant analytic splat and provider-bound kernel/point-set/hybrid outputs preserve sample/path/spectral metadata; physical Spectrum/Stokes/Complex fixtures, OOD and calibration diagnostics pass, but no trained artifact, production ABI or complete-scene GPU producer is claimed |
 | Diffraction camera | W.2 implemented and tested | Explicit CUDA `Wavefront` mode; wavelength PSF bank and spectral-film resolve, with geometric AOVs left unfiltered |
 | Diffractive materials | W.5 implemented and tested | Grating, sinusoidal phase-mask, ideal zone-plate, blazed DOE and bounded passive Jones scattering-table operators in ordinary CUDA `Wavefront`; no cross-path coherent interference |
 | Fluorescence/phosphorescence | W.6 implemented and tested | Bounded excitation-emission surface resource in ordinary CUDA `Wavefront`; camera paths use adjoint wavelength conversion, preserve detector wavelength, depolarize the shifted lane and carry lifetime delay; film output remains steady-state |

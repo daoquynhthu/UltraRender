@@ -13,6 +13,7 @@
 #include "ure/reconstruction/measurement.hpp"
 #include "ure/reconstruction/portfolio_measurement.hpp"
 #include "ure/reconstruction/statistical_reconstruction.hpp"
+#include "ure/reconstruction/sample_reconstruction.hpp"
 
 int main() {
     const ure::RenderConfig config;
@@ -30,6 +31,8 @@ int main() {
     ure::reconstruction::MeasurementSchema measurement_schema;
     const ure::reconstruction::StatisticalReconstructionConfig
         reconstruction_config;
+    const ure::reconstruction::SampleReconstructionConfig
+        sample_reconstruction_config;
     return config.backend.kind == ure::BackendKind::Auto &&
                    !buffer &&
                    technique_preset.executable() &&
@@ -45,6 +48,8 @@ int main() {
                        ure::reconstruction::kMeasurementSchemaVersion &&
                    reconstruction_config.version ==
                        ure::reconstruction::kStatisticalReconstructionVersion &&
+                   sample_reconstruction_config.version ==
+                       ure::reconstruction::kSampleReconstructionVersion &&
                    research_descriptor.version ==
                        ure::research::kTransportResearchContractVersion &&
                    !report.executable &&
