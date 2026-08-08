@@ -4,7 +4,7 @@ Document status: authoritative subordinate execution plan for Phase PB
 
 Last reviewed: 2026-08-08
 
-> **For agentic workers:** Execute this plan under [`AGENTS.md`](../AGENTS.md) using the repository's single-agent `PLAN -> IMPLEMENT -> VERIFY -> REVIEW -> REPORT -> COMMIT` workflow. The root [`PLAN.md`](../PLAN.md) owns the global cursor; this document owns PB subcursor details. Do not dispatch subagents or make intermediate commits unless the user explicitly changes that governance.
+> **For agentic workers:** Execute this plan under [`AGENTS.md`](../AGENTS.md) using the repository's single-agent `PLAN -> IMPLEMENT -> VERIFY -> REVIEW -> REPORT -> COMMIT` workflow. The root [`PLAN.md`](../PLAN.md) owns the global cursor; this document owns PB subcursor details. Do not dispatch subagents. The user granted standing authorization on 2026-08-08 for autonomous plan-scoped PB commits without intermediate progress prompts; push remains prohibited without separate authorization.
 
 **Goal:** Build and graduate a minimal, version-negotiated public interaction boundary that lets an external frontend and UltraRender evolve independently without freezing renderer algorithms or internal layouts.
 
@@ -21,7 +21,7 @@ The approved architecture is [`Public_API_ABI_Architecture.md`](Public_API_ABI_A
 Current PB cursor:
 
 ```text
-PB.0 — Boundary freeze, inventory, and compatibility baseline
+PB.1 — Contract registry, generation, mock worker, and frontend kit
 ```
 
 The HR route is suspended after completed HR.2. `HR.3` resumes only after PB.8 or an explicit root-PLAN revision. PB establishes the carrier; it does not promote learned proposals, reconstruction, world state, material graph, wave optics, or solver functionality to stable extensions.
@@ -37,7 +37,7 @@ Global constraints:
 - Native `.ure`/`.urescene`/`.urepkg` semantics remain authoritative; `SceneIR` and renderer/session layouts remain internal.
 - Existing `ure_c_api.h`, `pyure_native.dll`, and pyure ctypes remain legacy experimental during migration and are not deleted by PB.
 - No code change is complete without the scoped host/ABI/protocol test and the maintained Release gate required by its PB subphase.
-- Commits occur only after REPORT and explicit user approval.
+- Plan-scoped PB commits use the standing 2026-08-08 authorization after local VERIFY/REVIEW; no push is authorized.
 
 ## 1. Dependency graph and completion sequence
 
@@ -158,6 +158,8 @@ scripts/
 
 **Dependencies:** HR.2 complete; approved public-boundary architecture.
 
+**Status:** Complete (2026-08-08).
+
 **Outcome:** The repository can prove exactly what is legacy, what will be public, what must never leak, and which baseline artifacts later phases must preserve.
 
 **Files:**
@@ -179,18 +181,20 @@ scripts/
 
 **Execution checklist:**
 
-- [ ] Record current `ure_c_api.h` functions, structure sizes/offsets, enum values, `_vN` families, pointer lifetimes, index-addressed mutations, and error behaviors in `legacy_surface.json`.
-- [ ] Inventory native formats/tooling; glTF/MaterialX/USD/Hydra adapters; C++/C/pyure/CLI client surfaces; distributed/farm/cache files; solver/procedural/script/provider hooks; installed headers; the abandoned GUI; and frozen Phase X in `public_interaction_surface_ledger.json`.
-- [ ] Assign each ledger entry exactly one disposition (`CanonicalAuthority`, `PublicTransport`, `Adapter`, `VersionedExtension`, `InternalContract`, `LegacyMigration`, or `FrozenExcluded`) plus semantic authority, caller/owner, identities, translation path, bypass risk, migration phase, and conformance evidence.
-- [ ] Reject missing classifications, duplicate canonical authorities, adapters without canonical target/loss policy, public transports without registry identity, internal contracts presented as client APIs, legacy paths without terminal migration, and any maintained path that bypasses the future contract adapter without an explicit convergence decision.
-- [ ] Build the current legacy DLL, enumerate every export, classify intended `ure_*` symbols versus accidental C++/auto-export symbols, and bind the evidence to the DLL SHA-256.
-- [ ] Compile a representative C client and pyure smoke client against the legacy surface; retain source plus binaries as migration-only fixtures, without describing them as stable clients.
-- [ ] Add a static forbidden-leak scan for STL/C++ ABI, exceptions, backend SDK types, native handles, internal layouts, and automatic Windows exports in future `ure_public` headers/runtime targets.
-- [ ] Reserve numeric ranges for Core, StableExtension, UnstableExtension/Experimental, UnstableExtension/Research, vendor/private tests, and tombstones.
-- [ ] Run `scripts/audit_public_boundary.ps1`; verify it reproduces identical JSON twice and fails on an injected duplicate ID, forbidden public type, and extra export fixture.
-- [ ] Run the maintained Release CTest gate to prove inventory work did not change renderer behavior.
+- [x] Record current `ure_c_api.h` functions, structure sizes/offsets, enum values, `_vN` families, pointer lifetimes, index-addressed mutations, and error behaviors in `legacy_surface.json`.
+- [x] Inventory native formats/tooling; glTF/MaterialX/USD/Hydra adapters; C++/C/pyure/CLI client surfaces; distributed/farm/cache files; solver/procedural/script/provider hooks; installed headers; the abandoned GUI; and frozen Phase X in `public_interaction_surface_ledger.json`.
+- [x] Assign each ledger entry exactly one disposition (`CanonicalAuthority`, `PublicTransport`, `Adapter`, `VersionedExtension`, `InternalContract`, `LegacyMigration`, or `FrozenExcluded`) plus semantic authority, caller/owner, identities, translation path, bypass risk, migration phase, and conformance evidence.
+- [x] Reject missing classifications, duplicate canonical authorities, adapters without canonical target/loss policy, public transports without registry identity, internal contracts presented as client APIs, legacy paths without terminal migration, and any maintained path that bypasses the future contract adapter without an explicit convergence decision.
+- [x] Build the current legacy DLL, enumerate every export, classify intended `ure_*` symbols versus accidental C++/auto-export symbols, and bind the evidence to the DLL SHA-256.
+- [x] Compile a representative C client and pyure smoke client against the legacy surface; retain source plus binaries as migration-only fixtures, without describing them as stable clients.
+- [x] Add a static forbidden-leak scan for STL/C++ ABI, exceptions, backend SDK types, native handles, internal layouts, and automatic Windows exports in future `ure_public` headers/runtime targets.
+- [x] Reserve numeric ranges for Core, StableExtension, UnstableExtension/Experimental, UnstableExtension/Research, vendor/private tests, and tombstones.
+- [x] Run `scripts/audit_public_boundary.ps1`; verify it reproduces identical JSON twice and fails on an injected duplicate ID, forbidden public type, and extra export fixture.
+- [x] Run the maintained Release CTest gate to prove inventory work did not change renderer behavior.
 
-**Completion evidence:** legacy surface and DLL identities are reproducible; every current or historical interaction surface has one owner/authority/disposition and no unresolved conflict/bypass; registry ranges are frozen for Candidate 0.1; no current API is mislabeled stable.
+**Completion evidence:** legacy surface and DLL identities are reproducible; every current or historical interaction surface has one owner/authority/disposition, while every known bypass has an explicit convergence phase and terminal gate; registry ranges are frozen for Candidate 0.1; no current API is mislabeled stable.
+
+**Recorded evidence:** 25 interaction surfaces, 14 unique authority domains, zero unclassified/duplicate/forbidden-inspection entries; 2,030 legacy DLL exports classified as 55 intended C, 1,970 C++, and 5 other accidental symbols; deterministic C11 client fixture and audit report; malformed ledger/registry/header/export fixtures rejected; Release build and 72/72 CTest pass.
 
 ## 4. PB.1 — Contract registry, generation, mock worker, and frontend kit
 
@@ -441,7 +445,7 @@ At each completed PB phase:
 - keep `README.md` concise and free of release claims before PB.8;
 - update `docs/README.md` and generated public reference tables;
 - record candidate breaks in `registry_compatibility.json` and retain fixtures;
-- REPORT scope, verification, and review findings to the user;
-- commit only after explicit approval, using the repository phase commit convention.
+- retain scope, verification, and review findings in the phase evidence;
+- use the standing 2026-08-08 plan-scoped commit authorization after VERIFY/REVIEW, following the repository phase commit convention.
 
 No PB phase authorizes push, tag, public package publication, deletion of legacy APIs, or declaration of stable 1.0 before PB.8.

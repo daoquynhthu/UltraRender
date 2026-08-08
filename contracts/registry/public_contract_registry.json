@@ -1,0 +1,86 @@
+{
+  "schema": "ure.public.contract-registry-source/1.0",
+  "candidate_version": "0.1.0",
+  "publication_state": "Candidate",
+  "authoring_format": "canonical-json-integer-or-decimal-string",
+  "digest": {
+    "algorithm": "SHA-256",
+    "domain": "UltraRender.PublicRegistry.v1",
+    "canonicalization": "RFC8785-with-integers-and-decimal-strings-only"
+  },
+  "rules": {
+    "explicit_numeric_ids": true,
+    "derive_ids_from_names": false,
+    "reuse_published_ids": false,
+    "reuse_tombstones": false,
+    "stable_core_requires_extension_impossibility_evidence": true,
+    "candidate_breaks_require_compatibility_record": true
+  },
+  "public_header_policy": {
+    "roots": [
+      {"path": "libs/ure_public/include", "required_from_phase": "PB.1"},
+      {"path": "contracts/generated/include", "required_from_phase": "PB.1"}
+    ],
+    "extensions": [".h", ".hpp"],
+    "forbid_automatic_windows_exports": true,
+    "forbidden_patterns": [
+      {"id": "cpp_stl", "pattern": "\\bstd::(vector|string|shared_ptr|unique_ptr|optional|variant|function)\\b"},
+      {"id": "cpp_abi", "pattern": "\\b(class|template|virtual|throw|typeid|dynamic_cast)\\b"},
+      {"id": "backend_sdk", "pattern": "\\b(CU[a-zA-Z0-9_]*|cuda[A-Z][a-zA-Z0-9_]*|Vk[A-Z][a-zA-Z0-9_]*|ID3D12[a-zA-Z0-9_]*|Optix[a-zA-Z0-9_]*)\\b"},
+      {"id": "internal_layout", "pattern": "\\b(SceneIR|SceneDiff|RenderSession|RenderConfig|MeasurementBundle|WorldState)\\b"}
+    ]
+  },
+  "namespaces": [
+    {
+      "id": "core",
+      "first": 1,
+      "last": 1048575,
+      "stability": "Core",
+      "state": "Reserved"
+    },
+    {
+      "id": "stable_extension",
+      "first": 1048576,
+      "last": 2147483647,
+      "stability": "StableExtension",
+      "state": "Reserved"
+    },
+    {
+      "id": "unstable_experimental",
+      "first": 2147483648,
+      "last": 3221225471,
+      "stability": "UnstableExtension",
+      "maturity": "Experimental",
+      "state": "Reserved"
+    },
+    {
+      "id": "unstable_research",
+      "first": 3221225472,
+      "last": 4026531839,
+      "stability": "UnstableExtension",
+      "maturity": "Research",
+      "state": "Reserved"
+    },
+    {
+      "id": "vendor_private_test",
+      "first": 4026531840,
+      "last": 4294967294,
+      "stability": "Private",
+      "state": "Reserved"
+    }
+  ],
+  "identity_kinds": [
+    "Interface",
+    "Structure",
+    "Result",
+    "ErrorDomain",
+    "Event",
+    "Capability",
+    "Extension",
+    "PayloadSchema",
+    "FramePlane",
+    "Semantic"
+  ],
+  "entries": [],
+  "tombstones": []
+}

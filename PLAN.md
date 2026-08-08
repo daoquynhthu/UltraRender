@@ -1,6 +1,6 @@
 # UltraRender 高阶能力与公共边界研究实施路线图
 
-最后更新: 2026-08-08（公共交互边界 Phase PB 获批，游标切换至 PB.0）
+最后更新: 2026-08-08（PB.0 公共交互面与 legacy 兼容基线闭环）
 
 本文档是 UltraRender 当前唯一的行动纲领。2026-08-01 以前的主体建设路线已归档为
 [`docs/archive/Legacy_Construction_PLAN_2026-08-01.md`](docs/archive/Legacy_Construction_PLAN_2026-08-01.md)，
@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: PB.0 — Boundary freeze, inventory, and compatibility baseline
+当前游标: PB.1 — Contract registry, generation, mock worker, and frontend kit
 
 ### 0.1 唯一生产施工队列
 
@@ -38,7 +38,7 @@ HT transport     HR reconstruction HW physical world HD differentiation
                        │
                        ▼
 PB.0 -> PB.1 -> PB.2 -> PB.3 -> PB.4 -> PB.5 -> PB.6 -> PB.7 -> PB.8
-[current]                                                        [1.0 gate]
+[done]    [current]                                              [1.0 gate]
                        │
                        ▼
                  resume HR.3
@@ -105,6 +105,8 @@ side-by-side runtime major 处理。任何新增 Core 字段/函数必须证明 
 PB.8 还要求完整交互面 ledger 中不存在未分类、重复权威、绕过 adapter 或未闭环迁移项；native、CLI、pyure、
 USD/Hydra、distributed/farm、solver/provider 等历史边界必须分别归入 canonical authority、adapter、
 public transport、versioned extension、internal contract、legacy migration 或 frozen/excluded。
+
+**PB.0 状态**: 已完成（2026-08-08）。`ure.pb.public-interaction-surface-ledger/1.0` 将 25 个现有、规划或历史交互面归入 14 个唯一权威域，覆盖 native、adapter、C++/C/Python/CLI、Hydra、distributed/farm、solver/provider、installed SDK、冻结 Phase X 与禁止考察的 GUI；审计拒绝遗漏、重复权威、无归宿 bypass、禁止目录读取和未来 public header 的 C++/SDK/internal-layout 泄漏。legacy baseline 绑定 534 行/55 函数 C header 与 SHA-256 固定的 `pyure_native.dll`，确认 2,030 exports 中 55 个预期 C symbol、1,970 个 C++ symbol 和 5 个其他 accidental exports，并保留可执行 C11 migration client。确定性正/负门禁、文档一致性和 Release 72/72 CTest 通过。详细证据由 `scripts/audit_public_boundary.ps1` 和 `tests/fixtures/contracts/` 维护。
 
 ---
 

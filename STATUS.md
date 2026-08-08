@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative cursor is `PB.0 — Boundary freeze, inventory, and compatibility baseline`; HR.3 is suspended until Phase PB closes. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 are complete. The approved PB architecture will introduce one generated contract registry, a minimal Windows x64 C ABI, and a local Named Pipe/shared-memory worker for independent external clients. No PB runtime, worker, generated SDK, or stable ABI/protocol exists yet. PB.0-PB.7 are explicitly Candidate 0.x and create no compatibility promise; only PB.8 may declare Core ABI 1.0 / Worker Protocol 1.0 after its gates and separate approval.
+The authoritative cursor is `PB.1 — Contract registry, generation, mock worker, and frontend kit`; HR.3 is suspended until Phase PB closes. PB.0 is complete: a machine-validated ledger classifies 25 current, planned, or historical interaction surfaces into 14 unique authority domains, binds the 55-function legacy C header and 2,030-export DLL baseline, preserves an executable C11 migration client, and rejects missing/duplicate authority, forbidden inspection/public-header leakage, and export drift. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 remain complete. No PB runtime, worker, generated SDK, or stable ABI/protocol exists yet. PB.0-PB.7 are explicitly Candidate 0.x and create no compatibility promise; only PB.8 may declare Core ABI 1.0 / Worker Protocol 1.0 after its gates and separate approval.
 
 The reconstruction layer has a raw-preserving statistical baseline plus a sample/technique/path/spectral/phase-aware Research boundary. Analytic splatting and provider-bound kernel/point-set/hybrid outputs are executable in the SDK-free oracle, with Spectrum/Stokes/Complex physical policies, OOD masks and calibration diagnostics. No trained model or production model ABI is shipped, and the current complete-scene CUDA bridge still does not populate every high-order plane. CLI/JSON and pyure default to automatic integration objectives, while the low-level C++ default and named manual modes remain compatibility/reproducibility presets. The former Phase X plugin ABI remains frozen. Production coherent and partially coherent sessions still reject before GPU allocation.
 
@@ -23,7 +23,7 @@ Research, Experimental and Production are now separate maturity levels. Research
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
 | Build tree | `build_modular_x64` using Ninja |
 | Primary executable | `build_modular_x64/apps/ure_cli/ure_cli.exe` |
-| Registered tests | 71 CTest entries at this snapshot |
+| Registered tests | 72 CTest entries at this snapshot |
 
 The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remains unavailable on the portable native backends. Vulkan additionally has a Linux GCC/Ninja gate, Windows NVIDIA native ray-query evidence, and Windows NVIDIA/Intel compute-BVH evidence. D3D12 additionally has Windows NVIDIA DXR 1.1, compute fallback, typed texture/descriptor and cross-queue fence evidence. macOS, older CUDA architectures, and complete Linux/non-NVIDIA/D3D12 scene rendering do not have equivalent evidence.
 
@@ -46,7 +46,7 @@ The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remai
 | `ure_cli` | Offline rendering and native tooling orchestration | Active |
 | `pyure` | ctypes wrapper around the C session ABI | Active but not version-stable |
 
-Approved PB target modules `contracts`, `ure_public`, `ure_contract`, and `ure_worker` are not implemented at this cursor. Their names in architecture documents describe planned boundaries, not current build targets.
+PB.0 implements the `contracts` registry reservations, complete interaction-surface ledger, legacy fixtures and boundary audit. `ure_public`, `ure_contract`, and `ure_worker` are not implemented at this cursor; their names in architecture documents describe PB.1+ target boundaries, not current build targets.
 
 The deleted root `include/` and `src/` trees are not valid development paths.
 
@@ -104,7 +104,8 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | MaterialX import/export | Implemented for accepted subset | Unsupported nodes fail; URE graph remains authoritative |
 | USD/Hydra | U.1-U.6 schema adapter, delegate/plugin, polygonal mesh, bounded material conversion, progressive CUDA RenderSession bridge and native-to-USDA export implemented | GPU-enabled plugin supports camera, float render buffers, Beauty and existing AOVs without a graphics context. USDA export covers the documented Preview Surface/mesh-instance/sphere/camera/rigid subset; subdivision, Hydra instancing, file/stage ingestion, complete USDShade and time-sampled stage integration remain unavailable |
 | RenderSession / legacy C ABI / pyure | Implemented and tested | Legacy experimental compatibility surface; not Core ABI 1.0 and not version-stable |
-| PB public runtime / worker / generated SDK | Architecture and implementation plan approved | Not implemented; Candidate 0.x work begins at PB.0 and carries no stable promise |
+| PB boundary inventory/audit | PB.0 implemented and tested | 25 surfaces, 14 authority domains, deterministic audit, legacy header/DLL/client evidence; no runtime API is created |
+| PB public runtime / worker / generated SDK | PB.1+ planned | Not implemented; Candidate 0.x carries no stable promise |
 | Native procedural graph | Implemented | Deterministic build graph, not runtime GPU interpretation |
 | Script build hook | Contract implemented, disabled by default | Requires explicit opt-in and attestable external runner |
 | Native procedural plugin | Not implemented | Deferred until the high-order world/transport/measurement/solver boundaries are stable |

@@ -1,0 +1,13 @@
+{
+  "schema": "ure.public.registry-compatibility/1.0",
+  "candidate_version": "0.1.0",
+  "baseline": null,
+  "allowed_change_classes": [
+    "AdditiveCandidate",
+    "BreakingCandidate",
+    "StableCompatible",
+    "StableMajorBreaking"
+  ],
+  "changes": [],
+  "tombstones": []
+}

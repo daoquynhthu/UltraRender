@@ -13,7 +13,7 @@ This index separates current references from historical records. The root `PLAN.
 | [`../PLAN.md`](../PLAN.md) | Authoritative global queue; Phase PB currently suspends HR.3 until the public boundary closes |
 | [`../AGENTS.md`](../AGENTS.md) | Agent governance and workflow |
 | [`Public_API_ABI_Architecture.md`](Public_API_ABI_Architecture.md) | Approved normative architecture for the minimal C ABI and local worker boundary; Candidate 0.x creates no stable promise |
-| [`PB_Public_Boundary_PLAN.md`](PB_Public_Boundary_PLAN.md) | Active subordinate PB.0-PB.8 implementation sequence, file map and graduation evidence |
+| [`PB_Public_Boundary_PLAN.md`](PB_Public_Boundary_PLAN.md) | Active subordinate PB.0-PB.8 implementation sequence; PB.0 is complete and PB.1 is current |
 | [`HO_0_Capability_Baseline.md`](HO_0_Capability_Baseline.md) | Current executable inventory of capability boundaries, integrators, measurement gaps, state ownership, research capsules and benchmark families |
 | [`HO_1_Unified_Semantics.md`](HO_1_Unified_Semantics.md) | Current backend-neutral observable, measure, time, identity, uncertainty and compatibility architecture |
 | [`HO_2_Executable_Research_Substrate.md`](HO_2_Executable_Research_Substrate.md) | Current deterministic research execution, artifact, comparison, capability, oracle and promotion-evidence architecture |
@@ -63,7 +63,7 @@ These documents preserve design rationale and closure evidence. Dates, test coun
 
 Files under [`archive/`](archive/) are retained for historical context and are not maintained as current specifications. This includes former root handover/roadmap/progress documents and early physics/acoustic assessments.
 
-[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. It is useful for design history but cannot override the current `PB.0 — Boundary freeze, inventory, and compatibility baseline` cursor. Phase PB is a client interaction boundary, not revival of the archived third-party plugin design.
+[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. It is useful for design history but cannot override the current `PB.1 — Contract registry, generation, mock worker, and frontend kit` cursor. Phase PB is a client interaction boundary, not revival of the archived third-party plugin design.
 
 Files under [`superpowers/specs/`](superpowers/specs/) and [`superpowers/plans/`](superpowers/plans/) are archived design and execution records. They intentionally preserve proposed paths, old test counts and unchecked implementation steps. They do not override the completed implementation or current PLAN cursor.
 

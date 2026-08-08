@@ -38,6 +38,8 @@ $currentDocuments = @(
     "docs/HR_0_Measurement_Bundle.md",
     "docs/HR_1_Statistical_Reconstruction.md",
     "docs/HR_2_Sample_Reconstruction.md",
+    "docs/Public_API_ABI_Architecture.md",
+    "docs/PB_Public_Boundary_PLAN.md",
     "docs/Phase_R_P6_Mie_Volume_Resources.md", "docs/Phase_W_Wave_Optics_Audit.md",
     "docs/Phase_W_W12_Validation.md"
 )
@@ -73,9 +75,11 @@ foreach ($file in $executionRecords) {
 & (Join-Path $root "scripts/check_phase_hr0_measurement_bundle.ps1") -RepoRoot $root
 & (Join-Path $root "scripts/check_phase_hr1_statistical_reconstruction.ps1") -RepoRoot $root
 & (Join-Path $root "scripts/check_phase_hr2_sample_reconstruction.ps1") -RepoRoot $root
+& (Join-Path $root "scripts/audit_public_boundary.ps1") -RepoRoot $root -BuildDir $BuildDir
 
 $markdownFiles = @(Get-ChildItem -LiteralPath $root -File -Recurse -Filter "*.md" | Where-Object {
     $_.FullName -notmatch '[\\/]third_party[\\/]' -and
+    $_.FullName -notmatch '[\\/]gui[\\/]' -and
     $_.FullName -notmatch '[\\/]\.build[\\/]' -and
     $_.FullName -notmatch '[\\/]build[^\\/]*[\\/]'
 })

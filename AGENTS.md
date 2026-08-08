@@ -70,7 +70,7 @@ PB.0-PB.7 remain Candidate 0.x and create no stable public promise. The current 
 | W (Wave Optics Solver) | Done | W.0-W.12 complete within the declared production/reference boundary; unified physical, API, fail-loud, distributed and static validation closed |
 | U (USD/Hydra Adapter) | Done | U.1-U.6 complete; schema adapter, actual-OpenUSD delegate, mesh/material conversion, progressive RenderSession bridge and strict native-to-USDA export closed |
 | HO (High-order capabilities) | Paused after HR.2 | HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 complete; HR.3 resumes after Phase PB |
-| PB (Public Boundary) | In progress | Approved architecture and independent execution plan; current cursor: `PB.0 — Boundary freeze, inventory, and compatibility baseline` |
+| PB (Public Boundary) | In progress | PB.0 complete; current cursor: `PB.1 — Contract registry, generation, mock worker, and frontend kit` |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -249,8 +249,9 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | Vulkan | `vulkan_runtime`, `vulkan_acceleration` |
 | D3D12 | `d3d12_runtime` |
 | Multi-backend | `multi_backend_inventory` |
+| Public boundary | `test_public_boundary_audit` |
 | Optional Hydra build | `test_hydra_render_delegate`, `test_hydra_plugin_discovery`, `test_hydra_mesh_rprim`, `test_hydra_material_sprim`, `test_hydra_render_buffer`, `test_hydra_progressive_render`, plus SDK-only `test_usda_export` |
-| **CTest total** | **71 registered tests** in `build_modular_x64` |
+| **CTest total** | **72 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -344,6 +345,7 @@ Phase PB follows `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Bound
 - The current C API and pyure binding remain legacy experimental during migration. PB does not authorize their deletion.
 - The abandoned repository GUI is never a contract consumer or evidence source. External clients integrate through generated SDK fixtures, the mock worker, and packaged runtimes.
 - PB.0 maintains a complete Public Interaction Surface Ledger covering native formats/tooling, adapters, C++/C/Python/CLI surfaces, distributed/farm/provider contracts, installed headers, and excluded historical designs. PB.8 requires zero unclassified, duplicate-authority, bypass, or unresolved-migration entries.
+- The user granted standing authorization on 2026-08-08 for autonomous commits that remain inside the approved PB plan after local VERIFY/REVIEW. Per-slice approval and progress prompts are not required; push, tag and public release still require separate authorization.
 
 ### Step 1: PLAN
 - Search PLAN.md for the authoritative queue/current cursor, then read only the active phase, dependencies, and relevant status sections
@@ -519,11 +521,12 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 66 | 2026-08-01 HR.1 | Established the training-free statistical reconstruction baseline | Content-bound raw estimates, ESS/variance, tail evidence, motion/time confidence, disocclusion tests and physical Spectrum/Stokes filtering now produce uncertainty, support and rejection provenance without display-domain flattening. Bounded CUDA temporal/à-trous kernels match the SDK-free host oracle; missing complete-scene planes prevent silent default activation. SDK-free 14/14, installed package and Release 70/70 gates pass; cursor advances to `HR.2 — Sample-level 与光谱/偏振重建`. |
 | 67 | 2026-08-08 HR.2 | Established the sample-level spectral/polarimetric reconstruction Research boundary | Content-bound records preserve technique/path/spectral/phase metadata; canonical analytic splatting and explicitly opted-in batch/provider/artifact-bound external kernel/point-set/hybrid outputs remain Research. Spectrum observation, Stokes cone, Jones gauge, OOD, calibration, adversarial and positive/negative capsule gates pass. SDK-free 15/15, installed package and Release 71/71 gates pass; cursor advances to `HR.3 — Learned proposal 与 neural control variate`. |
 | 68 | 2026-08-08 PB route switch | Approved the minimal public client boundary and suspended HR.3 until it closes | One generated contract registry will drive a Windows x64 C ABI and local Named Pipe/shared-memory worker. PB.0-PB.7 are Candidate 0.x; stable Core freezes lifecycle grammar, not features. The legacy C API remains experimental, the repository GUI is abandoned, and only PB.8 may declare ABI/Protocol 1.0 after mixed-version, security, lifetime and external-client gates. |
+| 69 | 2026-08-08 PB.0 | Closed the complete public interaction-surface and legacy compatibility baseline | The machine-validated ledger assigns 25 native/adapter/client/distributed/provider/historical surfaces to 14 unique authority domains with explicit convergence gates. The 534-line/55-function legacy C header and SHA-bound DLL classify 2,030 exports (55 intended C, 1,970 C++, 5 other accidental); a retained C11 binary client, deterministic report and negative fixtures plus Release 72/72 close PB.0. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the Visual Studio 2026 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 are complete. HR.3 is suspended and the authoritative cursor is `PB.0 — Boundary freeze, inventory, and compatibility baseline`. The approved architecture and detailed execution authority are `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Boundary_PLAN.md`. PB establishes a minimal client boundary, not the former Phase X plugin ecosystem; PB.0-PB.7 remain Candidate 0.x with no stable promise.
+- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2 and PB.0 are complete. HR.3 is suspended and the authoritative cursor is `PB.1 — Contract registry, generation, mock worker, and frontend kit`. The approved architecture and detailed execution authority are `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Boundary_PLAN.md`. PB establishes a minimal client boundary, not the former Phase X plugin ecosystem; PB.0-PB.7 remain Candidate 0.x with no stable promise.
 - The CUDA automatic bridge does not yet populate every high-order measurement plane, HR.1/HR.2 reconstruction remains explicit, and HR.2 ships no trained model or production inference ABI. Future high-order capabilities enter the public boundary through independently versioned extensions instead of expanding stable Core.
 - The repository `gui/` tree is abandoned and excluded from inspection, development, migration and acceptance evidence. A future Studio/editor is an independent client of generated PB fixtures and packages.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
