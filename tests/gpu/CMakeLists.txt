@@ -57,7 +57,8 @@ if(CMAKE_CUDA_COMPILER)
         test_gpu_denoise.cu
     )
     target_include_directories(gpu_test_denoise PRIVATE ${GPU_TEST_INCLUDES})
-    target_link_libraries(gpu_test_denoise PRIVATE ure_core CUDA::cudart)
+    target_link_libraries(gpu_test_denoise PRIVATE
+        ure_core ure_reconstruction CUDA::cudart)
 
     add_executable(gpu_test_polarization
         test_gpu_polarization.cu

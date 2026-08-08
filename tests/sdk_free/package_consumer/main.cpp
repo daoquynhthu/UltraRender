@@ -12,6 +12,7 @@
 #include "ure/research/transport.hpp"
 #include "ure/reconstruction/measurement.hpp"
 #include "ure/reconstruction/portfolio_measurement.hpp"
+#include "ure/reconstruction/statistical_reconstruction.hpp"
 
 int main() {
     const ure::RenderConfig config;
@@ -27,6 +28,8 @@ int main() {
     const ure::research::CapabilityReport report;
     const ure::research::TransportResearchDescriptor research_descriptor;
     ure::reconstruction::MeasurementSchema measurement_schema;
+    const ure::reconstruction::StatisticalReconstructionConfig
+        reconstruction_config;
     return config.backend.kind == ure::BackendKind::Auto &&
                    !buffer &&
                    technique_preset.executable() &&
@@ -40,6 +43,8 @@ int main() {
                        ure::transport::kAutomaticIntegratorContractVersion &&
                    measurement_schema.version ==
                        ure::reconstruction::kMeasurementSchemaVersion &&
+                   reconstruction_config.version ==
+                       ure::reconstruction::kStatisticalReconstructionVersion &&
                    research_descriptor.version ==
                        ure::research::kTransportResearchContractVersion &&
                    !report.executable &&

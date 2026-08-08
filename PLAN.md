@@ -1,6 +1,6 @@
 # UltraRender 高阶能力研究与实施路线图
 
-最后更新: 2026-08-01（高阶能力路线切换）
+最后更新: 2026-08-01（HR.1 统计重建基线完成）
 
 本文档是 UltraRender 当前唯一的行动纲领。2026-08-01 以前的主体建设路线已归档为
 [`docs/archive/Legacy_Construction_PLAN_2026-08-01.md`](docs/archive/Legacy_Construction_PLAN_2026-08-01.md)，
@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HR.1 — 统计重建基线
+当前游标: HR.2 — Sample-level 与光谱/偏振重建
 
 ### 0.1 唯一生产施工队列
 
@@ -34,7 +34,7 @@ HO.2 executable research substrate                      [done]
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
 HT transport     HR reconstruction HW physical world HD differentiation
-[HT.5 done]      [HR.1 current]
+[HT.5 done]      [HR.2 current]
     │              │                │                │
     └──────────────┴────────┬───────┴────────────────┘
                             ▼
@@ -433,6 +433,8 @@ MeasurementBundle 至少支持可预算选择的以下层次：
 ### HR.1 — 统计重建基线
 
 **依赖**: HR.0。
+
+**状态**: 已完成（2026-08-01）。SDK-free `ure_reconstruction` 现提供带内容身份的 raw-preserving 统计帧、历史与输出合同，以 ESS 将 sample variance 转为 estimate variance，并执行多轮 variance-guided edge-avoiding à-trous、共享权重的 spectral/Stokes 物理域重建、median/MAD 加显式 tail evidence 的 heavy-tail/真实高能/错误样本分类，以及 motion/time confidence、reprojection 和 depth/normal/albedo disocclusion 拒绝。输出保留 raw estimate、variance/uncertainty、有效 spatial support、history confidence/length、tail class、validity 与 rejection reason。受限 CUDA temporal/à-trous kernels 在 32 components 内与 double-precision host oracle 对齐；当完整场景缺少 variance、ESS、tail 或动态置信 plane 时不自动启用旧 RGB denoise 路径。独立 SDK-free 14/14、installed package consumer 与 Release 70/70 CTest 通过。详见 `docs/HR_1_Statistical_Reconstruction.md`。
 
 - 建立不依赖训练数据的 variance-guided spatial/temporal/filtering baseline；
 - 引入 outlier/tail-aware statistics，区分 firefly、真实高能路径和错误样本；

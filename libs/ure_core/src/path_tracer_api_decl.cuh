@@ -66,6 +66,70 @@ __global__ __launch_bounds__(256) void suppress_dark_outliers_kernel(
     float albedo_phi
 );
 
+struct GpuStatisticalReconstructionConfig {
+    float signal_sigma;
+    float normal_sigma;
+    float depth_sigma;
+    float albedo_sigma;
+    float minimum_normal_dot;
+    float maximum_relative_depth_difference;
+    float maximum_albedo_distance;
+    float maximum_history_weight;
+    float heavy_tail_frequency;
+    float heavy_tail_scale;
+    float high_energy_sigma;
+    int minimum_spatial_support;
+};
+
+__global__ __launch_bounds__(256) void statistical_temporal_reconstruction_kernel(
+    float* reconstructed,
+    float* variance,
+    float* history_confidence,
+    unsigned int* history_length,
+    unsigned char* rejection_reason,
+    const float* raw_estimate,
+    const float* estimate_variance,
+    const GpuVec3* normal,
+    const float* albedo,
+    const float* depth,
+    const float* motion,
+    const float* motion_time_confidence,
+    const unsigned char* validity,
+    const float* history_reconstructed,
+    const float* history_variance,
+    const GpuVec3* history_normal,
+    const float* history_albedo,
+    const float* history_depth,
+    const float* history_pixel_confidence,
+    const unsigned int* previous_history_length,
+    const unsigned char* history_validity,
+    int width,
+    int height,
+    int component_count,
+    unsigned int maximum_history_length,
+    GpuStatisticalReconstructionConfig config);
+
+__global__ __launch_bounds__(256) void statistical_atrous_reconstruction_kernel(
+    float* reconstructed,
+    float* variance,
+    float* spatial_support,
+    unsigned char* tail_class,
+    const float* input_reconstructed,
+    const float* input_variance,
+    const float* raw_estimate,
+    const float* tail_frequency,
+    const float* maximum_absolute_contribution,
+    const GpuVec3* normal,
+    const float* albedo,
+    const float* depth,
+    const unsigned char* validity,
+    int width,
+    int height,
+    int component_count,
+    int step_size,
+    int stokes_domain,
+    GpuStatisticalReconstructionConfig config);
+
 // From path_tracer_wavefront.cuh (included into device TU)
 __global__ void decay_path_guiding_weights_kernel(float* weights, size_t count, float decay);
 

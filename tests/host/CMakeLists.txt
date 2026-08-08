@@ -89,6 +89,16 @@ add_test(
     COMMAND test_measurement_bundle)
 
 add_executable(
+    test_statistical_reconstruction
+    test_statistical_reconstruction.cpp)
+target_link_libraries(
+    test_statistical_reconstruction PRIVATE
+    ure_reconstruction ure_runtime)
+add_test(
+    NAME test_statistical_reconstruction
+    COMMAND test_statistical_reconstruction)
+
+add_executable(
     test_research_substrate
     test_research_substrate.cpp)
 target_link_libraries(
