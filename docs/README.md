@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-08
 
-This index separates current references from historical records. The root `PLAN.md` is the only authoritative high-order research and production queue. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
+This index separates current references from historical records. The root `PLAN.md` is the only authoritative global research and production queue; its current cursor is Phase PB. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
 
 ## Current project references
 
@@ -10,8 +10,10 @@ This index separates current references from historical records. The root `PLAN.
 |---|---|
 | [`../README.md`](../README.md) | Project entry, supported baseline and build commands |
 | [`../STATUS.md`](../STATUS.md) | Current capability and limitation matrix |
-| [`../PLAN.md`](../PLAN.md) | Authoritative HO/HT/HR/HW/HD queue, research maturity, dependencies and completion criteria |
+| [`../PLAN.md`](../PLAN.md) | Authoritative global queue; Phase PB currently suspends HR.3 until the public boundary closes |
 | [`../AGENTS.md`](../AGENTS.md) | Agent governance and workflow |
+| [`Public_API_ABI_Architecture.md`](Public_API_ABI_Architecture.md) | Approved normative architecture for the minimal C ABI and local worker boundary; Candidate 0.x creates no stable promise |
+| [`PB_Public_Boundary_PLAN.md`](PB_Public_Boundary_PLAN.md) | Active subordinate PB.0-PB.8 implementation sequence, file map and graduation evidence |
 | [`HO_0_Capability_Baseline.md`](HO_0_Capability_Baseline.md) | Current executable inventory of capability boundaries, integrators, measurement gaps, state ownership, research capsules and benchmark families |
 | [`HO_1_Unified_Semantics.md`](HO_1_Unified_Semantics.md) | Current backend-neutral observable, measure, time, identity, uncertainty and compatibility architecture |
 | [`HO_2_Executable_Research_Substrate.md`](HO_2_Executable_Research_Substrate.md) | Current deterministic research execution, artifact, comparison, capability, oracle and promotion-evidence architecture |
@@ -24,7 +26,7 @@ This index separates current references from historical records. The root `PLAN.
 | [`HR_0_Measurement_Bundle.md`](HR_0_Measurement_Bundle.md) | Current typed feature-film schema, budget loss, canonical merge, derived statistics and partial checkpoint architecture |
 | [`HR_1_Statistical_Reconstruction.md`](HR_1_Statistical_Reconstruction.md) | Current training-free variance/tail-aware spatial-temporal reconstruction, physical spectral/Stokes handling and raw/uncertainty provenance architecture |
 | [`HR_2_Sample_Reconstruction.md`](HR_2_Sample_Reconstruction.md) | Current sample-level Research contract, analytic splatting baseline, external kernel/point-set candidate boundary, physical Spectrum/Stokes/Complex projection and OOD/calibration evidence |
-| [`reference/Backend_API.md`](reference/Backend_API.md) | Implemented engine/session/C/Python API boundary |
+| [`reference/Backend_API.md`](reference/Backend_API.md) | Implemented legacy experimental engine/session/C/Python boundary during PB migration |
 | [`Spectral_Semantics_Guide.md`](Spectral_Semantics_Guide.md) | Current semantic reference for spectral quantities |
 | [`Phase_Q_Native_Scene_Format.md`](Phase_Q_Native_Scene_Format.md) | Completed native scene architecture and closure record |
 | [`Phase_R_P6_Mie_Volume_Resources.md`](Phase_R_P6_Mie_Volume_Resources.md) | Completed Mie resource/transport contract |
@@ -61,7 +63,7 @@ These documents preserve design rationale and closure evidence. Dates, test coun
 
 Files under [`archive/`](archive/) are retained for historical context and are not maintained as current specifications. This includes former root handover/roadmap/progress documents and early physics/acoustic assessments.
 
-[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. It is useful for design history but cannot override the current `HR.3 — Learned proposal 与 neural control variate` cursor.
+[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. It is useful for design history but cannot override the current `PB.0 — Boundary freeze, inventory, and compatibility baseline` cursor. Phase PB is a client interaction boundary, not revival of the archived third-party plugin design.
 
 Files under [`superpowers/specs/`](superpowers/specs/) and [`superpowers/plans/`](superpowers/plans/) are archived design and execution records. They intentionally preserve proposed paths, old test counts and unchecked implementation steps. They do not override the completed implementation or current PLAN cursor.
 

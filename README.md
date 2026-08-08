@@ -6,7 +6,8 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 
 ## 当前状态
 
-- Phase Q、Phase R、Phase T、Phase V、声明范围内的 Phase W、Phase U、HO.0-HO.2、HT.0-HT.5 与 HR.0-HR.2 已完成。SDK-free transport 层可形成带 coverage、normalization、uncertainty 和预算身份的自动计划；重建层保留 raw estimate，并已建立 statistical baseline 以及 sample/technique/path/spectral/phase-aware Research 边界。Spectrum、Stokes 与有界 Complex Jones 具有显式物理投影或 gauge 语义，外部 kernel/point-set/hybrid 输出必须绑定 exact batch/provider/artifact 且保持 Research maturity。当前 CUDA 完整场景路径尚未生产全部高阶 plane，也没有随仓库提供训练模型，因此不会把研究路径伪装成默认降噪。当前权威游标是 `HR.3 — Learned proposal 与 neural control variate`，原 Phase X 插件 ABI 继续冻结。
+- Phase Q、Phase R、Phase T、Phase V、声明范围内的 Phase W、Phase U、HO.0-HO.2、HT.0-HT.5 与 HR.0-HR.2 已完成。SDK-free transport 层可形成带 coverage、normalization、uncertainty 和预算身份的自动计划；重建层保留 raw estimate，并已建立 statistical baseline 以及 sample/technique/path/spectral/phase-aware Research 边界。Spectrum、Stokes 与有界 Complex Jones 具有显式物理投影或 gauge 语义，外部 kernel/point-set/hybrid 输出必须绑定 exact batch/provider/artifact 且保持 Research maturity。当前 CUDA 完整场景路径尚未生产全部高阶 plane，也没有随仓库提供训练模型，因此不会把研究路径伪装成默认降噪。
+- 当前权威游标已切换为 `PB.0 — Boundary freeze, inventory, and compatibility baseline`，HR.3 暂缓。Phase PB 将建立单一 contract registry、Windows x64 C ABI 和本地隔离 worker，使外部前端可独立开发；PB.0-PB.7 仅为 Candidate 0.x，不构成稳定兼容承诺。架构与施工细则见 [公共 API/ABI 架构](docs/Public_API_ABI_Architecture.md) 和 [Phase PB 计划](docs/PB_Public_Boundary_PLAN.md)。原 Phase X 通用插件生态继续冻结。
 - 默认完整场景渲染后端仍是 CUDA。Vulkan RT 与 DXR 已具备多 BLAS/TLAS build、compaction、transform refit/rebuild、scratch budget 和 telemetry；OptiX SDK 保持可选，存在时启用同一构建合同和实际 raygen/miss/closest-hit pipeline，缺失时不影响 CUDA self-compute、Vulkan 或 D3D12。一个由同一 SceneIR lower 的固定 fixture 已对齐四类 provider 的 shadow/closest hit、transform、material、UV/normal/tangent metadata 和小型 AOV；这不等同于任意 SceneIR 的完整 radiometric integrator 已迁移到 native provider。
 - 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure。Acceleration provider、build quality、update policy、cluster gate、stats gate 与 scratch budget 使用独立的向后兼容配置合同；CUDA `self_compute` 的质量预设、auto/static/refit/rebuild update、scratch-budget enforcement 与 versioned acceleration stats 已可执行。Native construction 与 traversal parity fixture 已完成。V.8-V.10 已加入 SDK-free clustered geometry resource、host/CUDA physical-error selector，以及 rigid/deforming/topology-change lifecycle planner；SceneDiff mesh mutation会校验并事务回滚。当前 CUDA 对 deformation/topology 采取正确但保守的完整 BLAS/TLAS rebuild，显式请求尚不可用的 BLAS refit 会失败。主 renderer 的 cluster flag 在完整 SceneIR traversal lowering 前继续明确失败。
 - Slang 2026.14 已完成固定版本、多目标编译、反射、debug mapping、CUDA 占用率及数值执行验证。Vulkan SPIR-V 与 D3D12 DXIL 复用共享光谱/偏振及加速语义；D3D12 release DXIL 由固定 Windows SDK DXC 确定性生成，debug artifact 单独生成。现有 CUDA production kernels 仍是私有 `.cu` fast path，Slang RHI 未被引入。
@@ -54,7 +55,7 @@ UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前�
 ## 明确未完成或受限的能力
 
 - 不提供 CPU production integrator。
-- 不提供交互式 OpenGL/Vulkan viewport。
+- 本仓库不开发 GUI 或交互式 viewport；现有 `gui/` 目录已废弃，不属于维护或设计输入。未来 Studio/editor 是通过 Phase PB SDK/worker 独立开发的客户端。
 - 不提供 OSL 编译器；MaterialX 是适配层，URE MaterialGraph 是内部权威模型。
 - Phase U 的 schema adapter、Hydra delegate/plugin、polygonal mesh、bounded material conversion、CUDA progressive session bridge 和严格 native-to-USDA adapter 已实现。USDA 只覆盖文档化子集；有损输出必须携带结构化报告，无法表达的 native 语义会拒绝。Hydra subdivision/instancing、OpenUSD stage/file ingestion、完整 USDShade 节点集与 time-sampled stage orchestration 仍未完成。
 - native procedural plugin ABI 已延期；只有在高阶路线冻结 world、transport、measurement 与 solver 边界后才重新设计。
@@ -181,6 +182,8 @@ Phase Q 原生格式的独立闭环验证入口：
 
 - [PLAN.md](PLAN.md)：唯一施工队列、阶段依赖和完成判据。
 - [STATUS.md](STATUS.md)：面向使用者的当前能力与限制。
+- [docs/Public_API_ABI_Architecture.md](docs/Public_API_ABI_Architecture.md)：已批准的最小公共交互边界规范。
+- [docs/PB_Public_Boundary_PLAN.md](docs/PB_Public_Boundary_PLAN.md)：Phase PB 的独立实施细则与门禁。
 - [docs/README.md](docs/README.md)：专题文档索引及“当前/历史”分类。
 - [AGENTS.md](AGENTS.md)：AI agent 的项目治理规则，不是用户功能说明。
 
@@ -188,4 +191,4 @@ Phase Q 原生格式的独立闭环验证入口：
 
 ## 许可证与发布状态
 
-仓库当前没有在本 README 中声明稳定发布版本、兼容性承诺或性能保证。集成前应固定具体 commit，并在目标硬件上重新运行所需测试和参考场景。
+仓库当前没有在本 README 中声明稳定发布版本、ABI/协议兼容性承诺或性能保证。Phase PB 只有在 PB.8 获得独立批准并通过规定门禁后才可声明 Core ABI 1.0 / Worker Protocol 1.0。此前集成应固定具体 commit，并在目标硬件上重新运行所需测试和参考场景。

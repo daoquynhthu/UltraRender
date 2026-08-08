@@ -8,7 +8,9 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative cursor is `HR.3 — Learned proposal 与 neural control variate`. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 are complete. The reconstruction layer has a raw-preserving statistical baseline plus a sample/technique/path/spectral/phase-aware Research boundary. Analytic splatting and provider-bound kernel/point-set/hybrid outputs are executable in the SDK-free oracle, with Spectrum/Stokes/Complex physical policies, OOD masks and calibration diagnostics. No trained model or production model ABI is shipped, and the current complete-scene CUDA bridge still does not populate every high-order plane. CLI/JSON and pyure default to automatic integration objectives, while the low-level C++ default and named manual modes remain compatibility/reproducibility presets. The former Phase X plugin ABI remains frozen. Production coherent and partially coherent sessions still reject before GPU allocation.
+The authoritative cursor is `PB.0 — Boundary freeze, inventory, and compatibility baseline`; HR.3 is suspended until Phase PB closes. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 are complete. The approved PB architecture will introduce one generated contract registry, a minimal Windows x64 C ABI, and a local Named Pipe/shared-memory worker for independent external clients. No PB runtime, worker, generated SDK, or stable ABI/protocol exists yet. PB.0-PB.7 are explicitly Candidate 0.x and create no compatibility promise; only PB.8 may declare Core ABI 1.0 / Worker Protocol 1.0 after its gates and separate approval.
+
+The reconstruction layer has a raw-preserving statistical baseline plus a sample/technique/path/spectral/phase-aware Research boundary. Analytic splatting and provider-bound kernel/point-set/hybrid outputs are executable in the SDK-free oracle, with Spectrum/Stokes/Complex physical policies, OOD masks and calibration diagnostics. No trained model or production model ABI is shipped, and the current complete-scene CUDA bridge still does not populate every high-order plane. CLI/JSON and pyure default to automatic integration objectives, while the low-level C++ default and named manual modes remain compatibility/reproducibility presets. The former Phase X plugin ABI remains frozen. Production coherent and partially coherent sessions still reject before GPU allocation.
 
 Research, Experimental and Production are now separate maturity levels. Research may use provisional implementations when it preserves a reproducible hypothesis, input/seed, baseline, metric, artifact and failure domain. This does not upgrade the capability matrix below; default paths still require the relevant production gates.
 
@@ -43,6 +45,8 @@ The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remai
 | `ure_physics` | Optional physics/acoustic experiments | Experimental |
 | `ure_cli` | Offline rendering and native tooling orchestration | Active |
 | `pyure` | ctypes wrapper around the C session ABI | Active but not version-stable |
+
+Approved PB target modules `contracts`, `ure_public`, `ure_contract`, and `ure_worker` are not implemented at this cursor. Their names in architecture documents describe planned boundaries, not current build targets.
 
 The deleted root `include/` and `src/` trees are not valid development paths.
 
@@ -99,7 +103,8 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | glTF/GLB import | Implemented through native validation boundary | glTF is an adapter, not core schema |
 | MaterialX import/export | Implemented for accepted subset | Unsupported nodes fail; URE graph remains authoritative |
 | USD/Hydra | U.1-U.6 schema adapter, delegate/plugin, polygonal mesh, bounded material conversion, progressive CUDA RenderSession bridge and native-to-USDA export implemented | GPU-enabled plugin supports camera, float render buffers, Beauty and existing AOVs without a graphics context. USDA export covers the documented Preview Surface/mesh-instance/sphere/camera/rigid subset; subdivision, Hydra instancing, file/stage ingestion, complete USDShade and time-sampled stage integration remain unavailable |
-| RenderSession / C ABI / pyure | Implemented and tested | ABI/version stability is not promised yet |
+| RenderSession / legacy C ABI / pyure | Implemented and tested | Legacy experimental compatibility surface; not Core ABI 1.0 and not version-stable |
+| PB public runtime / worker / generated SDK | Architecture and implementation plan approved | Not implemented; Candidate 0.x work begins at PB.0 and carries no stable promise |
 | Native procedural graph | Implemented | Deterministic build graph, not runtime GPU interpretation |
 | Script build hook | Contract implemented, disabled by default | Requires explicit opt-in and attestable external runner |
 | Native procedural plugin | Not implemented | Deferred until the high-order world/transport/measurement/solver boundaries are stable |
@@ -118,6 +123,7 @@ The following must not be described as production capabilities merely because en
 - Vulkan/D3D12/OptiX arbitrary-scene radiometric integrator lowering and DispatchRays;
 - OpenUSD file/stage ingestion, Hydra subdivision/instancing, complete USDShade conversion, time-sampled stage integration and the general plugin ecosystem; USDA adapter output exists only for the documented native subset;
 - production-grade general fluid or acoustic simulation.
+- Core ABI 1.0, Worker Protocol 1.0, generated external-client SDK/mock package, immutable public frame leases, UUID public transactions, and mixed-version compatibility support; these are Phase PB work, not current capabilities.
 
 ## Verification
 
@@ -181,4 +187,4 @@ R-P7 `Closure` passes on clean commit `56d1121`. The replicated `rough_indirect`
 
 ## Known documentation rule
 
-Files under `docs/superpowers/specs/` and `docs/superpowers/plans/` are archived design and execution records. Their dates, test counts, unchecked boxes, proposed file names and “next step” statements are historical. Use `docs/README.md` to distinguish current references from archives.
+[`docs/Public_API_ABI_Architecture.md`](docs/Public_API_ABI_Architecture.md) is the approved PB semantic authority and [`docs/PB_Public_Boundary_PLAN.md`](docs/PB_Public_Boundary_PLAN.md) is its active subordinate execution plan. Files under `docs/superpowers/specs/` and `docs/superpowers/plans/` remain archived records; their dates, test counts, unchecked boxes, proposed file names and “next step” statements are historical. Use `docs/README.md` to distinguish current references from archives.

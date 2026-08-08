@@ -8,7 +8,7 @@ This file defines the rules, conventions, and workflow that any AI agent must fo
 
 ## 1. Project Identity
 
-**UltraRender** is a research-oriented spectral/polarimetric renderer whose current complete-scene reference backend is CUDA. Its forward roadmap develops automatic estimator composition, measurement reconstruction, a unified time-varying physical world, and differentiable inverse workflows without weakening the existing physically explicit boundaries.
+**UltraRender** is a research-oriented spectral/polarimetric renderer whose current complete-scene reference backend is CUDA. Its forward roadmap develops automatic estimator composition, measurement reconstruction, a unified time-varying physical world, and differentiable inverse workflows without weakening the existing physically explicit boundaries. Phase PB currently has priority: it establishes a minimal client interaction grammar through one generated contract registry, a Windows x64 C ABI, and an isolated local worker without freezing those research subsystems.
 
 ### Architecture (Modular — Phase F Target State)
 
@@ -28,6 +28,17 @@ ure_config    — Config system (STATIC, pure C++, Phase I complete).
 ure_physics   — Physics/acoustic (STATIC, pure C++, built optionally).
 ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_config.
 ```
+
+### Phase PB Approved Target (not yet implemented)
+
+```text
+contracts      — Single source for public IDs, schemas, manifests, compatibility baselines and golden messages.
+ure_public     — Generated C11-compatible loader/value headers; contains no renderer or backend implementation.
+ure_contract   — Private adapter and product runtime DLL; translates public semantics to current internal modules.
+ure_worker     — Local Windows worker that loads the product runtime only through the public loader ABI.
+```
+
+PB.0-PB.7 remain Candidate 0.x and create no stable public promise. The current `ure_c_api.h`, `pyure_native.dll`, and pyure ctypes surface remain legacy experimental during migration.
 
 ### Phase Completion Status (see PLAN.md for details)
 
@@ -58,7 +69,8 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 | V (GPU Acceleration) | Done | V.0-V.11 complete; unified local/farm validation freezes construction, traversal, memory, parity, dynamic and distributed evidence |
 | W (Wave Optics Solver) | Done | W.0-W.12 complete within the declared production/reference boundary; unified physical, API, fail-loud, distributed and static validation closed |
 | U (USD/Hydra Adapter) | Done | U.1-U.6 complete; schema adapter, actual-OpenUSD delegate, mesh/material conversion, progressive RenderSession bridge and strict native-to-USDA export closed |
-| HO (High-order capabilities) | In progress | HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 complete; current cursor: `HR.3 — Learned proposal 与 neural control variate` |
+| HO (High-order capabilities) | Paused after HR.2 | HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 complete; HR.3 resumes after Phase PB |
+| PB (Public Boundary) | In progress | Approved architecture and independent execution plan; current cursor: `PB.0 — Boundary freeze, inventory, and compatibility baseline` |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -74,7 +86,7 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 - CPU production integrator development; host code is limited to oracle, compilation, build, scheduling, and validation roles
 - Adding features not in PLAN.md
 - Random refactoring without a plan step
-- OpenGL/Vulkan interactive viewport (CLI offline + Python future)
+- Implementing an in-repository GUI or interactive viewport; the existing `gui/` tree is abandoned and MUST NOT be inspected, maintained, migrated, tested, or used as a design input. Future Studio/editor work is an independent PB client.
 - OSL compiler (URE MaterialGraph is authoritative; MaterialX is an adapter)
 
 ---
@@ -195,11 +207,11 @@ E:\Render Engine\
 ├── cmake/                           # CMake modules (UltraRenderConfig.cmake.in)
 ├── docs/                            # Documentation
 ├── scripts/                         # Utility scripts
-├── tools/                           # Dev tools
-└── gui/                             # GUI layer
+└── tools/                           # Dev tools
 ```
 
-**All development happens in `libs/`, `apps/`, and `tests/`.** The old monolithic `include/` and `src/` directories have been removed.
+**Production development happens in `libs/`, `apps/`, and `tests/`; Phase PB also owns `contracts/`, its code generator under `tools/`, and validation scripts.** The old monolithic `include/` and `src/` directories have been removed.
+The repository `gui/` tree is abandoned and outside all development, audit, migration, test and architecture scope. Do not read it to infer frontend requirements.
 
 ---
 
@@ -317,6 +329,21 @@ The authoritative high-order PLAN distinguishes **Research**, **Experimental**, 
 - Production work must satisfy lifecycle, budget, fail-loud, API, backend, regression and documentation requirements relevant to its scope.
 - A negative research result is valid evidence and may close a branch. Do not add production scaffolding merely to preserve a disproven approach.
 - Existing fail-loud behavior may be permanent physical/mathematical policy, a resource boundary, missing evidence or accidental debt. Classify it through HO.0 before removal.
+
+### 6.4 Public Contract Stability Governance
+
+Phase PB follows `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Boundary_PLAN.md` under the root PLAN cursor.
+
+- PB.0-PB.7 artifacts are Candidate 0.x and MUST NOT be described as a stable ABI, stable protocol, supported public release, or compatibility promise.
+- The stable Core is limited to interaction grammar and lifecycle. Integrators, MaterialGraph, SceneIR, RenderConfig, MeasurementBundle, WorldState, GPU scheduling, model formats, solvers and research algorithms remain internal or independently versioned extensions.
+- Contract stability (`Core`/`StableExtension`/`UnstableExtension`), evidence maturity (`Research`/`Experimental`/`Production`), and runtime state (`Compiled`/`Available`/`Enabled`/`Applicable`) are independent axes.
+- Before adding a Core field or function, prove that a versioned schema, capability, or extension cannot express the requirement. Otherwise reject the Core expansion.
+- Exact-build Research extensions bind registry, runtime, provider and artifact identities and carry no cross-release compatibility promise.
+- Breaking stable changes require a side-by-side runtime major and explicit migration/support decision; never mutate a published major in place.
+- Core ABI 1.0 and Worker Protocol 1.0 may be declared only at PB.8 after mixed-version binary/protocol, lifetime, security, external-client E2E and documentation gates, plus explicit user approval.
+- The current C API and pyure binding remain legacy experimental during migration. PB does not authorize their deletion.
+- The abandoned repository GUI is never a contract consumer or evidence source. External clients integrate through generated SDK fixtures, the mock worker, and packaged runtimes.
+- PB.0 maintains a complete Public Interaction Surface Ledger covering native formats/tooling, adapters, C++/C/Python/CLI surfaces, distributed/farm/provider contracts, installed headers, and excluded historical designs. PB.8 requires zero unclassified, duplicate-authority, bypass, or unresolved-migration entries.
 
 ### Step 1: PLAN
 - Search PLAN.md for the authoritative queue/current cursor, then read only the active phase, dependencies, and relevant status sections
@@ -491,10 +518,13 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 65 | 2026-08-01 HT.5 | Closed the automatic integration system | Objective-bound automatic plans preserve graph/support/schedule/world provenance, coverage, normalization and uncertainty. The CUDA bridge uses disjoint pilot/production ranges, defensive wavefront coverage, sequential endpoint contexts, precision-weighted unbiased Beauty aggregation and explicit AOV/budget boundaries. Three scenes with independent repeats validate statistics, tail, time, measured/estimated VRAM and reordered merge; SDK-free 13/13, installed package and Release 69/69 gates pass. Cursor advances to `HR.1 — 统计重建基线`. |
 | 66 | 2026-08-01 HR.1 | Established the training-free statistical reconstruction baseline | Content-bound raw estimates, ESS/variance, tail evidence, motion/time confidence, disocclusion tests and physical Spectrum/Stokes filtering now produce uncertainty, support and rejection provenance without display-domain flattening. Bounded CUDA temporal/à-trous kernels match the SDK-free host oracle; missing complete-scene planes prevent silent default activation. SDK-free 14/14, installed package and Release 70/70 gates pass; cursor advances to `HR.2 — Sample-level 与光谱/偏振重建`. |
 | 67 | 2026-08-08 HR.2 | Established the sample-level spectral/polarimetric reconstruction Research boundary | Content-bound records preserve technique/path/spectral/phase metadata; canonical analytic splatting and explicitly opted-in batch/provider/artifact-bound external kernel/point-set/hybrid outputs remain Research. Spectrum observation, Stokes cone, Jones gauge, OOD, calibration, adversarial and positive/negative capsule gates pass. SDK-free 15/15, installed package and Release 71/71 gates pass; cursor advances to `HR.3 — Learned proposal 与 neural control variate`. |
+| 68 | 2026-08-08 PB route switch | Approved the minimal public client boundary and suspended HR.3 until it closes | One generated contract registry will drive a Windows x64 C ABI and local Named Pipe/shared-memory worker. PB.0-PB.7 are Candidate 0.x; stable Core freezes lifecycle grammar, not features. The legacy C API remains experimental, the repository GUI is abandoned, and only PB.8 may declare ABI/Protocol 1.0 after mixed-version, security, lifetime and external-client gates. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the Visual Studio 2026 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 are complete. The authoritative cursor is `HR.3 — Learned proposal 与 neural control variate`; the CUDA automatic bridge does not yet populate every high-order measurement plane, HR.1/HR.2 reconstruction remains explicit, HR.2 ships no trained model or production inference ABI, and the former Phase X plugin ABI is frozen until the new world/transport/measurement/solver boundaries mature.
+- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 are complete. HR.3 is suspended and the authoritative cursor is `PB.0 — Boundary freeze, inventory, and compatibility baseline`. The approved architecture and detailed execution authority are `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Boundary_PLAN.md`. PB establishes a minimal client boundary, not the former Phase X plugin ecosystem; PB.0-PB.7 remain Candidate 0.x with no stable promise.
+- The CUDA automatic bridge does not yet populate every high-order measurement plane, HR.1/HR.2 reconstruction remains explicit, and HR.2 ships no trained model or production inference ABI. Future high-order capabilities enter the public boundary through independently versioned extensions instead of expanding stable Core.
+- The repository `gui/` tree is abandoned and excluded from inspection, development, migration and acceptance evidence. A future Studio/editor is an independent client of generated PB fixtures and packages.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool. The default is memory-aware: depth 1 below 24 GiB and depth 2 otherwise. CUDA 13.3 exposed multi-`ptxas` allocation failure on the 16 GiB workstation, so its current stable default is 1 while host and unrelated targets remain globally parallel. CUDA architecture defaults to the local native GPU unless explicitly overridden for release or farm builds.

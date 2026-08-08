@@ -1,11 +1,11 @@
-# UltraRender 高阶能力研究与实施路线图
+# UltraRender 高阶能力与公共边界研究实施路线图
 
-最后更新: 2026-08-08（HR.2 sample-level 重建研究边界完成）
+最后更新: 2026-08-08（公共交互边界 Phase PB 获批，游标切换至 PB.0）
 
 本文档是 UltraRender 当前唯一的行动纲领。2026-08-01 以前的主体建设路线已归档为
 [`docs/archive/Legacy_Construction_PLAN_2026-08-01.md`](docs/archive/Legacy_Construction_PLAN_2026-08-01.md)，
-用于追溯已经完成的 Q/R/T/V/W/U 等阶段，不再定义当前施工顺序。原 Phase X 插件系统延期，
-其 ABI 只能在本路线冻结新的 world、transport、measurement 和 solver 边界后重新设计。
+用于追溯已经完成的 Q/R/T/V/W/U 等阶段，不再定义当前施工顺序。原 Phase X 第三方插件系统继续延期；
+当前插入的 Phase PB 只建立引擎与独立客户端之间的最小公共交互边界，不复活通用插件生态。
 
 本路线服务于一个长期目标：把 UltraRender 从“拥有多种高级渲染技术的离线渲染器”推进为
 “共享同一物理世界、可组合估计、可重建观测、可求导并可反向影响世界状态的深度仿真与渲染系统”。
@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: HR.3 — Learned proposal 与 neural control variate
+当前游标: PB.0 — Boundary freeze, inventory, and compatibility baseline
 
 ### 0.1 唯一生产施工队列
 
@@ -34,15 +34,23 @@ HO.2 executable research substrate                      [done]
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
 HT transport     HR reconstruction HW physical world HD differentiation
-[HT.5 done]      [HR.3 current]
+[HT.5 done]      [HR.2 done; HR.3 suspended]
+                       │
+                       ▼
+PB.0 -> PB.1 -> PB.2 -> PB.3 -> PB.4 -> PB.5 -> PB.6 -> PB.7 -> PB.8
+[current]                                                        [1.0 gate]
+                       │
+                       ▼
+                 resume HR.3
     │              │                │                │
     └──────────────┴────────┬───────┴────────────────┘
                             ▼
                      HO.C integrated closures
 ```
 
-队列游标只表示默认/生产路径的唯一施工阶段。HO.1 之后，满足依赖的研究实验可以并行存在，
-但不得借“研究中”宣称生产完成，也不得在没有适用域、证据和回退语义时进入默认执行路径。
+队列游标只表示默认/生产路径的唯一施工阶段。为解除独立前端与后端的接口阻塞，Phase PB 在 HR.2
+之后成为唯一施工路径；HR.3 及其后续高阶能力暂缓，但不改变已经完成的 HT/HR 证据。HO.1 之后，
+满足依赖的研究实验仍可存在，但不得借“研究中”宣称生产完成，也不得在没有适用域、证据和回退语义时进入默认执行路径。
 
 ### 0.2 当前基础
 
@@ -60,11 +68,43 @@ HT transport     HR reconstruction HW physical world HD differentiation
 
 | 项目 | 当前决定 | 原因 |
 |---|---|---|
-| 原 Phase X 通用插件 ABI | 冻结，不施工 | 过早冻结 ABI 会把旧的单积分器、静态 World、RGB/AOV 和 solver 边界固化为长期债务 |
-| 通用交互式 viewport | 非当前目标 | 先建立时间、状态、重建和可中断执行语义；GUI 不能反向定义核心物理模型 |
+| 原 Phase X 通用插件 ABI | 冻结，不施工 | Phase PB 是客户端交互边界，不是任意第三方代码进入进程的插件生态；两者不得混同 |
+| 仓库内 `gui/` | 永久废弃，不考察 | 未来 Studio/editor 是独立客户端，只依赖 PB SDK、mock worker、fixtures 和发布包 |
+| 通用交互式 viewport 实现 | 非 PB 目标 | PB 提供并行开发所需的交互语义和进程边界，但不在本仓库实现前端 |
 | CPU production integrator | 继续不做 | CPU 保留 oracle、编译、调度、研究验证和小规模参考角色 |
 | 单一“万能物理解算器” | 明确不做 | 统一的是状态、时间、单位、耦合和观测，不是用一个数值方法替代所有专用求解器 |
 | 先做神经降噪再补数据合同 | 明确不做 | 缺失波长、PDF、技术来源、矩和置信信息会形成不可逆的数据债务 |
+
+### 0.4 Phase PB — 公共 API/ABI 与 Worker 边界（当前优先路线）
+
+**架构权威**: [`docs/Public_API_ABI_Architecture.md`](docs/Public_API_ABI_Architecture.md)。
+
+**实施细则**: [`docs/PB_Public_Boundary_PLAN.md`](docs/PB_Public_Boundary_PLAN.md)。
+
+Phase PB 冻结的是极小的交互语法和生命周期，不冻结积分器、MaterialGraph、SceneIR、RenderConfig、
+MeasurementBundle、WorldState、GPU 调度、模型格式或研究算法。合同稳定性、证据成熟度和运行时状态
+是三个独立维度。PB.0-PB.7 只产生 Candidate 0.x，不形成公共稳定承诺；PB.8 必须经过旧客户端二进制、
+新客户端/旧 runtime、协议、生命周期、安全、独立客户端端到端和文档支持策略门禁后，才允许显式宣布
+Windows x64 Core ABI 1.0 与本地 Worker Protocol 1.0。
+
+```text
+PB.0 现有边界冻结、完整 Public Interaction Surface Ledger、legacy inventory 与兼容基线
+PB.1 单一 contract registry、确定性 codegen、golden messages 与 mock worker
+PB.2 Windows x64 两导出 loader ABI 与 candidate runtime DLL
+PB.3 instance/handle/error/capability/operation/event 核心生命周期
+PB.4 immutable frame lease、backpressure 与 Named Pipe/shared-memory worker
+PB.5 native full-scene validate/load/revision/replacement 永久回退路径
+PB.6 RFC 9562 UUID transaction、revision conflict 与 canonical camera extension
+PB.7 mixed-version、安全/fuzz、crash/restart、package 与独立 client E2E 闭环
+PB.8 最小 Core 复核、证据冻结与 1.0 稳定承诺（需单独批准）
+```
+
+PB 不批量稳定材质、光谱/偏振、automatic integrator、重建、世界或 solver 扩展。后续 HR/HW/HD
+能力通过独立版本的 StableExtension 或 exact-build Research/Experimental 扩展进入，必要的破坏性变化通过
+side-by-side runtime major 处理。任何新增 Core 字段/函数必须证明 schema、capability 或 extension 无法表达。
+PB.8 还要求完整交互面 ledger 中不存在未分类、重复权威、绕过 adapter 或未闭环迁移项；native、CLI、pyure、
+USD/Hydra、distributed/farm、solver/provider 等历史边界必须分别归入 canonical authority、adapter、
+public transport、versioned extension、internal contract、legacy migration 或 frozen/excluded。
 
 ---
 
@@ -459,6 +499,8 @@ MeasurementBundle 至少支持可预算选择的以下层次：
 
 **依赖**: HT.1、HR.0。
 
+**状态**: 暂缓。Phase PB 成为当前唯一施工路线；PB.8 闭环后，HR.3 通过版本化 Research/Experimental extension 继续，不扩张稳定 Core。
+
 - learned component 优先作为 proposal、control variate、residual 或 budget allocator；
 - 若进入无偏 estimator，必须有严格 correction、独立 holdout 或 unbiased residual estimator；
 - 禁止将同一训练/适配样本同时用于选择和无校正评估；
@@ -727,6 +769,7 @@ optimization、updated world 全链路可重放；梯度误差、优化下降、
 ### 10.3 文档与游标
 
 - 本文件只维护权威路线、阶段依赖、成熟度和完成标准；
+- 当前 Phase PB 的细分任务与证据格式由 `docs/PB_Public_Boundary_PLAN.md` 维护，但不得覆盖本文件第 0 节游标或扩大已批准架构；
 - `STATUS.md` 只描述已经实现的能力和诚实边界；
 - `README.md` 提供简洁入口，不展开路线细节；
 - 阶段完成文档进入 `docs/`，过时计划进入 `docs/archive/` 并标记历史身份；

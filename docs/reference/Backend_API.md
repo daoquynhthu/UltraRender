@@ -1,10 +1,10 @@
-# Backend and Session API Status
+# Legacy Backend and Session API Status
 
-Document status: current interface summary
+Document status: current summary of the implemented legacy experimental interface
 
-Last reviewed: 2026-07-28
+Last reviewed: 2026-08-08
 
-This document describes the implemented API boundary. It is not a promise of long-term ABI stability. `PLAN.md` controls future API work.
+This document describes the currently implemented C++/C/pyure boundary. It is not Core ABI 1.0 and is not a promise of source or binary stability. The approved replacement architecture is [`../Public_API_ABI_Architecture.md`](../Public_API_ABI_Architecture.md), its active implementation sequence is [`../PB_Public_Boundary_PLAN.md`](../PB_Public_Boundary_PLAN.md), and the root `PLAN.md` controls the cursor.
 
 ## Interface layers
 
@@ -107,13 +107,15 @@ C functions generally return `0` on success and a negative value or null handle 
 
 ## Stability boundary
 
+`ure_c_api.h`, `pyure_native.dll`, and the ctypes wrapper are legacy experimental compatibility surfaces during Phase PB. They remain available for existing repository clients and migration tests, but new high-order public semantics should first receive registry/schema identities rather than expanding the legacy configuration structures.
+
 The following are not promised:
 
 - stable binary ABI across arbitrary commits;
 - source compatibility for every configuration structure;
 - concurrent mutation while a render operation is using the same session;
 - non-CUDA backend parity;
-- interactive viewport integration;
+- integration against the abandoned repository `gui/` tree;
 - production support for advanced integrators that currently fail loudly.
 
 ## Verification
