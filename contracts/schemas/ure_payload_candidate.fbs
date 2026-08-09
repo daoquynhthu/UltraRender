@@ -1,0 +1,59 @@
+namespace ultrarender.contract.candidate;
+
+enum ResultCode:int {
+  Success = 0,
+  Incomplete = 1,
+  InvalidArgument = -1,
+  IncompatibleVersion = -2,
+  MalformedData = -3,
+  CapabilityUnavailable = -4,
+  BufferTooSmall = -5,
+  Backpressure = -6,
+  WorkerLost = -7,
+  Internal = -8
+}
+
+enum RuntimeState:ubyte {
+  Compiled = 0,
+  Available = 1,
+  Enabled = 2,
+  Applicable = 3
+}
+
+table CapabilityDescriptor {
+  id:uint (id: 0);
+  state:RuntimeState = Compiled (id: 1);
+  required:bool = false (id: 2);
+  version_major:ushort (id: 3);
+  version_minor:ushort (id: 4);
+}
+
+table ErrorDescriptor {
+  result:ResultCode = Success (id: 0);
+  domain:uint (id: 1);
+  detail:uint (id: 2);
+  message:string (id: 3);
+}
+
+table OperationDescriptor {
+  id:ulong (id: 0);
+  kind:uint (id: 1);
+  state:uint (id: 2);
+  terminal_result:ResultCode = Success (id: 3);
+}
+
+table EventDescriptor {
+  sequence:ulong (id: 0);
+  kind:uint (id: 1);
+  object_id:ulong (id: 2);
+  result:ResultCode = Success (id: 3);
+  detail:uint (id: 4);
+}
+
+table SharedBlobDescriptor {
+  lease_id:ulong (id: 0);
+  byte_offset:ulong (id: 1);
+  byte_length:ulong (id: 2);
+  digest:[ubyte] (id: 3);
+  access:uint (id: 4);
+}

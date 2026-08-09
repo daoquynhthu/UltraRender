@@ -21,7 +21,7 @@ The approved architecture is [`Public_API_ABI_Architecture.md`](Public_API_ABI_A
 Current PB cursor:
 
 ```text
-PB.1 — Contract registry, generation, mock worker, and frontend kit
+PB.2 — Windows x64 loader ABI and candidate runtime product
 ```
 
 The HR route is suspended after completed HR.2. `HR.3` resumes only after PB.8 or an explicit root-PLAN revision. PB establishes the carrier; it does not promote learned proposals, reconstruction, world state, material graph, wave optics, or solver functionality to stable extensions.
@@ -213,16 +213,18 @@ scripts/
 
 **Execution checklist:**
 
-- [ ] Implement strict JSON parsing, numeric-range validation, duplicate/tombstone/dependency/version/default checks, and path-independent canonical registry serialization.
-- [ ] Compute a domain-separated SHA-256 over canonical generated registry bytes and emit the digest into C constants, FlatBuffers fixtures, Markdown reference, and manifests.
-- [ ] Generate C11-compatible declarations and compile them as C11, C++23, and a standalone external C consumer without repository-private include paths.
-- [ ] Generate FlatBuffers schemas with explicit field IDs and run `flatc --conform` against the retained previous candidate baseline.
-- [ ] Implement a deterministic standalone mock worker that never loads renderer code and replays registry-defined request/response/event scripts over the candidate Named Pipe profile or an in-memory protocol harness.
-- [ ] Publish golden byte messages for every mock scenario plus intentionally malformed/truncated/oversized inputs.
-- [ ] Verify a clean second generation produces byte-identical headers, schemas, docs, manifests, and fixtures; fail the build on generated drift.
-- [ ] Build and run the standalone `external_client` against only the generated SDK staging directory and mock worker.
+- [x] Implement strict JSON parsing, numeric-range validation, duplicate/tombstone/dependency/version/default checks, and path-independent canonical registry serialization.
+- [x] Compute a domain-separated SHA-256 over canonical generated registry bytes and emit the digest into C constants, FlatBuffers fixtures, Markdown reference, and manifests.
+- [x] Generate C11-compatible declarations and compile them as C11, C++23, and a standalone external C consumer without repository-private include paths.
+- [x] Generate FlatBuffers schemas with explicit field IDs and run `flatc --conform` against the retained previous candidate baseline.
+- [x] Implement a deterministic standalone mock worker that never loads renderer code and replays registry-defined request/response/event scripts over the candidate Named Pipe profile or an in-memory protocol harness.
+- [x] Publish golden byte messages for every mock scenario plus intentionally malformed/truncated/oversized inputs.
+- [x] Verify a clean second generation produces byte-identical headers, schemas, docs, manifests, and fixtures; fail the build on generated drift.
+- [x] Build and run the standalone `external_client` against only the generated SDK staging directory and mock worker.
 
 **Completion evidence:** external-client work is unblocked by a self-contained candidate SDK/mock package; registry/generator output is reproducible; schema evolution and malformed-message gates pass.
+
+**Recorded evidence:** 53 explicit Candidate 0.1 registry identities and domain-separated digest `d3ea8fed3645fdc2e9ae930e60fa287a5caa0f5fb7e2f76273e98c20617b12ac`; generated C11 headers, three FlatBuffers schemas, manifest/reference, 12 request/response fixture pairs and byte-identical fixture mirror; actual future-schema optional-field compatibility; malformed/truncated/oversized, range, duplicate-key/ID, tombstone, dependency-cycle, version/default and generated-drift rejection; staged C11 external client and renderer-free standalone mock worker; `flatc 25.12.19 --conform`; legacy DLL `/Brepro` two-relink identity proof and refreshed 2,029-export executable-client baseline, with all 55 intended C exports unchanged and only one accidental C++ export removed; maintained Release gate passed. These artifacts remain Candidate and do not implement or promise the PB.2 runtime ABI.
 
 ## 5. PB.2 — Windows x64 loader ABI and candidate runtime product
 

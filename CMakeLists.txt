@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(UltraRender VERSION 1.0.0 LANGUAGES CXX)
+project(UltraRender VERSION 1.0.0 LANGUAGES C CXX)
 
 option(UR_BUILD_TESTS "Build tests" ON)
 option(UR_BUILD_CLI "Build CLI" ON)
@@ -57,6 +57,9 @@ endif()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 include(GNUInstallDirs)
+
+add_subdirectory(tools/ure_contract_codegen)
+add_subdirectory(libs/ure_public)
 
 add_subdirectory(libs/ure_types)
 add_subdirectory(libs/ure_diag)

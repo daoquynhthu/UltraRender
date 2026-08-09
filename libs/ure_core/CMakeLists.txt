@@ -175,4 +175,5 @@ set_target_properties(pyure_native PROPERTIES
 )
 if(MSVC)
     target_compile_options(pyure_native PRIVATE /W4 /utf-8 /EHsc /wd4819)
+    target_link_options(pyure_native PRIVATE /Brepro)
 endif()

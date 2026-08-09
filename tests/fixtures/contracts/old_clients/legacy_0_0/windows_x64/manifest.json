@@ -13,7 +13,7 @@
   "language": "C11",
   "compile_flags": ["/TC", "/std:c11", "/W4", "/WX", "/INCREMENTAL:NO"],
   "runtime_baseline": "build_modular_x64/pyure/pyure_native.dll",
-  "runtime_sha256": "4D35AA593EE05193B145176AB76B420FC1800BF83F72459E41639D2D90A183A0",
+  "runtime_sha256": "6C3D049C07910FC208EE1286103AE33200B0EF833AF1400C10066C9EA1B815D1",
   "required_exports": ["ure_aov_channel_count"],
   "expected_behavior": "URE_AOV_BEAUTY returns three channels",
   "compatibility_promise": "None; migration evidence only"

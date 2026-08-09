@@ -1,0 +1,35 @@
+include "ure_payload_candidate.fbs";
+include "ure_frame_candidate.fbs";
+
+namespace ultrarender.contract.candidate;
+
+enum MessageKind:uint {
+  HandshakeRequest = 500,
+  HandshakeResponse = 501,
+  OperationRequest = 504,
+  OperationResponse = 505,
+  Event = 506,
+  FrameReady = 507,
+  Shutdown = 508
+}
+
+table WorkerEnvelope {
+  protocol_major:ushort (id: 0);
+  protocol_minor:ushort (id: 1);
+  registry_digest:[ubyte] (id: 2);
+  sequence:ulong (id: 3);
+  message_kind:MessageKind = HandshakeRequest (id: 4);
+  operation_kind:uint (id: 5);
+  required_capabilities:[uint] (id: 6);
+  optional_capabilities:[uint] (id: 7);
+  result:ResultCode = Success (id: 8);
+  error:ErrorDescriptor (id: 9);
+  operation:OperationDescriptor (id: 10);
+  event:EventDescriptor (id: 11);
+  frame:FrameReadyDescriptor (id: 12);
+  shared_blob:SharedBlobDescriptor (id: 13);
+  payload:[ubyte] (id: 14);
+}
+
+root_type WorkerEnvelope;
+file_identifier "URW0";

@@ -71,6 +71,7 @@
       "ure_d3d12",
       "ure_diag",
       "ure_physics",
+      "ure_public",
       "ure_reconstruction",
       "ure_research",
       "ure_runtime",
@@ -109,12 +110,13 @@
       "output_role": "Capabilities, errors, operations, events and immutable frames",
       "translation_path": "Public registry -> contract adapter -> internal renderer services",
       "bypass_status": "None",
-      "bypass_detail": "No implementation exists at PB.0",
+      "bypass_detail": "PB.1 provides generated declarations and a renderer-free mock; the runtime adapter and real worker remain planned",
       "migration_phase": "PB.1-PB.8",
       "terminal_gate": "PB.8",
       "loss_policy": "Required semantics fail; optional semantics negotiate explicitly",
-      "conformance_evidence": [],
+      "conformance_evidence": ["test_contract_registry", "test_contract_codegen_compare", "test_mock_worker_external_client"],
       "anchors": [
+        {"path": "contracts/registry/public_contract_registry.json", "pattern": "ure.public.contract-registry-source/1.0"},
         {"path": "docs/Public_API_ABI_Architecture.md", "pattern": "One registry defines one semantic contract"},
         {"path": "docs/PB_Public_Boundary_PLAN.md", "pattern": "Current PB cursor"}
       ]

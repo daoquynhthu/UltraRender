@@ -156,8 +156,35 @@ foreach ($range in $ranges) {
     }
     $previousLast = $last
 }
-if (@($registry.entries).Count -ne 0 -or @($registry.tombstones).Count -ne 0) {
-    throw "PB.0 registry must reserve namespaces without publishing contract IDs"
+Assert-UniqueNonempty $registry.entries.registry_id "Registry entry ID"
+Assert-UniqueNonempty $registry.entries.canonical_name "Registry canonical name"
+Assert-UniqueNonempty $registry.entries.c_name "Registry C name"
+$registryEntryById = @{}
+foreach ($entry in @($registry.entries)) {
+    $range = @($registry.namespaces | Where-Object { $_.id -eq $entry.namespace })
+    if ($range.Count -ne 1 -or [uint64]$entry.registry_id -lt [uint64]$range[0].first -or
+        [uint64]$entry.registry_id -gt [uint64]$range[0].last -or $entry.stability -ne $range[0].stability) {
+        throw "Registry entry $($entry.canonical_name) is outside its namespace"
+    }
+    $registryEntryById[[string]$entry.registry_id] = $entry
+}
+foreach ($entry in @($registry.entries)) {
+    if (@($entry.dependencies).Count -gt 0) {
+        Assert-UniqueNonempty @($entry.dependencies | ForEach-Object { [string]$_ }) "Registry dependency for $($entry.canonical_name)"
+    }
+    foreach ($dependency in @($entry.dependencies)) {
+        if (-not $registryEntryById.ContainsKey([string]$dependency) -or [uint64]$dependency -eq [uint64]$entry.registry_id) {
+            throw "Registry entry $($entry.canonical_name) has an invalid dependency"
+        }
+        if ([bool]$entry.default_enabled -and -not [bool]$registryEntryById[[string]$dependency].default_enabled) {
+            throw "Registry default dependency closure failed for $($entry.canonical_name)"
+        }
+    }
+}
+$tombstoneIds = @($registry.tombstones.registry_id | ForEach-Object { [string]$_ })
+if ($tombstoneIds.Count -ne @($tombstoneIds | Sort-Object -Unique).Count -or
+    @($tombstoneIds | Where-Object { $registryEntryById.ContainsKey($_) }).Count -ne 0) {
+    throw "Registry tombstones are duplicate or reused"
 }
 if (@($compatibility.changes).Count -ne 0 -or @($compatibility.tombstones).Count -ne 0) {
     throw "PB.0 compatibility baseline must not contain published changes or tombstones"
@@ -174,7 +201,7 @@ foreach ($rootDescriptor in @($registry.public_header_policy.roots)) {
         Join-Path $RepoRoot $rootValue
     }
     if (-not (Test-Path -LiteralPath $fullRoot -PathType Container)) {
-        continue
+        throw "Required public header root is missing: $rootValue"
     }
     $publicHeaders = @(
         Get-ChildItem -LiteralPath $fullRoot -File -Recurse |
@@ -377,6 +404,12 @@ $dllHash = (Get-FileHash -LiteralPath $dllPath -Algorithm SHA256).Hash
 if ($dllInfo.Length -ne [int64]$legacy.binary.bytes -or $dllHash -ne $legacy.binary.sha256) {
     throw "Legacy DLL identity changed; refresh the baseline intentionally"
 }
+$legacyCoreCMake = Get-Content -LiteralPath (Join-Path $RepoRoot "libs/ure_core/CMakeLists.txt") -Raw
+if (-not [bool]$legacy.binary.reproducible_link -or $legacy.binary.reproducibility_flag -ne "/Brepro" -or
+    $legacy.binary.baseline_refresh_phase -ne "PB.1" -or
+    -not [regex]::IsMatch($legacyCoreCMake, 'target_link_options\s*\(\s*pyure_native\s+PRIVATE\s+/Brepro\s*\)')) {
+    throw "Legacy DLL reproducible-link policy is missing"
+}
 $dumpbin = Find-Dumpbin
 $dumpOutput = & $dumpbin /nologo /exports $dllPath 2>&1
 if ($LASTEXITCODE -ne 0) {
@@ -439,6 +472,7 @@ $report = [ordered]@{
     source_head = $head
     registry_candidate = [string]$registry.candidate_version
     registry_source_sha256 = (Get-FileHash -LiteralPath $registryPathResolved -Algorithm SHA256).Hash
+    registry_entry_count = @($registry.entries).Count
     compatibility_sha256 = (Get-FileHash -LiteralPath $compatibilityPathResolved -Algorithm SHA256).Hash
     interaction_ledger_sha256 = (Get-FileHash -LiteralPath $ledgerPathResolved -Algorithm SHA256).Hash
     interaction_surface_count = $entries.Count
