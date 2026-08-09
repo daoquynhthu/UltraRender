@@ -2,7 +2,7 @@
 
 Document status: authoritative subordinate execution plan for Phase PB
 
-Last reviewed: 2026-08-08
+Last reviewed: 2026-08-09
 
 > **For agentic workers:** Execute this plan under [`AGENTS.md`](../AGENTS.md) using the repository's single-agent `PLAN -> IMPLEMENT -> VERIFY -> REVIEW -> REPORT -> COMMIT` workflow. The root [`PLAN.md`](../PLAN.md) owns the global cursor; this document owns PB subcursor details. Do not dispatch subagents. The user granted standing authorization on 2026-08-08 for autonomous plan-scoped PB commits without intermediate progress prompts; push remains prohibited without separate authorization.
 
@@ -21,7 +21,7 @@ The approved architecture is [`Public_API_ABI_Architecture.md`](Public_API_ABI_A
 Current PB cursor:
 
 ```text
-PB.4 — Immutable frames and Windows local worker
+PB.5 — Native full-scene boundary and revisioned replacement
 ```
 
 The HR route is suspended after completed HR.2. `HR.3` resumes only after PB.8 or an explicit root-PLAN revision. PB establishes the carrier; it does not promote learned proposals, reconstruction, world state, material graph, wave optics, or solver functionality to stable extensions.
@@ -293,17 +293,19 @@ scripts/
 
 **Execution checklist:**
 
-- [ ] Implement frame snapshots that copy or retain a bounded source image so later production cannot mutate a live frame; use a conformance-only deterministic producer excluded from runtime packages until PB.5 connects the real session path.
-- [ ] Implement retained-frame and retained-byte budgets, explicit `Backpressure`, checked map/unmap/copy state, stride/extent validation, and release accounting.
-- [ ] Map plane semantics to HO.1 observable/unit/measure/time and HR.0 provenance identities; keep complex/Jones/Stokes/spectral/statistical data out of legacy AOV enums.
-- [ ] Implement same-user Named Pipe creation with `PIPE_REJECT_REMOTE_CLIENTS`, bounded messages, handshake version/capability/registry checks, and no socket/network initialization.
-- [ ] Launch the worker in a kill-on-close Job Object and load the runtime DLL only through the two loader symbols.
-- [ ] Transfer large frames/blobs through inherited or `DuplicateHandle` file mappings with checked offset/length/digest/access/lease identities.
-- [ ] Verify every FlatBuffer before allocation or dispatch and enforce nesting/table/vector/string/message/blob/frame limits.
-- [ ] Kill the worker during queueing, rendering, frame mapping, and shutdown; verify terminal `WorkerLost`, invalid mappings, no orphan process, no ID reuse, and clean restart identity.
-- [ ] Compare direct ABI and worker results/errors/events/frame metadata for the same deterministic mock and renderer fixtures.
+- [x] Implement frame snapshots that copy or retain a bounded source image so later production cannot mutate a live frame; use a conformance-only deterministic producer excluded from runtime packages until PB.5 connects the real session path.
+- [x] Implement retained-frame and retained-byte budgets, explicit `Backpressure`, checked map/unmap/copy state, stride/extent validation, and release accounting.
+- [x] Map plane semantics to HO.1 observable/unit/measure/time and HR.0 provenance identities; keep complex/Jones/Stokes/spectral/statistical data out of legacy AOV enums.
+- [x] Implement same-user Named Pipe creation with `PIPE_REJECT_REMOTE_CLIENTS`, bounded messages, handshake version/capability/registry checks, and no socket/network initialization.
+- [x] Launch the worker in a kill-on-close Job Object and load the runtime DLL only through the two loader symbols.
+- [x] Transfer large frames/blobs through inherited or `DuplicateHandle` file mappings with checked offset/length/digest/access/lease identities.
+- [x] Verify every FlatBuffer before allocation or dispatch and enforce nesting/table/vector/string/message/blob/frame limits.
+- [x] Kill the worker during queueing, rendering, frame mapping, and shutdown; verify terminal `WorkerLost`, invalid mappings, no orphan process, no ID reuse, and clean restart identity.
+- [x] Compare direct ABI and worker results/errors/events/frame metadata for the same deterministic mock and renderer fixtures.
 
 **Completion evidence:** local worker requires no firewall permission, opens no network endpoint, survives malformed clients, enforces frame backpressure/lifetimes, and has semantic parity with the in-process path.
+
+**Recorded evidence:** the 117-entry Candidate registry has digest `dd89cb843491009bc239c28c711a81eb181866ac43298c064e30bd129cd5f892` and generates the Frame ABI plus additive frame, shared-blob, handshake and envelope schemas. The product runtime exposes immutable frame leases but no private producer; the deterministic producer, conformance runtime and conformance worker are test-only and absent from the staged candidate package. Frame tests cover dual budgets, negotiated limits, `Backpressure`, immutable retained bytes, typed semantic/provenance identities, stale handles, map tokens, checked row-stride copy and release accounting. The Windows worker uses an explicit current-user DACL, `PIPE_REJECT_REMOTE_CLIENTS`, bounded verified FlatBuffers, a kill-on-close Job Object, dynamic two-symbol runtime loading and read-only `DuplicateHandle` file mappings with domain-separated SHA-256, access, lease, generation and producer identities. Direct ABI/worker data, metadata and frame-ready semantics match. Crash tests cover startup, active frame production, mapped transfer, shutdown, missing transport requirements, malformed and oversized messages, synthesize terminal `WorkerLost`, invalidate client mappings, observe process exit, and bind restarted lease IDs to a new random worker identity. Import/package inspection rejects Winsock/WinINet/WinHTTP/URLMon, runtime import linkage, and conformance binaries in the product stage. Frame/worker/crash tests each pass 100 consecutive runs; the maintained Release gate passes 89/89. Two `/Brepro` rebuilds produce identical product runtime SHA-256 `3254b8c27ba64968aecc844cafd505c0363b2b0fbe7bc784e0b650d6ce1d58ec` and product worker SHA-256 `a43b7f7060c24d640d3ecfcf9dc918dba2af2d2eaab24617c866eba0359f0241`. These artifacts remain Candidate 0.1 and make no compatibility promise.
 
 ## 8. PB.5 — Native full-scene boundary and revisioned replacement
 

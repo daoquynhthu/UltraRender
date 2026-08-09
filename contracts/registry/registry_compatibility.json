@@ -329,6 +329,126 @@
       "change_class": "AdditiveCandidate",
       "phase": "PB.3",
       "summary": "Add Candidate diagnostic event coalescing identity"
+    },
+    {
+      "registry_id": 28,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add Candidate per-instance frame lease budget structure"
+    },
+    {
+      "registry_id": 29,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add Candidate immutable frame metadata structure"
+    },
+    {
+      "registry_id": 30,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add Candidate typed plane metadata structure"
+    },
+    {
+      "registry_id": 31,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add Candidate checked read-map structure"
+    },
+    {
+      "registry_id": 32,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add Candidate bounded plane-copy structure"
+    },
+    {
+      "registry_id": 33,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add Candidate Frame function-table structure"
+    },
+    {
+      "registry_id": 705,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add Candidate immutable Frame interface"
+    },
+    {
+      "registry_id": 960,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add float32 plane scalar identity"
+    },
+    {
+      "registry_id": 961,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add RGBA plane component-layout identity"
+    },
+    {
+      "registry_id": 962,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add complete immutable-frame state identity"
+    },
+    {
+      "registry_id": 963,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add per-sample mean normalization identity"
+    },
+    {
+      "registry_id": 964,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add domain-labelled SHA-256 digest identity"
+    },
+    {
+      "registry_id": 965,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add read-only shared-blob access identity"
+    },
+    {
+      "registry_id": 4026531847,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Add private deterministic frame-source request"
+    },
+    {
+      "registry_id": 302,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Activate the Candidate immutable-frame capability"
+    },
+    {
+      "registry_id": 401,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Activate Candidate frame-ready events"
+    },
+    {
+      "registry_id": 506,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Activate the Candidate frame wire payload"
+    },
+    {
+      "registry_id": 507,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Activate the Candidate shared-blob wire payload"
+    },
+    {
+      "registry_id": 600,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Activate the typed color-plane schema"
+    },
+    {
+      "registry_id": 803,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.4",
+      "summary": "Activate immutable-frame acquisition semantics"
     }
   ],
   "tombstones": []

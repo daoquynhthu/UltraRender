@@ -2,7 +2,7 @@
 
 This generated reference is a Candidate artifact. It is not a stable ABI or protocol promise.
 
-Registry digest: `9a54e300aa927f5fe4e15962cf1ce5afdcf3815a3d5d6c3cfb68d356ef2f9ed8`
+Registry digest: `dd89cb843491009bc239c28c711a81eb181866ac43298c064e30bd129cd5f892`
 
 | Registry ID | Kind | Canonical name | Stability | Maturity | Since | Default | Dependencies |
 |---:|---|---|---|---|---|---|---|
@@ -32,6 +32,12 @@ Registry digest: `9a54e300aa927f5fe4e15962cf1ce5afdcf3815a3d5d6c3cfb68d356ef2f9e
 |25|Structure|`ure.structure.event_interface`|Core|NotApplicable|0.1.0|enabled|13, 20, 27, 100, 704|
 |26|Structure|`ure.structure.bool32`|Core|NotApplicable|0.1.0|enabled||
 |27|Structure|`ure.structure.handle`|Core|NotApplicable|0.1.0|enabled||
+|28|Structure|`ure.structure.instance_frame_budget`|Core|NotApplicable|0.1.0|disabled|1, 302|
+|29|Structure|`ure.structure.frame_info`|Core|NotApplicable|0.1.0|disabled|2, 4, 27, 302|
+|30|Structure|`ure.structure.frame_plane_info`|Core|NotApplicable|0.1.0|disabled|2, 4, 302, 600|
+|31|Structure|`ure.structure.frame_map`|Core|NotApplicable|0.1.0|disabled|2, 27, 302|
+|32|Structure|`ure.structure.frame_copy_info`|Core|NotApplicable|0.1.0|disabled|1, 6, 27, 302|
+|33|Structure|`ure.structure.frame_interface`|Core|NotApplicable|0.1.0|disabled|13, 27, 29, 30, 31, 32, 100, 705|
 |100|Result|`ure.result.success`|Core|NotApplicable|0.1.0|enabled||
 |101|Result|`ure.result.incomplete`|Core|NotApplicable|0.1.0|enabled||
 |102|Result|`ure.result.invalid_argument`|Core|NotApplicable|0.1.0|enabled||
@@ -74,6 +80,7 @@ Registry digest: `9a54e300aa927f5fe4e15962cf1ce5afdcf3815a3d5d6c3cfb68d356ef2f9e
 |702|Interface|`ure.interface.error`|Core|NotApplicable|0.1.0|enabled|200|
 |703|Interface|`ure.interface.operation`|Core|NotApplicable|0.1.0|enabled|301|
 |704|Interface|`ure.interface.event`|Core|NotApplicable|0.1.0|enabled|301|
+|705|Interface|`ure.interface.frame`|Core|NotApplicable|0.1.0|disabled|302|
 |800|Semantic|`ure.operation.create_instance`|Core|NotApplicable|0.1.0|disabled|301|
 |801|Semantic|`ure.operation.start`|Core|NotApplicable|0.1.0|disabled|301|
 |802|Semantic|`ure.operation.cancel`|Core|NotApplicable|0.1.0|disabled|301|
@@ -102,6 +109,12 @@ Registry digest: `9a54e300aa927f5fe4e15962cf1ce5afdcf3815a3d5d6c3cfb68d356ef2f9e
 |951|Semantic|`ure.maturity.experimental`|Core|NotApplicable|0.1.0|enabled||
 |952|Semantic|`ure.maturity.production`|Core|NotApplicable|0.1.0|enabled||
 |953|Semantic|`ure.maturity.not_applicable`|Core|NotApplicable|0.1.0|enabled||
+|960|Semantic|`ure.scalar_type.float32`|Core|NotApplicable|0.1.0|disabled|600|
+|961|Semantic|`ure.component_layout.rgba`|Core|NotApplicable|0.1.0|disabled|600|
+|962|Semantic|`ure.frame_completion.complete`|Core|NotApplicable|0.1.0|disabled|302|
+|963|Semantic|`ure.normalization.sample_mean`|Core|NotApplicable|0.1.0|disabled|600|
+|964|Semantic|`ure.digest_algorithm.sha256`|Core|NotApplicable|0.1.0|disabled|4, 507|
+|965|Semantic|`ure.shared_blob_access.read`|Core|NotApplicable|0.1.0|disabled|507|
 |4026531840|Semantic|`ure.private.mock.device_loss`|Private|NotApplicable|0.1.0|disabled|403|
 |4026531841|Semantic|`ure.private.mock.worker_crash`|Private|NotApplicable|0.1.0|disabled||
 |4026531842|Semantic|`ure.private.mock.event_gap`|Private|NotApplicable|0.1.0|disabled|402|
@@ -109,3 +122,4 @@ Registry digest: `9a54e300aa927f5fe4e15962cf1ce5afdcf3815a3d5d6c3cfb68d356ef2f9e
 |4026531844|Structure|`ure.private.structure.conformance_interface`|Private|NotApplicable|0.1.0|disabled|4026531845|
 |4026531845|Interface|`ure.private.interface.conformance`|Private|NotApplicable|0.1.0|disabled||
 |4026531846|Structure|`ure.private.structure.conformance_operation_request`|Private|NotApplicable|0.1.0|disabled|1, 4026531845|
+|4026531847|Structure|`ure.private.structure.conformance_frame_request`|Private|NotApplicable|0.1.0|disabled|1, 302, 4026531845|

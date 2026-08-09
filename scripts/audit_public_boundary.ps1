@@ -191,8 +191,11 @@ if ($tombstoneIds.Count -ne @($tombstoneIds | Sort-Object -Unique).Count -or
 }
 if ($compatibility.baseline.candidate_version -ne "0.1.0" -or
     $compatibility.baseline.registry_digest -ne "bb9a25aacb63bd88b4e79b67d7932a8b66174627beada11fa068475ca76e1513" -or
-    @($compatibility.changes).Count -ne 53 -or
-    @($compatibility.changes | Where-Object { $_.change_class -ne "AdditiveCandidate" -or $_.phase -ne "PB.3" }).Count -ne 0 -or
+    @($compatibility.changes).Count -ne 73 -or
+    @($compatibility.changes | Where-Object { $_.change_class -ne "AdditiveCandidate" }).Count -ne 0 -or
+    @($compatibility.changes | Where-Object { $_.phase -eq "PB.3" }).Count -ne 53 -or
+    @($compatibility.changes | Where-Object { $_.phase -eq "PB.4" }).Count -ne 20 -or
+    @($compatibility.changes | Where-Object { $_.phase -notin @("PB.3", "PB.4") }).Count -ne 0 -or
     @($compatibility.tombstones).Count -ne 0) {
     throw "PB candidate compatibility history is incomplete"
 }

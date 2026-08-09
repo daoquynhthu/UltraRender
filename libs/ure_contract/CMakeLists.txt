@@ -11,7 +11,9 @@ foreach(source
     ${CMAKE_CURRENT_SOURCE_DIR}/src/loader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime_adapter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/frame_adapter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime_adapter.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime_objects.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/private_conformance.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ultrarender_runtime_candidate.def
     ${CMAKE_SOURCE_DIR}/libs/ure_public/include/ultrarender/ure_loader.h
@@ -31,8 +33,9 @@ add_library(ure_contract SHARED
     src/loader.cpp
     src/runtime_adapter.cpp
     src/lifecycle.cpp
+    src/frame_adapter.cpp
     ultrarender_runtime_candidate.def)
-target_link_libraries(ure_contract PRIVATE ure_public)
+target_link_libraries(ure_contract PRIVATE ure_public bcrypt)
 target_include_directories(ure_contract PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}/generated
@@ -51,6 +54,31 @@ if(MSVC)
 else()
     target_compile_options(ure_contract PRIVATE -Wall -Wextra -pedantic)
 endif()
+
+add_library(ure_contract_conformance SHARED
+    src/loader.cpp
+    src/runtime_adapter.cpp
+    src/lifecycle.cpp
+    src/frame_adapter.cpp
+    ultrarender_runtime_candidate.def)
+target_link_libraries(ure_contract_conformance PRIVATE ure_public bcrypt)
+target_include_directories(ure_contract_conformance PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_BINARY_DIR}/generated
+    ${CMAKE_SOURCE_DIR}/third_party)
+target_compile_definitions(ure_contract_conformance PRIVATE
+    URE_PUBLIC_IMPLEMENTATION
+    URE_CONTRACT_CONFORMANCE=1)
+set_target_properties(ure_contract_conformance PROPERTIES
+    OUTPUT_NAME ultrarender_runtime_conformance
+    PREFIX ""
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+    WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+target_compile_options(ure_contract_conformance PRIVATE /W4 /WX /utf-8 /EHsc /wd4819)
+target_link_options(ure_contract_conformance PRIVATE
+    /Brepro
+    /DEF:${CMAKE_CURRENT_SOURCE_DIR}/ultrarender_runtime_candidate.def)
 
 install(TARGETS ure_contract
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

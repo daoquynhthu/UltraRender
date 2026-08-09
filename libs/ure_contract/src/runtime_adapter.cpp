@@ -12,87 +12,68 @@ namespace {
 
 using Json = nlohmann::ordered_json;
 
-template <class T>
-Json layout() {
-    return Json{{"size", sizeof(T)}, {"alignment", alignof(T)}};
-}
+template <class T> Json layout() { return Json{{"size", sizeof(T)}, {"alignment", alignof(T)}}; }
 
-template <class T>
-void field(Json& type, std::string_view name, std::size_t offset) {
-    type["fields"][std::string(name)] =
-        Json{{"offset", offset}, {"size", sizeof(T)}};
+template <class T> void field(Json &type, std::string_view name, std::size_t offset) {
+    type["fields"][std::string(name)] = Json{{"offset", offset}, {"size", sizeof(T)}};
 }
 
 Json build_manifest() {
-    Json root{{"schema", "ure.public.abi-layout/windows-x64/0.1"},
-              {"publication_state", "Candidate"},
-              {"compatibility_promise", "None before PB.8"},
-              {"platform_profile", "windows-x64-msvc-c11"},
-              {"calling_convention", "windows-x64-c"},
-              {"pointer_size", sizeof(void*)},
-              {"endianness", "little"},
-              {"compiler", Json{{"id", URE_RUNTIME_COMPILER_ID},
-                                {"version", URE_RUNTIME_COMPILER_VERSION}}},
-              {"toolchain", Json{{"msvc_toolset", URE_RUNTIME_MSVC_TOOLSET},
-                                 {"windows_sdk", URE_RUNTIME_WINDOWS_SDK},
-                                 {"schema_compiler", "flatc version 25.12.19"}}},
-              {"registry_digest", URE_REGISTRY_DIGEST_HEX},
-              {"runtime_build_digest", URE_RUNTIME_BUILD_DIGEST},
-              {"runtime_build_digest_scheme",
-               "sha256(domain|toolchain|runtime-sources|public-headers)"},
-              {"core_abi_range", Json{{"minimum", "0.1"}, {"maximum", "0.1"}}},
-              {"worker_protocol_range", Json{{"minimum", "0.1"},
-                                             {"maximum", "0.1"},
-                                             {"implementation", "mock_only"}}},
-              {"limits", Json{{"maximum_structure_chain", 32},
-                              {"maximum_message_bytes", 1048576},
-                              {"maximum_event_capacity", 4096},
-                              {"maximum_error_message_bytes", 1024}}},
-              {"features", Json{{"runtime_handles", true},
-                                {"renderer", false},
-                                {"worker", false},
-                                {"external_execution", false}}}};
+    Json root{
+        {"schema", "ure.public.abi-layout/windows-x64/0.1"},
+        {"publication_state", "Candidate"},
+        {"compatibility_promise", "None before PB.8"},
+        {"platform_profile", "windows-x64-msvc-c11"},
+        {"calling_convention", "windows-x64-c"},
+        {"pointer_size", sizeof(void *)},
+        {"endianness", "little"},
+        {"compiler",
+         Json{{"id", URE_RUNTIME_COMPILER_ID}, {"version", URE_RUNTIME_COMPILER_VERSION}}},
+        {"toolchain", Json{{"msvc_toolset", URE_RUNTIME_MSVC_TOOLSET},
+                           {"windows_sdk", URE_RUNTIME_WINDOWS_SDK},
+                           {"schema_compiler", "flatc version 25.12.19"}}},
+        {"registry_digest", URE_REGISTRY_DIGEST_HEX},
+        {"runtime_build_digest", URE_RUNTIME_BUILD_DIGEST},
+        {"runtime_build_digest_scheme", "sha256(domain|toolchain|runtime-sources|public-headers)"},
+        {"core_abi_range", Json{{"minimum", "0.1"}, {"maximum", "0.1"}}},
+        {"worker_protocol_range",
+         Json{{"minimum", "0.1"}, {"maximum", "0.1"}, {"implementation", "mock_only"}}},
+        {"limits", Json{{"maximum_structure_chain", 32},
+                        {"maximum_message_bytes", 1048576},
+                        {"maximum_event_capacity", 4096},
+                        {"maximum_error_message_bytes", 1024}}},
+        {"features", Json{{"runtime_handles", true},
+                          {"renderer", false},
+                          {"worker", false},
+                          {"external_execution", false}}}};
 
-    auto& types = root["types"];
+    auto &types = root["types"];
     types["ure_input_header_t"] = layout<ure_input_header_t>();
-    field<std::uint32_t>(types["ure_input_header_t"], "type",
-                         offsetof(ure_input_header_t, type));
-    field<std::uint32_t>(types["ure_input_header_t"], "size",
-                         offsetof(ure_input_header_t, size));
-    field<const void*>(types["ure_input_header_t"], "next",
-                       offsetof(ure_input_header_t, next));
+    field<std::uint32_t>(types["ure_input_header_t"], "type", offsetof(ure_input_header_t, type));
+    field<std::uint32_t>(types["ure_input_header_t"], "size", offsetof(ure_input_header_t, size));
+    field<const void *>(types["ure_input_header_t"], "next", offsetof(ure_input_header_t, next));
     types["ure_output_header_t"] = layout<ure_output_header_t>();
-    field<std::uint32_t>(types["ure_output_header_t"], "type",
-                         offsetof(ure_output_header_t, type));
-    field<std::uint32_t>(types["ure_output_header_t"], "size",
-                         offsetof(ure_output_header_t, size));
-    field<void*>(types["ure_output_header_t"], "next",
-                 offsetof(ure_output_header_t, next));
+    field<std::uint32_t>(types["ure_output_header_t"], "type", offsetof(ure_output_header_t, type));
+    field<std::uint32_t>(types["ure_output_header_t"], "size", offsetof(ure_output_header_t, size));
+    field<void *>(types["ure_output_header_t"], "next", offsetof(ure_output_header_t, next));
     types["ure_uuid_t"] = layout<ure_uuid_t>();
-    field<std::uint8_t[16]>(types["ure_uuid_t"], "bytes",
-                            offsetof(ure_uuid_t, bytes));
+    field<std::uint8_t[16]>(types["ure_uuid_t"], "bytes", offsetof(ure_uuid_t, bytes));
     types["ure_digest256_t"] = layout<ure_digest256_t>();
-    field<std::uint8_t[32]>(types["ure_digest256_t"], "bytes",
-                            offsetof(ure_digest256_t, bytes));
+    field<std::uint8_t[32]>(types["ure_digest256_t"], "bytes", offsetof(ure_digest256_t, bytes));
     types["ure_byte_span_t"] = layout<ure_byte_span_t>();
-    field<const std::uint8_t*>(types["ure_byte_span_t"], "data",
-                               offsetof(ure_byte_span_t, data));
-    field<std::uint64_t>(types["ure_byte_span_t"], "size",
-                         offsetof(ure_byte_span_t, size));
+    field<const std::uint8_t *>(types["ure_byte_span_t"], "data", offsetof(ure_byte_span_t, data));
+    field<std::uint64_t>(types["ure_byte_span_t"], "size", offsetof(ure_byte_span_t, size));
     types["ure_mutable_byte_span_t"] = layout<ure_mutable_byte_span_t>();
-    field<std::uint8_t*>(types["ure_mutable_byte_span_t"], "data",
-                         offsetof(ure_mutable_byte_span_t, data));
+    field<std::uint8_t *>(types["ure_mutable_byte_span_t"], "data",
+                          offsetof(ure_mutable_byte_span_t, data));
     field<std::uint64_t>(types["ure_mutable_byte_span_t"], "size",
                          offsetof(ure_mutable_byte_span_t, size));
     types["ure_string_view_t"] = layout<ure_string_view_t>();
-    field<const char*>(types["ure_string_view_t"], "data",
-                       offsetof(ure_string_view_t, data));
-    field<std::uint64_t>(types["ure_string_view_t"], "size",
-                         offsetof(ure_string_view_t, size));
+    field<const char *>(types["ure_string_view_t"], "data", offsetof(ure_string_view_t, data));
+    field<std::uint64_t>(types["ure_string_view_t"], "size", offsetof(ure_string_view_t, size));
     types["ure_bool32_t"] = layout<ure_bool32_t>();
     types["ure_handle_t"] = layout<ure_handle_t>();
-    types["ure_interface_table_header_t"] =
-        layout<ure_interface_table_header_t>();
+    types["ure_interface_table_header_t"] = layout<ure_interface_table_header_t>();
     field<std::uint64_t>(types["ure_interface_table_header_t"], "struct_size",
                          offsetof(ure_interface_table_header_t, struct_size));
     field<std::uint32_t>(types["ure_interface_table_header_t"], "version_major",
@@ -100,9 +81,8 @@ Json build_manifest() {
     field<std::uint32_t>(types["ure_interface_table_header_t"], "version_minor",
                          offsetof(ure_interface_table_header_t, version_minor));
     types["ure_runtime_interface_t"] = layout<ure_runtime_interface_t>();
-    field<ure_interface_table_header_t>(
-        types["ure_runtime_interface_t"], "header",
-        offsetof(ure_runtime_interface_t, header));
+    field<ure_interface_table_header_t>(types["ure_runtime_interface_t"], "header",
+                                        offsetof(ure_runtime_interface_t, header));
     field<decltype(ure_runtime_interface_t::create_instance)>(
         types["ure_runtime_interface_t"], "create_instance",
         offsetof(ure_runtime_interface_t, create_instance));
@@ -111,12 +91,10 @@ Json build_manifest() {
                               offsetof(ure_instance_create_info_t, header));
     field<std::uint32_t>(types["ure_instance_create_info_t"], "event_capacity",
                          offsetof(ure_instance_create_info_t, event_capacity));
-    field<std::uint32_t>(
-        types["ure_instance_create_info_t"], "required_capability_count",
-        offsetof(ure_instance_create_info_t, required_capability_count));
-    field<const std::uint32_t*>(
-        types["ure_instance_create_info_t"], "required_capabilities",
-        offsetof(ure_instance_create_info_t, required_capabilities));
+    field<std::uint32_t>(types["ure_instance_create_info_t"], "required_capability_count",
+                         offsetof(ure_instance_create_info_t, required_capability_count));
+    field<const std::uint32_t *>(types["ure_instance_create_info_t"], "required_capabilities",
+                                 offsetof(ure_instance_create_info_t, required_capabilities));
     field<std::uint64_t[2]>(types["ure_instance_create_info_t"], "reserved",
                             offsetof(ure_instance_create_info_t, reserved));
     types["ure_capability_query_t"] = layout<ure_capability_query_t>();
@@ -157,9 +135,8 @@ Json build_manifest() {
                          offsetof(ure_capability_descriptor_t, thread_policy));
     field<std::uint32_t>(types["ure_capability_descriptor_t"], "limits_schema",
                          offsetof(ure_capability_descriptor_t, limits_schema));
-    field<const std::uint32_t*>(
-        types["ure_capability_descriptor_t"], "dependencies",
-        offsetof(ure_capability_descriptor_t, dependencies));
+    field<const std::uint32_t *>(types["ure_capability_descriptor_t"], "dependencies",
+                                 offsetof(ure_capability_descriptor_t, dependencies));
     field<ure_byte_span_t>(types["ure_capability_descriptor_t"], "limits",
                            offsetof(ure_capability_descriptor_t, limits));
     field<ure_string_view_t>(types["ure_capability_descriptor_t"], "reason",
@@ -169,12 +146,9 @@ Json build_manifest() {
     types["ure_error_info_t"] = layout<ure_error_info_t>();
     field<ure_output_header_t>(types["ure_error_info_t"], "header",
                                offsetof(ure_error_info_t, header));
-    field<ure_result_t>(types["ure_error_info_t"], "result",
-                        offsetof(ure_error_info_t, result));
-    field<std::uint32_t>(types["ure_error_info_t"], "domain",
-                         offsetof(ure_error_info_t, domain));
-    field<std::uint32_t>(types["ure_error_info_t"], "detail",
-                         offsetof(ure_error_info_t, detail));
+    field<ure_result_t>(types["ure_error_info_t"], "result", offsetof(ure_error_info_t, result));
+    field<std::uint32_t>(types["ure_error_info_t"], "domain", offsetof(ure_error_info_t, domain));
+    field<std::uint32_t>(types["ure_error_info_t"], "detail", offsetof(ure_error_info_t, detail));
     field<std::uint32_t>(types["ure_error_info_t"], "structured_detail_schema",
                          offsetof(ure_error_info_t, structured_detail_schema));
     field<std::uint32_t>(types["ure_error_info_t"], "reserved",
@@ -183,8 +157,7 @@ Json build_manifest() {
                              offsetof(ure_error_info_t, message));
     field<ure_byte_span_t>(types["ure_error_info_t"], "structured_detail",
                            offsetof(ure_error_info_t, structured_detail));
-    field<ure_handle_t>(types["ure_error_info_t"], "cause",
-                        offsetof(ure_error_info_t, cause));
+    field<ure_handle_t>(types["ure_error_info_t"], "cause", offsetof(ure_error_info_t, cause));
     field<ure_handle_t>(types["ure_error_info_t"], "operation",
                         offsetof(ure_error_info_t, operation));
     field<ure_digest256_t>(types["ure_error_info_t"], "build_digest",
@@ -237,62 +210,191 @@ Json build_manifest() {
                          offsetof(ure_event_record_t, coalesced_count));
     field<ure_byte_span_t>(types["ure_event_record_t"], "payload",
                            offsetof(ure_event_record_t, payload));
+    field<ure_handle_t>(types["ure_event_record_t"], "frame", offsetof(ure_event_record_t, frame));
+    types["ure_instance_frame_budget_t"] = layout<ure_instance_frame_budget_t>();
+    field<ure_input_header_t>(types["ure_instance_frame_budget_t"], "header",
+                              offsetof(ure_instance_frame_budget_t, header));
+    field<std::uint32_t>(types["ure_instance_frame_budget_t"], "max_retained_frames",
+                         offsetof(ure_instance_frame_budget_t, max_retained_frames));
+    field<std::uint32_t>(types["ure_instance_frame_budget_t"], "reserved",
+                         offsetof(ure_instance_frame_budget_t, reserved));
+    field<std::uint64_t>(types["ure_instance_frame_budget_t"], "max_retained_bytes",
+                         offsetof(ure_instance_frame_budget_t, max_retained_bytes));
+    types["ure_frame_info_t"] = layout<ure_frame_info_t>();
+    field<ure_output_header_t>(types["ure_frame_info_t"], "header",
+                               offsetof(ure_frame_info_t, header));
+    field<ure_digest256_t>(types["ure_frame_info_t"], "frame_identity",
+                           offsetof(ure_frame_info_t, frame_identity));
+    field<ure_digest256_t>(types["ure_frame_info_t"], "scene_revision_identity",
+                           offsetof(ure_frame_info_t, scene_revision_identity));
+    field<ure_digest256_t>(types["ure_frame_info_t"], "camera_revision_identity",
+                           offsetof(ure_frame_info_t, camera_revision_identity));
+    field<ure_digest256_t>(types["ure_frame_info_t"], "objective_identity",
+                           offsetof(ure_frame_info_t, objective_identity));
+    field<ure_digest256_t>(types["ure_frame_info_t"], "estimator_identity",
+                           offsetof(ure_frame_info_t, estimator_identity));
+    field<ure_digest256_t>(types["ure_frame_info_t"], "provenance_identity",
+                           offsetof(ure_frame_info_t, provenance_identity));
+    field<ure_handle_t>(types["ure_frame_info_t"], "operation",
+                        offsetof(ure_frame_info_t, operation));
+    field<std::uint64_t>(types["ure_frame_info_t"], "sample_begin",
+                         offsetof(ure_frame_info_t, sample_begin));
+    field<std::uint64_t>(types["ure_frame_info_t"], "sample_count",
+                         offsetof(ure_frame_info_t, sample_count));
+    field<std::uint64_t>(types["ure_frame_info_t"], "timestamp_ns",
+                         offsetof(ure_frame_info_t, timestamp_ns));
+    field<std::uint64_t>(types["ure_frame_info_t"], "retained_bytes",
+                         offsetof(ure_frame_info_t, retained_bytes));
+    field<std::uint32_t>(types["ure_frame_info_t"], "width", offsetof(ure_frame_info_t, width));
+    field<std::uint32_t>(types["ure_frame_info_t"], "height", offsetof(ure_frame_info_t, height));
+    field<std::uint32_t>(types["ure_frame_info_t"], "completion",
+                         offsetof(ure_frame_info_t, completion));
+    field<std::uint32_t>(types["ure_frame_info_t"], "plane_count",
+                         offsetof(ure_frame_info_t, plane_count));
+    field<std::uint32_t>(types["ure_frame_info_t"], "dirty_x", offsetof(ure_frame_info_t, dirty_x));
+    field<std::uint32_t>(types["ure_frame_info_t"], "dirty_y", offsetof(ure_frame_info_t, dirty_y));
+    field<std::uint32_t>(types["ure_frame_info_t"], "dirty_width",
+                         offsetof(ure_frame_info_t, dirty_width));
+    field<std::uint32_t>(types["ure_frame_info_t"], "dirty_height",
+                         offsetof(ure_frame_info_t, dirty_height));
+    field<std::uint64_t[2]>(types["ure_frame_info_t"], "reserved",
+                            offsetof(ure_frame_info_t, reserved));
+    types["ure_frame_plane_info_t"] = layout<ure_frame_plane_info_t>();
+    field<ure_output_header_t>(types["ure_frame_plane_info_t"], "header",
+                               offsetof(ure_frame_plane_info_t, header));
+    field<std::uint32_t>(types["ure_frame_plane_info_t"], "plane_schema",
+                         offsetof(ure_frame_plane_info_t, plane_schema));
+    field<std::uint32_t>(types["ure_frame_plane_info_t"], "scalar_type",
+                         offsetof(ure_frame_plane_info_t, scalar_type));
+    field<std::uint32_t>(types["ure_frame_plane_info_t"], "component_layout",
+                         offsetof(ure_frame_plane_info_t, component_layout));
+    field<std::uint32_t>(types["ure_frame_plane_info_t"], "normalization",
+                         offsetof(ure_frame_plane_info_t, normalization));
+    field<std::uint32_t>(types["ure_frame_plane_info_t"], "width",
+                         offsetof(ure_frame_plane_info_t, width));
+    field<std::uint32_t>(types["ure_frame_plane_info_t"], "height",
+                         offsetof(ure_frame_plane_info_t, height));
+    field<std::uint32_t>(types["ure_frame_plane_info_t"], "depth",
+                         offsetof(ure_frame_plane_info_t, depth));
+    field<std::uint32_t>(types["ure_frame_plane_info_t"], "element_stride",
+                         offsetof(ure_frame_plane_info_t, element_stride));
+    field<std::uint64_t>(types["ure_frame_plane_info_t"], "row_stride",
+                         offsetof(ure_frame_plane_info_t, row_stride));
+    field<std::uint64_t>(types["ure_frame_plane_info_t"], "slice_stride",
+                         offsetof(ure_frame_plane_info_t, slice_stride));
+    field<std::uint64_t>(types["ure_frame_plane_info_t"], "byte_extent",
+                         offsetof(ure_frame_plane_info_t, byte_extent));
+    field<ure_digest256_t>(types["ure_frame_plane_info_t"], "observable_identity",
+                           offsetof(ure_frame_plane_info_t, observable_identity));
+    field<ure_digest256_t>(types["ure_frame_plane_info_t"], "unit_identity",
+                           offsetof(ure_frame_plane_info_t, unit_identity));
+    field<ure_digest256_t>(types["ure_frame_plane_info_t"], "measure_identity",
+                           offsetof(ure_frame_plane_info_t, measure_identity));
+    field<ure_digest256_t>(types["ure_frame_plane_info_t"], "time_identity",
+                           offsetof(ure_frame_plane_info_t, time_identity));
+    field<ure_digest256_t>(types["ure_frame_plane_info_t"], "uncertainty_identity",
+                           offsetof(ure_frame_plane_info_t, uncertainty_identity));
+    field<ure_digest256_t>(types["ure_frame_plane_info_t"], "provenance_identity",
+                           offsetof(ure_frame_plane_info_t, provenance_identity));
+    field<std::uint64_t[2]>(types["ure_frame_plane_info_t"], "reserved",
+                            offsetof(ure_frame_plane_info_t, reserved));
+    types["ure_frame_map_t"] = layout<ure_frame_map_t>();
+    field<ure_output_header_t>(types["ure_frame_map_t"], "header",
+                               offsetof(ure_frame_map_t, header));
+    field<ure_handle_t>(types["ure_frame_map_t"], "frame", offsetof(ure_frame_map_t, frame));
+    field<std::uint32_t>(types["ure_frame_map_t"], "plane_index",
+                         offsetof(ure_frame_map_t, plane_index));
+    field<std::uint32_t>(types["ure_frame_map_t"], "reserved", offsetof(ure_frame_map_t, reserved));
+    field<const std::uint8_t *>(types["ure_frame_map_t"], "data", offsetof(ure_frame_map_t, data));
+    field<std::uint64_t>(types["ure_frame_map_t"], "row_stride",
+                         offsetof(ure_frame_map_t, row_stride));
+    field<std::uint64_t>(types["ure_frame_map_t"], "slice_stride",
+                         offsetof(ure_frame_map_t, slice_stride));
+    field<std::uint64_t>(types["ure_frame_map_t"], "byte_extent",
+                         offsetof(ure_frame_map_t, byte_extent));
+    field<std::uint64_t>(types["ure_frame_map_t"], "map_token",
+                         offsetof(ure_frame_map_t, map_token));
+    types["ure_frame_copy_info_t"] = layout<ure_frame_copy_info_t>();
+    field<ure_input_header_t>(types["ure_frame_copy_info_t"], "header",
+                              offsetof(ure_frame_copy_info_t, header));
+    field<ure_handle_t>(types["ure_frame_copy_info_t"], "frame",
+                        offsetof(ure_frame_copy_info_t, frame));
+    field<std::uint32_t>(types["ure_frame_copy_info_t"], "plane_index",
+                         offsetof(ure_frame_copy_info_t, plane_index));
+    field<std::uint32_t>(types["ure_frame_copy_info_t"], "reserved",
+                         offsetof(ure_frame_copy_info_t, reserved));
+    field<std::uint8_t *>(types["ure_frame_copy_info_t"], "destination",
+                          offsetof(ure_frame_copy_info_t, destination));
+    field<std::uint64_t>(types["ure_frame_copy_info_t"], "destination_size",
+                         offsetof(ure_frame_copy_info_t, destination_size));
+    field<std::uint64_t>(types["ure_frame_copy_info_t"], "destination_row_stride",
+                         offsetof(ure_frame_copy_info_t, destination_row_stride));
+    field<std::uint64_t>(types["ure_frame_copy_info_t"], "destination_slice_stride",
+                         offsetof(ure_frame_copy_info_t, destination_slice_stride));
     types["ure_instance_interface_t"] = layout<ure_instance_interface_t>();
-    field<ure_interface_table_header_t>(
-        types["ure_instance_interface_t"], "header",
-        offsetof(ure_instance_interface_t, header));
-    field<decltype(ure_instance_interface_t::retain)>(
-        types["ure_instance_interface_t"], "retain",
-        offsetof(ure_instance_interface_t, retain));
-    field<decltype(ure_instance_interface_t::release)>(
-        types["ure_instance_interface_t"], "release",
-        offsetof(ure_instance_interface_t, release));
-    field<decltype(ure_instance_interface_t::close)>(
-        types["ure_instance_interface_t"], "close",
-        offsetof(ure_instance_interface_t, close));
+    field<ure_interface_table_header_t>(types["ure_instance_interface_t"], "header",
+                                        offsetof(ure_instance_interface_t, header));
+    field<decltype(ure_instance_interface_t::retain)>(types["ure_instance_interface_t"], "retain",
+                                                      offsetof(ure_instance_interface_t, retain));
+    field<decltype(ure_instance_interface_t::release)>(types["ure_instance_interface_t"], "release",
+                                                       offsetof(ure_instance_interface_t, release));
+    field<decltype(ure_instance_interface_t::close)>(types["ure_instance_interface_t"], "close",
+                                                     offsetof(ure_instance_interface_t, close));
     field<decltype(ure_instance_interface_t::query_capability)>(
         types["ure_instance_interface_t"], "query_capability",
         offsetof(ure_instance_interface_t, query_capability));
     types["ure_error_interface_t"] = layout<ure_error_interface_t>();
     field<ure_interface_table_header_t>(types["ure_error_interface_t"], "header",
                                         offsetof(ure_error_interface_t, header));
-    field<decltype(ure_error_interface_t::retain)>(
-        types["ure_error_interface_t"], "retain",
-        offsetof(ure_error_interface_t, retain));
-    field<decltype(ure_error_interface_t::release)>(
-        types["ure_error_interface_t"], "release",
-        offsetof(ure_error_interface_t, release));
-    field<decltype(ure_error_interface_t::get_info)>(
-        types["ure_error_interface_t"], "get_info",
-        offsetof(ure_error_interface_t, get_info));
+    field<decltype(ure_error_interface_t::retain)>(types["ure_error_interface_t"], "retain",
+                                                   offsetof(ure_error_interface_t, retain));
+    field<decltype(ure_error_interface_t::release)>(types["ure_error_interface_t"], "release",
+                                                    offsetof(ure_error_interface_t, release));
+    field<decltype(ure_error_interface_t::get_info)>(types["ure_error_interface_t"], "get_info",
+                                                     offsetof(ure_error_interface_t, get_info));
     types["ure_operation_interface_t"] = layout<ure_operation_interface_t>();
-    field<ure_interface_table_header_t>(
-        types["ure_operation_interface_t"], "header",
-        offsetof(ure_operation_interface_t, header));
-    field<decltype(ure_operation_interface_t::retain)>(
-        types["ure_operation_interface_t"], "retain",
-        offsetof(ure_operation_interface_t, retain));
+    field<ure_interface_table_header_t>(types["ure_operation_interface_t"], "header",
+                                        offsetof(ure_operation_interface_t, header));
+    field<decltype(ure_operation_interface_t::retain)>(types["ure_operation_interface_t"], "retain",
+                                                       offsetof(ure_operation_interface_t, retain));
     field<decltype(ure_operation_interface_t::release)>(
         types["ure_operation_interface_t"], "release",
         offsetof(ure_operation_interface_t, release));
     field<decltype(ure_operation_interface_t::get_info)>(
         types["ure_operation_interface_t"], "get_info",
         offsetof(ure_operation_interface_t, get_info));
-    field<decltype(ure_operation_interface_t::wait)>(
-        types["ure_operation_interface_t"], "wait",
-        offsetof(ure_operation_interface_t, wait));
+    field<decltype(ure_operation_interface_t::wait)>(types["ure_operation_interface_t"], "wait",
+                                                     offsetof(ure_operation_interface_t, wait));
     field<decltype(ure_operation_interface_t::request_cancel)>(
         types["ure_operation_interface_t"], "request_cancel",
         offsetof(ure_operation_interface_t, request_cancel));
     types["ure_event_interface_t"] = layout<ure_event_interface_t>();
     field<ure_interface_table_header_t>(types["ure_event_interface_t"], "header",
                                         offsetof(ure_event_interface_t, header));
-    field<decltype(ure_event_interface_t::poll)>(
-        types["ure_event_interface_t"], "poll",
-        offsetof(ure_event_interface_t, poll));
-    field<decltype(ure_event_interface_t::wait)>(
-        types["ure_event_interface_t"], "wait",
-        offsetof(ure_event_interface_t, wait));
+    field<decltype(ure_event_interface_t::poll)>(types["ure_event_interface_t"], "poll",
+                                                 offsetof(ure_event_interface_t, poll));
+    field<decltype(ure_event_interface_t::wait)>(types["ure_event_interface_t"], "wait",
+                                                 offsetof(ure_event_interface_t, wait));
+    types["ure_frame_interface_t"] = layout<ure_frame_interface_t>();
+    field<ure_interface_table_header_t>(types["ure_frame_interface_t"], "header",
+                                        offsetof(ure_frame_interface_t, header));
+    field<decltype(ure_frame_interface_t::retain)>(types["ure_frame_interface_t"], "retain",
+                                                   offsetof(ure_frame_interface_t, retain));
+    field<decltype(ure_frame_interface_t::release)>(types["ure_frame_interface_t"], "release",
+                                                    offsetof(ure_frame_interface_t, release));
+    field<decltype(ure_frame_interface_t::get_info)>(types["ure_frame_interface_t"], "get_info",
+                                                     offsetof(ure_frame_interface_t, get_info));
+    field<decltype(ure_frame_interface_t::get_plane_info)>(
+        types["ure_frame_interface_t"], "get_plane_info",
+        offsetof(ure_frame_interface_t, get_plane_info));
+    field<decltype(ure_frame_interface_t::map_plane_read)>(
+        types["ure_frame_interface_t"], "map_plane_read",
+        offsetof(ure_frame_interface_t, map_plane_read));
+    field<decltype(ure_frame_interface_t::unmap_plane)>(
+        types["ure_frame_interface_t"], "unmap_plane",
+        offsetof(ure_frame_interface_t, unmap_plane));
+    field<decltype(ure_frame_interface_t::copy_plane)>(types["ure_frame_interface_t"], "copy_plane",
+                                                       offsetof(ure_frame_interface_t, copy_plane));
     types["ure_bootstrap_diagnostic_t"] = layout<ure_bootstrap_diagnostic_t>();
     field<ure_output_header_t>(types["ure_bootstrap_diagnostic_t"], "header",
                                offsetof(ure_bootstrap_diagnostic_t, header));
@@ -310,10 +412,9 @@ Json build_manifest() {
                          offsetof(ure_bootstrap_diagnostic_t, message_written));
     field<std::uint32_t>(types["ure_bootstrap_diagnostic_t"], "reserved",
                          offsetof(ure_bootstrap_diagnostic_t, reserved));
-    field<char*>(types["ure_bootstrap_diagnostic_t"], "message_data",
-                 offsetof(ure_bootstrap_diagnostic_t, message_data));
-    types["ure_runtime_manifest_request_t"] =
-        layout<ure_runtime_manifest_request_t>();
+    field<char *>(types["ure_bootstrap_diagnostic_t"], "message_data",
+                  offsetof(ure_bootstrap_diagnostic_t, message_data));
+    types["ure_runtime_manifest_request_t"] = layout<ure_runtime_manifest_request_t>();
     field<ure_input_header_t>(types["ure_runtime_manifest_request_t"], "header",
                               offsetof(ure_runtime_manifest_request_t, header));
     field<std::uint32_t>(types["ure_runtime_manifest_request_t"], "minimum_major",
@@ -324,9 +425,8 @@ Json build_manifest() {
                          offsetof(ure_runtime_manifest_request_t, maximum_major));
     field<std::uint32_t>(types["ure_runtime_manifest_request_t"], "maximum_minor",
                          offsetof(ure_runtime_manifest_request_t, maximum_minor));
-    field<ure_digest256_t>(
-        types["ure_runtime_manifest_request_t"], "expected_registry_digest",
-        offsetof(ure_runtime_manifest_request_t, expected_registry_digest));
+    field<ure_digest256_t>(types["ure_runtime_manifest_request_t"], "expected_registry_digest",
+                           offsetof(ure_runtime_manifest_request_t, expected_registry_digest));
     field<std::uint64_t[2]>(types["ure_runtime_manifest_request_t"], "reserved",
                             offsetof(ure_runtime_manifest_request_t, reserved));
     types["ure_runtime_manifest_t"] = layout<ure_runtime_manifest_t>();
@@ -372,8 +472,8 @@ Json build_manifest() {
                          offsetof(ure_interface_response_t, version_minor));
     field<std::uint64_t>(types["ure_interface_response_t"], "table_size",
                          offsetof(ure_interface_response_t, table_size));
-    field<const void*>(types["ure_interface_response_t"], "table",
-                       offsetof(ure_interface_response_t, table));
+    field<const void *>(types["ure_interface_response_t"], "table",
+                        offsetof(ure_interface_response_t, table));
     field<std::uint64_t[2]>(types["ure_interface_response_t"], "reserved",
                             offsetof(ure_interface_response_t, reserved));
 
@@ -391,25 +491,30 @@ Json build_manifest() {
              {"error_info", URE_STRUCTURE_ERROR_INFO},
              {"operation_info", URE_STRUCTURE_OPERATION_INFO},
              {"event_record", URE_STRUCTURE_EVENT_RECORD},
+             {"instance_frame_budget", URE_STRUCTURE_INSTANCE_FRAME_BUDGET},
+             {"frame_info", URE_STRUCTURE_FRAME_INFO},
+             {"frame_plane_info", URE_STRUCTURE_FRAME_PLANE_INFO},
+             {"frame_map", URE_STRUCTURE_FRAME_MAP},
+             {"frame_copy_info", URE_STRUCTURE_FRAME_COPY_INFO},
              {"instance_interface", URE_STRUCTURE_INSTANCE_INTERFACE},
              {"error_interface", URE_STRUCTURE_ERROR_INTERFACE},
              {"operation_interface", URE_STRUCTURE_OPERATION_INTERFACE},
              {"event_interface", URE_STRUCTURE_EVENT_INTERFACE},
+             {"frame_interface", URE_STRUCTURE_FRAME_INTERFACE},
              {"bool32", URE_STRUCTURE_BOOL32},
              {"handle", URE_STRUCTURE_HANDLE}};
-    root["results"] =
-        Json{{"success", URE_RESULT_SUCCESS},
-             {"incomplete", URE_RESULT_INCOMPLETE},
-             {"invalid_argument", URE_RESULT_INVALID_ARGUMENT},
-             {"incompatible_version", URE_RESULT_INCOMPATIBLE_VERSION},
-             {"capability_unavailable", URE_RESULT_CAPABILITY_UNAVAILABLE},
-             {"invalid_handle", URE_RESULT_INVALID_HANDLE},
-             {"busy", URE_RESULT_BUSY},
-             {"timeout", URE_RESULT_TIMEOUT},
-             {"canceled", URE_RESULT_CANCELED},
-             {"device_lost", URE_RESULT_DEVICE_LOST},
-             {"budget_exhausted", URE_RESULT_BUDGET_EXHAUSTED},
-             {"internal", URE_RESULT_INTERNAL}};
+    root["results"] = Json{{"success", URE_RESULT_SUCCESS},
+                           {"incomplete", URE_RESULT_INCOMPLETE},
+                           {"invalid_argument", URE_RESULT_INVALID_ARGUMENT},
+                           {"incompatible_version", URE_RESULT_INCOMPATIBLE_VERSION},
+                           {"capability_unavailable", URE_RESULT_CAPABILITY_UNAVAILABLE},
+                           {"invalid_handle", URE_RESULT_INVALID_HANDLE},
+                           {"busy", URE_RESULT_BUSY},
+                           {"timeout", URE_RESULT_TIMEOUT},
+                           {"canceled", URE_RESULT_CANCELED},
+                           {"device_lost", URE_RESULT_DEVICE_LOST},
+                           {"budget_exhausted", URE_RESULT_BUDGET_EXHAUSTED},
+                           {"internal", URE_RESULT_INTERNAL}};
     root["event_overflow_policy"] = "replace queued batch with explicit gap; "
                                     "object state remains authoritative";
     root["diagnostic_coalescing_policy"] =
@@ -422,66 +527,57 @@ Json build_manifest() {
                                 {"runtime_state", "Applicable"},
                                 {"enabled", true},
                                 {"dependencies", Json::array()}}},
-             {"lifecycle",
-              Json{{"id", URE_CAPABILITY_LIFECYCLE},
-                   {"stability", "Core"},
-                   {"maturity", "NotApplicable"},
-                   {"runtime_state", "Applicable"},
-                   {"enabled", true},
-                   {"dependencies", Json::array({URE_CAPABILITY_BOOTSTRAP})}}},
-             {"frame_lease",
-              Json{{"id", URE_CAPABILITY_FRAME_LEASE},
-                   {"stability", "Core"},
-                   {"maturity", "Experimental"},
-                   {"runtime_state", "Compiled"},
-                   {"enabled", false},
-                   {"dependencies", Json::array({URE_CAPABILITY_LIFECYCLE})}}},
-             {"telemetry",
-              Json{{"id", URE_CAPABILITY_TELEMETRY},
-                   {"stability", "Core"},
-                   {"maturity", "Experimental"},
-                   {"runtime_state", "Compiled"},
-                   {"enabled", false},
-                   {"dependencies", Json::array({URE_CAPABILITY_LIFECYCLE})}}}};
-    root["interfaces"] =
-        Json{{"runtime", "5c94f345-6785-4d2f-a44b-5d631292ab8e"},
-             {"instance", "f6f5306c-31ee-4aa9-857f-4675e15bd90d"},
-             {"error", "8d762bb1-6cae-5c01-9f63-71b2a2344b10"},
-             {"operation", "17db0428-bd58-5f4e-8b90-a7a72d901e13"},
-             {"event", "6d41e4c9-9576-5287-a6b8-2bd359814521"}};
+             {"lifecycle", Json{{"id", URE_CAPABILITY_LIFECYCLE},
+                                {"stability", "Core"},
+                                {"maturity", "NotApplicable"},
+                                {"runtime_state", "Applicable"},
+                                {"enabled", true},
+                                {"dependencies", Json::array({URE_CAPABILITY_BOOTSTRAP})}}},
+             {"frame_lease", Json{{"id", URE_CAPABILITY_FRAME_LEASE},
+                                  {"stability", "Core"},
+                                  {"maturity", "Experimental"},
+                                  {"runtime_state", "Compiled"},
+                                  {"enabled", false},
+                                  {"dependencies", Json::array({URE_CAPABILITY_LIFECYCLE})}}},
+             {"telemetry", Json{{"id", URE_CAPABILITY_TELEMETRY},
+                                {"stability", "Core"},
+                                {"maturity", "Experimental"},
+                                {"runtime_state", "Compiled"},
+                                {"enabled", false},
+                                {"dependencies", Json::array({URE_CAPABILITY_LIFECYCLE})}}}};
+    root["interfaces"] = Json{{"runtime", "5c94f345-6785-4d2f-a44b-5d631292ab8e"},
+                              {"instance", "f6f5306c-31ee-4aa9-857f-4675e15bd90d"},
+                              {"error", "8d762bb1-6cae-5c01-9f63-71b2a2344b10"},
+                              {"operation", "17db0428-bd58-5f4e-8b90-a7a72d901e13"},
+                              {"event", "6d41e4c9-9576-5287-a6b8-2bd359814521"}};
     return root;
 }
 
 std::array<std::uint8_t, 32> parse_digest(std::string_view text) {
     const auto value = [](char digit) -> std::uint8_t {
-        return static_cast<std::uint8_t>(digit <= '9' ? digit - '0'
-                                                      : digit - 'a' + 10);
+        return static_cast<std::uint8_t>(digit <= '9' ? digit - '0' : digit - 'a' + 10);
     };
     std::array<std::uint8_t, 32> digest{};
     for (std::size_t index = 0; index < digest.size(); ++index) {
-        digest[index] = static_cast<std::uint8_t>((value(text[index * 2]) << 4U) |
-                                                  value(text[index * 2 + 1]));
+        digest[index] =
+            static_cast<std::uint8_t>((value(text[index * 2]) << 4U) | value(text[index * 2 + 1]));
     }
     return digest;
 }
 
 }
 
-const std::array<std::uint8_t, 32>& registry_digest() noexcept {
-    static constexpr std::array<std::uint8_t, 32> digest
-        URE_REGISTRY_DIGEST_BYTES;
+const std::array<std::uint8_t, 32> &registry_digest() noexcept {
+    static constexpr std::array<std::uint8_t, 32> digest URE_REGISTRY_DIGEST_BYTES;
     return digest;
 }
 
-const std::array<std::uint8_t, 32>& runtime_build_digest() noexcept {
-    static const std::array<std::uint8_t, 32> digest =
-        parse_digest(URE_RUNTIME_BUILD_DIGEST);
+const std::array<std::uint8_t, 32> &runtime_build_digest() noexcept {
+    static const std::array<std::uint8_t, 32> digest = parse_digest(URE_RUNTIME_BUILD_DIGEST);
     return digest;
 }
 
-std::string_view runtime_identity() noexcept {
-    return "UltraRender Candidate Runtime 0.1.0";
-}
+std::string_view runtime_identity() noexcept { return "UltraRender Candidate Runtime 0.1.0"; }
 
 std::string_view abi_manifest_json() {
     static const std::string manifest = build_manifest().dump();

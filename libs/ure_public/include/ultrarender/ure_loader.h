@@ -197,7 +197,84 @@ typedef struct ure_event_record_t {
     uint32_t reserved;
     uint64_t coalesced_count;
     ure_byte_span_t payload;
+    ure_handle_t frame;
 } ure_event_record_t;
+
+typedef struct ure_instance_frame_budget_t {
+    ure_input_header_t header;
+    uint32_t max_retained_frames;
+    uint32_t reserved;
+    uint64_t max_retained_bytes;
+} ure_instance_frame_budget_t;
+
+typedef struct ure_frame_info_t {
+    ure_output_header_t header;
+    ure_digest256_t frame_identity;
+    ure_digest256_t scene_revision_identity;
+    ure_digest256_t camera_revision_identity;
+    ure_digest256_t objective_identity;
+    ure_digest256_t estimator_identity;
+    ure_digest256_t provenance_identity;
+    ure_handle_t operation;
+    uint64_t sample_begin;
+    uint64_t sample_count;
+    uint64_t timestamp_ns;
+    uint64_t retained_bytes;
+    uint32_t width;
+    uint32_t height;
+    uint32_t completion;
+    uint32_t plane_count;
+    uint32_t dirty_x;
+    uint32_t dirty_y;
+    uint32_t dirty_width;
+    uint32_t dirty_height;
+    uint64_t reserved[2];
+} ure_frame_info_t;
+
+typedef struct ure_frame_plane_info_t {
+    ure_output_header_t header;
+    uint32_t plane_schema;
+    uint32_t scalar_type;
+    uint32_t component_layout;
+    uint32_t normalization;
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    uint32_t element_stride;
+    uint64_t row_stride;
+    uint64_t slice_stride;
+    uint64_t byte_extent;
+    ure_digest256_t observable_identity;
+    ure_digest256_t unit_identity;
+    ure_digest256_t measure_identity;
+    ure_digest256_t time_identity;
+    ure_digest256_t uncertainty_identity;
+    ure_digest256_t provenance_identity;
+    uint64_t reserved[2];
+} ure_frame_plane_info_t;
+
+typedef struct ure_frame_map_t {
+    ure_output_header_t header;
+    ure_handle_t frame;
+    uint32_t plane_index;
+    uint32_t reserved;
+    const uint8_t *data;
+    uint64_t row_stride;
+    uint64_t slice_stride;
+    uint64_t byte_extent;
+    uint64_t map_token;
+} ure_frame_map_t;
+
+typedef struct ure_frame_copy_info_t {
+    ure_input_header_t header;
+    ure_handle_t frame;
+    uint32_t plane_index;
+    uint32_t reserved;
+    uint8_t *destination;
+    uint64_t destination_size;
+    uint64_t destination_row_stride;
+    uint64_t destination_slice_stride;
+} ure_frame_copy_info_t;
 
 typedef struct ure_runtime_interface_t {
     ure_interface_table_header_t header;
@@ -240,6 +317,17 @@ typedef struct ure_event_interface_t {
     ure_result_t (URE_CALL *poll)(ure_handle_t instance, ure_event_record_t *event, ure_handle_t *error);
     ure_result_t (URE_CALL *wait)(ure_handle_t instance, uint64_t timeout_nanoseconds, ure_event_record_t *event, ure_handle_t *error);
 } ure_event_interface_t;
+
+typedef struct ure_frame_interface_t {
+    ure_interface_table_header_t header;
+    ure_result_t (URE_CALL *retain)(ure_handle_t frame, ure_handle_t *error);
+    ure_result_t (URE_CALL *release)(ure_handle_t frame, ure_handle_t *error);
+    ure_result_t (URE_CALL *get_info)(ure_handle_t frame, ure_frame_info_t *info, ure_handle_t *error);
+    ure_result_t (URE_CALL *get_plane_info)(ure_handle_t frame, uint32_t plane_index, ure_frame_plane_info_t *info, ure_handle_t *error);
+    ure_result_t (URE_CALL *map_plane_read)(ure_handle_t frame, uint32_t plane_index, ure_frame_map_t *map, ure_handle_t *error);
+    ure_result_t (URE_CALL *unmap_plane)(ure_handle_t frame, uint64_t map_token, ure_handle_t *error);
+    ure_result_t (URE_CALL *copy_plane)(const ure_frame_copy_info_t *copy_info, ure_handle_t *error);
+} ure_frame_interface_t;
 
 typedef ure_result_t (URE_CALL *ure_get_runtime_manifest_fn)(
     const ure_runtime_manifest_request_t *request,

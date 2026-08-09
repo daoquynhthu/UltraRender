@@ -84,7 +84,7 @@ try {
     Invoke-CodegenFailure $path $schemas "Invalid or duplicate registry entry" "Future version"
 
     $registry = Get-Content -LiteralPath $registrySource -Raw | ConvertFrom-Json -Depth 100
-    ($registry.entries | Where-Object canonical_name -eq "ure.capability.frame_lease").default_enabled = $true
+    ($registry.entries | Where-Object canonical_name -eq "ure.capability.telemetry").default_enabled = $true
     $path = Join-Path $temp "default_dependency.json"
     Write-Json $registry $path
     Invoke-CodegenFailure $path $schemas "Enabled-by-default entry is only compiled" "Default state closure"

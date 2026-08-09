@@ -9,6 +9,19 @@ table FramePlaneDescriptor {
   row_stride:ulong (id: 3);
   element_stride:uint (id: 4);
   blob:SharedBlobDescriptor (id: 5);
+  plane_id:ulong (id: 6);
+  scalar_type:uint (id: 7);
+  component_layout:uint (id: 8);
+  depth:uint = 1 (id: 9);
+  slice_stride:ulong (id: 10);
+  byte_extent:ulong (id: 11);
+  observable_identity:[ubyte] (id: 12);
+  unit_identity:[ubyte] (id: 13);
+  measure_identity:[ubyte] (id: 14);
+  time_identity:[ubyte] (id: 15);
+  uncertainty_identity:[ubyte] (id: 16);
+  provenance_identity:[ubyte] (id: 17);
+  normalization:uint (id: 18);
 }
 
 table FrameReadyDescriptor {
@@ -16,4 +29,21 @@ table FrameReadyDescriptor {
   revision:ulong (id: 1);
   planes:[FramePlaneDescriptor] (id: 2);
   retained_bytes:ulong (id: 3);
+  frame_identity:[ubyte] (id: 4);
+  scene_revision_identity:[ubyte] (id: 5);
+  camera_revision_identity:[ubyte] (id: 6);
+  objective_identity:[ubyte] (id: 7);
+  estimator_identity:[ubyte] (id: 8);
+  provenance_identity:[ubyte] (id: 9);
+  worker_instance_identity:[ubyte] (id: 10);
+  width:uint (id: 11);
+  height:uint (id: 12);
+  completion:uint (id: 13);
+  timestamp_ns:ulong (id: 14);
+  dirty_x:uint (id: 15);
+  dirty_y:uint (id: 16);
+  dirty_width:uint (id: 17);
+  dirty_height:uint (id: 18);
+  sample_begin:ulong (id: 19);
+  sample_count:ulong (id: 20);
 }

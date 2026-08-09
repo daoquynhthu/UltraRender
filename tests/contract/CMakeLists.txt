@@ -73,7 +73,29 @@ if(TARGET ure_contract)
     add_executable(test_runtime_lifecycle test_runtime_lifecycle.c)
     set_target_properties(test_runtime_lifecycle PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
     target_include_directories(test_runtime_lifecycle PRIVATE ${UR_PB1_STAGE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
-    add_dependencies(test_runtime_lifecycle ure_public_stage_headers ure_contract)
+    add_dependencies(test_runtime_lifecycle ure_public_stage_headers ure_contract_conformance)
+
+    add_executable(test_frame_leases test_frame_leases.c)
+    set_target_properties(test_frame_leases PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
+    target_include_directories(test_frame_leases PRIVATE ${UR_PB1_STAGE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
+    add_dependencies(test_frame_leases ure_public_stage_headers ure_contract_conformance)
+
+    add_library(worker_test_support STATIC worker_test_client.cpp)
+    target_link_libraries(worker_test_support PUBLIC
+        ure_public
+        ure_contract_schema
+        ure_worker_conformance_schema
+        PRIVATE
+        bcrypt)
+
+    add_executable(test_worker_protocol test_worker_protocol.cpp)
+    target_link_libraries(test_worker_protocol PRIVATE worker_test_support ure_public)
+    target_include_directories(test_worker_protocol PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    add_dependencies(test_worker_protocol ure_worker ure_worker_conformance ure_contract ure_contract_conformance)
+
+    add_executable(test_worker_crash test_worker_crash.cpp)
+    target_link_libraries(test_worker_crash PRIVATE worker_test_support)
+    add_dependencies(test_worker_crash ure_worker_conformance ure_contract_conformance)
 endif()
 
 if(MSVC)
@@ -81,11 +103,13 @@ if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
     endforeach()
     if(TARGET ure_contract)
-        foreach(target test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle)
+        foreach(target test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases worker_test_support test_worker_protocol test_worker_crash)
             target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
         endforeach()
         target_compile_options(test_loader_client PRIVATE /wd4191)
         target_compile_options(test_runtime_lifecycle PRIVATE /wd4191)
+        target_compile_options(test_frame_leases PRIVATE /wd4191)
+        target_compile_options(test_worker_protocol PRIVATE /wd4191)
     endif()
 endif()
 
@@ -103,7 +127,9 @@ if(TARGET ure_contract)
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/contracts/abi ${UR_PB2_STAGE_DIR}/abi
         COMMAND ${CMAKE_COMMAND} -E make_directory ${UR_PB2_STAGE_DIR}/bin
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:ure_contract> ${UR_PB2_STAGE_DIR}/bin/
-        DEPENDS ure_contract ure_public_stage_headers
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:ure_worker> ${UR_PB2_STAGE_DIR}/bin/
+        COMMAND ${CMAKE_COMMAND} -E rm -f ${UR_PB2_STAGE_DIR}/bin/$<TARGET_FILE_NAME:ure_worker_conformance>
+        DEPENDS ure_contract ure_worker ure_public_stage_headers
         VERBATIM)
 endif()
 
@@ -177,7 +203,32 @@ if(TARGET ure_contract)
         COMMAND test_loader_client $<TARGET_FILE:ure_contract>)
     add_test(
         NAME test_runtime_lifecycle
-        COMMAND test_runtime_lifecycle $<TARGET_FILE:ure_contract>)
+        COMMAND test_runtime_lifecycle $<TARGET_FILE:ure_contract_conformance>)
+    add_test(
+        NAME test_frame_leases
+        COMMAND test_frame_leases $<TARGET_FILE:ure_contract_conformance>)
+    add_test(
+        NAME test_worker_protocol
+        COMMAND test_worker_protocol
+            $<TARGET_FILE:ure_worker>
+            $<TARGET_FILE:ure_worker_conformance>
+            $<TARGET_FILE:ure_contract>
+            $<TARGET_FILE:ure_contract_conformance>)
+    add_test(
+        NAME test_worker_crash
+        COMMAND test_worker_crash
+            $<TARGET_FILE:ure_worker_conformance>
+            $<TARGET_FILE:ure_contract_conformance>)
+    add_test(
+        NAME test_worker_security
+        COMMAND
+            ${UR_PWSH_EXECUTABLE}
+            -NoProfile
+            -File ${CMAKE_CURRENT_SOURCE_DIR}/test_worker_security.ps1
+            -WorkerExecutable $<TARGET_FILE:ure_worker>
+            -ConformanceExecutable $<TARGET_FILE:ure_worker_conformance>
+            -ConformanceRuntime $<TARGET_FILE:ure_contract_conformance>
+            -RuntimeStage ${UR_PB2_STAGE_DIR})
 endif()
 
 set_tests_properties(
@@ -198,5 +249,9 @@ if(TARGET ure_contract)
         test_candidate_loader_exports
         test_candidate_loader_client
         test_runtime_lifecycle
+        test_frame_leases
+        test_worker_protocol
+        test_worker_crash
+        test_worker_security
         PROPERTIES TIMEOUT 60)
 endif()

@@ -1,0 +1,10 @@
+namespace ultrarender.contract.conformance;
+
+table FrameRequest {
+  width:uint (id: 0);
+  height:uint (id: 1);
+  seed:uint (id: 2);
+}
+
+root_type FrameRequest;
+file_identifier "URCF";

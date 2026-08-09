@@ -21,28 +21,24 @@
 namespace ure::contract_codegen {
 namespace {
 
-std::string read_text(const std::filesystem::path& path) {
+std::string read_text(const std::filesystem::path &path) {
     std::ifstream stream(path, std::ios::binary);
-    if (!stream)
-        throw std::runtime_error("Unable to open " + path.generic_string());
-    return {std::istreambuf_iterator<char>(stream),
-            std::istreambuf_iterator<char>()};
+    if (!stream) throw std::runtime_error("Unable to open " + path.generic_string());
+    return {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
 }
 
-void write_text(const std::filesystem::path& path, std::string_view text) {
+void write_text(const std::filesystem::path &path, std::string_view text) {
     std::filesystem::create_directories(path.parent_path());
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     stream.write(text.data(), static_cast<std::streamsize>(text.size()));
-    if (!stream)
-        throw std::runtime_error("Unable to write " + path.generic_string());
+    if (!stream) throw std::runtime_error("Unable to write " + path.generic_string());
 }
 
 std::string byte_initializer(std::span<const std::uint8_t> bytes) {
     std::ostringstream result;
     result << '{';
     for (std::size_t index = 0; index < bytes.size(); ++index) {
-        if (index != 0)
-            result << ", ";
+        if (index != 0) result << ", ";
         result << "0x" << std::hex << std::setfill('0') << std::setw(2)
                << static_cast<unsigned>(bytes[index]);
     }
@@ -58,14 +54,14 @@ std::vector<std::uint8_t> uuid_bytes(std::string_view uuid) {
             ++index;
             continue;
         }
-        result.push_back(static_cast<std::uint8_t>(
-            std::stoul(std::string(uuid.substr(index, 2)), nullptr, 16)));
+        result.push_back(
+            static_cast<std::uint8_t>(std::stoul(std::string(uuid.substr(index, 2)), nullptr, 16)));
         index += 2;
     }
     return result;
 }
 
-std::string numeric_literal(const RegistryEntry& entry) {
+std::string numeric_literal(const RegistryEntry &entry) {
     if (entry.numeric_value < 0) {
         return "(-INT32_C(" + std::to_string(-entry.numeric_value) + "))";
     }
@@ -75,23 +71,20 @@ std::string numeric_literal(const RegistryEntry& entry) {
     return "UINT32_C(" + std::to_string(entry.numeric_value) + ")";
 }
 
-std::string registry_header(const Registry& registry) {
+std::string registry_header(const Registry &registry) {
     std::ostringstream output;
     output << "#ifndef ULTRARENDER_URE_REGISTRY_H\n#define "
               "ULTRARENDER_URE_REGISTRY_H\n\n#include <stdint.h>\n\n";
     output << "#define URE_REGISTRY_CANDIDATE_MAJOR UINT32_C(0)\n";
     output << "#define URE_REGISTRY_CANDIDATE_MINOR UINT32_C(1)\n";
     output << "#define URE_REGISTRY_CANDIDATE_PATCH UINT32_C(0)\n";
-    output << "#define URE_REGISTRY_DIGEST_HEX \"" << registry.digest_hex
-           << "\"\n";
-    output << "#define URE_REGISTRY_DIGEST_BYTES "
-           << byte_initializer(registry.digest_bytes) << "\n\n";
-    for (const auto& entry : registry.entries) {
-        if (entry.stability == "Private")
-            continue;
+    output << "#define URE_REGISTRY_DIGEST_HEX \"" << registry.digest_hex << "\"\n";
+    output << "#define URE_REGISTRY_DIGEST_BYTES " << byte_initializer(registry.digest_bytes)
+           << "\n\n";
+    for (const auto &entry : registry.entries) {
+        if (entry.stability == "Private") continue;
         if (entry.has_numeric_value) {
-            output << "#define " << entry.c_name << ' ' << numeric_literal(entry)
-                   << "\n";
+            output << "#define " << entry.c_name << ' ' << numeric_literal(entry) << "\n";
         } else {
             output << "#define " << entry.c_name << "_UUID_BYTES "
                    << byte_initializer(uuid_bytes(entry.uuid)) << "\n";
@@ -301,7 +294,84 @@ typedef struct ure_event_record_t {
     uint32_t reserved;
     uint64_t coalesced_count;
     ure_byte_span_t payload;
+    ure_handle_t frame;
 } ure_event_record_t;
+
+typedef struct ure_instance_frame_budget_t {
+    ure_input_header_t header;
+    uint32_t max_retained_frames;
+    uint32_t reserved;
+    uint64_t max_retained_bytes;
+} ure_instance_frame_budget_t;
+
+typedef struct ure_frame_info_t {
+    ure_output_header_t header;
+    ure_digest256_t frame_identity;
+    ure_digest256_t scene_revision_identity;
+    ure_digest256_t camera_revision_identity;
+    ure_digest256_t objective_identity;
+    ure_digest256_t estimator_identity;
+    ure_digest256_t provenance_identity;
+    ure_handle_t operation;
+    uint64_t sample_begin;
+    uint64_t sample_count;
+    uint64_t timestamp_ns;
+    uint64_t retained_bytes;
+    uint32_t width;
+    uint32_t height;
+    uint32_t completion;
+    uint32_t plane_count;
+    uint32_t dirty_x;
+    uint32_t dirty_y;
+    uint32_t dirty_width;
+    uint32_t dirty_height;
+    uint64_t reserved[2];
+} ure_frame_info_t;
+
+typedef struct ure_frame_plane_info_t {
+    ure_output_header_t header;
+    uint32_t plane_schema;
+    uint32_t scalar_type;
+    uint32_t component_layout;
+    uint32_t normalization;
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    uint32_t element_stride;
+    uint64_t row_stride;
+    uint64_t slice_stride;
+    uint64_t byte_extent;
+    ure_digest256_t observable_identity;
+    ure_digest256_t unit_identity;
+    ure_digest256_t measure_identity;
+    ure_digest256_t time_identity;
+    ure_digest256_t uncertainty_identity;
+    ure_digest256_t provenance_identity;
+    uint64_t reserved[2];
+} ure_frame_plane_info_t;
+
+typedef struct ure_frame_map_t {
+    ure_output_header_t header;
+    ure_handle_t frame;
+    uint32_t plane_index;
+    uint32_t reserved;
+    const uint8_t *data;
+    uint64_t row_stride;
+    uint64_t slice_stride;
+    uint64_t byte_extent;
+    uint64_t map_token;
+} ure_frame_map_t;
+
+typedef struct ure_frame_copy_info_t {
+    ure_input_header_t header;
+    ure_handle_t frame;
+    uint32_t plane_index;
+    uint32_t reserved;
+    uint8_t *destination;
+    uint64_t destination_size;
+    uint64_t destination_row_stride;
+    uint64_t destination_slice_stride;
+} ure_frame_copy_info_t;
 
 typedef struct ure_runtime_interface_t {
     ure_interface_table_header_t header;
@@ -345,6 +415,17 @@ typedef struct ure_event_interface_t {
     ure_result_t (URE_CALL *wait)(ure_handle_t instance, uint64_t timeout_nanoseconds, ure_event_record_t *event, ure_handle_t *error);
 } ure_event_interface_t;
 
+typedef struct ure_frame_interface_t {
+    ure_interface_table_header_t header;
+    ure_result_t (URE_CALL *retain)(ure_handle_t frame, ure_handle_t *error);
+    ure_result_t (URE_CALL *release)(ure_handle_t frame, ure_handle_t *error);
+    ure_result_t (URE_CALL *get_info)(ure_handle_t frame, ure_frame_info_t *info, ure_handle_t *error);
+    ure_result_t (URE_CALL *get_plane_info)(ure_handle_t frame, uint32_t plane_index, ure_frame_plane_info_t *info, ure_handle_t *error);
+    ure_result_t (URE_CALL *map_plane_read)(ure_handle_t frame, uint32_t plane_index, ure_frame_map_t *map, ure_handle_t *error);
+    ure_result_t (URE_CALL *unmap_plane)(ure_handle_t frame, uint64_t map_token, ure_handle_t *error);
+    ure_result_t (URE_CALL *copy_plane)(const ure_frame_copy_info_t *copy_info, ure_handle_t *error);
+} ure_frame_interface_t;
+
 typedef ure_result_t (URE_CALL *ure_get_runtime_manifest_fn)(
     const ure_runtime_manifest_request_t *request,
     ure_runtime_manifest_t *manifest,
@@ -373,7 +454,7 @@ URE_PUBLIC_API ure_result_t URE_CALL ureQueryInterface(
 )";
 }
 
-std::string markdown_reference(const Registry& registry) {
+std::string markdown_reference(const Registry &registry) {
     std::ostringstream output;
     output << "# Candidate 0.1 Public Contract Registry\n\n";
     output << "This generated reference is a Candidate artifact. It is not a "
@@ -382,14 +463,12 @@ std::string markdown_reference(const Registry& registry) {
     output << "| Registry ID | Kind | Canonical name | Stability | Maturity | "
               "Since | Default | Dependencies |\n";
     output << "|---:|---|---|---|---|---|---|---|\n";
-    for (const auto& entry : registry.entries) {
-        output << '|' << entry.registry_id << '|' << entry.kind << "|`"
-               << entry.canonical_name << "`|" << entry.stability << '|'
-               << entry.maturity << '|' << entry.since << '|'
+    for (const auto &entry : registry.entries) {
+        output << '|' << entry.registry_id << '|' << entry.kind << "|`" << entry.canonical_name
+               << "`|" << entry.stability << '|' << entry.maturity << '|' << entry.since << '|'
                << (entry.default_enabled ? "enabled" : "disabled") << "|";
         for (std::size_t index = 0; index < entry.dependencies.size(); ++index) {
-            if (index != 0)
-                output << ", ";
+            if (index != 0) output << ", ";
             output << entry.dependencies[index];
         }
         output << "|\n";
@@ -397,20 +476,18 @@ std::string markdown_reference(const Registry& registry) {
     return output.str();
 }
 
-std::string sha256_file(const std::filesystem::path& path) {
+std::string sha256_file(const std::filesystem::path &path) {
     const std::string bytes = read_text(path);
-    return sha256_hex(std::span(
-        reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()));
+    return sha256_hex(
+        std::span(reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size()));
 }
 
-std::vector<std::filesystem::path>
-relative_files(const std::filesystem::path& root) {
+std::vector<std::filesystem::path> relative_files(const std::filesystem::path &root) {
     std::vector<std::filesystem::path> result;
-    for (const auto& item : std::filesystem::recursive_directory_iterator(root)) {
-        if (item.is_regular_file())
-            result.push_back(std::filesystem::relative(item.path(), root));
+    for (const auto &item : std::filesystem::recursive_directory_iterator(root)) {
+        if (item.is_regular_file()) result.push_back(std::filesystem::relative(item.path(), root));
     }
-    std::ranges::sort(result, [](const auto& left, const auto& right) {
+    std::ranges::sort(result, [](const auto &left, const auto &right) {
         return left.generic_string() < right.generic_string();
     });
     return result;
@@ -418,25 +495,19 @@ relative_files(const std::filesystem::path& root) {
 
 }
 
-void generate_contract_package(const Registry& registry,
-                               const std::filesystem::path& schema_directory,
-                               const std::filesystem::path& output_directory) {
+void generate_contract_package(const Registry &registry,
+                               const std::filesystem::path &schema_directory,
+                               const std::filesystem::path &output_directory) {
     std::filesystem::create_directories(output_directory);
-    write_text(output_directory / "include/ultrarender/ure_registry.h",
-               registry_header(registry));
-    write_text(output_directory / "include/ultrarender/ure_loader.h",
-               loader_header());
-    write_text(output_directory / "Public_Contract_Registry.md",
-               markdown_reference(registry));
-    write_text(output_directory /
-                   "registry/public_contract_registry.canonical.json",
+    write_text(output_directory / "include/ultrarender/ure_registry.h", registry_header(registry));
+    write_text(output_directory / "include/ultrarender/ure_loader.h", loader_header());
+    write_text(output_directory / "Public_Contract_Registry.md", markdown_reference(registry));
+    write_text(output_directory / "registry/public_contract_registry.canonical.json",
                registry.canonical_bytes);
-    const std::array schemas{"ure_payload_candidate.fbs",
-                             "ure_frame_candidate.fbs",
+    const std::array schemas{"ure_payload_candidate.fbs", "ure_frame_candidate.fbs",
                              "ure_worker_candidate.fbs"};
     for (const std::string_view name : schemas) {
-        write_text(output_directory / "schemas" / name,
-                   read_text(schema_directory / name));
+        write_text(output_directory / "schemas" / name, read_text(schema_directory / name));
     }
 
     nlohmann::json manifest{
@@ -446,32 +517,26 @@ void generate_contract_package(const Registry& registry,
         {"candidate_version", registry.candidate_version},
         {"registry_digest", registry.digest_hex},
         {"registry_entry_count", registry.entries.size()},
-        {"registry_canonicalization",
-         "RFC8785 restricted to integers and decimal strings"},
+        {"registry_canonicalization", "RFC8785 restricted to integers and decimal strings"},
         {"canonical_registry",
          {{"path", "registry/public_contract_registry.canonical.json"},
           {"sha256",
-           sha256_file(output_directory /
-                       "registry/public_contract_registry.canonical.json")}}},
+           sha256_file(output_directory / "registry/public_contract_registry.canonical.json")}}},
         {"schema_compiler", "flatc version 25.12.19"},
         {"platform_profiles", {"windows-x64-msvc-c11"}},
         {"public_header_language", "C11"},
         {"worker_protocol",
-         {{"major", 0},
-          {"minor", 1},
-          {"maximum_message_bytes", kMaxMockMessageBytes}}},
-        {"mock_transport",
-         "bounded fixture framing; production local IPC begins at PB.4"},
+         {{"major", 0}, {"minor", 1}, {"maximum_message_bytes", kMaxMockMessageBytes}}},
+        {"mock_transport", "bounded fixture framing; local worker transport "
+                           "remains Candidate through PB.7"},
         {"loader_exports", {"ureGetRuntimeManifest", "ureQueryInterface"}}};
     manifest["schemas"] = nlohmann::json::array();
     for (const std::string_view name : schemas) {
         const auto path = output_directory / "schemas" / name;
         manifest["schemas"].push_back(
-            {{"path", std::string("schemas/") + std::string(name)},
-             {"sha256", sha256_file(path)}});
+            {{"path", std::string("schemas/") + std::string(name)}, {"sha256", sha256_file(path)}});
     }
-    write_text(output_directory / "runtime_manifest_candidate.json",
-               manifest.dump(2) + "\n");
+    write_text(output_directory / "runtime_manifest_candidate.json", manifest.dump(2) + "\n");
 
     nlohmann::json scenario_manifest{
         {"schema", "ure.public.mock-scenarios/0.1"},
@@ -480,35 +545,33 @@ void generate_contract_package(const Registry& registry,
         {"framing", "uint32-little-endian-byte-count followed by one FlatBuffer"},
         {"maximum_message_bytes", kMaxMockMessageBytes},
         {"scenarios", nlohmann::json::array()}};
-    for (const auto& exchange : build_mock_exchanges(registry)) {
+    for (const auto &exchange : build_mock_exchanges(registry)) {
         const auto request_path =
             output_directory / "golden_messages" / (exchange.name + ".request.bin");
-        const auto response_path = output_directory / "golden_messages" /
-                                   (exchange.name + ".response.bin");
+        const auto response_path =
+            output_directory / "golden_messages" / (exchange.name + ".response.bin");
         write_binary(request_path, exchange.request);
         write_binary(response_path, exchange.response);
         scenario_manifest["scenarios"].push_back(
             {{"name", exchange.name},
-             {"request", std::filesystem::relative(request_path, output_directory)
-                             .generic_string()},
+             {"request",
+              std::filesystem::relative(request_path, output_directory).generic_string()},
              {"request_bytes", exchange.request.size()},
              {"request_sha256", sha256_file(request_path)},
-             {"response", std::filesystem::relative(response_path, output_directory)
-                              .generic_string()},
+             {"response",
+              std::filesystem::relative(response_path, output_directory).generic_string()},
              {"response_bytes", exchange.response.size()},
              {"response_sha256", sha256_file(response_path)},
              {"worker_exit_code", exchange.worker_exit_code}});
     }
-    write_text(output_directory / "mock_scenarios.json",
-               scenario_manifest.dump(2) + "\n");
+    write_text(output_directory / "mock_scenarios.json", scenario_manifest.dump(2) + "\n");
 }
 
-void compare_contract_package(const Registry& registry,
-                              const std::filesystem::path& schema_directory,
-                              const std::filesystem::path& expected_directory) {
-    const auto temporary =
-        std::filesystem::temp_directory_path() /
-        ("ure_contract_compare_" + registry.digest_hex.substr(0, 16));
+void compare_contract_package(const Registry &registry,
+                              const std::filesystem::path &schema_directory,
+                              const std::filesystem::path &expected_directory) {
+    const auto temporary = std::filesystem::temp_directory_path() /
+                           ("ure_contract_compare_" + registry.digest_hex.substr(0, 16));
     std::filesystem::remove_all(temporary);
     try {
         generate_contract_package(registry, schema_directory, temporary);
@@ -516,11 +579,9 @@ void compare_contract_package(const Registry& registry,
         const auto expected_files = relative_files(expected_directory);
         if (actual_files != expected_files)
             throw std::runtime_error("Generated file inventory drift");
-        for (const auto& relative : actual_files) {
-            if (read_text(temporary / relative) !=
-                read_text(expected_directory / relative)) {
-                throw std::runtime_error("Generated content drift: " +
-                                         relative.generic_string());
+        for (const auto &relative : actual_files) {
+            if (read_text(temporary / relative) != read_text(expected_directory / relative)) {
+                throw std::runtime_error("Generated content drift: " + relative.generic_string());
             }
         }
         std::filesystem::remove_all(temporary);

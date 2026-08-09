@@ -9,10 +9,10 @@
 
 #include "private_conformance_fixture.h"
 
-#define CHECK(expression)    \
-    do {                     \
-        if (!(expression))   \
-            return __LINE__; \
+#define CHECK(expression)                                                      \
+    do {                                                                       \
+        if (!(expression))                                                     \
+            return __LINE__;                                                   \
     } while (0)
 
 static ure_bootstrap_diagnostic_t diagnostic(char* text, uint32_t capacity) {
@@ -56,7 +56,8 @@ static DWORD WINAPI query_thread(void* parameter) {
         ure_runtime_manifest_request_t request = {0};
         ure_runtime_manifest_t manifest = {0};
         char text[64] = {0};
-        ure_bootstrap_diagnostic_t diag = diagnostic(text, (uint32_t)sizeof(text));
+        ure_bootstrap_diagnostic_t diag =
+            diagnostic(text, (uint32_t)sizeof(text));
         request.header.type = URE_STRUCTURE_RUNTIME_MANIFEST_REQUEST;
         request.header.size = (uint32_t)sizeof(request);
         request.maximum_minor = 1;
@@ -64,7 +65,8 @@ static DWORD WINAPI query_thread(void* parameter) {
         manifest.header.size = (uint32_t)sizeof(manifest);
         if (context->get_manifest(&request, &manifest, &diag) !=
                 URE_RESULT_SUCCESS ||
-            manifest.runtime_minor != 1 || manifest.abi_manifest_json.size == 0) {
+            manifest.runtime_minor != 1 ||
+            manifest.abi_manifest_json.size == 0) {
             InterlockedIncrement(&context->failures);
         }
         if (!query_table(context->query, context->id,
@@ -84,7 +86,8 @@ typedef struct operation_thread_context_t {
 } operation_thread_context_t;
 
 static DWORD WINAPI retain_operation_thread(void* parameter) {
-    operation_thread_context_t* context = (operation_thread_context_t*)parameter;
+    operation_thread_context_t* context =
+        (operation_thread_context_t*)parameter;
     uint32_t index = 0;
     CHECK(WaitForSingleObject(context->start, INFINITE) == WAIT_OBJECT_0);
     for (; index < 1000; ++index) {
@@ -101,7 +104,8 @@ static DWORD WINAPI retain_operation_thread(void* parameter) {
 }
 
 static DWORD WINAPI cancel_operation_thread(void* parameter) {
-    operation_thread_context_t* context = (operation_thread_context_t*)parameter;
+    operation_thread_context_t* context =
+        (operation_thread_context_t*)parameter;
     ure_handle_t error = NULL;
     CHECK(WaitForSingleObject(context->start, INFINITE) == WAIT_OBJECT_0);
     if (context->operations->request_cancel(context->operation,
@@ -143,7 +147,8 @@ static int inspect_error(const ure_error_interface_t* errors,
           info.message.size != 0);
     CHECK(info.structured_detail_schema == URE_PAYLOAD_ERROR &&
           info.structured_detail.size == 8);
-    CHECK(info.structured_detail.data[0] == (uint8_t)(URE_PAYLOAD_ERROR & 0xffU));
+    CHECK(info.structured_detail.data[0] ==
+          (uint8_t)(URE_PAYLOAD_ERROR & 0xffU));
     CHECK(errors->release(error) == URE_RESULT_SUCCESS);
     return 0;
 }
@@ -172,17 +177,20 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
     ure_instance_create_info_t create_info = {0};
     ure_handle_t instance = NULL;
     ure_handle_t error = NULL;
-    uint32_t required = URE_CAPABILITY_FRAME_LEASE;
-    CHECK(runtime && instances && errors && operations && events && conformance);
+    uint32_t required = URE_CAPABILITY_TELEMETRY;
+    CHECK(runtime && instances && errors && operations && events &&
+          conformance);
     {
         query_thread_context_t context = {get_manifest, query, runtime_id, 0};
         HANDLE threads[8] = {0};
         uint32_t index = 0;
         for (; index < 8; ++index) {
-            threads[index] = CreateThread(NULL, 0, query_thread, &context, 0, NULL);
+            threads[index] =
+                CreateThread(NULL, 0, query_thread, &context, 0, NULL);
             CHECK(threads[index] != NULL);
         }
-        CHECK(WaitForMultipleObjects(8, threads, TRUE, INFINITE) == WAIT_OBJECT_0);
+        CHECK(WaitForMultipleObjects(8, threads, TRUE, INFINITE) ==
+              WAIT_OBJECT_0);
         for (index = 0; index < 8; ++index)
             CloseHandle(threads[index]);
         CHECK(context.failures == 0);
@@ -222,10 +230,20 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
         CHECK(descriptor.dependency_count == 1 &&
               descriptor.dependencies[0] == URE_CAPABILITY_BOOTSTRAP);
         capability.capability_id = URE_CAPABILITY_FRAME_LEASE;
+        capability.required = 0;
+        capability.request_enable = 0;
         CHECK(instances->query_capability(instance, &capability, &descriptor,
-                                          &error) ==
-              URE_RESULT_CAPABILITY_UNAVAILABLE);
-        CHECK(inspect_error(errors, error, URE_RESULT_CAPABILITY_UNAVAILABLE) == 0);
+                                          &error) == URE_RESULT_SUCCESS);
+        CHECK(!descriptor.enabled && !descriptor.applicable &&
+              descriptor.maturity == URE_MATURITY_EXPERIMENTAL &&
+              descriptor.runtime_state == URE_RUNTIME_STATE_AVAILABLE);
+        capability.required = 1;
+        capability.request_enable = 1;
+        CHECK(instances->query_capability(instance, &capability, &descriptor,
+                                          &error) == URE_RESULT_SUCCESS);
+        CHECK(descriptor.enabled && descriptor.applicable &&
+              descriptor.runtime_state == URE_RUNTIME_STATE_APPLICABLE);
+        capability.capability_id = URE_CAPABILITY_TELEMETRY;
         CHECK(conformance->fail_next_error_allocation() == URE_RESULT_SUCCESS);
         CHECK(instances->query_capability(instance, &capability, &descriptor,
                                           &error) ==
@@ -239,17 +257,12 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
               descriptor.maturity == URE_MATURITY_EXPERIMENTAL);
         CHECK(descriptor.runtime_state == URE_RUNTIME_STATE_COMPILED &&
               descriptor.reason.size != 0);
-        capability.capability_id = URE_CAPABILITY_TELEMETRY;
-        CHECK(instances->query_capability(instance, &capability, &descriptor,
-                                          &error) == URE_RESULT_SUCCESS);
-        CHECK(!descriptor.enabled &&
-              descriptor.maturity == URE_MATURITY_EXPERIMENTAL &&
-              descriptor.reason.size != 0);
         capability.capability_id = UINT32_MAX;
         CHECK(instances->query_capability(instance, &capability, &descriptor,
                                           &error) ==
               URE_RESULT_CAPABILITY_UNAVAILABLE);
-        CHECK(inspect_error(errors, error, URE_RESULT_CAPABILITY_UNAVAILABLE) == 0);
+        CHECK(inspect_error(errors, error, URE_RESULT_CAPABILITY_UNAVAILABLE) ==
+              0);
     }
     {
         ure_private_conformance_operation_request_t request = {0};
@@ -257,7 +270,8 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
         ure_bool32_t accepted = 0;
         ure_handle_t operation = NULL;
         ure_handle_t other_instance = NULL;
-        request.header.type = URE_PRIVATE_STRUCTURE_CONFORMANCE_OPERATION_REQUEST;
+        request.header.type =
+            URE_PRIVATE_STRUCTURE_CONFORMANCE_OPERATION_REQUEST;
         request.header.size = (uint32_t)sizeof(request);
         request.work_steps = 50;
         request.step_delay_milliseconds = 2;
@@ -265,10 +279,11 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
                                             &error) == URE_RESULT_SUCCESS);
         CHECK(runtime->create_instance(&create_info, &other_instance, &error) ==
               URE_RESULT_SUCCESS);
-        CHECK(conformance->validate_operation_owner(instance, operation, &error) ==
-              URE_RESULT_SUCCESS);
         CHECK(conformance->validate_operation_owner(
-                  other_instance, operation, &error) == URE_RESULT_INVALID_HANDLE);
+                  instance, operation, &error) == URE_RESULT_SUCCESS);
+        CHECK(conformance->validate_operation_owner(other_instance, operation,
+                                                    &error) ==
+              URE_RESULT_INVALID_HANDLE);
         CHECK(inspect_error(errors, error, URE_RESULT_INVALID_HANDLE) == 0);
         CHECK(operations->wait(operation, 0, &error) == URE_RESULT_TIMEOUT);
         CHECK(instances->retain(instance, &error) == URE_RESULT_SUCCESS);
@@ -282,13 +297,16 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
               URE_RESULT_CANCELED);
         info.header.type = URE_STRUCTURE_OPERATION_INFO;
         info.header.size = (uint32_t)sizeof(info);
-        CHECK(operations->get_info(operation, &info, &error) == URE_RESULT_SUCCESS);
+        CHECK(operations->get_info(operation, &info, &error) ==
+              URE_RESULT_SUCCESS);
         CHECK(info.state == URE_OPERATION_STATE_CANCELED &&
               info.progress_sequence != 0);
-        CHECK(operations->retain(instance, &error) == URE_RESULT_INVALID_HANDLE);
+        CHECK(operations->retain(instance, &error) ==
+              URE_RESULT_INVALID_HANDLE);
         CHECK(inspect_error(errors, error, URE_RESULT_INVALID_HANDLE) == 0);
         CHECK(operations->release(operation, &error) == URE_RESULT_SUCCESS);
-        CHECK(operations->retain(operation, &error) == URE_RESULT_INVALID_HANDLE);
+        CHECK(operations->retain(operation, &error) ==
+              URE_RESULT_INVALID_HANDLE);
         CHECK(inspect_error(errors, error, URE_RESULT_INVALID_HANDLE) == 0);
         CHECK(instances->close(other_instance, &error) == URE_RESULT_SUCCESS);
         CHECK(instances->release(other_instance, &error) == URE_RESULT_SUCCESS);
@@ -299,25 +317,28 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
         HANDLE threads[8] = {0};
         HANDLE cancel_thread = NULL;
         uint32_t index = 0;
-        request.header.type = URE_PRIVATE_STRUCTURE_CONFORMANCE_OPERATION_REQUEST;
+        request.header.type =
+            URE_PRIVATE_STRUCTURE_CONFORMANCE_OPERATION_REQUEST;
         request.header.size = (uint32_t)sizeof(request);
         request.work_steps = 1000;
         request.step_delay_milliseconds = 1;
-        CHECK(conformance->submit_operation(instance, &request, &context.operation,
+        CHECK(conformance->submit_operation(instance, &request,
+                                            &context.operation,
                                             &error) == URE_RESULT_SUCCESS);
         context.operations = operations;
         context.start = CreateEventW(NULL, TRUE, FALSE, NULL);
         CHECK(context.start != NULL);
         for (; index < 8; ++index) {
-            threads[index] =
-                CreateThread(NULL, 0, retain_operation_thread, &context, 0, NULL);
+            threads[index] = CreateThread(NULL, 0, retain_operation_thread,
+                                          &context, 0, NULL);
             CHECK(threads[index] != NULL);
         }
         cancel_thread =
             CreateThread(NULL, 0, cancel_operation_thread, &context, 0, NULL);
         CHECK(cancel_thread != NULL);
         CHECK(SetEvent(context.start));
-        CHECK(WaitForMultipleObjects(8, threads, TRUE, INFINITE) == WAIT_OBJECT_0);
+        CHECK(WaitForMultipleObjects(8, threads, TRUE, INFINITE) ==
+              WAIT_OBJECT_0);
         CHECK(WaitForSingleObject(cancel_thread, INFINITE) == WAIT_OBJECT_0);
         for (index = 0; index < 8; ++index)
             CloseHandle(threads[index]);
@@ -326,7 +347,8 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
         CHECK(context.failures == 0 && context.accepted);
         CHECK(operations->wait(context.operation, 1000000000ULL, &error) ==
               URE_RESULT_CANCELED);
-        CHECK(operations->release(context.operation, &error) == URE_RESULT_SUCCESS);
+        CHECK(operations->release(context.operation, &error) ==
+              URE_RESULT_SUCCESS);
     }
     {
         uint32_t mode = 0;
@@ -339,14 +361,16 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
             ure_result_t expected = mode == 0   ? URE_RESULT_SUCCESS
                                     : mode == 1 ? URE_RESULT_INTERNAL
                                                 : URE_RESULT_DEVICE_LOST;
-            request.header.type = URE_PRIVATE_STRUCTURE_CONFORMANCE_OPERATION_REQUEST;
+            request.header.type =
+                URE_PRIVATE_STRUCTURE_CONFORMANCE_OPERATION_REQUEST;
             request.header.size = (uint32_t)sizeof(request);
             request.work_steps = 1;
             request.fail_at_end = mode == 1;
             request.device_lost_at_end = mode == 2;
             CHECK(conformance->submit_operation(instance, &request, &operation,
                                                 &error) == URE_RESULT_SUCCESS);
-            CHECK(operations->wait(operation, 1000000000ULL, &error) == expected);
+            CHECK(operations->wait(operation, 1000000000ULL, &error) ==
+                  expected);
             if (mode == 0) {
                 CHECK(error == NULL);
             } else {
@@ -365,9 +389,10 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
             info.header.size = (uint32_t)sizeof(info);
             CHECK(operations->get_info(operation, &info, &error) ==
                   URE_RESULT_SUCCESS);
-            CHECK(info.state == (mode == 0   ? URE_OPERATION_STATE_SUCCEEDED
-                                 : mode == 1 ? URE_OPERATION_STATE_FAILED
-                                             : URE_OPERATION_STATE_DEVICE_LOST));
+            CHECK(info.state == (mode == 0 ? URE_OPERATION_STATE_SUCCEEDED
+                                 : mode == 1
+                                     ? URE_OPERATION_STATE_FAILED
+                                     : URE_OPERATION_STATE_DEVICE_LOST));
             if (mode != 0) {
                 CHECK(info.terminal_error != NULL);
                 CHECK(info.terminal_error == wait_error_info.cause);
@@ -391,13 +416,16 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
     {
         ure_private_conformance_operation_request_t request = {0};
         ure_handle_t operation = NULL;
-        request.header.type = URE_PRIVATE_STRUCTURE_CONFORMANCE_OPERATION_REQUEST;
+        request.header.type =
+            URE_PRIVATE_STRUCTURE_CONFORMANCE_OPERATION_REQUEST;
         request.header.size = (uint32_t)sizeof(request);
         request.work_steps = 50;
         request.step_delay_milliseconds = 1;
-        CHECK(conformance->submit_operation(instance, &request, &operation, &error) == URE_RESULT_SUCCESS);
+        CHECK(conformance->submit_operation(instance, &request, &operation,
+                                            &error) == URE_RESULT_SUCCESS);
         CHECK(operations->release(operation, &error) == URE_RESULT_SUCCESS);
-        CHECK(operations->retain(operation, &error) == URE_RESULT_INVALID_HANDLE);
+        CHECK(operations->retain(operation, &error) ==
+              URE_RESULT_INVALID_HANDLE);
         CHECK(inspect_error(errors, error, URE_RESULT_INVALID_HANDLE) == 0);
     }
     {
@@ -406,19 +434,22 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
         ure_handle_t operation = NULL;
         close_thread_context_t context = {0};
         HANDLE thread = NULL;
-        request.header.type = URE_PRIVATE_STRUCTURE_CONFORMANCE_OPERATION_REQUEST;
+        request.header.type =
+            URE_PRIVATE_STRUCTURE_CONFORMANCE_OPERATION_REQUEST;
         request.header.size = (uint32_t)sizeof(request);
         request.work_steps = 50;
         request.step_delay_milliseconds = 2;
-        CHECK(runtime->create_instance(&create_info, &closing_instance, &error) ==
-              URE_RESULT_SUCCESS);
-        CHECK(conformance->submit_operation(closing_instance, &request, &operation,
+        CHECK(runtime->create_instance(&create_info, &closing_instance,
+                                       &error) == URE_RESULT_SUCCESS);
+        CHECK(conformance->submit_operation(closing_instance, &request,
+                                            &operation,
                                             &error) == URE_RESULT_SUCCESS);
         context.instances = instances;
         context.instance = closing_instance;
         context.start = CreateEventW(NULL, TRUE, FALSE, NULL);
         CHECK(context.start != NULL);
-        thread = CreateThread(NULL, 0, close_instance_thread, &context, 0, NULL);
+        thread =
+            CreateThread(NULL, 0, close_instance_thread, &context, 0, NULL);
         CHECK(thread != NULL);
         CHECK(SetEvent(context.start));
         CHECK(operations->wait(operation, 1000000000ULL, &error) ==
@@ -428,14 +459,15 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
         CloseHandle(thread);
         CloseHandle(context.start);
         CHECK(conformance->submit_operation(closing_instance, &request,
-                                            &context.instance,
-                                            &error) == URE_RESULT_INVALID_HANDLE);
+                                            &context.instance, &error) ==
+              URE_RESULT_INVALID_HANDLE);
         CHECK(inspect_error(errors, error, URE_RESULT_INVALID_HANDLE) == 0);
         CHECK(instances->retain(closing_instance, &error) ==
               URE_RESULT_INVALID_HANDLE);
         CHECK(inspect_error(errors, error, URE_RESULT_INVALID_HANDLE) == 0);
         CHECK(operations->release(operation, &error) == URE_RESULT_SUCCESS);
-        CHECK(instances->release(closing_instance, &error) == URE_RESULT_SUCCESS);
+        CHECK(instances->release(closing_instance, &error) ==
+              URE_RESULT_SUCCESS);
     }
     for (;;) {
         ure_event_record_t event = {0};
@@ -447,8 +479,8 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
             break;
         CHECK(result == URE_RESULT_SUCCESS);
     }
-    CHECK(conformance->emit_events(instance, 20, URE_EVENT_DIAGNOSTIC, &error) ==
-          URE_RESULT_SUCCESS);
+    CHECK(conformance->emit_events(instance, 20, URE_EVENT_DIAGNOSTIC,
+                                   &error) == URE_RESULT_SUCCESS);
     {
         ure_event_record_t event = {0};
         event.header.type = URE_STRUCTURE_EVENT_RECORD;
@@ -505,7 +537,8 @@ int main(int argc, char** argv) {
     CHECK(runtime != NULL);
     get_manifest = (ure_get_runtime_manifest_fn)GetProcAddress(
         runtime, "ureGetRuntimeManifest");
-    query = (ure_query_interface_fn)GetProcAddress(runtime, "ureQueryInterface");
+    query =
+        (ure_query_interface_fn)GetProcAddress(runtime, "ureQueryInterface");
     CHECK(get_manifest != NULL && query != NULL);
     result = run_lifecycle(get_manifest, query);
     FreeLibrary(runtime);

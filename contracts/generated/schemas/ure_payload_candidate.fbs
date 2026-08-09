@@ -56,4 +56,9 @@ table SharedBlobDescriptor {
   byte_length:ulong (id: 2);
   digest:[ubyte] (id: 3);
   access:uint (id: 4);
+  mapping_handle:ulong (id: 5);
+  digest_algorithm:uint (id: 6);
+  producer_identity:[ubyte] (id: 7);
+  expiration_operation_id:ulong (id: 8);
+  lease_generation:ulong (id: 9);
 }
