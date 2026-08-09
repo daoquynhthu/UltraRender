@@ -43,6 +43,9 @@ class WorkerClient {
     replace_scene(const std::vector<std::uint8_t> &content,
                   std::uint64_t scene_id, std::string &error);
     std::unique_ptr<fb::WorkerEnvelopeT>
+    apply_scene_transaction(const std::vector<std::uint8_t> &payload,
+                            std::string &error);
+    std::unique_ptr<fb::WorkerEnvelopeT>
     render_scene(std::uint64_t scene_id, std::uint64_t session_id,
                  std::string &error);
     std::unique_ptr<fb::WorkerEnvelopeT> release_lease(std::uint64_t lease,

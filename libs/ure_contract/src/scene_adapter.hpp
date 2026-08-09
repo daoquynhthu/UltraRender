@@ -7,6 +7,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include <ure/native_scene_ir.hpp>
 
@@ -34,6 +35,23 @@ struct SceneObject final : Object {
     std::shared_ptr<InstanceObject> instance;
     std::shared_ptr<const SceneRevisionData> current;
 };
+
+struct LoadedSceneData {
+    std::shared_ptr<SceneRevisionData> revision;
+    std::vector<native_scene::ValidationDiagnostic> diagnostics;
+};
+
+LoadedSceneData load_scene_blob(const ure_native_scene_blob_t &blob);
+std::shared_ptr<SceneRevisionData> finalize_scene_revision(
+    native_scene::NativeSceneArchive archive,
+    const std::array<std::uint8_t, 32> &blob_digest,
+    std::uint64_t revision,
+    std::uint32_t reset_reason);
+ure_result_t URE_CALL apply_scene_transaction(
+    ure_handle_t scene,
+    const ure_scene_transaction_t *transaction,
+    ure_scene_transaction_result_t *result,
+    ure_handle_t *error) noexcept;
 
 std::shared_ptr<const SceneRevisionData>
 scene_revision(ure_handle_t scene, ure_handle_t *error) noexcept;

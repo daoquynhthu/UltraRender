@@ -310,6 +310,18 @@ std::array<std::uint8_t, 32> sha256(std::string_view domain,
     return output;
 }
 
+std::array<std::uint8_t, 32>
+sha256_raw(std::span<const std::uint8_t> bytes) {
+    AlgorithmHandle algorithm;
+    HashHandle hash(algorithm.get());
+    hash_update(hash.get(), bytes);
+    std::array<std::uint8_t, 32> output{};
+    if (BCryptFinishHash(hash.get(), output.data(),
+                         static_cast<ULONG>(output.size()), 0) < 0)
+        throw std::runtime_error("SHA-256 finalization failed");
+    return output;
+}
+
 std::array<std::uint8_t, 32> file_digest(const std::filesystem::path &path) {
     std::ifstream input(path, std::ios::binary);
     if (!input)

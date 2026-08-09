@@ -8,6 +8,7 @@
 #include <utility>
 
 #include <ure/native_scene_hash.hpp>
+#include <ure/native_scene_uuid.hpp>
 
 #include "native_procedural_internal.hpp"
 
@@ -120,6 +121,8 @@ LoadResult<ProceduralBuildResult> build_procedural_scene(
     try {
         NativeSceneArchive working = make_native_scene_archive(source.document, source.scene);
         working.source_ids = source.source_ids;
+        working.object_uuids = source.object_uuids;
+        working.canonical_camera = source.canonical_camera;
         working.procedural_graph = source.procedural_graph;
         ProceduralBuildResult output;
         if (!working.procedural_graph) {
@@ -214,6 +217,20 @@ LoadResult<ProceduralBuildResult> build_procedural_scene(
         working.source_ids.materials.insert(working.source_ids.materials.end(), fragment.material_ids.begin(), fragment.material_ids.end());
         working.source_ids.instances.insert(working.source_ids.instances.end(), fragment.instance_ids.begin(), fragment.instance_ids.end());
         working.source_ids.quad_lights.insert(working.source_ids.quad_lights.end(), fragment.quad_light_ids.begin(), fragment.quad_light_ids.end());
+        const auto append_uuids = [&](std::vector<Uuid>& identities,
+                                      const std::vector<std::string>& aliases,
+                                      std::string_view kind) {
+            for (const auto& alias : aliases) {
+                identities.push_back(deterministic_object_uuid(
+                    working.document.id, kind, alias));
+            }
+        };
+        append_uuids(working.object_uuids.materials, fragment.material_ids,
+                     "material");
+        append_uuids(working.object_uuids.instances, fragment.instance_ids,
+                     "instance");
+        append_uuids(working.object_uuids.quad_lights,
+                     fragment.quad_light_ids, "quad_light");
         working.procedural_graph.reset();
         const ValidationReport final_validation = validate_scene_ir_archive(working);
         if (!final_validation.ok()) { LoadResult<ProceduralBuildResult> result; result.diagnostics = final_validation.diagnostics; return result; }

@@ -270,6 +270,67 @@ bool RuntimeClient::replace_scene(const SceneRequest &request,
     return true;
 }
 
+bool RuntimeClient::apply_scene_transaction(
+    const SceneTransactionRequest &request, SceneTransactionSnapshot &snapshot,
+    RuntimeFailure &failure) {
+    if (!impl_->scene || request.scene_id != impl_->scene_id) {
+        failure = {URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE, 402,
+                   "worker scene identity is unknown"};
+        return false;
+    }
+    ure_scene_transaction_t transaction{};
+    transaction.header = {URE_STRUCTURE_SCENE_TRANSACTION,
+                          sizeof(transaction), nullptr};
+    std::copy(request.transaction_id.begin(), request.transaction_id.end(),
+              transaction.transaction_id.bytes);
+    transaction.base_revision = request.base_revision;
+    transaction.payload_schema = URE_PAYLOAD_SCENE_TRANSACTION;
+    transaction.payload_version_major = 1;
+    transaction.max_operation_count = request.max_operation_count;
+    transaction.max_payload_bytes = request.max_payload_bytes;
+    transaction.payload = {request.payload.data(), request.payload.size()};
+    std::copy(request.payload_digest.begin(), request.payload_digest.end(),
+              transaction.payload_digest.bytes);
+    snapshot = {};
+    snapshot.result.header = {URE_STRUCTURE_SCENE_TRANSACTION_RESULT,
+                              sizeof(snapshot.result), nullptr};
+    ure_handle_t error_handle{};
+    ure_result_t result = impl_->scenes->apply_transaction(
+        impl_->scene, &transaction, &snapshot.result, &error_handle);
+    const bool conflict = result == URE_RESULT_REVISION_CONFLICT;
+    if (result != URE_RESULT_BUFFER_TOO_SMALL &&
+        !(conflict && snapshot.result.result_required != 0)) {
+        impl_->error(result, error_handle, failure);
+        return false;
+    }
+    if (error_handle) {
+        impl_->errors->release(error_handle);
+        error_handle = {};
+    }
+    snapshot.payload.resize(
+        static_cast<std::size_t>(snapshot.result.result_required));
+    snapshot.result = {};
+    snapshot.result.header = {URE_STRUCTURE_SCENE_TRANSACTION_RESULT,
+                              sizeof(snapshot.result), nullptr};
+    snapshot.result.result_payload = {snapshot.payload.data(),
+                                      snapshot.payload.size()};
+    result = impl_->scenes->apply_transaction(impl_->scene, &transaction,
+                                              &snapshot.result, &error_handle);
+    if (result == URE_RESULT_REVISION_CONFLICT) {
+        snapshot.payload.resize(
+            static_cast<std::size_t>(snapshot.result.result_written));
+        impl_->error(result, error_handle, failure);
+        return false;
+    }
+    if (result != URE_RESULT_SUCCESS) {
+        impl_->error(result, error_handle, failure);
+        return false;
+    }
+    snapshot.payload.resize(
+        static_cast<std::size_t>(snapshot.result.result_written));
+    return true;
+}
+
 bool RuntimeClient::render_scene(const ObjectiveRequest &request,
                                  FrameSnapshot &snapshot,
                                  RuntimeFailure &failure) {

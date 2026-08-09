@@ -21,7 +21,7 @@ The approved architecture is [`Public_API_ABI_Architecture.md`](Public_API_ABI_A
 Current PB cursor:
 
 ```text
-PB.6 — Persistent UUID transactions and canonical camera extension
+PB.7 — Mixed-version, security, packaging, and external-client closure
 ```
 
 The HR route is suspended after completed HR.2. `HR.3` resumes only after PB.8 or an explicit root-PLAN revision. PB establishes the carrier; it does not promote learned proposals, reconstruction, world state, material graph, wave optics, or solver functionality to stable extensions.
@@ -340,23 +340,25 @@ scripts/
 
 **Outcome:** Common editor changes use stable semantic identities and atomic base-revision transactions, while unsupported changes report full reload or rejection explicitly.
 
-**Files:** new versioned native-scene UUID fields/schemas and migration tool updates; `transaction_adapter.cpp`; `ure_scene_transaction_candidate.fbs`; `test_scene_transactions.cpp`; Phase Q schema baselines and fixtures.
+**Files:** versioned native-scene UUID fields/schemas and migration tooling; `scene_transaction.cpp`; additive transaction/camera tables in `ure_scene_candidate.fbs`; direct/worker transaction tests; Phase Q schema baselines and fixtures.
 
 **Interfaces produced:** Core transaction envelope; `ure.scene.camera.v1`, `ure.scene.transform.v1`, and bounded baseline edit schemas; commit result with strategy/reset/rebuilt-resource details.
 
 **Execution checklist:**
 
-- [ ] Add a canonical RFC 9562 UUID byte field to editable native objects, preserve legacy source IDs as non-authoritative aliases, migrate deterministically, and reject duplicates.
-- [ ] Freeze UUID byte/text conversion, save/load/package/undo/replay preservation, and generation policy with cross-language golden fixtures.
-- [ ] Implement transaction UUID, base scene revision, ordered schema-tagged operations, required capabilities, and client metadata.
-- [ ] Validate all operations and resources before apply; guarantee rollback of scene state, renderer state, revision, and accumulation on any rejection.
-- [ ] Return `HotUpdate`, `PartialRebuild`, `FullReload`, or `Rejected` plus exact reset reason, rebuilt UUIDs/resources, warnings, revision, and semantic digest.
-- [ ] Reject stale base revisions without automatic merge and verify concurrent-client conflict/retry behavior.
-- [ ] Implement the camera extension with one right-handed world transform and one projection truth per schema; convert look-at/FOV authoring conveniences before submission.
-- [ ] Exercise transform, camera, material reference/payload, mesh replacement, add/remove, visibility, light, and environment schemas only where current semantics are exact; capability-gate or full-reload unsupported cases.
-- [ ] Verify transaction replay and full-scene replacement produce the same semantic digest and frame identity for deterministic fixtures.
+- [x] Add a canonical RFC 9562 UUID byte field to editable native objects, preserve legacy source IDs as non-authoritative aliases, migrate deterministically, and reject duplicates.
+- [x] Freeze UUID byte/text conversion, save/load/package/undo/replay preservation, and generation policy with cross-language golden fixtures.
+- [x] Implement transaction UUID, base scene revision, ordered schema-tagged operations, required capabilities, and client metadata.
+- [x] Validate all operations and resources before apply; guarantee rollback of scene state, renderer state, revision, and accumulation on any rejection.
+- [x] Return `HotUpdate`, `PartialRebuild`, `FullReload`, or `Rejected` plus exact reset reason, rebuilt UUIDs/resources, warnings, revision, and semantic digest.
+- [x] Reject stale base revisions without automatic merge and verify concurrent-client conflict/retry behavior.
+- [x] Implement the camera extension with one right-handed world transform and one projection truth per schema; convert look-at/FOV authoring conveniences before submission.
+- [x] Exercise transform, camera, material reference/payload, mesh replacement, add/remove, visibility, light, and environment schemas only where current semantics are exact; capability-gate or full-reload unsupported cases.
+- [x] Verify transaction replay and full-scene replacement produce the same semantic digest and frame identity for deterministic fixtures.
 
 **Completion evidence:** no public edit uses vector indices; revision conflicts and rollback are deterministic; canonical camera fields cannot disagree; full reload remains explicit and correct.
+
+**Recorded evidence:** SceneIR schema 2 persists RFC 9562 UUID bytes for every editable object, retains source IDs only as aliases, and deterministically migrates schema 1 through UUIDv8/SHA-256 with duplicate and dangling-reference rejection. The 180-entry Candidate registry (digest `0e56eea2d03b2528ceefe2f686de3b63510d956738ee19cf107835abb297f554`) generates the additive transaction envelope, result layout, operation identities and schema while retaining PB.5 scene-schema conformance. The Scene table and product worker apply bounded UUID/base-revision transactions atomically, return explicit hot/partial/full/rejected strategies, expose retry revision on conflicts, and preserve the prior revision on rejection. Exact transform, canonical physical camera, material/mesh references, URI payload, object add/remove, light and environment edits are implemented; visibility and binary mesh replacement require an explicit full-scene fallback or reject. Golden UUID vectors, direct external-C++ ABI, worker routing, rollback/conflict/retry, canonical camera, full-reload fallback, semantic replay and rendered frame-identity parity are gated. The maintained Release gate passes 95/95. All artifacts remain Candidate 0.1 with no compatibility promise.
 
 ## 10. PB.7 — Mixed-version, security, packaging, and external-client closure
 

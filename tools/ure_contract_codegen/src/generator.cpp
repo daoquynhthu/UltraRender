@@ -400,6 +400,37 @@ typedef struct ure_native_scene_blob_t {
     uint64_t reserved[2];
 } ure_native_scene_blob_t;
 
+typedef struct ure_scene_transaction_t {
+    ure_input_header_t header;
+    ure_uuid_t transaction_id;
+    uint64_t base_revision;
+    uint32_t payload_schema;
+    uint32_t payload_version_major;
+    uint32_t payload_version_minor;
+    uint32_t max_operation_count;
+    uint64_t max_payload_bytes;
+    ure_byte_span_t payload;
+    ure_digest256_t payload_digest;
+    uint64_t reserved[2];
+} ure_scene_transaction_t;
+
+typedef struct ure_scene_transaction_result_t {
+    ure_output_header_t header;
+    ure_uuid_t transaction_id;
+    uint32_t strategy;
+    uint32_t reset_reason;
+    uint64_t base_revision;
+    uint64_t resulting_revision;
+    ure_digest256_t revision_identity;
+    ure_digest256_t semantic_digest;
+    uint32_t applied_operation_count;
+    uint32_t warning_count;
+    uint64_t result_required;
+    uint64_t result_written;
+    ure_mutable_byte_span_t result_payload;
+    uint64_t reserved[2];
+} ure_scene_transaction_result_t;
+
 typedef struct ure_scene_validation_result_t {
     ure_output_header_t header;
     ure_bool32_t valid;
@@ -531,6 +562,7 @@ typedef struct ure_scene_interface_t {
     ure_result_t (URE_CALL *retain)(ure_handle_t scene, ure_handle_t *error);
     ure_result_t (URE_CALL *release)(ure_handle_t scene, ure_handle_t *error);
     ure_result_t (URE_CALL *get_revision)(ure_handle_t scene, ure_scene_revision_info_t *revision, ure_handle_t *error);
+    ure_result_t (URE_CALL *apply_transaction)(ure_handle_t scene, const ure_scene_transaction_t *transaction, ure_scene_transaction_result_t *result, ure_handle_t *error);
 } ure_scene_interface_t;
 
 typedef struct ure_session_interface_t {
@@ -659,6 +691,33 @@ void generate_contract_package(const Registry &registry,
             {{"path", std::string("schemas/") + std::string(name)}, {"sha256", sha256_file(path)}});
     }
     write_text(output_directory / "runtime_manifest_candidate.json", manifest.dump(2) + "\n");
+
+    nlohmann::json uuid_golden{
+        {"schema", "ure.scene.uuid-golden/2.0"},
+        {"publication_state", "Candidate"},
+        {"byte_order", "RFC9562 network order"},
+        {"text_format", "lower-case hyphenated"},
+        {"generation", "UUIDv8(SHA-256, document-id, object-kind, legacy-alias)"},
+        {"vectors", nlohmann::json::array()}};
+    const std::array uuid_vectors{
+        std::array<std::string_view, 4>{"scene/full", "instance",
+                                        "instance/00000000",
+                                        "cb425169-163a-8869-8c5c-7f9db58451a8"},
+        std::array<std::string_view, 4>{"scene/full", "mesh",
+                                        "mesh/00000000",
+                                        "3fce6c4b-7d54-8257-9928-294e133531ac"},
+        std::array<std::string_view, 4>{"scene/full", "camera", "camera",
+                                        "1f4acf3c-eeb0-89c0-aa1a-0671cb431d63"}};
+    for (const auto &vector : uuid_vectors) {
+        uuid_golden["vectors"].push_back(
+            {{"document_id", vector[0]},
+             {"object_kind", vector[1]},
+             {"legacy_alias", vector[2]},
+             {"canonical_text", vector[3]},
+             {"canonical_bytes", uuid_bytes(vector[3])}});
+    }
+    write_text(output_directory / "scene_uuid_v2_golden.json",
+               uuid_golden.dump(2) + "\n");
 
     nlohmann::json scenario_manifest{
         {"schema", "ure.public.mock-scenarios/0.1"},

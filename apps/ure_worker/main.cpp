@@ -232,6 +232,35 @@ bool objective_request(const fb::PublicScenePayload &payload,
     return true;
 }
 
+bool transaction_request(std::span<const std::uint8_t> bytes,
+                         SceneTransactionRequest &request) {
+    const auto *payload = scene_payload(
+        bytes, fb::ScenePayloadKind::SceneTransactionRequest);
+    if (!payload || !payload->transaction_request())
+        return false;
+    const auto &source = *payload->transaction_request();
+    if (!source.transaction_uuid() || !source.transaction_uuid()->bytes() ||
+        source.transaction_uuid()->bytes()->size() !=
+            request.transaction_id.size() ||
+        !source.operations() || source.operations()->empty() ||
+        source.max_operation_count() == 0 ||
+        source.operations()->size() > source.max_operation_count() ||
+        source.max_payload_bytes() == 0 ||
+        bytes.size() > source.max_payload_bytes())
+        return false;
+    request = {};
+    std::copy(source.transaction_uuid()->bytes()->begin(),
+              source.transaction_uuid()->bytes()->end(),
+              request.transaction_id.begin());
+    request.scene_id = source.scene_id();
+    request.base_revision = source.base_revision();
+    request.max_operation_count = source.max_operation_count();
+    request.max_payload_bytes = source.max_payload_bytes();
+    request.payload.assign(bytes.begin(), bytes.end());
+    request.payload_digest = sha256_raw(bytes);
+    return true;
+}
+
 std::vector<std::uint8_t>
 revision_payload(const SceneRevisionSnapshot &snapshot) {
     fb::PublicScenePayloadT payload;
@@ -553,6 +582,37 @@ int run_worker(const Arguments &arguments) {
             } else {
                 response.payload_schema = URE_PAYLOAD_SCENE_REVISION;
                 response.payload = revision_payload(revision);
+                response.declared_payload_bytes = response.payload.size();
+            }
+        } else if (request->operation_kind() ==
+                       URE_OPERATION_APPLY_SCENE_TRANSACTION &&
+                   request->payload_schema() == URE_PAYLOAD_SCENE_TRANSACTION) {
+            const std::span payload(request->payload()->data(),
+                                    request->payload()->size());
+            SceneTransactionRequest transaction;
+            SceneTransactionSnapshot snapshot;
+            if (!transaction_request(payload, transaction)) {
+                response.result = fb::ResultCode::MalformedData;
+                failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 310,
+                           "scene transaction request is malformed"};
+                response.error = error_descriptor(failure);
+            } else if (transaction.payload.size() > negotiated_blob_bytes) {
+                response.result = fb::ResultCode::Backpressure;
+                failure = {URE_RESULT_BACKPRESSURE, URE_ERROR_DOMAIN_CORE, 311,
+                           "scene transaction exceeds the negotiated blob budget"};
+                response.error = error_descriptor(failure);
+            } else if (!runtime.apply_scene_transaction(transaction, snapshot,
+                                                        failure)) {
+                response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+                if (!snapshot.payload.empty()) {
+                    response.payload_schema = URE_PAYLOAD_SCENE_TRANSACTION;
+                    response.payload = std::move(snapshot.payload);
+                    response.declared_payload_bytes = response.payload.size();
+                }
+            } else {
+                response.payload_schema = URE_PAYLOAD_SCENE_TRANSACTION;
+                response.payload = std::move(snapshot.payload);
                 response.declared_payload_bytes = response.payload.size();
             }
         } else if (request->operation_kind() == URE_OPERATION_RENDER_SESSION &&

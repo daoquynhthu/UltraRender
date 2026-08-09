@@ -1,7 +1,7 @@
 {
   "schema": "ure.pb.old-client-fixture/1.0",
   "classification": "LegacyExperimentalMigrationBaseline",
-  "baseline_commit": "867c03d34039505bc03aa4539309618e44d8dad2",
+  "baseline_commit": "7c4a301b462c295613d786cd581a6730ebfac39f",
   "platform": "windows-x86_64",
   "source": "legacy_c_client.c",
   "source_sha256": "CF970FC14B2414289F139BE5256DF775BCA2B9B606CF83CB2DA0EC1D69BB3944",
@@ -13,7 +13,7 @@
   "language": "C11",
   "compile_flags": ["/TC", "/std:c11", "/W4", "/WX", "/INCREMENTAL:NO"],
   "runtime_baseline": "build_modular_x64/pyure/pyure_native.dll",
-  "runtime_sha256": "A58E494A5DB97BF33D8D77D48527741C8F1D5EB3EB3296888538AE6F6510FB23",
+  "runtime_sha256": "22244F8555F8AC5E68D5B12EA6627BDDAB60AC96BD050F684773C3395D145E9F",
   "required_exports": ["ure_aov_channel_count"],
   "expected_behavior": "URE_AOV_BEAUTY returns three channels",
   "compatibility_promise": "None; migration evidence only"

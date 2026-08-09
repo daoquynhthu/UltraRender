@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include <flatbuffers/flatbuffers.h>
 #include <flatbuffers/verifier.h>
 #include <ultrarender/ure_loader.h>
 
@@ -122,7 +123,7 @@ bool direct(const std::filesystem::path &runtime_path,
         blob.source_kind = URE_SCENE_SOURCE_MEMORY;
         blob.format = URE_SCENE_FORMAT_URESCENE;
         blob.bytes = {content.data(), content.size()};
-        blob.schema_max_major = 1;
+        blob.schema_max_major = 2;
         blob.budget = scene_budget();
         output.revision.header = {URE_STRUCTURE_SCENE_REVISION_INFO,
                                   sizeof(output.revision), nullptr};
@@ -242,6 +243,54 @@ bool equal(const std::vector<std::uint8_t> &wire,
            std::equal(wire.begin(), wire.end(), value.bytes);
 }
 
+std::vector<std::uint8_t> transaction_payload(std::uint64_t base_revision,
+                                              bool unsupported) {
+    const std::array<std::uint8_t, 16> target{
+        0xcb, 0x42, 0x51, 0x69, 0x16, 0x3a, 0x88, 0x69,
+        0x8c, 0x5c, 0x7f, 0x9d, 0xb5, 0x84, 0x51, 0xa8};
+    std::array<std::uint8_t, 16> identity{
+        0x01, 0x94, 0xc3, 0xf2, 0x7b, 0x5e, 0x7a, 0x11,
+        0x8d, 0x32, 0x12, 0x34, 0x56, 0x78, 0xab, 0xc0};
+    identity.back() = static_cast<std::uint8_t>(
+        base_revision + (unsupported ? 32U : 0U));
+    auto operation = std::make_unique<fb::SceneEditOperationT>();
+    operation->target_uuid = std::make_unique<fb::UuidValueT>();
+    operation->target_uuid->bytes.assign(target.begin(), target.end());
+    if (unsupported) {
+        operation->kind = fb::SceneEditKind::Visibility;
+        operation->visibility = std::make_unique<fb::VisibilityEditT>();
+        operation->visibility->visible = false;
+    } else {
+        operation->kind = fb::SceneEditKind::Transform;
+        operation->transform = std::make_unique<fb::TransformEditT>();
+        operation->transform->position =
+            std::make_unique<fb::EditVec3>(4.0, 5.0, 6.0);
+        operation->transform->scale =
+            std::make_unique<fb::EditVec3>(1.0, 1.0, 1.0);
+        operation->transform->rotation =
+            std::make_unique<fb::EditQuat>(1.0, 0.0, 0.0, 0.0);
+    }
+    fb::PublicScenePayloadT payload;
+    payload.kind = fb::ScenePayloadKind::SceneTransactionRequest;
+    payload.transaction_request =
+        std::make_unique<fb::SceneTransactionRequestT>();
+    auto &request = *payload.transaction_request;
+    request.transaction_uuid = std::make_unique<fb::UuidValueT>();
+    request.transaction_uuid->bytes.assign(identity.begin(), identity.end());
+    request.scene_id = 1;
+    request.base_revision = base_revision;
+    request.operations.push_back(std::move(operation));
+    request.max_operation_count = 16;
+    request.max_payload_bytes = UINT64_C(1048576);
+    request.client_id = "pb6.worker.cpp";
+    request.required_capabilities = {URE_CAPABILITY_NATIVE_SCENE};
+    flatbuffers::FlatBufferBuilder builder;
+    fb::FinishPublicScenePayloadBuffer(
+        builder, fb::CreatePublicScenePayload(builder, &payload));
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
+}
+
 int fail(int line, const std::string &error = {}) {
     std::cerr << "scene worker check failed at line " << line;
     if (!error.empty())
@@ -265,7 +314,8 @@ int fail(int line, const std::string &error = {}) {
 int run(const std::filesystem::path &worker,
         const std::filesystem::path &runtime,
         const std::filesystem::path &conformance_runtime,
-        const std::filesystem::path &fixture) {
+        const std::filesystem::path &fixture,
+        const std::filesystem::path &transaction_fixture) {
     using namespace ure::contract_test;
     const auto content = read_file(fixture);
     CHECK(!content.empty());
@@ -340,13 +390,58 @@ int run(const std::filesystem::path &worker,
     CHECK_ERROR(client.shutdown(error));
     std::uint32_t exit_code{};
     CHECK(client.wait(5000, exit_code) && exit_code == 0);
+    const auto transaction_content = read_file(transaction_fixture);
+    CHECK(!transaction_content.empty());
+    WorkerClient transaction_client;
+    CHECK_ERROR(transaction_client.launch(worker, runtime, error));
+    CHECK_ERROR(transaction_client.handshake(error));
+    auto transaction_scene =
+        transaction_client.replace_scene(transaction_content, 0, error);
+    CHECK_ERROR(transaction_scene &&
+                transaction_scene->result == fb::ResultCode::Success);
+    auto rolled_back = transaction_client.apply_scene_transaction(
+        transaction_payload(1, true), error);
+    CHECK_ERROR(rolled_back &&
+                rolled_back->result == fb::ResultCode::CapabilityUnavailable);
+    auto updated = transaction_client.apply_scene_transaction(
+        transaction_payload(1, false), error);
+    CHECK_ERROR(updated && updated->result == fb::ResultCode::Success &&
+                updated->payload_schema == URE_PAYLOAD_SCENE_TRANSACTION);
+    flatbuffers::Verifier transaction_verifier(
+        updated->payload.data(), updated->payload.size(), 64, 100000);
+    CHECK(fb::VerifyPublicScenePayloadBuffer(transaction_verifier));
+    const auto *transaction =
+        fb::GetPublicScenePayload(updated->payload.data());
+    CHECK(transaction && transaction->transaction_result() &&
+          transaction->transaction_result()->base_revision() == 1 &&
+          transaction->transaction_result()->resulting_revision() == 2 &&
+          transaction->transaction_result()->strategy() ==
+              URE_SCENE_UPDATE_HOT_UPDATE &&
+          !transaction->transaction_result()->renderer_rebuild());
+    auto conflict = transaction_client.apply_scene_transaction(
+        transaction_payload(1, false), error);
+    CHECK_ERROR(conflict &&
+                conflict->result == fb::ResultCode::RevisionConflict &&
+                conflict->payload_schema == URE_PAYLOAD_SCENE_TRANSACTION &&
+                !conflict->payload.empty());
+    flatbuffers::Verifier conflict_verifier(
+        conflict->payload.data(), conflict->payload.size(), 64, 100000);
+    CHECK(fb::VerifyPublicScenePayloadBuffer(conflict_verifier));
+    const auto *conflict_payload =
+        fb::GetPublicScenePayload(conflict->payload.data());
+    CHECK(conflict_payload && conflict_payload->transaction_result() &&
+          conflict_payload->transaction_result()->strategy() ==
+              URE_SCENE_UPDATE_REJECTED &&
+          conflict_payload->transaction_result()->retry_base_revision() == 2);
+    CHECK_ERROR(transaction_client.shutdown(error));
+    CHECK(transaction_client.wait(5000, exit_code) && exit_code == 0);
     return 0;
 }
 
 }
 
 int main(int argc, char **argv) {
-    if (argc != 5)
+    if (argc != 6)
         return 1;
-    return run(argv[1], argv[2], argv[3], argv[4]);
+    return run(argv[1], argv[2], argv[3], argv[4], argv[5]);
 }

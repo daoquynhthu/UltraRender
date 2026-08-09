@@ -57,6 +57,21 @@ struct SceneRevisionSnapshot {
     std::uint64_t scene_id{};
 };
 
+struct SceneTransactionRequest {
+    std::array<std::uint8_t, 16> transaction_id{};
+    std::uint64_t scene_id{};
+    std::uint64_t base_revision{};
+    std::uint32_t max_operation_count{};
+    std::uint64_t max_payload_bytes{};
+    std::vector<std::uint8_t> payload;
+    std::array<std::uint8_t, 32> payload_digest{};
+};
+
+struct SceneTransactionSnapshot {
+    ure_scene_transaction_result_t result{};
+    std::vector<std::uint8_t> payload;
+};
+
 struct ObjectiveRequest {
     std::uint64_t scene_id{};
     std::uint64_t session_id{};
@@ -90,6 +105,9 @@ class RuntimeClient {
     bool replace_scene(const SceneRequest &request,
                        SceneRevisionSnapshot &revision,
                        RuntimeFailure &failure);
+    bool apply_scene_transaction(const SceneTransactionRequest &request,
+                                 SceneTransactionSnapshot &snapshot,
+                                 RuntimeFailure &failure);
     bool render_scene(const ObjectiveRequest &request, FrameSnapshot &snapshot,
                       RuntimeFailure &failure);
     const std::array<std::uint8_t, 32> &registry_digest() const noexcept;

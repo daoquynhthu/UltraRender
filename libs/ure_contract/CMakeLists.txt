@@ -13,6 +13,7 @@ foreach(source
     ${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/frame_adapter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/scene_adapter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/scene_transaction.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/session_adapter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime_adapter.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime_objects.hpp
@@ -37,9 +38,10 @@ add_library(ure_contract SHARED
     src/lifecycle.cpp
     src/frame_adapter.cpp
     src/scene_adapter.cpp
+    src/scene_transaction.cpp
     src/session_adapter.cpp
     ultrarender_runtime_candidate.def)
-target_link_libraries(ure_contract PRIVATE ure_public ure_core ure_sceneio bcrypt)
+target_link_libraries(ure_contract PRIVATE ure_public ure_contract_schema ure_core ure_sceneio bcrypt)
 target_include_directories(ure_contract PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}/generated
@@ -65,9 +67,10 @@ add_library(ure_contract_conformance SHARED
     src/lifecycle.cpp
     src/frame_adapter.cpp
     src/scene_adapter.cpp
+    src/scene_transaction.cpp
     src/session_adapter.cpp
     ultrarender_runtime_candidate.def)
-target_link_libraries(ure_contract_conformance PRIVATE ure_public ure_core ure_sceneio bcrypt)
+target_link_libraries(ure_contract_conformance PRIVATE ure_public ure_contract_schema ure_core ure_sceneio bcrypt)
 target_include_directories(ure_contract_conformance PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}/generated

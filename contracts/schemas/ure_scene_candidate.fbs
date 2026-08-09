@@ -71,11 +71,167 @@ table RenderObjectiveRequest {
   payload_digest:[ubyte] (id: 13);
 }
 
+table UuidValue {
+  bytes:[ubyte] (id: 0);
+}
+
+struct EditVec3 {
+  x:double;
+  y:double;
+  z:double;
+}
+
+struct EditQuat {
+  w:double;
+  x:double;
+  y:double;
+  z:double;
+}
+
+enum SceneEditKind:uint {
+  Transform = 2147483649,
+  Camera = 2147483650,
+  MaterialReference = 2147483651,
+  PayloadReplace = 2147483652,
+  MeshReference = 2147483653,
+  AddObject = 2147483654,
+  RemoveObject = 2147483655,
+  Visibility = 2147483656,
+  Light = 2147483657,
+  Environment = 2147483658,
+  MeshReplace = 2147483659
+}
+
+enum SceneObjectKind:uint {
+  Instance = 2147483660,
+  Sphere = 2147483661,
+  QuadLight = 2147483662,
+  Material = 2147483663,
+  Mesh = 2147483664,
+  Image = 2147483665,
+  Texture = 2147483666,
+  Camera = 2147483667,
+  Environment = 2147483668
+}
+
+table TransformEdit {
+  position:EditVec3 (id: 0);
+  scale:EditVec3 (id: 1);
+  rotation:EditQuat (id: 2);
+}
+
+table CameraEdit {
+  world_from_camera:[double] (id: 0);
+  sensor_width_m:double (id: 1);
+  sensor_height_m:double (id: 2);
+  focal_length_m:double (id: 3);
+  aperture_diameter_m:double (id: 4);
+  focus_distance_m:double (id: 5);
+  lens_shift_x_m:double (id: 6);
+  lens_shift_y_m:double (id: 7);
+  shutter_open_s:double (id: 8);
+  shutter_close_s:double (id: 9);
+  exposure_scale:double = 1.0 (id: 10);
+}
+
+table ReferenceEdit {
+  referenced_uuid:UuidValue (id: 0);
+}
+
+table PayloadReplaceEdit {
+  payload_schema:uint (id: 0);
+  payload_version_major:uint (id: 1);
+  payload_version_minor:uint (id: 2);
+  payload:[ubyte] (id: 3);
+  payload_digest:[ubyte] (id: 4);
+  uri_utf8:string (id: 5);
+}
+
+table ObjectEdit {
+  object_kind:SceneObjectKind = Instance (id: 0);
+  alias:string (id: 1);
+  name:string (id: 2);
+  transform:TransformEdit (id: 3);
+  geometry_a:EditVec3 (id: 4);
+  geometry_b:EditVec3 (id: 5);
+  geometry_c:EditVec3 (id: 6);
+  scalar_a:double (id: 7);
+  material_uuid:UuidValue (id: 8);
+  mesh_uuid:UuidValue (id: 9);
+}
+
+table VisibilityEdit {
+  visible:bool = true (id: 0);
+}
+
+table LightEdit {
+  corner:EditVec3 (id: 0);
+  edge_u:EditVec3 (id: 1);
+  edge_v:EditVec3 (id: 2);
+  material_uuid:UuidValue (id: 3);
+}
+
+table EnvironmentEdit {
+  background:EditVec3 (id: 0);
+  medium_density:double (id: 1);
+  medium_anisotropy:double (id: 2);
+  medium_scattering:EditVec3 (id: 3);
+  medium_absorption:EditVec3 (id: 4);
+  medium_max_distance:double (id: 5);
+}
+
+table SceneEditOperation {
+  kind:SceneEditKind = Transform (id: 0);
+  target_uuid:UuidValue (id: 1);
+  transform:TransformEdit (id: 2);
+  camera:CameraEdit (id: 3);
+  reference:ReferenceEdit (id: 4);
+  payload_replace:PayloadReplaceEdit (id: 5);
+  object:ObjectEdit (id: 6);
+  visibility:VisibilityEdit (id: 7);
+  light:LightEdit (id: 8);
+  environment:EnvironmentEdit (id: 9);
+  mesh_replace:PayloadReplaceEdit (id: 10);
+}
+
+table SceneTransactionRequest {
+  transaction_uuid:UuidValue (id: 0);
+  scene_id:ulong (id: 1);
+  base_revision:ulong (id: 2);
+  operations:[SceneEditOperation] (id: 3);
+  max_operation_count:uint (id: 4);
+  max_payload_bytes:ulong (id: 5);
+  client_id:string (id: 6);
+  client_metadata:[ubyte] (id: 7);
+  fallback_scene:NativeSceneRequest (id: 8);
+  required_capabilities:[uint] (id: 9);
+}
+
+table SceneTransactionResult {
+  transaction_uuid:UuidValue (id: 0);
+  scene_id:ulong (id: 1);
+  base_revision:ulong (id: 2);
+  resulting_revision:ulong (id: 3);
+  strategy:uint (id: 4);
+  reset_reason:uint (id: 5);
+  rebuilt_object_uuids:[UuidValue] (id: 6);
+  rebuilt_resource_ids:[string] (id: 7);
+  warnings:[string] (id: 8);
+  revision_identity:[ubyte] (id: 9);
+  semantic_digest:[ubyte] (id: 10);
+  applied_operation_count:uint (id: 11);
+  retry_base_revision:ulong (id: 12);
+  accumulation_reset:bool (id: 13);
+  renderer_rebuild:bool (id: 14);
+}
+
 enum ScenePayloadKind:ubyte {
   None = 0,
   NativeSceneRequest = 1,
   SceneRevision = 2,
-  RenderObjectiveRequest = 3
+  RenderObjectiveRequest = 3,
+  SceneTransactionRequest = 4,
+  SceneTransactionResult = 5
 }
 
 table PublicScenePayload {
@@ -83,6 +239,8 @@ table PublicScenePayload {
   scene_request:NativeSceneRequest (id: 1);
   scene_revision:SceneRevisionDescriptor (id: 2);
   objective:RenderObjectiveRequest (id: 3);
+  transaction_request:SceneTransactionRequest (id: 4);
+  transaction_result:SceneTransactionResult (id: 5);
 }
 
 root_type PublicScenePayload;

@@ -327,28 +327,42 @@ void validate_compatibility(const std::filesystem::path& path, const Registry& r
 
 void validate_schemas(const std::filesystem::path& schema_directory) {
     const std::array names{"ure_payload_candidate.fbs", "ure_frame_candidate.fbs", "ure_scene_candidate.fbs", "ure_worker_candidate.fbs"};
-    const std::regex table_pattern(R"(table\s+[A-Za-z0-9_]+\s*\{([^}]*)\})");
     const std::regex field_pattern(R"(^\s*[A-Za-z0-9_]+\s*:[^;]+\(id:\s*([0-9]+)\)\s*;\s*$)");
     for (const std::string_view name : names) {
         const std::string text = read_text(schema_directory / name);
-        for (std::sregex_iterator table(text.begin(), text.end(), table_pattern), end; table != end; ++table) {
-            std::istringstream fields((*table)[1].str());
-            std::string line;
-            std::set<unsigned> ids;
-            while (std::getline(fields, line)) {
-                if (line.find_first_not_of(" \t\r") == std::string::npos) continue;
-                std::smatch field;
-                if (!std::regex_match(line, field, field_pattern) || !ids.insert(std::stoul(field[1].str())).second) {
-                    throw std::runtime_error("Schema field lacks a unique explicit ID in " + std::string(name));
-                }
-            }
+        std::istringstream lines(text);
+        std::string line;
+        std::set<unsigned> ids;
+        bool in_table = false;
+        const auto finish_table = [&] {
             unsigned expected = 0;
             for (const unsigned id : ids) {
                 if (id != expected++) {
                     throw std::runtime_error("Schema field IDs are not contiguous in " + std::string(name));
                 }
             }
+            ids.clear();
+        };
+        while (std::getline(lines, line)) {
+            const auto first = line.find_first_not_of(" \t\r");
+            if (first == std::string::npos) continue;
+            if (!in_table) {
+                in_table = line.compare(first, 6, "table ") == 0 &&
+                           line.find('{', first + 6) != std::string::npos;
+                continue;
+            }
+            if (line.find('}', first) != std::string::npos) {
+                finish_table();
+                in_table = false;
+                continue;
+            }
+            std::smatch field;
+            if (!std::regex_match(line, field, field_pattern) ||
+                !ids.insert(std::stoul(field[1].str())).second) {
+                throw std::runtime_error("Schema field lacks a unique explicit ID in " + std::string(name));
+            }
         }
+        if (in_table) throw std::runtime_error("Unterminated schema table in " + std::string(name));
     }
 }
 

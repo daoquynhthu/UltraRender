@@ -110,7 +110,7 @@
       "output_role": "Capabilities, errors, operations, events and immutable frames",
       "translation_path": "Public registry -> contract adapter -> internal renderer services",
       "bypass_status": "None",
-      "bypass_detail": "PB.1-PB.5 provide generated declarations, lifecycle/frame/scene/session tables, the two-export product runtime and a worker that uses only those exports; UUID transactions and remaining adapters continue under PB.6-PB.8",
+      "bypass_detail": "PB.1-PB.6 provide generated declarations, lifecycle/frame/scene/session/transaction tables, the two-export product runtime and a worker that uses only those exports; remaining adapter closure continues under PB.7-PB.8",
       "migration_phase": "PB.1-PB.8",
       "terminal_gate": "PB.8",
       "loss_policy": "Required semantics fail; optional semantics negotiate explicitly",

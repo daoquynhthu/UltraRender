@@ -86,6 +86,11 @@ if(TARGET ure_contract)
     target_include_directories(test_scene_boundary PRIVATE ${UR_PB1_STAGE_DIR}/include)
     add_dependencies(test_scene_boundary ure_public_stage_headers ure_contract)
 
+    add_executable(test_scene_transaction test_scene_transaction.cpp)
+    target_link_libraries(test_scene_transaction PRIVATE
+        ure_public ure_contract_schema bcrypt)
+    add_dependencies(test_scene_transaction ure_public_stage_headers ure_contract)
+
     add_library(worker_test_support STATIC worker_test_client.cpp)
     target_link_libraries(worker_test_support PUBLIC
         ure_public
@@ -113,7 +118,7 @@ if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
     endforeach()
     if(TARGET ure_contract)
-        foreach(target test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary worker_test_support test_worker_protocol test_worker_crash test_scene_worker)
+        foreach(target test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction worker_test_support test_worker_protocol test_worker_crash test_scene_worker)
             target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
         endforeach()
         target_compile_options(test_loader_client PRIVATE /wd4191)
@@ -159,6 +164,11 @@ add_test(
         ${CMAKE_SOURCE_DIR}/contracts/schemas/baseline/0.1/ure_worker_candidate.fbs
         ${CMAKE_SOURCE_DIR}/contracts/schemas/ure_worker_candidate.fbs)
 add_test(
+    NAME test_scene_contract_schema_conform
+    COMMAND ${UR_FLATC_EXECUTABLE} --conform
+        ${CMAKE_SOURCE_DIR}/contracts/schemas/baseline/0.1/ure_scene_candidate.fbs
+        ${CMAKE_SOURCE_DIR}/contracts/schemas/ure_scene_candidate.fbs)
+add_test(
     NAME test_public_loader_header_mirror
     COMMAND ${CMAKE_COMMAND} -E compare_files
         ${CMAKE_SOURCE_DIR}/contracts/generated/include/ultrarender/ure_loader.h
@@ -185,6 +195,22 @@ add_test(
         -File ${CMAKE_CURRENT_SOURCE_DIR}/test_golden_message_mirror.ps1
         -Generated ${CMAKE_SOURCE_DIR}/contracts/generated/golden_messages
         -Fixture ${CMAKE_SOURCE_DIR}/tests/fixtures/contracts/golden_messages)
+add_test(
+    NAME test_scene_uuid_golden
+    COMMAND
+        ${UR_PWSH_EXECUTABLE}
+        -NoProfile
+        -File ${CMAKE_CURRENT_SOURCE_DIR}/test_scene_uuid_golden.ps1
+        -Golden ${CMAKE_SOURCE_DIR}/contracts/generated/scene_uuid_v2_golden.json
+        -Fixture ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb6_scene_transaction_full/base_scene.ure
+        -AdditionalFixture ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb6_scene_transaction/base_scene.ure)
+add_test(
+    NAME test_phase_pb6_static
+    COMMAND
+        ${UR_PWSH_EXECUTABLE}
+        -NoProfile
+        -File ${CMAKE_CURRENT_SOURCE_DIR}/test_phase_pb6_static.ps1
+        -RepoRoot ${CMAKE_SOURCE_DIR})
 add_test(
     NAME test_mock_worker_external_client
     COMMAND external_client
@@ -227,6 +253,11 @@ if(TARGET ure_contract)
             ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb5_public_boundary/single_scene.urepkg
             ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb5_public_boundary/ambiguous_scenes.urepkg)
     add_test(
+        NAME test_scene_transaction
+        COMMAND test_scene_transaction
+            $<TARGET_FILE:ure_contract>
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb6_scene_transaction_full/base_scene.urescene)
+    add_test(
         NAME test_worker_protocol
         COMMAND test_worker_protocol
             $<TARGET_FILE:ure_worker>
@@ -244,7 +275,8 @@ if(TARGET ure_contract)
             $<TARGET_FILE:ure_worker>
             $<TARGET_FILE:ure_contract>
             $<TARGET_FILE:ure_contract_conformance>
-            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene)
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb6_scene_transaction_full/base_scene.urescene)
     add_test(
         NAME test_worker_security
         COMMAND
@@ -262,10 +294,13 @@ set_tests_properties(
     test_public_headers_cpp
     test_contract_codegen_compare
     test_contract_schema_conform
+    test_scene_contract_schema_conform
     test_public_loader_header_mirror
     test_public_registry_header_mirror
     test_contract_codegen_negative
     test_golden_message_mirror
+    test_scene_uuid_golden
+    test_phase_pb6_static
     test_mock_worker_external_client
     PROPERTIES TIMEOUT 60)
 
@@ -277,6 +312,7 @@ if(TARGET ure_contract)
         test_runtime_lifecycle
         test_frame_leases
         test_scene_boundary
+        test_scene_transaction
         test_worker_protocol
         test_worker_crash
         test_scene_worker

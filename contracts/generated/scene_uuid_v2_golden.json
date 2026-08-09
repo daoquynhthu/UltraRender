@@ -1,0 +1,81 @@
+{
+  "byte_order": "RFC9562 network order",
+  "generation": "UUIDv8(SHA-256, document-id, object-kind, legacy-alias)",
+  "publication_state": "Candidate",
+  "schema": "ure.scene.uuid-golden/2.0",
+  "text_format": "lower-case hyphenated",
+  "vectors": [
+    {
+      "canonical_bytes": [
+        203,
+        66,
+        81,
+        105,
+        22,
+        58,
+        136,
+        105,
+        140,
+        92,
+        127,
+        157,
+        181,
+        132,
+        81,
+        168
+      ],
+      "canonical_text": "cb425169-163a-8869-8c5c-7f9db58451a8",
+      "document_id": "scene/full",
+      "legacy_alias": "instance/00000000",
+      "object_kind": "instance"
+    },
+    {
+      "canonical_bytes": [
+        63,
+        206,
+        108,
+        75,
+        125,
+        84,
+        130,
+        87,
+        153,
+        40,
+        41,
+        78,
+        19,
+        53,
+        49,
+        172
+      ],
+      "canonical_text": "3fce6c4b-7d54-8257-9928-294e133531ac",
+      "document_id": "scene/full",
+      "legacy_alias": "mesh/00000000",
+      "object_kind": "mesh"
+    },
+    {
+      "canonical_bytes": [
+        31,
+        74,
+        207,
+        60,
+        238,
+        176,
+        137,
+        192,
+        170,
+        26,
+        6,
+        113,
+        203,
+        67,
+        29,
+        99
+      ],
+      "canonical_text": "1f4acf3c-eeb0-89c0-aa1a-0671cb431d63",
+      "document_id": "scene/full",
+      "legacy_alias": "camera",
+      "object_kind": "camera"
+    }
+  ]
+}

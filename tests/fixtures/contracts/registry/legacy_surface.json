@@ -1,6 +1,6 @@
 {
   "schema": "ure.pb.legacy-surface/1.0",
-  "baseline_commit": "867c03d34039505bc03aa4539309618e44d8dad2",
+  "baseline_commit": "7c4a301b462c295613d786cd581a6730ebfac39f",
   "classification": "LegacyExperimental",
   "header": {
     "path": "libs/ure_core/include/ure/ure_c_api.h",
@@ -18,14 +18,14 @@
   "binary": {
     "target": "pyure_native",
     "relative_path_from_build_dir": "pyure/pyure_native.dll",
-    "bytes": 25686016,
-    "sha256": "A58E494A5DB97BF33D8D77D48527741C8F1D5EB3EB3296888538AE6F6510FB23",
+    "bytes": 25736192,
+    "sha256": "22244F8555F8AC5E68D5B12EA6627BDDAB60AC96BD050F684773C3395D145E9F",
     "reproducible_link": true,
     "reproducibility_flag": "/Brepro",
-    "baseline_refresh_phase": "PB.5",
-    "export_count": 2030,
+    "baseline_refresh_phase": "PB.6",
+    "export_count": 2037,
     "intended_c_export_count": 55,
-    "accidental_cpp_export_count": 1970,
+    "accidental_cpp_export_count": 1977,
     "accidental_other_export_count": 5,
     "automatic_windows_exports": true
   },

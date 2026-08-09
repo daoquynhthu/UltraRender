@@ -111,7 +111,7 @@ static void test_hash_and_validation() {
     CHECK(has_code(validate_scene_document(unknown_extension, registry, limits), "URE-Q-EXT-001"));
 
     SceneDocument bad_major = scene;
-    bad_major.schema_version = {2, 0};
+    bad_major.schema_version = {3, 0};
     CHECK(has_code(validate_scene_document(bad_major, registry, limits), "URE-Q-VERSION-001"));
 
     SceneDocument newer_minor = scene;

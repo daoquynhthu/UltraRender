@@ -27,11 +27,6 @@ namespace {
 
 using Digest = std::array<std::uint8_t, 32>;
 
-struct LoadedScene {
-    std::shared_ptr<SceneRevisionData> revision;
-    std::vector<native_scene::ValidationDiagnostic> diagnostics;
-};
-
 class BudgetError final : public std::runtime_error {
   public:
     using std::runtime_error::runtime_error;
@@ -288,14 +283,14 @@ ure_result_t diagnostic_result(
     return URE_RESULT_SUCCESS;
 }
 
-LoadedScene load(const ure_native_scene_blob_t &blob) {
+LoadedSceneData load(const ure_native_scene_blob_t &blob) {
     if (!valid_budget(blob.budget) || blob.reserved[0] != 0 ||
         blob.reserved[1] != 0 || blob.header.next ||
         blob.schema_min_major > blob.schema_max_major ||
         (blob.schema_min_major == blob.schema_max_major &&
          blob.schema_min_minor > blob.schema_max_minor))
         throw std::invalid_argument("invalid native scene blob descriptor");
-    if (blob.schema_min_major > 1 || blob.schema_max_major < 1)
+    if (blob.schema_min_major > 2 || blob.schema_max_major < 1)
         throw SchemaError("native scene schema range is unsupported");
     const std::string selected = text(blob.package_scene_id);
     const auto validation_limits = limits(blob.budget);
@@ -349,7 +344,7 @@ LoadedScene load(const ure_native_scene_blob_t &blob) {
         throw std::invalid_argument("unknown native scene source kind");
     }
 
-    LoadedScene output;
+    LoadedSceneData output;
     output.diagnostics = loaded.diagnostics;
     if (!loaded.ok() || !loaded.value)
         return output;
@@ -419,7 +414,7 @@ void finish_revision(SceneRevisionData &revision, std::uint64_t number,
         domain_hash("UltraRender.SceneRevision.v1", identity);
 }
 
-void write_validation(const LoadedScene &loaded,
+void write_validation(const LoadedSceneData &loaded,
                       ure_scene_validation_result_t &output) {
     const auto capacity = output.diagnostics_capacity;
     char *const destination = output.diagnostics_data;
@@ -476,7 +471,7 @@ ure_result_t validate_impl(ure_handle_t instance_handle,
         !valid_validation_output(validation))
         return make_error(URE_RESULT_INVALID_ARGUMENT, 401,
                           "invalid scene validation request", error);
-    LoadedScene loaded;
+    LoadedSceneData loaded;
     try {
         loaded = load(*blob);
     } catch (const BudgetError &exception) {
@@ -525,7 +520,7 @@ ure_result_t create_impl(ure_handle_t instance_handle,
         revision->reserved[0] != 0 || revision->reserved[1] != 0)
         return make_error(URE_RESULT_INVALID_ARGUMENT, 407,
                           "invalid scene create request", error);
-    LoadedScene loaded;
+    LoadedSceneData loaded;
     try {
         loaded = load(*blob);
     } catch (const BudgetError &exception) {
@@ -570,7 +565,7 @@ ure_result_t replace_impl(ure_handle_t scene_handle,
         revision->reserved[0] != 0 || revision->reserved[1] != 0)
         return make_error(URE_RESULT_INVALID_ARGUMENT, 412,
                           "invalid scene replacement request", error);
-    LoadedScene loaded;
+    LoadedSceneData loaded;
     try {
         loaded = load(*blob);
     } catch (const BudgetError &exception) {
@@ -674,6 +669,29 @@ ure_result_t URE_CALL get_scene_revision(
 
 }
 
+LoadedSceneData load_scene_blob(const ure_native_scene_blob_t &blob) {
+    return load(blob);
+}
+
+std::shared_ptr<SceneRevisionData> finalize_scene_revision(
+    native_scene::NativeSceneArchive archive,
+    const std::array<std::uint8_t, 32> &blob_digest,
+    std::uint64_t revision_number,
+    std::uint32_t reset_reason) {
+    auto revision = std::make_shared<SceneRevisionData>();
+    revision->archive = std::move(archive);
+    revision->blob_digest = blob_digest;
+    revision->semantic_digest = digest_from_hex(
+        native_scene::scene_ir_semantic_hash(revision->archive));
+    revision->resource_manifest_digest = resource_digest(revision->archive);
+    revision->source_schema_major = revision->archive.document.schema_version.major;
+    revision->source_schema_minor = revision->archive.document.schema_version.minor;
+    revision->resource_count = revision->archive.document.resources.size();
+    revision->object_count = object_count(revision->archive);
+    finish_revision(*revision, revision_number, reset_reason);
+    return revision;
+}
+
 std::shared_ptr<const SceneRevisionData>
 scene_revision(ure_handle_t scene_handle, ure_handle_t *error) noexcept {
     const auto scene = handles().get<SceneObject>(scene_handle, ObjectType::Scene);
@@ -707,7 +725,8 @@ void write_scene_revision(const SceneRevisionData &source,
 const ure_scene_interface_t &scene_interface() noexcept {
     static const ure_scene_interface_t table{
         {sizeof(table), 0, 1}, validate_scene, create_scene, replace_scene,
-        retain_scene, release_scene, get_scene_revision};
+        retain_scene, release_scene, get_scene_revision,
+        apply_scene_transaction};
     return table;
 }
 

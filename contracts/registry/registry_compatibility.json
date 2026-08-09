@@ -653,6 +653,180 @@
       "change_class": "AdditiveCandidate",
       "phase": "PB.5",
       "summary": "Add closed session state"
+    },
+    {
+      "registry_id": 42,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add bounded scene transaction envelope"
+    },
+    {
+      "registry_id": 43,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add extensible scene transaction result"
+    },
+    {
+      "registry_id": 406,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add committed scene transaction event"
+    },
+    {
+      "registry_id": 808,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add scene transaction operation"
+    },
+    {
+      "registry_id": 980,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add hot-update strategy"
+    },
+    {
+      "registry_id": 981,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add partial-rebuild strategy"
+    },
+    {
+      "registry_id": 982,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add full-reload strategy"
+    },
+    {
+      "registry_id": 983,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add rejected update strategy"
+    },
+    {
+      "registry_id": 2147483648,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add versioned experimental scene transaction schema"
+    },
+    {
+      "registry_id": 2147483649,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add transform edit identity"
+    },
+    {
+      "registry_id": 2147483650,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add camera edit identity"
+    },
+    {
+      "registry_id": 2147483651,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add material reference edit identity"
+    },
+    {
+      "registry_id": 2147483652,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add payload replacement edit identity"
+    },
+    {
+      "registry_id": 2147483653,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add mesh reference edit identity"
+    },
+    {
+      "registry_id": 2147483654,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add object insertion edit identity"
+    },
+    {
+      "registry_id": 2147483655,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add object removal edit identity"
+    },
+    {
+      "registry_id": 2147483656,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add visibility edit identity"
+    },
+    {
+      "registry_id": 2147483657,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add light edit identity"
+    },
+    {
+      "registry_id": 2147483658,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add environment edit identity"
+    },
+    {
+      "registry_id": 2147483659,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add mesh payload replacement edit identity"
+    },
+    {
+      "registry_id": 2147483660,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add instance object identity"
+    },
+    {
+      "registry_id": 2147483661,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add sphere object identity"
+    },
+    {
+      "registry_id": 2147483662,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add quad-light object identity"
+    },
+    {
+      "registry_id": 2147483663,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add material object identity"
+    },
+    {
+      "registry_id": 2147483664,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add mesh object identity"
+    },
+    {
+      "registry_id": 2147483665,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add image object identity"
+    },
+    {
+      "registry_id": 2147483666,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add texture object identity"
+    },
+    {
+      "registry_id": 2147483667,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add camera object identity"
+    },
+    {
+      "registry_id": 2147483668,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.6",
+      "summary": "Add environment object identity"
     }
   ],
   "tombstones": []

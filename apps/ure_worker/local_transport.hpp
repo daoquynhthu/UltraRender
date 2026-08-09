@@ -54,6 +54,8 @@ bool create_read_only_shared_mapping(std::span<const std::uint8_t> bytes,
                                      std::string &error);
 std::array<std::uint8_t, 32> sha256(std::string_view domain,
                                     std::span<const std::uint8_t> bytes);
+std::array<std::uint8_t, 32>
+sha256_raw(std::span<const std::uint8_t> bytes);
 std::array<std::uint8_t, 32> file_digest(const std::filesystem::path &path);
 std::array<std::uint8_t, 32> random_identity();
 

@@ -99,7 +99,7 @@ scene_request(const std::vector<std::uint8_t> &content,
     request.source_kind = fb::SceneSourceKind::Memory;
     request.format = fb::SceneFormat::UreScene;
     request.content = content;
-    request.schema_max_major = 1;
+    request.schema_max_major = 2;
     request.scene_id = scene_id;
     request.budget = std::make_unique<fb::SceneBudgetT>();
     request.budget->max_content_bytes = UINT64_C(16777216);
@@ -355,6 +355,17 @@ WorkerClient::replace_scene(const std::vector<std::uint8_t> &content,
     request.payload_schema = URE_PAYLOAD_NATIVE_SCENE;
     request.payload_version_minor = 1;
     request.payload = scene_request(content, scene_id);
+    return impl_->exchange(request, error);
+}
+
+std::unique_ptr<fb::WorkerEnvelopeT> WorkerClient::apply_scene_transaction(
+    const std::vector<std::uint8_t> &payload, std::string &error) {
+    fb::WorkerEnvelopeT request;
+    request.message_kind = fb::MessageKind::OperationRequest;
+    request.operation_kind = URE_OPERATION_APPLY_SCENE_TRANSACTION;
+    request.payload_schema = URE_PAYLOAD_SCENE_TRANSACTION;
+    request.payload_version_major = 1;
+    request.payload = payload;
     return impl_->exchange(request, error);
 }
 

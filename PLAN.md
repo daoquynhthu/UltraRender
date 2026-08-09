@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: PB.6 — Persistent UUID transactions and canonical camera extension
+当前游标: PB.7 — Mixed-version, security, packaging, and external-client closure
 
 ### 0.1 唯一生产施工队列
 
@@ -117,6 +117,8 @@ public transport、versioned extension、internal contract、legacy migration �
 **PB.4 状态**: 已完成（2026-08-09）。117-entry Candidate registry（digest `dd89cb843491009bc239c28c711a81eb181866ac43298c064e30bd129cd5f892`）生成 Frame table、frame/plane/shared-blob schemas 与 worker handshake/control 合同。Frame snapshot 在创建时复制为 immutable storage，保留 frame/byte 双预算、显式 `Backpressure`、checked map/unmap/copy、stride/extent 与 typed observable/unit/measure/time/uncertainty/provenance identity。Windows `ure_worker` 仅通过两个 loader symbol 装载 product runtime，使用 same-user DACL、`PIPE_REJECT_REMOTE_CLIENTS` Named Pipe、Job Object kill-on-close、verified bounded FlatBuffers 与 read-only duplicated file mapping；不链接网络栈或 runtime import library。测试专用 producer/runtime/worker 与候选发布包分离。direct ABI/worker bytes、metadata 与 frame-ready event parity、negotiated limits、lease/digest/generation、malformed/oversized input、startup/render/mapping/shutdown crash、`WorkerLost`、restart identity、no-orphan 与 package/import gate 已闭环；frame/worker/crash 三项各重复 100 次并通过，Release 89/89 CTest 通过。两次 `/Brepro` rebuild 的 product runtime 与 worker SHA-256 分别稳定为 `3254b8c27ba64968aecc844cafd505c0363b2b0fbe7bc784e0b650d6ce1d58ec` 与 `a43b7f7060c24d640d3ecfcf9dc918dba2af2d2eaab24617c866eba0359f0241`。该能力仍是 Candidate 0.1，不含 native scene/session/render workflow，也不形成稳定承诺；游标进入 PB.5。
 
 **PB.5 状态**: 已完成（2026-08-09）。151-entry Candidate registry（digest `2b88d3c5efed84faf862df447bb1d8178f7eaba38a7fa1e9035f6cf0051f0e3d`）生成 Scene/Session C11 tables 与 native-scene/objective worker schema。Windows x64 runtime 通过 Phase Q 严格校验 memory/file `.ure`、`.urescene`、`.urepkg`，绑定 blob/semantic/resource/schema/package/revision identity，并以原子 replacement 和失败保留旧 revision 提供永久全场景回退。generic objective 只表达 time/memory/sample/output/determinism/payload，不公开 integrator enum；内部执行真实 CUDA automatic session，进度、错误和 immutable frame 复用 PB.3-PB.4 语义。product worker 只经两项 loader export 完成相同路径，conformance fault/producer 不进入候选包。门禁覆盖 corrupt/ambiguous package、unsupported schema、missing resource、content/decompression/nesting/resource/object/resident budget、active-work replacement、device loss，以及 direct ABI/worker revision、digest、error、session、frame metadata 和 byte parity；Release 91/91 CTest 通过。该能力仍是 Candidate 0.1，不形成稳定承诺；游标进入 PB.6。
+
+**PB.6 状态**: 已完成（2026-08-09）。SceneIR schema 2 为 editable objects 持久化 RFC 9562 UUID，并保留 legacy source ID 为非权威 alias；schema 1 通过 UUIDv8/SHA-256 确定性迁移，binary/text/package roundtrip、重复与悬空引用均受门禁约束。180-entry Candidate registry（digest `0e56eea2d03b2528ceefe2f686de3b63510d956738ee19cf107835abb297f554`）生成 transaction/result C11 布局、operation identities 与 additive FlatBuffers schema。Scene table 和 product worker 以 transaction UUID、base revision、有序 typed edits、required capabilities 与 client metadata 执行全量预校验和原子 swap；stale base 明确返回 retry revision 且不自动 merge。精确实现 transform、canonical physical camera、material/mesh reference、URI payload、add/remove、light 与 environment；visibility 与 binary mesh replacement 仅接受显式 full-scene fallback，否则拒绝。direct ABI/worker 门禁验证 sizing 不提交、rollback、conflict/retry、hot/partial/full/rejected strategy、rebuilt identities、semantic replay 与 frame identity parity；Release 95/95 CTest 通过。所有产物仍为 Candidate 0.1，不形成兼容承诺；游标进入 PB.7。
 
 ---
 

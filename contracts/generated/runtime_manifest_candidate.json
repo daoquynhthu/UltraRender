@@ -2,7 +2,7 @@
   "candidate_version": "0.1.0",
   "canonical_registry": {
     "path": "registry/public_contract_registry.canonical.json",
-    "sha256": "2d3eb921a31b172f2d5ce47aac0e98f04dcc8097d299c21437bc55d1b690a849"
+    "sha256": "f3a29aba1f3df8e06d4e1eb4eeddcfdfc5e264871d33a3df49c443871bccd55a"
   },
   "compatibility_promise": "None before PB.8",
   "loader_exports": [
@@ -16,8 +16,8 @@
   "public_header_language": "C11",
   "publication_state": "Candidate",
   "registry_canonicalization": "RFC8785 restricted to integers and decimal strings",
-  "registry_digest": "2b88d3c5efed84faf862df447bb1d8178f7eaba38a7fa1e9035f6cf0051f0e3d",
-  "registry_entry_count": 151,
+  "registry_digest": "0e56eea2d03b2528ceefe2f686de3b63510d956738ee19cf107835abb297f554",
+  "registry_entry_count": 180,
   "schema": "ure.public.runtime-manifest-candidate/0.1",
   "schema_compiler": "flatc version 25.12.19",
   "schemas": [
@@ -31,7 +31,7 @@
     },
     {
       "path": "schemas/ure_scene_candidate.fbs",
-      "sha256": "c2a15cec241f382898372a2939d22101a3a82f9cad920dc0cc181024ee9f76d3"
+      "sha256": "a201aad6e9e43c406fda45eefa418110553067646b5a52b69981c0c386f378aa"
     },
     {
       "path": "schemas/ure_worker_candidate.fbs",

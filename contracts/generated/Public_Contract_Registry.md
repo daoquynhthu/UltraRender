@@ -2,7 +2,7 @@
 
 This generated reference is a Candidate artifact. It is not a stable ABI or protocol promise.
 
-Registry digest: `2b88d3c5efed84faf862df447bb1d8178f7eaba38a7fa1e9035f6cf0051f0e3d`
+Registry digest: `0e56eea2d03b2528ceefe2f686de3b63510d956738ee19cf107835abb297f554`
 
 | Registry ID | Kind | Canonical name | Stability | Maturity | Since | Default | Dependencies |
 |---:|---|---|---|---|---|---|---|
@@ -44,8 +44,10 @@ Registry digest: `2b88d3c5efed84faf862df447bb1d8178f7eaba38a7fa1e9035f6cf0051f0e
 |37|Structure|`ure.structure.scene_revision_info`|Core|NotApplicable|0.1.0|disabled|2, 4, 7, 304|
 |38|Structure|`ure.structure.objective_envelope`|Core|NotApplicable|0.1.0|disabled|1, 4, 5, 305|
 |39|Structure|`ure.structure.session_info`|Core|NotApplicable|0.1.0|disabled|2, 4, 27, 305|
-|40|Structure|`ure.structure.scene_interface`|Core|NotApplicable|0.1.0|disabled|13, 27, 34, 35, 36, 37, 706|
+|40|Structure|`ure.structure.scene_interface`|Core|NotApplicable|0.1.0|disabled|13, 27, 34, 35, 36, 37, 42, 43, 706|
 |41|Structure|`ure.structure.session_interface`|Core|NotApplicable|0.1.0|disabled|13, 27, 38, 39, 707|
+|42|Structure|`ure.structure.scene_transaction`|Core|NotApplicable|0.1.0|disabled|1, 3, 4, 5, 7, 304, 2147483648|
+|43|Structure|`ure.structure.scene_transaction_result`|Core|NotApplicable|0.1.0|disabled|2, 3, 4, 6, 304, 980, 981, 982, 983, 2147483648|
 |100|Result|`ure.result.success`|Core|NotApplicable|0.1.0|enabled||
 |101|Result|`ure.result.incomplete`|Core|NotApplicable|0.1.0|enabled||
 |102|Result|`ure.result.invalid_argument`|Core|NotApplicable|0.1.0|enabled||
@@ -76,6 +78,7 @@ Registry digest: `2b88d3c5efed84faf862df447bb1d8178f7eaba38a7fa1e9035f6cf0051f0e
 |403|Event|`ure.event.device_lost`|Core|NotApplicable|0.1.0|enabled|301|
 |404|Event|`ure.event.diagnostic`|Core|NotApplicable|0.1.0|enabled|301|
 |405|Event|`ure.event.scene_replaced`|Core|NotApplicable|0.1.0|disabled|304|
+|406|Event|`ure.event.scene_transaction_committed`|Core|NotApplicable|0.1.0|disabled|304, 808|
 |500|PayloadSchema|`ure.payload.worker_handshake`|Core|NotApplicable|0.1.0|enabled|4, 300|
 |501|PayloadSchema|`ure.payload.worker_envelope`|Core|NotApplicable|0.1.0|enabled|500|
 |502|PayloadSchema|`ure.payload.error`|Core|NotApplicable|0.1.0|enabled|200|
@@ -106,6 +109,7 @@ Registry digest: `2b88d3c5efed84faf862df447bb1d8178f7eaba38a7fa1e9035f6cf0051f0e
 |805|Semantic|`ure.operation.validate_scene`|Core|NotApplicable|0.1.0|disabled|304|
 |806|Semantic|`ure.operation.replace_scene`|Core|NotApplicable|0.1.0|disabled|304|
 |807|Semantic|`ure.operation.render_session`|Core|NotApplicable|0.1.0|disabled|305|
+|808|Semantic|`ure.operation.apply_scene_transaction`|Core|NotApplicable|0.1.0|disabled|304, 2147483648|
 |900|Semantic|`ure.operation_state.queued`|Core|NotApplicable|0.1.0|disabled|703|
 |901|Semantic|`ure.operation_state.running`|Core|NotApplicable|0.1.0|disabled|703|
 |902|Semantic|`ure.operation_state.paused`|Core|NotApplicable|0.1.0|disabled|703|
@@ -149,6 +153,31 @@ Registry digest: `2b88d3c5efed84faf862df447bb1d8178f7eaba38a7fa1e9035f6cf0051f0e
 |977|Semantic|`ure.session_state.failed`|Core|NotApplicable|0.1.0|disabled|707|
 |978|Semantic|`ure.session_state.device_lost`|Core|NotApplicable|0.1.0|disabled|707|
 |979|Semantic|`ure.session_state.closed`|Core|NotApplicable|0.1.0|disabled|707|
+|980|Semantic|`ure.scene_update.hot_update`|Core|NotApplicable|0.1.0|disabled|304|
+|981|Semantic|`ure.scene_update.partial_rebuild`|Core|NotApplicable|0.1.0|disabled|304|
+|982|Semantic|`ure.scene_update.full_reload`|Core|NotApplicable|0.1.0|disabled|304|
+|983|Semantic|`ure.scene_update.rejected`|Core|NotApplicable|0.1.0|disabled|304|
+|2147483648|PayloadSchema|`ure.experimental.payload.scene_transaction`|UnstableExtension|Experimental|0.1.0|disabled|304|
+|2147483649|Semantic|`ure.experimental.scene_edit.transform`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483650|Semantic|`ure.experimental.scene_edit.camera`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483651|Semantic|`ure.experimental.scene_edit.material_reference`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483652|Semantic|`ure.experimental.scene_edit.payload_replace`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483653|Semantic|`ure.experimental.scene_edit.mesh_reference`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483654|Semantic|`ure.experimental.scene_edit.add_object`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483655|Semantic|`ure.experimental.scene_edit.remove_object`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483656|Semantic|`ure.experimental.scene_edit.visibility`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483657|Semantic|`ure.experimental.scene_edit.light`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483658|Semantic|`ure.experimental.scene_edit.environment`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483659|Semantic|`ure.experimental.scene_edit.mesh_replace`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483660|Semantic|`ure.experimental.scene_object.instance`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483661|Semantic|`ure.experimental.scene_object.sphere`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483662|Semantic|`ure.experimental.scene_object.quad_light`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483663|Semantic|`ure.experimental.scene_object.material`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483664|Semantic|`ure.experimental.scene_object.mesh`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483665|Semantic|`ure.experimental.scene_object.image`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483666|Semantic|`ure.experimental.scene_object.texture`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483667|Semantic|`ure.experimental.scene_object.camera`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
+|2147483668|Semantic|`ure.experimental.scene_object.environment`|UnstableExtension|Experimental|0.1.0|disabled|2147483648|
 |4026531840|Semantic|`ure.private.mock.device_loss`|Private|NotApplicable|0.1.0|disabled|403|
 |4026531841|Semantic|`ure.private.mock.worker_crash`|Private|NotApplicable|0.1.0|disabled||
 |4026531842|Semantic|`ure.private.mock.event_gap`|Private|NotApplicable|0.1.0|disabled|402|
