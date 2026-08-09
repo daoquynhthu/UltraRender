@@ -21,7 +21,7 @@ The approved architecture is [`Public_API_ABI_Architecture.md`](Public_API_ABI_A
 Current PB cursor:
 
 ```text
-PB.3 — Core lifecycle, errors, capabilities, operations, and events
+PB.4 — Immutable frames and Windows local worker
 ```
 
 The HR route is suspended after completed HR.2. `HR.3` resumes only after PB.8 or an explicit root-PLAN revision. PB establishes the carrier; it does not promote learned proposals, reconstruction, world state, material graph, wave optics, or solver functionality to stable extensions.
@@ -268,16 +268,18 @@ scripts/
 
 **Execution checklist:**
 
-- [ ] Implement typed handles containing owner instance, object type, generation, parent, state, and thread policy; reject stale, cross-instance, wrong-type, and parent-closed use.
-- [ ] Implement retained Error objects with stable result/domain/detail, UTF-8 message, schema-tagged details, context identities, cause retention, and allocation-failure fallback.
-- [ ] Catch every C++ exception at every function-table entry and map it without exposing exception type, private address, or uncontrolled path.
-- [ ] Map HO.1/HO.2 stability/maturity/runtime semantics to structured capability descriptors; verify required/optional negotiation and dependency closure.
-- [ ] Implement the monotonic operation state machine, wait timeout, pause/resume where supported, cancellation request/terminal result, and device-loss terminal mapping.
-- [ ] Implement bounded per-instance event queues with monotonic sequence, diagnostic coalescing policy, explicit gap records, and queryable terminal object state.
-- [ ] Stress concurrent manifest/table reads and declared handle-thread policies; use deterministic races for cancel/complete, close/wait, and event overflow.
-- [ ] Verify capability absence never silently selects a weaker semantic and Research capabilities cannot be enabled by production defaults.
+- [x] Implement typed handles containing owner instance, object type, generation, parent, state, and thread policy; reject stale, cross-instance, wrong-type, and parent-closed use.
+- [x] Implement retained Error objects with stable result/domain/detail, UTF-8 message, schema-tagged details, context identities, cause retention, and allocation-failure fallback.
+- [x] Catch every C++ exception at every function-table entry and map it without exposing exception type, private address, or uncontrolled path.
+- [x] Map HO.1/HO.2 stability/maturity/runtime semantics to structured capability descriptors; verify required/optional negotiation and dependency closure.
+- [x] Implement the monotonic operation state machine, wait timeout, pause/resume where supported, cancellation request/terminal result, and device-loss terminal mapping.
+- [x] Implement bounded per-instance event queues with monotonic sequence, diagnostic coalescing policy, explicit gap records, and queryable terminal object state.
+- [x] Stress concurrent manifest/table reads and declared handle-thread policies; use deterministic races for cancel/complete, close/wait, and event overflow.
+- [x] Verify capability absence never silently selects a weaker semantic and Research capabilities cannot be enabled by production defaults.
 
 **Completion evidence:** lifecycle/leak/race sanitization available on the Windows toolchain is clean; all structured failure and negotiation fixtures match between direct interface calls and registry expectations.
+
+**Recorded evidence:** the 103-entry Candidate registry has digest `9a54e300aa927f5fe4e15962cf1ce5afdcf3815a3d5d6c3cfb68d356ef2f9ed8` and records 53 PB.3 Candidate additions or activations over the retained PB.2 baseline. Generated C11 structures and immutable Runtime, Instance, Error, Operation, and Event tables expose typed non-reused handles without an import library. The direct dynamic-loader fixture covers retained cause chains and operation/build context, required/optional dependency closure, unavailable Experimental capabilities, unknown capability rejection, stale/wrong-type/cross-instance/closed-parent use, reference-counted busy behavior, monotonic cancel/success/failure/device-loss states, timeout, close/wait, early release, diagnostic coalescing, bounded overflow gaps, concurrent manifest/table reads, and concurrent handle retain/release. Fifty repeated MSVC AddressSanitizer executions and 100 ordinary stress executions completed without an error or live handle; the registered Release gate passes. Every table entry contains exceptions, the DLL still exports exactly two undecorated loader names, and two forced `/Brepro` relinks produced SHA-256 `43fc3e2440426269d1d663d905a686e54099aca52021b211dac2c3d92bc93f0a`. This remains Candidate 0.1: it has no renderer/session/frame/worker implementation and creates no compatibility promise.
 
 ## 7. PB.4 — Immutable frames and Windows local worker
 

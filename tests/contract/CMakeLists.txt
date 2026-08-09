@@ -69,6 +69,11 @@ if(TARGET ure_contract)
     set_target_properties(test_loader_client PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
     target_include_directories(test_loader_client PRIVATE ${UR_PB1_STAGE_DIR}/include)
     add_dependencies(test_loader_client ure_public_stage_headers ure_contract)
+
+    add_executable(test_runtime_lifecycle test_runtime_lifecycle.c)
+    set_target_properties(test_runtime_lifecycle PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
+    target_include_directories(test_runtime_lifecycle PRIVATE ${UR_PB1_STAGE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
+    add_dependencies(test_runtime_lifecycle ure_public_stage_headers ure_contract)
 endif()
 
 if(MSVC)
@@ -76,10 +81,11 @@ if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
     endforeach()
     if(TARGET ure_contract)
-        foreach(target test_abi_layout_c test_abi_layout_cpp test_loader_client)
+        foreach(target test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle)
             target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
         endforeach()
         target_compile_options(test_loader_client PRIVATE /wd4191)
+        target_compile_options(test_runtime_lifecycle PRIVATE /wd4191)
     endif()
 endif()
 
@@ -169,6 +175,9 @@ if(TARGET ure_contract)
     add_test(
         NAME test_candidate_loader_client
         COMMAND test_loader_client $<TARGET_FILE:ure_contract>)
+    add_test(
+        NAME test_runtime_lifecycle
+        COMMAND test_runtime_lifecycle $<TARGET_FILE:ure_contract>)
 endif()
 
 set_tests_properties(
@@ -188,5 +197,6 @@ if(TARGET ure_contract)
         test_candidate_abi_layout
         test_candidate_loader_exports
         test_candidate_loader_client
+        test_runtime_lifecycle
         PROPERTIES TIMEOUT 60)
 endif()

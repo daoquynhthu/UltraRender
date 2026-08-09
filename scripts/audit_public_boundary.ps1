@@ -181,16 +181,18 @@ foreach ($entry in @($registry.entries)) {
         }
     }
 }
+if (@($registry.entries | Where-Object { $_.kind -eq "Capability" -and $_.maturity -eq "Research" -and [bool]$_.default_enabled }).Count -ne 0) {
+    throw "Research capabilities must not be enabled by default"
+}
 $tombstoneIds = @($registry.tombstones.registry_id | ForEach-Object { [string]$_ })
 if ($tombstoneIds.Count -ne @($tombstoneIds | Sort-Object -Unique).Count -or
     @($tombstoneIds | Where-Object { $registryEntryById.ContainsKey($_) }).Count -ne 0) {
     throw "Registry tombstones are duplicate or reused"
 }
 if ($compatibility.baseline.candidate_version -ne "0.1.0" -or
-    $compatibility.baseline.registry_digest -ne "d3ea8fed3645fdc2e9ae930e60fa287a5caa0f5fb7e2f76273e98c20617b12ac" -or
-    @($compatibility.changes).Count -ne 2 -or
-    (Compare-Object @($compatibility.changes.registry_id | Sort-Object) @(13, 14)) -or
-    @($compatibility.changes | Where-Object { $_.change_class -ne "AdditiveCandidate" -or $_.phase -ne "PB.2" }).Count -ne 0 -or
+    $compatibility.baseline.registry_digest -ne "bb9a25aacb63bd88b4e79b67d7932a8b66174627beada11fa068475ca76e1513" -or
+    @($compatibility.changes).Count -ne 53 -or
+    @($compatibility.changes | Where-Object { $_.change_class -ne "AdditiveCandidate" -or $_.phase -ne "PB.3" }).Count -ne 0 -or
     @($compatibility.tombstones).Count -ne 0) {
     throw "PB candidate compatibility history is incomplete"
 }

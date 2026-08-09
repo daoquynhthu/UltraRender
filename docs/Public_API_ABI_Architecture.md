@@ -327,6 +327,8 @@ Core defines only these semantic roles:
 
 Opaque handles are owned by one runtime and one parent instance. Cross-instance handle use fails. Destroying a parent with live children either returns `BUSY` or closes children according to the interface's declared rule; it never silently leaks or invalidates memory still mapped by the client.
 
+Handles embedded in descriptors, error records, or event records are borrowed identities whose validity is bounded by the owning record or query. A client that needs an embedded Error, operation, or other retainable object after releasing that owner MUST retain the handle first; inspecting a borrowed handle never transfers ownership implicitly.
+
 Core contains no integrator enum, material-node enum, backend-native handle, learned-model format, solver family, or internal world-state representation.
 
 ## 8. Results, errors, threading, and lifetime

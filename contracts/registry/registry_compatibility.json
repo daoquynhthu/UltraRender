@@ -3,7 +3,7 @@
   "candidate_version": "0.1.0",
   "baseline": {
     "candidate_version": "0.1.0",
-    "registry_digest": "d3ea8fed3645fdc2e9ae930e60fa287a5caa0f5fb7e2f76273e98c20617b12ac"
+    "registry_digest": "bb9a25aacb63bd88b4e79b67d7932a8b66174627beada11fa068475ca76e1513"
   },
   "allowed_change_classes": [
     "AdditiveCandidate",
@@ -13,16 +13,322 @@
   ],
   "changes": [
     {
-      "registry_id": 13,
+      "registry_id": 15,
       "change_class": "AdditiveCandidate",
-      "phase": "PB.2",
-      "summary": "Add the common immutable interface-table header layout"
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 15"
     },
     {
-      "registry_id": 14,
+      "registry_id": 16,
       "change_class": "AdditiveCandidate",
-      "phase": "PB.2",
-      "summary": "Add the metadata-only Candidate runtime interface table"
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 16"
+    },
+    {
+      "registry_id": 17,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 17"
+    },
+    {
+      "registry_id": 18,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 18"
+    },
+    {
+      "registry_id": 19,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 19"
+    },
+    {
+      "registry_id": 20,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 20"
+    },
+    {
+      "registry_id": 22,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 22"
+    },
+    {
+      "registry_id": 23,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 23"
+    },
+    {
+      "registry_id": 24,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 24"
+    },
+    {
+      "registry_id": 25,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 25"
+    },
+    {
+      "registry_id": 26,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 26"
+    },
+    {
+      "registry_id": 27,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 27"
+    },
+    {
+      "registry_id": 110,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 110"
+    },
+    {
+      "registry_id": 111,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 111"
+    },
+    {
+      "registry_id": 112,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 112"
+    },
+    {
+      "registry_id": 113,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 113"
+    },
+    {
+      "registry_id": 114,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 114"
+    },
+    {
+      "registry_id": 115,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 115"
+    },
+    {
+      "registry_id": 702,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 702"
+    },
+    {
+      "registry_id": 703,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 703"
+    },
+    {
+      "registry_id": 704,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 704"
+    },
+    {
+      "registry_id": 900,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 900"
+    },
+    {
+      "registry_id": 901,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 901"
+    },
+    {
+      "registry_id": 902,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 902"
+    },
+    {
+      "registry_id": 903,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 903"
+    },
+    {
+      "registry_id": 904,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 904"
+    },
+    {
+      "registry_id": 905,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 905"
+    },
+    {
+      "registry_id": 906,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 906"
+    },
+    {
+      "registry_id": 907,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 907"
+    },
+    {
+      "registry_id": 920,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 920"
+    },
+    {
+      "registry_id": 921,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 921"
+    },
+    {
+      "registry_id": 922,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 922"
+    },
+    {
+      "registry_id": 930,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 930"
+    },
+    {
+      "registry_id": 931,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 931"
+    },
+    {
+      "registry_id": 932,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 932"
+    },
+    {
+      "registry_id": 933,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 933"
+    },
+    {
+      "registry_id": 940,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 940"
+    },
+    {
+      "registry_id": 941,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 941"
+    },
+    {
+      "registry_id": 942,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 942"
+    },
+    {
+      "registry_id": 943,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 943"
+    },
+    {
+      "registry_id": 950,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 950"
+    },
+    {
+      "registry_id": 951,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 951"
+    },
+    {
+      "registry_id": 952,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 952"
+    },
+    {
+      "registry_id": 953,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 953"
+    },
+    {
+      "registry_id": 4026531844,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 4026531844"
+    },
+    {
+      "registry_id": 4026531845,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 4026531845"
+    },
+    {
+      "registry_id": 4026531846,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate lifecycle identity 4026531846"
+    },
+    {
+      "registry_id": 301,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Activate the Candidate lifecycle capability"
+    },
+    {
+      "registry_id": 400,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Activate Candidate operation-state events"
+    },
+    {
+      "registry_id": 402,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Activate Candidate event-gap reporting"
+    },
+    {
+      "registry_id": 403,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Activate Candidate device-loss events"
+    },
+    {
+      "registry_id": 701,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Activate the Candidate Instance interface"
+    },
+    {
+      "registry_id": 404,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.3",
+      "summary": "Add Candidate diagnostic event coalescing identity"
     }
   ],
   "tombstones": []

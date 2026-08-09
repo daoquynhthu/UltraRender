@@ -1,6 +1,6 @@
 # UltraRender 高阶能力与公共边界研究实施路线图
 
-最后更新: 2026-08-09（PB.2 Windows x64 candidate loader ABI 闭环）
+最后更新: 2026-08-09（PB.3 Candidate Core lifecycle 闭环）
 
 本文档是 UltraRender 当前唯一的行动纲领。2026-08-01 以前的主体建设路线已归档为
 [`docs/archive/Legacy_Construction_PLAN_2026-08-01.md`](docs/archive/Legacy_Construction_PLAN_2026-08-01.md)，
@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: PB.3 — Core lifecycle, errors, capabilities, operations, and events
+当前游标: PB.4 — Immutable frames and Windows local worker
 
 ### 0.1 唯一生产施工队列
 
@@ -38,7 +38,7 @@ HT transport     HR reconstruction HW physical world HD differentiation
                        │
                        ▼
 PB.0 -> PB.1 -> PB.2 -> PB.3 -> PB.4 -> PB.5 -> PB.6 -> PB.7 -> PB.8
-[done]   [done]   [done] [current]                              [1.0 gate]
+[done]   [done]   [done]   [done] [current]                    [1.0 gate]
                        │
                        ▼
                  resume HR.3
@@ -111,6 +111,8 @@ public transport、versioned extension、internal contract、legacy migration �
 **PB.1 状态**: 已完成（2026-08-09）。Candidate 0.1 registry 发布 53 个显式身份，使用受限 RFC 8785 规范化和域分离 SHA-256；`ure_contract_codegen lint|generate|compare` 对重复 key、范围、数值、tombstone、依赖环、版本、默认状态和输出漂移实行 fail-loud。生成式 C11 loader/value headers、三份显式 field-ID FlatBuffers schema、manifest、Markdown reference 与 12 组 golden request/response 已进入自包含 SDK staging；实际 future-schema 未知字段、malformed/truncated/oversized 输入均有门禁。无 renderer 依赖的 in-memory mock harness、独立 mock worker 和仅使用 staging headers/fixtures 的 C11 external client 已闭环；`flatc 25.12.19 --conform`、C11/C++23 编译、干净二次生成和完整 Release 门禁通过。PB.0 暴露的 legacy DLL 非确定性链接缺口也已通过 `/Brepro` 修复并在两次独立 relink 后刷新为 2,029 exports（55 C、1,969 accidental C++、5 other）的内容基线；减少项仅来自未承诺的 accidental C++ surface。所有产物仍是 Candidate，无 ABI/Protocol 稳定承诺；真实 loader DLL 从 PB.2 开始。
 
 **PB.2 状态**: 已完成（2026-08-09）。`ultrarender_runtime_candidate.dll` 通过显式 `.def` 只导出 `ureGetRuntimeManifest` 与 `ureQueryInterface`，外部 C11 consumer 仅以 `LoadLibraryW`/`GetProcAddress` 加载且不导入 runtime DLL。loader 对 root type/size、reserved、closed version range、registry digest、unknown optional chain、duplicate/cyclic/overlength chain 与 caller-owned output/diagnostic 实行有界 fail-loud；UTF-8 bootstrap diagnostic 明确返回 required/written bytes 与确定性 NUL 截断。runtime 返回静态 immutable Candidate 0.1 table 和包含完整 type/field layout、enum、interface、registry/toolchain/build identity 的 ABI manifest；C11/C++23 layout 与 Windows x64 retained manifest 一致，export gate 拒绝第三个或修饰 symbol。PB.2 只增加两个 AdditiveCandidate registry identity，当前 55-entry digest 为 `bb9a25aacb63bd88b4e79b67d7932a8b66174627beada11fa068475ca76e1513`。它没有 instance handle、renderer/session、worker 或稳定承诺，这些分别由 PB.3-PB.8 建立。
+
+**PB.3 状态**: 已完成（2026-08-09）。Candidate Core 现提供 Runtime/Instance/Error/Operation/Event 五张不可变表、按 owner/type/generation/parent/state/thread-policy 校验且不复用的 opaque handle，以及 retained structured Error/cause/operation/build context。capability descriptor 独立表达版本、合同稳定性、证据成熟度、运行状态、依赖、限制与 unavailable reason；缺失 required、请求启用尚不可用的 Experimental capability、未知 capability 和默认 Research 路径均 fail closed，不选择较弱语义。operation 的 queued/running/cancel-pending/terminal 状态、timeout、cancel、close/wait、failure/device-loss 与早释放均有确定结果；instance-owned 有界 event queue 提供单调序列、diagnostic coalescing 和显式 gap。动态加载 C11 fixture 覆盖并发 manifest/table read、handle retain/release、cancel/complete、close/wait、overflow、stale/wrong-type/cross-instance/closed-parent、leak 与 retained cause；100 次普通压力和 50 次 MSVC ASan 压力通过。103-entry registry digest 为 `9a54e300aa927f5fe4e15962cf1ce5afdcf3815a3d5d6c3cfb68d356ef2f9ed8`；两次 `/Brepro` relink 的 DLL SHA-256 均为 `43fc3e2440426269d1d663d905a686e54099aca52021b211dac2c3d92bc93f0a`。它仍不含 renderer/session/frame/worker，也不形成稳定承诺；游标进入 PB.4。
 
 ---
 

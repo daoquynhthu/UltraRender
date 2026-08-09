@@ -180,19 +180,33 @@ ure_result_t query_interface(
 
     static constexpr std::array<std::uint8_t, 16> runtime_id URE_INTERFACE_RUNTIME_UUID_BYTES;
     static constexpr std::array<std::uint8_t, 16> instance_id URE_INTERFACE_INSTANCE_UUID_BYTES;
-    if (uuid_equal(query->interface_id, instance_id)) {
-        return fail(diagnostic, URE_RESULT_CAPABILITY_UNAVAILABLE, 10, "instance interface begins at PB.3");
-    }
-    if (!uuid_equal(query->interface_id, runtime_id)) {
+    static constexpr std::array<std::uint8_t, 16> error_id URE_INTERFACE_ERROR_UUID_BYTES;
+    static constexpr std::array<std::uint8_t, 16> operation_id URE_INTERFACE_OPERATION_UUID_BYTES;
+    static constexpr std::array<std::uint8_t, 16> event_id URE_INTERFACE_EVENT_UUID_BYTES;
+    static constexpr std::array<std::uint8_t, 16> conformance_id{
+        0xe1, 0xf2, 0x20, 0x01, 0x41, 0x20, 0x5a, 0xd1,
+        0x9e, 0xe0, 0x2f, 0xa0, 0xc7, 0xb3, 0x00, 0x01};
+    const ure_interface_table_header_t* table = nullptr;
+    if (uuid_equal(query->interface_id, runtime_id)) {
+        table = &ure::contract::runtime_interface().header;
+    } else if (uuid_equal(query->interface_id, instance_id)) {
+        table = &ure::contract::instance_interface().header;
+    } else if (uuid_equal(query->interface_id, error_id)) {
+        table = &ure::contract::error_interface().header;
+    } else if (uuid_equal(query->interface_id, operation_id)) {
+        table = &ure::contract::operation_interface().header;
+    } else if (uuid_equal(query->interface_id, event_id)) {
+        table = &ure::contract::event_interface().header;
+    } else if (uuid_equal(query->interface_id, conformance_id)) {
+        table = &ure::contract::conformance_interface().header;
+    } else {
         return fail(diagnostic, URE_RESULT_CAPABILITY_UNAVAILABLE, 11, "interface is not available");
     }
-
-    const ure_runtime_interface_t& table = ure::contract::runtime_interface();
     response->interface_id = query->interface_id;
-    response->version_major = table.header.version_major;
-    response->version_minor = table.header.version_minor;
-    response->table_size = table.header.struct_size;
-    response->table = &table;
+    response->version_major = table->version_major;
+    response->version_minor = table->version_minor;
+    response->table_size = table->struct_size;
+    response->table = table;
     write_diagnostic(diagnostic, URE_RESULT_SUCCESS, 0, {});
     return URE_RESULT_SUCCESS;
 }

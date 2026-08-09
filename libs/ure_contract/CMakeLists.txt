@@ -10,7 +10,9 @@ foreach(source
     ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
     ${CMAKE_CURRENT_SOURCE_DIR}/src/loader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime_adapter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/lifecycle.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime_adapter.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/private_conformance.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ultrarender_runtime_candidate.def
     ${CMAKE_SOURCE_DIR}/libs/ure_public/include/ultrarender/ure_loader.h
     ${CMAKE_SOURCE_DIR}/libs/ure_public/include/ultrarender/ure_registry.h)
@@ -28,6 +30,7 @@ configure_file(
 add_library(ure_contract SHARED
     src/loader.cpp
     src/runtime_adapter.cpp
+    src/lifecycle.cpp
     ultrarender_runtime_candidate.def)
 target_link_libraries(ure_contract PRIVATE ure_public)
 target_include_directories(ure_contract PRIVATE

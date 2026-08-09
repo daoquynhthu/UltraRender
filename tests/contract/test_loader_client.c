@@ -198,7 +198,8 @@ static int run_tests(ure_get_runtime_manifest_fn get_manifest, ure_query_interfa
         ure_interface_query_t query = make_runtime_query();
         ure_interface_response_t response = make_response();
         memcpy(query.interface_id.bytes, instance_id, sizeof(instance_id));
-        CHECK(query_interface(&query, &response, &diagnostic) == URE_RESULT_CAPABILITY_UNAVAILABLE);
+        CHECK(query_interface(&query, &response, &diagnostic) == URE_RESULT_SUCCESS);
+        CHECK(response.table != NULL && response.table_size == sizeof(ure_instance_interface_t));
     }
     return 0;
 }
