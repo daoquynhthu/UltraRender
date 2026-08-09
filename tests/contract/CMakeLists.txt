@@ -48,6 +48,8 @@ add_dependencies(test_public_headers_cpp ure_public_stage_headers)
 add_executable(ultrarender_mock_worker
     ${CMAKE_SOURCE_DIR}/tests/fixtures/contracts/mock_worker/mock_worker.cpp)
 target_link_libraries(ultrarender_mock_worker PRIVATE ure_contract_codegen_support)
+target_include_directories(ultrarender_mock_worker PRIVATE ${UR_PB1_STAGE_DIR}/include)
+add_dependencies(ultrarender_mock_worker ure_public_stage_headers)
 
 add_executable(external_client
     ${CMAKE_SOURCE_DIR}/tests/fixtures/contracts/mock_worker/external_client.c)
@@ -81,23 +83,25 @@ if(TARGET ure_contract)
     add_dependencies(test_frame_leases ure_public_stage_headers ure_contract_conformance)
 
     add_executable(test_scene_boundary
-        ${CMAKE_SOURCE_DIR}/tests/fixtures/contracts/scene_client/external_scene_client.c)
+        ${CMAKE_CURRENT_SOURCE_DIR}/external_client/direct_client.c)
     set_target_properties(test_scene_boundary PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
     target_include_directories(test_scene_boundary PRIVATE ${UR_PB1_STAGE_DIR}/include)
     add_dependencies(test_scene_boundary ure_public_stage_headers ure_contract)
 
-    add_executable(test_scene_transaction test_scene_transaction.cpp)
+    add_executable(test_scene_transaction external_client/transaction_client.cpp)
     target_link_libraries(test_scene_transaction PRIVATE
         ure_public ure_contract_schema bcrypt)
     add_dependencies(test_scene_transaction ure_public_stage_headers ure_contract)
 
-    add_library(worker_test_support STATIC worker_test_client.cpp)
+    add_library(worker_test_support STATIC external_client/worker_client.cpp)
     target_link_libraries(worker_test_support PUBLIC
         ure_public
         ure_contract_schema
         ure_worker_conformance_schema
         PRIVATE
         bcrypt)
+    target_include_directories(worker_test_support PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/external_client)
 
     add_executable(test_worker_protocol test_worker_protocol.cpp)
     target_link_libraries(test_worker_protocol PRIVATE worker_test_support ure_public)
@@ -111,6 +115,15 @@ if(TARGET ure_contract)
     add_executable(test_scene_worker test_scene_worker.cpp)
     target_link_libraries(test_scene_worker PRIVATE worker_test_support ure_public)
     add_dependencies(test_scene_worker ure_worker ure_contract ure_contract_conformance)
+
+    add_executable(test_pb7_fuzz test_pb7_fuzz.cpp)
+    target_link_libraries(test_pb7_fuzz PRIVATE ure_public bcrypt)
+    add_dependencies(test_pb7_fuzz ure_contract)
+
+    add_executable(test_worker_runtime_security test_worker_runtime_security.cpp)
+    target_link_libraries(test_worker_runtime_security PRIVATE
+        worker_test_support iphlpapi)
+    add_dependencies(test_worker_runtime_security ure_worker ure_contract)
 endif()
 
 if(MSVC)
@@ -118,7 +131,7 @@ if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
     endforeach()
     if(TARGET ure_contract)
-        foreach(target test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction worker_test_support test_worker_protocol test_worker_crash test_scene_worker)
+        foreach(target test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
             target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
         endforeach()
         target_compile_options(test_loader_client PRIVATE /wd4191)
@@ -146,6 +159,22 @@ if(TARGET ure_contract)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:ure_worker> ${UR_PB2_STAGE_DIR}/bin/
         COMMAND ${CMAKE_COMMAND} -E rm -f ${UR_PB2_STAGE_DIR}/bin/$<TARGET_FILE_NAME:ure_worker_conformance>
         DEPENDS ure_contract ure_worker ure_public_stage_headers
+        VERBATIM)
+
+    set(UR_PB7_SDK_STAGE_DIR ${CMAKE_BINARY_DIR}/pb7_packages/sdk)
+    set(UR_PB7_RUNTIME_STAGE_DIR ${CMAKE_BINARY_DIR}/pb7_packages/runtime)
+    add_custom_target(ure_candidate_packages ALL
+        COMMAND
+            ${UR_PWSH_EXECUTABLE}
+            -NoProfile
+            -File ${CMAKE_CURRENT_SOURCE_DIR}/stage_candidate_packages.ps1
+            -RepoRoot ${CMAKE_SOURCE_DIR}
+            -SdkStage ${UR_PB7_SDK_STAGE_DIR}
+            -RuntimeStage ${UR_PB7_RUNTIME_STAGE_DIR}
+            -RuntimeDll $<TARGET_FILE:ure_contract>
+            -WorkerExecutable $<TARGET_FILE:ure_worker>
+            -MockWorkerExecutable $<TARGET_FILE:ultrarender_mock_worker>
+        DEPENDS ure_contract ure_worker ultrarender_mock_worker ure_public_stage_headers
         VERBATIM)
 endif()
 
@@ -210,6 +239,13 @@ add_test(
         ${UR_PWSH_EXECUTABLE}
         -NoProfile
         -File ${CMAKE_CURRENT_SOURCE_DIR}/test_phase_pb6_static.ps1
+        -RepoRoot ${CMAKE_SOURCE_DIR})
+add_test(
+    NAME test_phase_pb7_static
+    COMMAND
+        ${UR_PWSH_EXECUTABLE}
+        -NoProfile
+        -File ${CMAKE_CURRENT_SOURCE_DIR}/test_phase_pb7_static.ps1
         -RepoRoot ${CMAKE_SOURCE_DIR})
 add_test(
     NAME test_mock_worker_external_client
@@ -286,7 +322,40 @@ if(TARGET ure_contract)
             -WorkerExecutable $<TARGET_FILE:ure_worker>
             -ConformanceExecutable $<TARGET_FILE:ure_worker_conformance>
             -ConformanceRuntime $<TARGET_FILE:ure_contract_conformance>
-            -RuntimeStage ${UR_PB2_STAGE_DIR})
+            -RuntimeStage ${UR_PB2_STAGE_DIR}
+            -RepoRoot ${CMAKE_SOURCE_DIR})
+    add_test(
+        NAME test_worker_runtime_security
+        COMMAND test_worker_runtime_security
+            $<TARGET_FILE:ure_worker>
+            $<TARGET_FILE:ure_contract>)
+    add_test(
+        NAME test_pb7_fuzz
+        COMMAND test_pb7_fuzz
+            $<TARGET_FILE:ure_contract>
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb6_scene_transaction_full/base_scene.urescene)
+    add_test(
+        NAME test_candidate_compatibility
+        COMMAND
+            ${UR_PWSH_EXECUTABLE}
+            -NoProfile
+            -File ${CMAKE_CURRENT_SOURCE_DIR}/test_candidate_compatibility.ps1
+            -RepoRoot ${CMAKE_SOURCE_DIR}
+            -CurrentClient $<TARGET_FILE:test_loader_client>
+            -CurrentRuntime $<TARGET_FILE:ure_contract>)
+    add_test(
+        NAME test_external_client_package
+        COMMAND
+            ${UR_PWSH_EXECUTABLE}
+            -NoProfile
+            -File ${CMAKE_CURRENT_SOURCE_DIR}/test_external_client_package.ps1
+            -SourceDir ${CMAKE_CURRENT_SOURCE_DIR}/external_client
+            -BuildDir ${CMAKE_BINARY_DIR}/pb7_external_client_build
+            -SdkStage ${UR_PB7_SDK_STAGE_DIR}
+            -RuntimeStage ${UR_PB7_RUNTIME_STAGE_DIR}
+            -Flatc ${UR_FLATC_EXECUTABLE}
+            -CMake ${CMAKE_COMMAND}
+            -Ninja ${CMAKE_MAKE_PROGRAM})
 endif()
 
 set_tests_properties(
@@ -301,6 +370,7 @@ set_tests_properties(
     test_golden_message_mirror
     test_scene_uuid_golden
     test_phase_pb6_static
+    test_phase_pb7_static
     test_mock_worker_external_client
     PROPERTIES TIMEOUT 60)
 
@@ -317,5 +387,10 @@ if(TARGET ure_contract)
         test_worker_crash
         test_scene_worker
         test_worker_security
+        test_worker_runtime_security
+        test_pb7_fuzz
+        test_candidate_compatibility
+        test_external_client_package
         PROPERTIES TIMEOUT 60)
+    set_tests_properties(test_external_client_package PROPERTIES TIMEOUT 300)
 endif()

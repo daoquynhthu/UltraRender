@@ -138,6 +138,8 @@ int main(int argc, char **argv) {
     ure_handle_t session = NULL;
     ure_handle_t operation = NULL;
     ure_handle_t frame = NULL;
+    ure_handle_t cancel_session = NULL;
+    ure_handle_t cancel_operation = NULL;
     ure_handle_t package_scene = NULL;
     ure_scene_revision_info_t replacement = {0};
     int ok = 1;
@@ -162,12 +164,15 @@ int main(int argc, char **argv) {
     }
     ure_query_interface_fn query = (ure_query_interface_fn)(void *)
         GetProcAddress(module, "ureQueryInterface");
+    ure_get_runtime_manifest_fn get_manifest = (ure_get_runtime_manifest_fn)(void *)
+        GetProcAddress(module, "ureGetRuntimeManifest");
     const uint8_t runtime_id[16] = URE_INTERFACE_RUNTIME_UUID_BYTES;
     const uint8_t instance_id[16] = URE_INTERFACE_INSTANCE_UUID_BYTES;
     const uint8_t scene_id[16] = URE_INTERFACE_SCENE_UUID_BYTES;
     const uint8_t session_id[16] = URE_INTERFACE_SESSION_UUID_BYTES;
     const uint8_t operation_id[16] = URE_INTERFACE_OPERATION_UUID_BYTES;
     const uint8_t frame_id[16] = URE_INTERFACE_FRAME_UUID_BYTES;
+    const uint8_t event_id[16] = URE_INTERFACE_EVENT_UUID_BYTES;
     const uint8_t error_id[16] = URE_INTERFACE_ERROR_UUID_BYTES;
     const ure_runtime_interface_t *runtimes = (const ure_runtime_interface_t *)
         query_table(query, runtime_id, sizeof(*runtimes));
@@ -181,12 +186,28 @@ int main(int argc, char **argv) {
         query_table(query, operation_id, sizeof(*operations));
     const ure_frame_interface_t *frames = (const ure_frame_interface_t *)
         query_table(query, frame_id, sizeof(*frames));
+    const ure_event_interface_t *events = (const ure_event_interface_t *)
+        query_table(query, event_id, sizeof(*events));
     const ure_error_interface_t *errors = (const ure_error_interface_t *)
         query_table(query, error_id, sizeof(*errors));
-    ok &= check(query && runtimes && instances && scenes && sessions && operations && frames && errors,
+    ok &= check(query && get_manifest && runtimes && instances && scenes && sessions && operations && frames && events && errors,
                 "required public interface is missing");
     if (!ok)
         goto cleanup;
+
+    {
+        ure_runtime_manifest_request_t request = {0};
+        ure_runtime_manifest_t manifest = {0};
+        request.header.type = URE_STRUCTURE_RUNTIME_MANIFEST_REQUEST;
+        request.header.size = sizeof(request);
+        request.maximum_minor = 1;
+        manifest.header.type = URE_STRUCTURE_RUNTIME_MANIFEST;
+        manifest.header.size = sizeof(manifest);
+        ok &= check(get_manifest(&request, &manifest, NULL) == URE_RESULT_SUCCESS &&
+                        manifest.runtime_major == 0 && manifest.runtime_minor == 1 &&
+                        manifest.abi_manifest_json.size != 0,
+                    "runtime manifest negotiation failed");
+    }
 
     {
         const uint32_t required[] = {URE_CAPABILITY_LIFECYCLE,
@@ -342,6 +363,10 @@ int main(int argc, char **argv) {
                 "frame acquisition failed");
     if (frame) {
         ure_frame_info_t info = {0};
+        ure_frame_plane_info_t plane = {0};
+        ure_frame_map_t map = {0};
+        ure_frame_copy_info_t copy = {0};
+        uint8_t *snapshot = NULL;
         info.header.type = URE_STRUCTURE_FRAME_INFO;
         info.header.size = sizeof(info);
         ok &= check(frames->get_info(frame, &info, NULL) == URE_RESULT_SUCCESS &&
@@ -350,6 +375,85 @@ int main(int argc, char **argv) {
                         memcmp(info.scene_revision_identity.bytes,
                                revision.revision_identity.bytes, 32) == 0,
                     "frame metadata differs from the bound revision");
+        plane.header.type = URE_STRUCTURE_FRAME_PLANE_INFO;
+        plane.header.size = sizeof(plane);
+        ok &= check(frames->get_plane_info(frame, 0, &plane, NULL) ==
+                        URE_RESULT_SUCCESS && plane.byte_extent != 0,
+                    "frame plane metadata is unavailable");
+        map.header.type = URE_STRUCTURE_FRAME_MAP;
+        map.header.size = sizeof(map);
+        ok &= check(frames->map_plane_read(frame, 0, &map, NULL) ==
+                        URE_RESULT_SUCCESS && map.data != NULL &&
+                        map.byte_extent == plane.byte_extent,
+                    "immutable frame mapping failed");
+        snapshot = (uint8_t *)malloc((size_t)plane.byte_extent);
+        ok &= check(snapshot != NULL, "frame snapshot allocation failed");
+        if (snapshot && map.data)
+            memcpy(snapshot, map.data, (size_t)plane.byte_extent);
+        if (map.map_token)
+            ok &= check(frames->unmap_plane(frame, map.map_token, NULL) ==
+                            URE_RESULT_SUCCESS,
+                        "frame unmap failed");
+        if (snapshot) {
+            uint8_t *copied = (uint8_t *)malloc((size_t)plane.byte_extent);
+            ok &= check(copied != NULL, "frame copy allocation failed");
+            if (copied) {
+                copy.header.type = URE_STRUCTURE_FRAME_COPY_INFO;
+                copy.header.size = sizeof(copy);
+                copy.frame = frame;
+                copy.destination = copied;
+                copy.destination_size = plane.byte_extent;
+                copy.destination_row_stride = plane.row_stride;
+                copy.destination_slice_stride = plane.slice_stride;
+                ok &= check(frames->copy_plane(&copy, NULL) == URE_RESULT_SUCCESS &&
+                                memcmp(snapshot, copied, (size_t)plane.byte_extent) == 0,
+                            "immutable frame copy differs from mapped bytes");
+                free(copied);
+            }
+            free(snapshot);
+        }
+    }
+
+    {
+        uint32_t event_count = 0;
+        for (;;) {
+            ure_event_record_t event = {0};
+            ure_result_t result = URE_RESULT_SUCCESS;
+            event.header.type = URE_STRUCTURE_EVENT_RECORD;
+            event.header.size = sizeof(event);
+            result = events->poll(instance, &event, NULL);
+            if (result == URE_RESULT_INCOMPLETE)
+                break;
+            ok &= check(result == URE_RESULT_SUCCESS,
+                        "progressive event polling failed");
+            if (result != URE_RESULT_SUCCESS)
+                break;
+            ++event_count;
+        }
+        ok &= check(event_count != 0, "render emitted no public events");
+    }
+
+    {
+        ure_objective_envelope_t cancel_objective = objective;
+        ure_bool32_t accepted = 0;
+        ure_result_t waited = URE_RESULT_SUCCESS;
+        cancel_objective.sample_budget = 100000;
+        ok &= check(sessions->create(instance, scene, &cancel_objective,
+                                     &cancel_session, NULL) == URE_RESULT_SUCCESS &&
+                        sessions->start(cancel_session, &cancel_operation, NULL) ==
+                            URE_RESULT_SUCCESS,
+                    "cancelable objective could not start");
+        if (cancel_operation) {
+            ok &= check(operations->request_cancel(cancel_operation, &accepted,
+                                                   NULL) == URE_RESULT_SUCCESS &&
+                            accepted,
+                        "operation cancellation was not accepted");
+            waited = operations->wait(cancel_operation, UINT64_C(30000000000),
+                                      NULL);
+            ok &= check(waited == URE_RESULT_CANCELED ||
+                            waited == URE_RESULT_SUCCESS,
+                        "canceled operation did not reach a terminal state");
+        }
     }
 
     {
@@ -390,6 +494,12 @@ int main(int argc, char **argv) {
     }
 
 cleanup:
+    if (cancel_operation && operations)
+        operations->release(cancel_operation, NULL);
+    if (cancel_session && sessions) {
+        sessions->close(cancel_session, NULL);
+        sessions->release(cancel_session, NULL);
+    }
     if (package_scene && scenes)
         scenes->release(package_scene, NULL);
     if (frame && frames)

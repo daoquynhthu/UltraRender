@@ -1,4 +1,4 @@
-#include "worker_test_client.hpp"
+#include "worker_client.hpp"
 
 #include <bcrypt.h>
 #include <flatbuffers/flatbuffers.h>
@@ -20,7 +20,9 @@
 
 #include <ultrarender/ure_loader.h>
 
+#if !defined(URE_EXTERNAL_CLIENT)
 #include "ure_worker_conformance_generated.h"
+#endif
 
 namespace ure::contract_test {
 namespace {
@@ -78,6 +80,7 @@ std::vector<std::uint8_t> encode(fb::WorkerEnvelopeT &envelope) {
             builder.GetBufferPointer() + builder.GetSize()};
 }
 
+#if !defined(URE_EXTERNAL_CLIENT)
 std::vector<std::uint8_t>
 frame_request(std::uint32_t width, std::uint32_t height, std::uint32_t seed) {
     flatbuffers::FlatBufferBuilder builder;
@@ -88,6 +91,7 @@ frame_request(std::uint32_t width, std::uint32_t height, std::uint32_t seed) {
     return {builder.GetBufferPointer(),
             builder.GetBufferPointer() + builder.GetSize()};
 }
+#endif
 
 std::vector<std::uint8_t>
 scene_request(const std::vector<std::uint8_t> &content,
@@ -337,6 +341,13 @@ bool WorkerClient::handshake_with_limits(std::uint64_t max_control_bytes,
 std::unique_ptr<fb::WorkerEnvelopeT>
 WorkerClient::request_frame(std::uint32_t width, std::uint32_t height,
                             std::uint32_t seed, std::string &error) {
+#if defined(URE_EXTERNAL_CLIENT)
+    static_cast<void>(width);
+    static_cast<void>(height);
+    static_cast<void>(seed);
+    error = "private conformance frame requests are unavailable";
+    return {};
+#else
     fb::WorkerEnvelopeT request;
     request.message_kind = fb::MessageKind::OperationRequest;
     request.operation_kind = URE_OPERATION_ACQUIRE_FRAME;
@@ -344,6 +355,7 @@ WorkerClient::request_frame(std::uint32_t width, std::uint32_t height,
     request.payload_version_minor = 1;
     request.payload = frame_request(width, height, seed);
     return impl_->exchange(request, error);
+#endif
 }
 
 std::unique_ptr<fb::WorkerEnvelopeT>
@@ -441,6 +453,64 @@ bool WorkerClient::send_malformed_message(std::string &error) {
                   static_cast<std::uint32_t>(message.size())))
         return true;
     error = "malformed worker message write failed";
+    return false;
+}
+
+bool WorkerClient::send_registry_mismatch(std::string &error) {
+    fb::WorkerEnvelopeT request;
+    request.protocol_minor = 1;
+    request.registry_digest.resize(32, 0x7bU);
+    request.sequence = impl_->request_sequence++;
+    request.correlation_id = impl_->correlation++;
+    request.message_kind = fb::MessageKind::HandshakeRequest;
+    request.handshake = std::make_unique<fb::WorkerHandshakeT>();
+    request.handshake->protocol_max_minor = 1;
+    request.handshake->core_max_minor = 1;
+    request.handshake->frame_schema_max_minor = 1;
+    request.handshake->registry_digest = request.registry_digest;
+    request.handshake->required_capabilities = {URE_CAPABILITY_LIFECYCLE};
+    request.handshake->transport_features = 7;
+    request.handshake->max_control_bytes = kMaximumControlBytes;
+    request.handshake->max_blob_bytes = kMaximumBlobBytes;
+    request.handshake->max_frame_bytes = kMaximumFrameBytes;
+    request.handshake->client_process_id = GetCurrentProcessId();
+    const auto encoded = encode(request);
+    const std::uint32_t size = static_cast<std::uint32_t>(encoded.size());
+    const std::array<std::uint8_t, 4> prefix{
+        static_cast<std::uint8_t>(size & 0xffU),
+        static_cast<std::uint8_t>((size >> 8U) & 0xffU),
+        static_cast<std::uint8_t>((size >> 16U) & 0xffU),
+        static_cast<std::uint8_t>((size >> 24U) & 0xffU)};
+    if (write_all(impl_->pipe, prefix.data(),
+                  static_cast<std::uint32_t>(prefix.size())) &&
+        write_all(impl_->pipe, encoded.data(), size))
+        return true;
+    error = "registry-mismatch worker message write failed";
+    return false;
+}
+
+bool WorkerClient::send_truncated_message(std::string &error) {
+    fb::WorkerEnvelopeT request;
+    request.protocol_minor = 1;
+    request.registry_digest.assign(kRegistry.begin(), kRegistry.end());
+    request.sequence = impl_->request_sequence++;
+    request.correlation_id = impl_->correlation++;
+    request.message_kind = fb::MessageKind::HandshakeRequest;
+    const auto encoded = encode(request);
+    const std::uint32_t declared = static_cast<std::uint32_t>(encoded.size());
+    const std::uint32_t actual = declared - 1;
+    const std::array<std::uint8_t, 4> prefix{
+        static_cast<std::uint8_t>(declared & 0xffU),
+        static_cast<std::uint8_t>((declared >> 8U) & 0xffU),
+        static_cast<std::uint8_t>((declared >> 16U) & 0xffU),
+        static_cast<std::uint8_t>((declared >> 24U) & 0xffU)};
+    if (write_all(impl_->pipe, prefix.data(),
+                  static_cast<std::uint32_t>(prefix.size())) &&
+        write_all(impl_->pipe, encoded.data(), actual)) {
+        close_handle(impl_->pipe);
+        return true;
+    }
+    error = "truncated worker message write failed";
     return false;
 }
 

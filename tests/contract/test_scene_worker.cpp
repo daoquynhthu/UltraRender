@@ -1,4 +1,4 @@
-#include "worker_test_client.hpp"
+#include "external_client/worker_client.hpp"
 #include "private_conformance_fixture.h"
 
 #include <algorithm>

@@ -35,6 +35,16 @@
       "worker_exit_code": 0
     },
     {
+      "name": "registry_mismatch",
+      "request": "golden_messages/registry_mismatch.request.bin",
+      "request_bytes": 108,
+      "request_sha256": "7c68202c1affad9ba31a77699c7c5ad5fddc89c89f8c83a1fc240f910be649c0",
+      "response": "golden_messages/registry_mismatch.response.bin",
+      "response_bytes": 108,
+      "response_sha256": "f47e521bd86768eaa582ea2274af032aa4997be72e996bd4d70c06d5780d2c03",
+      "worker_exit_code": 0
+    },
+    {
       "name": "old_minor",
       "request": "golden_messages/old_minor.request.bin",
       "request_bytes": 100,

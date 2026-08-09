@@ -16,4 +16,6 @@ Every retained client fixture directory must contain:
 
 PB.0 does not retain a binary merely to imply compatibility. PB.2 begins candidate loader clients, PB.7 executes mixed-version matrices, and PB.8 preserves the final candidate binaries as the Core ABI 1.0 compatibility seed. Binary fixtures must not contain credentials, machine paths, private symbols, or redistributables whose license forbids repository storage.
 
+PB.7 retains one independently compiled C11 client for each published PB.2-PB.6 Candidate baseline. These binaries validate only the interface prefixes known to their historical headers. They run against the current Candidate runtime as migration evidence. Earlier Candidate runtime DLLs are not retained as supported runtimes; the reverse supported matrix therefore contains only the current client/current content-digested runtime row. This deliberate asymmetry is recorded in `docs/Public_API_Candidate_Integration.md` and creates no pre-PB.8 promise.
+
 The current legacy inventory is [`../registry/legacy_surface.json`](../registry/legacy_surface.json). It binds the baseline header and DLL audit to commit `867c03d34039505bc03aa4539309618e44d8dad2`.

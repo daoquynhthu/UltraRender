@@ -85,7 +85,7 @@ static int make_path(wchar_t *path, size_t capacity, const wchar_t *root, const 
 
 int wmain(int argc, wchar_t **argv) {
     static const wchar_t *scenarios[] = {
-        L"normal_lifecycle", L"missing_optional_capability", L"missing_required_capability", L"old_minor",
+        L"normal_lifecycle", L"missing_optional_capability", L"missing_required_capability", L"registry_mismatch", L"old_minor",
         L"unknown_optional_field", L"event_gap", L"backpressure", L"device_loss", L"worker_crash",
         L"malformed_message", L"truncated_message", L"oversized_message"
     };

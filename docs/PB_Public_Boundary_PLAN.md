@@ -21,7 +21,7 @@ The approved architecture is [`Public_API_ABI_Architecture.md`](Public_API_ABI_A
 Current PB cursor:
 
 ```text
-PB.7 — Mixed-version, security, packaging, and external-client closure
+PB.8 — Stable 1.0 declaration gate; awaiting separate explicit approval
 ```
 
 The HR route is suspended after completed HR.2. `HR.3` resumes only after PB.8 or an explicit root-PLAN revision. PB establishes the carrier; it does not promote learned proposals, reconstruction, world state, material graph, wave optics, or solver functionality to stable extensions.
@@ -372,18 +372,20 @@ scripts/
 
 **Execution checklist:**
 
-- [ ] Retain compiled clients from every published candidate baseline with source, SDK digest, compiler identity, expected capability set, and content-digested manifest.
-- [ ] Run old compiled clients against the current runtime and the current client against every retained supported runtime; verify table-size bounds and required/optional negotiation.
-- [ ] Run worker golden messages across supported minor combinations, unknown optional fields, missing required capabilities, registry mismatch, corrupt/truncated/oversized payloads, and shared-memory misuse.
-- [ ] Fuzz loader headers/chains, registry input, FlatBuffers messages, scene blobs, transaction payloads, handle lifecycle, frame mapping, and cancellation/crash races under fixed corpus/budgets.
-- [ ] Package runtime and SDK independently; build `tests/contract/external_client` in a clean out-of-tree directory using only installed headers, schemas, libraries, worker, and fixtures.
-- [ ] Execute external-client E2E: manifest, negotiation, scene load, objective session, progressive operation/events, immutable frame copy/map, camera transaction, revision conflict, cancellation, worker crash/restart, and full-reload fallback.
-- [ ] Validate the complete Public Interaction Surface Ledger against maintained adapter/client conformance results: native, CLI render, pyure, USD/Hydra and any installed/farm/provider surface must be canonical, migrated, explicitly internal, or explicitly excluded with no unresolved bypass.
-- [ ] Inspect process/network state during the full suite to prove no listener/firewall request, ambient plugin/script/solver/model discovery, or orphan worker.
-- [ ] Generate `ure.phase_pb.validation.v1` with source/runtime/worker/registry/package digests, ABI/export/layout results, compatibility matrix, fuzz corpus identity, behavioral gates, and complete maintained CTest result.
-- [ ] Run the suite from a clean tree and verify the report schema and digest are deterministic apart from declared timing/environment fields.
+- [x] Retain compiled clients from every published candidate baseline with source, SDK digest, compiler identity, expected capability set, and content-digested manifest.
+- [x] Run old compiled clients against the current runtime and the current client against every retained supported runtime; verify table-size bounds and required/optional negotiation.
+- [x] Run worker golden messages across supported minor combinations, unknown optional fields, missing required capabilities, registry mismatch, corrupt/truncated/oversized payloads, and shared-memory misuse.
+- [x] Fuzz loader headers/chains, registry input, FlatBuffers messages, scene blobs, transaction payloads, handle lifecycle, frame mapping, and cancellation/crash races under fixed corpus/budgets.
+- [x] Package runtime and SDK independently; build `tests/contract/external_client` in a clean out-of-tree directory using only installed headers, schemas, libraries, worker, and fixtures.
+- [x] Execute external-client E2E: manifest, negotiation, scene load, objective session, progressive operation/events, immutable frame copy/map, camera transaction, revision conflict, cancellation, worker crash/restart, and full-reload fallback.
+- [x] Validate the complete Public Interaction Surface Ledger against maintained adapter/client conformance results: native, CLI render, pyure, USD/Hydra and any installed/farm/provider surface must be canonical, migrated, explicitly internal, or explicitly excluded with no unresolved bypass.
+- [x] Inspect process/network state during the full suite to prove no listener/firewall request, ambient plugin/script/solver/model discovery, or orphan worker.
+- [x] Generate `ure.phase_pb.validation.v1` with source/runtime/worker/registry/package digests, ABI/export/layout results, compatibility matrix, fuzz corpus identity, behavioral gates, and complete maintained CTest result.
+- [x] Run the suite from a clean tree and verify the report schema and digest are deterministic apart from declared timing/environment fields.
 
 **Completion evidence:** all supported candidate combinations and standalone package consumers pass; security/lifecycle failure classes are explicit; the candidate support promise is narrow, auditable, and implementable.
+
+**Recorded evidence:** Five content-digested PB.2-PB.6 C11 binaries compile against their historical generated headers and load the current two-export runtime using phase-known table prefixes. The Candidate policy retains only the current content-digested runtime as supported in the reverse direction. Independent SDK/runtime packages build three clean out-of-tree consumers for direct scene/session/frame, UUID transaction/conflict/camera/full-reload, and worker scene/render/shared-memory/crash/restart paths. The 13-message golden corpus includes registry mismatch; fixed-seed bounded loader, registry, schema, scene, transaction, handle, mapping, cancellation and crash gates are combined with exact package/import, live TCP/UDP, ambient-discovery and worker-exit audits. The 25-surface ledger remains closed. `ure.phase_pb.validation.v1` binds source, binary, registry, package, ABI, matrix, corpus, behavior and complete CTest identities while excluding declared environment fields from its semantic digest. Release 100/100 and clean-tree report reproduction pass. All artifacts remain Candidate 0.1 with no compatibility promise; PB.8 is not authorized.
 
 ## 11. PB.8 — Freeze and stable 1.0 declaration
 

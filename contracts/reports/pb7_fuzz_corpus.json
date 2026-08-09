@@ -1,0 +1,25 @@
+{
+  "schema": "ure.pb.fuzz-corpus/1.0",
+  "publication_state": "Candidate",
+  "seed": "0x8d12e519a73bc641",
+  "global_limits": {
+    "flatbuffer_max_depth": 64,
+    "flatbuffer_max_tables": 100000,
+    "control_bytes": 1048576,
+    "scene_bytes": 16777216,
+    "transaction_bytes": 4096,
+    "operation_count": 64
+  },
+  "targets": [
+    {"name": "loader_headers_and_chains", "mode": "fixed-seed mutation", "cases": 256, "gate": "test_pb7_fuzz"},
+    {"name": "registry_json_and_schema", "mode": "semantic mutation corpus", "cases": 12, "gate": "test_contract_codegen_negative"},
+    {"name": "flatbuffers_worker_messages", "mode": "golden and malformed corpus", "cases": 13, "gate": "test_mock_worker_external_client"},
+    {"name": "native_scene_blobs", "mode": "fixed-seed bit mutation", "cases": 128, "gate": "test_pb7_fuzz"},
+    {"name": "scene_transaction_payloads", "mode": "fixed-seed bounded byte mutation", "cases": 128, "gate": "test_pb7_fuzz"},
+    {"name": "handle_lifecycle", "mode": "invalid-generation corpus and concurrent retain/release schedule", "cases": 37, "gate": "test_pb7_fuzz,test_runtime_lifecycle"},
+    {"name": "frame_mapping", "mode": "invalid plane/token/stride/extent and lease-generation corpus", "cases": 18, "gate": "test_frame_leases,test_worker_protocol"},
+    {"name": "cancellation_races", "mode": "fixed concurrent cancel/retain/close schedule", "cases": 8, "gate": "test_runtime_lifecycle,test_scene_boundary"},
+    {"name": "worker_crash_races", "mode": "fixed startup/handshake/render/mapping/shutdown/malformed/restart schedule", "cases": 10, "gate": "test_worker_crash"}
+  ],
+  "compatibility_promise": "None before PB.8"
+}

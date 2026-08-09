@@ -1,4 +1,4 @@
-#include "worker_test_client.hpp"
+#include "external_client/worker_client.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -105,6 +105,16 @@ int run(const std::filesystem::path &worker,
     CHECK_ERROR(malformed.handshake(error));
     CHECK_ERROR(malformed.send_malformed_message(error));
     CHECK(malformed.wait(5000, exit_code) && exit_code != STILL_ACTIVE);
+
+    WorkerClient registry_mismatch;
+    CHECK_ERROR(registry_mismatch.launch(worker, runtime, error));
+    CHECK_ERROR(registry_mismatch.send_registry_mismatch(error));
+    CHECK(registry_mismatch.wait(5000, exit_code) && exit_code != STILL_ACTIVE);
+
+    WorkerClient truncated;
+    CHECK_ERROR(truncated.launch(worker, runtime, error));
+    CHECK_ERROR(truncated.send_truncated_message(error));
+    CHECK(truncated.wait(5000, exit_code) && exit_code != STILL_ACTIVE);
 
     WorkerClient during_shutdown;
     CHECK_ERROR(during_shutdown.launch(worker, runtime, error));

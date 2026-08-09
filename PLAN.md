@@ -1,6 +1,6 @@
 # UltraRender 高阶能力与公共边界研究实施路线图
 
-最后更新: 2026-08-09（PB.5 native full-scene boundary 闭环）
+最后更新: 2026-08-09（PB.7 Candidate public-boundary validation 闭环）
 
 本文档是 UltraRender 当前唯一的行动纲领。2026-08-01 以前的主体建设路线已归档为
 [`docs/archive/Legacy_Construction_PLAN_2026-08-01.md`](docs/archive/Legacy_Construction_PLAN_2026-08-01.md)，
@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: PB.7 — Mixed-version, security, packaging, and external-client closure
+当前游标: PB.8 — Stable 1.0 declaration gate（等待单独明确批准，不得自行进入）
 
 ### 0.1 唯一生产施工队列
 
@@ -38,7 +38,7 @@ HT transport     HR reconstruction HW physical world HD differentiation
                        │
                        ▼
 PB.0 -> PB.1 -> PB.2 -> PB.3 -> PB.4 -> PB.5 -> PB.6 -> PB.7 -> PB.8
-[done]   [done]   [done]   [done]   [done]   [done] [current]  [1.0 gate]
+[done]   [done]   [done]   [done]   [done]   [done]   [done]   [done]  [approval gate]
                        │
                        ▼
                  resume HR.3
@@ -119,6 +119,8 @@ public transport、versioned extension、internal contract、legacy migration �
 **PB.5 状态**: 已完成（2026-08-09）。151-entry Candidate registry（digest `2b88d3c5efed84faf862df447bb1d8178f7eaba38a7fa1e9035f6cf0051f0e3d`）生成 Scene/Session C11 tables 与 native-scene/objective worker schema。Windows x64 runtime 通过 Phase Q 严格校验 memory/file `.ure`、`.urescene`、`.urepkg`，绑定 blob/semantic/resource/schema/package/revision identity，并以原子 replacement 和失败保留旧 revision 提供永久全场景回退。generic objective 只表达 time/memory/sample/output/determinism/payload，不公开 integrator enum；内部执行真实 CUDA automatic session，进度、错误和 immutable frame 复用 PB.3-PB.4 语义。product worker 只经两项 loader export 完成相同路径，conformance fault/producer 不进入候选包。门禁覆盖 corrupt/ambiguous package、unsupported schema、missing resource、content/decompression/nesting/resource/object/resident budget、active-work replacement、device loss，以及 direct ABI/worker revision、digest、error、session、frame metadata 和 byte parity；Release 91/91 CTest 通过。该能力仍是 Candidate 0.1，不形成稳定承诺；游标进入 PB.6。
 
 **PB.6 状态**: 已完成（2026-08-09）。SceneIR schema 2 为 editable objects 持久化 RFC 9562 UUID，并保留 legacy source ID 为非权威 alias；schema 1 通过 UUIDv8/SHA-256 确定性迁移，binary/text/package roundtrip、重复与悬空引用均受门禁约束。180-entry Candidate registry（digest `0e56eea2d03b2528ceefe2f686de3b63510d956738ee19cf107835abb297f554`）生成 transaction/result C11 布局、operation identities 与 additive FlatBuffers schema。Scene table 和 product worker 以 transaction UUID、base revision、有序 typed edits、required capabilities 与 client metadata 执行全量预校验和原子 swap；stale base 明确返回 retry revision 且不自动 merge。精确实现 transform、canonical physical camera、material/mesh reference、URI payload、add/remove、light 与 environment；visibility 与 binary mesh replacement 仅接受显式 full-scene fallback，否则拒绝。direct ABI/worker 门禁验证 sizing 不提交、rollback、conflict/retry、hot/partial/full/rejected strategy、rebuilt identities、semantic replay 与 frame identity parity；Release 95/95 CTest 通过。所有产物仍为 Candidate 0.1，不形成兼容承诺；游标进入 PB.7。
+
+**PB.7 状态**: 已完成（2026-08-09）。PB.2-PB.6 的五份 Windows x64 C11 compiled client fixture 绑定 historical SDK/source/binary/compiler identity，并以各阶段已知 table prefix 对当前 runtime 执行真实加载；Candidate 支持策略明确只保留 current client/current content-digested runtime 作为反向支持行，未把旧 Candidate runtime 偷换为承诺。SDK 与 runtime 独立分包，clean out-of-tree client 仅用分包 headers/schemas/FlatBuffers/fixtures 和 product binaries 完成 manifest/capability、native scene/objective、operation/event、immutable frame map/copy、camera transaction、conflict、cancel、full reload、worker shared-memory、crash/restart E2E。13 组 golden messages 增加 exact registry mismatch，固定种子/预算 corpus 覆盖 loader chain、registry、FlatBuffers、scene、transaction、handle、mapping/cancel/crash 类别；静态 import 与运行中 TCP/UDP 检查确认无网络端点、防火墙触发路径、ambient discovery 或 orphan worker。完整 ledger 仍为零未分类/重复权威/bypass；`ure.phase_pb.validation.v1` schema 与确定性聚合脚本绑定 source/runtime/worker/registry/package/ABI/matrix/fuzz/behavior/CTest 证据。Release 100/100 CTest 通过后以 clean-tree validation report 再闭环。所有产物仍为 Candidate 0.1；PB.8 未获单独明确批准，当前必须停在稳定承诺门前。
 
 ---
 

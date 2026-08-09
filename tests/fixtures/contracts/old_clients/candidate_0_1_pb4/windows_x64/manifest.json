@@ -1,0 +1,32 @@
+{
+  "schema": "ure.pb.candidate-client-fixture/1.0",
+  "publication_state": "Candidate",
+  "candidate": "0.1",
+  "phase": "PB.4",
+  "baseline_commit": "193f4408c95decb6a99311f14f9b1990791d2288",
+  "platform": "windows-x64-msvc-c11",
+  "source": "candidate_client.c",
+  "source_sha256": "f8f7676815d3b98b70156b466a93508383cc9aa19fb26713aa4470363fe1f387",
+  "binary": "candidate_client.exe",
+  "binary_bytes": 143360,
+  "binary_sha256": "b990b2fed600ab627a314232a90aab669a1e5bcbb82c48e3009bef4419dfcfbe",
+  "sdk_header_sha256": "0e3c24bd0638e8d38c9860c4d3854a0bdc17cd9e1482bb6c0ca8c23dcfdfe78a",
+  "compiler": "Microsoft (R) C/C++ Optimizing Compiler Version 19.51.36252 for x64",
+  "windows_sdk": "10.0.28000.0",
+  "compile_flags": [
+    "/TC",
+    "/std:c11",
+    "/W4",
+    "/WX",
+    "/O2",
+    "/Brepro",
+    "/INCREMENTAL:NO"
+  ],
+  "expected_capabilities": [
+    "Bootstrap",
+    "Lifecycle",
+    "FrameLease"
+  ],
+  "expected_behavior": "Bootstrap and phase-known interface prefixes succeed against the current candidate; unknown optional interface discovery is unavailable.",
+  "compatibility_promise": "None before PB.8"
+}

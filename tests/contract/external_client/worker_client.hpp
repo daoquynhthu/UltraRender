@@ -54,6 +54,8 @@ class WorkerClient {
     bool send_shutdown_without_wait(std::string &error);
     bool send_oversized_message(std::string &error);
     bool send_malformed_message(std::string &error);
+    bool send_registry_mismatch(std::string &error);
+    bool send_truncated_message(std::string &error);
     void terminate() noexcept;
     bool wait(std::uint32_t timeout_ms, std::uint32_t &exit_code) noexcept;
     fb::ResultCode wait_result(std::uint32_t timeout_ms) noexcept;

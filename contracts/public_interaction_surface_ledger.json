@@ -110,11 +110,11 @@
       "output_role": "Capabilities, errors, operations, events and immutable frames",
       "translation_path": "Public registry -> contract adapter -> internal renderer services",
       "bypass_status": "None",
-      "bypass_detail": "PB.1-PB.6 provide generated declarations, lifecycle/frame/scene/session/transaction tables, the two-export product runtime and a worker that uses only those exports; remaining adapter closure continues under PB.7-PB.8",
+      "bypass_detail": "PB.1-PB.7 provide generated declarations, lifecycle/frame/scene/session/transaction tables, the two-export product runtime, a worker that uses only those exports, mixed-version fixtures, independent SDK/runtime packages, and clean out-of-tree client evidence; only the explicitly approved stable freeze remains for PB.8",
       "migration_phase": "PB.1-PB.8",
       "terminal_gate": "PB.8",
       "loss_policy": "Required semantics fail; optional semantics negotiate explicitly",
-      "conformance_evidence": ["test_contract_registry", "test_contract_codegen_compare", "test_mock_worker_external_client", "test_candidate_abi_layout", "test_candidate_loader_exports", "test_candidate_loader_client", "test_scene_boundary", "test_scene_worker"],
+      "conformance_evidence": ["test_contract_registry", "test_contract_codegen_compare", "test_mock_worker_external_client", "test_candidate_abi_layout", "test_candidate_loader_exports", "test_candidate_loader_client", "test_scene_boundary", "test_scene_worker", "test_candidate_compatibility", "test_pb7_fuzz", "test_worker_runtime_security", "test_external_client_package"],
       "anchors": [
         {"path": "contracts/registry/public_contract_registry.json", "pattern": "ure.public.contract-registry-source/1.0"},
         {"path": "docs/Public_API_ABI_Architecture.md", "pattern": "One registry defines one semantic contract"},

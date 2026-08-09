@@ -3,6 +3,7 @@ build/
 bin/
 lib/
 *.exe
+!tests/fixtures/contracts/old_clients/candidate_0_1_pb*/windows_x64/candidate_client.exe
 *.obj
 *.pdb
 *.tlog

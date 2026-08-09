@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ure.phase_pb.validation.v1",
+  "title": "UltraRender Phase PB Candidate Validation",
+  "type": "object",
+  "required": [
+    "schema",
+    "publication_state",
+    "compatibility_promise",
+    "source",
+    "artifacts",
+    "abi",
+    "compatibility_matrix",
+    "fuzz_corpus",
+    "behavioral_gates",
+    "ctest",
+    "environment",
+    "semantic_digest"
+  ],
+  "properties": {
+    "schema": {"const": "ure.phase_pb.validation.v1"},
+    "publication_state": {"const": "Candidate"},
+    "compatibility_promise": {"const": "None before PB.8"},
+    "source": {"type": "object"},
+    "artifacts": {"type": "object"},
+    "abi": {"type": "object"},
+    "compatibility_matrix": {"type": "object"},
+    "fuzz_corpus": {"type": "object"},
+    "behavioral_gates": {"type": "array", "minItems": 10},
+    "ctest": {"type": "object"},
+    "environment": {"type": "object"},
+    "semantic_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}

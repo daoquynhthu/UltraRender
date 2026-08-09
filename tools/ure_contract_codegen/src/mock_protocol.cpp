@@ -104,7 +104,9 @@ std::vector<std::uint8_t> malformed_response(std::vector<std::uint8_t> digest = 
 
 }
 
-std::vector<std::uint8_t> process_mock_request(std::span<const std::uint8_t> framed_request, int& exit_code) {
+std::vector<std::uint8_t> process_mock_request(
+    std::span<const std::uint8_t> framed_request, int& exit_code,
+    std::span<const std::uint8_t> expected_registry) {
     exit_code = 0;
     if (framed_request.size() < 4) return malformed_response();
     const std::uint32_t declared_size = framed_size(framed_request);
@@ -115,7 +117,10 @@ std::vector<std::uint8_t> process_mock_request(std::span<const std::uint8_t> fra
     flatbuffers::Verifier verifier(body.data(), body.size(), 64, 100000);
     if (!wire::VerifyWorkerEnvelopeBuffer(verifier)) return malformed_response();
     std::unique_ptr<wire::WorkerEnvelopeT> input(wire::GetWorkerEnvelope(body.data())->UnPack());
-    if (input->registry_digest.size() != 32 || input->protocol_major != 0 || input->protocol_minor > 1) {
+    if (input->registry_digest.size() != 32 || input->protocol_major != 0 ||
+        input->protocol_minor > 1 ||
+        (!expected_registry.empty() &&
+         !std::ranges::equal(input->registry_digest, expected_registry))) {
         wire::WorkerEnvelopeT response;
         response.protocol_major = 0;
         response.protocol_minor = 1;
@@ -177,14 +182,18 @@ std::vector<std::uint8_t> process_mock_request(std::span<const std::uint8_t> fra
 
 std::vector<MockExchange> build_mock_exchanges(const Registry& registry) {
     std::vector<MockExchange> result;
-    const auto add = [&result](std::string name, std::vector<std::uint8_t> bytes) {
+    const auto add = [&result, &registry](std::string name, std::vector<std::uint8_t> bytes) {
         int exit_code = 0;
-        auto response = process_mock_request(bytes, exit_code);
+        auto response = process_mock_request(bytes, exit_code,
+                                             registry.digest_bytes);
         result.push_back({std::move(name), std::move(bytes), std::move(response), exit_code});
     };
     add("normal_lifecycle", encode(request(registry, 1, 1, wire::MessageKind::OperationRequest, 801, {300, 301}, {303})));
     add("missing_optional_capability", encode(request(registry, 1, 2, wire::MessageKind::HandshakeRequest, 0, {300}, {999999})));
     add("missing_required_capability", encode(request(registry, 1, 3, wire::MessageKind::HandshakeRequest, 0, {999999}))) ;
+    auto mismatch = request(registry, 1, 13, wire::MessageKind::HandshakeRequest, 0, {300});
+    std::ranges::fill(mismatch.registry_digest, std::uint8_t{0x7b});
+    add("registry_mismatch", encode(std::move(mismatch)));
     add("old_minor", encode(request(registry, 0, 4, wire::MessageKind::HandshakeRequest, 0, {300})));
     add("unknown_optional_field", encode_future(registry));
     add("event_gap", encode(request(registry, 1, 6, wire::MessageKind::OperationRequest, 4026531842u, {301})));

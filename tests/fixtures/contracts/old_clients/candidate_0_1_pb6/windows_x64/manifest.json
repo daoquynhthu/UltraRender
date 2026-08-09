@@ -1,0 +1,35 @@
+{
+  "schema": "ure.pb.candidate-client-fixture/1.0",
+  "publication_state": "Candidate",
+  "candidate": "0.1",
+  "phase": "PB.6",
+  "baseline_commit": "5592aac151ee9d4e7e64cb35dca77b3053ab1bdc",
+  "platform": "windows-x64-msvc-c11",
+  "source": "candidate_client.c",
+  "source_sha256": "f8f7676815d3b98b70156b466a93508383cc9aa19fb26713aa4470363fe1f387",
+  "binary": "candidate_client.exe",
+  "binary_bytes": 143872,
+  "binary_sha256": "20b0064c8d234e1e4920c981a4777a34a7d1cc92e63f2115c7b21517705d8c76",
+  "sdk_header_sha256": "5ae8cfe2e2360bfd66e4d553ee61d72521c9e916827c4eb0e0ed35ec913860fb",
+  "compiler": "Microsoft (R) C/C++ Optimizing Compiler Version 19.51.36252 for x64",
+  "windows_sdk": "10.0.28000.0",
+  "compile_flags": [
+    "/TC",
+    "/std:c11",
+    "/W4",
+    "/WX",
+    "/O2",
+    "/Brepro",
+    "/INCREMENTAL:NO"
+  ],
+  "expected_capabilities": [
+    "Bootstrap",
+    "Lifecycle",
+    "FrameLease",
+    "NativeScene",
+    "RenderSession",
+    "SceneTransaction"
+  ],
+  "expected_behavior": "Bootstrap and phase-known interface prefixes succeed against the current candidate; unknown optional interface discovery is unavailable.",
+  "compatibility_promise": "None before PB.8"
+}

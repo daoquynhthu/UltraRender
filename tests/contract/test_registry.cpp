@@ -1,4 +1,5 @@
 #include <array>
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <span>
@@ -24,8 +25,15 @@ int main() {
         throw std::runtime_error("Candidate registry or C value surface drifted");
     }
     const auto exchanges = ure::contract_codegen::build_mock_exchanges(registry);
-    if (exchanges.size() != 12 || exchanges.front().response.empty() || exchanges[8].worker_exit_code != 86 ||
-        !exchanges[8].response.empty()) {
+    const auto crash = std::ranges::find(exchanges, "worker_crash",
+                                         &ure::contract_codegen::MockExchange::name);
+    const auto mismatch = std::ranges::find(
+        exchanges, "registry_mismatch",
+        &ure::contract_codegen::MockExchange::name);
+    if (exchanges.size() != 13 || exchanges.front().response.empty() ||
+        crash == exchanges.end() || crash->worker_exit_code != 86 ||
+        !crash->response.empty() || mismatch == exchanges.end() ||
+        mismatch->response.empty()) {
         throw std::runtime_error("Mock scenario matrix is incomplete");
     }
     return 0;

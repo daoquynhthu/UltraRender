@@ -20,7 +20,9 @@ struct MockExchange {
 };
 
 std::vector<MockExchange> build_mock_exchanges(const Registry& registry);
-std::vector<std::uint8_t> process_mock_request(std::span<const std::uint8_t> framed_request, int& exit_code);
+std::vector<std::uint8_t> process_mock_request(
+    std::span<const std::uint8_t> framed_request, int& exit_code,
+    std::span<const std::uint8_t> expected_registry = {});
 void write_binary(const std::filesystem::path& path, std::span<const std::uint8_t> bytes);
 std::vector<std::uint8_t> read_binary(const std::filesystem::path& path);
 
