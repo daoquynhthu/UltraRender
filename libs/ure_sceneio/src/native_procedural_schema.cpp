@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <span>
 #include <stdexcept>
@@ -311,7 +312,9 @@ LoadResult<std::shared_ptr<const ProceduralGraph>> decode_procedural_graph(
     std::span<const std::uint8_t> bytes, const ValidationLimits& limits) {
     if (bytes.size() > limits.max_total_uncompressed_bytes) return failure<std::shared_ptr<const ProceduralGraph>>("Procedural graph byte budget exceeded");
     try {
-        flatbuffers::Verifier verifier(bytes.data(), bytes.size());
+        const auto max_tables = static_cast<flatbuffers::uoffset_t>(std::min<std::uint64_t>(
+            limits.max_object_count, std::numeric_limits<flatbuffers::uoffset_t>::max()));
+        flatbuffers::Verifier verifier(bytes.data(), bytes.size(), limits.max_nesting_depth, max_tables);
         if (!schema::VerifyProceduralGraphBuffer(verifier)) return failure<std::shared_ptr<const ProceduralGraph>>("Invalid URPG payload");
         std::unique_ptr<schema::ProceduralGraphT> native(schema::GetProceduralGraph(bytes.data())->UnPack());
         auto graph = std::make_shared<const ProceduralGraph>(from_schema(*native));

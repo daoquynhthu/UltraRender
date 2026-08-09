@@ -171,6 +171,8 @@ ure_result_t query_interface(const ure_interface_query_t *query, ure_interface_r
     static constexpr std::array<std::uint8_t, 16> operation_id URE_INTERFACE_OPERATION_UUID_BYTES;
     static constexpr std::array<std::uint8_t, 16> event_id URE_INTERFACE_EVENT_UUID_BYTES;
     static constexpr std::array<std::uint8_t, 16> frame_id URE_INTERFACE_FRAME_UUID_BYTES;
+    static constexpr std::array<std::uint8_t, 16> scene_id URE_INTERFACE_SCENE_UUID_BYTES;
+    static constexpr std::array<std::uint8_t, 16> session_id URE_INTERFACE_SESSION_UUID_BYTES;
 #if defined(URE_CONTRACT_CONFORMANCE)
     static constexpr std::array<std::uint8_t, 16> conformance_id{0xe1, 0xf2, 0x20, 0x01, 0x41, 0x20,
                                                                  0x5a, 0xd1, 0x9e, 0xe0, 0x2f, 0xa0,
@@ -189,6 +191,10 @@ ure_result_t query_interface(const ure_interface_query_t *query, ure_interface_r
         table = &ure::contract::event_interface().header;
     } else if (uuid_equal(query->interface_id, frame_id)) {
         table = &ure::contract::frame_interface().header;
+    } else if (uuid_equal(query->interface_id, scene_id)) {
+        table = &ure::contract::scene_interface().header;
+    } else if (uuid_equal(query->interface_id, session_id)) {
+        table = &ure::contract::session_interface().header;
     }
 #if defined(URE_CONTRACT_CONFORMANCE)
     else if (uuid_equal(query->interface_id, conformance_id)) {

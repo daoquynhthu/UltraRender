@@ -84,7 +84,9 @@ static int run_tests(ure_get_runtime_manifest_fn get_manifest, ure_query_interfa
     CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "runtime_build_digest"));
     CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "ure_interface_response_t"));
     CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "flatc version 25.12.19"));
-    CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "\"renderer\":false"));
+    CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "\"renderer\":true"));
+    CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "ure_native_scene_blob_t"));
+    CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "ure_session_interface_t"));
 
     {
         oversized_request_t large_request = {0};

@@ -144,7 +144,9 @@ LoadResult<std::shared_ptr<Mesh>> decode_mesh_payload(std::span<const std::uint8
     if (bytes.size() > limits.max_resident_resource_bytes) {
         return failure<std::shared_ptr<Mesh>>("URE-Q3-BUDGET-001", "mesh", "Mesh payload exceeds resource budget");
     }
-    flatbuffers::Verifier verifier(bytes.data(), bytes.size());
+    const auto max_tables = static_cast<flatbuffers::uoffset_t>(std::min<std::uint64_t>(
+        limits.max_object_count, std::numeric_limits<flatbuffers::uoffset_t>::max()));
+    flatbuffers::Verifier verifier(bytes.data(), bytes.size(), limits.max_nesting_depth, max_tables);
     if (!schema::VerifyMeshPayloadBuffer(verifier)) {
         return failure<std::shared_ptr<Mesh>>("URE-Q3-MESH-001", "mesh", "Invalid URMS payload");
     }
@@ -184,7 +186,9 @@ LoadResult<std::shared_ptr<const scene_ir::MiePhaseResource>> decode_mie_payload
         return failure<std::shared_ptr<const scene_ir::MiePhaseResource>>(
             "URE-Q3-BUDGET-001", "mie", "Mie payload exceeds resource budget");
     }
-    flatbuffers::Verifier verifier(bytes.data(), bytes.size());
+    const auto max_tables = static_cast<flatbuffers::uoffset_t>(std::min<std::uint64_t>(
+        limits.max_object_count, std::numeric_limits<flatbuffers::uoffset_t>::max()));
+    flatbuffers::Verifier verifier(bytes.data(), bytes.size(), limits.max_nesting_depth, max_tables);
     if (!schema::VerifyMiePayloadBuffer(verifier)) {
         return failure<std::shared_ptr<const scene_ir::MiePhaseResource>>(
             "URE-Q3-MIE-001", "mie", "Invalid URMI payload");

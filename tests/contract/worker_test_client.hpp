@@ -39,6 +39,12 @@ class WorkerClient {
                                                        std::uint32_t height,
                                                        std::uint32_t seed,
                                                        std::string &error);
+    std::unique_ptr<fb::WorkerEnvelopeT>
+    replace_scene(const std::vector<std::uint8_t> &content,
+                  std::uint64_t scene_id, std::string &error);
+    std::unique_ptr<fb::WorkerEnvelopeT>
+    render_scene(std::uint64_t scene_id, std::uint64_t session_id,
+                 std::string &error);
     std::unique_ptr<fb::WorkerEnvelopeT> release_lease(std::uint64_t lease,
                                                        std::string &error);
     bool shutdown(std::string &error);

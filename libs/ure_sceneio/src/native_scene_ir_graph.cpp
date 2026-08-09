@@ -603,7 +603,9 @@ LoadResult<NativeSceneArchive> decode_scene_graph(
     const std::unordered_map<std::string, std::shared_ptr<const scene_ir::MiePhaseResource>>& mie,
     const std::unordered_map<std::string, std::string>& resource_hashes,
     const ValidationLimits& limits) {
-    flatbuffers::Verifier verifier(bytes.data(), bytes.size());
+    const auto max_tables = static_cast<flatbuffers::uoffset_t>(std::min<std::uint64_t>(
+        limits.max_object_count, std::numeric_limits<flatbuffers::uoffset_t>::max()));
+    flatbuffers::Verifier verifier(bytes.data(), bytes.size(), limits.max_nesting_depth, max_tables);
     if (!schema::VerifySceneGraphBuffer(verifier)) return graph_failure<NativeSceneArchive>("Invalid URIG payload");
     try {
         std::unique_ptr<schema::SceneGraphT> graph(schema::GetSceneGraph(bytes.data())->UnPack());

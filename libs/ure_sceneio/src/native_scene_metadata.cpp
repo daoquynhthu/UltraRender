@@ -88,9 +88,9 @@ void append_validation(LoadResult<T>& result, ValidationReport validation) {
 bool verify_metadata(std::span<const std::uint8_t> bytes, const ValidationLimits& limits) {
     if (bytes.size() < 8 || !fb::MetadataEnvelopeBufferHasIdentifier(bytes.data())) return false;
     const auto max_tables = static_cast<flatbuffers::uoffset_t>(std::min<std::uint64_t>(
-        limits.max_directory_entries,
+        std::min(limits.max_directory_entries, limits.max_object_count),
         std::numeric_limits<flatbuffers::uoffset_t>::max()));
-    flatbuffers::Verifier verifier(bytes.data(), bytes.size(), 64, max_tables);
+    flatbuffers::Verifier verifier(bytes.data(), bytes.size(), limits.max_nesting_depth, max_tables);
     return fb::VerifyMetadataEnvelopeBuffer(verifier);
 }
 

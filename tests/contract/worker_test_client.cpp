@@ -89,6 +89,49 @@ frame_request(std::uint32_t width, std::uint32_t height, std::uint32_t seed) {
             builder.GetBufferPointer() + builder.GetSize()};
 }
 
+std::vector<std::uint8_t>
+scene_request(const std::vector<std::uint8_t> &content,
+              std::uint64_t scene_id) {
+    fb::PublicScenePayloadT payload;
+    payload.kind = fb::ScenePayloadKind::NativeSceneRequest;
+    payload.scene_request = std::make_unique<fb::NativeSceneRequestT>();
+    auto &request = *payload.scene_request;
+    request.source_kind = fb::SceneSourceKind::Memory;
+    request.format = fb::SceneFormat::UreScene;
+    request.content = content;
+    request.schema_max_major = 1;
+    request.scene_id = scene_id;
+    request.budget = std::make_unique<fb::SceneBudgetT>();
+    request.budget->max_content_bytes = UINT64_C(16777216);
+    request.budget->max_uncompressed_bytes = UINT64_C(67108864);
+    request.budget->max_resident_bytes = UINT64_C(268435456);
+    request.budget->max_resource_count = 4096;
+    request.budget->max_object_count = 100000;
+    request.budget->max_nesting_depth = 64;
+    request.budget->max_decompression_ratio = 256;
+    flatbuffers::FlatBufferBuilder builder;
+    fb::FinishPublicScenePayloadBuffer(
+        builder, fb::CreatePublicScenePayload(builder, &payload));
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
+}
+
+std::vector<std::uint8_t> objective_request(std::uint64_t scene_id,
+                                            std::uint64_t session_id) {
+    fb::PublicScenePayloadT payload;
+    payload.kind = fb::ScenePayloadKind::RenderObjectiveRequest;
+    payload.objective = std::make_unique<fb::RenderObjectiveRequestT>();
+    payload.objective->scene_id = scene_id;
+    payload.objective->session_id = session_id;
+    payload.objective->sample_budget = 1;
+    payload.objective->payload_digest.resize(32, 0);
+    flatbuffers::FlatBufferBuilder builder;
+    fb::FinishPublicScenePayloadBuffer(
+        builder, fb::CreatePublicScenePayload(builder, &payload));
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
+}
+
 }
 
 struct WorkerClient::Impl {
@@ -257,7 +300,9 @@ bool WorkerClient::handshake_with_limits(std::uint64_t max_control_bytes,
     handshake.registry_digest.assign(kRegistry.begin(), kRegistry.end());
     handshake.frontend_build_digest.resize(32, 0x5aU);
     handshake.required_capabilities = {URE_CAPABILITY_LIFECYCLE,
-                                       URE_CAPABILITY_FRAME_LEASE};
+                                       URE_CAPABILITY_FRAME_LEASE,
+                                       URE_CAPABILITY_NATIVE_SCENE,
+                                       URE_CAPABILITY_RENDER_SESSION};
     handshake.optional_capabilities = {URE_CAPABILITY_TELEMETRY};
     handshake.transport_features = transport_features;
     handshake.max_control_bytes = max_control_bytes;
@@ -273,7 +318,9 @@ bool WorkerClient::handshake_with_limits(std::uint64_t max_control_bytes,
         response->handshake->transport_features != transport_features ||
         response->handshake->required_capabilities !=
             std::vector<std::uint32_t>{URE_CAPABILITY_LIFECYCLE,
-                                       URE_CAPABILITY_FRAME_LEASE} ||
+                                       URE_CAPABILITY_FRAME_LEASE,
+                                       URE_CAPABILITY_NATIVE_SCENE,
+                                       URE_CAPABILITY_RENDER_SESSION} ||
         !response->handshake->optional_capabilities.empty() ||
         response->handshake->max_control_bytes > max_control_bytes ||
         response->handshake->max_blob_bytes > max_blob_bytes ||
@@ -296,6 +343,30 @@ WorkerClient::request_frame(std::uint32_t width, std::uint32_t height,
     request.payload_schema = kConformanceFrameSchema;
     request.payload_version_minor = 1;
     request.payload = frame_request(width, height, seed);
+    return impl_->exchange(request, error);
+}
+
+std::unique_ptr<fb::WorkerEnvelopeT>
+WorkerClient::replace_scene(const std::vector<std::uint8_t> &content,
+                            std::uint64_t scene_id, std::string &error) {
+    fb::WorkerEnvelopeT request;
+    request.message_kind = fb::MessageKind::OperationRequest;
+    request.operation_kind = URE_OPERATION_REPLACE_SCENE;
+    request.payload_schema = URE_PAYLOAD_NATIVE_SCENE;
+    request.payload_version_minor = 1;
+    request.payload = scene_request(content, scene_id);
+    return impl_->exchange(request, error);
+}
+
+std::unique_ptr<fb::WorkerEnvelopeT>
+WorkerClient::render_scene(std::uint64_t scene_id, std::uint64_t session_id,
+                           std::string &error) {
+    fb::WorkerEnvelopeT request;
+    request.message_kind = fb::MessageKind::OperationRequest;
+    request.operation_kind = URE_OPERATION_RENDER_SESSION;
+    request.payload_schema = URE_PAYLOAD_RENDER_OBJECTIVE;
+    request.payload_version_minor = 1;
+    request.payload = objective_request(scene_id, session_id);
     return impl_->exchange(request, error);
 }
 

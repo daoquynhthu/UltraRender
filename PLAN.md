@@ -1,6 +1,6 @@
 # UltraRender 高阶能力与公共边界研究实施路线图
 
-最后更新: 2026-08-09（PB.4 immutable frames / local worker 闭环）
+最后更新: 2026-08-09（PB.5 native full-scene boundary 闭环）
 
 本文档是 UltraRender 当前唯一的行动纲领。2026-08-01 以前的主体建设路线已归档为
 [`docs/archive/Legacy_Construction_PLAN_2026-08-01.md`](docs/archive/Legacy_Construction_PLAN_2026-08-01.md)，
@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: PB.5 — Native full-scene boundary and revisioned replacement
+当前游标: PB.6 — Persistent UUID transactions and canonical camera extension
 
 ### 0.1 唯一生产施工队列
 
@@ -38,7 +38,7 @@ HT transport     HR reconstruction HW physical world HD differentiation
                        │
                        ▼
 PB.0 -> PB.1 -> PB.2 -> PB.3 -> PB.4 -> PB.5 -> PB.6 -> PB.7 -> PB.8
-[done]   [done]   [done]   [done]   [done] [current]          [1.0 gate]
+[done]   [done]   [done]   [done]   [done]   [done] [current]  [1.0 gate]
                        │
                        ▼
                  resume HR.3
@@ -115,6 +115,8 @@ public transport、versioned extension、internal contract、legacy migration �
 **PB.3 状态**: 已完成（2026-08-09）。Candidate Core 现提供 Runtime/Instance/Error/Operation/Event 五张不可变表、按 owner/type/generation/parent/state/thread-policy 校验且不复用的 opaque handle，以及 retained structured Error/cause/operation/build context。capability descriptor 独立表达版本、合同稳定性、证据成熟度、运行状态、依赖、限制与 unavailable reason；缺失 required、请求启用尚不可用的 Experimental capability、未知 capability 和默认 Research 路径均 fail closed，不选择较弱语义。operation 的 queued/running/cancel-pending/terminal 状态、timeout、cancel、close/wait、failure/device-loss 与早释放均有确定结果；instance-owned 有界 event queue 提供单调序列、diagnostic coalescing 和显式 gap。动态加载 C11 fixture 覆盖并发 manifest/table read、handle retain/release、cancel/complete、close/wait、overflow、stale/wrong-type/cross-instance/closed-parent、leak 与 retained cause；100 次普通压力和 50 次 MSVC ASan 压力通过。103-entry registry digest 为 `9a54e300aa927f5fe4e15962cf1ce5afdcf3815a3d5d6c3cfb68d356ef2f9ed8`；两次 `/Brepro` relink 的 DLL SHA-256 均为 `43fc3e2440426269d1d663d905a686e54099aca52021b211dac2c3d92bc93f0a`。它仍不含 renderer/session/frame/worker，也不形成稳定承诺；游标进入 PB.4。
 
 **PB.4 状态**: 已完成（2026-08-09）。117-entry Candidate registry（digest `dd89cb843491009bc239c28c711a81eb181866ac43298c064e30bd129cd5f892`）生成 Frame table、frame/plane/shared-blob schemas 与 worker handshake/control 合同。Frame snapshot 在创建时复制为 immutable storage，保留 frame/byte 双预算、显式 `Backpressure`、checked map/unmap/copy、stride/extent 与 typed observable/unit/measure/time/uncertainty/provenance identity。Windows `ure_worker` 仅通过两个 loader symbol 装载 product runtime，使用 same-user DACL、`PIPE_REJECT_REMOTE_CLIENTS` Named Pipe、Job Object kill-on-close、verified bounded FlatBuffers 与 read-only duplicated file mapping；不链接网络栈或 runtime import library。测试专用 producer/runtime/worker 与候选发布包分离。direct ABI/worker bytes、metadata 与 frame-ready event parity、negotiated limits、lease/digest/generation、malformed/oversized input、startup/render/mapping/shutdown crash、`WorkerLost`、restart identity、no-orphan 与 package/import gate 已闭环；frame/worker/crash 三项各重复 100 次并通过，Release 89/89 CTest 通过。两次 `/Brepro` rebuild 的 product runtime 与 worker SHA-256 分别稳定为 `3254b8c27ba64968aecc844cafd505c0363b2b0fbe7bc784e0b650d6ce1d58ec` 与 `a43b7f7060c24d640d3ecfcf9dc918dba2af2d2eaab24617c866eba0359f0241`。该能力仍是 Candidate 0.1，不含 native scene/session/render workflow，也不形成稳定承诺；游标进入 PB.5。
+
+**PB.5 状态**: 已完成（2026-08-09）。151-entry Candidate registry（digest `2b88d3c5efed84faf862df447bb1d8178f7eaba38a7fa1e9035f6cf0051f0e3d`）生成 Scene/Session C11 tables 与 native-scene/objective worker schema。Windows x64 runtime 通过 Phase Q 严格校验 memory/file `.ure`、`.urescene`、`.urepkg`，绑定 blob/semantic/resource/schema/package/revision identity，并以原子 replacement 和失败保留旧 revision 提供永久全场景回退。generic objective 只表达 time/memory/sample/output/determinism/payload，不公开 integrator enum；内部执行真实 CUDA automatic session，进度、错误和 immutable frame 复用 PB.3-PB.4 语义。product worker 只经两项 loader export 完成相同路径，conformance fault/producer 不进入候选包。门禁覆盖 corrupt/ambiguous package、unsupported schema、missing resource、content/decompression/nesting/resource/object/resident budget、active-work replacement、device loss，以及 direct ABI/worker revision、digest、error、session、frame metadata 和 byte parity；Release 91/91 CTest 通过。该能力仍是 Candidate 0.1，不形成稳定承诺；游标进入 PB.6。
 
 ---
 

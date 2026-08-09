@@ -276,6 +276,103 @@ typedef struct ure_frame_copy_info_t {
     uint64_t destination_slice_stride;
 } ure_frame_copy_info_t;
 
+typedef struct ure_scene_budget_t {
+    ure_input_header_t header;
+    uint64_t max_content_bytes;
+    uint64_t max_uncompressed_bytes;
+    uint64_t max_resident_bytes;
+    uint64_t max_resource_count;
+    uint64_t max_object_count;
+    uint32_t max_nesting_depth;
+    uint32_t max_decompression_ratio;
+    uint64_t reserved[2];
+} ure_scene_budget_t;
+
+typedef struct ure_native_scene_blob_t {
+    ure_input_header_t header;
+    uint32_t source_kind;
+    uint32_t format;
+    ure_byte_span_t bytes;
+    ure_string_view_t path_utf8;
+    ure_string_view_t package_scene_id;
+    uint32_t schema_min_major;
+    uint32_t schema_min_minor;
+    uint32_t schema_max_major;
+    uint32_t schema_max_minor;
+    ure_scene_budget_t budget;
+    uint64_t reserved[2];
+} ure_native_scene_blob_t;
+
+typedef struct ure_scene_validation_result_t {
+    ure_output_header_t header;
+    ure_bool32_t valid;
+    uint32_t error_count;
+    uint32_t warning_count;
+    uint32_t source_schema_major;
+    uint32_t source_schema_minor;
+    uint32_t diagnostics_capacity;
+    uint32_t diagnostics_required;
+    uint32_t diagnostics_written;
+    char *diagnostics_data;
+    ure_digest256_t blob_digest;
+    ure_digest256_t semantic_digest;
+    ure_digest256_t resource_manifest_digest;
+    uint64_t resource_count;
+    uint64_t object_count;
+    uint64_t reserved[2];
+} ure_scene_validation_result_t;
+
+typedef struct ure_scene_revision_info_t {
+    ure_output_header_t header;
+    uint64_t revision;
+    ure_digest256_t revision_identity;
+    ure_digest256_t blob_digest;
+    ure_digest256_t semantic_digest;
+    ure_digest256_t resource_manifest_digest;
+    uint32_t source_schema_major;
+    uint32_t source_schema_minor;
+    uint32_t reset_reason;
+    uint32_t warning_count;
+    uint32_t loss_count;
+    uint32_t reserved32;
+    uint64_t resource_count;
+    uint64_t object_count;
+    ure_string_view_t selected_package_scene;
+    uint64_t reserved[2];
+} ure_scene_revision_info_t;
+
+typedef struct ure_objective_envelope_t {
+    ure_input_header_t header;
+    uint32_t payload_schema;
+    uint32_t payload_version_major;
+    uint32_t payload_version_minor;
+    uint32_t determinism_policy;
+    uint32_t usage_policy;
+    uint32_t output_count;
+    const uint32_t *output_semantics;
+    uint64_t wall_time_budget_ns;
+    uint64_t memory_budget_bytes;
+    uint64_t sample_budget;
+    uint64_t latency_budget_ns;
+    ure_byte_span_t payload;
+    ure_digest256_t payload_digest;
+    uint64_t reserved[2];
+} ure_objective_envelope_t;
+
+typedef struct ure_session_info_t {
+    ure_output_header_t header;
+    uint32_t state;
+    uint32_t reset_reason;
+    uint64_t bound_scene_revision;
+    ure_digest256_t scene_revision_identity;
+    ure_digest256_t objective_identity;
+    uint64_t completed_samples;
+    uint64_t requested_samples;
+    ure_handle_t active_operation;
+    ure_handle_t latest_frame;
+    uint64_t reserved[2];
+} ure_session_info_t;
+
 typedef struct ure_runtime_interface_t {
     ure_interface_table_header_t header;
     ure_result_t (URE_CALL *create_instance)(
@@ -328,6 +425,31 @@ typedef struct ure_frame_interface_t {
     ure_result_t (URE_CALL *unmap_plane)(ure_handle_t frame, uint64_t map_token, ure_handle_t *error);
     ure_result_t (URE_CALL *copy_plane)(const ure_frame_copy_info_t *copy_info, ure_handle_t *error);
 } ure_frame_interface_t;
+
+typedef struct ure_scene_interface_t {
+    ure_interface_table_header_t header;
+    ure_result_t (URE_CALL *validate)(ure_handle_t instance, const ure_native_scene_blob_t *blob, ure_scene_validation_result_t *validation, ure_handle_t *error);
+    ure_result_t (URE_CALL *create)(ure_handle_t instance, const ure_native_scene_blob_t *blob, ure_handle_t *scene, ure_scene_revision_info_t *revision, ure_handle_t *error);
+    ure_result_t (URE_CALL *replace)(ure_handle_t scene, const ure_native_scene_blob_t *blob, ure_scene_revision_info_t *revision, ure_handle_t *error);
+    ure_result_t (URE_CALL *retain)(ure_handle_t scene, ure_handle_t *error);
+    ure_result_t (URE_CALL *release)(ure_handle_t scene, ure_handle_t *error);
+    ure_result_t (URE_CALL *get_revision)(ure_handle_t scene, ure_scene_revision_info_t *revision, ure_handle_t *error);
+} ure_scene_interface_t;
+
+typedef struct ure_session_interface_t {
+    ure_interface_table_header_t header;
+    ure_result_t (URE_CALL *create)(ure_handle_t instance, ure_handle_t scene, const ure_objective_envelope_t *objective, ure_handle_t *session, ure_handle_t *error);
+    ure_result_t (URE_CALL *retain)(ure_handle_t session, ure_handle_t *error);
+    ure_result_t (URE_CALL *release)(ure_handle_t session, ure_handle_t *error);
+    ure_result_t (URE_CALL *close)(ure_handle_t session, ure_handle_t *error);
+    ure_result_t (URE_CALL *get_info)(ure_handle_t session, ure_session_info_t *info, ure_handle_t *error);
+    ure_result_t (URE_CALL *bind_scene)(ure_handle_t session, ure_handle_t scene, ure_scene_revision_info_t *revision, ure_handle_t *error);
+    ure_result_t (URE_CALL *start)(ure_handle_t session, ure_handle_t *operation, ure_handle_t *error);
+    ure_result_t (URE_CALL *pause)(ure_handle_t session, ure_handle_t *error);
+    ure_result_t (URE_CALL *resume)(ure_handle_t session, ure_handle_t *error);
+    ure_result_t (URE_CALL *reset)(ure_handle_t session, uint32_t reason, ure_handle_t *error);
+    ure_result_t (URE_CALL *acquire_frame)(ure_handle_t session, ure_handle_t *frame, ure_handle_t *error);
+} ure_session_interface_t;
 
 typedef ure_result_t (URE_CALL *ure_get_runtime_manifest_fn)(
     const ure_runtime_manifest_request_t *request,

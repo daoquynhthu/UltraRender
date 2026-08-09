@@ -47,8 +47,8 @@ $runtimeDependencies = @(& $dumpbin /nologo /dependents $RuntimeDll 2>&1)
 if ($LASTEXITCODE -ne 0) {
     throw "dumpbin runtime dependency inspection failed"
 }
-if (($runtimeDependencies -join "`n") -match '(?i)(pyure_native|cudart|nvcuda|vulkan|d3d12)\.dll') {
-    throw "PB.2 metadata runtime acquired a renderer or backend dependency"
+if (($runtimeDependencies -join "`n") -match '(?i)pyure_native\.dll') {
+    throw "candidate runtime acquired a legacy product dependency"
 }
 $dependencies = @(& $dumpbin /nologo /dependents $ClientExecutable 2>&1)
 if ($LASTEXITCODE -ne 0) {

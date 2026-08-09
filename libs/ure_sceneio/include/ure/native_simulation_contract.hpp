@@ -30,7 +30,8 @@ ValidationReport validate_simulation_contract(const NativeSimulationContract& co
 CompiledSimulationContract compile_simulation_contract(const NativeSimulationContract& contract, const SimulationCapabilityRegistry& capabilities);
 std::string simulation_contract_semantic_hash(const NativeSimulationContract& contract);
 std::vector<std::uint8_t> write_simulation_contract_binary(const NativeSimulationContract& contract);
-LoadResult<NativeSimulationContract> read_simulation_contract_binary(std::span<const std::uint8_t> bytes);
+LoadResult<NativeSimulationContract> read_simulation_contract_binary(
+    std::span<const std::uint8_t> bytes, const ValidationLimits& limits = {});
 std::string write_simulation_contract_text(const NativeSimulationContract& contract);
 LoadResult<NativeSimulationContract> read_simulation_contract_text(std::string_view text);
 

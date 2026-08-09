@@ -216,6 +216,8 @@ struct ValidationLimits {
     std::uint64_t max_resident_resource_bytes = 8ull * 1024ull * 1024ull * 1024ull;
     std::uint64_t max_inline_numeric_scalars = 64;
     std::uint64_t max_decompression_ratio = 256;
+    std::uint32_t max_nesting_depth = 64;
+    std::uint64_t max_object_count = 10'000'000;
 };
 
 struct CapabilityRegistry {

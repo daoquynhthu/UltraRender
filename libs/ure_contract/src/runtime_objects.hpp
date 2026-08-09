@@ -24,7 +24,9 @@ enum class ObjectType : std::uint32_t {
     Instance = 1,
     Error = 2,
     Operation = 3,
-    Frame = 4
+    Frame = 4,
+    Scene = 5,
+    Session = 6
 };
 
 struct Object {
@@ -70,6 +72,8 @@ struct InstanceObject final : Object {
     std::uint64_t next_sequence{1};
     std::size_t event_capacity{64};
     bool frame_enabled{};
+    bool scene_enabled{};
+    bool session_enabled{};
     std::uint32_t max_retained_frames{4};
     std::uint64_t max_retained_bytes{UINT64_C(16) * 1024 * 1024};
     std::uint32_t retained_frames{};
@@ -77,11 +81,17 @@ struct InstanceObject final : Object {
 };
 
 struct OperationObject final : Object {
+    ~OperationObject() override {
+        if (worker.joinable() && worker.get_id() == std::this_thread::get_id())
+            worker.detach();
+    }
+
     std::mutex mutex;
     std::condition_variable changed;
     std::shared_ptr<InstanceObject> instance;
     std::jthread worker;
     std::uint32_t state{URE_OPERATION_STATE_QUEUED};
+    std::uint32_t stage{URE_OPERATION_START};
     std::uint32_t steps{1};
     std::uint32_t delay_ms{1};
     std::uint64_t completed{};
@@ -127,6 +137,7 @@ class HandleTable {
                  std::shared_ptr<Object> *final_object = nullptr);
     std::uint64_t size();
     std::uint32_t reference_count(ure_handle_t handle, ObjectType type);
+    std::uint64_t child_count(ure_handle_t owner);
 
   private:
     std::mutex mutex_;

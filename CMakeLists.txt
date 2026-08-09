@@ -60,8 +60,6 @@ include(GNUInstallDirs)
 
 add_subdirectory(tools/ure_contract_codegen)
 add_subdirectory(libs/ure_public)
-add_subdirectory(libs/ure_contract)
-add_subdirectory(apps/ure_worker)
 
 add_subdirectory(libs/ure_types)
 add_subdirectory(libs/ure_diag)
@@ -83,6 +81,11 @@ if(UR_ENABLE_CUDA)
 endif()
 if(UR_ENABLE_HYDRA)
     add_subdirectory(libs/ure_hydra)
+endif()
+
+if(UR_ENABLE_CUDA)
+    add_subdirectory(libs/ure_contract)
+    add_subdirectory(apps/ure_worker)
 endif()
 
 if(UR_BUILD_PHYSICS)

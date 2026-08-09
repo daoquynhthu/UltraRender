@@ -10,7 +10,14 @@ enum ResultCode:int {
   BufferTooSmall = -5,
   Backpressure = -6,
   WorkerLost = -7,
-  Internal = -8
+  Internal = -8,
+  InvalidHandle = -9,
+  Busy = -10,
+  Timeout = -11,
+  Canceled = -12,
+  DeviceLost = -13,
+  BudgetExhausted = -14,
+  RevisionConflict = -15
 }
 
 enum RuntimeState:ubyte {

@@ -1,0 +1,89 @@
+include "ure_payload_candidate.fbs";
+
+namespace ultrarender.contract.candidate;
+
+enum SceneSourceKind:uint {
+  Memory = 966,
+  File = 967
+}
+
+enum SceneFormat:uint {
+  Ure = 968,
+  UreScene = 969,
+  UrePackage = 970
+}
+
+table SceneBudget {
+  max_content_bytes:ulong (id: 0);
+  max_uncompressed_bytes:ulong (id: 1);
+  max_resident_bytes:ulong (id: 2);
+  max_resource_count:ulong (id: 3);
+  max_object_count:ulong (id: 4);
+  max_nesting_depth:uint (id: 5);
+  max_decompression_ratio:uint (id: 6);
+}
+
+table NativeSceneRequest {
+  source_kind:SceneSourceKind = Memory (id: 0);
+  format:SceneFormat = UreScene (id: 1);
+  content:[ubyte] (id: 2);
+  path_utf8:string (id: 3);
+  package_scene_id:string (id: 4);
+  schema_min_major:uint (id: 5);
+  schema_min_minor:uint (id: 6);
+  schema_max_major:uint (id: 7);
+  schema_max_minor:uint (id: 8);
+  budget:SceneBudget (id: 9);
+  scene_id:ulong (id: 10);
+}
+
+table SceneRevisionDescriptor {
+  scene_id:ulong (id: 0);
+  revision:ulong (id: 1);
+  revision_identity:[ubyte] (id: 2);
+  blob_digest:[ubyte] (id: 3);
+  semantic_digest:[ubyte] (id: 4);
+  resource_manifest_digest:[ubyte] (id: 5);
+  source_schema_major:uint (id: 6);
+  source_schema_minor:uint (id: 7);
+  reset_reason:uint (id: 8);
+  warning_count:uint (id: 9);
+  loss_count:uint (id: 10);
+  resource_count:ulong (id: 11);
+  object_count:ulong (id: 12);
+  selected_package_scene:string (id: 13);
+}
+
+table RenderObjectiveRequest {
+  scene_id:ulong (id: 0);
+  session_id:ulong (id: 1);
+  payload_schema:uint (id: 2);
+  payload_version_major:uint (id: 3);
+  payload_version_minor:uint (id: 4);
+  determinism_policy:uint (id: 5);
+  usage_policy:uint (id: 6);
+  output_semantics:[uint] (id: 7);
+  wall_time_budget_ns:ulong (id: 8);
+  memory_budget_bytes:ulong (id: 9);
+  sample_budget:ulong (id: 10);
+  latency_budget_ns:ulong (id: 11);
+  payload:[ubyte] (id: 12);
+  payload_digest:[ubyte] (id: 13);
+}
+
+enum ScenePayloadKind:ubyte {
+  None = 0,
+  NativeSceneRequest = 1,
+  SceneRevision = 2,
+  RenderObjectiveRequest = 3
+}
+
+table PublicScenePayload {
+  kind:ScenePayloadKind = None (id: 0);
+  scene_request:NativeSceneRequest (id: 1);
+  scene_revision:SceneRevisionDescriptor (id: 2);
+  objective:RenderObjectiveRequest (id: 3);
+}
+
+root_type PublicScenePayload;
+file_identifier "URS0";

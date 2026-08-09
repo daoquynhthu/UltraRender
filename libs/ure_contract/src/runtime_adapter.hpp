@@ -21,6 +21,15 @@ const ure_error_interface_t &error_interface() noexcept;
 const ure_operation_interface_t &operation_interface() noexcept;
 const ure_event_interface_t &event_interface() noexcept;
 const ure_frame_interface_t &frame_interface() noexcept;
+const ure_scene_interface_t &scene_interface() noexcept;
+const ure_session_interface_t &session_interface() noexcept;
+ure_result_t create_frame_snapshot(
+    ure_handle_t instance, ure_handle_t operation,
+    const ure_digest256_t &scene_revision,
+    const ure_digest256_t &objective, std::uint64_t sample_count,
+    std::uint32_t width, std::uint32_t height, const float *rgb,
+    std::uint64_t rgb_count, ure_handle_t *frame,
+    ure_handle_t *error) noexcept;
 #if defined(URE_CONTRACT_CONFORMANCE)
 const ure_private_conformance_interface_t &conformance_interface() noexcept;
 ure_result_t produce_conformance_frame(

@@ -449,6 +449,210 @@
       "change_class": "AdditiveCandidate",
       "phase": "PB.4",
       "summary": "Activate immutable-frame acquisition semantics"
+    },
+    {
+      "registry_id": 34,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add bounded native-scene validation limits"
+    },
+    {
+      "registry_id": 35,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add native scene memory/file blob descriptor"
+    },
+    {
+      "registry_id": 36,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add scene validation result structure"
+    },
+    {
+      "registry_id": 37,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add immutable scene revision descriptor"
+    },
+    {
+      "registry_id": 38,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add versioned render-objective envelope"
+    },
+    {
+      "registry_id": 39,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add render session state descriptor"
+    },
+    {
+      "registry_id": 40,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add Candidate Scene function table"
+    },
+    {
+      "registry_id": 41,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add Candidate Session function table"
+    },
+    {
+      "registry_id": 116,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add explicit revision-conflict result"
+    },
+    {
+      "registry_id": 304,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add Candidate native-scene capability"
+    },
+    {
+      "registry_id": 305,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add Candidate render-session capability"
+    },
+    {
+      "registry_id": 405,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add scene-replacement event identity"
+    },
+    {
+      "registry_id": 508,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add native-scene worker payload"
+    },
+    {
+      "registry_id": 509,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add scene-revision worker payload"
+    },
+    {
+      "registry_id": 510,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add render-objective worker payload"
+    },
+    {
+      "registry_id": 706,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add Candidate Scene interface"
+    },
+    {
+      "registry_id": 707,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add Candidate Session interface"
+    },
+    {
+      "registry_id": 805,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add native-scene validation operation"
+    },
+    {
+      "registry_id": 806,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add atomic full-scene replacement operation"
+    },
+    {
+      "registry_id": 807,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add render-session operation"
+    },
+    {
+      "registry_id": 966,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add in-memory scene source identity"
+    },
+    {
+      "registry_id": 967,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add file scene source identity"
+    },
+    {
+      "registry_id": 968,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add .ure scene format identity"
+    },
+    {
+      "registry_id": 969,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add .urescene format identity"
+    },
+    {
+      "registry_id": 970,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add .urepkg scene format identity"
+    },
+    {
+      "registry_id": 971,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add full-replacement reset identity"
+    },
+    {
+      "registry_id": 972,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add explicit reset identity"
+    },
+    {
+      "registry_id": 973,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add created session state"
+    },
+    {
+      "registry_id": 974,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add ready session state"
+    },
+    {
+      "registry_id": 975,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add running session state"
+    },
+    {
+      "registry_id": 976,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add paused session state"
+    },
+    {
+      "registry_id": 977,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add failed session state"
+    },
+    {
+      "registry_id": 978,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add device-lost session state"
+    },
+    {
+      "registry_id": 979,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.5",
+      "summary": "Add closed session state"
     }
   ],
   "tombstones": []

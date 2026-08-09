@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -206,7 +207,7 @@ CompiledSolverContract compile_solver_contract(const NativeSolverContract& value
 
 std::vector<std::uint8_t> write_solver_contract_binary(const NativeSolverContract& contract) { auto native = to_schema(contract); flatbuffers::FlatBufferBuilder builder; fb::FinishSolverContractBuffer(builder, fb::SolverContract::Pack(builder, &native)); return {builder.GetBufferPointer(), builder.GetBufferPointer() + builder.GetSize()}; }
 
-LoadResult<NativeSolverContract> read_solver_contract_binary(std::span<const std::uint8_t> bytes) { flatbuffers::Verifier verifier(bytes.data(), bytes.size()); if (!fb::VerifySolverContractBuffer(verifier)) return failure<NativeSolverContract>("URE-Q7-SCHEMA-001", "Invalid URSC payload"); try { std::unique_ptr<fb::SolverContractT> native(fb::GetSolverContract(bytes.data())->UnPack()); LoadResult<NativeSolverContract> result; result.value = from_schema(*native); return result; } catch (const std::exception& exception) { return failure<NativeSolverContract>("URE-Q7-SCHEMA-002", exception.what()); } }
+LoadResult<NativeSolverContract> read_solver_contract_binary(std::span<const std::uint8_t> bytes, const ValidationLimits& limits) { const auto max_tables = static_cast<flatbuffers::uoffset_t>(std::min<std::uint64_t>(limits.max_object_count, std::numeric_limits<flatbuffers::uoffset_t>::max())); flatbuffers::Verifier verifier(bytes.data(), bytes.size(), limits.max_nesting_depth, max_tables); if (!fb::VerifySolverContractBuffer(verifier)) return failure<NativeSolverContract>("URE-Q7-SCHEMA-001", "Invalid URSC payload"); try { std::unique_ptr<fb::SolverContractT> native(fb::GetSolverContract(bytes.data())->UnPack()); LoadResult<NativeSolverContract> result; result.value = from_schema(*native); return result; } catch (const std::exception& exception) { return failure<NativeSolverContract>("URE-Q7-SCHEMA-002", exception.what()); } }
 
 std::string solver_contract_semantic_hash(const NativeSolverContract& contract) { NativeSolverContract semantic = contract; semantic.hints = {}; const auto bytes = write_solver_contract_binary(semantic); return sha256_hex(bytes); }
 

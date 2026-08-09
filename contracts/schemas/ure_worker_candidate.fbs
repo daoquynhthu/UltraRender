@@ -1,5 +1,6 @@
 include "ure_payload_candidate.fbs";
 include "ure_frame_candidate.fbs";
+include "ure_scene_candidate.fbs";
 
 namespace ultrarender.contract.candidate;
 

@@ -19,7 +19,7 @@ int main() {
     const auto registry = ure::contract_codegen::load_registry(URE_TEST_REGISTRY_PATH);
     ure::contract_codegen::validate_compatibility(URE_TEST_COMPATIBILITY_PATH, registry);
     ure::contract_codegen::validate_schemas(URE_TEST_SCHEMA_DIR);
-    if (registry.entries.size() != 117 || registry.digest_hex != URE_REGISTRY_DIGEST_HEX || sizeof(ure_uuid_t) != 16 ||
+    if (registry.entries.size() != 151 || registry.digest_hex != URE_REGISTRY_DIGEST_HEX || sizeof(ure_uuid_t) != 16 ||
         sizeof(ure_digest256_t) != 32 || sizeof(ure_input_header_t) != sizeof(ure_output_header_t)) {
         throw std::runtime_error("Candidate registry or C value surface drifted");
     }

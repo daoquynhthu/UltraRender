@@ -412,6 +412,8 @@ external authoring state
 
 Fallback is never silent. A commit result reports `HotUpdate`, `PartialRebuild`, `FullReload`, or `Rejected`, reset reason, rebuilt resource identities, warnings, and new revision/digest.
 
+PB.5 implements the Candidate full-replacement subset on Windows x64. The public Scene table accepts bounded memory/file native blobs, returns validation diagnostics and immutable revision identities, and swaps revisions atomically. The Session table binds an accepted revision, lowers generic objective and resource budgets to the internal automatic path, exposes operation progress, and publishes immutable PB.4 frames. The local worker invokes the same tables through the two loader exports; it does not define a second scene, error, session, or framebuffer authority. UUID-addressed partial transactions, camera schemas, and hot-update strategy results remain PB.6 work.
+
 ### 10.2 Revisions and transactions
 
 Every accepted state has a monotonic revision, semantic digest, source-schema version, and resource-manifest digest. A transaction envelope contains transaction UUID, base revision, ordered schema-tagged operations, required capabilities, and client metadata.

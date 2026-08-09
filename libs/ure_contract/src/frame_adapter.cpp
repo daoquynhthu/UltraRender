@@ -128,15 +128,17 @@ struct PlaneData {
 
 struct FrameObject final : Object {
     ~FrameObject() override {
-        if (!budget_accounted || !instance)
-            return;
-        std::scoped_lock lock(instance->mutex);
-        if (instance->retained_frames != 0)
-            --instance->retained_frames;
-        if (instance->retained_bytes >= retained_bytes)
-            instance->retained_bytes -= retained_bytes;
-        else
-            instance->retained_bytes = 0;
+        if (budget_accounted && instance) {
+            std::scoped_lock lock(instance->mutex);
+            if (instance->retained_frames != 0)
+                --instance->retained_frames;
+            if (instance->retained_bytes >= retained_bytes)
+                instance->retained_bytes -= retained_bytes;
+            else
+                instance->retained_bytes = 0;
+        }
+        if (operation)
+            operation_interface().release(operation, nullptr);
     }
 
     std::mutex mutex;
@@ -148,6 +150,7 @@ struct FrameObject final : Object {
     Digest objective{};
     Digest estimator{};
     Digest provenance{};
+    ure_handle_t operation{};
     std::uint64_t sample_begin{};
     std::uint64_t sample_count{1};
     std::uint64_t created_ns{};
@@ -209,7 +212,7 @@ ure_result_t frame_get_info_impl(ure_handle_t handle, ure_frame_info_t *info,
     store_digest(info->objective_identity, frame->objective);
     store_digest(info->estimator_identity, frame->estimator);
     store_digest(info->provenance_identity, frame->provenance);
-    info->operation = nullptr;
+    info->operation = frame->operation;
     info->sample_begin = frame->sample_begin;
     info->sample_count = frame->sample_count;
     info->timestamp_ns = frame->created_ns;
@@ -446,6 +449,120 @@ produce_frame_impl(ure_handle_t instance_handle,
 }
 #endif
 
+ure_result_t create_snapshot_impl(
+    ure_handle_t instance_handle, ure_handle_t operation_handle,
+    const ure_digest256_t &scene_revision,
+    const ure_digest256_t &objective, std::uint64_t sample_count,
+    std::uint32_t width, std::uint32_t height, const float *rgb,
+    std::uint64_t rgb_count, ure_handle_t *output, ure_handle_t *error) {
+    clear_error(error);
+    if (output)
+        *output = nullptr;
+    const auto instance =
+        handles().get<InstanceObject>(instance_handle, ObjectType::Instance);
+    if (!instance)
+        return make_error(URE_RESULT_INVALID_HANDLE, 224,
+                          "invalid frame owner instance", error);
+    std::uint64_t pixels{};
+    std::uint64_t expected_rgb{};
+    std::uint64_t bytes{};
+    if (!output || width == 0 || height == 0 || width > 8192 || height > 8192 ||
+        !checked_multiply(width, height, pixels) ||
+        !checked_multiply(pixels, 16, bytes) || bytes > UINT64_C(1073741824))
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 225,
+                          "invalid renderer frame extent: " +
+                              std::to_string(width) + "x" +
+                              std::to_string(height) + ", output=" +
+                              (output ? std::string("set") : std::string("null")),
+                          error);
+    if (!rgb || !checked_multiply(pixels, 3, expected_rgb) ||
+        rgb_count != expected_rgb)
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 230,
+                          "renderer RGB plane extent differs from the scene: expected " +
+                              std::to_string(expected_rgb) + ", received " +
+                              std::to_string(rgb_count),
+                          error);
+    if (operation_handle &&
+        !handles().get<OperationObject>(operation_handle, ObjectType::Operation))
+        return make_error(URE_RESULT_INVALID_HANDLE, 226,
+                          "invalid frame operation", error);
+    {
+        std::scoped_lock lock(instance->mutex);
+        if (!instance->frame_enabled)
+            return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 227,
+                              "frame capability is not enabled", error);
+        if (instance->retained_frames >= instance->max_retained_frames ||
+            bytes > instance->max_retained_bytes - instance->retained_bytes)
+            return make_error(URE_RESULT_BACKPRESSURE, 228,
+                              "frame lease budget is exhausted", error);
+    }
+    try {
+        auto frame = std::make_shared<FrameObject>();
+        frame->type = ObjectType::Frame;
+        frame->thread_policy = URE_THREAD_POLICY_CONCURRENT_READ;
+        frame->owner = instance_handle;
+        frame->parent = instance_handle;
+        frame->instance = instance;
+        frame->width = width;
+        frame->height = height;
+        frame->sample_count = sample_count;
+        frame->created_ns = timestamp_ns();
+        frame->retained_bytes = bytes;
+        PlaneData plane;
+        plane.width = width;
+        plane.height = height;
+        plane.row_stride = static_cast<std::uint64_t>(width) * 16;
+        plane.slice_stride = bytes;
+        plane.bytes.resize(static_cast<std::size_t>(bytes));
+        for (std::uint64_t pixel = 0; pixel < pixels; ++pixel) {
+            const std::array<float, 4> rgba{
+                rgb[pixel * 3], rgb[pixel * 3 + 1], rgb[pixel * 3 + 2], 1.0F};
+            std::memcpy(plane.bytes.data() + pixel * 16, rgba.data(), 16);
+        }
+        plane.observable = digest("UltraRender.Observable.LinearRgbRadiance.v1");
+        plane.unit = digest("UltraRender.Unit.RadianceSI.v1");
+        plane.measure = digest("UltraRender.Measure.PixelArea.v1");
+        plane.time = digest("UltraRender.Time.StaticObservation.v1");
+        plane.uncertainty = digest("UltraRender.Uncertainty.SampleEstimate.v1");
+        plane.provenance =
+            digest("UltraRender.FramePlane.RenderSession.v1", plane.bytes);
+        frame->frame_identity =
+            digest("UltraRender.Frame.RenderSession.v1", plane.bytes);
+        std::memcpy(frame->scene_revision.data(), scene_revision.bytes,
+                    frame->scene_revision.size());
+        frame->camera_revision = digest(
+            "UltraRender.CameraRevision.NativeScene.v1",
+            std::span(scene_revision.bytes, sizeof(scene_revision.bytes)));
+        std::memcpy(frame->objective.data(), objective.bytes,
+                    frame->objective.size());
+        frame->estimator = digest("UltraRender.Estimator.Automatic.v1");
+        frame->provenance = plane.provenance;
+        frame->planes.push_back(std::move(plane));
+        if (operation_handle) {
+            if (!handles().retain(operation_handle, ObjectType::Operation))
+                return make_error(URE_RESULT_INVALID_HANDLE, 226,
+                                  "invalid frame operation", error);
+            frame->operation = operation_handle;
+        }
+        {
+            std::scoped_lock lock(instance->mutex);
+            if (instance->retained_frames >= instance->max_retained_frames ||
+                bytes > instance->max_retained_bytes - instance->retained_bytes)
+                return make_error(URE_RESULT_BACKPRESSURE, 228,
+                                  "frame lease budget is exhausted", error);
+            ++instance->retained_frames;
+            instance->retained_bytes += bytes;
+            frame->budget_accounted = true;
+        }
+        *output = handles().insert(frame);
+        emit_event(instance, URE_EVENT_FRAME_READY, operation_handle, *output);
+        return URE_RESULT_SUCCESS;
+    } catch (...) {
+        return make_error(URE_RESULT_INTERNAL, 229,
+                          "renderer frame snapshot allocation failed", error);
+    }
+}
+
 ure_result_t URE_CALL frame_retain(ure_handle_t frame,
                                    ure_handle_t *error) noexcept {
     return guard_entry(error, [&] { return frame_retain_impl(frame, error); });
@@ -495,6 +612,20 @@ const ure_frame_interface_t &frame_interface() noexcept {
     static const ure_frame_interface_t table{
         {sizeof(table), 0, 1}, frame_retain, frame_release, frame_get_info, frame_get_plane_info, frame_map, frame_unmap, frame_copy};
     return table;
+}
+
+ure_result_t create_frame_snapshot(
+    ure_handle_t instance, ure_handle_t operation,
+    const ure_digest256_t &scene_revision,
+    const ure_digest256_t &objective, std::uint64_t sample_count,
+    std::uint32_t width, std::uint32_t height, const float *rgb,
+    std::uint64_t rgb_count, ure_handle_t *frame,
+    ure_handle_t *error) noexcept {
+    return guard_entry(error, [&] {
+        return create_snapshot_impl(instance, operation, scene_revision, objective,
+                                    sample_count, width, height, rgb, rgb_count,
+                                    frame, error);
+    });
 }
 
 #if defined(URE_CONTRACT_CONFORMANCE)

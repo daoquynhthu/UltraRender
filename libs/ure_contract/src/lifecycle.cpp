@@ -67,6 +67,15 @@ std::uint32_t HandleTable::reference_count(ure_handle_t handle, ObjectType type)
     return found->second->references.load(std::memory_order_acquire);
 }
 
+std::uint64_t HandleTable::child_count(ure_handle_t owner) {
+    std::scoped_lock lock(mutex_);
+    return static_cast<std::uint64_t>(std::ranges::count_if(
+        objects_, [owner](const auto &entry) {
+            return entry.second->owner == owner &&
+                   entry.second->type != ObjectType::Instance;
+        }));
+}
+
 HandleTable &handles() {
     static HandleTable table;
     return table;
@@ -209,21 +218,32 @@ ure_result_t create_instance_impl(const ure_instance_create_info_t *info, ure_ha
         next = header.next;
     }
     bool frame_required = false;
+    bool scene_required = false;
+    bool session_required = false;
     for (std::uint32_t index = 0; index < info->required_capability_count; ++index) {
         const std::uint32_t capability = info->required_capabilities[index];
         if (capability != URE_CAPABILITY_BOOTSTRAP && capability != URE_CAPABILITY_LIFECYCLE &&
-            capability != URE_CAPABILITY_FRAME_LEASE) {
+            capability != URE_CAPABILITY_FRAME_LEASE &&
+            capability != URE_CAPABILITY_NATIVE_SCENE &&
+            capability != URE_CAPABILITY_RENDER_SESSION) {
             return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 101,
                               "required capability is unavailable", error);
         }
         if (capability == URE_CAPABILITY_FRAME_LEASE) frame_required = true;
+        if (capability == URE_CAPABILITY_NATIVE_SCENE) scene_required = true;
+        if (capability == URE_CAPABILITY_RENDER_SESSION) session_required = true;
     }
+    if (session_required && (!frame_required || !scene_required))
+        return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 101,
+                          "render session dependencies were not requested", error);
     try {
         auto instance = std::make_shared<InstanceObject>();
         instance->type = ObjectType::Instance;
         instance->thread_policy = URE_THREAD_POLICY_CONCURRENT;
         instance->event_capacity = info->event_capacity;
         instance->frame_enabled = frame_required;
+        instance->scene_enabled = scene_required;
+        instance->session_enabled = session_required;
         if (frame_budget) {
             instance->max_retained_frames = frame_budget->max_retained_frames;
             instance->max_retained_bytes = frame_budget->max_retained_bytes;
@@ -267,6 +287,8 @@ ure_result_t instance_release_impl(ure_handle_t instance, ure_handle_t *error) {
             }
         }
     }
+    if (handles().child_count(instance) != 0)
+        return make_error(URE_RESULT_BUSY, 105, "instance has live child objects", error);
     return handles().release(instance, ObjectType::Instance)
                ? URE_RESULT_SUCCESS
                : make_error(URE_RESULT_INVALID_HANDLE, 106, "invalid instance release", error);
@@ -351,8 +373,39 @@ ure_result_t query_capability_impl(ure_handle_t instance, const ure_capability_q
         }
         return URE_RESULT_SUCCESS;
     }
-    if (query->capability_id != URE_CAPABILITY_FRAME_LEASE &&
-        query->capability_id != URE_CAPABILITY_TELEMETRY) {
+    if (query->capability_id == URE_CAPABILITY_NATIVE_SCENE ||
+        query->capability_id == URE_CAPABILITY_RENDER_SESSION) {
+        static constexpr std::uint32_t scene_dependencies[]{URE_CAPABILITY_LIFECYCLE};
+        static constexpr std::uint32_t session_dependencies[]{
+            URE_CAPABILITY_FRAME_LEASE, URE_CAPABILITY_NATIVE_SCENE};
+        const bool session = query->capability_id == URE_CAPABILITY_RENDER_SESSION;
+        descriptor->maturity = URE_MATURITY_EXPERIMENTAL;
+        descriptor->runtime_state = URE_RUNTIME_STATE_AVAILABLE;
+        descriptor->dependencies =
+            session ? session_dependencies : scene_dependencies;
+        descriptor->dependency_count = session ? 2U : 1U;
+        if (query->required || query->request_enable) {
+            std::scoped_lock lock(object->mutex);
+            if (session && (!object->frame_enabled || !object->scene_enabled))
+                return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 110,
+                                  "render session dependencies are not enabled", error);
+            if (session)
+                object->session_enabled = true;
+            else
+                object->scene_enabled = true;
+        }
+        {
+            std::scoped_lock lock(object->mutex);
+            descriptor->enabled =
+                (session ? object->session_enabled : object->scene_enabled) ? 1U : 0U;
+            descriptor->applicable = descriptor->enabled;
+            descriptor->runtime_state = descriptor->enabled
+                                            ? URE_RUNTIME_STATE_APPLICABLE
+                                            : URE_RUNTIME_STATE_AVAILABLE;
+        }
+        return URE_RESULT_SUCCESS;
+    }
+    if (query->capability_id != URE_CAPABILITY_TELEMETRY) {
         return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 110, "unknown capability", error);
     }
     descriptor->maturity = URE_MATURITY_EXPERIMENTAL;
@@ -601,7 +654,7 @@ ure_result_t operation_get_info_impl(ure_handle_t handle, ure_operation_info_t *
     info->state = operation->state;
     info->progress_available = 1;
     info->progress = static_cast<double>(operation->completed) / operation->steps;
-    info->stage = URE_OPERATION_START;
+    info->stage = operation->stage;
     info->completed_work = operation->completed;
     info->total_work = operation->steps;
     info->progress_sequence = operation->progress_sequence;
@@ -626,7 +679,14 @@ ure_result_t operation_wait_impl(ure_handle_t handle, std::uint64_t timeout_ns,
                           operation->terminal_error, handle);
     }
     if (operation->state == URE_OPERATION_STATE_FAILED) {
-        return make_error(URE_RESULT_INTERNAL, 118, "operation failed", error,
+        ure_result_t terminal_result = URE_RESULT_INTERNAL;
+        std::string terminal_message = "operation failed";
+        if (const auto terminal_error = handles().get<ErrorObject>(
+                operation->terminal_error, ObjectType::Error)) {
+            terminal_result = terminal_error->result;
+            terminal_message = terminal_error->message;
+        }
+        return make_error(terminal_result, 118, std::move(terminal_message), error,
                           operation->terminal_error, handle);
     }
     return URE_RESULT_SUCCESS;

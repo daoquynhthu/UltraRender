@@ -21,7 +21,7 @@ The approved architecture is [`Public_API_ABI_Architecture.md`](Public_API_ABI_A
 Current PB cursor:
 
 ```text
-PB.5 — Native full-scene boundary and revisioned replacement
+PB.6 — Persistent UUID transactions and canonical camera extension
 ```
 
 The HR route is suspended after completed HR.2. `HR.3` resumes only after PB.8 or an explicit root-PLAN revision. PB establishes the carrier; it does not promote learned proposals, reconstruction, world state, material graph, wave optics, or solver functionality to stable extensions.
@@ -311,6 +311,8 @@ scripts/
 
 **Dependencies:** PB.4 and Phase Q native-scene validation/serialization.
 
+**Status:** Complete (2026-08-09).
+
 **Outcome:** External clients can validate, load, bind, render, acquire frames, and replace complete native scenes through memory/file/package blobs without seeing `SceneIR`; the PB.4 conformance-only frame source is no longer needed by product paths.
 
 **Files:** `scene_adapter.cpp`, `session_adapter.cpp`, native scene payload schemas/registry entries, `test_scene_boundary.cpp`, and standalone external-client scene fixtures.
@@ -319,16 +321,18 @@ scripts/
 
 **Execution checklist:**
 
-- [ ] Accept `.ure`, `.urescene`, `.urepkg`, and equivalent memory blobs only through declared schema ranges and existing strict Phase Q validation.
-- [ ] Bind blob digest, semantic digest, source schema, resource manifest, selected package scene, and accepted monotonic revision into the public descriptor.
-- [ ] Implement atomic full-scene replacement with old scene retention on failure, structured loss/warning propagation, and explicit accumulation reset reason.
-- [ ] Lower versioned objective envelopes and generic time/memory/sample/output/determinism policies to current session/automatic-plan semantics without exposing integrator enums.
-- [ ] Connect real session progress and framebuffer snapshots to the PB.4 operation/event/frame interfaces and prove the product worker contains no conformance-only frame command.
-- [ ] Enforce content, resource, decompression, nesting, object-count, and memory budgets before renderer allocation.
-- [ ] Test malformed/corrupt packages, unsupported schemas, missing resources, duplicate package scene ambiguity, budget exhaustion, device loss, and replacement during active work.
-- [ ] Compare direct ABI and worker scene revision/digest/error/session/frame behavior on the same maintained native fixtures.
+- [x] Accept `.ure`, `.urescene`, `.urepkg`, and equivalent memory blobs only through declared schema ranges and existing strict Phase Q validation.
+- [x] Bind blob digest, semantic digest, source schema, resource manifest, selected package scene, and accepted monotonic revision into the public descriptor.
+- [x] Implement atomic full-scene replacement with old scene retention on failure, structured loss/warning propagation, and explicit accumulation reset reason.
+- [x] Lower versioned objective envelopes and generic time/memory/sample/output/determinism policies to current session/automatic-plan semantics without exposing integrator enums.
+- [x] Connect real session progress and framebuffer snapshots to the PB.4 operation/event/frame interfaces and prove the product worker contains no conformance-only frame command.
+- [x] Enforce content, resource, decompression, nesting, object-count, and memory budgets before renderer allocation.
+- [x] Test malformed/corrupt packages, unsupported schemas, missing resources, duplicate package scene ambiguity, budget exhaustion, device loss, and replacement during active work.
+- [x] Compare direct ABI and worker scene revision/digest/error/session/frame behavior on the same maintained native fixtures.
 
 **Completion evidence:** full-scene submission is a complete permanent fallback; validation and replacement are atomic; no internal scene layout or transient index crosses the boundary.
+
+**Recorded evidence:** the 151-entry Candidate registry (digest `2b88d3c5efed84faf862df447bb1d8178f7eaba38a7fa1e9035f6cf0051f0e3d`) generates Scene/Session C11 tables and the additive native-scene/objective worker schema. The Windows x64 product runtime validates memory or file `.ure`, `.urescene`, and `.urepkg` inputs through Phase Q, binds content/semantic/resource/schema/package/revision identities, preserves the accepted revision after failed replacement, and lowers generic objectives only to the internal automatic integrator. Scene content, decompression, nesting, resources, objects, resident memory, frame leases, and control/blob sizes are bounded before renderer allocation or IPC dispatch. The product worker performs real CUDA session rendering through the two loader exports and has no conformance operation; the private device-loss injection remains confined to the conformance runtime. Maintained C11/C++ fixtures cover corrupt and ambiguous packages, unsupported schema, missing resources, budget failures, active-work replacement, device loss, revision rollback, and direct ABI/worker revision, digest, error, session, frame metadata and byte parity. The maintained Release gate passes 91/91. All artifacts remain Candidate 0.1 with no compatibility promise.
 
 ## 9. PB.6 — Persistent UUID transactions and canonical camera extension
 

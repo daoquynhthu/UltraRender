@@ -161,6 +161,105 @@ bool valid_frame_request(std::span<const std::uint8_t> payload,
 #endif
 }
 
+const fb::PublicScenePayload *scene_payload(
+    std::span<const std::uint8_t> payload, fb::ScenePayloadKind kind) {
+    flatbuffers::Verifier verifier(payload.data(), payload.size(), 64, 100000);
+    if (!fb::VerifyPublicScenePayloadBuffer(verifier))
+        return nullptr;
+    const auto *root = fb::GetPublicScenePayload(payload.data());
+    return root && root->kind() == kind ? root : nullptr;
+}
+
+bool scene_request(const fb::PublicScenePayload &payload,
+                   SceneRequest &request) {
+    const auto *source = payload.scene_request();
+    if (!source || !source->budget())
+        return false;
+    request = {};
+    request.source_kind = static_cast<std::uint32_t>(source->source_kind());
+    request.format = static_cast<std::uint32_t>(source->format());
+    if (source->content())
+        request.content.assign(source->content()->begin(),
+                               source->content()->end());
+    if (source->path_utf8())
+        request.path_utf8 = source->path_utf8()->str();
+    if (source->package_scene_id())
+        request.package_scene_id = source->package_scene_id()->str();
+    request.schema_min_major = source->schema_min_major();
+    request.schema_min_minor = source->schema_min_minor();
+    request.schema_max_major = source->schema_max_major();
+    request.schema_max_minor = source->schema_max_minor();
+    request.scene_id = source->scene_id();
+    const auto &budget = *source->budget();
+    request.budget = {budget.max_content_bytes(),
+                      budget.max_uncompressed_bytes(),
+                      budget.max_resident_bytes(),
+                      budget.max_resource_count(),
+                      budget.max_object_count(),
+                      budget.max_nesting_depth(),
+                      budget.max_decompression_ratio()};
+    return true;
+}
+
+bool objective_request(const fb::PublicScenePayload &payload,
+                       ObjectiveRequest &request) {
+    const auto *source = payload.objective();
+    if (!source)
+        return false;
+    request = {};
+    request.scene_id = source->scene_id();
+    request.session_id = source->session_id();
+    request.payload_schema = source->payload_schema();
+    request.payload_version_major = source->payload_version_major();
+    request.payload_version_minor = source->payload_version_minor();
+    request.determinism_policy = source->determinism_policy();
+    request.usage_policy = source->usage_policy();
+    if (source->output_semantics())
+        request.output_semantics.assign(source->output_semantics()->begin(),
+                                        source->output_semantics()->end());
+    request.wall_time_budget_ns = source->wall_time_budget_ns();
+    request.memory_budget_bytes = source->memory_budget_bytes();
+    request.sample_budget = source->sample_budget();
+    request.latency_budget_ns = source->latency_budget_ns();
+    if (source->payload())
+        request.payload.assign(source->payload()->begin(), source->payload()->end());
+    if (source->payload_digest()) {
+        if (source->payload_digest()->size() != request.payload_digest.size())
+            return false;
+        std::copy(source->payload_digest()->begin(),
+                  source->payload_digest()->end(), request.payload_digest.begin());
+    }
+    return true;
+}
+
+std::vector<std::uint8_t>
+revision_payload(const SceneRevisionSnapshot &snapshot) {
+    fb::PublicScenePayloadT payload;
+    payload.kind = fb::ScenePayloadKind::SceneRevision;
+    payload.scene_revision = std::make_unique<fb::SceneRevisionDescriptorT>();
+    auto &revision = *payload.scene_revision;
+    revision.scene_id = snapshot.scene_id;
+    revision.revision = snapshot.revision.revision;
+    revision.revision_identity = bytes(snapshot.revision.revision_identity);
+    revision.blob_digest = bytes(snapshot.revision.blob_digest);
+    revision.semantic_digest = bytes(snapshot.revision.semantic_digest);
+    revision.resource_manifest_digest =
+        bytes(snapshot.revision.resource_manifest_digest);
+    revision.source_schema_major = snapshot.revision.source_schema_major;
+    revision.source_schema_minor = snapshot.revision.source_schema_minor;
+    revision.reset_reason = snapshot.revision.reset_reason;
+    revision.warning_count = snapshot.revision.warning_count;
+    revision.loss_count = snapshot.revision.loss_count;
+    revision.resource_count = snapshot.revision.resource_count;
+    revision.object_count = snapshot.revision.object_count;
+    revision.selected_package_scene = snapshot.selected_package_scene;
+    flatbuffers::FlatBufferBuilder builder;
+    const auto root = fb::CreatePublicScenePayload(builder, &payload);
+    fb::FinishPublicScenePayloadBuffer(builder, root);
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
+}
+
 std::unique_ptr<fb::SharedBlobDescriptorT>
 blob_descriptor(std::uint64_t lease_id, std::uint64_t generation,
                 std::uint64_t remote_handle, std::uint64_t size,
@@ -231,6 +330,11 @@ frame_descriptor(const FrameSnapshot &snapshot, std::uint64_t lease_id,
     frame->dirty_height = snapshot.frame.dirty_height;
     frame->sample_begin = snapshot.frame.sample_begin;
     frame->sample_count = snapshot.frame.sample_count;
+    frame->session_id = snapshot.session_id;
+    frame->session_state = snapshot.session.state;
+    frame->bound_scene_revision = snapshot.session.bound_scene_revision;
+    frame->completed_samples = snapshot.session.completed_samples;
+    frame->requested_samples = snapshot.session.requested_samples;
     return frame;
 }
 
@@ -304,7 +408,9 @@ int run_worker(const Arguments &arguments) {
     for (const std::uint32_t capability : *handshake->required_capabilities()) {
         if (capability != URE_CAPABILITY_BOOTSTRAP &&
             capability != URE_CAPABILITY_LIFECYCLE &&
-            capability != URE_CAPABILITY_FRAME_LEASE)
+            capability != URE_CAPABILITY_FRAME_LEASE &&
+            capability != URE_CAPABILITY_NATIVE_SCENE &&
+            capability != URE_CAPABILITY_RENDER_SESSION)
             return 27;
         if (std::find(required_capabilities.begin(), required_capabilities.end(),
                       capability) != required_capabilities.end())
@@ -335,7 +441,9 @@ int run_worker(const Arguments &arguments) {
     for (const std::uint32_t capability : *handshake->optional_capabilities()) {
         const bool supported = capability == URE_CAPABILITY_BOOTSTRAP ||
                                capability == URE_CAPABILITY_LIFECYCLE ||
-                               capability == URE_CAPABILITY_FRAME_LEASE;
+                               capability == URE_CAPABILITY_FRAME_LEASE ||
+                               capability == URE_CAPABILITY_NATIVE_SCENE ||
+                               capability == URE_CAPABILITY_RENDER_SESSION;
         if (supported &&
             !contains_capability(handshake->required_capabilities(), capability) &&
             std::find(selected.optional_capabilities.begin(),
@@ -416,14 +524,88 @@ int run_worker(const Arguments &arguments) {
                           runtime.registry_digest(), worker_identity);
         response.message_kind = fb::MessageKind::OperationResponse;
         if (request->message_kind() != fb::MessageKind::OperationRequest ||
-            request->operation_kind() != URE_OPERATION_ACQUIRE_FRAME ||
-            request->payload_schema() != kConformanceFrameSchema ||
-            !request->payload() || !kConformanceFrameEnabled) {
+            !request->payload()) {
             response.result = fb::ResultCode::CapabilityUnavailable;
             failure = {URE_RESULT_CAPABILITY_UNAVAILABLE, URE_ERROR_DOMAIN_CORE, 302,
                        "operation is unavailable in this worker package"};
             response.error = error_descriptor(failure);
-        } else {
+        } else if (request->operation_kind() == URE_OPERATION_REPLACE_SCENE &&
+                   request->payload_schema() == URE_PAYLOAD_NATIVE_SCENE) {
+            const std::span payload(request->payload()->data(),
+                                    request->payload()->size());
+            const auto *wire = scene_payload(
+                payload, fb::ScenePayloadKind::NativeSceneRequest);
+            SceneRequest scene;
+            SceneRevisionSnapshot revision;
+            if (!wire || !scene_request(*wire, scene)) {
+                response.result = fb::ResultCode::MalformedData;
+                failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 306,
+                           "native scene request is malformed"};
+                response.error = error_descriptor(failure);
+            } else if (scene.content.size() > negotiated_blob_bytes) {
+                response.result = fb::ResultCode::Backpressure;
+                failure = {URE_RESULT_BACKPRESSURE, URE_ERROR_DOMAIN_CORE, 307,
+                           "native scene exceeds the negotiated blob budget"};
+                response.error = error_descriptor(failure);
+            } else if (!runtime.replace_scene(scene, revision, failure)) {
+                response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+            } else {
+                response.payload_schema = URE_PAYLOAD_SCENE_REVISION;
+                response.payload = revision_payload(revision);
+                response.declared_payload_bytes = response.payload.size();
+            }
+        } else if (request->operation_kind() == URE_OPERATION_RENDER_SESSION &&
+                   request->payload_schema() == URE_PAYLOAD_RENDER_OBJECTIVE) {
+            const std::span payload(request->payload()->data(),
+                                    request->payload()->size());
+            const auto *wire = scene_payload(
+                payload, fb::ScenePayloadKind::RenderObjectiveRequest);
+            ObjectiveRequest objective;
+            FrameSnapshot snapshot;
+            if (!wire || !objective_request(*wire, objective)) {
+                response.result = fb::ResultCode::MalformedData;
+                failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 308,
+                           "render objective request is malformed"};
+                response.error = error_descriptor(failure);
+            } else if (!runtime.render_scene(objective, snapshot, failure)) {
+                response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+            } else if (snapshot.bytes.size() > negotiated_blob_bytes ||
+                       snapshot.bytes.size() > negotiated_frame_bytes ||
+                       leases.size() >= 8 ||
+                       snapshot.bytes.size() >
+                           negotiated_blob_bytes - retained_blob_bytes) {
+                response.result = fb::ResultCode::Backpressure;
+                failure = {URE_RESULT_BACKPRESSURE, URE_ERROR_DOMAIN_CORE, 309,
+                           "rendered frame exceeds the negotiated lease budget"};
+                response.error = error_descriptor(failure);
+            } else {
+                if (next_lease == 0 || next_generation == 0)
+                    return 36;
+                const std::uint64_t lease_id = next_lease++;
+                const std::uint64_t generation = next_generation++;
+                std::uint64_t remote_handle{};
+                Lease lease;
+                if (!create_read_only_shared_mapping(
+                        snapshot.bytes, client_process.get(), lease.mapping,
+                        remote_handle, error))
+                    return 37;
+                lease.generation = generation;
+                lease.retained_bytes = snapshot.bytes.size();
+                const auto content_digest =
+                    sha256("UltraRender.SharedFrameBlob.v1", snapshot.bytes);
+                response.message_kind = fb::MessageKind::FrameReady;
+                response.payload_schema = URE_PAYLOAD_FRAME;
+                response.frame = frame_descriptor(
+                    snapshot, lease_id, generation, remote_handle,
+                    content_digest, worker_identity);
+                leases.emplace(lease_id, std::move(lease));
+                retained_blob_bytes += snapshot.bytes.size();
+            }
+        } else if (request->operation_kind() == URE_OPERATION_ACQUIRE_FRAME &&
+                   request->payload_schema() == kConformanceFrameSchema &&
+                   kConformanceFrameEnabled) {
             std::uint32_t width{};
             std::uint32_t height{};
             std::uint32_t seed{};
@@ -493,6 +675,11 @@ int run_worker(const Arguments &arguments) {
                     retained_blob_bytes += snapshot.bytes.size();
                 }
             }
+        } else {
+            response.result = fb::ResultCode::CapabilityUnavailable;
+            failure = {URE_RESULT_CAPABILITY_UNAVAILABLE, URE_ERROR_DOMAIN_CORE, 302,
+                       "operation is unavailable in this worker package"};
+            response.error = error_descriptor(failure);
         }
         encoded = encode(response);
         if (!write_message(pipe.get(), encoded, error))

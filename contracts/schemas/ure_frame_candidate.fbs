@@ -46,4 +46,9 @@ table FrameReadyDescriptor {
   dirty_height:uint (id: 18);
   sample_begin:ulong (id: 19);
   sample_count:ulong (id: 20);
+  session_id:ulong (id: 21);
+  session_state:uint (id: 22);
+  bound_scene_revision:ulong (id: 23);
+  completed_samples:ulong (id: 24);
+  requested_samples:ulong (id: 25);
 }

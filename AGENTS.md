@@ -32,10 +32,10 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 ### Phase PB Approved Target (implemented progressively)
 
 ```text
-contracts      — Single source for public IDs, schemas, manifests, compatibility baselines and golden messages (PB.0-PB.4 implemented).
+contracts      — Single source for public IDs, schemas, manifests, compatibility baselines and golden messages (PB.0-PB.5 implemented).
 ure_public     — Generated C11-compatible loader/value headers; contains no renderer or backend implementation (PB.1 implemented as Candidate).
-ure_contract   — Candidate product runtime DLL with two bootstrap exports and Core lifecycle/Frame tables (PB.4 implemented).
-ure_worker     — Candidate local Windows worker that loads the product runtime only through the public loader ABI (PB.4 implemented; native scene/session rendering begins at PB.5).
+ure_contract   — Candidate product runtime DLL with two bootstrap exports and lifecycle/Frame/Scene/Session tables (PB.5 implemented).
+ure_worker     — Candidate local Windows worker that loads the product runtime only through the public loader ABI and renders bounded native scenes (PB.5 implemented).
 ```
 
 PB.0-PB.7 remain Candidate 0.x and create no stable public promise. The current `ure_c_api.h`, `pyure_native.dll`, and pyure ctypes surface remain legacy experimental during migration.
@@ -70,7 +70,7 @@ PB.0-PB.7 remain Candidate 0.x and create no stable public promise. The current 
 | W (Wave Optics Solver) | Done | W.0-W.12 complete within the declared production/reference boundary; unified physical, API, fail-loud, distributed and static validation closed |
 | U (USD/Hydra Adapter) | Done | U.1-U.6 complete; schema adapter, actual-OpenUSD delegate, mesh/material conversion, progressive RenderSession bridge and strict native-to-USDA export closed |
 | HO (High-order capabilities) | Paused after HR.2 | HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 complete; HR.3 resumes after Phase PB |
-| PB (Public Boundary) | In progress | PB.0-PB.4 complete; current cursor: `PB.5 — Native full-scene boundary and revisioned replacement` |
+| PB (Public Boundary) | In progress | PB.0-PB.5 complete; current cursor: `PB.6 — Persistent UUID transactions and canonical camera extension` |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -249,9 +249,9 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | Vulkan | `vulkan_runtime`, `vulkan_acceleration` |
 | D3D12 | `d3d12_runtime` |
 | Multi-backend | `multi_backend_inventory` |
-| Public boundary | `test_public_boundary_audit`, `test_contract_registry`, `test_public_headers_cpp`, `test_contract_codegen_compare`, `test_contract_schema_conform`, `test_public_loader_header_mirror`, `test_public_registry_header_mirror`, `test_contract_codegen_negative`, `test_golden_message_mirror`, `test_mock_worker_external_client`, `test_candidate_abi_layout`, `test_candidate_loader_exports`, `test_candidate_loader_client`, `test_runtime_lifecycle`, `test_frame_leases`, `test_worker_protocol`, `test_worker_crash`, `test_worker_security` |
+| Public boundary | `test_public_boundary_audit`, `test_contract_registry`, `test_public_headers_cpp`, `test_contract_codegen_compare`, `test_contract_schema_conform`, `test_public_loader_header_mirror`, `test_public_registry_header_mirror`, `test_contract_codegen_negative`, `test_golden_message_mirror`, `test_mock_worker_external_client`, `test_candidate_abi_layout`, `test_candidate_loader_exports`, `test_candidate_loader_client`, `test_runtime_lifecycle`, `test_frame_leases`, `test_scene_boundary`, `test_worker_protocol`, `test_worker_crash`, `test_scene_worker`, `test_worker_security` |
 | Optional Hydra build | `test_hydra_render_delegate`, `test_hydra_plugin_discovery`, `test_hydra_mesh_rprim`, `test_hydra_material_sprim`, `test_hydra_render_buffer`, `test_hydra_progressive_render`, plus SDK-only `test_usda_export` |
-| **CTest total** | **89 registered tests** in `build_modular_x64` |
+| **CTest total** | **91 registered tests** in `build_modular_x64` |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -526,11 +526,12 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 71 | 2026-08-09 PB.2 | Closed the Windows x64 Candidate loader ABI and metadata runtime | A `/Brepro` DLL with an explicit `.def` exports only `ureGetRuntimeManifest` and `ureQueryInterface`; a no-import C11 client loads both through `LoadLibraryW`/`GetProcAddress`. Strict structure, chain, reserved, version, digest and diagnostic truncation behavior is gated. C11/C++23 layouts match a retained Windows x64 JSON manifest; immutable Runtime table and build/toolchain metadata are available. Two additive Candidate identities raise the registry to 55 entries without adding handles, renderer/session behavior, a worker, or a stable promise. The cursor advances to PB.3. |
 | 72 | 2026-08-09 PB.3 | Closed the Candidate Core lifecycle grammar | The 103-entry registry and generated C11 ABI expose Runtime/Instance/Error/Operation/Event tables, typed non-reused handles, retained structured error/cause context, three-axis capability descriptors, monotonic operation cancellation/terminal states, and bounded/coalescing/gap-aware events. Dynamic C11 races, leak accounting, 100-run stress, 50-run MSVC ASan stress, exact exports/layouts, `/Brepro` relinks and the Release gate close PB.3 without adding rendering, frames, a worker, or a stable promise. The cursor advances to PB.4. |
 | 73 | 2026-08-09 PB.4 | Closed immutable frame leases and the isolated Windows local worker | The 117-entry Candidate registry and generated Frame table provide immutable budgeted snapshots, typed plane identities, checked map/copy leases and explicit backpressure. A same-user, remote-rejecting Named Pipe worker dynamically loads only the two runtime exports, transfers digest-bound read-only mappings, and is contained by a kill-on-close Job Object. Test-only runtime/worker producers are excluded from the product stage; parity, malformed input, crash/restart, import/package and Release 89/89 gates pass. The cursor advances to PB.5 without creating a stable promise or native-scene/render workflow. |
+| 74 | 2026-08-09 PB.5 | Closed the Candidate native full-scene and real render boundary | The 151-entry registry generates Scene/Session tables and native-scene/objective worker schemas. Phase Q validates bounded memory/file/package blobs; accepted revisions bind content, semantic, resource, schema and package identities and replace atomically. The two-export product runtime and worker run the same CUDA automatic session and immutable frame path; corrupt/ambiguous packages, unsupported schemas, missing resources, budgets, active-work replacement, device loss, and direct/worker parity pass with the Release 91/91 gate. The cursor advances to PB.6 without creating a stable promise. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the Visual Studio 2026 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2 and PB.0-PB.4 are complete. HR.3 is suspended and the authoritative cursor is `PB.5 — Native full-scene boundary and revisioned replacement`. The approved architecture and detailed execution authority are `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Boundary_PLAN.md`. PB establishes a minimal client boundary, not the former Phase X plugin ecosystem; PB.0-PB.7 remain Candidate 0.x with no stable promise.
+- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2 and PB.0-PB.5 are complete. HR.3 is suspended and the authoritative cursor is `PB.6 — Persistent UUID transactions and canonical camera extension`. The approved architecture and detailed execution authority are `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Boundary_PLAN.md`. PB establishes a minimal client boundary, not the former Phase X plugin ecosystem; PB.0-PB.7 remain Candidate 0.x with no stable promise.
 - The CUDA automatic bridge does not yet populate every high-order measurement plane, HR.1/HR.2 reconstruction remains explicit, and HR.2 ships no trained model or production inference ABI. Future high-order capabilities enter the public boundary through independently versioned extensions instead of expanding stable Core.
 - The repository `gui/` tree is abandoned and excluded from inspection, development, migration and acceptance evidence. A future Studio/editor is an independent client of generated PB fixtures and packages.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.

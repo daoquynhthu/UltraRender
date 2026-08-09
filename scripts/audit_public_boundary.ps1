@@ -191,11 +191,12 @@ if ($tombstoneIds.Count -ne @($tombstoneIds | Sort-Object -Unique).Count -or
 }
 if ($compatibility.baseline.candidate_version -ne "0.1.0" -or
     $compatibility.baseline.registry_digest -ne "bb9a25aacb63bd88b4e79b67d7932a8b66174627beada11fa068475ca76e1513" -or
-    @($compatibility.changes).Count -ne 73 -or
+    @($compatibility.changes).Count -ne 107 -or
     @($compatibility.changes | Where-Object { $_.change_class -ne "AdditiveCandidate" }).Count -ne 0 -or
     @($compatibility.changes | Where-Object { $_.phase -eq "PB.3" }).Count -ne 53 -or
     @($compatibility.changes | Where-Object { $_.phase -eq "PB.4" }).Count -ne 20 -or
-    @($compatibility.changes | Where-Object { $_.phase -notin @("PB.3", "PB.4") }).Count -ne 0 -or
+    @($compatibility.changes | Where-Object { $_.phase -eq "PB.5" }).Count -ne 34 -or
+    @($compatibility.changes | Where-Object { $_.phase -notin @("PB.3", "PB.4", "PB.5") }).Count -ne 0 -or
     @($compatibility.tombstones).Count -ne 0) {
     throw "PB candidate compatibility history is incomplete"
 }
@@ -416,7 +417,7 @@ if ($dllInfo.Length -ne [int64]$legacy.binary.bytes -or $dllHash -ne $legacy.bin
 }
 $legacyCoreCMake = Get-Content -LiteralPath (Join-Path $RepoRoot "libs/ure_core/CMakeLists.txt") -Raw
 if (-not [bool]$legacy.binary.reproducible_link -or $legacy.binary.reproducibility_flag -ne "/Brepro" -or
-    $legacy.binary.baseline_refresh_phase -ne "PB.1" -or
+    $legacy.binary.baseline_refresh_phase -ne "PB.5" -or
     -not [regex]::IsMatch($legacyCoreCMake, 'target_link_options\s*\(\s*pyure_native\s+PRIVATE\s+/Brepro\s*\)')) {
     throw "Legacy DLL reproducible-link policy is missing"
 }

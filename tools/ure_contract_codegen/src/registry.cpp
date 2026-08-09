@@ -326,7 +326,7 @@ void validate_compatibility(const std::filesystem::path& path, const Registry& r
 }
 
 void validate_schemas(const std::filesystem::path& schema_directory) {
-    const std::array names{"ure_payload_candidate.fbs", "ure_frame_candidate.fbs", "ure_worker_candidate.fbs"};
+    const std::array names{"ure_payload_candidate.fbs", "ure_frame_candidate.fbs", "ure_scene_candidate.fbs", "ure_worker_candidate.fbs"};
     const std::regex table_pattern(R"(table\s+[A-Za-z0-9_]+\s*\{([^}]*)\})");
     const std::regex field_pattern(R"(^\s*[A-Za-z0-9_]+\s*:[^;]+\(id:\s*([0-9]+)\)\s*;\s*$)");
     for (const std::string_view name : names) {

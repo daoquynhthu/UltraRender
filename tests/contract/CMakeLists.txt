@@ -80,6 +80,12 @@ if(TARGET ure_contract)
     target_include_directories(test_frame_leases PRIVATE ${UR_PB1_STAGE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
     add_dependencies(test_frame_leases ure_public_stage_headers ure_contract_conformance)
 
+    add_executable(test_scene_boundary
+        ${CMAKE_SOURCE_DIR}/tests/fixtures/contracts/scene_client/external_scene_client.c)
+    set_target_properties(test_scene_boundary PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
+    target_include_directories(test_scene_boundary PRIVATE ${UR_PB1_STAGE_DIR}/include)
+    add_dependencies(test_scene_boundary ure_public_stage_headers ure_contract)
+
     add_library(worker_test_support STATIC worker_test_client.cpp)
     target_link_libraries(worker_test_support PUBLIC
         ure_public
@@ -96,6 +102,10 @@ if(TARGET ure_contract)
     add_executable(test_worker_crash test_worker_crash.cpp)
     target_link_libraries(test_worker_crash PRIVATE worker_test_support)
     add_dependencies(test_worker_crash ure_worker_conformance ure_contract_conformance)
+
+    add_executable(test_scene_worker test_scene_worker.cpp)
+    target_link_libraries(test_scene_worker PRIVATE worker_test_support ure_public)
+    add_dependencies(test_scene_worker ure_worker ure_contract ure_contract_conformance)
 endif()
 
 if(MSVC)
@@ -103,12 +113,13 @@ if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
     endforeach()
     if(TARGET ure_contract)
-        foreach(target test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases worker_test_support test_worker_protocol test_worker_crash)
+        foreach(target test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary worker_test_support test_worker_protocol test_worker_crash test_scene_worker)
             target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
         endforeach()
         target_compile_options(test_loader_client PRIVATE /wd4191)
         target_compile_options(test_runtime_lifecycle PRIVATE /wd4191)
         target_compile_options(test_frame_leases PRIVATE /wd4191)
+        target_compile_options(test_scene_boundary PRIVATE /wd4191)
         target_compile_options(test_worker_protocol PRIVATE /wd4191)
     endif()
 endif()
@@ -208,6 +219,14 @@ if(TARGET ure_contract)
         NAME test_frame_leases
         COMMAND test_frame_leases $<TARGET_FILE:ure_contract_conformance>)
     add_test(
+        NAME test_scene_boundary
+        COMMAND test_scene_boundary
+            $<TARGET_FILE:ure_contract>
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.ure
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb5_public_boundary/single_scene.urepkg
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb5_public_boundary/ambiguous_scenes.urepkg)
+    add_test(
         NAME test_worker_protocol
         COMMAND test_worker_protocol
             $<TARGET_FILE:ure_worker>
@@ -219,6 +238,13 @@ if(TARGET ure_contract)
         COMMAND test_worker_crash
             $<TARGET_FILE:ure_worker_conformance>
             $<TARGET_FILE:ure_contract_conformance>)
+    add_test(
+        NAME test_scene_worker
+        COMMAND test_scene_worker
+            $<TARGET_FILE:ure_worker>
+            $<TARGET_FILE:ure_contract>
+            $<TARGET_FILE:ure_contract_conformance>
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene)
     add_test(
         NAME test_worker_security
         COMMAND
@@ -250,8 +276,10 @@ if(TARGET ure_contract)
         test_candidate_loader_client
         test_runtime_lifecycle
         test_frame_leases
+        test_scene_boundary
         test_worker_protocol
         test_worker_crash
+        test_scene_worker
         test_worker_security
         PROPERTIES TIMEOUT 60)
 endif()

@@ -81,7 +81,8 @@ CompiledSolverContract compile_solver_contract(const NativeSolverContract& contr
                                                const SolverCapabilityRegistry& capabilities);
 std::string solver_contract_semantic_hash(const NativeSolverContract& contract);
 std::vector<std::uint8_t> write_solver_contract_binary(const NativeSolverContract& contract);
-LoadResult<NativeSolverContract> read_solver_contract_binary(std::span<const std::uint8_t> bytes);
+LoadResult<NativeSolverContract> read_solver_contract_binary(
+    std::span<const std::uint8_t> bytes, const ValidationLimits& limits = {});
 std::string write_solver_contract_text(const NativeSolverContract& contract);
 LoadResult<NativeSolverContract> read_solver_contract_text(std::string_view text);
 

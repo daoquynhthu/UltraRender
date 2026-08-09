@@ -37,15 +37,15 @@ Json build_manifest() {
         {"runtime_build_digest_scheme", "sha256(domain|toolchain|runtime-sources|public-headers)"},
         {"core_abi_range", Json{{"minimum", "0.1"}, {"maximum", "0.1"}}},
         {"worker_protocol_range",
-         Json{{"minimum", "0.1"}, {"maximum", "0.1"}, {"implementation", "mock_only"}}},
+         Json{{"minimum", "0.1"}, {"maximum", "0.1"}, {"implementation", "product_and_conformance"}}},
         {"limits", Json{{"maximum_structure_chain", 32},
                         {"maximum_message_bytes", 1048576},
                         {"maximum_event_capacity", 4096},
                         {"maximum_error_message_bytes", 1024}}},
         {"features", Json{{"runtime_handles", true},
-                          {"renderer", false},
-                          {"worker", false},
-                          {"external_execution", false}}}};
+                          {"renderer", true},
+                          {"worker", true},
+                          {"external_execution", true}}}};
 
     auto &types = root["types"];
     types["ure_input_header_t"] = layout<ure_input_header_t>();
@@ -220,6 +220,91 @@ Json build_manifest() {
                          offsetof(ure_instance_frame_budget_t, reserved));
     field<std::uint64_t>(types["ure_instance_frame_budget_t"], "max_retained_bytes",
                          offsetof(ure_instance_frame_budget_t, max_retained_bytes));
+    types["ure_scene_budget_t"] = layout<ure_scene_budget_t>();
+    field<ure_input_header_t>(types["ure_scene_budget_t"], "header", offsetof(ure_scene_budget_t, header));
+    field<std::uint64_t>(types["ure_scene_budget_t"], "max_content_bytes", offsetof(ure_scene_budget_t, max_content_bytes));
+    field<std::uint64_t>(types["ure_scene_budget_t"], "max_uncompressed_bytes", offsetof(ure_scene_budget_t, max_uncompressed_bytes));
+    field<std::uint64_t>(types["ure_scene_budget_t"], "max_resident_bytes", offsetof(ure_scene_budget_t, max_resident_bytes));
+    field<std::uint64_t>(types["ure_scene_budget_t"], "max_resource_count", offsetof(ure_scene_budget_t, max_resource_count));
+    field<std::uint64_t>(types["ure_scene_budget_t"], "max_object_count", offsetof(ure_scene_budget_t, max_object_count));
+    field<std::uint32_t>(types["ure_scene_budget_t"], "max_nesting_depth", offsetof(ure_scene_budget_t, max_nesting_depth));
+    field<std::uint32_t>(types["ure_scene_budget_t"], "max_decompression_ratio", offsetof(ure_scene_budget_t, max_decompression_ratio));
+    field<std::uint64_t[2]>(types["ure_scene_budget_t"], "reserved", offsetof(ure_scene_budget_t, reserved));
+    types["ure_native_scene_blob_t"] = layout<ure_native_scene_blob_t>();
+    field<ure_input_header_t>(types["ure_native_scene_blob_t"], "header", offsetof(ure_native_scene_blob_t, header));
+    field<std::uint32_t>(types["ure_native_scene_blob_t"], "source_kind", offsetof(ure_native_scene_blob_t, source_kind));
+    field<std::uint32_t>(types["ure_native_scene_blob_t"], "format", offsetof(ure_native_scene_blob_t, format));
+    field<ure_byte_span_t>(types["ure_native_scene_blob_t"], "bytes", offsetof(ure_native_scene_blob_t, bytes));
+    field<ure_string_view_t>(types["ure_native_scene_blob_t"], "path_utf8", offsetof(ure_native_scene_blob_t, path_utf8));
+    field<ure_string_view_t>(types["ure_native_scene_blob_t"], "package_scene_id", offsetof(ure_native_scene_blob_t, package_scene_id));
+    field<std::uint32_t>(types["ure_native_scene_blob_t"], "schema_min_major", offsetof(ure_native_scene_blob_t, schema_min_major));
+    field<std::uint32_t>(types["ure_native_scene_blob_t"], "schema_min_minor", offsetof(ure_native_scene_blob_t, schema_min_minor));
+    field<std::uint32_t>(types["ure_native_scene_blob_t"], "schema_max_major", offsetof(ure_native_scene_blob_t, schema_max_major));
+    field<std::uint32_t>(types["ure_native_scene_blob_t"], "schema_max_minor", offsetof(ure_native_scene_blob_t, schema_max_minor));
+    field<ure_scene_budget_t>(types["ure_native_scene_blob_t"], "budget", offsetof(ure_native_scene_blob_t, budget));
+    field<std::uint64_t[2]>(types["ure_native_scene_blob_t"], "reserved", offsetof(ure_native_scene_blob_t, reserved));
+    types["ure_scene_validation_result_t"] = layout<ure_scene_validation_result_t>();
+    field<ure_output_header_t>(types["ure_scene_validation_result_t"], "header", offsetof(ure_scene_validation_result_t, header));
+    field<ure_bool32_t>(types["ure_scene_validation_result_t"], "valid", offsetof(ure_scene_validation_result_t, valid));
+    field<std::uint32_t>(types["ure_scene_validation_result_t"], "error_count", offsetof(ure_scene_validation_result_t, error_count));
+    field<std::uint32_t>(types["ure_scene_validation_result_t"], "warning_count", offsetof(ure_scene_validation_result_t, warning_count));
+    field<std::uint32_t>(types["ure_scene_validation_result_t"], "source_schema_major", offsetof(ure_scene_validation_result_t, source_schema_major));
+    field<std::uint32_t>(types["ure_scene_validation_result_t"], "source_schema_minor", offsetof(ure_scene_validation_result_t, source_schema_minor));
+    field<std::uint32_t>(types["ure_scene_validation_result_t"], "diagnostics_capacity", offsetof(ure_scene_validation_result_t, diagnostics_capacity));
+    field<std::uint32_t>(types["ure_scene_validation_result_t"], "diagnostics_required", offsetof(ure_scene_validation_result_t, diagnostics_required));
+    field<std::uint32_t>(types["ure_scene_validation_result_t"], "diagnostics_written", offsetof(ure_scene_validation_result_t, diagnostics_written));
+    field<char *>(types["ure_scene_validation_result_t"], "diagnostics_data", offsetof(ure_scene_validation_result_t, diagnostics_data));
+    field<ure_digest256_t>(types["ure_scene_validation_result_t"], "blob_digest", offsetof(ure_scene_validation_result_t, blob_digest));
+    field<ure_digest256_t>(types["ure_scene_validation_result_t"], "semantic_digest", offsetof(ure_scene_validation_result_t, semantic_digest));
+    field<ure_digest256_t>(types["ure_scene_validation_result_t"], "resource_manifest_digest", offsetof(ure_scene_validation_result_t, resource_manifest_digest));
+    field<std::uint64_t>(types["ure_scene_validation_result_t"], "resource_count", offsetof(ure_scene_validation_result_t, resource_count));
+    field<std::uint64_t>(types["ure_scene_validation_result_t"], "object_count", offsetof(ure_scene_validation_result_t, object_count));
+    field<std::uint64_t[2]>(types["ure_scene_validation_result_t"], "reserved", offsetof(ure_scene_validation_result_t, reserved));
+    types["ure_scene_revision_info_t"] = layout<ure_scene_revision_info_t>();
+    field<ure_output_header_t>(types["ure_scene_revision_info_t"], "header", offsetof(ure_scene_revision_info_t, header));
+    field<std::uint64_t>(types["ure_scene_revision_info_t"], "revision", offsetof(ure_scene_revision_info_t, revision));
+    field<ure_digest256_t>(types["ure_scene_revision_info_t"], "revision_identity", offsetof(ure_scene_revision_info_t, revision_identity));
+    field<ure_digest256_t>(types["ure_scene_revision_info_t"], "blob_digest", offsetof(ure_scene_revision_info_t, blob_digest));
+    field<ure_digest256_t>(types["ure_scene_revision_info_t"], "semantic_digest", offsetof(ure_scene_revision_info_t, semantic_digest));
+    field<ure_digest256_t>(types["ure_scene_revision_info_t"], "resource_manifest_digest", offsetof(ure_scene_revision_info_t, resource_manifest_digest));
+    field<std::uint32_t>(types["ure_scene_revision_info_t"], "source_schema_major", offsetof(ure_scene_revision_info_t, source_schema_major));
+    field<std::uint32_t>(types["ure_scene_revision_info_t"], "source_schema_minor", offsetof(ure_scene_revision_info_t, source_schema_minor));
+    field<std::uint32_t>(types["ure_scene_revision_info_t"], "reset_reason", offsetof(ure_scene_revision_info_t, reset_reason));
+    field<std::uint32_t>(types["ure_scene_revision_info_t"], "warning_count", offsetof(ure_scene_revision_info_t, warning_count));
+    field<std::uint32_t>(types["ure_scene_revision_info_t"], "loss_count", offsetof(ure_scene_revision_info_t, loss_count));
+    field<std::uint32_t>(types["ure_scene_revision_info_t"], "reserved32", offsetof(ure_scene_revision_info_t, reserved32));
+    field<std::uint64_t>(types["ure_scene_revision_info_t"], "resource_count", offsetof(ure_scene_revision_info_t, resource_count));
+    field<std::uint64_t>(types["ure_scene_revision_info_t"], "object_count", offsetof(ure_scene_revision_info_t, object_count));
+    field<ure_string_view_t>(types["ure_scene_revision_info_t"], "selected_package_scene", offsetof(ure_scene_revision_info_t, selected_package_scene));
+    field<std::uint64_t[2]>(types["ure_scene_revision_info_t"], "reserved", offsetof(ure_scene_revision_info_t, reserved));
+    types["ure_objective_envelope_t"] = layout<ure_objective_envelope_t>();
+    field<ure_input_header_t>(types["ure_objective_envelope_t"], "header", offsetof(ure_objective_envelope_t, header));
+    field<std::uint32_t>(types["ure_objective_envelope_t"], "payload_schema", offsetof(ure_objective_envelope_t, payload_schema));
+    field<std::uint32_t>(types["ure_objective_envelope_t"], "payload_version_major", offsetof(ure_objective_envelope_t, payload_version_major));
+    field<std::uint32_t>(types["ure_objective_envelope_t"], "payload_version_minor", offsetof(ure_objective_envelope_t, payload_version_minor));
+    field<std::uint32_t>(types["ure_objective_envelope_t"], "determinism_policy", offsetof(ure_objective_envelope_t, determinism_policy));
+    field<std::uint32_t>(types["ure_objective_envelope_t"], "usage_policy", offsetof(ure_objective_envelope_t, usage_policy));
+    field<std::uint32_t>(types["ure_objective_envelope_t"], "output_count", offsetof(ure_objective_envelope_t, output_count));
+    field<const std::uint32_t *>(types["ure_objective_envelope_t"], "output_semantics", offsetof(ure_objective_envelope_t, output_semantics));
+    field<std::uint64_t>(types["ure_objective_envelope_t"], "wall_time_budget_ns", offsetof(ure_objective_envelope_t, wall_time_budget_ns));
+    field<std::uint64_t>(types["ure_objective_envelope_t"], "memory_budget_bytes", offsetof(ure_objective_envelope_t, memory_budget_bytes));
+    field<std::uint64_t>(types["ure_objective_envelope_t"], "sample_budget", offsetof(ure_objective_envelope_t, sample_budget));
+    field<std::uint64_t>(types["ure_objective_envelope_t"], "latency_budget_ns", offsetof(ure_objective_envelope_t, latency_budget_ns));
+    field<ure_byte_span_t>(types["ure_objective_envelope_t"], "payload", offsetof(ure_objective_envelope_t, payload));
+    field<ure_digest256_t>(types["ure_objective_envelope_t"], "payload_digest", offsetof(ure_objective_envelope_t, payload_digest));
+    field<std::uint64_t[2]>(types["ure_objective_envelope_t"], "reserved", offsetof(ure_objective_envelope_t, reserved));
+    types["ure_session_info_t"] = layout<ure_session_info_t>();
+    field<ure_output_header_t>(types["ure_session_info_t"], "header", offsetof(ure_session_info_t, header));
+    field<std::uint32_t>(types["ure_session_info_t"], "state", offsetof(ure_session_info_t, state));
+    field<std::uint32_t>(types["ure_session_info_t"], "reset_reason", offsetof(ure_session_info_t, reset_reason));
+    field<std::uint64_t>(types["ure_session_info_t"], "bound_scene_revision", offsetof(ure_session_info_t, bound_scene_revision));
+    field<ure_digest256_t>(types["ure_session_info_t"], "scene_revision_identity", offsetof(ure_session_info_t, scene_revision_identity));
+    field<ure_digest256_t>(types["ure_session_info_t"], "objective_identity", offsetof(ure_session_info_t, objective_identity));
+    field<std::uint64_t>(types["ure_session_info_t"], "completed_samples", offsetof(ure_session_info_t, completed_samples));
+    field<std::uint64_t>(types["ure_session_info_t"], "requested_samples", offsetof(ure_session_info_t, requested_samples));
+    field<ure_handle_t>(types["ure_session_info_t"], "active_operation", offsetof(ure_session_info_t, active_operation));
+    field<ure_handle_t>(types["ure_session_info_t"], "latest_frame", offsetof(ure_session_info_t, latest_frame));
+    field<std::uint64_t[2]>(types["ure_session_info_t"], "reserved", offsetof(ure_session_info_t, reserved));
     types["ure_frame_info_t"] = layout<ure_frame_info_t>();
     field<ure_output_header_t>(types["ure_frame_info_t"], "header",
                                offsetof(ure_frame_info_t, header));
@@ -395,6 +480,27 @@ Json build_manifest() {
         offsetof(ure_frame_interface_t, unmap_plane));
     field<decltype(ure_frame_interface_t::copy_plane)>(types["ure_frame_interface_t"], "copy_plane",
                                                        offsetof(ure_frame_interface_t, copy_plane));
+    types["ure_scene_interface_t"] = layout<ure_scene_interface_t>();
+    field<ure_interface_table_header_t>(types["ure_scene_interface_t"], "header", offsetof(ure_scene_interface_t, header));
+    field<decltype(ure_scene_interface_t::validate)>(types["ure_scene_interface_t"], "validate", offsetof(ure_scene_interface_t, validate));
+    field<decltype(ure_scene_interface_t::create)>(types["ure_scene_interface_t"], "create", offsetof(ure_scene_interface_t, create));
+    field<decltype(ure_scene_interface_t::replace)>(types["ure_scene_interface_t"], "replace", offsetof(ure_scene_interface_t, replace));
+    field<decltype(ure_scene_interface_t::retain)>(types["ure_scene_interface_t"], "retain", offsetof(ure_scene_interface_t, retain));
+    field<decltype(ure_scene_interface_t::release)>(types["ure_scene_interface_t"], "release", offsetof(ure_scene_interface_t, release));
+    field<decltype(ure_scene_interface_t::get_revision)>(types["ure_scene_interface_t"], "get_revision", offsetof(ure_scene_interface_t, get_revision));
+    types["ure_session_interface_t"] = layout<ure_session_interface_t>();
+    field<ure_interface_table_header_t>(types["ure_session_interface_t"], "header", offsetof(ure_session_interface_t, header));
+    field<decltype(ure_session_interface_t::create)>(types["ure_session_interface_t"], "create", offsetof(ure_session_interface_t, create));
+    field<decltype(ure_session_interface_t::retain)>(types["ure_session_interface_t"], "retain", offsetof(ure_session_interface_t, retain));
+    field<decltype(ure_session_interface_t::release)>(types["ure_session_interface_t"], "release", offsetof(ure_session_interface_t, release));
+    field<decltype(ure_session_interface_t::close)>(types["ure_session_interface_t"], "close", offsetof(ure_session_interface_t, close));
+    field<decltype(ure_session_interface_t::get_info)>(types["ure_session_interface_t"], "get_info", offsetof(ure_session_interface_t, get_info));
+    field<decltype(ure_session_interface_t::bind_scene)>(types["ure_session_interface_t"], "bind_scene", offsetof(ure_session_interface_t, bind_scene));
+    field<decltype(ure_session_interface_t::start)>(types["ure_session_interface_t"], "start", offsetof(ure_session_interface_t, start));
+    field<decltype(ure_session_interface_t::pause)>(types["ure_session_interface_t"], "pause", offsetof(ure_session_interface_t, pause));
+    field<decltype(ure_session_interface_t::resume)>(types["ure_session_interface_t"], "resume", offsetof(ure_session_interface_t, resume));
+    field<decltype(ure_session_interface_t::reset)>(types["ure_session_interface_t"], "reset", offsetof(ure_session_interface_t, reset));
+    field<decltype(ure_session_interface_t::acquire_frame)>(types["ure_session_interface_t"], "acquire_frame", offsetof(ure_session_interface_t, acquire_frame));
     types["ure_bootstrap_diagnostic_t"] = layout<ure_bootstrap_diagnostic_t>();
     field<ure_output_header_t>(types["ure_bootstrap_diagnostic_t"], "header",
                                offsetof(ure_bootstrap_diagnostic_t, header));
@@ -492,6 +598,12 @@ Json build_manifest() {
              {"operation_info", URE_STRUCTURE_OPERATION_INFO},
              {"event_record", URE_STRUCTURE_EVENT_RECORD},
              {"instance_frame_budget", URE_STRUCTURE_INSTANCE_FRAME_BUDGET},
+             {"scene_budget", URE_STRUCTURE_SCENE_BUDGET},
+             {"native_scene_blob", URE_STRUCTURE_NATIVE_SCENE_BLOB},
+             {"scene_validation_result", URE_STRUCTURE_SCENE_VALIDATION_RESULT},
+             {"scene_revision_info", URE_STRUCTURE_SCENE_REVISION_INFO},
+             {"objective_envelope", URE_STRUCTURE_OBJECTIVE_ENVELOPE},
+             {"session_info", URE_STRUCTURE_SESSION_INFO},
              {"frame_info", URE_STRUCTURE_FRAME_INFO},
              {"frame_plane_info", URE_STRUCTURE_FRAME_PLANE_INFO},
              {"frame_map", URE_STRUCTURE_FRAME_MAP},
@@ -501,6 +613,8 @@ Json build_manifest() {
              {"operation_interface", URE_STRUCTURE_OPERATION_INTERFACE},
              {"event_interface", URE_STRUCTURE_EVENT_INTERFACE},
              {"frame_interface", URE_STRUCTURE_FRAME_INTERFACE},
+             {"scene_interface", URE_STRUCTURE_SCENE_INTERFACE},
+             {"session_interface", URE_STRUCTURE_SESSION_INTERFACE},
              {"bool32", URE_STRUCTURE_BOOL32},
              {"handle", URE_STRUCTURE_HANDLE}};
     root["results"] = Json{{"success", URE_RESULT_SUCCESS},
@@ -539,6 +653,18 @@ Json build_manifest() {
                                   {"runtime_state", "Compiled"},
                                   {"enabled", false},
                                   {"dependencies", Json::array({URE_CAPABILITY_LIFECYCLE})}}},
+             {"native_scene", Json{{"id", URE_CAPABILITY_NATIVE_SCENE},
+                                    {"stability", "Core"},
+                                    {"maturity", "Experimental"},
+                                    {"runtime_state", "Compiled"},
+                                    {"enabled", false},
+                                    {"dependencies", Json::array({URE_CAPABILITY_LIFECYCLE})}}},
+             {"render_session", Json{{"id", URE_CAPABILITY_RENDER_SESSION},
+                                      {"stability", "Core"},
+                                      {"maturity", "Experimental"},
+                                      {"runtime_state", "Compiled"},
+                                      {"enabled", false},
+                                      {"dependencies", Json::array({URE_CAPABILITY_LIFECYCLE, URE_CAPABILITY_FRAME_LEASE, URE_CAPABILITY_NATIVE_SCENE})}}},
              {"telemetry", Json{{"id", URE_CAPABILITY_TELEMETRY},
                                 {"stability", "Core"},
                                 {"maturity", "Experimental"},
@@ -549,7 +675,10 @@ Json build_manifest() {
                               {"instance", "f6f5306c-31ee-4aa9-857f-4675e15bd90d"},
                               {"error", "8d762bb1-6cae-5c01-9f63-71b2a2344b10"},
                               {"operation", "17db0428-bd58-5f4e-8b90-a7a72d901e13"},
-                              {"event", "6d41e4c9-9576-5287-a6b8-2bd359814521"}};
+                              {"event", "6d41e4c9-9576-5287-a6b8-2bd359814521"},
+                              {"frame", "8fed2ef8-1d8d-4989-8fa0-3f6b5641e9bf"},
+                              {"scene", "5ae91517-da5d-4fc8-965d-1e7d6b738946"},
+                              {"session", "459d7468-66c2-4e48-bb2e-81f22b1d7807"}};
     return root;
 }
 

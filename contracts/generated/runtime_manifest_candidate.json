@@ -2,7 +2,7 @@
   "candidate_version": "0.1.0",
   "canonical_registry": {
     "path": "registry/public_contract_registry.canonical.json",
-    "sha256": "b31d1b6870f946ebd024d7eaeb19c8064c7674ba38ff30dd5e82bba0d0dc8bdb"
+    "sha256": "2d3eb921a31b172f2d5ce47aac0e98f04dcc8097d299c21437bc55d1b690a849"
   },
   "compatibility_promise": "None before PB.8",
   "loader_exports": [
@@ -16,22 +16,26 @@
   "public_header_language": "C11",
   "publication_state": "Candidate",
   "registry_canonicalization": "RFC8785 restricted to integers and decimal strings",
-  "registry_digest": "dd89cb843491009bc239c28c711a81eb181866ac43298c064e30bd129cd5f892",
-  "registry_entry_count": 117,
+  "registry_digest": "2b88d3c5efed84faf862df447bb1d8178f7eaba38a7fa1e9035f6cf0051f0e3d",
+  "registry_entry_count": 151,
   "schema": "ure.public.runtime-manifest-candidate/0.1",
   "schema_compiler": "flatc version 25.12.19",
   "schemas": [
     {
       "path": "schemas/ure_payload_candidate.fbs",
-      "sha256": "694863842705a031e1da4b775458f4ddba6853b4581008c5b840bf9c1834b94a"
+      "sha256": "9d6aabfbd1091ff2945b1769a46d01f7826ca1e5ec18915e9fdf6072e266c4f5"
     },
     {
       "path": "schemas/ure_frame_candidate.fbs",
-      "sha256": "3750d908b5f83b4290af08639b5b84f31b00ce3ebbcb0f4bcba8b271b18add7f"
+      "sha256": "c239fbc5cdab2f371fe12f934963225d4723a12d41ce839243ac5bada3a10dc4"
+    },
+    {
+      "path": "schemas/ure_scene_candidate.fbs",
+      "sha256": "c2a15cec241f382898372a2939d22101a3a82f9cad920dc0cc181024ee9f76d3"
     },
     {
       "path": "schemas/ure_worker_candidate.fbs",
-      "sha256": "39f0fa7a8936e7e6a7dad8304b12b1436f2318cc1a21f54f5550d8db1cd74cc8"
+      "sha256": "e8fac9d148c201e8c61eca789bc1e524464f4d17cb3b60c819797358ac533152"
     }
   ],
   "worker_protocol": {
