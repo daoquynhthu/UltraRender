@@ -2,7 +2,7 @@
 
 This generated reference is a Candidate artifact. It is not a stable ABI or protocol promise.
 
-Registry digest: `d3ea8fed3645fdc2e9ae930e60fa287a5caa0f5fb7e2f76273e98c20617b12ac`
+Registry digest: `bb9a25aacb63bd88b4e79b67d7932a8b66174627beada11fa068475ca76e1513`
 
 | Registry ID | Kind | Canonical name | Stability | Maturity | Since | Default | Dependencies |
 |---:|---|---|---|---|---|---|---|
@@ -18,6 +18,8 @@ Registry digest: `d3ea8fed3645fdc2e9ae930e60fa287a5caa0f5fb7e2f76273e98c20617b12
 |10|Structure|`ure.structure.runtime_manifest`|Core|NotApplicable|0.1.0|enabled|2, 4, 5, 7|
 |11|Structure|`ure.structure.interface_query`|Core|NotApplicable|0.1.0|enabled|1, 3|
 |12|Structure|`ure.structure.interface_response`|Core|NotApplicable|0.1.0|enabled|2, 3|
+|13|Structure|`ure.structure.interface_table_header`|Core|NotApplicable|0.1.0|enabled||
+|14|Structure|`ure.structure.runtime_interface`|Core|NotApplicable|0.1.0|enabled|13, 700|
 |100|Result|`ure.result.success`|Core|NotApplicable|0.1.0|enabled||
 |101|Result|`ure.result.incomplete`|Core|NotApplicable|0.1.0|enabled||
 |102|Result|`ure.result.invalid_argument`|Core|NotApplicable|0.1.0|enabled||

@@ -17,8 +17,8 @@ function Write-Json {
 }
 
 function Invoke-CodegenFailure {
-    param([string]$Registry, [string]$SchemaRoot, [string]$Pattern, [string]$Label)
-    $output = & $Codegen lint --registry $Registry --compatibility $compatibility --schemas $SchemaRoot 2>&1 | Out-String
+    param([string]$Registry, [string]$SchemaRoot, [string]$Pattern, [string]$Label, [string]$Compatibility = $compatibility)
+    $output = & $Codegen lint --registry $Registry --compatibility $Compatibility --schemas $SchemaRoot 2>&1 | Out-String
     if ($LASTEXITCODE -eq 0) {
         throw "$Label unexpectedly passed"
     }
@@ -39,6 +39,12 @@ try {
     if ($LASTEXITCODE -ne 0 -or $rewrittenDigest -ne $canonicalDigest) {
         throw "Registry digest depends on source formatting or path"
     }
+
+    $compatibilityValue = Get-Content -LiteralPath $compatibility -Raw | ConvertFrom-Json -Depth 100
+    $compatibilityValue.changes[1].registry_id = $compatibilityValue.changes[0].registry_id
+    $badCompatibility = Join-Path $temp "duplicate_compatibility_change.json"
+    Write-Json $compatibilityValue $badCompatibility
+    Invoke-CodegenFailure $registrySource $schemas "Invalid registry compatibility change" "Duplicate compatibility change" $badCompatibility
 
     $registry = Get-Content -LiteralPath $registrySource -Raw | ConvertFrom-Json -Depth 100
     $registry.entries[1].registry_id = $registry.entries[0].registry_id
@@ -78,7 +84,7 @@ try {
     Invoke-CodegenFailure $path $schemas "Invalid or duplicate registry entry" "Future version"
 
     $registry = Get-Content -LiteralPath $registrySource -Raw | ConvertFrom-Json -Depth 100
-    $registry.entries[25].default_enabled = $true
+    ($registry.entries | Where-Object canonical_name -eq "ure.capability.frame_lease").default_enabled = $true
     $path = Join-Path $temp "default_dependency.json"
     Write-Json $registry $path
     Invoke-CodegenFailure $path $schemas "Enabled-by-default entry is only compiled" "Default state closure"

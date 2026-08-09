@@ -186,8 +186,13 @@ if ($tombstoneIds.Count -ne @($tombstoneIds | Sort-Object -Unique).Count -or
     @($tombstoneIds | Where-Object { $registryEntryById.ContainsKey($_) }).Count -ne 0) {
     throw "Registry tombstones are duplicate or reused"
 }
-if (@($compatibility.changes).Count -ne 0 -or @($compatibility.tombstones).Count -ne 0) {
-    throw "PB.0 compatibility baseline must not contain published changes or tombstones"
+if ($compatibility.baseline.candidate_version -ne "0.1.0" -or
+    $compatibility.baseline.registry_digest -ne "d3ea8fed3645fdc2e9ae930e60fa287a5caa0f5fb7e2f76273e98c20617b12ac" -or
+    @($compatibility.changes).Count -ne 2 -or
+    (Compare-Object @($compatibility.changes.registry_id | Sort-Object) @(13, 14)) -or
+    @($compatibility.changes | Where-Object { $_.change_class -ne "AdditiveCandidate" -or $_.phase -ne "PB.2" }).Count -ne 0 -or
+    @($compatibility.tombstones).Count -ne 0) {
+    throw "PB candidate compatibility history is incomplete"
 }
 
 Assert-UniqueNonempty $registry.public_header_policy.extensions "Public header extension"

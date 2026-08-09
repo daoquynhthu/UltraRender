@@ -2,7 +2,7 @@
   "candidate_version": "0.1.0",
   "canonical_registry": {
     "path": "registry/public_contract_registry.canonical.json",
-    "sha256": "78aafb4ea1d2a950ef6dcf73abb2b6e82d8a83686017d94de4a59132e0f18372"
+    "sha256": "6cdf768264565bb1473975b84d4be6274da057d4e586e9c1a4b292a7f1377531"
   },
   "compatibility_promise": "None before PB.8",
   "loader_exports": [
@@ -16,8 +16,8 @@
   "public_header_language": "C11",
   "publication_state": "Candidate",
   "registry_canonicalization": "RFC8785 restricted to integers and decimal strings",
-  "registry_digest": "d3ea8fed3645fdc2e9ae930e60fa287a5caa0f5fb7e2f76273e98c20617b12ac",
-  "registry_entry_count": 53,
+  "registry_digest": "bb9a25aacb63bd88b4e79b67d7932a8b66174627beada11fa068475ca76e1513",
+  "registry_entry_count": 55,
   "schema": "ure.public.runtime-manifest-candidate/0.1",
   "schema_compiler": "flatc version 25.12.19",
   "schemas": [

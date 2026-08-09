@@ -151,6 +151,16 @@ typedef struct ure_string_view_t {
     uint64_t size;
 } ure_string_view_t;
 
+typedef struct ure_interface_table_header_t {
+    uint64_t struct_size;
+    uint32_t version_major;
+    uint32_t version_minor;
+} ure_interface_table_header_t;
+
+typedef struct ure_runtime_interface_t {
+    ure_interface_table_header_t header;
+} ure_runtime_interface_t;
+
 typedef struct ure_bootstrap_diagnostic_t {
     ure_output_header_t header;
     ure_result_t result;
@@ -203,6 +213,16 @@ typedef struct ure_interface_response_t {
     const void *table;
     uint64_t reserved[2];
 } ure_interface_response_t;
+
+typedef ure_result_t (URE_CALL *ure_get_runtime_manifest_fn)(
+    const ure_runtime_manifest_request_t *request,
+    ure_runtime_manifest_t *manifest,
+    ure_bootstrap_diagnostic_t *diagnostic);
+
+typedef ure_result_t (URE_CALL *ure_query_interface_fn)(
+    const ure_interface_query_t *query,
+    ure_interface_response_t *response,
+    ure_bootstrap_diagnostic_t *diagnostic);
 
 URE_PUBLIC_API ure_result_t URE_CALL ureGetRuntimeManifest(
     const ure_runtime_manifest_request_t *request,

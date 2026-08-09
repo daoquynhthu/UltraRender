@@ -301,11 +301,25 @@ void validate_compatibility(const std::filesystem::path& path, const Registry& r
         !value.at("tombstones").is_array()) {
         throw std::runtime_error("Registry compatibility metadata is inconsistent");
     }
+    if (!value.at("baseline").is_null()) {
+        require_exact_keys(value.at("baseline"), {"candidate_version", "registry_digest"}, "Compatibility baseline");
+        if (value.at("baseline").at("candidate_version") != registry.candidate_version ||
+            !std::regex_match(
+                value.at("baseline").at("registry_digest").get<std::string>(),
+                std::regex("[0-9a-f]{64}"))) {
+            throw std::runtime_error("Registry compatibility baseline is invalid");
+        }
+    }
     const std::set<std::string> allowed(value.at("allowed_change_classes").begin(), value.at("allowed_change_classes").end());
+    std::unordered_set<std::uint32_t> registry_ids;
+    for (const auto& entry : registry.entries) registry_ids.insert(entry.registry_id);
     std::unordered_set<std::uint32_t> changed;
     for (const auto& change : value.at("changes")) {
+        require_exact_keys(change, {"registry_id", "change_class", "phase", "summary"}, "Compatibility change");
         const std::uint32_t id = change.at("registry_id").get<std::uint32_t>();
-        if (!allowed.contains(change.at("change_class").get<std::string>()) || !changed.insert(id).second) {
+        if (!registry_ids.contains(id) || !allowed.contains(change.at("change_class").get<std::string>()) ||
+            !changed.insert(id).second || change.at("phase").get<std::string>().empty() ||
+            change.at("summary").get<std::string>().empty()) {
             throw std::runtime_error("Invalid registry compatibility change record");
         }
     }

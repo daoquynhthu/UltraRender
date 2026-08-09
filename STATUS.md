@@ -8,7 +8,7 @@ This document summarizes the current repository state for users and integrators.
 
 UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
 
-The authoritative cursor is `PB.2 — Windows x64 loader ABI and candidate runtime product`; HR.3 is suspended until Phase PB closes. PB.0-PB.1 are complete: the interaction ledger and legacy C/DLL/client baseline remain enforced, while a 53-entry Candidate 0.1 registry now deterministically generates C11 headers, explicit-ID FlatBuffers schemas, manifests, reference data and 12 golden exchanges. A renderer-free in-memory mock harness, standalone mock worker and staged C11 external client unblock frontend development. These are test/development artifacts, not a real runtime DLL or a stable ABI/protocol. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 remain complete. PB.0-PB.7 create no compatibility promise; only PB.8 may declare Core ABI 1.0 / Worker Protocol 1.0 after its gates and separate approval.
+The authoritative cursor is `PB.3 — Core lifecycle, errors, capabilities, operations, and events`; HR.3 is suspended until Phase PB closes. PB.0-PB.2 are complete: the interaction/legacy baseline and generated SDK/mock kit remain enforced, and the 55-entry Candidate 0.1 registry now drives a Windows x64 candidate runtime with exactly two bootstrap exports. The DLL returns only manifest metadata and an immutable Runtime table; it has no Instance, renderer, session, or worker implementation. A C11 consumer loads it with `LoadLibraryW`/`GetProcAddress` and has no runtime import dependency. This is not a stable ABI/protocol. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 remain complete. PB.0-PB.7 create no compatibility promise; only PB.8 may declare Core ABI 1.0 / Worker Protocol 1.0 after its gates and separate approval.
 
 The reconstruction layer has a raw-preserving statistical baseline plus a sample/technique/path/spectral/phase-aware Research boundary. Analytic splatting and provider-bound kernel/point-set/hybrid outputs are executable in the SDK-free oracle, with Spectrum/Stokes/Complex physical policies, OOD masks and calibration diagnostics. No trained model or production model ABI is shipped, and the current complete-scene CUDA bridge still does not populate every high-order plane. CLI/JSON and pyure default to automatic integration objectives, while the low-level C++ default and named manual modes remain compatibility/reproducibility presets. The former Phase X plugin ABI remains frozen. Production coherent and partially coherent sessions still reject before GPU allocation.
 
@@ -23,7 +23,7 @@ Research, Experimental and Production are now separate maturity levels. Research
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
 | Build tree | `build_modular_x64` using Ninja |
 | Primary executable | `build_modular_x64/apps/ure_cli/ure_cli.exe` |
-| Registered tests | 81 CTest entries at this snapshot |
+| Registered tests | 84 CTest entries at this snapshot |
 
 The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remains unavailable on the portable native backends. Vulkan additionally has a Linux GCC/Ninja gate, Windows NVIDIA native ray-query evidence, and Windows NVIDIA/Intel compute-BVH evidence. D3D12 additionally has Windows NVIDIA DXR 1.1, compute fallback, typed texture/descriptor and cross-queue fence evidence. macOS, older CUDA architectures, and complete Linux/non-NVIDIA/D3D12 scene rendering do not have equivalent evidence.
 
@@ -44,10 +44,11 @@ The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remai
 | `ure_diag` | Logging and diagnostics | Active |
 | `ure_physics` | Optional physics/acoustic experiments | Experimental |
 | `ure_public` | Generated Candidate 0.1 C11 loader/value declarations | Active frontend-development surface; no runtime implementation or stable promise |
+| `ure_contract` | Windows x64 Candidate runtime bootstrap and private semantic adapters | PB.2 metadata-only loader implemented; PB.3 object adapters and all stable promises remain pending |
 | `ure_cli` | Offline rendering and native tooling orchestration | Active |
 | `pyure` | ctypes wrapper around the C session ABI | Active but not version-stable |
 
-PB.0 implements the complete interaction-surface and legacy baseline. PB.1 implements the authoring registry, deterministic generator, `ure_public` Candidate headers, schema/manifest/reference package, golden messages and renderer-free mock kit. `ure_contract` and the real `ure_worker` do not exist yet; PB.2 begins the two-export candidate runtime DLL, and PB.4 owns production local IPC.
+PB.0 implements the complete interaction-surface and legacy baseline. PB.1 implements the authoring registry, deterministic generator, `ure_public` Candidate headers, schema/manifest/reference package, golden messages and renderer-free mock kit. PB.2 implements the metadata-only `ure_contract` candidate runtime and its two loader exports. PB.3 owns real Core object lifecycle; the real `ure_worker` and production local IPC remain PB.4 work.
 
 The deleted root `include/` and `src/` trees are not valid development paths.
 
@@ -107,7 +108,7 @@ The deleted root `include/` and `src/` trees are not valid development paths.
 | RenderSession / legacy C ABI / pyure | Implemented and tested | Legacy experimental compatibility surface; not Core ABI 1.0 and not version-stable |
 | PB boundary inventory/audit | PB.0 implemented and tested | 25 surfaces, 14 authority domains, deterministic audit, legacy header/DLL/client evidence; no runtime API is created |
 | PB generated SDK / mock kit | PB.1 implemented and tested | 53 registry identities, deterministic C11/schema/manifest/reference outputs, 12 golden exchanges, staged external C client; Candidate only |
-| PB public runtime / real worker | PB.2+ planned | No candidate runtime DLL or production worker exists; no stable promise |
+| PB candidate runtime / real worker | PB.2 loader implemented; PB.3-PB.4 planned | Metadata-only two-export DLL exists; no Instance/session/renderer/worker implementation and no stable promise |
 | Native procedural graph | Implemented | Deterministic build graph, not runtime GPU interpretation |
 | Script build hook | Contract implemented, disabled by default | Requires explicit opt-in and attestable external runner |
 | Native procedural plugin | Not implemented | Deferred until the high-order world/transport/measurement/solver boundaries are stable |
@@ -126,7 +127,7 @@ The following must not be described as production capabilities merely because en
 - Vulkan/D3D12/OptiX arbitrary-scene radiometric integrator lowering and DispatchRays;
 - OpenUSD file/stage ingestion, Hydra subdivision/instancing, complete USDShade conversion, time-sampled stage integration and the general plugin ecosystem; USDA adapter output exists only for the documented native subset;
 - production-grade general fluid or acoustic simulation.
-- Core ABI 1.0, Worker Protocol 1.0, a real candidate runtime/worker, immutable public frame leases, UUID public transactions, and mixed-version compatibility support; these are later Phase PB work, not current capabilities.
+- Core ABI 1.0, Worker Protocol 1.0, candidate Instance/session/renderer/worker execution, immutable public frame leases, UUID public transactions, and mixed-version compatibility support; these are later Phase PB work, not current capabilities.
 
 ## Verification
 

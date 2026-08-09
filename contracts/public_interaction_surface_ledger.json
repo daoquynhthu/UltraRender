@@ -110,11 +110,11 @@
       "output_role": "Capabilities, errors, operations, events and immutable frames",
       "translation_path": "Public registry -> contract adapter -> internal renderer services",
       "bypass_status": "None",
-      "bypass_detail": "PB.1 provides generated declarations and a renderer-free mock; the runtime adapter and real worker remain planned",
+      "bypass_detail": "PB.2 provides the generated declarations, renderer-free mock and metadata-only two-export loader runtime; object adapters and the real worker remain planned",
       "migration_phase": "PB.1-PB.8",
       "terminal_gate": "PB.8",
       "loss_policy": "Required semantics fail; optional semantics negotiate explicitly",
-      "conformance_evidence": ["test_contract_registry", "test_contract_codegen_compare", "test_mock_worker_external_client"],
+      "conformance_evidence": ["test_contract_registry", "test_contract_codegen_compare", "test_mock_worker_external_client", "test_candidate_abi_layout", "test_candidate_loader_exports", "test_candidate_loader_client"],
       "anchors": [
         {"path": "contracts/registry/public_contract_registry.json", "pattern": "ure.public.contract-registry-source/1.0"},
         {"path": "docs/Public_API_ABI_Architecture.md", "pattern": "One registry defines one semantic contract"},

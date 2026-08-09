@@ -7,6 +7,8 @@ static_assert(std::is_standard_layout_v<ure_input_header_t>);
 static_assert(std::is_standard_layout_v<ure_output_header_t>);
 static_assert(sizeof(ure_uuid_t) == 16);
 static_assert(sizeof(ure_digest256_t) == 32);
+static_assert(sizeof(ure_interface_table_header_t) == 16);
+static_assert(sizeof(ure_runtime_interface_t) == 16);
 static_assert(offsetof(ure_input_header_t, type) == 0);
 static_assert(offsetof(ure_input_header_t, size) == 4);
 static_assert(offsetof(ure_input_header_t, next) == 8);

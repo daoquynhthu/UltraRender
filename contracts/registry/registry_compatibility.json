@@ -1,13 +1,29 @@
 {
   "schema": "ure.public.registry-compatibility/1.0",
   "candidate_version": "0.1.0",
-  "baseline": null,
+  "baseline": {
+    "candidate_version": "0.1.0",
+    "registry_digest": "d3ea8fed3645fdc2e9ae930e60fa287a5caa0f5fb7e2f76273e98c20617b12ac"
+  },
   "allowed_change_classes": [
     "AdditiveCandidate",
     "BreakingCandidate",
     "StableCompatible",
     "StableMajorBreaking"
   ],
-  "changes": [],
+  "changes": [
+    {
+      "registry_id": 13,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.2",
+      "summary": "Add the common immutable interface-table header layout"
+    },
+    {
+      "registry_id": 14,
+      "change_class": "AdditiveCandidate",
+      "phase": "PB.2",
+      "summary": "Add the metadata-only Candidate runtime interface table"
+    }
+  ],
   "tombstones": []
 }

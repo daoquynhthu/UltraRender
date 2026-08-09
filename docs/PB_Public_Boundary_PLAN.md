@@ -21,7 +21,7 @@ The approved architecture is [`Public_API_ABI_Architecture.md`](Public_API_ABI_A
 Current PB cursor:
 
 ```text
-PB.2 — Windows x64 loader ABI and candidate runtime product
+PB.3 — Core lifecycle, errors, capabilities, operations, and events
 ```
 
 The HR route is suspended after completed HR.2. `HR.3` resumes only after PB.8 or an explicit root-PLAN revision. PB establishes the carrier; it does not promote learned proposals, reconstruction, world state, material graph, wave optics, or solver functionality to stable extensions.
@@ -243,16 +243,18 @@ scripts/
 
 **Execution checklist:**
 
-- [ ] Add the candidate SHARED target with hidden/default-off visibility and an explicit Windows `.def` containing only the two loader names.
-- [ ] Implement loader argument, structure-size/type/reserved/chain validation without allocating runtime handles.
-- [ ] Implement bounded bootstrap diagnostics with explicit required/written UTF-8 byte counts and deterministic truncation behavior.
-- [ ] Return immutable runtime/interface tables and reject unsupported version ranges without accessing caller bytes beyond declared sizes.
-- [ ] Generate and compare the Windows x64 ABI layout manifest using C and C++ compilation units.
-- [ ] Inspect the built DLL export directory and fail unless it contains exactly two undecorated C loader symbols.
-- [ ] Load the DLL through `LoadLibraryW`/`GetProcAddress` in a consumer that links no import library or private header.
-- [ ] Exercise undersized/oversized structures, unknown optional chains, duplicate/cyclic/overlength chains, null output, invalid reserved fields, and message truncation.
+- [x] Add the candidate SHARED target with hidden/default-off visibility and an explicit Windows `.def` containing only the two loader names.
+- [x] Implement loader argument, structure-size/type/reserved/chain validation without allocating runtime handles.
+- [x] Implement bounded bootstrap diagnostics with explicit required/written UTF-8 byte counts and deterministic truncation behavior.
+- [x] Return immutable runtime/interface tables and reject unsupported version ranges without accessing caller bytes beyond declared sizes.
+- [x] Generate and compare the Windows x64 ABI layout manifest using C and C++ compilation units.
+- [x] Inspect the built DLL export directory and fail unless it contains exactly two undecorated C loader symbols.
+- [x] Load the DLL through `LoadLibraryW`/`GetProcAddress` in a consumer that links no import library or private header.
+- [x] Exercise undersized/oversized structures, unknown optional chains, duplicate/cyclic/overlength chains, null output, invalid reserved fields, and message truncation.
 
 **Completion evidence:** the candidate DLL loads through the two-symbol ABI, layout/export manifests are reproducible, all bootstrap misuse fails deterministically, and no C++ symbol/exception crosses the boundary.
+
+**Recorded evidence:** `ultrarender_runtime_candidate.dll` is linked with `/Brepro` and an explicit two-name `.def`; two forced relinks produced identical SHA-256 `8151077bfa4009ac0ba66aa8fdc17ee1868a21e6646151b6bc29b6f41dedf5d1`. `test_candidate_loader_exports` confirms the exact undecorated export set, rejects renderer/backend DLL dependencies and proves the C11 loader consumer has no runtime import. `test_candidate_abi_layout` compares independently compiled C11/C++23 layouts with the retained Windows x64 JSON manifest. `test_candidate_loader_client` covers successful manifest/table discovery, immutable table identity, incompatible registry/interface versions, unavailable Instance, null/undersized/oversized structures, optional output/input chains, duplicate/cyclic/33-node chains, reserved fields, bounded diagnostic truncation and ABI/build metadata. The Candidate registry grows additively from the retained PB.1 digest to 55 identities and digest `bb9a25aacb63bd88b4e79b67d7932a8b66174627beada11fa068475ca76e1513`; no stable promise, runtime handle, renderer object or worker is introduced.
 
 ## 6. PB.3 — Core lifecycle, errors, capabilities, operations, and events
 

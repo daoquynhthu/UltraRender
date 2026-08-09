@@ -60,6 +60,7 @@ include(GNUInstallDirs)
 
 add_subdirectory(tools/ure_contract_codegen)
 add_subdirectory(libs/ure_public)
+add_subdirectory(libs/ure_contract)
 
 add_subdirectory(libs/ure_types)
 add_subdirectory(libs/ure_diag)
