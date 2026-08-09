@@ -3,12 +3,14 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 $schemaTriples = @(
     @{ Name = "ure_scene_ir_v1"; Identifier = "URIG" },
+    @{ Name = "ure_scene_ir_v2"; Identifier = "URIG"; Baseline = "ure_scene_ir_v1" },
     @{ Name = "ure_mesh_v1"; Identifier = "URMS" },
     @{ Name = "ure_mie_v1"; Identifier = "URMI" }
 )
 foreach ($entry in $schemaTriples) {
     $schema = Join-Path $repoRoot ("schemas\" + $entry.Name + ".fbs")
-    $baseline = Join-Path $repoRoot ("schemas\" + $entry.Name + ".baseline.fbs")
+    $baselineName = if ($entry.Baseline) { $entry.Baseline } else { $entry.Name }
+    $baseline = Join-Path $repoRoot ("schemas\" + $baselineName + ".baseline.fbs")
     $generated = Join-Path $repoRoot ("libs\ure_sceneio\generated\" + $entry.Name + "_generated.h")
     if (-not (Test-Path $schema) -or -not (Test-Path $baseline) -or -not (Test-Path $generated)) {
         throw "Missing Q.3 schema triple for $($entry.Name)"

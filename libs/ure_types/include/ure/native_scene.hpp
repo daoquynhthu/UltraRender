@@ -19,10 +19,17 @@ struct Version {
     auto operator<=>(const Version&) const = default;
 };
 
+struct Uuid {
+    std::array<std::uint8_t, 16> bytes{};
+    auto operator<=>(const Uuid&) const = default;
+};
+
 inline constexpr Version kSceneSchemaVersion{1, 0};
+inline constexpr Version kSceneSchemaVersionV2{2, 0};
 inline constexpr Version kSceneContainerVersion{1, 0};
 inline constexpr Version kPackageFormatVersion{1, 0};
 inline constexpr std::string_view kSceneSchemaIdentity = "ure.scene/1.0";
+inline constexpr std::string_view kSceneSchemaIdentityV2 = "ure.scene/2.0";
 inline constexpr std::string_view kSceneContainerIdentity = "ure.container.scene/1.0";
 inline constexpr std::string_view kPackageContainerIdentity = "ure.container.package/1.0";
 

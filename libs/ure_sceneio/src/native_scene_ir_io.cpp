@@ -111,7 +111,7 @@ std::vector<std::uint8_t> write_scene_ir_binary(const NativeSceneArchive& archiv
                                 8, {}, {}, encode_scene_metadata(document)});
     std::vector<std::string> resource_dependencies;
     for (const auto& resource : resources.payloads) resource_dependencies.push_back(resource.id);
-    container.chunks.push_back({"scene_graph", static_cast<std::uint32_t>(ChunkKind::SceneGraph), {1, 0},
+    container.chunks.push_back({"scene_graph", static_cast<std::uint32_t>(ChunkKind::SceneGraph), archive.document.schema_version,
                                 RequirementLevel::Required, static_cast<std::uint32_t>(CompressionCodec::None),
                                 8, {}, std::move(resource_dependencies), detail::encode_scene_graph(archive, resources)});
     if (archive.procedural_graph) {
@@ -217,6 +217,11 @@ LoadResult<NativeSceneArchive> read_scene_ir_binary(
             LoadResult<NativeSceneArchive> result;
             result.diagnostics = std::move(diagnostics);
             return result;
+        }
+        if (graph->schema_version != document.value->schema_version) {
+            return io_failure<NativeSceneArchive>(
+                "URE-Q3-VERSION-002", "scene_graph",
+                "Scene graph chunk version differs from metadata schema version");
         }
         auto archive = detail::decode_scene_graph(*document.value, graph->payload, meshes, mie, resource_hashes, limits);
         append_diagnostics(diagnostics, archive.diagnostics);

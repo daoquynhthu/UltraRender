@@ -185,6 +185,37 @@ CapabilityRegistry native_tool_capabilities() {
     return registry;
 }
 
+NativeSceneArchive migrate_native_scene_archive(
+    const NativeSceneArchive& archive) {
+    if (archive.document.schema_version.major ==
+        kSceneSchemaVersionV2.major) {
+        return archive;
+    }
+    if (archive.document.schema_version.major !=
+        kSceneSchemaVersion.major) {
+        throw std::invalid_argument("Native scene schema has no registered migration");
+    }
+    NativeSceneArchive migrated = archive;
+    const std::string input_hash = scene_ir_semantic_hash(archive);
+    migrated.document.schema_version = kSceneSchemaVersionV2;
+    assign_deterministic_object_uuids(migrated);
+    migrated.canonical_camera = canonical_camera_from_scene(migrated.scene.camera);
+    const std::string output_hash = scene_ir_semantic_hash(migrated);
+    migrated.document.migrations.push_back({
+        archive.document.schema_version,
+        kSceneSchemaVersionV2,
+        "ure.scene.migrate.uuid-v2",
+        {1, 0},
+        input_hash,
+        output_hash,
+        false});
+    const ValidationReport validation = validate_scene_ir_archive(migrated);
+    if (!validation.ok()) {
+        throw std::invalid_argument(validation.diagnostics.front().message);
+    }
+    return migrated;
+}
+
 LoadResult<NativeSceneArchive> load_native_asset(const std::filesystem::path& path,
                                                  const ValidationLimits& limits) {
     if (path.extension() != ".urepkg") {
@@ -293,7 +324,7 @@ void pack_native_scenes(const std::filesystem::path& output,
         const std::string hash = scene_ir_semantic_hash(*loaded.value);
         manifest.scenes.push_back({id, hash, "ure+sha256://" + sha256_hex(payload)});
         chunks.push_back({std::string(kEmbeddedScenePrefix) + id,
-                          static_cast<std::uint32_t>(ChunkKind::SceneGraph), {1, 0}, RequirementLevel::Required,
+                          static_cast<std::uint32_t>(ChunkKind::SceneGraph), loaded.value->document.schema_version, RequirementLevel::Required,
                           static_cast<std::uint32_t>(CompressionCodec::None), 8, {}, {}, payload});
     }
     atomic_write(output, write_package_binary(manifest, std::move(chunks)));
@@ -320,7 +351,13 @@ void unpack_native_package(const std::filesystem::path& input,
 void migrate_native_scene(const std::filesystem::path& input,
                           const std::filesystem::path& output,
                           const ValidationLimits& limits) {
-    build_native_scene(input, output, limits);
+    const auto loaded = load_native_asset(input, limits);
+    if (!loaded.ok()) {
+        throw std::invalid_argument(
+            loaded.diagnostics.empty() ? "Native scene migration failed" :
+                                         loaded.diagnostics.front().message);
+    }
+    save_native_scene(output, migrate_native_scene_archive(*loaded.value));
 }
 
 void export_native_scene_usda(

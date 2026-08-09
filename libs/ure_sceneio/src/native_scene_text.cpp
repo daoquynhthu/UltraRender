@@ -251,7 +251,9 @@ std::string write_scene_text(const SceneDocument& document) {
     }
     const Json root{
         {"conventions", write_conventions(document.conventions)}, {"extensions", std::move(extensions)},
-        {"features", std::move(features)}, {"format", std::string(kSceneSchemaIdentity)},
+        {"features", std::move(features)}, {"format", std::string(
+            document.schema_version.major >= 2 ? kSceneSchemaIdentityV2 :
+                                                 kSceneSchemaIdentity)},
         {"id", document.id}, {"kind", "scene"}, {"migrations", std::move(migrations)},
         {"resources", std::move(resources)}, {"schema_version", write_version(document.schema_version)}
     };
@@ -264,13 +266,20 @@ LoadResult<SceneDocument> read_scene_text(std::string_view text,
     try {
         const Json root = parse_text(text, limits);
         require_exact_keys(root, {"conventions", "extensions", "features", "format", "id", "kind", "migrations", "resources", "schema_version"});
+        const std::string format = root.at("format").get<std::string>();
         if (root.at("kind").get<std::string>() != "scene" ||
-            root.at("format").get<std::string>() != kSceneSchemaIdentity) {
+            (format != kSceneSchemaIdentity && format != kSceneSchemaIdentityV2)) {
             return text_error<SceneDocument>("URE-Q-TEXT-002", "Text document identity mismatch");
         }
         SceneDocument document;
         document.id = root.at("id").get<std::string>();
         document.schema_version = read_version(root.at("schema_version"));
+        if ((document.schema_version.major >= 2) !=
+            (format == kSceneSchemaIdentityV2)) {
+            return text_error<SceneDocument>(
+                "URE-Q-TEXT-002",
+                "Text document identity differs from schema version");
+        }
         document.conventions = read_conventions(root.at("conventions"));
         for (const auto& value : root.at("features")) {
             require_exact_keys(value, {"dependencies", "minimum_version", "name", "parameters", "provider", "requirement"});

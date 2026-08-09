@@ -3,10 +3,13 @@
 #include <memory>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include <ure/native_scene_ir.hpp>
+#include <ure/native_scene_tooling.hpp>
+#include <ure/native_scene_uuid.hpp>
 #include <ure/detail/cuda_scene_compiler.hpp>
 
 static int g_passed = 0;
@@ -29,6 +32,8 @@ static bool has_code(const ure::native_scene::LoadResult<T>& result, const std::
     return false;
 }
 
+static ure::scene_ir::SceneIR make_roundtrip_scene();
+
 static void test_archive_identity_defaults() {
     ure::scene_ir::SceneIR scene;
     scene.materials.push_back(std::make_shared<ure::scene_ir::MaterialNode>());
@@ -39,6 +44,46 @@ static void test_archive_identity_defaults() {
 
     const auto archive = ure::native_scene::make_native_scene_archive(document, scene);
     CHECK(archive.source_ids.materials == std::vector<std::string>{"material/00000000"});
+    CHECK(archive.object_uuids.materials.size() == 1);
+    CHECK(ure::native_scene::is_rfc9562_uuid(archive.object_uuids.materials[0]));
+}
+
+static void test_uuid_contract_and_migration() {
+    using namespace ure::native_scene;
+    const Uuid first = deterministic_object_uuid(
+        "scene/uuid", "material", "material/00000000");
+    const Uuid repeated = deterministic_object_uuid(
+        "scene/uuid", "material", "material/00000000");
+    const Uuid different = deterministic_object_uuid(
+        "scene/uuid", "mesh", "material/00000000");
+    CHECK(first == repeated);
+    CHECK(first != different);
+    CHECK(is_rfc9562_uuid(first));
+    CHECK(parse_uuid(format_uuid(first)) == first);
+    bool rejected = false;
+    try {
+        static_cast<void>(parse_uuid("00000000-0000-0000-0000-000000000000"));
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+
+    SceneDocument document;
+    document.id = "scene/uuid-migration";
+    document.schema_version = kSceneSchemaVersion;
+    const auto source = make_native_scene_archive(document, make_roundtrip_scene());
+    const auto migrated = migrate_native_scene_archive(source);
+    CHECK(migrated.document.schema_version == kSceneSchemaVersionV2);
+    CHECK(migrated.document.migrations.size() == 1);
+    CHECK(!migrated.document.migrations[0].lossy);
+    CHECK(migrated.document.migrations[0].input_hash ==
+          scene_ir_semantic_hash(source));
+    CHECK(migrated.object_uuids.materials == source.object_uuids.materials);
+    CHECK(migrate_native_scene_archive(migrated).document.migrations.size() == 1);
+
+    auto duplicate = migrated;
+    duplicate.object_uuids.meshes[0] = duplicate.object_uuids.materials[0];
+    CHECK(has_code(validate_scene_ir_archive(duplicate), "URE-Q3-UUID-003"));
 }
 
 static void test_archive_deep_freeze_and_identity_validation() {
@@ -162,6 +207,52 @@ static void test_exploded_roundtrip() {
     if (loaded.value) {
         CHECK(ure::native_scene::scene_ir_semantic_hash(*loaded.value) ==
               ure::native_scene::scene_ir_semantic_hash(archive));
+    }
+}
+
+static void test_v2_uuid_and_camera_roundtrip() {
+    using namespace ure::native_scene;
+    SceneDocument document;
+    document.id = "scene/v2-roundtrip";
+    document.schema_version = kSceneSchemaVersionV2;
+    auto archive = make_native_scene_archive(document, make_roundtrip_scene());
+    archive.canonical_camera.shutter_open_s = 0.125;
+    archive.canonical_camera.shutter_close_s = 0.25;
+    archive.canonical_camera.exposure_scale = 1.5;
+
+    const auto binary_bytes = write_scene_ir_binary(archive);
+    const auto binary = read_scene_ir_binary(binary_bytes, {});
+    CHECK(binary.ok());
+    if (binary.value) {
+        CHECK(binary.value->object_uuids.materials ==
+              archive.object_uuids.materials);
+        CHECK(binary.value->object_uuids.instances ==
+              archive.object_uuids.instances);
+        CHECK(binary.value->canonical_camera == archive.canonical_camera);
+        CHECK(binary.value->scene.instances[0].material ==
+              binary.value->scene.materials[0]);
+    }
+
+    auto exploded = write_scene_ir_text(archive);
+    CHECK(exploded.manifest.find("\"format\": \"ure.scene/2.0\"") !=
+          std::string::npos);
+    const std::string authoritative_alias =
+        "\"material_id\": \"material/00000000\"";
+    const auto alias_offset = exploded.manifest.find(authoritative_alias);
+    CHECK(alias_offset != std::string::npos);
+    if (alias_offset != std::string::npos) {
+        exploded.manifest.replace(
+            alias_offset, authoritative_alias.size(),
+            "\"material_id\": \"obsolete/alias\"");
+    }
+    const auto text = read_scene_ir_text(exploded, {});
+    CHECK(text.ok());
+    if (text.value) {
+        CHECK(text.value->object_uuids.materials ==
+              archive.object_uuids.materials);
+        CHECK(text.value->canonical_camera == archive.canonical_camera);
+        CHECK(text.value->scene.instances[0].material ==
+              text.value->scene.materials[0]);
     }
 }
 
@@ -485,9 +576,11 @@ int main(int argc, char** argv) {
         return hash ? 0 : 1;
     }
     test_archive_identity_defaults();
+    test_uuid_contract_and_migration();
     test_archive_deep_freeze_and_identity_validation();
     test_binary_roundtrip();
     test_exploded_roundtrip();
+    test_v2_uuid_and_camera_roundtrip();
     test_file_roundtrip();
     test_full_current_field_roundtrip();
     test_validation_and_compiler_boundary();

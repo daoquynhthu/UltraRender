@@ -72,7 +72,8 @@ bool checked_add(std::uint64_t left, std::uint64_t right, std::uint64_t& result)
 }
 
 void validate_version(ValidationReport& report, Version version, const std::string& path) {
-    if (version.major != kSceneSchemaVersion.major) {
+    if (version.major != kSceneSchemaVersion.major &&
+        version.major != kSceneSchemaVersionV2.major) {
         add_diagnostic(report, "URE-Q-VERSION-001", DiagnosticSeverity::Error, path,
                        "Unsupported schema major version", "Run an explicit registered migration tool");
     }
@@ -81,7 +82,7 @@ void validate_version(ValidationReport& report, Version version, const std::stri
 void validate_conventions(ValidationReport& report, const SceneConventions& conventions) {
     if (conventions != SceneConventions{}) {
         add_diagnostic(report, "URE-Q-CONVENTION-001", DiagnosticSeverity::Error, "/conventions",
-                       "Version 1 requires canonical production conventions", "Convert units and axes during import or build");
+                       "Native scenes require canonical production conventions", "Convert units and axes during import or build");
     }
 }
 

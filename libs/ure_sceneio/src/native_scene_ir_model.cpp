@@ -10,6 +10,7 @@
 
 #include <ure/native_scene_ir.hpp>
 #include <ure/native_scene_hash.hpp>
+#include <ure/native_scene_uuid.hpp>
 
 #include "native_scene_ir_internal.hpp"
 
@@ -81,6 +82,29 @@ void validate_id_vector(ValidationReport& report,
         }
         if (!valid_id(ids[index])) {
             add_error(report, "URE-Q3-ID-003", std::format("{}[{}]", path, index), "Source identity has invalid grammar");
+        }
+    }
+}
+
+void validate_uuid_vector(ValidationReport& report,
+                          const std::vector<Uuid>& values,
+                          std::size_t expected_size,
+                          std::string_view path,
+                          std::set<Uuid>& unique) {
+    if (values.size() != expected_size) {
+        add_error(report, "URE-Q3-UUID-001", std::string(path),
+                  "UUID count does not match SceneIR registry");
+        return;
+    }
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (!is_rfc9562_uuid(values[index])) {
+            add_error(report, "URE-Q3-UUID-002",
+                      std::format("{}[{}]", path, index),
+                      "Object UUID variant or version is invalid");
+        } else if (!unique.insert(values[index]).second) {
+            add_error(report, "URE-Q3-UUID-003",
+                      std::format("{}[{}]", path, index),
+                      "Object UUID is duplicated");
         }
     }
 }
@@ -189,6 +213,34 @@ void append_bytes(std::vector<std::uint8_t>& destination, std::string_view value
 
 }
 
+void assign_deterministic_object_uuids(NativeSceneArchive& archive) {
+    auto assign = [&](std::vector<Uuid>& output,
+                      const std::vector<std::string>& aliases,
+                      std::string_view kind) {
+        output.clear();
+        output.reserve(aliases.size());
+        for (const auto& alias : aliases) {
+            output.push_back(deterministic_object_uuid(
+                archive.document.id, kind, alias));
+        }
+    };
+    assign(archive.object_uuids.materials, archive.source_ids.materials,
+           "material");
+    assign(archive.object_uuids.meshes, archive.source_ids.meshes, "mesh");
+    assign(archive.object_uuids.images, archive.source_ids.images, "image");
+    assign(archive.object_uuids.textures, archive.source_ids.textures,
+           "texture");
+    assign(archive.object_uuids.instances, archive.source_ids.instances,
+           "instance");
+    assign(archive.object_uuids.spheres, archive.source_ids.spheres, "sphere");
+    assign(archive.object_uuids.quad_lights, archive.source_ids.quad_lights,
+           "quad_light");
+    archive.object_uuids.camera = deterministic_object_uuid(
+        archive.document.id, "camera", "camera");
+    archive.object_uuids.environment = deterministic_object_uuid(
+        archive.document.id, "environment", "environment");
+}
+
 NativeSceneArchive make_native_scene_archive(SceneDocument document,
                                              const scene_ir::SceneIR& scene) {
     NativeSceneArchive archive;
@@ -287,6 +339,8 @@ NativeSceneArchive make_native_scene_archive(SceneDocument document,
     archive.source_ids.instances = indexed_ids("instance", scene.instances.size());
     archive.source_ids.spheres = indexed_ids("sphere", scene.spheres.size());
     archive.source_ids.quad_lights = indexed_ids("light/quad", scene.quad_lights.size());
+    assign_deterministic_object_uuids(archive);
+    archive.canonical_camera = canonical_camera_from_scene(archive.scene.camera);
     return archive;
 }
 
@@ -300,6 +354,38 @@ ValidationReport validate_scene_ir_archive(const NativeSceneArchive& archive,
     validate_id_vector(report, archive.source_ids.instances, archive.scene.instances.size(), "source_ids.instances");
     validate_id_vector(report, archive.source_ids.spheres, archive.scene.spheres.size(), "source_ids.spheres");
     validate_id_vector(report, archive.source_ids.quad_lights, archive.scene.quad_lights.size(), "source_ids.quad_lights");
+    std::set<Uuid> unique_uuids;
+    validate_uuid_vector(report, archive.object_uuids.materials,
+                         archive.scene.materials.size(), "object_uuids.materials",
+                         unique_uuids);
+    validate_uuid_vector(report, archive.object_uuids.meshes,
+                         archive.scene.meshes.size(), "object_uuids.meshes",
+                         unique_uuids);
+    validate_uuid_vector(report, archive.object_uuids.images,
+                         archive.scene.images.size(), "object_uuids.images",
+                         unique_uuids);
+    validate_uuid_vector(report, archive.object_uuids.textures,
+                         archive.scene.textures.size(), "object_uuids.textures",
+                         unique_uuids);
+    validate_uuid_vector(report, archive.object_uuids.instances,
+                         archive.scene.instances.size(), "object_uuids.instances",
+                         unique_uuids);
+    validate_uuid_vector(report, archive.object_uuids.spheres,
+                         archive.scene.spheres.size(), "object_uuids.spheres",
+                         unique_uuids);
+    validate_uuid_vector(report, archive.object_uuids.quad_lights,
+                         archive.scene.quad_lights.size(),
+                         "object_uuids.quad_lights", unique_uuids);
+    if (!is_rfc9562_uuid(archive.object_uuids.camera) ||
+        !unique_uuids.insert(archive.object_uuids.camera).second) {
+        add_error(report, "URE-Q3-UUID-004", "object_uuids.camera",
+                  "Camera UUID is invalid or duplicated");
+    }
+    if (!is_rfc9562_uuid(archive.object_uuids.environment) ||
+        !unique_uuids.insert(archive.object_uuids.environment).second) {
+        add_error(report, "URE-Q3-UUID-005", "object_uuids.environment",
+                  "Environment UUID is invalid or duplicated");
+    }
 
     const auto materials = pointer_set(archive.scene.materials);
     const auto meshes = pointer_set(archive.scene.meshes);
@@ -407,6 +493,10 @@ ValidationReport validate_scene_ir_archive(const NativeSceneArchive& archive,
         camera.aperture < 0.0f || camera.focus_dist <= 0.0f) {
         add_error(report, "URE-Q3-SCALAR-001", "camera", "Invalid camera scalar");
     }
+    if (!valid_canonical_camera(archive.canonical_camera)) {
+        add_error(report, "URE-Q3-CAMERA-001", "canonical_camera",
+                  "Canonical camera transform or projection is invalid");
+    }
     if (!finite(archive.scene.background_color) || !finite(archive.scene.medium_density) ||
         !finite(archive.scene.medium_anisotropy) || !finite(archive.scene.medium_scattering) ||
         !finite(archive.scene.medium_absorption) || !finite(archive.scene.medium_max_distance) ||
@@ -432,6 +522,8 @@ ValidationReport validate_scene_ir_archive(const NativeSceneArchive& archive,
 std::string scene_ir_semantic_hash(const NativeSceneArchive& archive) {
     NativeSceneArchive canonical = make_native_scene_archive(archive.document, archive.scene);
     canonical.source_ids = archive.source_ids;
+    canonical.object_uuids = archive.object_uuids;
+    canonical.canonical_camera = archive.canonical_camera;
     std::unordered_map<const scene_ir::MiePhaseResource*, std::shared_ptr<const scene_ir::MiePhaseResource>> normalized_mie;
     auto normalize_mie_reference = [&](std::shared_ptr<const scene_ir::MiePhaseResource>& reference) {
         if (!reference) return;

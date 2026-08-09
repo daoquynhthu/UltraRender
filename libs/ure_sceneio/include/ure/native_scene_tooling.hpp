@@ -24,6 +24,8 @@ struct NativeInspection {
 };
 
 CapabilityRegistry native_tool_capabilities();
+NativeSceneArchive migrate_native_scene_archive(
+    const NativeSceneArchive& archive);
 LoadResult<NativeSceneArchive> load_native_asset(const std::filesystem::path& path,
                                                  const ValidationLimits& limits = {});
 LoadResult<NativeSceneArchive> load_native_package_scene(

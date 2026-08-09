@@ -13,8 +13,9 @@ $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("ure-native-schema
 New-Item -ItemType Directory -Path $temporaryRoot | Out-Null
 try {
     $schemas = @(
-        @{ Name = "ure_native_v1"; ObjectApi = $false },
-        @{ Name = "ure_scene_ir_v1"; ObjectApi = $true },
+        @{ Name = "ure_native_v1"; Baseline = "ure_native_v1"; ObjectApi = $false },
+        @{ Name = "ure_scene_ir_v1"; Baseline = "ure_scene_ir_v1"; ObjectApi = $true },
+        @{ Name = "ure_scene_ir_v2"; Baseline = "ure_scene_ir_v1"; ObjectApi = $true },
         @{ Name = "ure_mesh_v1"; ObjectApi = $true },
         @{ Name = "ure_mie_v1"; ObjectApi = $true }
         @{ Name = "ure_procedural_graph_v1"; ObjectApi = $true },
@@ -25,7 +26,8 @@ try {
     )
     foreach ($entry in $schemas) {
         $schema = Join-Path $repoRoot ("schemas\" + $entry.Name + ".fbs")
-        $baseline = Join-Path $repoRoot ("schemas\" + $entry.Name + ".baseline.fbs")
+        $baselineName = if ($entry.Baseline) { $entry.Baseline } else { $entry.Name }
+        $baseline = Join-Path $repoRoot ("schemas\" + $baselineName + ".baseline.fbs")
         & $Flatc --conform $baseline $schema
         if ($LASTEXITCODE -ne 0) {
             throw "FlatBuffers schema conformance failed for $($entry.Name)"

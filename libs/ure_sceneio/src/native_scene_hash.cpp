@@ -166,7 +166,9 @@ std::string sha256_hex(std::span<const std::uint8_t> bytes) {
 
 std::string semantic_hash(const SceneDocument& document) {
     HashEncoder encoder;
-    encoder.add_string(std::string(kSceneSchemaIdentity));
+    encoder.add_string(std::string(
+        document.schema_version.major >= 2 ? kSceneSchemaIdentityV2 :
+                                             kSceneSchemaIdentity));
     encoder.add_string(document.id);
     add_version(encoder, document.schema_version);
     encoder.add_string(document.conventions.length_unit);

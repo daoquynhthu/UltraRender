@@ -8,6 +8,8 @@ add_library(ure_sceneio STATIC
     src/materialx_io.cpp
     src/mie_phase_io.cpp
     src/native_scene_hash.cpp
+    src/native_scene_uuid.cpp
+    src/native_scene_camera.cpp
     src/native_scene_container.cpp
     src/native_scene_metadata.cpp
     src/native_scene_text.cpp
