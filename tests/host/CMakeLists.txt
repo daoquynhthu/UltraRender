@@ -187,30 +187,32 @@ add_executable(test_spectral_oracle test_spectral_oracle.cpp)
 target_link_libraries(test_spectral_oracle PRIVATE ure_types)
 add_test(NAME test_spectral_oracle COMMAND test_spectral_oracle)
 
-add_executable(test_wave_optics test_wave_optics.cpp)
-target_link_libraries(test_wave_optics PRIVATE ure_core ure_diag)
-add_test(NAME test_wave_optics COMMAND test_wave_optics)
+if(TARGET ure_core)
+    add_executable(test_wave_optics test_wave_optics.cpp)
+    target_link_libraries(test_wave_optics PRIVATE ure_core ure_diag)
+    add_test(NAME test_wave_optics COMMAND test_wave_optics)
 
-add_executable(
-    test_local_fullwave
-    test_local_fullwave.cpp)
-target_link_libraries(
-    test_local_fullwave
-    PRIVATE ure_core ure_sceneio ure_diag)
-add_test(
-    NAME test_local_fullwave
-    COMMAND test_local_fullwave)
+    add_executable(
+        test_local_fullwave
+        test_local_fullwave.cpp)
+    target_link_libraries(
+        test_local_fullwave
+        PRIVATE ure_core ure_sceneio ure_diag)
+    add_test(
+        NAME test_local_fullwave
+        COMMAND test_local_fullwave)
 
-add_executable(test_integrator test_integrator.cpp)
-target_link_libraries(test_integrator PRIVATE ure_core ure_diag)
-add_test(NAME test_integrator COMMAND test_integrator)
+    add_executable(test_integrator test_integrator.cpp)
+    target_link_libraries(test_integrator PRIVATE ure_core ure_diag)
+    add_test(NAME test_integrator COMMAND test_integrator)
 
-add_executable(test_mie_phase test_mie_phase.cpp)
-target_link_libraries(test_mie_phase PRIVATE ure_sceneio ure_core ure_diag)
-target_compile_definitions(test_mie_phase PRIVATE
-    URE_TEST_ASSET_DIR="${CMAKE_SOURCE_DIR}/tests/assets"
-)
-add_test(NAME test_mie_phase COMMAND test_mie_phase)
+    add_executable(test_mie_phase test_mie_phase.cpp)
+    target_link_libraries(test_mie_phase PRIVATE ure_sceneio ure_core ure_diag)
+    target_compile_definitions(test_mie_phase PRIVATE
+        URE_TEST_ASSET_DIR="${CMAKE_SOURCE_DIR}/tests/assets"
+    )
+    add_test(NAME test_mie_phase COMMAND test_mie_phase)
+endif()
 
 add_executable(test_native_scene test_native_scene.cpp)
 target_link_libraries(test_native_scene PRIVATE ure_sceneio ure_diag)
@@ -219,19 +221,21 @@ target_compile_definitions(test_native_scene PRIVATE
 )
 add_test(NAME test_native_scene COMMAND test_native_scene)
 
-add_executable(test_native_scene_ir test_native_scene_ir.cpp)
-target_link_libraries(test_native_scene_ir PRIVATE ure_sceneio ure_core ure_diag)
-target_compile_definitions(test_native_scene_ir PRIVATE
-    URE_TEST_ASSET_DIR="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene"
-)
-add_test(NAME test_native_scene_ir COMMAND test_native_scene_ir)
+if(TARGET ure_core)
+    add_executable(test_native_scene_ir test_native_scene_ir.cpp)
+    target_link_libraries(test_native_scene_ir PRIVATE ure_sceneio ure_core ure_diag)
+    target_compile_definitions(test_native_scene_ir PRIVATE
+        URE_TEST_ASSET_DIR="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene"
+    )
+    add_test(NAME test_native_scene_ir COMMAND test_native_scene_ir)
 
-add_executable(test_native_procedural_graph test_native_procedural_graph.cpp)
-target_link_libraries(test_native_procedural_graph PRIVATE ure_sceneio ure_core ure_diag)
-target_compile_definitions(test_native_procedural_graph PRIVATE
-    URE_TEST_ASSET_DIR="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene"
-)
-add_test(NAME test_native_procedural_graph COMMAND test_native_procedural_graph)
+    add_executable(test_native_procedural_graph test_native_procedural_graph.cpp)
+    target_link_libraries(test_native_procedural_graph PRIVATE ure_sceneio ure_core ure_diag)
+    target_compile_definitions(test_native_procedural_graph PRIVATE
+        URE_TEST_ASSET_DIR="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene"
+    )
+    add_test(NAME test_native_procedural_graph COMMAND test_native_procedural_graph)
+endif()
 
 add_executable(test_native_script_build test_native_script_build.cpp)
 target_link_libraries(test_native_script_build PRIVATE ure_sceneio ure_diag)
@@ -256,14 +260,16 @@ target_compile_definitions(test_native_tooling PRIVATE
 )
 add_test(NAME test_native_tooling COMMAND test_native_tooling)
 
-add_executable(test_native_adapter test_native_adapter.cpp)
-target_link_libraries(test_native_adapter PRIVATE ure_sceneio ure_diag)
-target_compile_definitions(test_native_adapter PRIVATE
-    URE_TEST_SCENE_DIR="${CMAKE_SOURCE_DIR}/scenes"
-    URE_TEST_CLI="$<TARGET_FILE:ure_cli>"
-)
-add_dependencies(test_native_adapter ure_cli)
-add_test(NAME test_native_adapter COMMAND test_native_adapter)
+if(TARGET ure_cli)
+    add_executable(test_native_adapter test_native_adapter.cpp)
+    target_link_libraries(test_native_adapter PRIVATE ure_sceneio ure_diag)
+    target_compile_definitions(test_native_adapter PRIVATE
+        URE_TEST_SCENE_DIR="${CMAKE_SOURCE_DIR}/scenes"
+        URE_TEST_CLI="$<TARGET_FILE:ure_cli>"
+    )
+    add_dependencies(test_native_adapter ure_cli)
+    add_test(NAME test_native_adapter COMMAND test_native_adapter)
+endif()
 
 add_executable(
     test_usd_schema_adapter
@@ -287,54 +293,56 @@ target_compile_definitions(test_native_validation_suite PRIVATE
 )
 add_test(NAME test_native_validation_suite COMMAND test_native_validation_suite)
 
-add_executable(test_gltf_frontend test_gltf_frontend.cpp)
-target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
-add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)
+if(TARGET ure_core)
+    add_executable(test_gltf_frontend test_gltf_frontend.cpp)
+    target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)
+    add_test(NAME test_gltf_frontend COMMAND test_gltf_frontend)
 
-add_executable(test_material_graph test_material_graph.cpp)
-target_link_libraries(test_material_graph PRIVATE ure_core ure_diag)
-add_test(NAME test_material_graph COMMAND test_material_graph)
+    add_executable(test_material_graph test_material_graph.cpp)
+    target_link_libraries(test_material_graph PRIVATE ure_core ure_diag)
+    add_test(NAME test_material_graph COMMAND test_material_graph)
 
-add_executable(test_materialx_io test_materialx_io.cpp)
-target_link_libraries(test_materialx_io PRIVATE ure_sceneio ure_core ure_diag)
-add_test(NAME test_materialx_io COMMAND test_materialx_io)
+    add_executable(test_materialx_io test_materialx_io.cpp)
+    target_link_libraries(test_materialx_io PRIVATE ure_sceneio ure_core ure_diag)
+    add_test(NAME test_materialx_io COMMAND test_materialx_io)
 
-add_executable(test_session test_session.cpp)
-target_link_libraries(test_session PRIVATE ure_sceneio ure_core ure_diag)
-add_test(NAME test_session COMMAND test_session)
+    add_executable(test_session test_session.cpp)
+    target_link_libraries(test_session PRIVATE ure_sceneio ure_core ure_diag)
+    add_test(NAME test_session COMMAND test_session)
 
-add_executable(test_distributed_file_io test_distributed_file_io.cpp)
-target_link_libraries(test_distributed_file_io PRIVATE ure_core ure_diag)
-add_test(NAME test_distributed_file_io COMMAND test_distributed_file_io)
+    add_executable(test_distributed_file_io test_distributed_file_io.cpp)
+    target_link_libraries(test_distributed_file_io PRIVATE ure_core ure_diag)
+    add_test(NAME test_distributed_file_io COMMAND test_distributed_file_io)
 
-add_executable(
-    test_distributed_wave_io
-    test_distributed_wave_io.cpp)
-target_link_libraries(
-    test_distributed_wave_io
-    PRIVATE ure_core ure_diag)
-add_test(
-    NAME test_distributed_wave_io
-    COMMAND test_distributed_wave_io)
+    add_executable(
+        test_distributed_wave_io
+        test_distributed_wave_io.cpp)
+    target_link_libraries(
+        test_distributed_wave_io
+        PRIVATE ure_core ure_diag)
+    add_test(
+        NAME test_distributed_wave_io
+        COMMAND test_distributed_wave_io)
 
-set(CUDA_BACKEND_HOST_TESTS
-    test_gltf_frontend
-    test_materialx_io
-    test_material_graph
-    test_mie_phase
-    test_native_procedural_graph
-    test_native_scene_ir
-)
-foreach(cuda_backend_test IN LISTS CUDA_BACKEND_HOST_TESTS)
-    target_link_libraries(${cuda_backend_test} PRIVATE CUDA::cudart)
-endforeach()
-
-find_package(Python3 COMPONENTS Interpreter QUIET)
-if(Python3_Interpreter_FOUND)
-    add_test(NAME test_pyure_smoke
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pyure_smoke.py
+    set(CUDA_BACKEND_HOST_TESTS
+        test_gltf_frontend
+        test_materialx_io
+        test_material_graph
+        test_mie_phase
+        test_native_procedural_graph
+        test_native_scene_ir
     )
-    set_tests_properties(test_pyure_smoke PROPERTIES
-        ENVIRONMENT "PYTHONPATH=${CMAKE_SOURCE_DIR};PYURE_NATIVE=$<TARGET_FILE:pyure_native>;URE_CLI=$<TARGET_FILE:ure_cli>;URE_NATIVE_TEST_SCENE=${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene/full_scene.urescene"
-    )
+    foreach(cuda_backend_test IN LISTS CUDA_BACKEND_HOST_TESTS)
+        target_link_libraries(${cuda_backend_test} PRIVATE CUDA::cudart)
+    endforeach()
+
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME test_pyure_smoke
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pyure_smoke.py
+        )
+        set_tests_properties(test_pyure_smoke PROPERTIES
+            ENVIRONMENT "PYTHONPATH=${CMAKE_SOURCE_DIR};PYURE_NATIVE=$<TARGET_FILE:pyure_native>;URE_CLI=$<TARGET_FILE:ure_cli>;URE_NATIVE_TEST_SCENE=${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene/full_scene.urescene"
+        )
+    endif()
 endif()

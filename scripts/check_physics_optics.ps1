@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 
 $repo = Resolve-Path (Join-Path $PSScriptRoot "..")
 $buildPath = Join-Path $repo $BuildDir
+$artifactBin = Join-Path $buildPath "artifacts\$Config\bin"
 
 function Run-Step {
     param(
@@ -50,10 +51,7 @@ $executables = @(
 )
 
 foreach ($exe in $executables) {
-    $exePath = Join-Path $buildPath "tests\gpu\$exe"
-    if (-not (Test-Path $exePath)) {
-        $exePath = Join-Path $buildPath "tests\gpu\$Config\$exe"
-    }
+    $exePath = Join-Path $artifactBin $exe
     Run-Step "Run $exe" {
         & $exePath
     }
@@ -63,10 +61,7 @@ if ($RenderVisual) {
     $scenePath = Join-Path $repo "scenes\textured_quad_validation.gltf"
     $outputPath = Join-Path $repo "output\physics_optics_visual_gltf.hdr"
     New-Item -ItemType Directory -Force -Path (Split-Path $outputPath) | Out-Null
-    $cliPath = Join-Path $buildPath "apps\ure_cli\ure_cli.exe"
-    if (-not (Test-Path $cliPath)) {
-        $cliPath = Join-Path $buildPath "apps\ure_cli\$Config\ure_cli.exe"
-    }
+    $cliPath = Join-Path $artifactBin "ure_cli.exe"
     Run-Step "Render glTF optics visual smoke" {
         & $cliPath render $scenePath --spp 1 --width 8 --height 8 --format hdr --output (Split-Path $outputPath -Leaf)
     }

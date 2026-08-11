@@ -40,7 +40,7 @@ Required final gate for this audit:
 .\scripts\build_x64.ps1 -BuildDir build_modular_x64 -Config RelWithDebInfo
 ctest --test-dir build_modular_x64 --output-on-failure
 .\scripts\check_phase_l_static.ps1
-& .\build_modular_x64\apps\ure_cli\ure_cli.exe validate .\scenes\benchmarks\phase_l_spectral_budget.gltf
+& .\build_modular_x64\artifacts\RelWithDebInfo\bin\ure_cli.exe validate .\scenes\benchmarks\phase_l_spectral_budget.gltf
 & .\tools\benchmarks\run_phase_l_spectral_smoke.ps1 -BuildDir build_modular_x64 -Spp 1 -Width 32 -Height 32 -Output phase_l_spectral_budget_smoke.hdr
 git diff --check
 git diff --cached --check

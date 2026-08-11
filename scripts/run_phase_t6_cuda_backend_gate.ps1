@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $BuildDir = Join-Path $RepoRoot "build_modular_x64"
-$Cli = Join-Path $BuildDir "apps\ure_cli\ure_cli.exe"
+$Cli = Join-Path $BuildDir "artifacts\Release\bin\ure_cli.exe"
 $Scene = Join-Path $RepoRoot "scenes\cornell_box.gltf"
 $OutputDir = Join-Path $RepoRoot ".build\phase_t6_gate"
 $SmallOutput = Join-Path $OutputDir "cornell_64x64_8spp.bmp"

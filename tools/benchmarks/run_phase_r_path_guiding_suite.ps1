@@ -11,7 +11,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $BuildPath = Join-Path $RepoRoot $BuildDir
-$ExePath = Join-Path $BuildPath "tests\gpu\gpu_phase_r_guiding_benchmark.exe"
+$ExePath = Join-Path $BuildPath "artifacts\$Config\bin\gpu_phase_r_guiding_benchmark.exe"
 $ResultDir = Join-Path $RepoRoot "output\benchmarks"
 $ResultPath = Join-Path $ResultDir "phase_r_path_guiding_suite.json"
 

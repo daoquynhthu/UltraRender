@@ -40,6 +40,13 @@ target_include_directories(ure_transport_sdk_free PUBLIC
 target_link_libraries(ure_transport_sdk_free PRIVATE
     ure_runtime_sdk_free
 )
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
+   CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
+    set_source_files_properties(
+        "${URE_ROOT}/libs/ure_transport/src/support_measure_graph.cpp"
+        "${URE_ROOT}/libs/ure_transport/src/technique_graph.cpp"
+        PROPERTIES COMPILE_OPTIONS -Wno-stringop-overflow)
+endif()
 
 add_library(ure_research_sdk_free STATIC
     "${URE_ROOT}/libs/ure_research/src/artifact.cpp"

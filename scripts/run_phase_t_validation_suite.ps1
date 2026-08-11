@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $BuildPath = Join-Path $RepoRoot $BuildDir
+$ArtifactBin = Join-Path $BuildPath "artifacts\$Config\bin"
 $OutputDir = Join-Path $RepoRoot ".build\phase_t_validation"
 $ReportPath = Join-Path $OutputDir "report.json"
 $InventoryPath = Join-Path $OutputDir "inventory.json"
@@ -138,7 +139,7 @@ $targets = @(
     "test_vulkan_acceleration",
     "test_multi_backend_inventory"
 )
-$D3dExecutable = Join-Path $BuildPath "tests\d3d12\test_d3d12_runtime.exe"
+$D3dExecutable = Join-Path $ArtifactBin "test_d3d12_runtime.exe"
 if (Test-Path -LiteralPath $D3dExecutable) {
     $targets += "test_d3d12_runtime"
 }
@@ -153,7 +154,7 @@ if (-not $SkipBuild) {
 $inventoryEnvironment = @{
     UR_PHASE_T10_REPORT = $InventoryPath
 }
-$InventoryExecutable = Join-Path $BuildPath "tests\multi_backend\test_multi_backend_inventory.exe"
+$InventoryExecutable = Join-Path $ArtifactBin "test_multi_backend_inventory.exe"
 Invoke-TimedCommand `
     -FilePath $InventoryExecutable `
     -Environment $inventoryEnvironment | Out-Null
@@ -192,7 +193,7 @@ $selectedTests = Invoke-TimedCommand `
 
 $cudaLaunch = Invoke-LaunchBenchmark `
     -Name "cuda_runtime_contract" `
-    -FilePath (Join-Path $BuildPath "tests\gpu\gpu_test_cuda_runtime.exe") `
+    -FilePath (Join-Path $ArtifactBin "gpu_test_cuda_runtime.exe") `
     -WorkItems 64
 $vulkanWorkItems = [uint64]$vulkanWorkers.Count * 320
 $vulkanEnvironment = @{}
@@ -201,7 +202,7 @@ if ($vulkanCrossVendor) {
 }
 $vulkanLaunch = Invoke-LaunchBenchmark `
     -Name "vulkan_foundation_contract" `
-    -FilePath (Join-Path $BuildPath "tests\vulkan\test_vulkan_runtime.exe") `
+    -FilePath (Join-Path $ArtifactBin "test_vulkan_runtime.exe") `
     -Environment $vulkanEnvironment `
     -WorkItems $vulkanWorkItems
 $vulkanAccelerationEnvironment = @{}
@@ -209,7 +210,7 @@ if ($vulkanRayQueryCapable) {
     $vulkanAccelerationEnvironment.UR_REQUIRE_VULKAN_RT = "1"
 }
 $vulkanAcceleration = Invoke-TimedCommand `
-    -FilePath (Join-Path $BuildPath "tests\vulkan\test_vulkan_acceleration.exe") `
+    -FilePath (Join-Path $ArtifactBin "test_vulkan_acceleration.exe") `
     -Environment $vulkanAccelerationEnvironment
 
 $d3dLaunch = $null
@@ -255,7 +256,7 @@ $renderArguments = @(
 )
 $renderTimer = [Diagnostics.Stopwatch]::StartNew()
 $renderProcess = Start-Process `
-    -FilePath (Join-Path $BuildPath "apps\ure_cli\ure_cli.exe") `
+    -FilePath (Join-Path $ArtifactBin "ure_cli.exe") `
     -ArgumentList $renderArguments `
     -PassThru `
     -WindowStyle Hidden `
@@ -361,7 +362,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $artifactPaths = [ordered]@{
-    cuda = Join-Path $BuildPath "libs\ure_core\ure_core.lib"
+    cuda = Join-Path $BuildPath "artifacts\$Config\lib\ure_core.lib"
     vulkan = Join-Path $RepoRoot "shaders\vulkan\generated\spectral_polarization.spv"
 }
 if ($d3dWorkers.Count -gt 0) {

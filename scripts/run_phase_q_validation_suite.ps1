@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $build = Join-Path $root $BuildDir
-$cli = Join-Path $build "apps/ure_cli/ure_cli.exe"
+$cli = Join-Path $build "artifacts/$Config/bin/ure_cli.exe"
 $scene = Join-Path $root "tests/assets/native_scene/q3_full_scene/full_scene.urescene"
 $temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("ure-q12-" + [guid]::NewGuid().ToString("N"))
 

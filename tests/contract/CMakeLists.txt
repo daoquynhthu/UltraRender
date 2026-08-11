@@ -155,8 +155,10 @@ add_custom_target(ure_public_sdk_stage ALL
     VERBATIM)
 
 if(TARGET ure_contract)
-    set(UR_PB8_SDK_STAGE_DIR ${CMAKE_BINARY_DIR}/pb8_packages/sdk)
-    set(UR_PB8_RUNTIME_STAGE_DIR ${CMAKE_BINARY_DIR}/pb8_packages/runtime)
+    set(UR_PB8_PACKAGE_ROOT
+        ${URE_ARTIFACT_ROOT}/$<CONFIG>/pb8_packages)
+    set(UR_PB8_SDK_STAGE_DIR ${UR_PB8_PACKAGE_ROOT}/sdk)
+    set(UR_PB8_RUNTIME_STAGE_DIR ${UR_PB8_PACKAGE_ROOT}/runtime)
     add_custom_target(ure_release_packages ALL
         COMMAND
             ${UR_PWSH_EXECUTABLE}

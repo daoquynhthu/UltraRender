@@ -1,10 +1,11 @@
 param(
-    [string]$BuildDir = "build_modular_x64"
+    [string]$BuildDir = "build_modular_x64",
+    [string]$Config = "Release"
 )
 
 $ErrorActionPreference = "Stop"
 $repo = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$exe = Join-Path $repo "$BuildDir\tests\gpu\gpu_phase_r_guiding_benchmark.exe"
+$exe = Join-Path $repo "$BuildDir\artifacts\$Config\bin\gpu_phase_r_guiding_benchmark.exe"
 $output = Join-Path $repo "output\benchmarks"
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 $baseline = Join-Path $output "phase_r_mlt_high_occlusion_contract.bin"

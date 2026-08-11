@@ -132,11 +132,11 @@ $Report = [ordered]@{
     }
     artifacts = [ordered]@{
         sceneio_sha256 = File-Digest (
-            Join-Path $BuildPath "libs/ure_sceneio/ure_sceneio.lib")
+            Join-Path $BuildPath "artifacts/$Config/lib/ure_sceneio.lib")
         hydra_plugin_sha256 = File-Digest (
-            Join-Path $HydraBuildPath "hydra/ure_hydra/Release/ure_hydra.dll")
+            Join-Path $HydraBuildPath "artifacts/$Config/bin/ure_hydra/ure_hydra.dll")
         usda_export_test_sha256 = File-Digest (
-            Join-Path $UsdBuildPath "tests/hydra/test_usda_export.exe")
+            Join-Path $UsdBuildPath "artifacts/$Config/bin/test_usda_export.exe")
     }
     evidence = [ordered]@{
         usd_native_mapping = "passed"

@@ -7,12 +7,38 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLATC_VERSION: 25.12.19
+  FLATC_LINUX_SHA256: 9f87066dc5dfa7fe02090b55bab5f3e55df03e32c9b0cdf229004ade7d091039
+  FLATC_LINUX_BINARY_SHA256: 7d16cbedc9721dc6985a810438038531cd8e4e6e11630af707d3a4c0c40f91f4
+  FLATC_WINDOWS_SHA256: fff9445c9db907227bc64b54cc98743084c4949282aa4e576cff6a955724ddc8
+  FLATC_WINDOWS_BINARY_SHA256: eddf0ca8ab85003151a895faabc99e9a7c02c8b4ea4d421fd5725a7a0c34ca8c
+
 jobs:
-  linux-cuda-build:
-    name: Linux CUDA Build
+  linux-non-gpu:
+    name: Linux ${{ matrix.compiler }} non-GPU
     runs-on: ubuntu-24.04
-    container:
-      image: nvidia/cuda:12.6.3-devel-ubuntu24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: GCC 13
+            cc: gcc-13
+            cxx: g++-13
+            build_suffix: gcc
+            compiler_packages: gcc-13 g++-13
+          - compiler: Clang 18
+            cc: clang-18
+            cxx: clang++-18
+            build_suffix: clang
+            compiler_packages: clang-18 clang-tools-18
 
     steps:
       - name: Check out repository
@@ -20,32 +46,234 @@ jobs:
 
       - name: Install build tools
         run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            build-essential \
-            cmake \
-            git \
-            ninja-build \
-            pkg-config
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ca-certificates ccache curl ninja-build unzip \
+            ${{ matrix.compiler_packages }}
 
-      - name: Configure
-        run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_CUDA_ARCHITECTURES=all-major
+      - name: Cache pinned flatc
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ultrarender/flatc/${{ env.FLATC_VERSION }}/linux
+          key: flatc-linux-x64-${{ env.FLATC_VERSION }}-${{ env.FLATC_LINUX_SHA256 }}
 
-      - name: Build
-        run: cmake --build build --parallel
-
-      - name: Package artifact
+      - name: Install pinned flatc
+        shell: bash
         run: |
-          mkdir -p dist
-          cp build/apps/ure_cli/ure_cli dist/UltraRender
-          tar -C dist -czf ultrarender-linux-cuda.tar.gz UltraRender
+          set -euo pipefail
+          tool_dir="$HOME/.cache/ultrarender/flatc/$FLATC_VERSION/linux"
+          flatc="$tool_dir/flatc"
+          if [[ ! -x "$flatc" ]]; then
+            mkdir -p "$tool_dir"
+            archive="$RUNNER_TEMP/flatc-linux.zip"
+            curl --fail --location --retry 3 \
+              "https://github.com/google/flatbuffers/releases/download/v${FLATC_VERSION}/Linux.flatc.binary.g%2B%2B-13.zip" \
+              --output "$archive"
+            echo "$FLATC_LINUX_SHA256  $archive" | sha256sum --check
+            unzip -o "$archive" -d "$tool_dir"
+            chmod +x "$flatc"
+          fi
+          echo "$FLATC_LINUX_BINARY_SHA256  $flatc" | sha256sum --check
+          test "$("$flatc" --version)" = "flatc version $FLATC_VERSION"
+          echo "FLATC_PATH=$flatc" >> "$GITHUB_ENV"
 
-      - name: Upload artifact
+      - name: Cache compiler objects
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ matrix.build_suffix }}-v1-${{ hashFiles('**/CMakeLists.txt', 'cmake/**', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ matrix.build_suffix }}-v1-
+
+      - name: Configure root non-GPU build
+        run: |
+          cmake -S . -B build/root-${{ matrix.build_suffix }} -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_INSTALL_PREFIX="$PWD/build/install-${{ matrix.build_suffix }}" \
+            -DUR_FLATC_EXECUTABLE="$FLATC_PATH" \
+            -DUR_ENABLE_CUDA=OFF \
+            -DUR_ENABLE_OPTIX=OFF \
+            -DUR_ENABLE_VULKAN=OFF \
+            -DUR_ENABLE_D3D12=OFF \
+            -DUR_ENABLE_HYDRA=OFF \
+            -DUR_BUILD_CLI=OFF \
+            -DUR_BUILD_TESTS=ON \
+            -DUR_BUILD_PHYSICS=ON
+
+      - name: Build and test root non-GPU surface
+        run: |
+          cmake --build build/root-${{ matrix.build_suffix }} --parallel
+          test -x build/root-${{ matrix.build_suffix }}/artifacts/Release/bin/ure_contract_codegen
+          test -f build/root-${{ matrix.build_suffix }}/artifacts/Release/lib/libure_runtime.a
+          test ! -e build/root-${{ matrix.build_suffix }}/tools/ure_contract_codegen/ure_contract_codegen
+          ctest --test-dir build/root-${{ matrix.build_suffix }} --output-on-failure
+
+      - name: Test installed package consumer
+        run: |
+          cmake --install build/root-${{ matrix.build_suffix }}
+          cmake \
+            -S tests/sdk_free/package_consumer \
+            -B build/consumer-${{ matrix.build_suffix }} \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_PREFIX_PATH="$PWD/build/install-${{ matrix.build_suffix }}"
+          cmake --build build/consumer-${{ matrix.build_suffix }} --parallel
+          ./build/consumer-${{ matrix.build_suffix }}/ultrarender_sdk_free_consumer
+
+      - name: Build and test strict SDK-free surface
+        run: |
+          cmake \
+            -S tests/sdk_free \
+            -B build/sdk-free-${{ matrix.build_suffix }} \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build build/sdk-free-${{ matrix.build_suffix }} --parallel
+          ctest --test-dir build/sdk-free-${{ matrix.build_suffix }} --output-on-failure
+
+      - name: Report compiler-cache statistics
+        if: always()
+        run: ccache --show-stats
+
+      - name: Upload failure diagnostics
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ultrarender-linux-cuda
-          path: ultrarender-linux-cuda.tar.gz
-          if-no-files-found: error
+          name: ci-logs-linux-${{ matrix.build_suffix }}
+          path: |
+            build/root-${{ matrix.build_suffix }}/CMakeFiles/CMakeConfigureLog.yaml
+            build/root-${{ matrix.build_suffix }}/Testing/Temporary
+            build/sdk-free-${{ matrix.build_suffix }}/CMakeFiles/CMakeConfigureLog.yaml
+            build/sdk-free-${{ matrix.build_suffix }}/Testing/Temporary
+          if-no-files-found: ignore
+
+  windows-non-gpu:
+    name: Windows MSVC non-GPU
+    runs-on: windows-2025
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Activate MSVC toolchain
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Cache pinned flatc
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ultrarender/flatc/${{ env.FLATC_VERSION }}/windows
+          key: flatc-windows-x64-${{ env.FLATC_VERSION }}-${{ env.FLATC_WINDOWS_SHA256 }}
+
+      - name: Install pinned flatc
+        shell: pwsh
+        run: |
+          $tool_dir = Join-Path $HOME ".cache/ultrarender/flatc/$env:FLATC_VERSION/windows"
+          $flatc = Join-Path $tool_dir "flatc.exe"
+          if (-not (Test-Path -LiteralPath $flatc)) {
+              New-Item -ItemType Directory -Force -Path $tool_dir | Out-Null
+              $archive = Join-Path $env:RUNNER_TEMP "flatc-windows.zip"
+              $download = @{
+                  Uri = "https://github.com/google/flatbuffers/releases/download/v$env:FLATC_VERSION/Windows.flatc.binary.zip"
+                  OutFile = $archive
+                  MaximumRetryCount = 3
+                  RetryIntervalSec = 5
+              }
+              Invoke-WebRequest @download
+              $actual_hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($actual_hash -ne $env:FLATC_WINDOWS_SHA256) {
+                  throw "flatc archive digest mismatch: $actual_hash"
+              }
+              Expand-Archive -LiteralPath $archive -DestinationPath $tool_dir -Force
+          }
+          $binary_hash = (Get-FileHash -LiteralPath $flatc -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($binary_hash -ne $env:FLATC_WINDOWS_BINARY_SHA256) {
+              throw "flatc binary digest mismatch: $binary_hash"
+          }
+          $actual_version = & $flatc --version
+          if ($actual_version -ne "flatc version $env:FLATC_VERSION") {
+              throw "Unexpected flatc version: $actual_version"
+          }
+          "FLATC_PATH=$flatc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Configure root non-GPU build
+        shell: pwsh
+        run: |
+          $configure = @(
+              "-S", ".",
+              "-B", "build/root-msvc",
+              "-G", "Ninja",
+              "-DCMAKE_BUILD_TYPE=Release",
+              "-DCMAKE_INSTALL_PREFIX=$PWD/build/install-msvc",
+              "-DUR_FLATC_EXECUTABLE=$env:FLATC_PATH",
+              "-DUR_ENABLE_CUDA=OFF",
+              "-DUR_ENABLE_OPTIX=OFF",
+              "-DUR_ENABLE_VULKAN=OFF",
+              "-DUR_ENABLE_D3D12=OFF",
+              "-DUR_ENABLE_HYDRA=OFF",
+              "-DUR_BUILD_CLI=OFF",
+              "-DUR_BUILD_TESTS=ON",
+              "-DUR_BUILD_PHYSICS=ON"
+          )
+          cmake @configure
+
+      - name: Build and test root non-GPU surface
+        shell: pwsh
+        run: |
+          cmake --build build/root-msvc --parallel
+          if (-not (Test-Path -LiteralPath "build/root-msvc/artifacts/Release/bin/ure_contract_codegen.exe")) {
+              throw "Central runtime artifact directory is incomplete"
+          }
+          if (-not (Test-Path -LiteralPath "build/root-msvc/artifacts/Release/lib/ure_runtime.lib")) {
+              throw "Central library artifact directory is incomplete"
+          }
+          if (Test-Path -LiteralPath "build/root-msvc/tools/ure_contract_codegen/ure_contract_codegen.exe") {
+              throw "A final target escaped the central artifact directory"
+          }
+          ctest --test-dir build/root-msvc --output-on-failure
+
+      - name: Test installed package consumer
+        shell: pwsh
+        run: |
+          cmake --install build/root-msvc
+          $configure = @(
+              "-S", "tests/sdk_free/package_consumer",
+              "-B", "build/consumer-msvc",
+              "-G", "Ninja",
+              "-DCMAKE_BUILD_TYPE=Release",
+              "-DCMAKE_PREFIX_PATH=$PWD/build/install-msvc"
+          )
+          cmake @configure
+          cmake --build build/consumer-msvc --parallel
+          & "./build/consumer-msvc/ultrarender_sdk_free_consumer.exe"
+
+      - name: Build and test strict SDK-free surface
+        shell: pwsh
+        run: |
+          $configure = @(
+              "-S", "tests/sdk_free",
+              "-B", "build/sdk-free-msvc",
+              "-G", "Ninja",
+              "-DCMAKE_BUILD_TYPE=Release"
+          )
+          cmake @configure
+          cmake --build build/sdk-free-msvc --parallel
+          ctest --test-dir build/sdk-free-msvc --output-on-failure
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-windows-msvc
+          path: |
+            build/root-msvc/CMakeFiles/CMakeConfigureLog.yaml
+            build/root-msvc/Testing/Temporary
+            build/sdk-free-msvc/CMakeFiles/CMakeConfigureLog.yaml
+            build/sdk-free-msvc/Testing/Temporary
+          if-no-files-found: ignore

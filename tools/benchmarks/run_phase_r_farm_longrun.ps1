@@ -13,7 +13,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$ExePath = Join-Path $RepoRoot "$BuildDir\tests\gpu\gpu_phase_r_guiding_benchmark.exe"
+$ExePath = Join-Path $RepoRoot "$BuildDir\artifacts\$Config\bin\gpu_phase_r_guiding_benchmark.exe"
 $ResultDir = Join-Path $RepoRoot "output\benchmarks\phase_r_farm"
 $ManifestPath = Join-Path $ResultDir "manifest.json"
 $MergedPath = Join-Path $ResultDir "merged.bin"

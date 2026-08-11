@@ -43,7 +43,7 @@ struct NativeAdapterResult {
 
 struct MaterialXAdapterResult {
     scene_ir::MaterialGraph graph;
-    AdapterLossReport loss_report{AdapterFormat::MaterialX};
+    AdapterLossReport loss_report{AdapterFormat::MaterialX, {}};
     std::vector<ValidationDiagnostic> diagnostics;
 
     bool ok() const;
@@ -56,7 +56,7 @@ struct UsdExportMapping {
 
 struct UsdExportResult {
     std::string usda;
-    AdapterLossReport loss_report{AdapterFormat::Usd};
+    AdapterLossReport loss_report{AdapterFormat::Usd, {}};
     std::vector<ValidationDiagnostic> diagnostics;
     std::vector<UsdExportMapping> mappings;
     UsdExportPolicy policy = UsdExportPolicy::Strict;

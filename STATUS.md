@@ -10,7 +10,7 @@ UltraRender remains a research and development renderer. There is no “UltraRen
 
 Phase PB is complete. The project declares **Core ABI 1.0** and **Worker Protocol 1.0** for the exact Windows x64 profile described below. The declaration freezes a small client interaction grammar, not the renderer as a product and not its algorithms, internal data models, feature set, or cross-platform behavior. The declaration tag is a repository evidence marker; packages have not been publicly distributed and the support clock has not started.
 
-The authoritative implementation cursor resumes at `HR.3 — Learned proposal and neural control variate`. Phase Q, R, T, V, the declared bounded scope of W, U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2, and PB.0-PB.8 are complete within their documented boundaries.
+The authoritative implementation cursor resumes at `HR.3 — Learned proposal 与 neural control variate`. Phase Q, R, T, V, the declared bounded scope of W, U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2, and PB.0-PB.8 are complete within their documented boundaries.
 
 ## Declared public boundary
 
@@ -36,13 +36,19 @@ The stable Core deliberately excludes telemetry, spectral/Stokes plane schemas, 
 | Area | Current baseline |
 |---|---|
 | Complete-scene reference backend | CUDA |
-| Host | Windows 11, Visual Studio 2026, MSVC 19.51, Windows SDK 10.0.28000, C++23 |
+| Host | Windows 11, Visual Studio 2026, MSVC 19.52, Windows SDK 10.0.28000, C++23 |
 | GPU toolchain | CUDA 13.3, CUDA C++20 |
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
-| Build | Ninja, `build_modular_x64`, Release gate |
+| Build | Ninja, `build_modular_x64`, Release gate; final products under `artifacts/<Config>/{bin,lib,symbols,pb8_packages}` |
 | Portable backends | Vulkan 1.3 and D3D12/DXR foundations; bounded native acceleration/parity, not full SceneIR rendering |
 
 macOS, ARM64, 32-bit, complete Linux/non-NVIDIA rendering, C++ ABI, COM, static linking, and portable native-handle interop are not promised by Core ABI 1.0.
+
+## Hosted non-GPU CI
+
+The maintained GitHub Actions workflow builds the CUDA-off root project on Ubuntu 24.04 with GCC 13 and Clang 18, and on Windows 2025 with MSVC. Each lane compiles the non-GPU libraries and contract generator, runs 32 root host tests, installs the CMake package, executes an out-of-tree `find_package()` consumer, and independently builds and runs the 15-test SDK-free tree with warnings as errors.
+
+GPU backends, CUDA-coupled renderer/session/product-runtime targets, and optional SDK-coupled adapters remain outside this hosted gate. This is a compile, host-behavior, and package-consumption portability boundary; it is not evidence of complete Linux rendering or an additional Core ABI profile. The exact matrix and cache policy are documented in [`docs/CI.md`](docs/CI.md).
 
 ## Subsystem status
 

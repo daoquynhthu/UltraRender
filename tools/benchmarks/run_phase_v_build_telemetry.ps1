@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $BuildPath = Join-Path $RepoRoot $BuildDir
+$ArtifactBin = Join-Path $BuildPath "artifacts\$Config\bin"
 
 if (-not $SkipBuild) {
     & (Join-Path $RepoRoot "scripts\build_x64.ps1") `
@@ -20,8 +21,8 @@ if (-not $SkipBuild) {
     }
 }
 
-$GpuTest = Join-Path $BuildPath "tests\gpu\gpu_test_acceleration_contract.exe"
-$SessionTest = Join-Path $BuildPath "tests\host\test_session.exe"
+$GpuTest = Join-Path $ArtifactBin "gpu_test_acceleration_contract.exe"
+$SessionTest = Join-Path $ArtifactBin "test_session.exe"
 if (-not (Test-Path $GpuTest) -or -not (Test-Path $SessionTest)) {
     throw "Phase V telemetry executables are missing"
 }

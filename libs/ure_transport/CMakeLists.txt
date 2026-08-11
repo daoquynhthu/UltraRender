@@ -26,6 +26,14 @@ else()
         ure_transport PRIVATE -Wall -Wextra -pedantic -Werror)
 endif()
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
+   CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
+    set_source_files_properties(
+        src/support_measure_graph.cpp
+        src/technique_graph.cpp
+        PROPERTIES COMPILE_OPTIONS -Wno-stringop-overflow)
+endif()
+
 install(TARGETS ure_transport EXPORT UltraRender_Targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )

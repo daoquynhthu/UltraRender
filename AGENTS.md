@@ -421,12 +421,13 @@ Phase PB follows `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Bound
 ## 9. Build Environment
 
 - **OS**: Windows 11
-- **Compiler**: MSVC 19.51 through Visual Studio 2026 18.8.2
+- **Compiler**: MSVC 19.52 through Visual Studio 2026 18.8.2
 - **Windows SDK**: 10.0.28000
 - **CUDA**: 13.3
 - **GPU**: RTX 5060 Laptop (CC 12.0, 8 GB VRAM, 26 SMs)
 - **Generator**: Ninja through `scripts/build_x64.ps1` with the Visual Studio 2026 x64 toolchain
 - **Build directory**: `build_modular_x64/`
+- **Final artifacts**: `build_modular_x64/artifacts/<Config>/{bin,lib,symbols,pb8_packages}`
 - **Build config**: `Release` (for tests), `Debug` (for development)
 
 ### Build Commands

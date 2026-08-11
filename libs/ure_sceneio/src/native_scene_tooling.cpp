@@ -1,4 +1,8 @@
+#if defined(_WIN32)
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
+#endif
 
 #include <atomic>
 #include <filesystem>
@@ -11,7 +15,11 @@
 #include <utility>
 #include <vector>
 
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <ure/native_scene_hash.hpp>
 #include <ure/native_scene_tooling.hpp>
@@ -39,8 +47,13 @@ void atomic_write(const std::filesystem::path& path, std::span<const std::uint8_
     static std::atomic<std::uint64_t> sequence = 0;
     const auto parent = path.has_parent_path() ? path.parent_path() : std::filesystem::current_path();
     std::filesystem::create_directories(parent);
+#if defined(_WIN32)
     const auto temporary = parent / (path.filename().wstring() + L".tmp." +
         std::to_wstring(GetCurrentProcessId()) + L"." + std::to_wstring(sequence.fetch_add(1)));
+#else
+    const auto temporary = parent / (path.filename().wstring() + L".tmp." +
+        std::to_wstring(getpid()) + L"." + std::to_wstring(sequence.fetch_add(1)));
+#endif
     try {
         std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
         if (!output) throw std::runtime_error("Native asset temporary file open failed");
@@ -48,9 +61,17 @@ void atomic_write(const std::filesystem::path& path, std::span<const std::uint8_
         output.flush();
         if (!output) throw std::runtime_error("Native asset write failed");
         output.close();
+#if defined(_WIN32)
         if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
             throw std::runtime_error("Native asset atomic replacement failed");
         }
+#else
+        std::error_code error;
+        std::filesystem::rename(temporary, path, error);
+        if (error) {
+            throw std::runtime_error("Native asset atomic replacement failed: " + error.message());
+        }
+#endif
     } catch (...) {
         std::error_code ignored;
         std::filesystem::remove(temporary, ignored);

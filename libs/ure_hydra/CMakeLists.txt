@@ -133,22 +133,15 @@ if(UR_ENABLE_CUDA)
         PRIVATE UR_HYDRA_RENDERING=1
     )
 endif()
+set(_ur_hydra_build_dir
+    "${URE_RUNTIME_OUTPUT_DIRECTORY}/ure_hydra")
 set_target_properties(ure_hydra PROPERTIES
     PREFIX ""
     RUNTIME_OUTPUT_DIRECTORY
-        "${CMAKE_BINARY_DIR}/hydra/ure_hydra"
+        "${_ur_hydra_build_dir}"
     LIBRARY_OUTPUT_DIRECTORY
-        "${CMAKE_BINARY_DIR}/hydra/ure_hydra"
+        "${_ur_hydra_build_dir}"
 )
-foreach(_config Debug Release RelWithDebInfo MinSizeRel)
-    string(TOUPPER "${_config}" _config_upper)
-    set_target_properties(ure_hydra PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY_${_config_upper}
-            "${CMAKE_BINARY_DIR}/hydra/ure_hydra/${_config}"
-        LIBRARY_OUTPUT_DIRECTORY_${_config_upper}
-            "${CMAKE_BINARY_DIR}/hydra/ure_hydra/${_config}"
-    )
-endforeach()
 
 configure_file(
     resources/plugInfo.json.in
@@ -157,7 +150,7 @@ configure_file(
 )
 file(GENERATE
     OUTPUT
-        "${CMAKE_BINARY_DIR}/hydra/ure_hydra/$<CONFIG>/resources/plugInfo.json"
+        "${_ur_hydra_build_dir}/resources/plugInfo.json"
     INPUT
         "${CMAKE_CURRENT_BINARY_DIR}/plugInfo.json"
 )

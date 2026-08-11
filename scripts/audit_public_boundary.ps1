@@ -427,7 +427,7 @@ if ($dllInfo.Length -ne [int64]$legacy.binary.bytes -or $dllHash -ne $legacy.bin
 }
 $legacyCoreCMake = Get-Content -LiteralPath (Join-Path $RepoRoot "libs/ure_core/CMakeLists.txt") -Raw
 if (-not [bool]$legacy.binary.reproducible_link -or $legacy.binary.reproducibility_flag -ne "/Brepro" -or
-    $legacy.binary.baseline_refresh_phase -ne "PB.6" -or
+    $legacy.binary.baseline_refresh_phase -ne "CI portability and MSVC 19.52 migration 2026-08-11" -or
     -not [regex]::IsMatch($legacyCoreCMake, 'target_link_options\s*\(\s*pyure_native\s+PRIVATE\s+/Brepro\s*\)')) {
     throw "Legacy DLL reproducible-link policy is missing"
 }

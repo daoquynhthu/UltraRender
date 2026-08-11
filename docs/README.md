@@ -12,6 +12,7 @@ This index separates current references from historical records. The root `PLAN.
 | [`../STATUS.md`](../STATUS.md) | Current capability and limitation matrix |
 | [`../PLAN.md`](../PLAN.md) | Authoritative global queue; PB.8 is complete and HR.3 is current |
 | [`../AGENTS.md`](../AGENTS.md) | Agent governance and workflow |
+| [`CI.md`](CI.md) | Hosted non-GPU compiler matrix, test/install coverage, exclusions, pinned tools, and cache policy |
 | [`Public_API_ABI_Architecture.md`](Public_API_ABI_Architecture.md) | Normative minimal C ABI/local-worker architecture and PB.8 stable-major gates |
 | [`PB_Public_Boundary_PLAN.md`](PB_Public_Boundary_PLAN.md) | Completed subordinate PB.0-PB.8 sequence and declaration evidence |
 | [`Public_API_Integration.md`](Public_API_Integration.md) | Core 1.0 loader, table-prefix, scene/session/frame, worker, and unstable-transaction integration guide |

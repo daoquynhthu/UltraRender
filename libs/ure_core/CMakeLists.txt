@@ -105,12 +105,12 @@ if(UR_ENABLE_OPTIX AND UR_OPTIX_INCLUDE_DIR)
             "OptiX requires a concrete CUDA architecture; set CMAKE_CUDA_ARCHITECTURES to a numeric list")
     endif()
     set(UR_OPTIX_TRACE_MODULE
-        "${CMAKE_BINARY_DIR}/shaders/optix/phase_v7_acceleration.optixir"
+        "${URE_RUNTIME_OUTPUT_DIRECTORY}/shaders/optix/phase_v7_acceleration.optixir"
         CACHE INTERNAL "Phase V.7 OptiX traversal module" FORCE)
     add_custom_command(
         OUTPUT "${UR_OPTIX_TRACE_MODULE}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory
-            "${CMAKE_BINARY_DIR}/shaders/optix"
+            "${URE_RUNTIME_OUTPUT_DIRECTORY}/shaders/optix"
         COMMAND "${CMAKE_CUDA_COMPILER}"
             --optix-ir
             --std=c++17
@@ -169,9 +169,6 @@ target_compile_definitions(pyure_native PRIVATE USE_CUDA)
 set_target_properties(pyure_native PROPERTIES
     OUTPUT_NAME "pyure_native"
     WINDOWS_EXPORT_ALL_SYMBOLS ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/pyure"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/pyure"
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/pyure"
 )
 if(MSVC)
     target_compile_options(pyure_native PRIVATE /W4 /utf-8 /EHsc /wd4819)

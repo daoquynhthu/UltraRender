@@ -13,7 +13,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $BuildPath = Join-Path $RepoRoot $BuildDir
-$ExePath = Join-Path $BuildPath "apps\ure_cli\ure_cli.exe"
+$ExePath = Join-Path $BuildPath "artifacts\$Config\bin\ure_cli.exe"
 $ScenePath = Join-Path $RepoRoot $Scene
 $ResultDir = Join-Path $RepoRoot "output\benchmarks"
 $ResultPath = Join-Path $ResultDir "phase_r_integrator_smoke.json"

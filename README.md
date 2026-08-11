@@ -4,6 +4,8 @@ UltraRender 是一个处于持续研发阶段的光谱/偏振离线渲染器。�
 
 本项目尚不是通用生产渲染器，也没有发布“UltraRender 1.0”。功能与成熟度以 [STATUS.md](STATUS.md) 为准，施工顺序以 [PLAN.md](PLAN.md) 为准。Research、Experimental、Production 是不同的证据等级；类型、配置项或拒绝测试的存在不代表对应能力已经可用。
 
+当前权威实施游标为 `HR.3 — Learned proposal 与 neural control variate`；公共交互合同的稳定声明不改变该研究路线的内部演进边界。
+
 ## 公共交互边界
 
 项目现已声明以下两个独立版本化合同：
@@ -58,18 +60,22 @@ docs/                 现役文档与历史归档
 
 ## 构建与验证
 
-维护中的完整构建基线为 Windows 11、Visual Studio 2026/MSVC 19.51、Windows SDK 10.0.28000、CUDA 13.3、CMake 与 Ninja。
+维护中的完整构建基线为 Windows 11、Visual Studio 2026/MSVC 19.52、Windows SDK 10.0.28000、CUDA 13.3、CMake 与 Ninja。
 
 ```powershell
 .\scripts\build_x64.ps1 -BuildDir build_modular_x64 -Config Release
 ctest --test-dir build_modular_x64 -C Release --output-on-failure
 ```
 
+根工程的最终构建产物集中在 `build_modular_x64/artifacts/<Config>/`：可执行文件、运行时动态库及运行时着色器位于 `bin/`，静态库、导入库及 Unix 链接库位于 `lib/`，工具链生成的调试符号位于 `symbols/`，PB.8 的可交付目录位于 `pb8_packages/`。对象文件、生成源码、测试证据与非发布暂存目录仍保留在各自的 CMake 构建目录中。
+
 Ninja 可并行构建普通目标；高内存 CUDA 编译由 `ur_cuda_heavy_compile` job pool 独立限流，不要求全局串行。PB 公共边界完整验证：
 
 ```powershell
 .\scripts\run_phase_pb_validation_suite.ps1 -BuildDir build_modular_x64 -Config Release
 ```
+
+GitHub Actions 另行在 Ubuntu 24.04 的 GCC 13/Clang 18 与 Windows 2025 的 MSVC 上执行 CUDA-off 根构建、32 项纯 host 测试、15 项 warnings-as-errors SDK-free 测试，以及安装后 `find_package()` 消费测试。该门禁验证非 GPU 源码和包边界的可移植性，不扩张完整场景渲染的平台承诺。矩阵、排除项和缓存策略见 [CI 说明](docs/CI.md)。
 
 最新本地 PB.8 证据为 Release 构建与 101/101 CTest，通过三种独立调用方式生成六幅实际 PFM 图像。测试数量是快照，不等同于整体成熟度。
 

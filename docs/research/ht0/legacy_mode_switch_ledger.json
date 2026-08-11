@@ -1,6 +1,6 @@
 {
   "schema": "ure.transport.legacy-mode-ledger/1.0",
-  "snapshot_date": "2026-08-01",
+  "snapshot_date": "2026-08-11",
   "policy": "IntegratorMode is a compatibility preset. New estimator semantics must enter TechniqueGraph and may not create an unlisted mode-only decision site.",
   "entries": [
     {"path": "apps/ure_cli/src/main.cpp", "occurrences": 31, "role": "cli_compatibility_and_automatic_objective_adapter"},
@@ -12,6 +12,7 @@
     {"path": "libs/ure_core/src/path_tracer_host_api.cu", "occurrences": 17, "role": "frozen_cuda_legacy_dispatch"},
     {"path": "libs/ure_core/src/ure_c_api.cpp", "occurrences": 21, "role": "c_api_compatibility_and_automatic_objective_adapter"},
     {"path": "libs/ure_core/src/wave_optics.cpp", "occurrences": 2, "role": "wave_boundary_compatibility"},
+    {"path": "libs/ure_contract/src/session_adapter.cpp", "occurrences": 1, "role": "stable_core_automatic_objective_adapter"},
     {"path": "libs/ure_runtime/include/ure/runtime/execution_graph.hpp", "occurrences": 1, "role": "legacy_runtime_lowering_contract"},
     {"path": "libs/ure_runtime/src/execution_graph.cpp", "occurrences": 3, "role": "legacy_runtime_lowering"},
     {"path": "libs/ure_sceneio/include/ure/native_solver_contract.hpp", "occurrences": 1, "role": "native_schema_compatibility"},

@@ -343,8 +343,6 @@ struct PathExecutionConfig {
     std::uint64_t bidirectional_epoch = 0;
     std::uint64_t vcm_radius_iteration = 0;
     std::uint64_t mlt_epoch = 0;
-
-    bool operator==(const PathExecutionConfig&) const = default;
 };
 
 struct WaveExecutionConfig {

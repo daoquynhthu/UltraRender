@@ -18,6 +18,8 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $BuildPath = Join-Path $RepoRoot $BuildDir
+$ArtifactBin = Join-Path $BuildPath "artifacts\$Config\bin"
+$ArtifactLib = Join-Path $BuildPath "artifacts\$Config\lib"
 $EvidenceRoot =
     Join-Path $RepoRoot ".build\phase_v_validation"
 $InventoryPath =
@@ -92,8 +94,7 @@ $Targets = @(
     "test_multi_backend_inventory",
     "test_vulkan_acceleration"
 )
-$D3dExecutable = Join-Path $BuildPath `
-    "tests\d3d12\test_d3d12_runtime.exe"
+$D3dExecutable = Join-Path $ArtifactBin "test_d3d12_runtime.exe"
 $RequiredTests = @(
     "gpu_acceleration_contract",
     "gpu_clustered_geometry",
@@ -191,8 +192,8 @@ $BackendParity = Read-Json `
 $PreviousInventory = $env:UR_PHASE_T10_REPORT
 try {
     $env:UR_PHASE_T10_REPORT = $InventoryPath
-    $InventoryExecutable = Join-Path $BuildPath `
-        "tests\multi_backend\test_multi_backend_inventory.exe"
+    $InventoryExecutable = Join-Path $ArtifactBin `
+        "test_multi_backend_inventory.exe"
     Invoke-Checked {
         & $InventoryExecutable
     } "Phase V distributed inventory"
@@ -271,11 +272,9 @@ $Report = [ordered]@{
     }
     artifacts = [ordered]@{
         acceleration_executable_sha256 = File-Digest (
-            Join-Path $BuildPath `
-                "tests\gpu\gpu_test_acceleration_contract.exe")
+            Join-Path $ArtifactBin "gpu_test_acceleration_contract.exe")
         core_library_sha256 = File-Digest (
-            Join-Path $BuildPath `
-                "libs\ure_core\ure_core.lib")
+            Join-Path $ArtifactLib "ure_core.lib")
     }
     thresholds = [ordered]@{
         dense_build_ms_max = @(15.0, 75.0, 250.0)

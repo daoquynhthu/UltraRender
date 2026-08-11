@@ -34,6 +34,8 @@ static ure::RenderConfig config_for(ure::IntegratorMode mode) {
     ure::RenderConfig config;
     config.integrator.mode = mode;
     switch (mode) {
+    case ure::IntegratorMode::Automatic:
+        break;
     case ure::IntegratorMode::Wavefront:
         break;
     case ure::IntegratorMode::PathGuided:

@@ -434,8 +434,8 @@ AutomaticIntegratorPlan compile_automatic_integrator_plan(
         result.decisions.push_back(std::move(decision));
     }
     if (arithmetic_overflow || total_samples > objective.maximum_samples ||
-        schedule.spent_nanoseconds > objective.deadline_nanoseconds &&
-            objective.kind != AutomaticObjectiveKind::Quality ||
+        (schedule.spent_nanoseconds > objective.deadline_nanoseconds &&
+         objective.kind != AutomaticObjectiveKind::Quality) ||
         schedule.reserved_resident_bytes >
             objective.resident_budget_bytes ||
         schedule.reserved_scratch_bytes > objective.scratch_budget_bytes) {

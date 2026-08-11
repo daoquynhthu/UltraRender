@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $BuildPath = Join-Path $RepoRoot $BuildDir
+$ArtifactBin = Join-Path $BuildPath "artifacts\$Config\bin"
 $ReportRoot = Join-Path $RepoRoot ".build\phase_v6_native_provider"
 $ReportPath = Join-Path $ReportRoot "report.json"
 
@@ -36,7 +37,7 @@ try {
             throw "native provider build failed"
         }
     }
-    $CudaTest = Join-Path $BuildPath "tests\gpu\gpu_test_cuda_runtime.exe"
+    $CudaTest = Join-Path $ArtifactBin "gpu_test_cuda_runtime.exe"
     $CudaOutput = & $CudaTest 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) {
         throw "CUDA/OptiX provider test failed:`n$CudaOutput"

@@ -1,6 +1,7 @@
 param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [string]$BuildDir = (Join-Path $RepoRoot "build_modular_x64"),
+    [string]$Config = "Release",
     [string]$ReportPath = (Join-Path $BuildDir "phase_pb_validation_v2.json"),
     [switch]$RequireClean
 )
@@ -59,10 +60,10 @@ $tracked = @(& git -C $RepoRoot ls-files --cached --others --exclude-standard |
         (Test-Path -LiteralPath (Join-Path $RepoRoot $_) -PathType Leaf)
     } | ForEach-Object { Get-Item -LiteralPath (Join-Path $RepoRoot $_) })
 $sourceDigest = Get-TreeDigest $tracked $RepoRoot
-$runtime = Join-Path $BuildDir "libs/ure_contract/ultrarender_runtime_1.dll"
-$worker = Join-Path $BuildDir "apps/ure_worker/ultrarender_worker_1.exe"
-$sdkManifest = Join-Path $BuildDir "pb8_packages/sdk/package_manifest.json"
-$runtimeManifest = Join-Path $BuildDir "pb8_packages/runtime/package_manifest.json"
+$runtime = Join-Path $BuildDir "artifacts/$Config/bin/ultrarender_runtime_1.dll"
+$worker = Join-Path $BuildDir "artifacts/$Config/bin/ultrarender_worker_1.exe"
+$sdkManifest = Join-Path $BuildDir "artifacts/$Config/pb8_packages/sdk/package_manifest.json"
+$runtimeManifest = Join-Path $BuildDir "artifacts/$Config/pb8_packages/runtime/package_manifest.json"
 $freezeReview = Join-Path $RepoRoot "contracts/stability/core_1_0_freeze_review.json"
 $callCoverage = Join-Path $RepoRoot "contracts/e2e/core_1_0_call_coverage.json"
 $compatibilityMatrix = Join-Path $RepoRoot "contracts/stability/core_1_0_compatibility_matrix.json"

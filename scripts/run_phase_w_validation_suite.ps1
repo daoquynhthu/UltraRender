@@ -10,6 +10,8 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (
     Join-Path $PSScriptRoot "..")
 $BuildPath = Join-Path $RepoRoot $BuildDir
+$ArtifactBin = Join-Path $BuildPath "artifacts\$Config\bin"
+$ArtifactLib = Join-Path $BuildPath "artifacts\$Config\lib"
 $ResolvedOutput = Join-Path $RepoRoot $OutputPath
 
 function Invoke-Checked {
@@ -198,14 +200,11 @@ $Report = [ordered]@{
     }
     artifacts = [ordered]@{
         wave_host_sha256 = File-Digest (
-            Join-Path $BuildPath `
-                "tests\host\test_wave_optics.exe")
+            Join-Path $ArtifactBin "test_wave_optics.exe")
         wave_gpu_sha256 = File-Digest (
-            Join-Path $BuildPath `
-                "tests\gpu\gpu_test_wave_optics.exe")
+            Join-Path $ArtifactBin "gpu_test_wave_optics.exe")
         core_library_sha256 = File-Digest (
-            Join-Path $BuildPath `
-                "libs\ure_core\ure_core.lib")
+            Join-Path $ArtifactLib "ure_core.lib")
     }
     evidence = $Evidence
     test_gate = [ordered]@{

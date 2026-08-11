@@ -7,6 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $BuildPath = Join-Path $RepoRoot $BuildDir
+$ArtifactBin = Join-Path $BuildPath "artifacts\$Config\bin"
 $OutputDir = Join-Path $RepoRoot ".build\phase_v7_parity"
 $InventoryPath = Join-Path $OutputDir "inventory.json"
 $ReportPath = Join-Path $OutputDir "report.json"
@@ -72,7 +73,7 @@ $targets = @(
     "test_multi_backend_inventory"
 )
 $D3dExecutable =
-    Join-Path $BuildPath "tests\d3d12\test_d3d12_runtime.exe"
+    Join-Path $ArtifactBin "test_d3d12_runtime.exe"
 if (Test-Path -LiteralPath $D3dExecutable) {
     $targets += "test_d3d12_runtime"
 }
@@ -84,7 +85,7 @@ if (-not $SkipBuild) {
 }
 
 $InventoryExecutable =
-    Join-Path $BuildPath "tests\multi_backend\test_multi_backend_inventory.exe"
+    Join-Path $ArtifactBin "test_multi_backend_inventory.exe"
 Invoke-Checked `
     -Path $InventoryExecutable `
     -Environment @{
@@ -108,9 +109,9 @@ if ($cudaWorkers.Count -lt 1 -or
 }
 
 $cudaCompute = Invoke-Checked -Path (
-    Join-Path $BuildPath "tests\gpu\gpu_test_acceleration_contract.exe")
+    Join-Path $ArtifactBin "gpu_test_acceleration_contract.exe")
 $cudaOptix = Invoke-Checked -Path (
-    Join-Path $BuildPath "tests\gpu\gpu_test_cuda_runtime.exe")
+    Join-Path $ArtifactBin "gpu_test_cuda_runtime.exe")
 $optixExecuted =
     $cudaOptix.output -match
         "OptiX acceleration provider traversal and lifecycle passed"
@@ -127,7 +128,7 @@ if ($vulkanRayWorkers.Count -gt 0) {
 }
 $vulkan = Invoke-Checked `
     -Path (
-        Join-Path $BuildPath "tests\vulkan\test_vulkan_acceleration.exe") `
+        Join-Path $ArtifactBin "test_vulkan_acceleration.exe") `
     -Environment $vulkanEnvironment
 
 $d3dRayWorkers = @(
@@ -166,7 +167,7 @@ if ($OptixRoot -and
         & git -C $OptixRoot rev-parse HEAD
     ).Trim()
 }
-$OptixModule = Join-Path $BuildPath "shaders\optix\phase_v7_acceleration.optixir"
+$OptixModule = Join-Path $ArtifactBin "shaders\optix\phase_v7_acceleration.optixir"
 $OptixCompiler = $null
 if ($optixExecuted) {
     $nvccVersion = (& nvcc.exe --version 2>&1 | Out-String)

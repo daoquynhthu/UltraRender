@@ -12,7 +12,14 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repo = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$exe = Join-Path $repo "$BuildDir\apps\ure_cli\ure_cli.exe"
+$build = Join-Path $repo $BuildDir
+if ([string]::IsNullOrWhiteSpace($Config)) {
+    $cache = Get-Content -LiteralPath (Join-Path $build "CMakeCache.txt")
+    $entry = $cache | Where-Object { $_ -match '^CMAKE_BUILD_TYPE:STRING=' } |
+        Select-Object -First 1
+    $Config = ($entry -split '=', 2)[1]
+}
+$exe = Join-Path $build "artifacts\$Config\bin\ure_cli.exe"
 if (-not (Test-Path $exe)) {
     throw "ure_cli.exe not found: $exe"
 }

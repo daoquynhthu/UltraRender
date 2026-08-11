@@ -9,6 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $BuildPath = Join-Path $RepoRoot $BuildDir
+$ArtifactBin = Join-Path $BuildPath "artifacts\$Config\bin"
 
 if (-not $SkipBuild) {
     & (Join-Path $RepoRoot "scripts\build_x64.ps1") `
@@ -21,10 +22,8 @@ if (-not $SkipBuild) {
     }
 }
 
-$GpuTest = Join-Path $BuildPath `
-    "tests\gpu\gpu_test_cluster_lod.exe"
-$HostTest = Join-Path $BuildPath `
-    "tests\host\test_cluster_lod.exe"
+$GpuTest = Join-Path $ArtifactBin "gpu_test_cluster_lod.exe"
+$HostTest = Join-Path $ArtifactBin "test_cluster_lod.exe"
 if (-not (Test-Path $GpuTest) -or
     -not (Test-Path $HostTest)) {
     throw "Phase V.9 LoD executables are missing"

@@ -2,6 +2,7 @@ param(
     [string]$BuildDir = "build_modular_x64",
     [string]$Config = "Release",
     [string]$Generator = "Ninja",
+    [string]$MsvcToolsetVersion = "14.52",
     [string]$CudaArchitectures = "",
     [int]$CudaHeavyCompileJobs = 0,
     [string[]]$CMakeOptions = @(),
@@ -115,7 +116,12 @@ function Invoke-VsBuildCommand {
     $vsDevCmd = Find-VsDevCmd
     if ($vsDevCmd) {
         Write-Info "Using Visual Studio developer environment: $vsDevCmd"
-        $cmdLine = "chcp 65001 >NUL && set VSLANG=1033 && call `"$vsDevCmd`" -arch=amd64 -host_arch=amd64 && $Command"
+        $toolset = if ([string]::IsNullOrWhiteSpace($MsvcToolsetVersion)) {
+            ""
+        } else {
+            " -vcvars_ver=$MsvcToolsetVersion"
+        }
+        $cmdLine = "chcp 65001 >NUL && set VSLANG=1033 && call `"$vsDevCmd`" -arch=amd64 -host_arch=amd64$toolset && $Command"
         & cmd.exe /c $cmdLine
         if ($LASTEXITCODE -ne 0) {
             throw "Command failed with exit code $LASTEXITCODE"
@@ -197,6 +203,7 @@ Write-Info "Repo root: $RepoRoot"
 Write-Info "Build dir: $BuildPath"
 Write-Info "Configuration: $Config"
 Write-Info "Generator: $Generator"
+Write-Info "MSVC toolset: $(if ($MsvcToolsetVersion) { $MsvcToolsetVersion } else { 'Visual Studio default' })"
 Write-Info "CUDA architectures: $(if ($EffectiveCudaArchitectures) { $EffectiveCudaArchitectures } else { 'project default' })"
 Write-Info "CUDA heavy compile jobs: $(if ($CudaHeavyCompileJobs -gt 0) { $CudaHeavyCompileJobs } else { 'project default' })"
 Write-Info "Additional CMake options: $($CMakeOptions -join ', ')"

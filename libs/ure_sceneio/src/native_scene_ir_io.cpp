@@ -1,4 +1,8 @@
+#if defined(_WIN32)
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -13,7 +17,11 @@
 #include <utility>
 #include <vector>
 
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <nlohmann/json.hpp>
 
@@ -57,9 +65,15 @@ std::vector<std::uint8_t> read_file(const std::filesystem::path& path, std::uint
 void atomic_write(const std::filesystem::path& path, std::span<const std::uint8_t> bytes) {
     static std::atomic<std::uint64_t> sequence = 0;
     std::filesystem::create_directories(path.parent_path());
+#if defined(_WIN32)
     const std::filesystem::path temporary = path.parent_path() /
         (path.filename().wstring() + L".tmp." + std::to_wstring(GetCurrentProcessId()) + L"." +
          std::to_wstring(sequence.fetch_add(1, std::memory_order_relaxed)));
+#else
+    const std::filesystem::path temporary = path.parent_path() /
+        (path.filename().wstring() + L".tmp." + std::to_wstring(getpid()) + L"." +
+         std::to_wstring(sequence.fetch_add(1, std::memory_order_relaxed)));
+#endif
     try {
         {
             std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
@@ -68,9 +82,17 @@ void atomic_write(const std::filesystem::path& path, std::span<const std::uint8_
             output.flush();
             if (!output) throw std::runtime_error("Native scene temporary file write failed");
         }
+#if defined(_WIN32)
         if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
             throw std::runtime_error("Native scene atomic replacement failed");
         }
+#else
+        std::error_code error;
+        std::filesystem::rename(temporary, path, error);
+        if (error) {
+            throw std::runtime_error("Native scene atomic replacement failed: " + error.message());
+        }
+#endif
     } catch (...) {
         std::error_code ignored;
         std::filesystem::remove(temporary, ignored);

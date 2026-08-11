@@ -41,7 +41,8 @@ add_custom_command(
 
 add_library(ure_contract_schema INTERFACE)
 target_include_directories(ure_contract_schema INTERFACE
-    ${UR_CONTRACT_GENERATED_DIR}
+    ${UR_CONTRACT_GENERATED_DIR})
+target_include_directories(ure_contract_schema SYSTEM INTERFACE
     ${CMAKE_SOURCE_DIR}/third_party/flatbuffers/include)
 target_sources(ure_contract_schema INTERFACE ${UR_CONTRACT_GENERATED_HEADERS})
 

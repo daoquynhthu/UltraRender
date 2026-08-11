@@ -9,6 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $BuildPath = Join-Path $RepoRoot $BuildDir
+$ArtifactBin = Join-Path $BuildPath "artifacts\$Config\bin"
 
 if (-not $SkipBuild) {
     & (Join-Path $RepoRoot "scripts\build_x64.ps1") `
@@ -21,10 +22,8 @@ if (-not $SkipBuild) {
     }
 }
 
-$GpuTest = Join-Path $BuildPath `
-    "tests\gpu\gpu_test_dynamic_geometry.exe"
-$HostTest = Join-Path $BuildPath `
-    "tests\host\test_dynamic_geometry.exe"
+$GpuTest = Join-Path $ArtifactBin "gpu_test_dynamic_geometry.exe"
+$HostTest = Join-Path $ArtifactBin "test_dynamic_geometry.exe"
 if (-not (Test-Path $GpuTest) -or
     -not (Test-Path $HostTest)) {
     throw "Phase V.10 dynamic geometry executables are missing"

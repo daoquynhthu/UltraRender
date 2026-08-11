@@ -1,12 +1,13 @@
 param(
     [string]$BuildDir = "build_modular_x64",
+    [string]$Config = "Release",
     [int]$Spp = 4096,
     [switch]$SkipBuild
 )
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$ExePath = Join-Path $RepoRoot "$BuildDir\tests\gpu\gpu_phase_r_guiding_benchmark.exe"
+$ExePath = Join-Path $RepoRoot "$BuildDir\artifacts\$Config\bin\gpu_phase_r_guiding_benchmark.exe"
 $ResultDir = Join-Path $RepoRoot "output\benchmarks"
 
 function Get-ImageSums {
@@ -31,7 +32,7 @@ function Get-ImageSums {
 
 if (-not $SkipBuild) {
     & (Join-Path $RepoRoot "scripts\build_x64.ps1") -BuildDir $BuildDir `
-        -Config Release -SkipConfigure -Targets gpu_phase_r_guiding_benchmark
+        -Config $Config -SkipConfigure -Targets gpu_phase_r_guiding_benchmark
     if ($LASTEXITCODE -ne 0) { throw "bounded connection contract build failed" }
 }
 New-Item -ItemType Directory -Force $ResultDir | Out-Null
