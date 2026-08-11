@@ -14,7 +14,7 @@ The maintained GitHub Actions workflow validates the portable host and SDK-free 
 
 Every lane builds Release with Ninja and performs three independent checks:
 
-1. The root project builds `ure_public`, contract code generation, types, diagnostics, runtime, transport, research, reconstruction, configuration, scene I/O, and optional physics while CUDA and GPU backends are disabled. The 32 tests that do not link `ure_core` or `ure_cli` execute from this tree.
+1. The root project builds `ure_public`, contract code generation, types, diagnostics, runtime, transport, research, reconstruction, configuration, scene I/O, and optional physics while CUDA and GPU backends are disabled. The 33 tests that do not link `ure_core` or `ure_cli` execute from this tree, including the PRV.0 product-ledger static gate.
 2. The root package is installed to a clean prefix. A separate consumer configures with `find_package(UltraRender)`, links the installed SDK-free components, and runs.
 3. `tests/sdk_free` recompiles the runtime, transport, research, and reconstruction boundary independently and runs 15 tests with compiler warnings treated as errors.
 

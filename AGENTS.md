@@ -10,7 +10,7 @@ This file defines the rules, conventions, and workflow that any AI agent must fo
 
 **UltraRender** is a research-oriented spectral/polarimetric renderer whose current complete-scene reference backend is CUDA. The current roadmap prioritizes the `UltraRender_preview` product-integration milestone: existing scene, material, transport, measurement, reconstruction, backend, session and client capabilities must converge through one product execution authority and real end-to-end artifacts. Phase PB established the stable client interaction grammar; HR.3, broader high-order world/differentiation work and new estimator research are frozen during the Preview route.
 
-The authoritative implementation cursor is `PRV.0 — 产品真相基线与闭环账本`.
+The authoritative implementation cursor is `PRV.1 — 唯一 Product Runtime 与客户端主干`.
 
 ### Architecture (Modular — Phase F Target State)
 
@@ -84,7 +84,7 @@ These names describe the approved Preview target, not current implementation cla
 | U (USD/Hydra Adapter) | Done | U.1-U.6 complete; schema adapter, actual-OpenUSD delegate, mesh/material conversion, progressive RenderSession bridge and strict native-to-USDA export closed |
 | HO (High-order capabilities) | Frozen after HR.2 | HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 are retained as Preview inputs; HR.3/HW/HD are not active |
 | PB (Public Boundary) | Done | PB.0-PB.7 retained as Candidate history; PB.8 declared Windows x64 Core ABI 1.0 and Worker Protocol 1.0 |
-| PRV (Preview integration) | PRV.0 active | Product truth baseline, one execution authority, complete-scene realization, output/reconstruction, backend and client E2E closure |
+| PRV (Preview integration) | PRV.0 done; PRV.1 active | Product truth baseline, one execution authority, complete-scene realization, output/reconstruction, backend and client E2E closure |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -267,7 +267,7 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | Multi-backend | `multi_backend_inventory` |
 | Public boundary | `test_public_boundary_audit`, `test_contract_registry`, `test_public_headers_cpp`, `test_contract_codegen_compare`, `test_contract_schema_conform`, `test_scene_contract_schema_conform`, `test_public_loader_header_mirror`, `test_public_registry_header_mirror`, `test_contract_codegen_negative`, `test_golden_message_mirror`, `test_scene_uuid_golden`, `test_phase_pb6_static`, `test_phase_pb7_static`, `test_phase_pb8_static`, `test_mock_worker_external_client`, `test_core_1_0_abi_layout`, `test_core_1_0_loader_exports`, `test_core_1_0_loader_client`, `test_runtime_lifecycle`, `test_frame_leases`, `test_scene_boundary`, `test_scene_transaction`, `test_worker_protocol`, `test_worker_crash`, `test_scene_worker`, `test_worker_security`, `test_worker_runtime_security`, `test_pb7_fuzz`, `test_core_1_0_compatibility`, `test_external_client_package` |
 | Optional Hydra build | `test_hydra_render_delegate`, `test_hydra_plugin_discovery`, `test_hydra_mesh_rprim`, `test_hydra_material_sprim`, `test_hydra_render_buffer`, `test_hydra_progressive_render`, plus SDK-only `test_usda_export` |
-| **CTest total** | **101 registered tests** in `build_modular_x64` at the PB.8 declaration snapshot |
+| **CTest total** | **103 registered tests** in `build_modular_x64` after PRV.0; PB.8 declaration snapshot was 101 |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -549,11 +549,12 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 77 | 2026-08-11 PB.8 implementation | Staged the audited Core 1.0 and Worker Protocol 1.0 freeze candidate | Eleven pre-release Core IDs are tombstoned; telemetry, spectral/Stokes planes, renderer strategies and UUID transactions moved out of Core, with transactions isolated behind an UnstableExtension table and no initial StableExtension. Frozen-prefix validation, release-named packages, a retained PB.7-layout seed, three external calling modes and six real PFM renders are implemented. Full validation and post-REPORT stable declaration approval remain open. |
 | 78 | 2026-08-11 PB.8 declaration | Declared the bounded Windows x64 client contracts and resumed the high-order route | Core ABI 1.0 and Worker Protocol 1.0 are stable contracts, not an UltraRender 1.0 product release. Apache License 2.0 now governs project code; declared packages remain locally staged and not publicly distributed. The user separately authorized a scoped declaration tag; HR.3 is the current cursor. |
 | 79 | 2026-08-11 Preview route switch | Replaced continued high-order expansion with product integration and end-to-end closure | The former high-order/PB root plan is archived read-only. `PRV.0 — Product truth baseline and closure ledger` is current; HR.3, broader HW/HD work, new estimators and neural systems are frozen. CLI and adapters must converge through one product service with explicit direct/Worker transport, real scene realization, measurements, training-free reconstruction and retained artifacts. |
+| 80 | 2026-08-11 PRV.0 | Established the product truth baseline and closure ledger | Forty-four product capabilities/entry points, 25 maintained semantics and 12 retained E2E scenarios are machine-gated with source identities and negative fixtures. The report binds 103 CTests, six Core/Worker PFM artifacts, one honest legacy-CLI HDR artifact, three actual adapters and optional Hydra state without declaring Preview. Cursor advances to PRV.1. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the Visual Studio 2026 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2 and PB.0-PB.8 are complete within their documented component/contract boundaries. Core ABI 1.0 and Worker Protocol 1.0 are declared only for the documented Windows x64 boundary; there is no UltraRender 1.0 or `UltraRender_preview` product release or public package distribution. The authoritative cursor is PRV.0. The approved Preview architecture is `docs/UltraRender_Preview_Architecture.md`; the archived high-order/PB root plan is `docs/archive/High_Order_Public_Boundary_PLAN_2026-08-11.md` and cannot reopen frozen work.
+- PRV.0, Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2 and PB.0-PB.8 are complete within their documented product-baseline/component/contract boundaries. Core ABI 1.0 and Worker Protocol 1.0 are declared only for the documented Windows x64 boundary; there is no UltraRender 1.0 or `UltraRender_preview` product release or public package distribution. The authoritative cursor is PRV.1. The approved Preview architecture is `docs/UltraRender_Preview_Architecture.md`; the archived high-order/PB root plan is `docs/archive/High_Order_Public_Boundary_PLAN_2026-08-11.md` and cannot reopen frozen work.
 - The CUDA automatic bridge does not yet fully consume the HT.1-HT.5 execution contracts or populate every high-order measurement plane. HR.1/HR.2 reconstruction remains explicit, and HR.2 ships no trained model or production inference ABI. Preview productionizes training-free reconstruction only; HR.3, neural denoising, new estimator research, broader HW and HD remain frozen.
 - CLI render, Hydra and legacy pyure currently bypass the product runtime. Preview converges maintained clients on a shared `ure_client` and one `ure_product` service, with explicit direct or Worker transport and no implicit fallback. Accepted-but-ignored semantics are forbidden.
 - The repository `gui/` tree is abandoned and excluded from inspection, development, migration and acceptance evidence. A future Studio/editor is an independent client of generated PB fixtures and packages.

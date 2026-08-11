@@ -10,7 +10,7 @@ UltraRender remains a research and development renderer. There is no “UltraRen
 
 Phase PB is complete. The project declares **Core ABI 1.0** and **Worker Protocol 1.0** for the exact Windows x64 profile described below. The declaration freezes a small client interaction grammar, not the renderer as a product and not its algorithms, internal data models, feature set, or cross-platform behavior. The declaration tag is a repository evidence marker; packages have not been publicly distributed and the support clock has not started.
 
-The authoritative implementation cursor is `PRV.0 — 产品真相基线与闭环账本`. Phase Q, R, T, V, the declared bounded scope of W, U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2, and PB.0-PB.8 are complete within their documented contract, component, or evidence boundaries. Those completion records do not imply product E2E closure. HR.3, neural systems, new estimator research, the broader high-order physical world, and differentiation are frozen during the Preview route.
+The authoritative implementation cursor is `PRV.1 — 唯一 Product Runtime 与客户端主干`. PRV.0, Phase Q, R, T, V, the declared bounded scope of W, U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2, and PB.0-PB.8 are complete within their documented contract, component, or evidence boundaries. Those completion records do not imply product E2E closure. HR.3, neural systems, new estimator research, the broader high-order physical world, and differentiation are frozen during the Preview route.
 
 ## Preview integration state
 
@@ -27,7 +27,9 @@ The approved target has one product execution authority. Maintained clients use 
 | Multi-device/farm/cache | Component executable | Not reachable through one canonical product job and artifact workflow |
 | Hydra/legacy Python | Client-reachable internal paths | Bypass the canonical product service and require convergence |
 
-PRV.0 will replace this prose snapshot with a machine-validated closure ledger. Until then, no capability above may be promoted to Product E2E beyond its stated fixture.
+PRV.0 now backs this snapshot with a machine-validated closure ledger. It records 44 maintained capabilities and entry points: 2 Contract, 18 ComponentExecutable, 15 RendererIntegrated, 7 ClientReachable and 2 ProductE2E. The two ProductE2E classifications are limited to the bounded Core/Worker PB fixture; none of the twelve retained Preview product scenarios is ProductE2E.
+
+The accompanying semantic audit covers 25 maintained inputs and finds 12 accepted-but-ignored semantics plus 4 executed-with-debt semantics. The retained scenario manifest binds twelve required workflows across eight coverage dimensions. See [`docs/PRV0_Product_Truth_Baseline.md`](docs/PRV0_Product_Truth_Baseline.md) and the machine report [`docs/reports/ure_preview_baseline_v1.json`](docs/reports/ure_preview_baseline_v1.json).
 
 ## Declared public boundary
 
@@ -63,7 +65,7 @@ macOS, ARM64, 32-bit, complete Linux/non-NVIDIA rendering, C++ ABI, COM, static 
 
 ## Hosted non-GPU CI
 
-The maintained GitHub Actions workflow builds the CUDA-off root project on Ubuntu 24.04 with GCC 13 and Clang 18, and on Windows 2025 with MSVC. Each lane compiles the non-GPU libraries and contract generator, runs 32 root host tests, installs the CMake package, executes an out-of-tree `find_package()` consumer, and independently builds and runs the 15-test SDK-free tree with warnings as errors.
+The maintained GitHub Actions workflow builds the CUDA-off root project on Ubuntu 24.04 with GCC 13 and Clang 18, and on Windows 2025 with MSVC. Each lane compiles the non-GPU libraries and contract generator, runs 33 root host/contract tests, installs the CMake package, executes an out-of-tree `find_package()` consumer, and independently builds and runs the 15-test SDK-free tree with warnings as errors.
 
 GPU backends, CUDA-coupled renderer/session/product-runtime targets, and optional SDK-coupled adapters remain outside this hosted gate. This is a compile, host-behavior, and package-consumption portability boundary; it is not evidence of complete Linux rendering or an additional Core ABI profile. The exact matrix and cache policy are documented in [`docs/CI.md`](docs/CI.md).
 
@@ -126,6 +128,8 @@ Unsupported capability requests are expected to fail with structured diagnostics
 .\scripts\build_x64.ps1 -BuildDir build_modular_x64 -Config Release
 ctest --test-dir build_modular_x64 -C Release --output-on-failure
 .\scripts\run_phase_pb_validation_suite.ps1 -BuildDir build_modular_x64 -Config Release
+pwsh -NoProfile -File scripts/check_phase_prv0_static.ps1 -RepoRoot .
+pwsh -NoProfile -File scripts/run_phase_prv0_baseline.ps1 -RepoRoot . -BuildDir build_modular_x64 -RequireLiveImages
 ```
 
 CTest counts are snapshots. Use `ctest --test-dir build_modular_x64 -C Release -N` for the live inventory.

@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ure.preview.baseline.v1",
+  "title": "UltraRender Preview Product Truth Baseline",
+  "type": "object",
+  "required": ["schema", "preview_release_declared", "source", "contracts", "closure", "semantic_audit", "scenarios", "ctest", "image_evidence", "cli_image_evidence", "backends", "optional_hydra", "semantic_digest"],
+  "properties": {
+    "schema": {"const": "ure.preview.baseline.v1"},
+    "preview_release_declared": {"const": false},
+    "source": {
+      "type": "object",
+      "required": ["commit", "tree_sha256", "dirty"],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "dirty": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "contracts": {
+      "type": "object",
+      "required": ["closure_ledger_sha256", "semantic_audit_sha256", "scenario_manifest_sha256", "schema_sha256"],
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    },
+    "closure": {
+      "type": "object",
+      "required": ["entry_count", "levels", "bypasses", "must_converge"],
+      "properties": {
+        "entry_count": {"type": "integer", "minimum": 40},
+        "levels": {"type": "object"},
+        "bypasses": {"type": "integer", "minimum": 1},
+        "must_converge": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    },
+    "semantic_audit": {
+      "type": "object",
+      "required": ["entry_count", "accepted_but_ignored", "semantic_debt", "guarded_source_count"],
+      "properties": {
+        "entry_count": {"type": "integer", "minimum": 25},
+        "accepted_but_ignored": {"type": "integer", "minimum": 1},
+        "semantic_debt": {"type": "integer", "minimum": 1},
+        "guarded_source_count": {"type": "integer", "minimum": 6}
+      },
+      "additionalProperties": false
+    },
+    "scenarios": {
+      "type": "object",
+      "required": ["count", "product_e2e_now", "required_dimensions"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 12},
+        "product_e2e_now": {"type": "integer", "const": 0},
+        "required_dimensions": {"type": "integer", "minimum": 8}
+      },
+      "additionalProperties": false
+    },
+    "ctest": {
+      "type": "object",
+      "required": ["registered", "inventory_sha256", "full_gate_state"],
+      "properties": {
+        "registered": {"type": "integer", "minimum": 100},
+        "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "full_gate_state": {"enum": ["NotRun", "Passed", "Failed"]}
+      },
+      "additionalProperties": false
+    },
+    "image_evidence": {
+      "type": "array",
+      "minItems": 6,
+      "items": {
+        "type": "object",
+        "required": ["calling_mode", "file", "bytes", "sha256", "evidence_scope"],
+        "properties": {
+          "calling_mode": {"type": "string", "minLength": 1},
+          "file": {"type": "string", "pattern": "\\.pfm$"},
+          "bytes": {"type": "integer", "minimum": 33},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "evidence_scope": {"const": "Core ABI 1.0 / Worker Protocol 1.0 bounded render; not Preview product closure"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "cli_image_evidence": {
+      "type": "object",
+      "required": ["calling_mode", "file", "bytes", "sha256", "closure", "limitation"],
+      "properties": {
+        "calling_mode": {"const": "legacy_cli_direct_renderer"},
+        "file": {"type": "string", "pattern": "\\.hdr$"},
+        "bytes": {"type": "integer", "minimum": 33},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "closure": {"const": "RendererIntegrated"},
+        "limitation": {"const": "Product service bypass; evidence of current behavior only"}
+      },
+      "additionalProperties": false
+    },
+    "backends": {"type": "array", "minItems": 2},
+    "optional_hydra": {
+      "type": "object",
+      "required": ["configured", "closure"],
+      "properties": {
+        "configured": {"type": "boolean"},
+        "closure": {"const": "RendererIntegratedProductBypass"}
+      },
+      "additionalProperties": false
+    },
+    "semantic_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}

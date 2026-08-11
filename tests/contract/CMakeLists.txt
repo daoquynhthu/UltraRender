@@ -13,6 +13,19 @@ set_tests_properties(
     test_public_boundary_audit
     PROPERTIES TIMEOUT 90)
 
+if(TARGET ure_cli)
+    add_test(
+        NAME test_phase_prv0_baseline
+        COMMAND
+            ${UR_PWSH_EXECUTABLE}
+            -NoProfile
+            -File ${CMAKE_CURRENT_SOURCE_DIR}/test_phase_prv0_baseline.ps1
+            -RepoRoot ${CMAKE_SOURCE_DIR}
+            -BuildDir ${CMAKE_BINARY_DIR}
+            -CliExecutable $<TARGET_FILE:ure_cli>)
+    set_tests_properties(test_phase_prv0_baseline PROPERTIES TIMEOUT 120)
+endif()
+
 set(UR_PB1_STAGE_DIR ${CMAKE_BINARY_DIR}/pb1_sdk)
 set(UR_PB1_STAGE_HEADERS
     ${UR_PB1_STAGE_DIR}/include/ultrarender/ure_loader.h

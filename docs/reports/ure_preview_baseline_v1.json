@@ -1,0 +1,123 @@
+{
+  "schema": "ure.preview.baseline.v1",
+  "preview_release_declared": false,
+  "source": {
+    "commit": "d550c8fac895aef4460506f288f22db7448c1eae",
+    "tree_sha256": "5e89626b4cefd6abde778e476413287cdf786f511f39ecf19f7ae6ea9c3e17f8",
+    "dirty": true
+  },
+  "contracts": {
+    "closure_ledger_sha256": "8b10764ffc7a7292fdc1d5e795eb6c31b6da002d7c4500f62de183e1bce503e2",
+    "semantic_audit_sha256": "94ebd2debb04129a664c4cdb909378ef671d618b16e0012fcbfb7118447e0a58",
+    "scenario_manifest_sha256": "50b5dac19b1a36552c84d02330edf63a98e37a5e67d9ed9b0d0be625f825e0d9",
+    "schema_sha256": "369a341fe031bb68c5909e67fa8962517f5e29f4abc8606206f8b489ad717a9c"
+  },
+  "closure": {
+    "entry_count": 44,
+    "levels": {
+      "Contract": 2,
+      "ComponentExecutable": 18,
+      "RendererIntegrated": 15,
+      "ClientReachable": 7,
+      "ProductE2E": 2
+    },
+    "bypasses": 24,
+    "must_converge": 31
+  },
+  "semantic_audit": {
+    "entry_count": 25,
+    "accepted_but_ignored": 12,
+    "semantic_debt": 4,
+    "guarded_source_count": 6
+  },
+  "scenarios": {
+    "count": 12,
+    "product_e2e_now": 0,
+    "required_dimensions": 8
+  },
+  "ctest": {
+    "registered": 103,
+    "inventory_sha256": "4fcab51773d637ccb416a6878c342b5a2a27681341c83a7f4efdf93442aeca1e",
+    "full_gate_state": "Passed"
+  },
+  "image_evidence": [
+    {
+      "calling_mode": "in_process_core_c11",
+      "file": "direct_map.pfm",
+      "bytes": 49166,
+      "sha256": "357fb5754224969bebb77a4bf237627b5ba7d2c5e9e153ca5cc8822a4c519394",
+      "evidence_scope": "Core ABI 1.0 / Worker Protocol 1.0 bounded render; not Preview product closure"
+    },
+    {
+      "calling_mode": "in_process_core_c11",
+      "file": "direct_copy.pfm",
+      "bytes": 49166,
+      "sha256": "357fb5754224969bebb77a4bf237627b5ba7d2c5e9e153ca5cc8822a4c519394",
+      "evidence_scope": "Core ABI 1.0 / Worker Protocol 1.0 bounded render; not Preview product closure"
+    },
+    {
+      "calling_mode": "in_process_unstable_transaction_cpp",
+      "file": "transaction_replay.pfm",
+      "bytes": 24590,
+      "sha256": "11dbc09b94b53128cc302c861f04f51de0facd84d155d43e4cd88d5d81a00ee9",
+      "evidence_scope": "Core ABI 1.0 / Worker Protocol 1.0 bounded render; not Preview product closure"
+    },
+    {
+      "calling_mode": "in_process_unstable_transaction_cpp",
+      "file": "transaction_replace.pfm",
+      "bytes": 24590,
+      "sha256": "11dbc09b94b53128cc302c861f04f51de0facd84d155d43e4cd88d5d81a00ee9",
+      "evidence_scope": "Core ABI 1.0 / Worker Protocol 1.0 bounded render; not Preview product closure"
+    },
+    {
+      "calling_mode": "local_worker_named_pipe_shared_memory",
+      "file": "worker_first.pfm",
+      "bytes": 49166,
+      "sha256": "357fb5754224969bebb77a4bf237627b5ba7d2c5e9e153ca5cc8822a4c519394",
+      "evidence_scope": "Core ABI 1.0 / Worker Protocol 1.0 bounded render; not Preview product closure"
+    },
+    {
+      "calling_mode": "local_worker_named_pipe_shared_memory",
+      "file": "worker_restart.pfm",
+      "bytes": 49166,
+      "sha256": "357fb5754224969bebb77a4bf237627b5ba7d2c5e9e153ca5cc8822a4c519394",
+      "evidence_scope": "Core ABI 1.0 / Worker Protocol 1.0 bounded render; not Preview product closure"
+    }
+  ],
+  "cli_image_evidence": {
+    "calling_mode": "legacy_cli_direct_renderer",
+    "file": "prv0_cli.hdr",
+    "bytes": 1071,
+    "sha256": "2c704f84d4cbd91ef9d66c5ab02e26ef0370b90597cf0cc99372a07b5651b3d9",
+    "closure": "RendererIntegrated",
+    "limitation": "Product service bypass; evidence of current behavior only"
+  },
+  "backends": [
+    {
+      "kind": "cuda",
+      "name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "driver": "CUDA driver 13.3",
+      "compiler": "CUDA toolkit 13.3"
+    },
+    {
+      "kind": "vulkan",
+      "name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+      "adapter_id": "vulkan:45c8e9921a9c327d8838d42f4842e4dd",
+      "driver": "NVIDIA 610.47",
+      "compiler": "SPIR-V 1.6 / Slang 2026.14"
+    },
+    {
+      "kind": "vulkan",
+      "name": "Intel(R) RaptorLake-S Mobile Graphics Controller",
+      "adapter_id": "vulkan:868088a7040000000002000000000000",
+      "driver": "Intel Corporation 101.7076",
+      "compiler": "SPIR-V 1.6 / Slang 2026.14"
+    }
+  ],
+  "optional_hydra": {
+    "configured": false,
+    "closure": "RendererIntegratedProductBypass"
+  },
+  "semantic_digest": "d4c2c2056fbf2935612a3d97de185dca4bcca1caabef15ae0fb8137de4ab777f"
+}

@@ -1,6 +1,6 @@
 # UltraRender Preview 产品集成与端到端闭环路线图
 
-最后更新: 2026-08-11（高阶研究路线归档冻结；`UltraRender_preview` 产品集成路线成为唯一施工队列）
+最后更新: 2026-08-11（PRV.0 产品真相基线闭环；当前进入 PRV.1 唯一 Product Runtime 与客户端主干）
 
 本文档是 UltraRender 当前唯一的全局施工权威。它将项目重心从继续扩展高阶研究能力，切换为已有非研究能力的产品总装、端到端闭环，以及训练无关重建/降噪的生产接入。
 
@@ -17,7 +17,7 @@
 
 ## 0. 权威状态
 
-当前游标: PRV.0 — 产品真相基线与闭环账本
+当前游标: PRV.1 — 唯一 Product Runtime 与客户端主干
 
 ### 0.1 唯一施工队列
 
@@ -26,10 +26,10 @@ Legacy construction Q/R/T/V/W/U                    [archived, read-only]
 High-order HO/HT/HR + Public Boundary PB           [archived, read-only]
                   |
                   v
-PRV.0 product truth baseline and closure ledger    [current]
+PRV.0 product truth baseline and closure ledger    [done]
                   |
                   v
-PRV.1 one product runtime and client spine
+PRV.1 one product runtime and client spine         [current]
                   |
                   v
 PRV.2 complete scene realization and packages
@@ -175,7 +175,7 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 
 ## 2. PRV.0 — 产品真相基线与闭环账本
 
-**状态**: 当前游标。
+**状态**: 已完成（2026-08-11）。44 项 product closure ledger、25 项 semantic/no-op audit、12 个 retained E2E 场景和 `ure.preview.baseline.v1` 已由正向、确定性与负向门禁固定；Windows Release 103/103 CTest 通过，最近 hosted non-GPU main gate 为绿色。
 
 **目标**: 把“旧 Phase 完成”重新映射为可执行产品闭环等级，冻结 accepted-but-ignored、重复执行权威和测试专用入口，建立 Preview 的机器可验证起点。
 
@@ -219,6 +219,8 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 ---
 
 ## 3. PRV.1 — 唯一 Product Runtime 与客户端主干
+
+**状态**: 当前游标。
 
 **目标**: 建立 `ure_product` 和 `ure_client`，让 CLI render 首先退出 renderer 实现，证明 direct 与 Worker 通过同一 runtime 服务执行当前基础场景。
 

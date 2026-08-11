@@ -4,13 +4,15 @@ UltraRender 是一个处于持续研发阶段的光谱/偏振离线渲染器。�
 
 本项目尚不是通用生产渲染器，也没有发布“UltraRender 1.0”。功能与成熟度以 [STATUS.md](STATUS.md) 为准，施工顺序以 [PLAN.md](PLAN.md) 为准。Research、Experimental、Production 是不同的证据等级；类型、配置项或拒绝测试的存在不代表对应能力已经可用。
 
-当前权威实施游标为 `PRV.0 — 产品真相基线与闭环账本`。项目暂时冻结 learned/neural、新积分器、广义统一物理世界和可微路线，优先把已有能力接入一个可验证的 `UltraRender_preview` 产品闭环。该名称是尚未达成的里程碑，不是现有发布版本。
+当前权威实施游标为 `PRV.1 — 唯一 Product Runtime 与客户端主干`。项目暂时冻结 learned/neural、新积分器、广义统一物理世界和可微路线，优先把已有能力接入一个可验证的 `UltraRender_preview` 产品闭环。该名称是尚未达成的里程碑，不是现有发布版本。
 
 ## Preview 集成方向
 
 Preview 路线要求 CLI、Python、Hydra 和后续编辑器通过同一个产品服务工作：客户端使用共享 `ure_client`，显式选择进程内 direct transport 或本地 Worker transport；两者最终调用同一 runtime/product implementation。Worker 只负责隔离、协议和共享内存传输，CLI 也不再拥有第二套场景加载、积分器选择、重建或输出实现。
 
 当前代码尚未达到这个目标：CLI render、Hydra 和 legacy pyure 仍有直接调用内部 renderer/session 的路径；自动渲染桥、原生高级块、MeasurementBundle、重建、可移植 backend、多设备/farm/cache 也尚未全部进入同一个完整场景工作流。新的 [Preview 架构](docs/UltraRender_Preview_Architecture.md) 定义目标边界，[PLAN.md](PLAN.md) 按 `PRV.0` 至 `PRV.11` 逐步完成迁移和真实图像门禁。
+
+PRV.0 已建立机器可验证的[产品真相基线](docs/PRV0_Product_Truth_Baseline.md)：44 项能力/入口闭环记录、25 项维护语义审计和 12 个保留产品场景。当前只有 Core/Worker 的有界 PB fixture 具备 ProductE2E 证据；十二个 Preview 产品场景均尚未达到 ProductE2E。基线明确记录 12 项 accepted-but-ignored 和 4 项执行语义债务，后续阶段必须执行、拒绝、保留为工具语义或冻结为研究，不得静默忽略。
 
 ## 公共交互边界
 
@@ -83,7 +85,7 @@ Ninja 可并行构建普通目标；高内存 CUDA 编译由 `ur_cuda_heavy_comp
 .\scripts\run_phase_pb_validation_suite.ps1 -BuildDir build_modular_x64 -Config Release
 ```
 
-GitHub Actions 另行在 Ubuntu 24.04 的 GCC 13/Clang 18 与 Windows 2025 的 MSVC 上执行 CUDA-off 根构建、32 项纯 host 测试、15 项 warnings-as-errors SDK-free 测试，以及安装后 `find_package()` 消费测试。该门禁验证非 GPU 源码和包边界的可移植性，不扩张完整场景渲染的平台承诺。矩阵、排除项和缓存策略见 [CI 说明](docs/CI.md)。
+GitHub Actions 另行在 Ubuntu 24.04 的 GCC 13/Clang 18 与 Windows 2025 的 MSVC 上执行 CUDA-off 根构建、33 项纯 host/contract 测试、15 项 warnings-as-errors SDK-free 测试，以及安装后 `find_package()` 消费测试。该门禁验证非 GPU 源码和包边界的可移植性，不扩张完整场景渲染的平台承诺。矩阵、排除项和缓存策略见 [CI 说明](docs/CI.md)。
 
 最新已冻结的 PB.8 证据为 Release 构建与 101/101 CTest，通过三种独立调用方式生成六幅实际 PFM 图像。它只证明公共边界声明门禁，不证明 Preview 产品闭环；测试数量也是快照。
 

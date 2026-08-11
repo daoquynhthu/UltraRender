@@ -1,5 +1,15 @@
 enable_testing()
 
+find_program(UR_HOST_PWSH_EXECUTABLE NAMES pwsh REQUIRED)
+add_test(
+    NAME test_phase_prv0_static
+    COMMAND
+        ${UR_HOST_PWSH_EXECUTABLE}
+        -NoProfile
+        -File ${CMAKE_SOURCE_DIR}/tests/contract/test_phase_prv0_static.ps1
+        -RepoRoot ${CMAKE_SOURCE_DIR})
+set_tests_properties(test_phase_prv0_static PROPERTIES TIMEOUT 90)
+
 if(MSVC)
     add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/EHsc;/utf-8;/wd4819>")
 endif()
