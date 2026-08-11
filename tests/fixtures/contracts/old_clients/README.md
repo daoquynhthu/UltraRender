@@ -1,6 +1,6 @@
 # Legacy and Stable Client Binary Fixtures
 
-Document status: active Phase PB fixture policy
+Document status: active Core 1 compatibility fixture policy; PB phase history is complete
 
 PB.0 records the existing C/pyure surface as `LegacyExperimental`. Its fixtures are migration baselines, not stable ABI promises.
 

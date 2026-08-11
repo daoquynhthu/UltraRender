@@ -28,4 +28,4 @@ The 2026-07-18 Release run passed all four scenes. High-SPP relative mean bias w
 
 High-memory CUDA targets use the Ninja `ur_cuda_heavy_compile` pool; host compilation and unrelated targets remain globally parallel. The technique AOV replaces the previously unused `d_accum_sq_buffer`, so R-P4 adds no net framebuffer-sized VRAM allocation.
 
-R-P4 verification additionally requires the complete registered Release CTest gate and the Phase R static audit. The next authoritative construction cursor is R-P5.
+R-P4 verification additionally requires the complete registered Release CTest gate and the Phase R static audit. At closure, the phase-local cursor advanced to R-P5; the root `PLAN.md` now owns the current PRV cursor.

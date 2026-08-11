@@ -32,7 +32,7 @@ The generated report is reproducible evidence and is not committed. It records t
 
 [`capability_boundary_ledger.json`](research/ho0/capability_boundary_ledger.json) scans explicit diagnostic strings containing unsupported, unavailable, not-implemented, precondition and mutual-exclusion language. Ordered, non-overlapping coverage rules bind every discovered line to one owner and expected count. Any new line fails the audit until it is reviewed and classified.
 
-The scan exposed a missing category in the initial roadmap: schema and identity incompatibility is neither accidental debt nor a backend omission. Unknown scene, solver, execution-graph, distributed-frame or byte-order semantics must remain rejected until an explicit migration exists. `PLAN.md` now includes `Schema/Identity Boundary` as a durable class.
+The scan exposed a missing category in the initial roadmap: schema and identity incompatibility is neither accidental debt nor a backend omission. Unknown scene, solver, execution-graph, distributed-frame or byte-order semantics must remain rejected until an explicit migration exists. The archived high-order plan records `Schema/Identity Boundary` as the durable HO.0 class; the active PRV route preserves the same fail-closed rule.
 
 The ledger does not use the diagnostic count as a quality metric. Several groups should remain fail-loud indefinitely:
 

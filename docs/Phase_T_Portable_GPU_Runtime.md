@@ -2,8 +2,9 @@
 
 ## Status
 
-T.0 through T.11 are complete and the current project cursor is V.5. This
-document records the closed Phase T contract. CUDA remains the complete
+T.0 through T.11 are complete. This document records the closed Phase T
+contract; its internal cursor statements are historical closure snapshots and
+the root `PLAN.md` owns the current PRV cursor. CUDA remains the complete
 scene rendering backend. Vulkan has a production compute-runtime foundation and
 a bounded acceleration bridge on Windows and Linux. D3D12/DXR has an optional
 Windows runtime and bounded acceleration bridge. Full SceneIR rendering is not
@@ -271,7 +272,7 @@ estimator order, cold/warm MLT state, wave transfers/barriers, active-count
 loops, indirect arguments, epoch identity, cycle/order drift, invalid PDF
 versions and dispatch overflow. CUDA render and wave tests verify entry
 integration; the Release inventory contains 40 registered tests at this
-closure snapshot. The authoritative cursor is T.6.
+closure snapshot. The phase-local cursor then advanced to T.6.
 
 ## T.6 CUDA production backend migration
 
@@ -328,7 +329,7 @@ buffer kernel through
 copy/event/dispatch/barrier/copy DAG submission and also covers budget, image,
 module/pipeline lifetime, invalid handles, unsupported module format and
 timeline behavior. The Release inventory is 41 registered tests at this
-closure snapshot. The authoritative cursor is T.7.
+closure snapshot. The phase-local cursor then advanced to T.7.
 
 ## T.7 Vulkan compute production foundation
 
@@ -601,5 +602,5 @@ Phase T therefore closes the backend-neutral runtime and bounded core execution
 contract. It does not claim that Vulkan or D3D12 can render arbitrary SceneIR
 through the public renderer. Production BLAS/TLAS policy, refit/compaction,
 native provider completion and the general portable SceneIR rendering path
-remain Phase V. Phase T closed by advancing to V.0; the current project cursor
-is V.4.
+remain Phase V. Phase T closed by advancing to V.0; that historical handoff no
+longer describes the current project cursor.

@@ -2,6 +2,8 @@
 
 Document status: normative support scope for the declared Core ABI 1.0 and Worker Protocol 1.0. This is not an UltraRender 1.0 product release. The declaration tag records evidence but does not publish packages or authorize distribution.
 
+The `UltraRender_preview` integration route does not expand this promise. Preview capabilities use independently versioned 0.x schemas or extensions unless they pass a separate stability review. No Preview product release has been declared.
+
 ## Stable promises
 
 Within runtime major 1:

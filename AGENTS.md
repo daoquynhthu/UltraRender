@@ -8,7 +8,9 @@ This file defines the rules, conventions, and workflow that any AI agent must fo
 
 ## 1. Project Identity
 
-**UltraRender** is a research-oriented spectral/polarimetric renderer whose current complete-scene reference backend is CUDA. Its forward roadmap develops automatic estimator composition, measurement reconstruction, a unified time-varying physical world, and differentiable inverse workflows without weakening the existing physically explicit boundaries. Phase PB established a minimal client interaction grammar through one generated contract registry, a Windows x64 C ABI, and an isolated local worker without freezing those research subsystems; the high-order route has resumed at HR.3.
+**UltraRender** is a research-oriented spectral/polarimetric renderer whose current complete-scene reference backend is CUDA. The current roadmap prioritizes the `UltraRender_preview` product-integration milestone: existing scene, material, transport, measurement, reconstruction, backend, session and client capabilities must converge through one product execution authority and real end-to-end artifacts. Phase PB established the stable client interaction grammar; HR.3, broader high-order world/differentiation work and new estimator research are frozen during the Preview route.
+
+The authoritative implementation cursor is `PRV.0 — 产品真相基线与闭环账本`.
 
 ### Architecture (Modular — Phase F Target State)
 
@@ -40,6 +42,17 @@ ure_worker     — Release-named local Windows worker that loads the product run
 
 PB.0-PB.7 remain Candidate 0.x history and create no stable public promise. PB.8 declared Core ABI 1.0 and Worker Protocol 1.0 on Windows x64; this is not an UltraRender 1.0 product release or public package distribution. The current `ure_c_api.h`, `pyure_native.dll`, and pyure ctypes surface remain legacy experimental during migration.
 
+### UltraRender Preview Approved Target (implemented progressively)
+
+```text
+ure_client     — Planned shared client library used by CLI and maintained adapters; selects direct or Worker transport explicitly and owns no renderer logic.
+ure_product    — Planned sole product service behind the runtime; realizes scenes, compiles automatic execution plans, produces measurements, reconstructs and publishes artifacts.
+ure_contract   — Stable Core bootstrap plus versioned Preview extensions; delegates execution to ure_product instead of implementing a second renderer.
+ure_worker     — Isolated host and protocol bridge for the same runtime/product service; never a renderer or semantic fallback.
+```
+
+These names describe the approved Preview target, not current implementation claims. Until the corresponding PRV phase closes, legacy direct CLI, Hydra and pyure paths remain explicitly unmerged capability islands.
+
 ### Phase Completion Status (see PLAN.md for details)
 
 | Phase | Status | Key Deliverables |
@@ -69,8 +82,9 @@ PB.0-PB.7 remain Candidate 0.x history and create no stable public promise. PB.8
 | V (GPU Acceleration) | Done | V.0-V.11 complete; unified local/farm validation freezes construction, traversal, memory, parity, dynamic and distributed evidence |
 | W (Wave Optics Solver) | Done | W.0-W.12 complete within the declared production/reference boundary; unified physical, API, fail-loud, distributed and static validation closed |
 | U (USD/Hydra Adapter) | Done | U.1-U.6 complete; schema adapter, actual-OpenUSD delegate, mesh/material conversion, progressive RenderSession bridge and strict native-to-USDA export closed |
-| HO (High-order capabilities) | HR.3 active | HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 complete; HR.3 resumed after Phase PB |
+| HO (High-order capabilities) | Frozen after HR.2 | HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 are retained as Preview inputs; HR.3/HW/HD are not active |
 | PB (Public Boundary) | Done | PB.0-PB.7 retained as Candidate history; PB.8 declared Windows x64 Core ABI 1.0 and Worker Protocol 1.0 |
+| PRV (Preview integration) | PRV.0 active | Product truth baseline, one execution authority, complete-scene realization, output/reconstruction, backend and client E2E closure |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -81,6 +95,8 @@ PB.0-PB.7 remain Candidate 0.x history and create no stable public promise. PB.8
 - Textures are spectral resource carriers (`HostTexture` → RGB CUDA texture object or explicit source-sample spectral grid), not display RGB
 - The high-order route preserves observable, measure, time, units, uncertainty and provenance instead of flattening them into RGB or mode enums
 - Research may explore provisional algorithms; only evidence-backed Experimental/Production results may enter default execution paths
+- Preview exposes one product execution authority; CLI, Worker and adapters are clients or transports, not alternate renderers
+- Accepted input semantics must be executed, explicitly rejected, preserved for tooling, or frozen as research; accepted-but-ignored behavior is forbidden
 
 ### Non-Goals (out of scope)
 - CPU production integrator development; host code is limited to oracle, compilation, build, scheduling, and validation roles
@@ -210,7 +226,7 @@ E:\Render Engine\
 └── tools/                           # Dev tools
 ```
 
-**Production development happens in `libs/`, `apps/`, and `tests/`; Phase PB also owns `contracts/`, its code generator under `tools/`, and validation scripts.** The old monolithic `include/` and `src/` directories have been removed.
+**Production development happens in `libs/`, `apps/`, and `tests/`; public-boundary and Preview work also owns `contracts/`, code generators under `tools/`, validation scripts, retained product scenarios and artifact schemas.** The old monolithic `include/` and `src/` directories have been removed.
 The repository `gui/` tree is abandoned and outside all development, audit, migration, test and architecture scope. Do not read it to infer frontend requirements.
 
 ---
@@ -333,7 +349,7 @@ The authoritative high-order PLAN distinguishes **Research**, **Experimental**, 
 
 ### 6.4 Public Contract Stability Governance
 
-Phase PB follows `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Boundary_PLAN.md` under the root PLAN cursor.
+Phase PB is complete and remains governed by `docs/Public_API_ABI_Architecture.md`, `docs/Public_API_Support_Policy.md` and its read-only closure plan. The active PRV route follows `docs/UltraRender_Preview_Architecture.md` and the root `PLAN.md` while consuming, not expanding, the declared stable Core.
 
 - PB.0-PB.7 artifacts are Candidate 0.x and MUST NOT be described as a stable ABI, stable protocol, supported public release, or compatibility promise.
 - The stable Core is limited to interaction grammar and lifecycle. Integrators, MaterialGraph, SceneIR, RenderConfig, MeasurementBundle, WorldState, GPU scheduling, model formats, solvers and research algorithms remain internal or independently versioned extensions.
@@ -344,8 +360,8 @@ Phase PB follows `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Bound
 - Core ABI 1.0 and Worker Protocol 1.0 may be declared only at PB.8 after mixed-version binary/protocol, lifetime, security, external-client E2E and documentation gates, plus explicit user approval.
 - The current C API and pyure binding remain legacy experimental during migration. PB does not authorize their deletion.
 - The abandoned repository GUI is never a contract consumer or evidence source. External clients integrate through generated SDK fixtures, the mock worker, and packaged runtimes.
-- PB.0 maintains a complete Public Interaction Surface Ledger covering native formats/tooling, adapters, C++/C/Python/CLI surfaces, distributed/farm/provider contracts, installed headers, and excluded historical designs. PB.8 requires zero unclassified, duplicate-authority, bypass, or unresolved-migration entries.
-- The user granted standing authorization on 2026-08-08 for autonomous commits that remain inside the approved PB plan after local VERIFY/REVIEW. Per-slice approval and progress prompts are not required; push, tag and public release still require separate authorization.
+- PB.0-PB.8 preserve the Public Interaction Surface Ledger covering native formats/tooling, adapters, C++/C/Python/CLI surfaces, distributed/farm/provider contracts, installed headers, and excluded historical designs. Its PB-scope closure does not imply product execution convergence; PRV.0 reclassifies current bypass, accepted-but-ignored, and closure-level debt in the product ledger.
+- The 2026-08-08 standing authorization applied to the now-complete PB plan. PRV work follows the authorization recorded for its active task or phase; push, tag, product declaration and public release always require separate authorization.
 
 ### Step 1: PLAN
 - Search PLAN.md for the authoritative queue/current cursor, then read only the active phase, dependencies, and relevant status sections
@@ -532,12 +548,14 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 76 | 2026-08-09 PB.7 | Closed Candidate mixed-version, security, package and independent-client validation | Five historical compiled clients bind their source/SDK/compiler identities and load the current runtime through phase-known prefixes; only the current runtime is retained as supported in reverse. Independent SDK/runtime packages build clean direct, transaction and worker consumers. Registry-mismatch goldens, bounded fuzz, live no-network/no-ambient-discovery, shared-memory/crash/restart and ledger gates feed deterministic `ure.phase_pb.validation.v1`; Release 100/100 and clean-tree report reproduction pass. PB.8 remains an unapproved stable-promise gate. |
 | 77 | 2026-08-11 PB.8 implementation | Staged the audited Core 1.0 and Worker Protocol 1.0 freeze candidate | Eleven pre-release Core IDs are tombstoned; telemetry, spectral/Stokes planes, renderer strategies and UUID transactions moved out of Core, with transactions isolated behind an UnstableExtension table and no initial StableExtension. Frozen-prefix validation, release-named packages, a retained PB.7-layout seed, three external calling modes and six real PFM renders are implemented. Full validation and post-REPORT stable declaration approval remain open. |
 | 78 | 2026-08-11 PB.8 declaration | Declared the bounded Windows x64 client contracts and resumed the high-order route | Core ABI 1.0 and Worker Protocol 1.0 are stable contracts, not an UltraRender 1.0 product release. Apache License 2.0 now governs project code; declared packages remain locally staged and not publicly distributed. The user separately authorized a scoped declaration tag; HR.3 is the current cursor. |
+| 79 | 2026-08-11 Preview route switch | Replaced continued high-order expansion with product integration and end-to-end closure | The former high-order/PB root plan is archived read-only. `PRV.0 — Product truth baseline and closure ledger` is current; HR.3, broader HW/HD work, new estimators and neural systems are frozen. CLI and adapters must converge through one product service with explicit direct/Worker transport, real scene realization, measurements, training-free reconstruction and retained artifacts. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the Visual Studio 2026 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2 and PB.0-PB.8 are complete. Core ABI 1.0 and Worker Protocol 1.0 are declared only for the documented Windows x64 boundary; there is no UltraRender 1.0 product release or public package distribution. The authoritative cursor is HR.3. The approved PB architecture and closure record are `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Boundary_PLAN.md`; PB.0-PB.7 remain Candidate 0.x history with no retroactive promise.
-- The CUDA automatic bridge does not yet populate every high-order measurement plane, HR.1/HR.2 reconstruction remains explicit, and HR.2 ships no trained model or production inference ABI. Future high-order capabilities enter the public boundary through independently versioned extensions instead of expanding stable Core.
+- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2 and PB.0-PB.8 are complete within their documented component/contract boundaries. Core ABI 1.0 and Worker Protocol 1.0 are declared only for the documented Windows x64 boundary; there is no UltraRender 1.0 or `UltraRender_preview` product release or public package distribution. The authoritative cursor is PRV.0. The approved Preview architecture is `docs/UltraRender_Preview_Architecture.md`; the archived high-order/PB root plan is `docs/archive/High_Order_Public_Boundary_PLAN_2026-08-11.md` and cannot reopen frozen work.
+- The CUDA automatic bridge does not yet fully consume the HT.1-HT.5 execution contracts or populate every high-order measurement plane. HR.1/HR.2 reconstruction remains explicit, and HR.2 ships no trained model or production inference ABI. Preview productionizes training-free reconstruction only; HR.3, neural denoising, new estimator research, broader HW and HD remain frozen.
+- CLI render, Hydra and legacy pyure currently bypass the product runtime. Preview converges maintained clients on a shared `ure_client` and one `ure_product` service, with explicit direct or Worker transport and no implicit fallback. Accepted-but-ignored semantics are forbidden.
 - The repository `gui/` tree is abandoned and excluded from inspection, development, migration and acceptance evidence. A future Studio/editor is an independent client of generated PB fixtures and packages.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.
 - High-memory CUDA target compilation is limited by the Ninja `ur_cuda_heavy_compile` job pool. The default is memory-aware: depth 1 below 24 GiB and depth 2 otherwise. CUDA 13.3 exposed multi-`ptxas` allocation failure on the 16 GiB workstation, so its current stable default is 1 while host and unrelated targets remain globally parallel. CUDA architecture defaults to the local native GPU unless explicitly overridden for release or farm builds.

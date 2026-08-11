@@ -1,10 +1,10 @@
 # UltraRender Public Boundary Implementation Plan
 
-Document status: authoritative subordinate execution plan for Phase PB
+Document status: completed read-only subordinate plan for Phase PB
 
 Last reviewed: 2026-08-11
 
-> **For agentic workers:** Execute this plan under [`AGENTS.md`](../AGENTS.md) using the repository's single-agent `PLAN -> IMPLEMENT -> VERIFY -> REVIEW -> REPORT -> COMMIT` workflow. The root [`PLAN.md`](../PLAN.md) owns the global cursor; this document owns PB subcursor details. Do not dispatch subagents. The user granted standing authorization on 2026-08-08 for autonomous plan-scoped PB commits without intermediate progress prompts; push remains prohibited without separate authorization.
+> **Historical execution note:** This plan governed PB.0-PB.8 and is now read-only. The root [`PLAN.md`](../PLAN.md) owns the active PRV cursor. Its references to resuming or advancing to HR.3 record the point-in-time PB handoff; the later Preview route froze HR.3 and does not reopen this plan. The 2026-08-08 PB commit authorization is exhausted with PB completion.
 
 **Goal:** Build and graduate a minimal, version-negotiated public interaction boundary that lets an external frontend and UltraRender evolve independently without freezing renderer algorithms or internal layouts.
 
@@ -24,7 +24,7 @@ Current PB cursor:
 PB.8 — Complete; Core ABI 1.0 and Worker Protocol 1.0 declared on 2026-08-11
 ```
 
-The HR route resumed at `HR.3` after PB.8. PB establishes the carrier; it does not promote learned proposals, reconstruction, world state, material graph, wave optics, or solver functionality to stable extensions.
+At PB.8 completion, the HR route briefly resumed at `HR.3`; that is historical state. The active root route is now PRV.0 and freezes HR.3. PB establishes the carrier; it does not promote learned proposals, reconstruction, world state, material graph, wave optics, or solver functionality to stable extensions.
 
 Global constraints:
 

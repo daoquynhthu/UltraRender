@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-11
 
-This index separates current references from historical records. The root `PLAN.md` is the only authoritative global research and production queue; its current cursor is HR.3 after Phase PB closure. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
+This index separates current authorities, completed subsystem references, and historical records. The root `PLAN.md` is the only authoritative global execution queue; its current cursor is PRV.0. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
 
 ## Current project references
 
@@ -10,27 +10,35 @@ This index separates current references from historical records. The root `PLAN.
 |---|---|
 | [`../README.md`](../README.md) | Project entry, supported baseline and build commands |
 | [`../STATUS.md`](../STATUS.md) | Current capability and limitation matrix |
-| [`../PLAN.md`](../PLAN.md) | Authoritative global queue; PB.8 is complete and HR.3 is current |
+| [`../PLAN.md`](../PLAN.md) | Authoritative `UltraRender_preview` integration queue; PRV.0 is current |
 | [`../AGENTS.md`](../AGENTS.md) | Agent governance and workflow |
 | [`CI.md`](CI.md) | Hosted non-GPU compiler matrix, test/install coverage, exclusions, pinned tools, and cache policy |
+| [`UltraRender_Preview_Architecture.md`](UltraRender_Preview_Architecture.md) | Normative one-product-service architecture, closure model, client/transport boundary, backend profiles and Preview completion rules |
 | [`Public_API_ABI_Architecture.md`](Public_API_ABI_Architecture.md) | Normative minimal C ABI/local-worker architecture and PB.8 stable-major gates |
-| [`PB_Public_Boundary_PLAN.md`](PB_Public_Boundary_PLAN.md) | Completed subordinate PB.0-PB.8 sequence and declaration evidence |
+| [`PB_Public_Boundary_PLAN.md`](PB_Public_Boundary_PLAN.md) | Read-only completed PB.0-PB.8 subordinate sequence and declaration evidence |
 | [`Public_API_Integration.md`](Public_API_Integration.md) | Core 1.0 loader, table-prefix, scene/session/frame, worker, and unstable-transaction integration guide |
 | [`Public_API_Support_Policy.md`](Public_API_Support_Policy.md) | Exact Windows x64 scope, compatibility/support window, schema ranges, extension policy, and non-promises |
 | [`PB8_Stable_Compatibility_Report.md`](PB8_Stable_Compatibility_Report.md) | Declared Core ABI 1.0 / Worker Protocol 1.0 freeze audit, retained seed, calling-mode/image E2E, and verification record |
-| [`HO_0_Capability_Baseline.md`](HO_0_Capability_Baseline.md) | Current executable inventory of capability boundaries, integrators, measurement gaps, state ownership, research capsules and benchmark families |
-| [`HO_1_Unified_Semantics.md`](HO_1_Unified_Semantics.md) | Current backend-neutral observable, measure, time, identity, uncertainty and compatibility architecture |
-| [`HO_2_Executable_Research_Substrate.md`](HO_2_Executable_Research_Substrate.md) | Current deterministic research execution, artifact, comparison, capability, oracle and promotion-evidence architecture |
-| [`HT_0_Legacy_Technique_Graph.md`](HT_0_Legacy_Technique_Graph.md) | Current descriptor graph, legacy-integrator preset mapping, structured rejection and mode-switch freeze architecture |
-| [`HT_1_Support_Measure_Composition.md`](HT_1_Support_Measure_Composition.md) | Current bounded path grammar, exact support partition, measure-transform and layered MIS/GRIS/MCMC composition architecture |
-| [`HT_2_Pilot_Qualification.md`](HT_2_Pilot_Qualification.md) | Current pilot cost/variance/covariance/tail/ESS/memory evidence, adaptive-selection bias protection and automatic technique qualification architecture |
-| [`HT_3_Online_Portfolio_Scheduling.md`](HT_3_Online_Portfolio_Scheduling.md) | Current cost/covariance-aware online allocation, exploration/starvation, drift re-pilot, distributed coverage and MeasurementBundle schedule-provenance architecture |
-| [`HT_4_Transport_Research_Platform.md`](HT_4_Transport_Research_Platform.md) | Current capsule-bound transport research descriptors, joint-sample/reuse contracts, opt-in graph materialization and replicated assessment architecture |
+
+## Completed subsystem references and Preview inputs
+
+These documents remain technically relevant to PRV implementation, but they do not own the global cursor. HO/HT/HR research expansion beyond the completed boundaries is frozen unless a future root plan explicitly reactivates it.
+
+| Document | Purpose |
+|---|---|
+| [`HO_0_Capability_Baseline.md`](HO_0_Capability_Baseline.md) | Retained executable inventory of capability boundaries, integrators, measurement gaps, state ownership, research capsules and benchmark families |
+| [`HO_1_Unified_Semantics.md`](HO_1_Unified_Semantics.md) | Retained backend-neutral observable, measure, time, identity, uncertainty and compatibility architecture |
+| [`HO_2_Executable_Research_Substrate.md`](HO_2_Executable_Research_Substrate.md) | Retained deterministic research execution, artifact, comparison, capability, oracle and promotion-evidence architecture |
+| [`HT_0_Legacy_Technique_Graph.md`](HT_0_Legacy_Technique_Graph.md) | Retained descriptor graph, legacy-integrator preset mapping, structured rejection and mode-switch freeze architecture |
+| [`HT_1_Support_Measure_Composition.md`](HT_1_Support_Measure_Composition.md) | Retained bounded path grammar, exact support partition, measure-transform and layered MIS/GRIS/MCMC composition architecture |
+| [`HT_2_Pilot_Qualification.md`](HT_2_Pilot_Qualification.md) | Retained pilot cost/variance/covariance/tail/ESS/memory evidence, adaptive-selection bias protection and automatic technique qualification architecture |
+| [`HT_3_Online_Portfolio_Scheduling.md`](HT_3_Online_Portfolio_Scheduling.md) | Retained cost/covariance-aware online allocation, exploration/starvation, drift re-pilot, distributed coverage and MeasurementBundle schedule-provenance architecture |
+| [`HT_4_Transport_Research_Platform.md`](HT_4_Transport_Research_Platform.md) | Frozen capsule-bound transport research descriptors, joint-sample/reuse contracts, opt-in graph materialization and replicated assessment architecture |
 | [`HT_5_Automatic_Integration_Closure.md`](HT_5_Automatic_Integration_Closure.md) | Completed objective-driven automatic plan, defensive CUDA endpoint ensemble, provenance, budget and multi-scene statistical closure |
-| [`HR_0_Measurement_Bundle.md`](HR_0_Measurement_Bundle.md) | Current typed feature-film schema, budget loss, canonical merge, derived statistics and partial checkpoint architecture |
-| [`HR_1_Statistical_Reconstruction.md`](HR_1_Statistical_Reconstruction.md) | Current training-free variance/tail-aware spatial-temporal reconstruction, physical spectral/Stokes handling and raw/uncertainty provenance architecture |
-| [`HR_2_Sample_Reconstruction.md`](HR_2_Sample_Reconstruction.md) | Current sample-level Research contract, analytic splatting baseline, external kernel/point-set candidate boundary, physical Spectrum/Stokes/Complex projection and OOD/calibration evidence |
-| [`reference/Backend_API.md`](reference/Backend_API.md) | Implemented legacy experimental engine/session/C/Python boundary during PB migration |
+| [`HR_0_Measurement_Bundle.md`](HR_0_Measurement_Bundle.md) | Retained typed feature-film schema, budget loss, canonical merge, derived statistics and partial checkpoint architecture |
+| [`HR_1_Statistical_Reconstruction.md`](HR_1_Statistical_Reconstruction.md) | Preview input for training-free variance/tail-aware spatial-temporal reconstruction, physical spectral/Stokes handling and raw/uncertainty provenance |
+| [`HR_2_Sample_Reconstruction.md`](HR_2_Sample_Reconstruction.md) | Frozen sample-level Research contract and optional analytic reconstruction input; external learned/provider expansion is not active |
+| [`reference/Backend_API.md`](reference/Backend_API.md) | Implemented legacy experimental engine/session/C/Python boundary awaiting PRV client convergence |
 | [`Spectral_Semantics_Guide.md`](Spectral_Semantics_Guide.md) | Current semantic reference for spectral quantities |
 | [`Phase_Q_Native_Scene_Format.md`](Phase_Q_Native_Scene_Format.md) | Completed native scene architecture and closure record |
 | [`Phase_R_P6_Mie_Volume_Resources.md`](Phase_R_P6_Mie_Volume_Resources.md) | Completed Mie resource/transport contract |
@@ -67,7 +75,7 @@ These documents preserve design rationale and closure evidence. Dates, test coun
 
 Files under [`archive/`](archive/) are retained for historical context and are not maintained as current specifications. This includes former root handover/roadmap/progress documents and early physics/acoustic assessments.
 
-[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. It is useful for design history but cannot override the current `HR.3 — Learned proposal and neural control variate` cursor. Phase PB is a client interaction boundary, not revival of the archived third-party plugin design.
+[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. [`archive/High_Order_Public_Boundary_PLAN_2026-08-11.md`](archive/High_Order_Public_Boundary_PLAN_2026-08-11.md) preserves the subsequent HO/HT/HR and PB route. Both are read-only design history and cannot override the current PRV.0 cursor or reopen HR.3, HW, HD, Phase X or neural work.
 
 Files under [`superpowers/specs/`](superpowers/specs/) and [`superpowers/plans/`](superpowers/plans/) are archived design and execution records. They intentionally preserve proposed paths, old test counts and unchecked implementation steps. They do not override the completed implementation or current PLAN cursor.
 

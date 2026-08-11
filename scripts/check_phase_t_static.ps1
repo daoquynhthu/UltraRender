@@ -126,7 +126,7 @@ try {
     Assert-Contains "scripts/run_phase_t6_cuda_backend_gate.ps1" "T5VramMiB" "T.6 VRAM regression gate is missing"
     Assert-Contains "scripts/run_phase_t6_cuda_backend_gate.ps1" "MaximumRegression" "T.6 performance regression gate is missing"
     Assert-Contains "CMakeLists.txt" "option\(UR_ENABLE_CUDA" "T.6 CUDA-optional root build is missing"
-    Assert-Contains "CMakeLists.txt" "project\(UltraRender VERSION 1\.0\.0 LANGUAGES CXX\)" "T.6 root project still requires CUDA language"
+    Assert-Contains "CMakeLists.txt" "project\(UltraRender LANGUAGES C CXX\)" "T.6 root project still requires CUDA language"
     if (Test-Path "libs/ure_core/include/ure/gpu_structs.hpp") {
         throw "T.6 CUDA structs remain in the installed public surface"
     }
@@ -158,7 +158,7 @@ try {
     Assert-Contains "scripts/run_phase_t7_vulkan_foundation_gate.ps1" "phase_t7_linux" "T.7 Linux build gate is missing"
     Assert-Contains "scripts/run_phase_t7_vulkan_foundation_gate.ps1" "UR_REQUIRE_CROSS_VENDOR_VULKAN" "T.7 cross-vendor gate is missing"
     Assert-Contains "tests/sdk_free/vulkan_package_consumer/CMakeLists.txt" "UltraRender::ure_vulkan" "T.7 installed package consumer is missing"
-    Assert-Contains "PLAN.md" "T\.7 closure.*权威游标进入 T\.8" "PLAN lacks the T.7 closure and T.8 gate"
+    Assert-Contains "docs/archive/Legacy_Construction_PLAN_2026-08-01.md" "T\.7 closure.*权威游标进入 T\.8" "Archived construction PLAN lacks the T.7 closure and T.8 gate"
     Assert-Contains "libs/ure_runtime/include/ure/runtime/acceleration.hpp" "class AccelerationProvider" "T.8 acceleration provider contract is missing"
     Assert-Contains "libs/ure_runtime/include/ure/runtime/acceleration.hpp" "AccelerationFallback" "T.8 acceleration fallback contract is missing"
     Assert-Contains "libs/ure_runtime/src/acceleration.cpp" "select_acceleration" "T.8 acceleration selection is missing"
@@ -175,7 +175,7 @@ try {
     Assert-Contains "tests/vulkan/test_vulkan_acceleration.cpp" "cross_adapter_compute" "T.8 cross-adapter fallback parity is missing"
     Assert-Contains "scripts/run_phase_t8_vulkan_acceleration_gate.ps1" "phase_t8_linux" "T.8 Linux acceleration gate is missing"
     Assert-Contains "scripts/run_phase_t8_vulkan_acceleration_gate.ps1" "UR_REQUIRE_VULKAN_RT" "T.8 native ray-query execution gate is missing"
-    Assert-Contains "PLAN.md" "T\.8 closure.*权威游标进入 T\.9" "PLAN lacks the T.8 closure and T.9 gate"
+    Assert-Contains "docs/archive/Legacy_Construction_PLAN_2026-08-01.md" "T\.8 closure.*权威游标进入 T\.9" "Archived construction PLAN lacks the T.8 closure and T.9 gate"
     Assert-Contains "CMakeLists.txt" "option\(UR_ENABLE_D3D12" "T.9 D3D12-optional root build is missing"
     Assert-Contains "libs/ure_d3d12/include/ure/d3d12_runtime.hpp" "class D3D12RuntimeDevice" "T.9 D3D12 runtime Device is missing"
     Assert-NoMatch @(
@@ -191,7 +191,7 @@ try {
     Assert-Contains "scripts/run_phase_t9_d3d12_gate.ps1" "UR_ENABLE_D3D12=OFF" "T.9 no-D3D12 isolation gate is missing"
     Assert-Contains "scripts/run_phase_t9_d3d12_gate.ps1" "deterministic DXIL" "T.9 deterministic DXIL evidence is missing"
     Assert-Contains "shaders/d3d12/phase_t9_manifest.json" "10\.0\.26100\.0" "T.9 DXC pin is missing"
-    Assert-Contains "PLAN.md" "T\.9 closure.*权威游标进入 T\.10" "PLAN lacks the T.9 closure and T.10 gate"
+    Assert-Contains "docs/archive/Legacy_Construction_PLAN_2026-08-01.md" "T\.9 closure.*权威游标进入 T\.10" "Archived construction PLAN lacks the T.9 closure and T.10 gate"
     Assert-Contains "libs/ure_runtime/include/ure/runtime/multi_backend.hpp" "struct WorkerCapability" "T.10 worker capability contract is missing"
     Assert-Contains "libs/ure_runtime/include/ure/runtime/multi_backend.hpp" "struct ResourceCacheKey" "T.10 resource cache key is missing"
     Assert-Contains "libs/ure_runtime/include/ure/runtime/multi_backend.hpp" "struct MergeExecutionMetadata" "T.10 merge provenance contract is missing"
@@ -209,7 +209,7 @@ try {
     Assert-Contains "tests/multi_backend/test_multi_backend_inventory.cpp" "UR_PHASE_T10_REPORT" "T.10 actual adapter inventory evidence is missing"
     Assert-Contains "tests/sdk_free/CMakeLists.txt" "test_multi_backend_sdk_free" "T.10 SDK-free scheduling test is missing"
     Assert-Contains "scripts/run_phase_t10_multi_backend_gate.ps1" "actual CUDA/Vulkan/D3D12 inventory" "T.10 closure gate is missing"
-    Assert-Contains "PLAN.md" "T\.10 closure.*权威游标进入 T\.11" "PLAN lacks the T.10 closure and T.11 gate"
+    Assert-Contains "docs/archive/Legacy_Construction_PLAN_2026-08-01.md" "T\.10 closure.*权威游标进入 T\.11" "Archived construction PLAN lacks the T.10 closure and T.11 gate"
     Assert-Contains "scripts/run_phase_t_validation_suite.ps1" "ure\.phase_t\.validation\.v1" "T.11 machine-readable report schema is missing"
     Assert-Contains "scripts/run_phase_t_validation_suite.ps1" "physical_units" "T.11 physical-unit evidence is missing"
     Assert-Contains "scripts/run_phase_t_validation_suite.ps1" "hit_metadata" "T.11 hit-metadata evidence is missing"
@@ -219,7 +219,7 @@ try {
     Assert-Contains "scripts/run_phase_t_validation_suite.ps1" "vram" "T.11 VRAM evidence is missing"
     Assert-Contains "scripts/run_phase_t_validation_suite.ps1" "throughput" "T.11 throughput evidence is missing"
     Assert-Contains "scripts/run_phase_t_validation_suite.ps1" "capability_unavailable_compute_fallback" "T.11 capability classification is missing"
-    Assert-Contains "PLAN.md" "T\.11 closure.*权威游标进入 V\.0" "PLAN lacks the T.11 closure and V.0 gate"
+    Assert-Contains "docs/archive/Legacy_Construction_PLAN_2026-08-01.md" "T\.11 closure.*权威游标进入 V\.0" "Archived construction PLAN lacks the T.11 closure and V.0 gate"
     Write-Host "Phase T static audit passed"
 } finally {
     Pop-Location

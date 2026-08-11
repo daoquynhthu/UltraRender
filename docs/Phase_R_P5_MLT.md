@@ -4,7 +4,8 @@
 
 R-P5 is complete. The GPU chain runtime, diagnostics, deterministic shard
 identities, and fixed-error benefit suite are production paths within the
-boundaries below. The authoritative construction cursor has advanced to R-P7.
+boundaries below. The phase-local cursor advanced to R-P7 at this historical
+closure point; the root `PLAN.md` owns the current PRV cursor.
 
 ## Estimator boundary
 

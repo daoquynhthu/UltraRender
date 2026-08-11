@@ -6,9 +6,9 @@ Last reviewed: 2026-08-11
 
 Compatibility status: Core ABI 1.0 and Worker Protocol 1.0 are declared for the documented Windows x64 profile. This is not an UltraRender 1.0 product release; packages are not publicly distributed and the support clock has not started.
 
-This document defines the public interaction boundary completed before resuming `HR.3`. It replaces the external `UltraRender_Stable_Public_API_ABI_Architecture_v1.md` draft as the repository-owned design authority. The draft's central decision—one semantic contract exposed through an in-process C ABI and an isolated worker protocol—is retained, while the stability surface is narrowed and several ABI, identity, transport, lifetime, and release details are made explicit.
+This document defines the public interaction boundary completed by PB.8. It replaces the external `UltraRender_Stable_Public_API_ABI_Architecture_v1.md` draft as the repository-owned design authority. The draft's central decision—one semantic contract exposed through an in-process C ABI and an isolated worker protocol—is retained, while the stability surface is narrowed and several ABI, identity, transport, lifetime, and release details are made explicit.
 
-The executable phase order and graduation evidence are defined by [`PB_Public_Boundary_PLAN.md`](PB_Public_Boundary_PLAN.md). The root [`PLAN.md`](../PLAN.md) remains authoritative for the global cursor.
+The completed PB phase order and graduation evidence are preserved in [`PB_Public_Boundary_PLAN.md`](PB_Public_Boundary_PLAN.md). The root [`PLAN.md`](../PLAN.md) remains authoritative for the global cursor. The active product-integration architecture is [`UltraRender_Preview_Architecture.md`](UltraRender_Preview_Architecture.md); it consumes this stable boundary without enlarging Core ABI 1.0.
 
 ---
 
@@ -70,7 +70,7 @@ No surface may remain unclassified. No two entries may claim canonical authority
 
 Hydra requires special treatment because its external ABI is governed by OpenUSD. UltraRender does not replace that ABI. The maintained delegate must lower Hydra state into the same native scene/revision/transaction semantics and converge on the same execution service as PB, or remain explicitly legacy and unsupported as a stable client path. It MUST NOT preserve an independent camera, material, object-ID, error, operation, or framebuffer authority.
 
-CLI native build/validate/pack tools may remain direct format tooling. CLI rendering, pyure, and any separately released integration must migrate to PB or prove semantic parity with the same contract adapter. Distributed/farm and solver-provider contracts remain internal or become explicitly versioned extensions; they never silently become alternative frontend APIs.
+CLI native build/validate/pack tools may remain direct format tooling when they do not execute renderer semantics. CLI rendering, pyure, Hydra, and any separately released integration must converge on the shared Preview client/product service; parity between duplicate implementations is not a permanent substitute. Distributed/farm and solver-provider contracts remain internal or become explicitly versioned extensions; they never silently become alternative frontend APIs.
 
 ## 3. What stability means
 

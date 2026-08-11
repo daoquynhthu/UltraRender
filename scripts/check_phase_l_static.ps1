@@ -399,10 +399,10 @@ if ($benchmarkScript -notmatch "spectral-max-resident-mb") {
     throw "L.12 benchmark smoke must pass resident cache budget"
 }
 
-$planPath = Join-Path $RepoRoot "PLAN.md"
+$planPath = Join-Path $RepoRoot "docs\archive\Legacy_Construction_PLAN_2026-08-01.md"
 $plan = Get-Content -Raw $planPath
 if ($plan -notmatch "已完成 \(L\.0-L\.12\)") {
-    throw "L.12 PLAN overview must mark Phase L complete through L.12"
+    throw "Archived construction PLAN must mark Phase L complete through L.12"
 }
 
 $completionAuditPath = Join-Path $RepoRoot "docs\Phase_L_Completion_Audit.md"

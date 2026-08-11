@@ -1,10 +1,16 @@
 # UltraRender
 
-UltraRender 是一个处于持续研发阶段的光谱/偏振离线渲染器。当前完整场景参考路径基于 CUDA；仓库还包含原生场景格式、材质图、自动估计器组合、测量与重建合同，以及有界的多后端、波动光学和物理研究基础。
+UltraRender 是一个处于持续研发阶段的光谱/偏振离线渲染器。当前完整场景参考路径基于 CUDA；仓库还包含原生场景格式、材质图、估计器组合、测量与重建合同，以及有界的多后端、波动光学和物理基础。其中不少能力目前仍停留在合同、独立组件或测试入口，并未形成统一产品工作流。
 
 本项目尚不是通用生产渲染器，也没有发布“UltraRender 1.0”。功能与成熟度以 [STATUS.md](STATUS.md) 为准，施工顺序以 [PLAN.md](PLAN.md) 为准。Research、Experimental、Production 是不同的证据等级；类型、配置项或拒绝测试的存在不代表对应能力已经可用。
 
-当前权威实施游标为 `HR.3 — Learned proposal 与 neural control variate`；公共交互合同的稳定声明不改变该研究路线的内部演进边界。
+当前权威实施游标为 `PRV.0 — 产品真相基线与闭环账本`。项目暂时冻结 learned/neural、新积分器、广义统一物理世界和可微路线，优先把已有能力接入一个可验证的 `UltraRender_preview` 产品闭环。该名称是尚未达成的里程碑，不是现有发布版本。
+
+## Preview 集成方向
+
+Preview 路线要求 CLI、Python、Hydra 和后续编辑器通过同一个产品服务工作：客户端使用共享 `ure_client`，显式选择进程内 direct transport 或本地 Worker transport；两者最终调用同一 runtime/product implementation。Worker 只负责隔离、协议和共享内存传输，CLI 也不再拥有第二套场景加载、积分器选择、重建或输出实现。
+
+当前代码尚未达到这个目标：CLI render、Hydra 和 legacy pyure 仍有直接调用内部 renderer/session 的路径；自动渲染桥、原生高级块、MeasurementBundle、重建、可移植 backend、多设备/farm/cache 也尚未全部进入同一个完整场景工作流。新的 [Preview 架构](docs/UltraRender_Preview_Architecture.md) 定义目标边界，[PLAN.md](PLAN.md) 按 `PRV.0` 至 `PRV.11` 逐步完成迁移和真实图像门禁。
 
 ## 公共交互边界
 
@@ -24,17 +30,17 @@ UltraRender 是一个处于持续研发阶段的光谱/偏振离线渲染器。�
 - [集成指南](docs/Public_API_Integration.md)
 - [PB.8 兼容性报告](docs/PB8_Stable_Compatibility_Report.md)
 
-## 当前实现范围
+## 当前实现基础
 
 - CUDA wavefront path tracing，运行时光谱域与最多 32 个 GPU wavelength packet lanes；
 - Stokes/Mueller 偏振、MaterialGraph、glTF/MaterialX 适配、HG/Rayleigh/Mie 体积；
 - `.ure`、`.urescene`、`.urepkg` 原生场景及验证、迁移、打包工具；
-- ReSTIR DI、受限 ReSTIR PT、BDPT/VCM、specular manifold 与 PSSMLT 的已验证范围；
-- SDK-free runtime、transport、research 与 reconstruction 合同；
+- ReSTIR DI、受限 ReSTIR PT、BDPT/VCM、specular manifold 与 PSSMLT 的独立已验证范围；
+- SDK-free runtime、transport、research 与 reconstruction 合同及组件测试；
 - Vulkan、D3D12/DXR 与可选 OptiX 的运行时/加速基础和固定 SceneIR parity 证据；
 - 有界衍射、荧光、部分相干、各向异性介质和局部全波耦合参考合同。
 
-这些条目均有明确适用域。完整 SceneIR radiometric renderer 尚未迁移到 Vulkan/D3D12/OptiX；部分相干与一般全波路径不是生产场景渲染器；仓库不提供训练模型或生产 neural inference ABI。
+这些条目均有明确适用域，不能从旧阶段的 “Done” 推导为产品 E2E。完整 SceneIR radiometric renderer 尚未迁移到 Vulkan/D3D12/OptiX；部分相干与一般全波路径不是生产场景渲染器；仓库不提供训练模型或 production neural inference ABI。
 
 ## 工程结构
 
@@ -55,6 +61,8 @@ libs/ure_d3d12/       D3D12/DXR runtime/acceleration foundation
 tests/                Host、GPU、公共边界与 SDK-free 门禁
 docs/                 现役文档与历史归档
 ```
+
+`ure_client` 与 `ure_product` 是 Preview 路线中的批准目标模块，目前尚不能列为已实现目录。
 
 仓库内 `gui/` 已废弃，不属于设计、维护或测试范围。未来编辑器应作为独立客户端使用公共 ABI/Worker 边界。
 
@@ -77,7 +85,7 @@ Ninja 可并行构建普通目标；高内存 CUDA 编译由 `ur_cuda_heavy_comp
 
 GitHub Actions 另行在 Ubuntu 24.04 的 GCC 13/Clang 18 与 Windows 2025 的 MSVC 上执行 CUDA-off 根构建、32 项纯 host 测试、15 项 warnings-as-errors SDK-free 测试，以及安装后 `find_package()` 消费测试。该门禁验证非 GPU 源码和包边界的可移植性，不扩张完整场景渲染的平台承诺。矩阵、排除项和缓存策略见 [CI 说明](docs/CI.md)。
 
-最新本地 PB.8 证据为 Release 构建与 101/101 CTest，通过三种独立调用方式生成六幅实际 PFM 图像。测试数量是快照，不等同于整体成熟度。
+最新已冻结的 PB.8 证据为 Release 构建与 101/101 CTest，通过三种独立调用方式生成六幅实际 PFM 图像。它只证明公共边界声明门禁，不证明 Preview 产品闭环；测试数量也是快照。
 
 ## 已知边界
 
@@ -85,6 +93,7 @@ GitHub Actions 另行在 Ubuntu 24.04 的 GCC 13/Clang 18 与 Windows 2025 的 M
 - 不承诺完整 Linux、macOS、ARM64 或非 NVIDIA 场景渲染支持。
 - 不提供 OSL 编译器；MaterialX 是适配层，URE MaterialGraph 是内部权威模型。
 - 物理/声学模块仍是实验性基础，不是统一物理世界的完成实现。
+- CLI、Hydra、legacy Python、完整场景重建与非 CUDA backend 尚未完成 Preview 收敛。
 - 研究和不完整能力会 fail loudly；不会以静默降级伪装为已支持路径。
 
 ## 文档与许可

@@ -64,6 +64,6 @@ Errors are retained handles with stable result/domain/detail and optional versio
 
 Release map leases and frames before exhausting instance budgets. Close sessions/scenes/operations before the instance. After a worker crash, all worker-owned handles and leases are invalid regardless of their previous state.
 
-Exact promises, support window, platform scope, scene-schema ranges, and non-promises are in [Public API Support Policy](Public_API_Support_Policy.md). The architecture and execution authority remain [Public API/ABI Architecture](Public_API_ABI_Architecture.md) and [PB Public Boundary Plan](PB_Public_Boundary_PLAN.md).
+Exact promises, support window, platform scope, scene-schema ranges, and non-promises are in [Public API Support Policy](Public_API_Support_Policy.md). [Public API/ABI Architecture](Public_API_ABI_Architecture.md) remains authoritative for Core/Worker compatibility. The active product execution architecture and queue are [UltraRender Preview Product Architecture](UltraRender_Preview_Architecture.md) and the root [PLAN](../PLAN.md); the PB plan is a read-only closure record.
 
 UltraRender project code is licensed under Apache License 2.0. Both staged packages include the project license; bundled third-party components retain their own license files.

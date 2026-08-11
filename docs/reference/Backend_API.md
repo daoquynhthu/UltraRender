@@ -4,7 +4,7 @@ Document status: current summary of the implemented legacy experimental interfac
 
 Last reviewed: 2026-08-08
 
-This document describes the currently implemented C++/C/pyure boundary. It is not Core ABI 1.0 and is not a promise of source or binary stability. The approved replacement architecture is [`../Public_API_ABI_Architecture.md`](../Public_API_ABI_Architecture.md), its active implementation sequence is [`../PB_Public_Boundary_PLAN.md`](../PB_Public_Boundary_PLAN.md), and the root `PLAN.md` controls the cursor.
+This document describes the currently implemented C++/C/pyure boundary. It is not Core ABI 1.0 and is not a promise of source or binary stability. [`../Public_API_ABI_Architecture.md`](../Public_API_ABI_Architecture.md) defines the stable public replacement boundary. [`../UltraRender_Preview_Architecture.md`](../UltraRender_Preview_Architecture.md) and the root `PLAN.md` define the active product convergence target and sequence; the PB plan is a read-only closure record.
 
 ## Interface layers
 
@@ -107,7 +107,7 @@ C functions generally return `0` on success and a negative value or null handle 
 
 ## Stability boundary
 
-`ure_c_api.h`, `pyure_native.dll`, and the ctypes wrapper are legacy experimental compatibility surfaces during Phase PB. They remain available for existing repository clients and migration tests, but new high-order public semantics should first receive registry/schema identities rather than expanding the legacy configuration structures.
+`ure_c_api.h`, `pyure_native.dll`, and the ctypes wrapper are legacy experimental compatibility surfaces awaiting PRV client convergence. They remain available for existing repository clients and migration tests, but new product semantics receive registry/schema identities and a versioned Preview extension rather than expanding the legacy configuration structures. These legacy paths must not become a second product renderer.
 
 The following are not promised:
 

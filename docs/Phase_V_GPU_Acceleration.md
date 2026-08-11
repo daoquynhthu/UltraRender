@@ -2,12 +2,14 @@
 
 ## Status
 
-V.0 through V.11 are complete and the authoritative cursor is W.2. This
-document records the initial acceleration audit, configuration contract,
+V.0 through V.11 are complete. This document records the initial acceleration
+audit, configuration contract,
 self-compute construction, optional native-provider lifecycle and the
 cross-provider traversal contract. V.8 establishes clustered geometry
 resources, V.9 closes physical-error LoD selection, V.10 closes dynamic
 geometry lifecycle, and V.11 freezes the unified validation contract.
+Its phase-local cursor statements are historical; the root `PLAN.md` owns the
+current PRV cursor.
 
 ## Current production path
 

@@ -6,11 +6,28 @@ This document is the current capability summary. [`PLAN.md`](PLAN.md) is authori
 
 ## Maturity and cursor
 
-UltraRender remains a research and development renderer. There is no “UltraRender 1.0” product release.
+UltraRender remains a research and development renderer. There is no “UltraRender 1.0” or `UltraRender_preview` product release.
 
 Phase PB is complete. The project declares **Core ABI 1.0** and **Worker Protocol 1.0** for the exact Windows x64 profile described below. The declaration freezes a small client interaction grammar, not the renderer as a product and not its algorithms, internal data models, feature set, or cross-platform behavior. The declaration tag is a repository evidence marker; packages have not been publicly distributed and the support clock has not started.
 
-The authoritative implementation cursor resumes at `HR.3 — Learned proposal 与 neural control variate`. Phase Q, R, T, V, the declared bounded scope of W, U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2, and PB.0-PB.8 are complete within their documented boundaries.
+The authoritative implementation cursor is `PRV.0 — 产品真相基线与闭环账本`. Phase Q, R, T, V, the declared bounded scope of W, U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2, and PB.0-PB.8 are complete within their documented contract, component, or evidence boundaries. Those completion records do not imply product E2E closure. HR.3, neural systems, new estimator research, the broader high-order physical world, and differentiation are frozen during the Preview route.
+
+## Preview integration state
+
+The approved target has one product execution authority. Maintained clients use a shared client library and select either an in-process direct transport or the local Worker transport; both reach the same runtime/product implementation. The Worker owns isolation and transport only. This target is specified in [`docs/UltraRender_Preview_Architecture.md`](docs/UltraRender_Preview_Architecture.md) and is not yet the current implementation.
+
+| Product area | Highest current evidence | Preview gap |
+|---|---|---|
+| Core/Worker scene render | Product E2E for the bounded PB.8 fixture | General objectives, measurements, reconstruction and product scene realization are not closed |
+| CLI render | Client-reachable legacy direct path | Bypasses the product runtime and owns separate load/output orchestration |
+| Native advanced blocks | Contract / component executable | Procedural, resource, solver and simulation declarations are not uniformly realized by the renderer |
+| Automatic transport | Component executable with a bounded CUDA bridge | The product renderer does not yet consume the full HT support, pilot and portfolio authority |
+| Measurement/reconstruction | Component executable | No complete-scene product producer/output chain for all required planes |
+| Vulkan/D3D12/OptiX | Component executable runtime/acceleration evidence | No maintained arbitrary-scene radiometric product path |
+| Multi-device/farm/cache | Component executable | Not reachable through one canonical product job and artifact workflow |
+| Hydra/legacy Python | Client-reachable internal paths | Bypass the canonical product service and require convergence |
+
+PRV.0 will replace this prose snapshot with a machine-validated closure ledger. Until then, no capability above may be promoted to Product E2E beyond its stated fixture.
 
 ## Declared public boundary
 
@@ -56,15 +73,15 @@ GPU backends, CUDA-coupled renderer/session/product-runtime targets, and optiona
 |---|---|---|
 | CUDA renderer | Implemented and tested | Complete-scene reference path; no CPU production integrator |
 | Spectral/polarization | Runtime spectral domain, packet cap 32, Stokes/Mueller on covered paths | Not general coherent field transport |
-| Automatic integration | Technique Graph, support/measure composition, pilot qualification and portfolio closure implemented | Applicability and fallback remain explicit; manual modes remain for compatibility/reproduction |
+| Automatic integration | Technique Graph, support/measure composition, pilot qualification and portfolio contracts plus a bounded CUDA bridge implemented | Current product auto renderer does not yet consume the entire HT authority; manual modes remain for reproduction |
 | Advanced estimators | ReSTIR DI, bounded ReSTIR PT, BDPT/VCM, bounded specular manifold and PSSMLT verified | Unsupported combinations such as MLT+BDPT remain rejected |
-| Measurement/reconstruction | Typed MeasurementBundle, statistical baseline and sample-level Research boundary implemented | No trained model, production model ABI, or complete high-order plane producer |
-| Native scene | `.ure`, `.urescene`, `.urepkg`, `.urecache` contracts and tooling implemented | Schema versions are independent from Core ABI |
-| Materials/assets | MaterialGraph, glTF/GLB, bounded MaterialX, image/SPD/Mie paths implemented | MaterialGraph C++ layout is internal |
+| Measurement/reconstruction | Typed MeasurementBundle, statistical baseline and sample-level Research boundary implemented as SDK-free components | No complete-scene producer/product output path; no trained model or production model ABI |
+| Native scene | `.ure`, `.urescene`, `.urepkg`, `.urecache` contracts and tooling implemented | Advanced blocks are not uniformly consumed by the product renderer; schema versions are independent from Core ABI |
+| Materials/assets | MaterialGraph, glTF/GLB, bounded MaterialX, image/SPD/Mie component paths implemented | Authoring adapters and runtime realization are not yet one product path; MaterialGraph C++ layout is internal |
 | Portable GPU runtime | SDK-free runtime and multi-backend scheduling contracts implemented | Full arbitrary-scene renderer remains CUDA-only |
 | GPU acceleration | CUDA self-compute plus bounded OptiX/Vulkan RT/DXR construction/traversal parity | Native providers do not yet run the complete radiometric renderer |
 | Wave optics | Bounded diffraction, fluorescence, partial-coherence, anisotropic and local full-wave contracts/references | No production general coherent scene solver |
-| USD/Hydra | Bounded adapter/delegate/export path implemented | OpenUSD ABI is external; Hydra is not a Core extension |
+| USD/Hydra | Bounded adapter/delegate/export path implemented | The delegate currently reaches internal `RenderSession` directly; OpenUSD ABI is external and Hydra is not a Core extension |
 | Physics/acoustics | Optional experimental foundations | Unified time-varying physical world remains future work |
 
 ## Public-boundary evidence
@@ -75,7 +92,7 @@ The PB.8 freeze has:
 - one generated registry for C ABI and worker semantics;
 - deterministic v1 schemas, ABI manifest, tombstones and compatibility records;
 - lifetime, lease, backpressure, cancellation, security, malformed-input and crash/restart gates;
-- a closed 25-surface interaction ledger with no duplicate authority or unresolved migration;
+- a closed 25-surface PB interaction ledger with no duplicate public contract authority under the PB scope;
 - independent C11, C++23 unstable-extension and local-worker consumers;
 - all 39 Core calls plus the transaction call exercised;
 - six finite, nonzero, spatially nonuniform PFM render artifacts;
@@ -83,16 +100,23 @@ The PB.8 freeze has:
 
 The machine-readable report is [`docs/reports/phase_pb_validation_v2.json`](docs/reports/phase_pb_validation_v2.json). Exact promise and non-promise language is in [`docs/Public_API_Support_Policy.md`](docs/Public_API_Support_Policy.md).
 
+This report is a point-in-time public-boundary declaration record. PRV.0 separately audits product execution ownership, accepted-but-ignored semantics and maintained-client bypasses; it does not reinterpret or weaken PB.8 compatibility evidence.
+
 ## Explicitly incomplete
 
-- learned proposals and neural control variates beyond the HR.2 Research substrate;
-- automatic production reconstruction without all required measurement planes;
+- one canonical product service shared by CLI, direct, Worker, Python and Hydra clients;
+- complete realization or explicit rejection of native procedural/resource/solver/simulation semantics;
+- full HT-contract-driven automatic transport in the product renderer;
+- automatic production reconstruction with complete-scene measurement producers and multilayer output;
 - coherent/partial-coherent production scene sessions and worker frame emission;
 - scene-integrated anisotropic interfaces, walk-off and ray splitting;
 - bundled general full-wave solvers and engine-owned solver discovery/execution;
 - arbitrary-scene radiometric rendering on Vulkan, D3D12/DXR, or OptiX;
+- canonical multi-device, farm, cache and checkpoint workflows exposed through the product job;
 - a unified dynamic physical world and production-grade general fluid/acoustic solver;
 - an in-repository GUI or general plugin ecosystem.
+
+Learned proposals, neural denoisers, new estimator families, broad unified-world research and differentiable workflows are intentionally frozen rather than active incomplete Preview work.
 
 Unsupported capability requests are expected to fail with structured diagnostics. A fail-loud boundary may represent policy, resource limits, missing evidence, or remaining implementation debt; it is not by itself proof of a defect.
 

@@ -11,7 +11,7 @@
       "scan_kind": "quoted diagnostic lexical scan"
     },
     "source_assertions": [
-      {"path": "PLAN.md", "pattern": "Schema/Identity Boundary"},
+      {"path": "docs/archive/High_Order_Public_Boundary_PLAN_2026-08-11.md", "pattern": "Schema/Identity Boundary"},
       {"path": "docs/research/ho0/capability_boundary_ledger.json", "pattern": "expected_total_matches"}
     ]
   },
