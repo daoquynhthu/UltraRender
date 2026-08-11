@@ -20,6 +20,9 @@ foreach(source
     ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime_objects.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/private_conformance.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ultrarender_runtime_1.def
+    ${CMAKE_SOURCE_DIR}/libs/ure_product/CMakeLists.txt
+    ${CMAKE_SOURCE_DIR}/libs/ure_product/include/ure/product/product_service.hpp
+    ${CMAKE_SOURCE_DIR}/libs/ure_product/src/product_service.cpp
     ${CMAKE_SOURCE_DIR}/libs/ure_public/include/ultrarender/ure_loader.h
     ${CMAKE_SOURCE_DIR}/libs/ure_public/include/ultrarender/ure_registry.h)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${source})
@@ -42,7 +45,7 @@ add_library(ure_contract SHARED
     src/scene_transaction.cpp
     src/session_adapter.cpp
     ultrarender_runtime_1.def)
-target_link_libraries(ure_contract PRIVATE ure_public ure_contract_schema ure_core ure_sceneio bcrypt)
+target_link_libraries(ure_contract PRIVATE ure_public ure_contract_schema ure_product ure_core ure_sceneio bcrypt)
 target_include_directories(ure_contract PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}/generated
@@ -71,7 +74,7 @@ add_library(ure_contract_conformance SHARED
     src/scene_transaction.cpp
     src/session_adapter.cpp
     ultrarender_runtime_1.def)
-target_link_libraries(ure_contract_conformance PRIVATE ure_public ure_contract_schema ure_core ure_sceneio bcrypt)
+target_link_libraries(ure_contract_conformance PRIVATE ure_public ure_contract_schema ure_product ure_core ure_sceneio bcrypt)
 target_include_directories(ure_contract_conformance PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}/generated

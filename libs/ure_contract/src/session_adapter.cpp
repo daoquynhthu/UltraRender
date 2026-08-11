@@ -14,23 +14,13 @@
 #include <utility>
 
 #include <ure/native_scene_hash.hpp>
-#include <ure/session.hpp>
+#include <ure/product/product_service.hpp>
 
 namespace ure::contract {
 namespace {
 
-using Digest = std::array<std::uint8_t, 32>;
-
-struct ObjectiveData {
-    Digest identity{};
-    std::uint64_t wall_time_budget_ns{};
-    std::uint64_t memory_budget_bytes{};
-    std::uint64_t sample_budget{1};
-    std::uint64_t latency_budget_ns{};
-    std::uint32_t determinism_policy{};
-    std::uint32_t usage_policy{};
-    bool force_device_loss{};
-};
+using Digest = product::Identity;
+using ObjectiveData = product::ProductObjective;
 
 struct SessionObject final : Object {
     ~SessionObject() override {
@@ -43,7 +33,7 @@ struct SessionObject final : Object {
     std::mutex mutex;
     std::shared_ptr<InstanceObject> instance;
     std::shared_ptr<const SceneRevisionData> revision;
-    std::unique_ptr<ure::RenderSession> renderer;
+    std::unique_ptr<product::ProductJob> job;
     ObjectiveData objective;
     ure_handle_t active_operation{};
     ure_handle_t latest_frame{};
@@ -139,41 +129,15 @@ bool valid_objective(const ure_objective_envelope_t *objective,
     output.identity = objective_identity(*objective);
     output.wall_time_budget_ns = objective->wall_time_budget_ns;
     output.memory_budget_bytes = objective->memory_budget_bytes;
-    output.sample_budget = objective->sample_budget == 0 ? 1 : objective->sample_budget;
+    output.requested_samples = objective->sample_budget == 0 ? 1 : objective->sample_budget;
     output.latency_budget_ns = objective->latency_budget_ns;
     output.determinism_policy = objective->determinism_policy;
     output.usage_policy = objective->usage_policy;
+    output.output_semantics.assign(
+        objective->output_semantics,
+        objective->output_semantics + objective->output_count);
     output.force_device_loss = conformance_device_loss;
     return true;
-}
-
-ure::RenderConfig render_config(const ObjectiveData &objective) {
-    ure::RenderConfig config;
-    config.integrator.mode = ure::IntegratorMode::Automatic;
-    config.automatic_integrator.enabled = true;
-    config.automatic_integrator.time_budget_milliseconds =
-        objective.wall_time_budget_ns / UINT64_C(1000000);
-    const std::uint64_t memory_mb =
-        objective.memory_budget_bytes / UINT64_C(1048576);
-    config.automatic_integrator.memory_budget_mb = static_cast<int>(
-        std::min<std::uint64_t>(memory_mb,
-                                static_cast<std::uint64_t>(std::numeric_limits<int>::max())));
-    config.samples_per_pass = 1;
-    config.sample_index_offset = 0;
-    return config;
-}
-
-std::unique_ptr<ure::RenderSession>
-make_renderer(const SceneRevisionData &revision, const ObjectiveData &objective) {
-    auto renderer = std::make_unique<ure::RenderSession>(
-        ure::RenderSession::create(render_config(objective)));
-    auto scene = revision.archive.scene;
-    if (scene.width <= 0)
-        scene.width = 64;
-    if (scene.height <= 0)
-        scene.height = 64;
-    renderer->load_scene(scene);
-    return renderer;
 }
 
 void store(ure_digest256_t &output, const Digest &value) noexcept {
@@ -221,8 +185,7 @@ void run_render(const std::shared_ptr<SessionObject> &session,
                 const std::shared_ptr<OperationObject> &operation,
                 ure_handle_t operation_handle) noexcept {
     try {
-        if (session->objective.force_device_loss)
-            throw std::runtime_error("device lost: conformance session fault");
+        session->job->begin();
         {
             std::scoped_lock lock(operation->mutex);
             operation->state = URE_OPERATION_STATE_RUNNING;
@@ -242,6 +205,7 @@ void run_render(const std::shared_ptr<SessionObject> &session,
                 if (operation->cancel_requested ||
                     operation->instance->closed.load(std::memory_order_acquire)) {
                     lock.unlock();
+                    session->job->cancel();
                     finish_operation(operation, operation_handle,
                                      URE_OPERATION_STATE_CANCELED,
                                      URE_RESULT_CANCELED, 500,
@@ -249,12 +213,13 @@ void run_render(const std::shared_ptr<SessionObject> &session,
                     return;
                 }
             }
-            session->renderer->render_pass();
+            session->job->render_sample();
+            const auto progress = session->job->operation();
             {
                 std::scoped_lock lock(operation->mutex, session->mutex);
-                operation->completed = sample + 1;
+                operation->completed = progress.accepted_samples;
                 ++operation->progress_sequence;
-                session->completed_samples = sample + 1;
+                session->completed_samples = progress.accepted_samples;
             }
             if (session->objective.wall_time_budget_ns != 0 &&
                 static_cast<std::uint64_t>(
@@ -263,19 +228,19 @@ void run_render(const std::shared_ptr<SessionObject> &session,
                         .count()) >= session->objective.wall_time_budget_ns)
                 break;
         }
-        int width{};
-        int height{};
-        session->renderer->get_framebuffer_size(width, height);
-        const auto &rgb = session->renderer->get_framebuffer();
+        const auto product_frame = session->job->publish_frame();
+        const auto artifact = session->job->artifact_manifest(product_frame);
         ure_handle_t frame{};
         ure_handle_t frame_error{};
         const ure_digest256_t scene_identity =
-            public_digest(session->revision->revision_identity);
-        const ure_digest256_t objective = public_digest(session->objective.identity);
+            public_digest(product_frame.identities.snapshot);
+        const ure_digest256_t objective =
+            public_digest(product_frame.identities.objective);
         const ure_result_t frame_result = create_frame_snapshot(
             session->owner, operation_handle, scene_identity, objective,
-            session->completed_samples, static_cast<std::uint32_t>(width),
-            static_cast<std::uint32_t>(height), rgb.data(), rgb.size(), &frame,
+            artifact.accepted_samples, product_frame.width,
+            product_frame.height, product_frame.rgb.data(),
+            product_frame.rgb.size(), &frame,
             &frame_error);
         if (frame_result != URE_RESULT_SUCCESS) {
             std::string message = "rendered frame snapshot failed";
@@ -307,6 +272,7 @@ void run_render(const std::shared_ptr<SessionObject> &session,
                          URE_OPERATION_STATE_SUCCEEDED, URE_RESULT_SUCCESS, 0,
                          {});
     } catch (const std::exception &exception) {
+        session->job->fail();
         std::string message = exception.what();
         std::string lower = message;
         std::ranges::transform(lower, lower.begin(), [](unsigned char value) {
@@ -326,6 +292,7 @@ void run_render(const std::shared_ptr<SessionObject> &session,
                                      : URE_RESULT_INTERNAL,
                          502, "render session execution failed: " + message);
     } catch (...) {
+        session->job->fail();
         {
             std::scoped_lock lock(session->mutex);
             session->state = URE_SESSION_STATE_FAILED;
@@ -356,9 +323,10 @@ ure_result_t create_impl(ure_handle_t instance_handle, ure_handle_t scene_handle
     const auto revision = scene_revision(scene_handle, error);
     if (!revision)
         return URE_RESULT_INVALID_HANDLE;
-    std::unique_ptr<ure::RenderSession> renderer;
+    std::unique_ptr<product::ProductJob> job;
     try {
-        renderer = make_renderer(*revision, objective_data);
+        job = product::ProductJob::create(
+            revision->archive, revision->revision_identity, objective_data);
     } catch (const std::exception &exception) {
         return make_error(URE_RESULT_INTERNAL, 505,
                           "renderer scene binding failed: " +
@@ -372,7 +340,7 @@ ure_result_t create_impl(ure_handle_t instance_handle, ure_handle_t scene_handle
     session->thread_policy = URE_THREAD_POLICY_EXTERNALLY_SYNCHRONIZED;
     session->instance = instance;
     session->revision = revision;
-    session->renderer = std::move(renderer);
+    session->job = std::move(job);
     session->objective = objective_data;
     session->state = URE_SESSION_STATE_READY;
     *output = handles().insert(session);
@@ -425,7 +393,7 @@ ure_result_t close_impl(ure_handle_t session_handle, ure_handle_t *error) {
             return make_error(wait, 510,
                               "session close could not drain active work", error);
     }
-    session->renderer->cancel();
+    session->job->cancel();
     session->closed.store(true, std::memory_order_release);
     std::scoped_lock lock(session->mutex);
     session->state = URE_SESSION_STATE_CLOSED;
@@ -450,8 +418,9 @@ ure_result_t get_info_impl(ure_handle_t session_handle, ure_session_info_t *info
     info->bound_scene_revision = session->revision->revision;
     store(info->scene_revision_identity, session->revision->revision_identity);
     store(info->objective_identity, session->objective.identity);
-    info->completed_samples = session->completed_samples;
-    info->requested_samples = session->objective.sample_budget;
+    const auto progress = session->job->operation();
+    info->completed_samples = progress.accepted_samples;
+    info->requested_samples = session->objective.requested_samples;
     info->active_operation = session->active_operation;
     info->latest_frame = session->latest_frame;
     return URE_RESULT_SUCCESS;
@@ -478,9 +447,9 @@ ure_result_t bind_scene_impl(ure_handle_t session_handle,
     const auto next_revision = scene_revision(scene_handle, error);
     if (!next_revision)
         return URE_RESULT_INVALID_HANDLE;
-    std::unique_ptr<ure::RenderSession> next_renderer;
     try {
-        next_renderer = make_renderer(*next_revision, session->objective);
+        session->job->replace_scene(
+            next_revision->archive, next_revision->revision_identity);
     } catch (const std::exception &exception) {
         return make_error(URE_RESULT_INTERNAL, 515,
                           "renderer scene rebind failed: " +
@@ -490,7 +459,6 @@ ure_result_t bind_scene_impl(ure_handle_t session_handle,
     ure_handle_t old_frame{};
     {
         std::scoped_lock lock(session->mutex);
-        session->renderer = std::move(next_renderer);
         session->revision = next_revision;
         session->completed_samples = 0;
         session->reset_reason = URE_SCENE_RESET_FULL_REPLACEMENT;
@@ -529,7 +497,8 @@ ure_result_t start_impl(ure_handle_t session_handle, ure_handle_t *output,
     operation->parent = session_handle;
     operation->thread_policy = URE_THREAD_POLICY_CONCURRENT;
     operation->instance = session->instance;
-    operation->steps = static_cast<std::uint32_t>(session->objective.sample_budget);
+    operation->steps = static_cast<std::uint32_t>(
+        session->objective.requested_samples);
     operation->stage = URE_OPERATION_RENDER_SESSION;
     *output = handles().insert(operation);
     if (!handles().retain(*output, ObjectType::Operation))
@@ -575,7 +544,7 @@ ure_result_t pause_impl(ure_handle_t session_handle, ure_handle_t *error) {
         session->state = URE_SESSION_STATE_PAUSED;
         ++operation->progress_sequence;
     }
-    session->renderer->pause();
+    session->job->pause();
     emit_event(session->instance, URE_EVENT_OPERATION_STATE,
                session->active_operation);
     return URE_RESULT_SUCCESS;
@@ -603,7 +572,7 @@ ure_result_t resume_impl(ure_handle_t session_handle, ure_handle_t *error) {
         ++operation->progress_sequence;
         operation->changed.notify_all();
     }
-    session->renderer->resume();
+    session->job->resume();
     emit_event(session->instance, URE_EVENT_OPERATION_STATE,
                session->active_operation);
     return URE_RESULT_SUCCESS;
@@ -621,7 +590,7 @@ ure_result_t reset_impl(ure_handle_t session_handle, std::uint32_t reason,
         operation_nonterminal(session->active_operation))
         return make_error(URE_RESULT_BUSY, 526,
                           "session reset is unavailable", error);
-    session->renderer->reset_accumulation();
+    session->job->reset();
     ure_handle_t old_frame{};
     {
         std::scoped_lock lock(session->mutex);

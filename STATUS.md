@@ -18,7 +18,7 @@ The approved target has one product execution authority. Maintained clients use 
 
 | Product area | Highest current evidence | Preview gap |
 |---|---|---|
-| Core/Worker scene render | Product E2E for the bounded PB.8 fixture | General objectives, measurements, reconstruction and product scene realization are not closed |
+| Core/Worker scene render | Product E2E for the bounded PB.8 fixture; runtime adapter now delegates rendering to the internal `ure_product` job | Product extension, shared client and general objectives/artifacts are not closed |
 | CLI render | Client-reachable legacy direct path | Bypasses the product runtime and owns separate load/output orchestration |
 | Native advanced blocks | Contract / component executable | Procedural, resource, solver and simulation declarations are not uniformly realized by the renderer |
 | Automatic transport | Component executable with a bounded CUDA bridge | The product renderer does not yet consume the full HT support, pilot and portfolio authority |

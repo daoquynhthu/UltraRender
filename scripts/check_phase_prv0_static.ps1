@@ -3,7 +3,8 @@ param(
     [string]$ClosureLedgerPath = "",
     [string]$SemanticAuditPath = "",
     [string]$ScenarioManifestPath = "",
-    [string]$ReportPath = ""
+    [string]$ReportPath = "",
+    [switch]$RequireCurrentReportContracts
 )
 
 $ErrorActionPreference = "Stop"
@@ -212,21 +213,23 @@ if (-not [string]::IsNullOrWhiteSpace($ReportPath)) {
     if ($report.schema -ne "ure.preview.baseline.v1" -or $report.preview_release_declared -ne $false) {
         throw "Preview baseline report identity or release declaration is invalid"
     }
-    if ($report.closure.entry_count -ne @($closure.entries).Count -or
-        $report.semantic_audit.entry_count -ne @($semantic.entries).Count -or
-        $report.scenarios.count -ne @($scenarios.scenarios).Count -or
-        $report.scenarios.product_e2e_now -ne 0) {
-        throw "Preview baseline report counts drifted from the source contracts"
-    }
-    $expectedContractHashes = @{
-        closure_ledger_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $closurePath).Hash.ToLowerInvariant()
-        semantic_audit_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $semanticPath).Hash.ToLowerInvariant()
-        scenario_manifest_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $scenarioPath).Hash.ToLowerInvariant()
-        schema_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $reportSchemaPath).Hash.ToLowerInvariant()
-    }
-    foreach ($pair in $expectedContractHashes.GetEnumerator()) {
-        if ($report.contracts.($pair.Key) -ne $pair.Value) {
-            throw "Preview baseline report contract digest drifted: $($pair.Key)"
+    if ($RequireCurrentReportContracts) {
+        if ($report.closure.entry_count -ne @($closure.entries).Count -or
+            $report.semantic_audit.entry_count -ne @($semantic.entries).Count -or
+            $report.scenarios.count -ne @($scenarios.scenarios).Count -or
+            $report.scenarios.product_e2e_now -ne 0) {
+            throw "Preview baseline report counts drifted from the source contracts"
+        }
+        $expectedContractHashes = @{
+            closure_ledger_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $closurePath).Hash.ToLowerInvariant()
+            semantic_audit_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $semanticPath).Hash.ToLowerInvariant()
+            scenario_manifest_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $scenarioPath).Hash.ToLowerInvariant()
+            schema_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $reportSchemaPath).Hash.ToLowerInvariant()
+        }
+        foreach ($pair in $expectedContractHashes.GetEnumerator()) {
+            if ($report.contracts.($pair.Key) -ne $pair.Value) {
+                throw "Preview baseline report contract digest drifted: $($pair.Key)"
+            }
         }
     }
     if ($report.source.commit -notmatch '^[0-9a-f]{40}$' -or

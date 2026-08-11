@@ -1,0 +1,3 @@
+#pragma once
+
+#define URE_PRODUCT_BUILD_DIGEST "@UR_PRODUCT_BUILD_DIGEST@"

@@ -46,7 +46,7 @@ PB.0-PB.7 remain Candidate 0.x history and create no stable public promise. PB.8
 
 ```text
 ure_client     — Planned shared client library used by CLI and maintained adapters; selects direct or Worker transport explicitly and owns no renderer logic.
-ure_product    — Planned sole product service behind the runtime; realizes scenes, compiles automatic execution plans, produces measurements, reconstructs and publishes artifacts.
+ure_product    — Internal product service now established in PRV.1; currently owns bounded ProductJob execution and identities, with complete realization/measurement/reconstruction work remaining in later PRV phases.
 ure_contract   — Stable Core bootstrap plus versioned Preview extensions; delegates execution to ure_product instead of implementing a second renderer.
 ure_worker     — Isolated host and protocol bridge for the same runtime/product service; never a renderer or semantic fallback.
 ```

@@ -64,7 +64,7 @@ tests/                Host、GPU、公共边界与 SDK-free 门禁
 docs/                 现役文档与历史归档
 ```
 
-`ure_client` 与 `ure_product` 是 Preview 路线中的批准目标模块，目前尚不能列为已实现目录。
+`ure_product` 已在 PRV.1 中建立为内部产品作业与身份/帧/制品清单执行边界，Core runtime adapter 已开始委托它执行；`ure_client` 仍是尚未实现的批准目标。PRV.1 尚未闭环，因此 CLI、Worker extension 与公共客户端收敛仍不能视为完成。
 
 仓库内 `gui/` 已废弃，不属于设计、维护或测试范围。未来编辑器应作为独立客户端使用公共 ABI/Worker 边界。
 

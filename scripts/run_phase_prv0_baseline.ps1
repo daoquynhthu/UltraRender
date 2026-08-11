@@ -1,7 +1,7 @@
 param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [string]$BuildDir = "build_modular_x64",
-    [string]$ReportPath = "docs/reports/ure_preview_baseline_v1.json",
+    [string]$ReportPath = "",
     [ValidateSet("NotRun", "Passed", "Failed")][string]$FullGateState = "NotRun",
     [switch]$RequireLiveImages
 )
@@ -95,6 +95,11 @@ function Get-BackendInventory([string]$CliPath) {
 }
 
 $buildPath = Resolve-RepositoryPath $BuildDir
+$ReportPath = if ([string]::IsNullOrWhiteSpace($ReportPath)) {
+    Join-Path $buildPath "reports/ure_preview_baseline_v1.json"
+} else {
+    $ReportPath
+}
 $reportFullPath = Resolve-RepositoryPath $ReportPath
 $closurePath = Join-Path $RepoRoot "contracts/product_closure_ledger.json"
 $semanticPath = Join-Path $RepoRoot "contracts/product_semantic_audit.json"
@@ -220,5 +225,5 @@ $parent = Split-Path -Parent $reportFullPath
 New-Item -ItemType Directory -Force -Path $parent | Out-Null
 $json = ($report | ConvertTo-Json -Depth 100).Replace("`r`n", "`n")
 [System.IO.File]::WriteAllText($reportFullPath, $json + "`n", [System.Text.UTF8Encoding]::new($false))
-& (Join-Path $RepoRoot "scripts/check_phase_prv0_static.ps1") -RepoRoot $RepoRoot -ReportPath $reportFullPath | Out-Null
+& (Join-Path $RepoRoot "scripts/check_phase_prv0_static.ps1") -RepoRoot $RepoRoot -ReportPath $reportFullPath -RequireCurrentReportContracts | Out-Null
 Write-Output "PRV.0 baseline written: $ReportPath ($($testNames.Count) tests, $($backends.Count) adapters, $($images.Count + 1) current images)"
