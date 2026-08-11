@@ -76,6 +76,8 @@ Human client / SDK client / Hydra adapter / Python adapter
                     backend executors
 ```
 
+PRV.1 implements this spine for the bounded native-scene color workflow. `ure_client` now supplies explicit Direct and Worker transports, both negotiate ProductJob 0.1 and return the same identities, frame bytes and artifact manifest; CLI render uses only this client and defaults to Worker. Complete archive realization, scene tooling through the runtime, typed measurements, reconstruction and official artifact publication remain subsequent PRV phases.
+
 `ure_product` is an internal C++ product-orchestration module. It owns product jobs, scene realization, immutable snapshots, execution planning, measurement production, reconstruction, checkpointing and artifact publication. It may depend on renderer modules; renderer modules must not depend on clients, CLI or Worker transport.
 
 `ure_client` is the maintained client library used by CLI, generated language adapters and external integration fixtures. It presents one operation model over two explicit transports:
@@ -105,7 +107,7 @@ Worker Protocol 1.0 remains same-user local IPC. Preview additions use additive,
 
 Core ABI 1.0 remains unchanged. Preview capabilities are exposed through independently queried 0.x extensions, initially `UnstableExtension` unless a separate stability review proves a smaller stable contract is justified.
 
-The first Preview extension is ProductJob 0.1. It reuses Core handles, operations and immutable Frame leases while exposing product build/snapshot/objective/plan identities, exact accepted-sample progress and an artifact manifest. It does not add fields or functions to any Core 1.0 prefix. Until later Preview phases define richer execution, Core Objective requests outside the implemented color/sample/wall-time/memory subset reject explicitly.
+The first Preview extension is ProductJob 0.1. It reuses Core handles, operations and immutable Frame leases while exposing product build/snapshot/objective/plan identities, exact accepted-sample progress and an artifact manifest. It does not add fields or functions to any Core 1.0 prefix. PRV.1 implements its bounded native-scene/color/sample subset through Direct and Worker transports. Until later Preview phases define richer execution, unsupported determinism, usage, output, latency and precision-losing budget requests reject explicitly.
 
 The registry digest identifies one exact generated registry snapshot, including unstable extensions. Adding or changing an `UnstableExtension` therefore changes the digest without changing Core major 1. Clients that pin the digest intentionally request that exact snapshot and may reject a newer runtime; clients seeking Core-prefix compatibility negotiate the Core/interface version and leave the exact registry digest unconstrained.
 

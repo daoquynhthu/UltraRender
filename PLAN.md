@@ -1,6 +1,6 @@
 # UltraRender Preview 产品集成与端到端闭环路线图
 
-最后更新: 2026-08-11（PRV.0 产品真相基线闭环；当前进入 PRV.1 唯一 Product Runtime 与客户端主干）
+最后更新: 2026-08-11（PRV.1 唯一 Product Runtime 与客户端主干闭环；当前进入 PRV.2 完整场景实现与自包含包）
 
 本文档是 UltraRender 当前唯一的全局施工权威。它将项目重心从继续扩展高阶研究能力，切换为已有非研究能力的产品总装、端到端闭环，以及训练无关重建/降噪的生产接入。
 
@@ -17,7 +17,7 @@
 
 ## 0. 权威状态
 
-当前游标: PRV.1 — 唯一 Product Runtime 与客户端主干
+当前游标: PRV.2 — 完整场景实现与自包含包
 
 ### 0.1 唯一施工队列
 
@@ -29,10 +29,10 @@ High-order HO/HT/HR + Public Boundary PB           [archived, read-only]
 PRV.0 product truth baseline and closure ledger    [done]
                   |
                   v
-PRV.1 one product runtime and client spine         [current]
+PRV.1 one product runtime and client spine         [done]
                   |
                   v
-PRV.2 complete scene realization and packages
+PRV.2 complete scene realization and packages      [current]
                   |
                   v
 PRV.3 material, asset and bounded wave composition
@@ -108,12 +108,12 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 | Phase X plugin ecosystem | 冻结 | 不施工 |
 | repository GUI | 永久废弃 | 禁止考察 |
 
-### 0.5 当前输入事实
+### 0.5 PRV.0 路线起点（历史基线）
 
-以下事实是 PRV 路线的起点，而不是完成声明：
+以下事实固定 PRV.0 启动时的能力状态，而不是当前实现声明；现状由阶段完成记录、`STATUS.md` 和现役账本更新：
 
 - Core ABI 1.0 / Worker Protocol 1.0 已声明，但当前稳定 Session 的多项 Objective 语义和 sample accounting 需要产品一致性复核；
-- CLI render 仍直接创建 `RenderEngineFactory`，Hydra 与 legacy pyure 也绕过统一产品服务；
+- CLI render、Hydra 与 legacy pyure 当时均绕过统一产品服务；CLI render 已由 PRV.1 收敛，后两者仍待 PRV.10；
 - Native archive 能验证 procedural/resource/solver/simulation block，但现有 CLI/runtime 主要只消费 `archive.scene`；
 - `ure_transport` 已有 Technique Graph、support/measure、pilot、portfolio 与 automatic plan，当前 simplified automatic renderer 未完整消费这些合同；
 - CUDA 拥有完整场景路径；Vulkan、D3D12/DXR、OptiX 当前主要是 runtime、acceleration 和 parity fixture；
@@ -121,7 +121,7 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - MultiGpuContext、distributed files、farm schedule 和 `.urecache` 主要是内部组件/测试入口；
 - `ure_reconstruction`、MeasurementBundle 和统计/样本级 reconstruction 尚未成为完整场景 renderer 的正式输出链；
 - CLI 官方输出仍以单 Beauty HDR/BMP/PPM 为主，公共 Core Frame 当前是单 RGBA plane；
-- 当前维护构建快照为 Windows Release 101 个注册 CTest；数量不是 Preview 成熟度指标。
+- 路线启动时的维护构建快照为 Windows Release 101 个注册 CTest；数量不是 Preview 成熟度指标。
 
 ---
 
@@ -220,9 +220,9 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 
 ## 3. PRV.1 — 唯一 Product Runtime 与客户端主干
 
-**状态**: 当前游标。
+**状态**: 已完成。
 
-**当前进度**: PRV.1.1 与 PRV.1.2 已实现并通过局部门禁；当前施工子游标为 PRV.1.3。
+**完成记录**: `ure_product`、ProductJob 0.1、`ure_client` Direct/Worker transport 与 CLI render 已收敛到同一产品执行权威。CLI 默认 Worker、显式 direct，渲染链接图不再包含 `ure_core`/`ure_sceneio`；原生场景工具暂由隔离的 `ultrarender_native_tool` 保持可用，语义权威在 PRV.2 迁入 runtime scene-tool extension。Direct/Worker 的 load/render/cancel/error/frame/artifact、无隐式回退与两幅逐字节一致的 64×64 PFM 由 `docs/reports/phase_prv1_validation_v1.json` 固定。
 
 **目标**: 建立 `ure_product` 和 `ure_client`，让 CLI render 首先退出 renderer 实现，证明 direct 与 Worker 通过同一 runtime 服务执行当前基础场景。
 
@@ -268,6 +268,8 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 ---
 
 ## 4. PRV.2 — 完整场景实现与自包含包
+
+**状态**: 当前游标。
 
 **目标**: 让一个产品作业消费完整 NativeSceneArchive，并让验证、实现和渲染对 required feature 得出同一结论。
 

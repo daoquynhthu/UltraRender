@@ -115,6 +115,10 @@ if(TARGET ure_contract)
     target_link_libraries(test_product_extension PRIVATE ure_public)
     add_dependencies(test_product_extension ure_public_stage_headers ure_contract)
 
+    add_executable(test_client_transport test_client_transport.cpp)
+    target_link_libraries(test_client_transport PRIVATE ure_client)
+    add_dependencies(test_client_transport ure_worker ure_contract)
+
     add_library(worker_test_support STATIC external_client/worker_client.cpp)
     target_link_libraries(worker_test_support PUBLIC
         ure_public
@@ -153,7 +157,7 @@ if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
     endforeach()
     if(TARGET ure_contract)
-        foreach(target contract_image_artifact test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction test_product_extension worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
+        foreach(target contract_image_artifact test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction test_product_extension test_client_transport worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
             target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
         endforeach()
         target_compile_options(test_loader_client PRIVATE /wd4191)
@@ -269,6 +273,13 @@ add_test(
         -File ${CMAKE_CURRENT_SOURCE_DIR}/test_phase_pb8_static.ps1
         -RepoRoot ${CMAKE_SOURCE_DIR})
 add_test(
+    NAME test_phase_prv1_static
+    COMMAND
+        ${UR_PWSH_EXECUTABLE}
+        -NoProfile
+        -File ${CMAKE_SOURCE_DIR}/scripts/check_phase_prv1_static.ps1
+        -RepoRoot ${CMAKE_SOURCE_DIR})
+add_test(
     NAME test_mock_worker_external_client
     COMMAND external_client
         ${UR_PB1_STAGE_DIR}/bin/ultrarender_mock_worker.exe
@@ -323,6 +334,26 @@ if(TARGET ure_contract)
         COMMAND test_product_extension
             $<TARGET_FILE:ure_contract>
             ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene)
+    add_test(
+        NAME test_client_transport
+        COMMAND test_client_transport
+            $<TARGET_FILE:ure_contract>
+            $<TARGET_FILE:ure_worker>
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene
+            ${CMAKE_CURRENT_BINARY_DIR}/prv1_direct.pfm
+            ${CMAKE_CURRENT_BINARY_DIR}/prv1_worker.pfm)
+    if(TARGET ure_cli)
+        add_test(
+            NAME test_prv1_cli
+            COMMAND
+                ${UR_PWSH_EXECUTABLE}
+                -NoProfile
+                -File ${CMAKE_CURRENT_SOURCE_DIR}/test_prv1_cli.ps1
+                -Cli $<TARGET_FILE:ure_cli>
+                -Runtime $<TARGET_FILE:ure_contract>
+                -Worker $<TARGET_FILE:ure_worker>
+                -Scene ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene)
+    endif()
     add_test(
         NAME test_worker_protocol
         COMMAND test_worker_protocol
@@ -402,6 +433,7 @@ set_tests_properties(
     test_phase_pb6_static
     test_phase_pb7_static
     test_phase_pb8_static
+    test_phase_prv1_static
     test_mock_worker_external_client
     PROPERTIES TIMEOUT 60)
 
@@ -415,6 +447,7 @@ if(TARGET ure_contract)
         test_scene_boundary
         test_scene_transaction
         test_product_extension
+        test_client_transport
         test_worker_protocol
         test_worker_crash
         test_scene_worker
@@ -424,5 +457,8 @@ if(TARGET ure_contract)
         test_core_1_0_compatibility
         test_external_client_package
         PROPERTIES TIMEOUT 60)
+    if(TARGET ure_cli)
+        set_tests_properties(test_prv1_cli PROPERTIES TIMEOUT 60)
+    endif()
     set_tests_properties(test_external_client_package PROPERTIES TIMEOUT 300)
 endif()

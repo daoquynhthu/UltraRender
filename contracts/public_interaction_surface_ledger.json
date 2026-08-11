@@ -67,6 +67,7 @@
   "discovery": {
     "installed_header_modules": [
       "ure_config",
+      "ure_client",
       "ure_core",
       "ure_d3d12",
       "ure_diag",
@@ -82,6 +83,7 @@
     ],
     "root_client_surfaces": [
       "apps/ure_cli/src/main.cpp",
+      "libs/ure_client/include/ure/client/client.hpp",
       "libs/ure_core/include/ure/ure_c_api.h",
       "libs/ure_core/include/ure/render.hpp",
       "libs/ure_core/include/ure/session.hpp",
@@ -207,7 +209,7 @@
       "id": "native_cli_tooling",
       "surface": "CLI validate/build/pack/unpack/inspect/migrate/export tooling",
       "callers": ["command-line users", "build pipelines"],
-      "owners": ["ure_cli", "ure_sceneio"],
+      "owners": ["ure_cli", "ure_native_tool", "ure_sceneio"],
       "semantic_domains": ["scene_authoring"],
       "authority_claims": [],
       "authority_refs": ["native_scene_authority"],
@@ -219,7 +221,7 @@
       "runtime_states": ["Compiled", "Available", "Enabled", "Applicable"],
       "input_role": "Files and explicit tooling commands",
       "output_role": "Validated/migrated native artifacts and loss reports",
-      "translation_path": "CLI command -> native scene tooling",
+      "translation_path": "CLI command -> isolated native tooling component -> native scene tooling",
       "bypass_status": "None",
       "bypass_detail": "Format tooling may remain direct and does not define renderer lifecycle",
       "migration_phase": "None",
@@ -228,6 +230,7 @@
       "conformance_evidence": ["test_native_tooling", "test_native_validation_suite"],
       "anchors": [
         {"path": "apps/ure_cli/src/main.cpp", "pattern": "cmd_native_tool"},
+        {"path": "apps/ure_native_tool/src/main.cpp", "pattern": "cmd_native_tool"},
         {"path": "libs/ure_sceneio/include/ure/native_scene_tooling.hpp", "pattern": "native"}
       ]
     },
@@ -432,23 +435,24 @@
       "semantic_domains": ["client_interaction"],
       "authority_claims": [],
       "authority_refs": ["pb_public_boundary_core_1_0", "native_scene_authority"],
-      "disposition": "LegacyMigration",
+      "disposition": "Adapter",
       "target_disposition": "Adapter",
       "contract_stability": "LegacyExperimental",
       "evidence_maturity": "Production",
       "implementation_status": "Implemented",
       "runtime_states": ["Compiled", "Available", "Enabled", "Applicable"],
-      "input_role": "CLI config and scene path",
-      "output_role": "Offline render and image files",
-      "translation_path": "CLI -> direct RenderEngineFactory/renderer",
-      "bypass_status": "MustConverge",
-      "bypass_detail": "Rendering must migrate to PB or prove semantic parity; native tooling may remain direct",
-      "migration_phase": "PB.5-PB.8",
-      "terminal_gate": "PB.8",
-      "loss_policy": "Unsupported scene/config requests fail",
-      "conformance_evidence": ["test_native_validation_suite"],
+      "input_role": "Native scene path and executable ProductJob 0.1 objective subset",
+      "output_role": "Product identities, immutable frame payload and artifact manifest",
+      "translation_path": "CLI -> ure_client -> explicit direct or Worker transport -> ProductJob 0.1",
+      "bypass_status": "None",
+      "bypass_detail": "CLI owns no renderer implementation and never changes transport implicitly",
+      "migration_phase": "PRV.1",
+      "terminal_gate": "PRV.1",
+      "loss_policy": "Unsupported scene/config requests reject before submission",
+      "conformance_evidence": ["test_client_transport", "test_prv1_cli"],
       "anchors": [
-        {"path": "apps/ure_cli/src/main.cpp", "pattern": "RenderEngineFactory::create_gpu_renderer"}
+        {"path": "apps/ure_cli/src/main.cpp", "pattern": "ure::client::Client::connect"},
+        {"path": "libs/ure_client/include/ure/client/client.hpp", "pattern": "TransportMode"}
       ]
     },
     {

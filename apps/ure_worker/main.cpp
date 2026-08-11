@@ -19,6 +19,7 @@
 
 #include "local_transport.hpp"
 #include "runtime_client.hpp"
+#include "ure_product_v0_generated.h"
 #include "ure_worker_v1_generated.h"
 #if defined(URE_WORKER_CONFORMANCE)
 #include "ure_worker_conformance_generated.h"
@@ -28,6 +29,7 @@ namespace ure::worker {
 namespace {
 
 namespace fb = ultrarender::contract::v1;
+namespace product_fb = ultrarender::contract::preview::v0;
 
 inline constexpr std::uint64_t kTransportNamedPipe = UINT64_C(1) << 0U;
 inline constexpr std::uint64_t kTransportDuplicatedMapping = UINT64_C(1) << 1U;
@@ -230,6 +232,90 @@ bool objective_request(const fb::PublicScenePayload &payload,
                   source->payload_digest()->end(), request.payload_digest.begin());
     }
     return true;
+}
+
+const product_fb::ProductEnvelope *product_payload(
+    std::span<const std::uint8_t> payload,
+    product_fb::ProductMessageKind kind) {
+    flatbuffers::Verifier verifier(payload.data(), payload.size(), 64, 100000);
+    if (!product_fb::VerifyProductEnvelopeBuffer(verifier))
+        return nullptr;
+    const auto *root = product_fb::GetProductEnvelope(payload.data());
+    return root && root->kind() == kind ? root : nullptr;
+}
+
+bool product_objective_request(const product_fb::ProductJobRequest &source,
+                               ObjectiveRequest &request) {
+    request = {};
+    request.scene_id = source.scene_id();
+    request.payload_schema = source.objective_schema();
+    request.payload_version_major = source.objective_version_major();
+    request.payload_version_minor = source.objective_version_minor();
+    request.determinism_policy = source.determinism_policy();
+    request.usage_policy = source.usage_policy();
+    if (source.output_semantics())
+        request.output_semantics.assign(source.output_semantics()->begin(),
+                                        source.output_semantics()->end());
+    request.wall_time_budget_ns = source.wall_time_budget_ns();
+    request.memory_budget_bytes = source.memory_budget_bytes();
+    request.sample_budget = source.sample_budget();
+    request.latency_budget_ns = source.latency_budget_ns();
+    if (source.objective())
+        request.payload.assign(source.objective()->begin(),
+                               source.objective()->end());
+    if (source.objective_digest()) {
+        if (source.objective_digest()->size() != request.payload_digest.size())
+            return false;
+        std::copy(source.objective_digest()->begin(),
+                  source.objective_digest()->end(),
+                  request.payload_digest.begin());
+    }
+    return true;
+}
+
+std::unique_ptr<product_fb::ProductIdentitySetT>
+product_identities(const ProductStatusSnapshot &status) {
+    auto identities = std::make_unique<product_fb::ProductIdentitySetT>();
+    identities->build.assign(status.build_identity.begin(),
+                             status.build_identity.end());
+    identities->snapshot.assign(status.snapshot_identity.begin(),
+                                status.snapshot_identity.end());
+    identities->objective.assign(status.objective_identity.begin(),
+                                 status.objective_identity.end());
+    identities->plan.assign(status.plan_identity.begin(),
+                            status.plan_identity.end());
+    return identities;
+}
+
+std::vector<std::uint8_t> product_response_payload(
+    product_fb::ProductMessageKind kind, const ProductStatusSnapshot &status,
+    const ProductArtifactSnapshot *artifact = nullptr) {
+    product_fb::ProductEnvelopeT envelope;
+    envelope.kind = kind;
+    envelope.status = std::make_unique<product_fb::ProductJobStatusT>();
+    envelope.status->job_id = status.job_id;
+    envelope.status->operation_id = status.operation_id;
+    envelope.status->frame_id = status.frame_id;
+    envelope.status->state = status.state;
+    envelope.status->requested_samples = status.requested_samples;
+    envelope.status->accepted_samples = status.accepted_samples;
+    envelope.status->identities = product_identities(status);
+    if (artifact) {
+        envelope.artifact =
+            std::make_unique<product_fb::ProductArtifactManifestT>();
+        envelope.artifact->job_id = artifact->job_id;
+        envelope.artifact->accepted_samples = artifact->accepted_samples;
+        envelope.artifact->rgb_value_count = artifact->rgb_value_count;
+        envelope.artifact->frame_content.assign(
+            artifact->frame_content_identity.begin(),
+            artifact->frame_content_identity.end());
+        envelope.artifact->identities = product_identities(status);
+    }
+    flatbuffers::FlatBufferBuilder builder;
+    product_fb::FinishProductEnvelopeBuffer(
+        builder, product_fb::CreateProductEnvelope(builder, &envelope));
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
 }
 
 bool transaction_request(std::span<const std::uint8_t> bytes,
@@ -436,7 +522,8 @@ int run_worker(const Arguments &arguments) {
             capability != URE_CAPABILITY_LIFECYCLE &&
             capability != URE_CAPABILITY_FRAME_LEASE &&
             capability != URE_CAPABILITY_NATIVE_SCENE &&
-            capability != URE_CAPABILITY_RENDER_SESSION)
+            capability != URE_CAPABILITY_RENDER_SESSION &&
+            capability != URE_CAPABILITY_PRODUCT_JOB)
             return 27;
         if (std::find(required_capabilities.begin(), required_capabilities.end(),
                       capability) != required_capabilities.end())
@@ -472,7 +559,8 @@ int run_worker(const Arguments &arguments) {
                                capability == URE_CAPABILITY_LIFECYCLE ||
                                capability == URE_CAPABILITY_FRAME_LEASE ||
                                capability == URE_CAPABILITY_NATIVE_SCENE ||
-                               capability == URE_CAPABILITY_RENDER_SESSION;
+                               capability == URE_CAPABILITY_RENDER_SESSION ||
+                               capability == URE_CAPABILITY_PRODUCT_JOB;
         if (supported &&
             !contains_capability(handshake->required_capabilities(), capability) &&
             std::find(selected.optional_capabilities.begin(),
@@ -614,6 +702,138 @@ int run_worker(const Arguments &arguments) {
                 response.payload_schema = URE_PAYLOAD_SCENE_TRANSACTION;
                 response.payload = std::move(snapshot.payload);
                 response.declared_payload_bytes = response.payload.size();
+            }
+        } else if (request->operation_kind() == URE_OPERATION_CREATE_PRODUCT_JOB &&
+                   request->payload_schema() == URE_PAYLOAD_PRODUCT_JOB) {
+            const std::span payload(request->payload()->data(),
+                                    request->payload()->size());
+            const auto *wire = product_payload(
+                payload, product_fb::ProductMessageKind::CreateJob);
+            ObjectiveRequest objective;
+            ProductStatusSnapshot status;
+            if (!wire || !wire->request() || wire->request()->job_id() == 0 ||
+                !product_objective_request(*wire->request(), objective)) {
+                response.result = fb::ResultCode::MalformedData;
+                failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 312,
+                           "product create request is malformed"};
+                response.error = error_descriptor(failure);
+            } else if (!runtime.create_product_job(
+                           objective, wire->request()->job_id(), status,
+                           failure)) {
+                response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+            } else {
+                response.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+                response.payload = product_response_payload(
+                    product_fb::ProductMessageKind::CreateJob, status);
+                response.declared_payload_bytes = response.payload.size();
+            }
+        } else if (request->operation_kind() == URE_OPERATION_START_PRODUCT_JOB &&
+                   request->payload_schema() == URE_PAYLOAD_PRODUCT_JOB) {
+            const std::span payload(request->payload()->data(),
+                                    request->payload()->size());
+            const auto *wire = product_payload(
+                payload, product_fb::ProductMessageKind::StartJob);
+            ProductStatusSnapshot status;
+            if (!wire || !wire->request() || wire->request()->job_id() == 0) {
+                response.result = fb::ResultCode::MalformedData;
+                failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 313,
+                           "product start request is malformed"};
+                response.error = error_descriptor(failure);
+            } else if (!runtime.start_product_job(wire->request()->job_id(),
+                                                  status, failure)) {
+                response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+            } else {
+                response.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+                response.payload = product_response_payload(
+                    product_fb::ProductMessageKind::StartJob, status);
+                response.declared_payload_bytes = response.payload.size();
+            }
+        } else if (request->operation_kind() == URE_OPERATION_CANCEL_PRODUCT_JOB &&
+                   request->payload_schema() == URE_PAYLOAD_PRODUCT_JOB) {
+            const std::span payload(request->payload()->data(),
+                                    request->payload()->size());
+            const auto *wire = product_payload(
+                payload, product_fb::ProductMessageKind::CancelJob);
+            ProductStatusSnapshot status;
+            if (!wire || !wire->request() || wire->request()->job_id() == 0) {
+                response.result = fb::ResultCode::MalformedData;
+                failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 314,
+                           "product cancel request is malformed"};
+                response.error = error_descriptor(failure);
+            } else if (!runtime.cancel_product_job(wire->request()->job_id(),
+                                                   status, failure)) {
+                response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+            } else {
+                response.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+                response.payload = product_response_payload(
+                    product_fb::ProductMessageKind::CancelJob, status);
+                response.declared_payload_bytes = response.payload.size();
+            }
+        } else if (request->operation_kind() ==
+                       URE_OPERATION_ACQUIRE_PRODUCT_ARTIFACT &&
+                   request->payload_schema() == URE_PAYLOAD_PRODUCT_JOB) {
+            const std::span payload(request->payload()->data(),
+                                    request->payload()->size());
+            const auto *wire = product_payload(
+                payload, product_fb::ProductMessageKind::AcquireArtifact);
+            ProductStatusSnapshot status;
+            ProductArtifactSnapshot artifact;
+            FrameSnapshot snapshot;
+            if (!wire || !wire->request() || wire->request()->job_id() == 0) {
+                response.result = fb::ResultCode::MalformedData;
+                failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 315,
+                           "product artifact request is malformed"};
+                response.error = error_descriptor(failure);
+            } else if (!runtime.acquire_product_artifact(
+                           wire->request()->job_id(), status, artifact, snapshot,
+                           failure)) {
+                response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+                if (status.job_id != 0) {
+                    response.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+                    response.payload = product_response_payload(
+                        product_fb::ProductMessageKind::AcquireArtifact,
+                        status);
+                    response.declared_payload_bytes = response.payload.size();
+                }
+            } else if (snapshot.bytes.size() > negotiated_blob_bytes ||
+                       snapshot.bytes.size() > negotiated_frame_bytes ||
+                       leases.size() >= 8 ||
+                       snapshot.bytes.size() >
+                           negotiated_blob_bytes - retained_blob_bytes) {
+                response.result = fb::ResultCode::Backpressure;
+                failure = {URE_RESULT_BACKPRESSURE, URE_ERROR_DOMAIN_CORE, 316,
+                           "product frame exceeds the negotiated lease budget"};
+                response.error = error_descriptor(failure);
+            } else {
+                if (next_lease == 0 || next_generation == 0)
+                    return 36;
+                const std::uint64_t lease_id = next_lease++;
+                const std::uint64_t generation = next_generation++;
+                std::uint64_t remote_handle{};
+                Lease lease;
+                if (!create_read_only_shared_mapping(
+                        snapshot.bytes, client_process.get(), lease.mapping,
+                        remote_handle, error))
+                    return 37;
+                lease.generation = generation;
+                lease.retained_bytes = snapshot.bytes.size();
+                const auto content_digest =
+                    sha256("UltraRender.SharedFrameBlob.v1", snapshot.bytes);
+                response.message_kind = fb::MessageKind::FrameReady;
+                response.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+                response.payload = product_response_payload(
+                    product_fb::ProductMessageKind::AcquireArtifact, status,
+                    &artifact);
+                response.declared_payload_bytes = response.payload.size();
+                response.frame = frame_descriptor(
+                    snapshot, lease_id, generation, remote_handle,
+                    content_digest, worker_identity);
+                leases.emplace(lease_id, std::move(lease));
+                retained_blob_bytes += snapshot.bytes.size();
             }
         } else if (request->operation_kind() == URE_OPERATION_RENDER_SESSION &&
                    request->payload_schema() == URE_PAYLOAD_RENDER_OBJECTIVE) {

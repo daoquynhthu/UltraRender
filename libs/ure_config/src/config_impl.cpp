@@ -237,6 +237,8 @@ CliResult parse_cli(int argc, char** argv) {
 
     auto* render_cmd = app.add_subcommand("render", "Render a scene file");
     std::string scene_render, config_render, output_render, format_render;
+    std::string transport_render = "worker", runtime_render, worker_render;
+    std::uint64_t cancel_after_ms = 0;
     int spp_render = 0, width_render = 0, height_render = 0;
     std::uint64_t spectral_domain_bins = 0;
     int spectral_packet_lanes = 0, spectral_max_resident_mb = 0;
@@ -331,7 +333,11 @@ CliResult parse_cli(int argc, char** argv) {
     std::uint32_t integrator_mlt_seed = 0;
     std::uint64_t integrator_mlt_chain_id_offset = 0;
     bool physics = false, audio = false;
-    render_cmd->add_option("scene", scene_render, "Path to scene file (glTF)")->required();
+    render_cmd->add_option("scene", scene_render, "Path to native scene or package")->required();
+    render_cmd->add_option("--transport", transport_render, "Product transport: worker or direct");
+    render_cmd->add_option("--runtime", runtime_render, "Absolute or executable-relative product runtime path");
+    render_cmd->add_option("--worker", worker_render, "Absolute or executable-relative Worker path");
+    render_cmd->add_option("--cancel-after-ms", cancel_after_ms, "Request bounded diagnostic cancellation after launch");
     render_cmd->add_option("-c,--config", config_render, "Path to JSON config file");
     render_cmd->add_option("--spp", spp_render, "Samples per pixel");
     render_cmd->add_option("--width", width_render, "Render width");
@@ -559,6 +565,10 @@ CliResult parse_cli(int argc, char** argv) {
         result.command = CliCommand::Render;
         result.scene_path = scene_render;
         result.config_path = config_render;
+        result.transport = transport_render;
+        result.runtime_path = runtime_render;
+        result.worker_path = worker_render;
+        result.cancel_after_ms = cancel_after_ms;
         RenderConfig cfg;
         if (!config_render.empty())
             cfg = load_config(config_render);

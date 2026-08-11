@@ -65,7 +65,7 @@ try {
     Expect-Failure "forbidden GUI anchor" { param($j) $j.entries[0].anchors[0] = "gui/legacy.cpp" } Closure
     Expect-Failure "missing semantic migration" {
         param($j)
-        $entry = $j.entries | Where-Object current_behavior -eq "AcceptedButIgnored" | Select-Object -First 1
+        $entry = $j.entries | Where-Object current_behavior -eq "ExecutedWithSemanticDebt" | Select-Object -First 1
         $entry.migration_phase = ""
     } Semantic
     Expect-Failure "guarded source drift" { param($j) $j.guarded_sources[0].sha256 = ("0" * 64) } Semantic

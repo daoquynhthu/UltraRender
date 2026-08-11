@@ -123,7 +123,6 @@ if ($missingAuthorityClaims.Count -ne 0 -or $authorityClaims.Count -ne @($closur
 }
 
 $requiredBypass = @{
-    cli_render = "ProductServiceBypass"
     cpp_session = "ProductServiceBypass"
     legacy_python = "ProductServiceBypass"
     hydra = "ProductServiceBypass"

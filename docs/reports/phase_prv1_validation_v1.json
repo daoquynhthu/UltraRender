@@ -1,0 +1,72 @@
+{
+  "schema": "ure.phase_prv1.validation.v1",
+  "preview_release_declared": false,
+  "component_state": "Verified",
+  "source": {
+    "registry_digest": "62501eff808502857828856d4a83f4a9be3322725747d2cb1e12343d6ef06c56",
+    "product_schema_sha256": "4f6faa635a8c9f6783e965fc6899733b5c4b4344bfb2dea0670c54fff9b28ca6",
+    "client_api_sha256": "54c2262f2f37b731bf26048e954e381b32568c9df79abfcd95646bd0653a5032",
+    "direct_transport_sha256": "9529ad547c9fc52ee165f0931fe0e6d816fdb157f67ead1af1604e697bd01c7d",
+    "worker_transport_sha256": "2737649e5ce7dc7f9112d0dae186637d64bf3f69a31e62e4155392eef8ac4b67",
+    "cli_sha256": "febc1eff2a9f7ddbf288922b0d4b30afbca6f37db0e22ed31811a59c6de933b6",
+    "worker_sha256": "fe6913d4e269ac89d1801b4ee7175c73475bc711a413ab0a5f9d274b434b4503"
+  },
+  "contract": {
+    "core_abi": "1.0",
+    "worker_protocol": "1.0",
+    "product_extension": "0.1",
+    "bootstrap_exports": [
+      "ureGetRuntimeManifest",
+      "ureQueryInterface"
+    ]
+  },
+  "client": {
+    "default_transport": "Worker",
+    "explicit_transports": [
+      "Direct",
+      "Worker"
+    ],
+    "implicit_fallback": false,
+    "identity_parity": true
+  },
+  "image_e2e": [
+    {
+      "transport": "Direct",
+      "file": "prv1_direct.pfm",
+      "bytes": 49166,
+      "sha256": "05297ba898c023ce38b8eecb99727522891ff9bf031ea6bc3f862b3837b360cc",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "transport": "Worker",
+      "file": "prv1_worker.pfm",
+      "bytes": 49166,
+      "sha256": "05297ba898c023ce38b8eecb99727522891ff9bf031ea6bc3f862b3837b360cc",
+      "width": 64,
+      "height": 64
+    }
+  ],
+  "behavioral_gates": [
+    "native_scene_load",
+    "product_job_render",
+    "immutable_frame_copy",
+    "artifact_manifest",
+    "direct_worker_identity_parity",
+    "unsupported_objective_rejection",
+    "direct_worker_cancellation",
+    "worker_launch_failure_isolation",
+    "no_implicit_transport_fallback",
+    "multiple_job_client_lifecycle",
+    "bounded_worker_shutdown",
+    "shared_frame_layout_and_digest",
+    "cli_renderer_ownership_removed"
+  ],
+  "ctest": {
+    "configuration": "Release",
+    "registered": 108,
+    "focused_failed": 0,
+    "full_gate_state": "Passed"
+  },
+  "semantic_digest": "a7d93f4a5a63abfb45b38bfc9f82b4c955d716a2dde2f48e0daae13a5fb4783d"
+}

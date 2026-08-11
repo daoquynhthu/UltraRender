@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ure.phase_prv1.validation.v1",
+  "title": "UltraRender PRV.1 validation report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "preview_release_declared",
+    "component_state",
+    "source",
+    "contract",
+    "client",
+    "image_e2e",
+    "behavioral_gates",
+    "ctest",
+    "semantic_digest"
+  ],
+  "properties": {
+    "schema": { "const": "ure.phase_prv1.validation.v1" },
+    "preview_release_declared": { "const": false },
+    "component_state": { "enum": ["Implemented", "Verified"] },
+    "source": {
+      "type": "object",
+      "required": ["registry_digest", "product_schema_sha256", "client_api_sha256", "direct_transport_sha256", "worker_transport_sha256", "cli_sha256", "worker_sha256"],
+      "properties": {
+        "registry_digest": { "$ref": "#/$defs/digest" },
+        "product_schema_sha256": { "$ref": "#/$defs/digest" },
+        "client_api_sha256": { "$ref": "#/$defs/digest" },
+        "direct_transport_sha256": { "$ref": "#/$defs/digest" },
+        "worker_transport_sha256": { "$ref": "#/$defs/digest" },
+        "cli_sha256": { "$ref": "#/$defs/digest" },
+        "worker_sha256": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "required": ["core_abi", "worker_protocol", "product_extension", "bootstrap_exports"],
+      "properties": {
+        "core_abi": { "const": "1.0" },
+        "worker_protocol": { "const": "1.0" },
+        "product_extension": { "const": "0.1" },
+        "bootstrap_exports": {
+          "const": ["ureGetRuntimeManifest", "ureQueryInterface"]
+        }
+      }
+    },
+    "client": {
+      "type": "object",
+      "required": ["default_transport", "explicit_transports", "implicit_fallback", "identity_parity"],
+      "properties": {
+        "default_transport": { "const": "Worker" },
+        "explicit_transports": { "const": ["Direct", "Worker"] },
+        "implicit_fallback": { "const": false },
+        "identity_parity": { "const": true }
+      }
+    },
+    "image_e2e": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["transport", "file", "bytes", "sha256", "width", "height"],
+        "properties": {
+          "transport": { "enum": ["Direct", "Worker"] },
+          "file": { "type": "string", "minLength": 1 },
+          "bytes": { "type": "integer", "minimum": 1024 },
+          "sha256": { "$ref": "#/$defs/digest" },
+          "width": { "type": "integer", "minimum": 1 },
+          "height": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "behavioral_gates": {
+      "type": "array",
+      "minItems": 8,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "ctest": {
+      "type": "object",
+      "required": ["configuration", "registered", "focused_failed", "full_gate_state"],
+      "properties": {
+        "configuration": { "const": "Release" },
+        "registered": { "type": "integer", "minimum": 100 },
+        "focused_failed": { "const": 0 },
+        "full_gate_state": { "enum": ["NotRun", "Passed"] }
+      }
+    },
+    "semantic_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

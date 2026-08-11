@@ -42,6 +42,8 @@ The initial StableExtension list is empty.
 
 The UUID transaction facility is an `UnstableExtension`. Query `URE_INTERFACE_SCENE_TRANSACTION`; if it is unavailable, use full-scene replacement. Its table, request/result structures, payload schema, edit IDs, strategy diagnostics, operation ID, and event ID may change between builds and require an exact registry digest. A client must never infer its availability from Core ABI 1.0 alone.
 
+ProductJob 0.1 is also an `UnstableExtension`. The maintained source-tree `ure_client` library negotiates it over explicit Direct or Worker transport and is the current path used by CLI render. It exposes a bounded native-scene/color job, product build/snapshot/objective/plan identities, accepted-sample accounting, immutable Frame data and an artifact manifest. Unsupported objective semantics reject; Worker failure or registry mismatch never changes transport implicitly. This PRV.1 surface is exact-build product integration, not an additional stable Core promise or a published SDK guarantee.
+
 Spectral, Stokes/polarimetric, MeasurementBundle, reconstruction, integrator, material, physical-world, differentiation, telemetry, and solver/provider capabilities follow the same rule: they are absent from Core unless separately identified and versioned.
 
 ## Local worker

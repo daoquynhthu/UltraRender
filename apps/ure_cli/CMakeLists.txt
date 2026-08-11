@@ -1,16 +1,10 @@
 add_executable(ure_cli src/main.cpp)
+add_dependencies(ure_cli ure_native_tool)
 
 target_link_libraries(ure_cli PRIVATE
-    ure_core
-    ure_sceneio
+    ure_client
     ure_config
-    ure_diag
 )
-
-if(TARGET ure_physics)
-    target_link_libraries(ure_cli PRIVATE ure_physics)
-    target_compile_definitions(ure_cli PRIVATE UR_HAS_PHYSICS)
-endif()
 
 if(MSVC)
     target_compile_options(ure_cli PRIVATE

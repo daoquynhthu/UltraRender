@@ -89,6 +89,30 @@ struct ObjectiveRequest {
     std::array<std::uint8_t, 32> payload_digest{};
 };
 
+struct ProductStatusSnapshot {
+    std::uint64_t job_id{};
+    std::uint64_t operation_id{};
+    std::uint64_t frame_id{};
+    std::uint32_t state{};
+    std::uint64_t requested_samples{};
+    std::uint64_t accepted_samples{};
+    std::array<std::uint8_t, 32> build_identity{};
+    std::array<std::uint8_t, 32> snapshot_identity{};
+    std::array<std::uint8_t, 32> objective_identity{};
+    std::array<std::uint8_t, 32> plan_identity{};
+};
+
+struct ProductArtifactSnapshot {
+    std::uint64_t job_id{};
+    std::uint64_t accepted_samples{};
+    std::uint64_t rgb_value_count{};
+    std::array<std::uint8_t, 32> build_identity{};
+    std::array<std::uint8_t, 32> snapshot_identity{};
+    std::array<std::uint8_t, 32> objective_identity{};
+    std::array<std::uint8_t, 32> plan_identity{};
+    std::array<std::uint8_t, 32> frame_content_identity{};
+};
+
 class RuntimeClient {
   public:
     RuntimeClient();
@@ -110,6 +134,24 @@ class RuntimeClient {
                                  RuntimeFailure &failure);
     bool render_scene(const ObjectiveRequest &request, FrameSnapshot &snapshot,
                       RuntimeFailure &failure);
+    bool create_product_job(const ObjectiveRequest &request,
+                            std::uint64_t job_id,
+                            ProductStatusSnapshot &status,
+                            RuntimeFailure &failure);
+    bool start_product_job(std::uint64_t job_id,
+                           ProductStatusSnapshot &status,
+                           RuntimeFailure &failure);
+    bool cancel_product_job(std::uint64_t job_id,
+                            ProductStatusSnapshot &status,
+                            RuntimeFailure &failure);
+    bool inspect_product_job(std::uint64_t job_id,
+                             ProductStatusSnapshot &status,
+                             RuntimeFailure &failure);
+    bool acquire_product_artifact(std::uint64_t job_id,
+                                  ProductStatusSnapshot &status,
+                                  ProductArtifactSnapshot &artifact,
+                                  FrameSnapshot &frame,
+                                  RuntimeFailure &failure);
     const std::array<std::uint8_t, 32> &registry_digest() const noexcept;
 
   private:

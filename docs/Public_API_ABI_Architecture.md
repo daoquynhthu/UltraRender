@@ -70,7 +70,7 @@ No surface may remain unclassified. No two entries may claim canonical authority
 
 Hydra requires special treatment because its external ABI is governed by OpenUSD. UltraRender does not replace that ABI. The maintained delegate must lower Hydra state into the same native scene/revision/transaction semantics and converge on the same execution service as PB, or remain explicitly legacy and unsupported as a stable client path. It MUST NOT preserve an independent camera, material, object-ID, error, operation, or framebuffer authority.
 
-CLI native build/validate/pack tools may remain direct format tooling when they do not execute renderer semantics. CLI rendering, pyure, Hydra, and any separately released integration must converge on the shared Preview client/product service; parity between duplicate implementations is not a permanent substitute. Distributed/farm and solver-provider contracts remain internal or become explicitly versioned extensions; they never silently become alternative frontend APIs.
+CLI rendering has converged on the shared Preview client/product service in PRV.1. Native build/validate/pack tools are temporarily isolated from its render link graph and move behind a runtime scene-tool extension in PRV.2. Pyure, Hydra, and any separately released integration must likewise converge; parity between duplicate implementations is not a permanent substitute. Distributed/farm and solver-provider contracts remain internal or become explicitly versioned extensions; they never silently become alternative frontend APIs.
 
 ## 3. What stability means
 

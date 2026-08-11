@@ -21,6 +21,14 @@ table ProductJobRequest {
   objective_schema:uint (id: 3);
   objective_version_major:ushort (id: 4);
   objective_version_minor:ushort (id: 5);
+  determinism_policy:uint (id: 6);
+  usage_policy:uint (id: 7);
+  output_semantics:[uint] (id: 8);
+  wall_time_budget_ns:ulong (id: 9);
+  memory_budget_bytes:ulong (id: 10);
+  sample_budget:ulong (id: 11);
+  latency_budget_ns:ulong (id: 12);
+  objective_digest:[ubyte] (id: 13);
 }
 
 table ProductJobStatus {

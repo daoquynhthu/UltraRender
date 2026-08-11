@@ -1,0 +1,7 @@
+add_executable(ure_native_tool src/main.cpp)
+set_target_properties(ure_native_tool PROPERTIES OUTPUT_NAME ultrarender_native_tool)
+target_link_libraries(ure_native_tool PRIVATE ure_sceneio ure_config ure_diag)
+if(MSVC)
+    target_compile_options(ure_native_tool PRIVATE /W4 /WX /utf-8 /EHsc /wd4819)
+endif()
+install(TARGETS ure_native_tool RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

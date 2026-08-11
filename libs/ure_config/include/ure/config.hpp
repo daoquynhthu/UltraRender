@@ -218,6 +218,10 @@ struct CliResult {
     std::vector<std::string> input_paths;
     std::string loss_report_path;
     std::string scene_id;
+    std::string transport = "worker";
+    std::string runtime_path;
+    std::string worker_path;
+    std::uint64_t cancel_after_ms{};
     bool allow_lossy = false;
     bool verbose = false;
     bool quiet = false;

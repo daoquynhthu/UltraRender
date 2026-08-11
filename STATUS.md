@@ -10,16 +10,16 @@ UltraRender remains a research and development renderer. There is no “UltraRen
 
 Phase PB is complete. The project declares **Core ABI 1.0** and **Worker Protocol 1.0** for the exact Windows x64 profile described below. The declaration freezes a small client interaction grammar, not the renderer as a product and not its algorithms, internal data models, feature set, or cross-platform behavior. The declaration tag is a repository evidence marker; packages have not been publicly distributed and the support clock has not started.
 
-The authoritative implementation cursor is `PRV.1 — 唯一 Product Runtime 与客户端主干`. PRV.0, Phase Q, R, T, V, the declared bounded scope of W, U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2, and PB.0-PB.8 are complete within their documented contract, component, or evidence boundaries. Those completion records do not imply product E2E closure. HR.3, neural systems, new estimator research, the broader high-order physical world, and differentiation are frozen during the Preview route.
+The authoritative implementation cursor is `PRV.2 — 完整场景实现与自包含包`. PRV.0-PRV.1, Phase Q, R, T, V, the declared bounded scope of W, U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2, and PB.0-PB.8 are complete within their documented contract, component, or evidence boundaries. Those completion records do not imply product E2E closure. HR.3, neural systems, new estimator research, the broader high-order physical world, and differentiation are frozen during the Preview route.
 
 ## Preview integration state
 
-The approved target has one product execution authority. Maintained clients use a shared client library and select either an in-process direct transport or the local Worker transport; both reach the same runtime/product implementation. The Worker owns isolation and transport only. This target is specified in [`docs/UltraRender_Preview_Architecture.md`](docs/UltraRender_Preview_Architecture.md) and is not yet the current implementation.
+The current render-client spine has one product execution authority. `ure_client` selects either an in-process Direct transport or the local Worker transport; both reach the same runtime/ProductJob implementation. The Worker owns isolation and transport only, and the CLI defaults to Worker without implicit Direct fallback. The complete Preview architecture remains larger than this PRV.1 slice and is specified in [`docs/UltraRender_Preview_Architecture.md`](docs/UltraRender_Preview_Architecture.md).
 
 | Product area | Highest current evidence | Preview gap |
 |---|---|---|
-| Core/Worker scene render | Product E2E for the bounded PB.8 fixture; runtime adapter delegates rendering to `ure_product`, and the generated ProductJob 0.1 direct extension exposes identities, accepted samples, frames and artifact manifests | Shared `ure_client`, Worker extension forwarding and CLI convergence are not closed |
-| CLI render | Client-reachable legacy direct path | Bypasses the product runtime and owns separate load/output orchestration |
+| Core/Worker scene render | Product E2E for the bounded PRV.1 native-scene path; runtime adapter and Worker both delegate ProductJob 0.1 to `ure_product` | Complete archive realization, measurements and official output remain later PRV phases |
+| CLI render | Product E2E for the PRV.1 subset through `ure_client`; Worker is default and Direct is explicit | Rich scene/output/tooling semantics are not yet exposed by ProductJob 0.1 |
 | Native advanced blocks | Contract / component executable | Procedural, resource, solver and simulation declarations are not uniformly realized by the renderer |
 | Automatic transport | Component executable with a bounded CUDA bridge | The product renderer does not yet consume the full HT support, pilot and portfolio authority |
 | Measurement/reconstruction | Component executable | No complete-scene product producer/output chain for all required planes |
@@ -27,11 +27,11 @@ The approved target has one product execution authority. Maintained clients use 
 | Multi-device/farm/cache | Component executable | Not reachable through one canonical product job and artifact workflow |
 | Hydra/legacy Python | Client-reachable internal paths | Bypass the canonical product service and require convergence |
 
-PRV.0 now backs this snapshot with a machine-validated closure ledger. It records 44 maintained capabilities and entry points: 2 Contract, 18 ComponentExecutable, 15 RendererIntegrated, 7 ClientReachable and 2 ProductE2E. The two ProductE2E classifications are limited to the bounded Core/Worker PB fixture; none of the twelve retained Preview product scenarios is ProductE2E.
+PRV.0 preserves the historical product baseline. The current machine-validated closure ledger records 46 maintained capabilities and entry points: 2 Contract, 18 ComponentExecutable, 14 RendererIntegrated, 7 ClientReachable and 5 ProductE2E. The five ProductE2E classifications cover only the bounded Core/ProductJob/Worker/CLI spine; none of the twelve final Preview product scenarios is ProductE2E.
 
-The accompanying semantic audit covers 25 maintained inputs and finds 12 accepted-but-ignored semantics plus 4 executed-with-debt semantics. The retained scenario manifest binds twelve required workflows across eight coverage dimensions. See [`docs/PRV0_Product_Truth_Baseline.md`](docs/PRV0_Product_Truth_Baseline.md) and the machine report [`docs/reports/ure_preview_baseline_v1.json`](docs/reports/ure_preview_baseline_v1.json).
+The current semantic audit covers 25 maintained inputs: 15 reject outside the executable ProductJob 0.1 subset, 4 execute, 4 are preserved for tooling and 2 execute with explicit semantic debt. No maintained input is accepted-but-ignored. The retained scenario manifest binds twelve required workflows across eight coverage dimensions. See the historical [`PRV.0 baseline`](docs/PRV0_Product_Truth_Baseline.md), its [machine report](docs/reports/ure_preview_baseline_v1.json), and the current [PRV.1 validation report](docs/reports/phase_prv1_validation_v1.json).
 
-PRV.1 has completed its internal service and ProductJob 0.1 slices. The current live ledger has 46 entries; ProductJob remains an `UnstableExtension`, Core ABI 1.0 prefixes are unchanged, non-executable Objective semantics reject, and accepted-sample/frame/artifact accounting is tested through the real CUDA path. PRV.1 is not complete until one maintained `ure_client` provides explicit Direct/Worker transports and CLI render migrates to it.
+PRV.1 is complete. ProductJob remains an `UnstableExtension`; Core ABI 1.0 prefixes are unchanged. The shared `ure_client` provides explicit Direct/Worker transports, Worker uses the two bootstrap exports and shared-memory frame leases, and CLI render owns no renderer/SceneIR/image-save implementation. Direct/Worker/CLI load, render, cancellation, error, frame and artifact behavior is gated, including two byte-identical 64×64 PFM renders and failure isolation without transport fallback.
 
 ## Declared public boundary
 
@@ -42,9 +42,9 @@ PRV.1 has completed its internal service and ProductJob 0.1 slices. The current 
 | Worker protocol | 1.0; same-user local Named Pipe plus read-only shared-memory leases |
 | Worker | `ultrarender_worker_1.exe`; no TCP/UDP listener, firewall exception, or ambient plugin/script/solver/model discovery |
 | Core surface | 39 table functions for discovery, lifetime, capabilities/errors, operations/events, scene replacement, sessions, and immutable frames |
-| Registry | 182 live identities, 140 reviewed Core identities, 11 pre-release tombstones |
+| Registry | 192 live identities, 140 reviewed Core identities, 11 pre-release tombstones; ProductJob entries are unstable |
 | Stable extensions | None initially |
-| Unstable extensions | UUID scene transaction table; exact registry/runtime identity required |
+| Unstable extensions | UUID scene transaction and ProductJob 0.1 tables; exact registry/runtime identity required |
 | Stable fallback | Bounded native full-scene validation and atomic replacement |
 | Legacy APIs | `ure_c_api.h`, `pyure_native.dll`, and pyure ctypes remain experimental and are not Core ABI 1.0 |
 
@@ -75,6 +75,7 @@ GPU backends, CUDA-coupled renderer/session/product-runtime targets, and optiona
 
 | Subsystem | Current state | Important boundary |
 |---|---|---|
+| Product client/runtime | `ure_product`, ProductJob 0.1 and `ure_client` Direct/Worker transports execute the same bounded native scene; CLI render uses this path | ProductJob is unstable and currently exposes only the PRV.1 objective/frame/artifact subset |
 | CUDA renderer | Implemented and tested | Complete-scene reference path; no CPU production integrator |
 | Spectral/polarization | Runtime spectral domain, packet cap 32, Stokes/Mueller on covered paths | Not general coherent field transport |
 | Automatic integration | Technique Graph, support/measure composition, pilot qualification and portfolio contracts plus a bounded CUDA bridge implemented | Current product auto renderer does not yet consume the entire HT authority; manual modes remain for reproduction |
@@ -104,11 +105,11 @@ The PB.8 freeze has:
 
 The machine-readable report is [`docs/reports/phase_pb_validation_v2.json`](docs/reports/phase_pb_validation_v2.json). Exact promise and non-promise language is in [`docs/Public_API_Support_Policy.md`](docs/Public_API_Support_Policy.md).
 
-This report is a point-in-time public-boundary declaration record. PRV.0 separately audits product execution ownership, accepted-but-ignored semantics and maintained-client bypasses; it does not reinterpret or weaken PB.8 compatibility evidence.
+This report is a point-in-time public-boundary declaration record. PRV.0 separately established the product execution, semantic-debt and maintained-client baseline; the live ledger has advanced through PRV.1 without reinterpreting or weakening PB.8 compatibility evidence.
 
 ## Explicitly incomplete
 
-- one canonical product service shared by CLI, direct, Worker, Python and Hydra clients;
+- migration of Python and Hydra onto the canonical product service already used by CLI, Direct and Worker;
 - complete realization or explicit rejection of native procedural/resource/solver/simulation semantics;
 - full HT-contract-driven automatic transport in the product renderer;
 - automatic production reconstruction with complete-scene measurement producers and multilayer output;
@@ -131,7 +132,8 @@ Unsupported capability requests are expected to fail with structured diagnostics
 ctest --test-dir build_modular_x64 -C Release --output-on-failure
 .\scripts\run_phase_pb_validation_suite.ps1 -BuildDir build_modular_x64 -Config Release
 pwsh -NoProfile -File scripts/check_phase_prv0_static.ps1 -RepoRoot .
-pwsh -NoProfile -File scripts/run_phase_prv0_baseline.ps1 -RepoRoot . -BuildDir build_modular_x64 -RequireLiveImages
+pwsh -NoProfile -File scripts/check_phase_prv1_static.ps1 -RepoRoot . -RequireVerifiedReport
+pwsh -NoProfile -File scripts/run_phase_prv1_validation.ps1 -RepoRoot . -BuildDir build_modular_x64 -FullGateState Passed
 ```
 
 CTest counts are snapshots. Use `ctest --test-dir build_modular_x64 -C Release -N` for the live inventory.

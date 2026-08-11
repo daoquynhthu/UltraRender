@@ -17,7 +17,7 @@ The baseline has four authorities:
 
 The initial ledger contains 44 entries: 2 Contract, 18 ComponentExecutable, 15 RendererIntegrated, 7 ClientReachable and 2 ProductE2E. The two ProductE2E entries are only the bounded Core/Worker PB fixture paths backed by six retained external-client PFM artifacts. They do not promote any of the twelve Preview product scenarios to ProductE2E.
 
-CLI render, the installed C++ session, Hydra, legacy C and legacy Python remain product-service bypasses. The CLI baseline image is retained as evidence of its current RendererIntegrated direct path, not as evidence of canonical product execution.
+At the PRV.0 snapshot, CLI render, the installed C++ session, Hydra, legacy C and legacy Python were product-service bypasses. PRV.1 subsequently converged CLI render through `ure_client`; the other legacy paths remain tracked by the live ledger. The retained CLI baseline image is historical evidence of the former RendererIntegrated direct path, not current canonical execution evidence.
 
 The semantic audit records 25 maintained semantics. At the initial baseline, 12 are accepted without execution and 4 execute with semantic debt. The highest-priority findings are:
 
@@ -35,20 +35,18 @@ The manifest fixes diffuse, textured PBR, glass/SDS, small light, high occlusion
 
 Several current sources are retained component fixtures or deterministic generators rather than product-ready scene packages. Their `current_closure` records that limitation. Later PRV phases must replace or promote evidence only after the canonical product service produces the declared artifact and passes the scenario metrics.
 
-## Reproduction
+## Historical validation
 
 The static gate validates required coverage, unique execution-authority claims, source anchors and hashes, valid owners/dispositions, honest bypasses, non-expired migration gates, external evidence for ProductE2E claims and the GUI exclusion. Negative fixtures prove that each of those boundaries fails closed.
 
+The committed baseline report and its legacy-CLI image are read-only historical evidence. Current validation checks that the report remains internally valid while the live ledger advances; it does not rerun the retired direct-render CLI path.
+
 ```powershell
 pwsh -NoProfile -File scripts/check_phase_prv0_static.ps1 -RepoRoot .
-ctest --test-dir build_modular_x64 -C Release -R "^test_phase_prv0_static$" --output-on-failure
-pwsh -NoProfile -File scripts/run_phase_prv0_baseline.ps1 `
-  -RepoRoot . -BuildDir build_modular_x64 `
-  -ReportPath docs/reports/ure_preview_baseline_v1.json `
-  -RequireLiveImages
+ctest --test-dir build_modular_x64 -C Release -R "^test_phase_prv0_baseline$" --output-on-failure
 ```
 
-The baseline generator excludes its output file from the source-tree digest, normalizes the CTest inventory, omits dynamic available-memory values from backend identity and verifies live image bytes against the retained PB report. `preview_release_declared` is structurally fixed to `false`.
+The original baseline generator excluded its output file from the source-tree digest, normalized the CTest inventory, omitted dynamic available-memory values from backend identity and verified live image bytes against the retained PB report. `preview_release_declared` remains structurally fixed to `false`.
 
 The generated report's `source.dirty` field honestly records whether it was produced before a commit. Its source commit and content digests remain sufficient to identify the exact audited inputs; a clean-tree reproduction may regenerate the report after checkout without changing the semantic contracts.
 

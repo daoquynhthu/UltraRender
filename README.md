@@ -4,17 +4,17 @@ UltraRender 是一个处于持续研发阶段的光谱/偏振离线渲染器。�
 
 本项目尚不是通用生产渲染器，也没有发布“UltraRender 1.0”。功能与成熟度以 [STATUS.md](STATUS.md) 为准，施工顺序以 [PLAN.md](PLAN.md) 为准。Research、Experimental、Production 是不同的证据等级；类型、配置项或拒绝测试的存在不代表对应能力已经可用。
 
-当前权威实施游标为 `PRV.1 — 唯一 Product Runtime 与客户端主干`。项目暂时冻结 learned/neural、新积分器、广义统一物理世界和可微路线，优先把已有能力接入一个可验证的 `UltraRender_preview` 产品闭环。该名称是尚未达成的里程碑，不是现有发布版本。
+当前权威实施游标为 `PRV.2 — 完整场景实现与自包含包`。项目暂时冻结 learned/neural、新积分器、广义统一物理世界和可微路线，优先把已有能力接入一个可验证的 `UltraRender_preview` 产品闭环。该名称是尚未达成的里程碑，不是现有发布版本。
 
 ## Preview 集成方向
 
 Preview 路线要求 CLI、Python、Hydra 和后续编辑器通过同一个产品服务工作：客户端使用共享 `ure_client`，显式选择进程内 direct transport 或本地 Worker transport；两者最终调用同一 runtime/product implementation。Worker 只负责隔离、协议和共享内存传输，CLI 也不再拥有第二套场景加载、积分器选择、重建或输出实现。
 
-当前代码尚未达到这个目标：CLI render、Hydra 和 legacy pyure 仍有直接调用内部 renderer/session 的路径；自动渲染桥、原生高级块、MeasurementBundle、重建、可移植 backend、多设备/farm/cache 也尚未全部进入同一个完整场景工作流。新的 [Preview 架构](docs/UltraRender_Preview_Architecture.md) 定义目标边界，[PLAN.md](PLAN.md) 按 `PRV.0` 至 `PRV.11` 逐步完成迁移和真实图像门禁。
+PRV.1 已让 CLI render 退出 renderer 实现：共享 `ure_client` 提供显式 Direct/Worker transport，两路均使用 ProductJob 0.1 与同一个 `ure_product` 服务；CLI 默认 Worker，启动失败不会回退 direct。Hydra、legacy pyure、自动渲染桥、原生高级块、MeasurementBundle、重建、可移植 backend、多设备/farm/cache 仍未全部进入同一个完整场景工作流。[Preview 架构](docs/UltraRender_Preview_Architecture.md) 定义目标边界，[PLAN.md](PLAN.md) 按 `PRV.0` 至 `PRV.11` 逐步完成迁移和真实图像门禁。
 
-PRV.0 已建立机器可验证的[产品真相基线](docs/PRV0_Product_Truth_Baseline.md)：44 项能力/入口闭环记录、25 项维护语义审计和 12 个保留产品场景。当前只有 Core/Worker 的有界 PB fixture 具备 ProductE2E 证据；十二个 Preview 产品场景均尚未达到 ProductE2E。基线明确记录 12 项 accepted-but-ignored 和 4 项执行语义债务，后续阶段必须执行、拒绝、保留为工具语义或冻结为研究，不得静默忽略。
+PRV.0 的历史[产品真相基线](docs/PRV0_Product_Truth_Baseline.md)记录了当时的 44 项能力/入口、25 项维护语义和 12 个保留产品场景。PRV.1 后现役账本有 46 项记录，其中 5 项达到有界 ProductE2E；维护语义中已无 accepted-but-ignored，仍有 2 项明确的执行语义债务。十二个最终 Preview 产品场景仍未闭环，后续阶段必须继续执行、拒绝、保留为工具语义或冻结为研究。
 
-PRV.1 当前已建立内部 `ure_product` 服务和 generated ProductJob 0.1 `UnstableExtension`。Direct 调用可取得 build/snapshot/objective/plan identity、实际 accepted samples、Frame 和 artifact manifest；无法执行的非默认 Objective 语义会明确拒绝。共享 `ure_client`、Worker forwarding 与 CLI 迁移尚未完成，因此这仍不是 Preview 产品闭环。
+PRV.1 已闭环内部 `ure_product` 服务、generated ProductJob 0.1 `UnstableExtension`、共享 `ure_client`、Worker forwarding 与 CLI render 迁移。Direct/Worker 返回一致的 build/snapshot/objective/plan identity、accepted samples、Frame 与 artifact manifest；无法执行的 Objective/CLI 语义明确拒绝。两路真实 64×64 PFM 逐字节一致，证据见 [PRV.1 验证报告](docs/reports/phase_prv1_validation_v1.json)。这只完成客户端主干，不代表 `UltraRender_preview` 已完成。
 
 ## 公共交互边界
 
@@ -25,7 +25,7 @@ PRV.1 当前已建立内部 `ure_product` 服务和 generated ProductJob 0.1 `Un
 
 这是客户端交互合同的 1.0，不是 UltraRender 产品版本 1.0，也不表示仓库整体 API、算法或平台均已稳定。声明不等于公开分发；当前标签与仓库内构建用于固定声明证据，支持时钟仅在另行批准并公开分发软件包后开始。
 
-稳定 Core 只覆盖运行时发现、句柄与生命周期、能力/错误、异步操作与事件、原生场景完整替换、通用渲染目标和不可变 frame lease。它不冻结积分器、MaterialGraph、SceneIR、RenderConfig、MeasurementBundle、WorldState、GPU 调度、模型格式、求解器或研究算法。初始 `StableExtension` 列表为空；UUID transaction 是独立的 `UnstableExtension`。现有 `ure_c_api.h`、`pyure_native.dll` 和 pyure ctypes 仍是 legacy experimental 接口。
+稳定 Core 只覆盖运行时发现、句柄与生命周期、能力/错误、异步操作与事件、原生场景完整替换、通用渲染目标和不可变 frame lease。它不冻结积分器、MaterialGraph、SceneIR、RenderConfig、MeasurementBundle、WorldState、GPU 调度、模型格式、求解器或研究算法。初始 `StableExtension` 列表为空；UUID transaction 与 ProductJob 0.1 均是独立的 `UnstableExtension`。现有 `ure_c_api.h`、`pyure_native.dll` 和 pyure ctypes 仍是 legacy experimental 接口。
 
 公共边界的规范与使用说明：
 
@@ -52,7 +52,9 @@ PRV.1 当前已建立内部 `ure_product` 服务和 generated ProductJob 0.1 `Un
 apps/                 CLI 与本地 worker
 contracts/            公共 registry、schema、ABI baseline 与验证报告
 libs/ure_public/      生成的 C11 公共头
+libs/ure_client/      显式 Direct/Worker 的共享产品客户端
 libs/ure_contract/    Windows x64 Core ABI runtime adapter
+libs/ure_product/     内部 ProductJob 执行与身份/制品边界
 libs/ure_core/        CUDA 渲染核心与 session
 libs/ure_types/       后端无关类型与 SceneIR
 libs/ure_runtime/     后端无关 GPU runtime 合同
@@ -66,7 +68,7 @@ tests/                Host、GPU、公共边界与 SDK-free 门禁
 docs/                 现役文档与历史归档
 ```
 
-`ure_product` 已在 PRV.1 中建立为内部产品作业与身份/帧/制品清单执行边界，Core runtime adapter 已开始委托它执行；`ure_client` 仍是尚未实现的批准目标。PRV.1 尚未闭环，因此 CLI、Worker extension 与公共客户端收敛仍不能视为完成。
+`ure_product` 是内部产品作业与身份/帧/制品清单执行边界，Core runtime adapter 与 Worker 均委托它执行；`ure_client` 是 CLI 当前唯一的渲染客户端主干。原生 validate/build/pack/migrate/export 工具暂由独立 `ultrarender_native_tool` 进程承载，避免把 `ure_sceneio` 重新链接进 CLI render；其语义权威将在 PRV.2 收敛到 runtime scene-tool extension。
 
 仓库内 `gui/` 已废弃，不属于设计、维护或测试范围。未来编辑器应作为独立客户端使用公共 ABI/Worker 边界。
 
@@ -89,7 +91,7 @@ Ninja 可并行构建普通目标；高内存 CUDA 编译由 `ur_cuda_heavy_comp
 
 GitHub Actions 另行在 Ubuntu 24.04 的 GCC 13/Clang 18 与 Windows 2025 的 MSVC 上执行 CUDA-off 根构建、33 项纯 host/contract 测试、15 项 warnings-as-errors SDK-free 测试，以及安装后 `find_package()` 消费测试。该门禁验证非 GPU 源码和包边界的可移植性，不扩张完整场景渲染的平台承诺。矩阵、排除项和缓存策略见 [CI 说明](docs/CI.md)。
 
-最新已冻结的 PB.8 证据为 Release 构建与 101/101 CTest，通过三种独立调用方式生成六幅实际 PFM 图像。它只证明公共边界声明门禁，不证明 Preview 产品闭环；测试数量也是快照。
+最新已冻结的 PB.8 证据为 Release 构建与 101/101 CTest，通过三种独立调用方式生成六幅实际 PFM 图像。PRV.1 另有 Direct/Worker/CLI 产品主干及两幅一致 PFM 的独立证据；两者都不证明完整 Preview 产品闭环。测试数量均为阶段快照。
 
 ## 已知边界
 
@@ -97,7 +99,7 @@ GitHub Actions 另行在 Ubuntu 24.04 的 GCC 13/Clang 18 与 Windows 2025 的 M
 - 不承诺完整 Linux、macOS、ARM64 或非 NVIDIA 场景渲染支持。
 - 不提供 OSL 编译器；MaterialX 是适配层，URE MaterialGraph 是内部权威模型。
 - 物理/声学模块仍是实验性基础，不是统一物理世界的完成实现。
-- CLI、Hydra、legacy Python、完整场景重建与非 CUDA backend 尚未完成 Preview 收敛。
+- Hydra、legacy Python、完整场景高级语义、重建与非 CUDA backend 尚未完成 Preview 收敛；CLI render 已收敛，场景工具仍待 PRV.2 迁入 runtime extension。
 - 研究和不完整能力会 fail loudly；不会以静默降级伪装为已支持路径。
 
 ## 文档与许可
