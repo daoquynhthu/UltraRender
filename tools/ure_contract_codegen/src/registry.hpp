@@ -32,8 +32,9 @@ struct Registry {
     std::string canonical_bytes;
     std::string digest_hex;
     std::vector<std::uint8_t> digest_bytes;
-    std::string candidate_version;
+    std::string version;
     std::vector<RegistryEntry> entries;
+    std::vector<std::uint32_t> tombstones;
 };
 
 Registry load_registry(const std::filesystem::path& path);

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ure.phase_pb.validation.v2",
+  "title": "UltraRender Phase PB Core 1.0 Validation",
+  "type": "object",
+  "required": [
+    "schema",
+    "publication_state",
+    "declaration_state",
+    "compatibility_promise",
+    "source",
+    "artifacts",
+    "abi",
+    "compatibility_matrix",
+    "image_e2e",
+    "fuzz_corpus",
+    "behavioral_gates",
+    "ctest",
+    "environment",
+    "semantic_digest"
+  ],
+  "properties": {
+    "schema": {"const": "ure.phase_pb.validation.v2"},
+    "publication_state": {"const": "Stable"},
+    "declaration_state": {"const": "Declared"},
+    "compatibility_promise": {"type": "string", "minLength": 1},
+    "source": {"type": "object"},
+    "artifacts": {"type": "object"},
+    "abi": {"type": "object"},
+    "compatibility_matrix": {"type": "object"},
+    "image_e2e": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "required": ["calling_mode", "file", "bytes", "sha256"],
+        "properties": {
+          "calling_mode": {"type": "string"},
+          "file": {"type": "string", "pattern": "\\.pfm$"},
+          "bytes": {"type": "integer", "minimum": 33},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "fuzz_corpus": {"type": "object"},
+    "behavioral_gates": {"type": "array", "minItems": 16},
+    "ctest": {"type": "object"},
+    "environment": {"type": "object"},
+    "semantic_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}

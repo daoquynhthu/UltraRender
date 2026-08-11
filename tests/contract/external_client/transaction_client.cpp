@@ -24,11 +24,13 @@
 #include <flatbuffers/verifier.h>
 #include <ultrarender/ure_loader.h>
 
-#include "ure_scene_candidate_generated.h"
+#include "ure_scene_v1_generated.h"
+
+#include "image_artifact.h"
 
 namespace {
 
-namespace fb = ultrarender::contract::candidate;
+namespace fb = ultrarender::contract::v1;
 
 int failures{};
 
@@ -111,7 +113,8 @@ const Table *query_table(ure_query_interface_fn query,
     ure_interface_response_t response{};
     request.header = {URE_STRUCTURE_INTERFACE_QUERY, sizeof(request), nullptr};
     std::memcpy(request.interface_id.bytes, identity, sizeof(identity));
-    request.maximum_minor = 1;
+    request.minimum_major = 1;
+    request.maximum_major = 1;
     response.header = {URE_STRUCTURE_INTERFACE_RESPONSE, sizeof(response),
                        nullptr};
     if (query(&request, &response, nullptr) != URE_RESULT_SUCCESS ||
@@ -363,7 +366,7 @@ bool render_identity(const ure_session_interface_t &sessions,
                      const ure_operation_interface_t &operations,
                      const ure_frame_interface_t &frames,
                      ure_handle_t instance, ure_handle_t scene,
-                     ure_digest256_t &identity) {
+                     ure_digest256_t &identity, const char *image_path) {
     ure_objective_envelope_t objective{};
     objective.header = {URE_STRUCTURE_OBJECTIVE_ENVELOPE, sizeof(objective),
                         nullptr};
@@ -384,6 +387,22 @@ bool render_identity(const ure_session_interface_t &sessions,
         info.header = {URE_STRUCTURE_FRAME_INFO, sizeof(info), nullptr};
         success = frames.get_info(frame, &info, nullptr) == URE_RESULT_SUCCESS;
         identity = info.frame_identity;
+        ure_frame_plane_info_t plane{};
+        plane.header = {URE_STRUCTURE_FRAME_PLANE_INFO, sizeof(plane), nullptr};
+        ure_frame_map_t map{};
+        map.header = {URE_STRUCTURE_FRAME_MAP, sizeof(map), nullptr};
+        ure_image_evidence_t evidence{};
+        success = success && image_path &&
+                  frames.get_plane_info(frame, 0, &plane, nullptr) ==
+                      URE_RESULT_SUCCESS &&
+                  frames.map_plane_read(frame, 0, &map, nullptr) ==
+                      URE_RESULT_SUCCESS &&
+                  ure_write_pfm_rgba(image_path, map.data, info.width,
+                                     info.height, map.row_stride, &evidence) != 0;
+        if (map.map_token)
+            success = frames.unmap_plane(frame, map.map_token, nullptr) ==
+                          URE_RESULT_SUCCESS &&
+                      success;
     }
     if (frame)
         frames.release(frame, nullptr);
@@ -399,7 +418,7 @@ bool render_identity(const ure_session_interface_t &sessions,
 }
 
 int main(int argc, char **argv) {
-    if (argc != 3)
+    if (argc != 5)
         return 2;
     std::filesystem::current_path(
         std::filesystem::path(argv[2]).parent_path());
@@ -416,21 +435,25 @@ int main(int argc, char **argv) {
     const std::uint8_t runtime_id[16] = URE_INTERFACE_RUNTIME_UUID_BYTES;
     const std::uint8_t instance_id[16] = URE_INTERFACE_INSTANCE_UUID_BYTES;
     const std::uint8_t scene_id[16] = URE_INTERFACE_SCENE_UUID_BYTES;
+    const std::uint8_t transaction_id[16] =
+        URE_INTERFACE_SCENE_TRANSACTION_UUID_BYTES;
     const std::uint8_t session_id[16] = URE_INTERFACE_SESSION_UUID_BYTES;
     const std::uint8_t operation_id[16] = URE_INTERFACE_OPERATION_UUID_BYTES;
     const std::uint8_t frame_id[16] = URE_INTERFACE_FRAME_UUID_BYTES;
     const auto runtimes = query_table<ure_runtime_interface_t>(query, runtime_id);
     const auto instances = query_table<ure_instance_interface_t>(query, instance_id);
     const auto scenes = query_table<ure_scene_interface_t>(query, scene_id);
+    const auto transactions =
+        query_table<ure_scene_transaction_interface_t>(query, transaction_id);
     const auto sessions = query_table<ure_session_interface_t>(query, session_id);
     const auto operations =
         query_table<ure_operation_interface_t>(query, operation_id);
     const auto frames = query_table<ure_frame_interface_t>(query, frame_id);
-    check(runtimes && instances && scenes && sessions && operations && frames &&
-              scenes->apply_transaction,
+    check(runtimes && instances && scenes && transactions && sessions &&
+              operations && frames && transactions->apply_transaction,
           "scene transaction interface is unavailable");
-    if (!runtimes || !instances || !scenes || !sessions || !operations ||
-        !frames) {
+    if (!runtimes || !instances || !scenes || !transactions || !sessions ||
+        !operations || !frames) {
         FreeLibrary(module);
         return 4;
     }
@@ -460,7 +483,7 @@ int main(int argc, char **argv) {
     const auto first = transaction(first_bytes, 1);
     ure_scene_transaction_result_t small{};
     small.header = {URE_STRUCTURE_SCENE_TRANSACTION_RESULT, sizeof(small), nullptr};
-    check(scenes->apply_transaction(scene, &first, &small, nullptr) ==
+    check(transactions->apply_transaction(scene, &first, &small, nullptr) ==
               URE_RESULT_BUFFER_TOO_SMALL && small.result_required != 0,
           "transaction sizing pass did not fail without commit");
     auto retained = revision_output();
@@ -473,7 +496,7 @@ int main(int argc, char **argv) {
     first_result.header = {URE_STRUCTURE_SCENE_TRANSACTION_RESULT,
                            sizeof(first_result), nullptr};
     first_result.result_payload = {result_bytes.data(), result_bytes.size()};
-    check(scenes->apply_transaction(scene, &first, &first_result, nullptr) ==
+    check(transactions->apply_transaction(scene, &first, &first_result, nullptr) ==
               URE_RESULT_SUCCESS && first_result.resulting_revision == 2 &&
               first_result.strategy == URE_SCENE_UPDATE_HOT_UPDATE,
           "transform transaction failed");
@@ -495,7 +518,7 @@ int main(int argc, char **argv) {
 
     ure_scene_transaction_result_t stale{};
     stale.header = {URE_STRUCTURE_SCENE_TRANSACTION_RESULT, sizeof(stale), nullptr};
-    check(scenes->apply_transaction(scene, &first, &stale, nullptr) ==
+    check(transactions->apply_transaction(scene, &first, &stale, nullptr) ==
               URE_RESULT_REVISION_CONFLICT &&
               stale.resulting_revision == 2 &&
               stale.strategy == URE_SCENE_UPDATE_REJECTED,
@@ -509,7 +532,7 @@ int main(int argc, char **argv) {
     ure_scene_transaction_result_t rejected{};
     rejected.header = {URE_STRUCTURE_SCENE_TRANSACTION_RESULT, sizeof(rejected),
                        nullptr};
-    check(scenes->apply_transaction(scene, &rollback, &rejected, nullptr) ==
+    check(transactions->apply_transaction(scene, &rollback, &rejected, nullptr) ==
               URE_RESULT_CAPABILITY_UNAVAILABLE &&
               rejected.strategy == URE_SCENE_UPDATE_REJECTED,
           "unsupported transaction was not rejected");
@@ -530,7 +553,7 @@ int main(int argc, char **argv) {
                             sizeof(camera_result), nullptr};
     camera_result.result_payload = {camera_result_storage.data(),
                                     camera_result_storage.size()};
-    check(scenes->apply_transaction(scene, &camera, &camera_result, nullptr) ==
+    check(transactions->apply_transaction(scene, &camera, &camera_result, nullptr) ==
               URE_RESULT_SUCCESS && camera_result.resulting_revision == 3 &&
               camera_result.strategy == URE_SCENE_UPDATE_HOT_UPDATE,
           "canonical camera transaction failed");
@@ -547,7 +570,7 @@ int main(int argc, char **argv) {
                               sizeof(fallback_result), nullptr};
     fallback_result.result_payload = {fallback_result_storage.data(),
                                       fallback_result_storage.size()};
-    check(scenes->apply_transaction(scene, &fallback_transaction,
+    check(transactions->apply_transaction(scene, &fallback_transaction,
                                     &fallback_result, nullptr) ==
               URE_RESULT_SUCCESS && fallback_result.resulting_revision == 4 &&
               fallback_result.strategy == URE_SCENE_UPDATE_FULL_RELOAD &&
@@ -574,7 +597,7 @@ int main(int argc, char **argv) {
 
     ure_digest256_t replay_frame{};
     check(render_identity(*sessions, *operations, *frames, instance, scene,
-                          replay_frame),
+                          replay_frame, argv[3]),
           "transaction replay frame failed");
 
     auto replacement = revision_output();
@@ -585,7 +608,7 @@ int main(int argc, char **argv) {
           "full replacement and transaction replay differ semantically");
     ure_digest256_t replacement_frame{};
     check(render_identity(*sessions, *operations, *frames, instance, scene,
-                          replacement_frame) &&
+                          replacement_frame, argv[4]) &&
               std::memcmp(replay_frame.bytes, replacement_frame.bytes, 32) == 0,
           "full replacement and transaction replay frame identities differ");
 
@@ -600,7 +623,7 @@ int main(int argc, char **argv) {
                              sizeof(partial_result), nullptr};
     partial_result.result_payload = {partial_result_storage.data(),
                                      partial_result_storage.size()};
-    check(scenes->apply_transaction(scene, &partial, &partial_result, nullptr) ==
+    check(transactions->apply_transaction(scene, &partial, &partial_result, nullptr) ==
               URE_RESULT_SUCCESS && partial_result.resulting_revision == 6 &&
               partial_result.strategy == URE_SCENE_UPDATE_PARTIAL_REBUILD &&
               partial_result.applied_operation_count == 6,
@@ -616,7 +639,7 @@ int main(int argc, char **argv) {
                             sizeof(remove_result), nullptr};
     remove_result.result_payload = {remove_result_storage.data(),
                                     remove_result_storage.size()};
-    check(scenes->apply_transaction(scene, &remove, &remove_result, nullptr) ==
+    check(transactions->apply_transaction(scene, &remove, &remove_result, nullptr) ==
               URE_RESULT_SUCCESS && remove_result.resulting_revision == 7 &&
               remove_result.strategy == URE_SCENE_UPDATE_PARTIAL_REBUILD,
           "object removal transaction failed");

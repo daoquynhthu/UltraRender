@@ -1,194 +1,88 @@
 # UltraRender
 
-UltraRender 是一个处于持续开发阶段的 CUDA 离线渲染器。当前可执行路径以光谱辐射度、Stokes/Mueller 偏振和 wavefront path tracing 为基础；项目同时包含原生场景格式、材质图、体积相函数、会话 API、分布式文件契约，以及若干物理、声学和波动光学的参考实现或接口。
+UltraRender 是一个处于持续研发阶段的光谱/偏振离线渲染器。当前完整场景参考路径基于 CUDA；仓库还包含原生场景格式、材质图、自动估计器组合、测量与重建合同，以及有界的多后端、波动光学和物理研究基础。
 
-本项目尚未达到通用生产渲染器的成熟度。功能范围以 [PLAN.md](PLAN.md) 的权威施工队列和 [STATUS.md](STATUS.md) 的当前能力表为准；历史设计或阶段计划不代表现行能力。
+本项目尚不是通用生产渲染器，也没有发布“UltraRender 1.0”。功能与成熟度以 [STATUS.md](STATUS.md) 为准，施工顺序以 [PLAN.md](PLAN.md) 为准。Research、Experimental、Production 是不同的证据等级；类型、配置项或拒绝测试的存在不代表对应能力已经可用。
 
-## 当前状态
+## 公共交互边界
 
-- Phase Q、Phase R、Phase T、Phase V、声明范围内的 Phase W、Phase U、HO.0-HO.2、HT.0-HT.5 与 HR.0-HR.2 已完成。SDK-free transport 层可形成带 coverage、normalization、uncertainty 和预算身份的自动计划；重建层保留 raw estimate，并已建立 statistical baseline 以及 sample/technique/path/spectral/phase-aware Research 边界。Spectrum、Stokes 与有界 Complex Jones 具有显式物理投影或 gauge 语义，外部 kernel/point-set/hybrid 输出必须绑定 exact batch/provider/artifact 且保持 Research maturity。当前 CUDA 完整场景路径尚未生产全部高阶 plane，也没有随仓库提供训练模型，因此不会把研究路径伪装成默认降噪。
-- PB.0-PB.7 已完成公共交互面分类、Candidate registry/生成式 SDK、Windows x64 两导出 loader ABI、Core 生命周期、immutable frame lease、native scene/session、持久 UUID transaction，以及 mixed-version/security/package/独立客户端验证。SDK 与 runtime 分包；clean out-of-tree C/C++ consumer 覆盖 direct ABI、transaction 和本地 worker E2E。`ure_worker` 只经两个 loader symbol 装载 runtime，使用 same-user Named Pipe 与只读 shared-memory lease，不进行网络监听或 ambient plugin/script/solver/model discovery。PB.2-PB.6 compiled client 仅作为当前 Candidate runtime 的迁移证据，旧 Candidate runtime 不被暗示为受支持版本。这里仍不是稳定 ABI/Protocol。当前停在 `PB.8 — Stable 1.0 declaration gate`，必须获得单独明确批准才能进入；HR.3 继续暂缓。细则见 [公共 API/ABI 架构](docs/Public_API_ABI_Architecture.md)、[Phase PB 计划](docs/PB_Public_Boundary_PLAN.md) 和 [Candidate 集成边界](docs/Public_API_Candidate_Integration.md)。
-- 默认完整场景渲染后端仍是 CUDA。Vulkan RT 与 DXR 已具备多 BLAS/TLAS build、compaction、transform refit/rebuild、scratch budget 和 telemetry；OptiX SDK 保持可选，存在时启用同一构建合同和实际 raygen/miss/closest-hit pipeline，缺失时不影响 CUDA self-compute、Vulkan 或 D3D12。一个由同一 SceneIR lower 的固定 fixture 已对齐四类 provider 的 shadow/closest hit、transform、material、UV/normal/tangent metadata 和小型 AOV；这不等同于任意 SceneIR 的完整 radiometric integrator 已迁移到 native provider。
-- 后端选择、adapter identity、能力位、limits、显存预算及 driver/compiler identity 已贯穿 JSON、CLI、C ABI 和 pyure。Acceleration provider、build quality、update policy、cluster gate、stats gate 与 scratch budget 使用独立的向后兼容配置合同；CUDA `self_compute` 的质量预设、auto/static/refit/rebuild update、scratch-budget enforcement 与 versioned acceleration stats 已可执行。Native construction 与 traversal parity fixture 已完成。V.8-V.10 已加入 SDK-free clustered geometry resource、host/CUDA physical-error selector，以及 rigid/deforming/topology-change lifecycle planner；SceneDiff mesh mutation会校验并事务回滚。当前 CUDA 对 deformation/topology 采取正确但保守的完整 BLAS/TLAS rebuild，显式请求尚不可用的 BLAS refit 会失败。主 renderer 的 cluster flag 在完整 SceneIR traversal lowering 前继续明确失败。
-- Slang 2026.14 已完成固定版本、多目标编译、反射、debug mapping、CUDA 占用率及数值执行验证。Vulkan SPIR-V 与 D3D12 DXIL 复用共享光谱/偏振及加速语义；D3D12 release DXIL 由固定 Windows SDK DXC 确定性生成，debug artifact 单独生成。现有 CUDA production kernels 仍是私有 `.cu` fast path，Slang RHI 未被引入。
-- 纯 C++ `ure_runtime` 已定义 device、queue、timeline fence、event、buffer、image、sampler、module、pipeline、资源规划、dispatch DAG、execution graph、acceleration provider/selection/hit metadata、multi-backend scheduling 和 device-loss 合同；CUDA production backend 已实现这些合同的私有 lowering，并覆盖 path、wave、multi-GPU、PTX pipeline 与结构化错误路径。
-- `ure_vulkan` 已实现 Vulkan 1.3 adapter、queue、timeline、buffer/image/sampler、SPIR-V module、typed descriptor、specialization、pipeline cache、validation/debug-utils、device-loss 映射，以及私有 BLAS/TLAS build 与 ray-query descriptor lowering；其公共头不暴露 Vulkan SDK 类型。
-- `ure_d3d12` 已实现 Windows D3D12 adapter、buffer/image/sampler、DXIL pipeline、descriptor heap、queue/fence、DRED，以及私有 DXR BLAS/TLAS 与 inline ray-query lowering；其公共头不暴露 Windows、D3D12 或 DXGI 类型。
-- SDK-free scheduler 会在执行前校验 worker feature、float precision、coherence mode、显存下限和共享 kernel semantics，以稳定整数权重划分 sample ranges；当前 distributed file v6 在既有 backend/adapter、driver/compiler、executable digest 和 resource-cache provenance 上增加严格的 frame-kind/phase/layout/realization 语义。兼容 CUDA/Vulkan/D3D12 sample shards 可合并，不兼容或重叠分片会拒绝。
-- `run_phase_t_validation_suite.ps1` 以机器可读报告统一检查物理 unit oracle、hit/framebuffer fixture、CUDA reference render、variance/MSE、device loss、budget、cache、cold/warm launch、VRAM 和 throughput。CUDA/Vulkan 必测，DXR 按实际 capability 执行；不同后端或工作负载的差异必须带阈值和原因分类。
-- `run_phase_v_validation_suite.ps1` 输出稳定的 `ure.phase_v.validation.v1` 报告，聚合 dense build/trace/VRAM、async construction、provider parity、cluster LoD、dynamic update、当前 distributed v6 resource/worker/cache provenance 和完整 CTest。farm worker 入口要求 clean tree 并记录 run/shard/sample coverage；这类证据不扩大 native renderer 或 clustered traversal 的已实现范围。
-- `run_phase_w_validation_suite.ps1` 输出 `ure.phase_w.validation.v1`，统一记录解析衍射、薄膜复相位、rough-dielectric spectral/UV PDF、Stokes/Jones、fluorescence、相干合并顺序、unsupported fail-loud、API parity、静态门禁和完整 CTest；报告不会把 reference contract 扩大为生产 coherent renderer。
-- 当前 Release 构建注册 95 个 CTest；测试数量只表示已登记门禁规模，不等同于功能覆盖率或发布成熟度。
-- 当前 CUDA self-compute acceleration 使用每 mesh object-space BLAS 和独立 world-space instance TLAS。默认/`fast_build` 保留兼容的 median BVH2；`balanced` 使用 binned object SAH 与 72-byte quantized BVH4，`high_quality` 使用受引用预算约束的 spatial SAH/SBVH 与 116-byte quantized BVH8。transform hot update 可按 policy refit 或 rebuild TLAS；deforming/topology-changing mesh mutation 会重建 BLAS/TLAS并输出 timing/correctness telemetry。bounded async build、pinned-stream compact upload 和 scratch/device budget preflight 已执行。Vulkan RT、DXR 和可选 OptiX 已完成 native construction lifecycle，并通过同一 SceneIR fixture 的 cross-provider traversal/hit/AOV 门禁；通用 native integrator lowering与 clustered SceneIR traversal 仍未完成。
-- CLI 与 pyure 默认使用自动积分目标；低层 C++ `RenderConfig` 默认仍是 spectral/polarimetric wavefront，以保留源兼容。手工积分器名用于兼容、复现和受控实验。
-- 显式启用的 camera diffraction 支持圆孔或规则叶片 pupil、defocus phase、sensor-pixel integration 与 wavelength-binned PSF resolve。独立的材质开关支持 grating、sinusoidal phase mask、ideal zone plate、blazed DOE、有界 Jones scattering table，以及有界 Stokes-shift excitation-emission fluorescence resource；它们都限制在各自校验过的普通 CUDA wavefront 组合。fluorescence 使用相机路径的 adjoint wavelength transition，并保留 detector wavelength 与 phosphorescence delay；当前 Beauty film 仍是 steady-state。partial coherence 提供 cross-spectral-density、Gaussian-Schell source、coherent realization、generalized ray、host/CUDA ensemble reduction、正确平均顺序，以及区分 radiance/complex field/mutual intensity/coherent realization 的 v6 分布式充分统计文件与合并合同；生产 coherent session 仍明确拒绝。W.10 可通过版本化 byte provider 合同消费 RCWA/FDTD/FEM/BEM/FMM/DDA/S-matrix 结果，并按求解器二进制、语义和物理请求建立确定性缓存；项目不捆绑这些求解器，也不执行 scene-scale global Maxwell 求解。
-- production unbiased/spatial ReSTIR DI 与受限 ReSTIR PT suffix reuse 已完成验证。GPU specular-manifold、BDPT、VCM 和独立 PSSMLT 已通过各自统计门禁；MLT 与 bidirectional/VCM/manifold 的组合仍明确拒绝。
-- 完整 CUDA 渲染基线为 Windows 11、Visual Studio 2026、MSVC 19.51、CUDA 13.3 和 NVIDIA compute capability 12.0。Vulkan foundation 另有 Linux GCC/Ninja、Windows NVIDIA native ray-query 及 NVIDIA/Intel compute-BVH 证据；D3D12 foundation 有 Windows NVIDIA DXR 1.1、compute fallback、texture/descriptor 与 cross-queue fence 证据。这些门禁不等同于完整 Linux、D3D12 或非 NVIDIA 场景渲染支持。
+项目现已声明以下两个独立版本化合同：
 
-## 已验证的能力
+- **Core ABI 1.0**：Windows 11 x64 的 C11 动态加载接口；
+- **Worker Protocol 1.0**：同一用户、本机 Named Pipe 与只读共享内存传输。
 
-以下描述限定为当前仓库中已有实现和测试覆盖，不表示覆盖所有场景或达到商业渲染器的稳定性：
+这是客户端交互合同的 1.0，不是 UltraRender 产品版本 1.0，也不表示仓库整体 API、算法或平台均已稳定。声明不等于公开分发；当前标签与仓库内构建用于固定声明证据，支持时钟仅在另行批准并公开分发软件包后开始。
 
-- 运行时光谱域与 GPU wavelength packet 分离；GPU packet 上限为 32 lanes，并支持单波长 sampled mode。
-- CIE 1931 2° observer、显式 wavelength PDF、色散、导体复折射率和局部单层薄膜边界模型。
-- CUDA wavefront diffraction camera：归一化的 360–830 nm PSF bank、仅对 PSF 插值分 bin 的精确波长 XYZ film、圆形/规则多叶片光阑、离焦相位和 2x2 sensor aperture integration；普通 material path 与关闭状态保持不变。
-- CUDA diffractive material operators：按 wavelength lane 采样传播级次并传输完整 2×2 complex Jones response；RCWA/FMM table 受 4,096-entry 预算、完整采样网格和联合被动性校验约束。该路径是非相干 radiometric thin-sheet scattering，不等同于 coherent field propagation。
-- 局部全波耦合合同：有界、SDK-free 的 RCWA/FDTD/FEM/BEM/FMM/DDA/S-matrix request/result envelope，严格 capability/version/digest 协商、收敛/互易/能量/预算证据，以及绑定 provider executable/semantic identity 的确定性缓存。验证后的完整 Jones table 可直接进入 W.5 CUDA 路径；外部求解器实现、进程隔离和稳定动态 ABI 不在本阶段虚报。
-- 部分相干参考层：有界 Hermitian PSD cross-spectral density、Gaussian-Schell 扩展光源、确定性 coherent realizations、Jones/OPL generalized rays、OCT/interferometry coherence oracle、speckle 统计门禁，以及保持 coherent-before-incoherent 顺序的事务式 raw-field merge。CUDA 只执行 ensemble-to-CSD reference reduction，不表示主 path tracer 已支持部分相干场。
-- 相干分布式合同：v6 shard metadata 明确区分 radiance、complex field、mutual intensity 与 coherent realization；非辐射帧绑定 phase-reference、field-layout、source/group 和 realization provenance。content-digested field/CSD 文件只按各自充分统计规则事务式合并，禁止把复振幅当 RGB 相加；该合同不表示生产 renderer 已输出相干帧。
-- 各向异性介质参考层：有界 spectral dielectric-impermeability/extinction tensor、ordinary/extraordinary eigenmodes、birefringence、dichroism、optical activity、liquid-crystal director 与 stress-optic response。host/CUDA 使用同一 homogeneous transverse-displacement complex generator；该合同没有被压平为 scalar `ior`，也不表示 SceneIR path tracer 已接入 tensor interface、walk-off 或 ray splitting。
-- Stokes 状态与若干 Mueller 边界变换。它们属于强度域偏振传输，不等同于跨路径相干场求解。
-- Training-free 统计重建基线：以 ESS/variance、tail evidence、motion/time confidence 和 disocclusion validity 驱动 spatial-temporal filtering；Spectrum 保持非负，Stokes 使用共享凸权重保持物理可实现性，并始终单独保留 raw estimate、uncertainty、support 和 rejection reason。当前完整场景 producer 不具备全部输入 plane，因此该能力不会自动替代 Beauty。
-- Sample-level 重建 Research 层：typed record 保留 technique/path/wavelength/PDF/material/phase metadata；analytic splat 与外部 kernel-prediction、point-set/transformer、hybrid provider 输出使用 permutation-invariant、batch-bound 合同。固定门禁覆盖光谱观测一致性、Stokes cone、Jones gauge covariance、OOD 与置信校准诊断；当前不包含训练权重或生产模型 ABI。
-- Lambertian、metal、dielectric、cloth、有限厚度 dielectric layer 和受约束的 BSDF mix/material graph 路径。
-- 均质体积、Henyey–Greenstein、Rayleigh，以及资源驱动的光谱 Mie `eval/pdf/sample`、NEE 和 continuation。
-- glTF/GLB 导入、MaterialX 受支持子集适配、OBJ/图像/SPD 等资源输入。
-- URE 原生 `.ure`、`.urescene`、`.urepkg` 和可重建 `.urecache` 契约，包含校验、迁移、打包和检查工具。
-- 严格的 native-to-USDA adapter：基础材质、共享 mesh prototype/instance、sphere、camera 和 rigid metadata 可确定性导出；多场景 package 需要显式 scene ID，有损输出需要持久化 loss report，高级 native 语义不可表达时失败。
-- `RenderSession`、C ABI、pyure、AOV、场景 mutation，以及 sample-range/file-backend 分布式契约。
-- 同构/异构 GPU 与 farm worker 的 capability negotiation、sample-space 分区、resource-cache identity 和 framebuffer merge metadata。跨机器任务传输、worker 生命周期管理和完整场景 portable-backend 执行仍不属于已完成范围。
-- production ReSTIR DI 的 temporal/spatial reuse，以及 ReSTIR PT 的有界、版本化 path-suffix replay；超出该有界契约的 suffix 会明确失败，不会静默近似。
-- GPU BDPT/VCM 与最多四事件的 specular-manifold estimator；其适用范围、独立 wavefront technique-AOV 对照和统计门禁见 [Phase R-P4 文档](docs/Phase_R_P4_Specular_Manifold.md)。
-- R-P5 已完成 primary-sample-space replay、独立 GPU chains、对称 Laplace mutation、stratified bootstrap seeding、归一化、诊断与多 GPU chain identity。R-P7 的独立 sample-range/chain-identity 复核否定了旧版相关参考图的两场景结论；当前只保留可复现的 SDS small-light 正收益，并将 SDS、小光源、玻璃焦散和高遮挡记录为统计边界，不以数量替代统计独立性。更极端的面积补偿小光源只保留路径分布契约，不冒充在当前预算下稳定的统计证据。MLT 与 BDPT/VCM/manifold 的组合在共享光谱主样本合同完成前明确拒绝。设计与证据边界见 [Phase R-P5 文档](docs/Phase_R_P5_MLT.md)。
-- R-P7 已在 clean commit 上通过 `Closure`：版本化工业验证报告聚合八类带哈希证据及 MSE、方差、色差、time-to-error 和吞吐指标；BDPT/VCM 独立收益与边界矩阵、4,096-SPP 分片合并以及同一可执行文件的 Nsight/VRAM 实测证据均通过验证。Phase R 已闭环。见 [Phase R-P7 文档](docs/Phase_R_P7_Industrial_Validation.md)。
+稳定 Core 只覆盖运行时发现、句柄与生命周期、能力/错误、异步操作与事件、原生场景完整替换、通用渲染目标和不可变 frame lease。它不冻结积分器、MaterialGraph、SceneIR、RenderConfig、MeasurementBundle、WorldState、GPU 调度、模型格式、求解器或研究算法。初始 `StableExtension` 列表为空；UUID transaction 是独立的 `UnstableExtension`。现有 `ure_c_api.h`、`pyure_native.dll` 和 pyure ctypes 仍是 legacy experimental 接口。
 
-## 明确未完成或受限的能力
+公共边界的规范与使用说明：
 
-- 不提供 CPU production integrator。
-- 本仓库不开发 GUI 或交互式 viewport；现有 `gui/` 目录已废弃，不属于维护或设计输入。未来 Studio/editor 是通过 Phase PB SDK/worker 独立开发的客户端。
-- 不提供 OSL 编译器；MaterialX 是适配层，URE MaterialGraph 是内部权威模型。
-- Phase U 的 schema adapter、Hydra delegate/plugin、polygonal mesh、bounded material conversion、CUDA progressive session bridge 和严格 native-to-USDA adapter 已实现。USDA 只覆盖文档化子集；有损输出必须携带结构化报告，无法表达的 native 语义会拒绝。Hydra subdivision/instancing、OpenUSD stage/file ingestion、完整 USDShade 节点集与 time-sampled stage orchestration 仍未完成。
-- native procedural plugin ABI 已延期；只有在高阶路线冻结 world、transport、measurement 与 solver 边界后才重新设计。
-- 物理和声学模块属于可选、实验性子系统；不能把已有 SPH、碰撞或音频组件理解为经过系统验证的通用仿真器。
-- “百万级光谱域”指资源域可使用很大的采样/索引空间，不表示每条光线携带百万个波长 lane，也不表示所有百万规模工作负载均具备实时或固定性能保证。
+- [架构规范](docs/Public_API_ABI_Architecture.md)
+- [支持策略](docs/Public_API_Support_Policy.md)
+- [集成指南](docs/Public_API_Integration.md)
+- [PB.8 兼容性报告](docs/PB8_Stable_Compatibility_Report.md)
+
+## 当前实现范围
+
+- CUDA wavefront path tracing，运行时光谱域与最多 32 个 GPU wavelength packet lanes；
+- Stokes/Mueller 偏振、MaterialGraph、glTF/MaterialX 适配、HG/Rayleigh/Mie 体积；
+- `.ure`、`.urescene`、`.urepkg` 原生场景及验证、迁移、打包工具；
+- ReSTIR DI、受限 ReSTIR PT、BDPT/VCM、specular manifold 与 PSSMLT 的已验证范围；
+- SDK-free runtime、transport、research 与 reconstruction 合同；
+- Vulkan、D3D12/DXR 与可选 OptiX 的运行时/加速基础和固定 SceneIR parity 证据；
+- 有界衍射、荧光、部分相干、各向异性介质和局部全波耦合参考合同。
+
+这些条目均有明确适用域。完整 SceneIR radiometric renderer 尚未迁移到 Vulkan/D3D12/OptiX；部分相干与一般全波路径不是生产场景渲染器；仓库不提供训练模型或生产 neural inference ABI。
 
 ## 工程结构
 
 ```text
-Render Engine/
-├── apps/ure_cli/       # 离线命令行入口
-├── libs/ure_types/     # backend-neutral 类型与 SceneIR
-├── libs/ure_runtime/   # backend-neutral GPU runtime contracts
-├── libs/ure_transport/ # transport semantics、composition、pilot qualification 与 portfolio scheduling contracts
-├── libs/ure_research/  # research execution、transport experiments、comparison、oracle 与 promotion contracts
-├── libs/ure_reconstruction/ # typed MeasurementBundle、statistical/sample reconstruction、merge 与 checkpoint contracts
-├── libs/ure_vulkan/    # Vulkan 1.3 compute and acceleration runtime
-├── libs/ure_d3d12/     # Windows D3D12/DXR optional runtime
-├── libs/ure_core/      # 渲染核心、会话 API 和私有 CUDA production backend
-├── libs/ure_sceneio/   # 原生场景、glTF、MaterialX、图像和光谱资源 I/O
-├── libs/ure_config/    # JSON/CLI 配置
-├── libs/ure_diag/      # 日志与诊断
-├── libs/ure_physics/   # 可选物理/声学实验模块
-├── pyure/              # Python ctypes 封装
-├── tests/              # host、GPU 和 Python 测试
-├── docs/               # 当前技术文档与归档设计记录
-├── scenes/             # 示例和验证场景
-└── scripts/            # 构建、静态审计和验证脚本
+apps/                 CLI 与本地 worker
+contracts/            公共 registry、schema、ABI baseline 与验证报告
+libs/ure_public/      生成的 C11 公共头
+libs/ure_contract/    Windows x64 Core ABI runtime adapter
+libs/ure_core/        CUDA 渲染核心与 session
+libs/ure_types/       后端无关类型与 SceneIR
+libs/ure_runtime/     后端无关 GPU runtime 合同
+libs/ure_transport/   估计器、measure、support 与组合合同
+libs/ure_research/    可复现实验与证据合同
+libs/ure_reconstruction/  MeasurementBundle 与重建合同
+libs/ure_sceneio/     原生场景及资源 I/O
+libs/ure_vulkan/      Vulkan runtime/acceleration foundation
+libs/ure_d3d12/       D3D12/DXR runtime/acceleration foundation
+tests/                Host、GPU、公共边界与 SDK-free 门禁
+docs/                 现役文档与历史归档
 ```
 
-## 构建要求
+仓库内 `gui/` 已废弃，不属于设计、维护或测试范围。未来编辑器应作为独立客户端使用公共 ABI/Worker 边界。
 
-仓库当前维护的构建路径是 Windows x64：
+## 构建与验证
 
-- Windows 11
-- Visual Studio 2026 with MSVC 19.51
-- CMake 与 Ninja（构建脚本负责定位）
-- CUDA Toolkit 13.3
-- 支持 C++23 的 MSVC host compiler
-
-配置并构建 Release：
+维护中的完整构建基线为 Windows 11、Visual Studio 2026/MSVC 19.51、Windows SDK 10.0.28000、CUDA 13.3、CMake 与 Ninja。
 
 ```powershell
 .\scripts\build_x64.ps1 -BuildDir build_modular_x64 -Config Release
-```
-
-Ninja 可并行构建宿主代码和独立目标；高内存 CUDA 编译由工程内的
-`ur_cuda_heavy_compile` job pool 单独限流。默认值按物理内存选择：低于 24 GiB
-使用深度 1，其余环境使用深度 2。CUDA 13.3 下单个 `ptxas` 已可占用数 GiB，
-因此当前 16 GiB 开发机采用深度 1；宿主代码和无关目标仍保持并行。不要为常规
-构建全局指定 `--parallel 1`。不同工具链环境可通过
-`.\scripts\build_x64.ps1 -CudaHeavyCompileJobs <N>` 显式覆盖并重新配置。
-未显式指定时只编译当前本机 GPU 架构；发布或 farm 构建应通过
-`-CudaArchitectures <list>` 明确给出目标架构。
-
-运行完整注册测试：
-
-```powershell
 ctest --test-dir build_modular_x64 -C Release --output-on-failure
 ```
 
-测试注册项会随权威阶段增加；实际数量以当前构建树的 `ctest -N` 输出为准。
-
-仅构建不依赖 GPU SDK 的公共基础库时，可关闭 CUDA backend：
+Ninja 可并行构建普通目标；高内存 CUDA 编译由 `ur_cuda_heavy_compile` job pool 独立限流，不要求全局串行。PB 公共边界完整验证：
 
 ```powershell
-cmake -S . -B build_sdk_free -DUR_ENABLE_CUDA=OFF -DUR_BUILD_CLI=OFF -DUR_BUILD_TESTS=OFF
-cmake --build build_sdk_free --config Release --target ure_runtime ure_sceneio ure_config
+.\scripts\run_phase_pb_validation_suite.ps1 -BuildDir build_modular_x64 -Config Release
 ```
 
-Vulkan compute/acceleration foundation 可在不安装 CUDA 或 Vulkan SDK 的情况下单独构建；运行时仍需要系统 Vulkan loader：
+最新本地 PB.8 证据为 Release 构建与 101/101 CTest，通过三种独立调用方式生成六幅实际 PFM 图像。测试数量是快照，不等同于整体成熟度。
 
-```powershell
-cmake -S . -B build_vulkan -DUR_ENABLE_CUDA=OFF -DUR_ENABLE_VULKAN=ON -DUR_BUILD_CLI=OFF
-cmake --build build_vulkan --config Release --target ure_vulkan test_vulkan_runtime test_vulkan_acceleration
-```
+## 已知边界
 
-Windows D3D12/DXR foundation 使用系统 D3D12/DXGI 和固定 Windows SDK DXC，可独立关闭：
+- 不提供 CPU production integrator。
+- 不承诺完整 Linux、macOS、ARM64 或非 NVIDIA 场景渲染支持。
+- 不提供 OSL 编译器；MaterialX 是适配层，URE MaterialGraph 是内部权威模型。
+- 物理/声学模块仍是实验性基础，不是统一物理世界的完成实现。
+- 研究和不完整能力会 fail loudly；不会以静默降级伪装为已支持路径。
 
-```powershell
-cmake -S . -B build_d3d12 -DUR_ENABLE_CUDA=OFF -DUR_ENABLE_VULKAN=OFF -DUR_ENABLE_D3D12=ON -DUR_BUILD_CLI=OFF
-cmake --build build_d3d12 --config Release --target ure_d3d12 test_d3d12_runtime
-```
+## 文档与许可
 
-OptiX provider 只需要 NVIDIA 官方 SDK/`optix-dev` headers，不成为默认构建依赖。以下门禁同时要求本机 Vulkan RT、DXR，并在提供 headers 时执行真实 OptiX GAS/IAS lifecycle：
+[文档索引](docs/README.md) 区分现役规范、阶段证据和历史归档。
 
-```powershell
-.\scripts\run_phase_v6_native_provider_gate.ps1 -OptixRoot <optix-sdk-or-optix-dev-root>
-```
-
-同一 SceneIR fixture 的 CUDA self-compute、可选 OptiX、Vulkan RT 与 DXR traversal/hit/AOV 一致性门禁：
-
-```powershell
-.\scripts\run_phase_v7_cross_provider_parity.ps1
-```
-
-## 命令行工具
-
-```powershell
-# 查看命令和参数
-.\build_modular_x64\apps\ure_cli\ure_cli.exe --help
-
-# 校验原生场景或 package
-.\build_modular_x64\apps\ure_cli\ure_cli.exe validate <scene.ure|scene.urescene|scene.urepkg>
-
-# 渲染受支持的原生或 glTF 场景
-.\build_modular_x64\apps\ure_cli\ure_cli.exe render <scene> [options]
-
-# 原生格式工具
-.\build_modular_x64\apps\ure_cli\ure_cli.exe build <input> --output <output>
-.\build_modular_x64\apps\ure_cli\ure_cli.exe pack <inputs...> --output <package.urepkg>
-.\build_modular_x64\apps\ure_cli\ure_cli.exe unpack <package.urepkg> --output <directory>
-.\build_modular_x64\apps\ure_cli\ure_cli.exe inspect <input>
-.\build_modular_x64\apps\ure_cli\ure_cli.exe migrate <input> --output <output>
-```
-
-Phase Q 原生格式的独立闭环验证入口：
-
-```powershell
-.\scripts\run_phase_q_validation_suite.ps1 -BuildDir build_modular_x64 -Config Release
-```
-
-## 文档口径
-
-- [PLAN.md](PLAN.md)：唯一施工队列、阶段依赖和完成判据。
-- [STATUS.md](STATUS.md)：面向使用者的当前能力与限制。
-- [docs/Public_API_ABI_Architecture.md](docs/Public_API_ABI_Architecture.md)：已批准的最小公共交互边界规范。
-- [docs/PB_Public_Boundary_PLAN.md](docs/PB_Public_Boundary_PLAN.md)：Phase PB 的独立实施细则与门禁。
-- [docs/README.md](docs/README.md)：专题文档索引及“当前/历史”分类。
-- [AGENTS.md](AGENTS.md)：AI agent 的项目治理规则，不是用户功能说明。
-
-专题审计文档记录特定阶段的证据和边界。文件中的旧测试数量、日期和“下一步”只描述当时快照；发生冲突时以 PLAN、当前源码、CMake/CTest 注册项和实际运行结果为准。
-
-## 许可证与发布状态
-
-仓库当前没有在本 README 中声明稳定发布版本、ABI/协议兼容性承诺或性能保证。Phase PB 只有在 PB.8 获得独立批准并通过规定门禁后才可声明 Core ABI 1.0 / Worker Protocol 1.0。此前集成应固定具体 commit，并在目标硬件上重新运行所需测试和参考场景。
+UltraRender 项目代码采用 [Apache License 2.0](LICENSE)。第三方组件继续受其各自许可约束；相关许可文件随源码或分发包保留。

@@ -465,8 +465,12 @@ typedef struct ure_scene_interface_t {
     ure_result_t (URE_CALL *retain)(ure_handle_t scene, ure_handle_t *error);
     ure_result_t (URE_CALL *release)(ure_handle_t scene, ure_handle_t *error);
     ure_result_t (URE_CALL *get_revision)(ure_handle_t scene, ure_scene_revision_info_t *revision, ure_handle_t *error);
-    ure_result_t (URE_CALL *apply_transaction)(ure_handle_t scene, const ure_scene_transaction_t *transaction, ure_scene_transaction_result_t *result, ure_handle_t *error);
 } ure_scene_interface_t;
+
+typedef struct ure_scene_transaction_interface_t {
+    ure_interface_table_header_t header;
+    ure_result_t (URE_CALL *apply_transaction)(ure_handle_t scene, const ure_scene_transaction_t *transaction, ure_scene_transaction_result_t *result, ure_handle_t *error);
+} ure_scene_transaction_interface_t;
 
 typedef struct ure_session_interface_t {
     ure_interface_table_header_t header;

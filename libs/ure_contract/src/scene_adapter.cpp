@@ -130,7 +130,7 @@ void check_json_nesting(std::span<const std::uint8_t> bytes,
 
 bool valid_budget(const ure_scene_budget_t &budget) noexcept {
     return budget.header.type == URE_STRUCTURE_SCENE_BUDGET &&
-           budget.header.size >= sizeof(budget) && !budget.header.next &&
+           budget.header.size >= core_1_0_size<ure_scene_budget_t>() && !budget.header.next &&
            budget.max_content_bytes >= 128 &&
            budget.max_content_bytes <= UINT64_C(17179869184) &&
            budget.max_uncompressed_bytes >= budget.max_content_bytes &&
@@ -724,9 +724,14 @@ void write_scene_revision(const SceneRevisionData &source,
 
 const ure_scene_interface_t &scene_interface() noexcept {
     static const ure_scene_interface_t table{
-        {sizeof(table), 0, 1}, validate_scene, create_scene, replace_scene,
-        retain_scene, release_scene, get_scene_revision,
-        apply_scene_transaction};
+        {sizeof(table), 1, 0}, validate_scene, create_scene, replace_scene,
+        retain_scene, release_scene, get_scene_revision};
+    return table;
+}
+
+const ure_scene_transaction_interface_t &scene_transaction_interface() noexcept {
+    static const ure_scene_transaction_interface_t table{
+        {sizeof(table), 1, 0}, apply_scene_transaction};
     return table;
 }
 

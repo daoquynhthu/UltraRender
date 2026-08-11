@@ -203,7 +203,7 @@ ure_result_t create_instance_impl(const ure_instance_create_info_t *info, ure_ha
         ure_input_header_t header{};
         std::memcpy(&header, next, sizeof(header));
         if (header.type == URE_STRUCTURE_INSTANCE_FRAME_BUDGET) {
-            if (header.size < sizeof(ure_instance_frame_budget_t)) {
+            if (header.size < core_1_0_size<ure_instance_frame_budget_t>()) {
                 return make_error(URE_RESULT_INVALID_ARGUMENT, 100, "invalid frame budget chain",
                                   error);
             }
@@ -328,8 +328,8 @@ ure_result_t query_capability_impl(ure_handle_t instance, const ure_capability_q
     static constexpr std::uint32_t lifecycle_dependencies[]{URE_CAPABILITY_BOOTSTRAP};
     static constexpr std::string_view telemetry_reason = "No telemetry provider is available";
     descriptor->capability_id = query->capability_id;
-    descriptor->version_major = 0;
-    descriptor->version_minor = 1;
+    descriptor->version_major = 1;
+    descriptor->version_minor = 0;
     descriptor->version_patch = 0;
     descriptor->stability = URE_STABILITY_CORE;
     descriptor->thread_policy = URE_THREAD_POLICY_CONCURRENT_READ;
@@ -855,38 +855,38 @@ ure_result_t URE_CALL event_wait(ure_handle_t instance, std::uint64_t timeout_ns
 }
 
 const ure_runtime_interface_t &runtime_interface() noexcept {
-    static const ure_runtime_interface_t table{{sizeof(table), 0, 1}, create_instance};
+    static const ure_runtime_interface_t table{{sizeof(table), 1, 0}, create_instance};
     return table;
 }
 
 const ure_instance_interface_t &instance_interface() noexcept {
     static const ure_instance_interface_t table{
-        {sizeof(table), 0, 1}, instance_retain, instance_release, instance_close, query_capability};
+        {sizeof(table), 1, 0}, instance_retain, instance_release, instance_close, query_capability};
     return table;
 }
 
 const ure_error_interface_t &error_interface() noexcept {
     static const ure_error_interface_t table{
-        {sizeof(table), 0, 1}, error_retain, error_release, error_get_info};
+        {sizeof(table), 1, 0}, error_retain, error_release, error_get_info};
     return table;
 }
 
 const ure_operation_interface_t &operation_interface() noexcept {
-    static const ure_operation_interface_t table{{sizeof(table), 0, 1}, operation_retain,
+    static const ure_operation_interface_t table{{sizeof(table), 1, 0}, operation_retain,
                                                  operation_release,     operation_get_info,
                                                  operation_wait,        operation_cancel};
     return table;
 }
 
 const ure_event_interface_t &event_interface() noexcept {
-    static const ure_event_interface_t table{{sizeof(table), 0, 1}, event_poll, event_wait};
+    static const ure_event_interface_t table{{sizeof(table), 1, 0}, event_poll, event_wait};
     return table;
 }
 
 #if defined(URE_CONTRACT_CONFORMANCE)
 const ure_private_conformance_interface_t &conformance_interface() noexcept {
     static const ure_private_conformance_interface_t table{
-        {sizeof(table), 0, 1},    submit_operation,  emit_events,
+        {sizeof(table), 1, 0},    submit_operation,  emit_events,
         validate_operation_owner, live_handle_count, fail_error_allocation,
         produce_conformance_frame};
     return table;

@@ -75,9 +75,9 @@ std::string registry_header(const Registry &registry) {
     std::ostringstream output;
     output << "#ifndef ULTRARENDER_URE_REGISTRY_H\n#define "
               "ULTRARENDER_URE_REGISTRY_H\n\n#include <stdint.h>\n\n";
-    output << "#define URE_REGISTRY_CANDIDATE_MAJOR UINT32_C(0)\n";
-    output << "#define URE_REGISTRY_CANDIDATE_MINOR UINT32_C(1)\n";
-    output << "#define URE_REGISTRY_CANDIDATE_PATCH UINT32_C(0)\n";
+    output << "#define URE_REGISTRY_VERSION_MAJOR UINT32_C(1)\n";
+    output << "#define URE_REGISTRY_VERSION_MINOR UINT32_C(0)\n";
+    output << "#define URE_REGISTRY_VERSION_PATCH UINT32_C(0)\n";
     output << "#define URE_REGISTRY_DIGEST_HEX \"" << registry.digest_hex << "\"\n";
     output << "#define URE_REGISTRY_DIGEST_BYTES " << byte_initializer(registry.digest_bytes)
            << "\n\n";
@@ -562,8 +562,12 @@ typedef struct ure_scene_interface_t {
     ure_result_t (URE_CALL *retain)(ure_handle_t scene, ure_handle_t *error);
     ure_result_t (URE_CALL *release)(ure_handle_t scene, ure_handle_t *error);
     ure_result_t (URE_CALL *get_revision)(ure_handle_t scene, ure_scene_revision_info_t *revision, ure_handle_t *error);
-    ure_result_t (URE_CALL *apply_transaction)(ure_handle_t scene, const ure_scene_transaction_t *transaction, ure_scene_transaction_result_t *result, ure_handle_t *error);
 } ure_scene_interface_t;
+
+typedef struct ure_scene_transaction_interface_t {
+    ure_interface_table_header_t header;
+    ure_result_t (URE_CALL *apply_transaction)(ure_handle_t scene, const ure_scene_transaction_t *transaction, ure_scene_transaction_result_t *result, ure_handle_t *error);
+} ure_scene_transaction_interface_t;
 
 typedef struct ure_session_interface_t {
     ure_interface_table_header_t header;
@@ -610,9 +614,9 @@ URE_PUBLIC_API ure_result_t URE_CALL ureQueryInterface(
 
 std::string markdown_reference(const Registry &registry) {
     std::ostringstream output;
-    output << "# Candidate 0.1 Public Contract Registry\n\n";
-    output << "This generated reference is a Candidate artifact. It is not a "
-              "stable ABI or protocol promise.\n\n";
+    output << "# Core 1.0 Public Contract Registry\n\n";
+    output << "This generated reference freezes the Core ABI 1.x and Worker "
+              "Protocol 1.x identity space. Extension maturity remains independent.\n\n";
     output << "Registry digest: `" << registry.digest_hex << "`\n\n";
     output << "| Registry ID | Kind | Canonical name | Stability | Maturity | "
               "Since | Default | Dependencies |\n";
@@ -658,17 +662,17 @@ void generate_contract_package(const Registry &registry,
     write_text(output_directory / "Public_Contract_Registry.md", markdown_reference(registry));
     write_text(output_directory / "registry/public_contract_registry.canonical.json",
                registry.canonical_bytes);
-    const std::array schemas{"ure_payload_candidate.fbs", "ure_frame_candidate.fbs",
-                             "ure_scene_candidate.fbs", "ure_worker_candidate.fbs"};
+    const std::array schemas{"ure_payload_v1.fbs", "ure_frame_v1.fbs",
+                              "ure_scene_v1.fbs", "ure_worker_v1.fbs"};
     for (const std::string_view name : schemas) {
         write_text(output_directory / "schemas" / name, read_text(schema_directory / name));
     }
 
     nlohmann::json manifest{
-        {"schema", "ure.public.runtime-manifest-candidate/0.1"},
-        {"publication_state", "Candidate"},
-        {"compatibility_promise", "None before PB.8"},
-        {"candidate_version", registry.candidate_version},
+        {"schema", "ure.public.runtime-manifest/1.0"},
+        {"publication_state", "Stable"},
+        {"compatibility_promise", "Core ABI 1.x and Worker Protocol 1.x within the declared support window"},
+        {"version", registry.version},
         {"registry_digest", registry.digest_hex},
         {"registry_entry_count", registry.entries.size()},
         {"registry_canonicalization", "RFC8785 restricted to integers and decimal strings"},
@@ -679,10 +683,12 @@ void generate_contract_package(const Registry &registry,
         {"schema_compiler", "flatc version 25.12.19"},
         {"platform_profiles", {"windows-x64-msvc-c11"}},
         {"public_header_language", "C11"},
+        {"core_abi", {{"major", 1}, {"minor", 0}}},
         {"worker_protocol",
-         {{"major", 0}, {"minor", 1}, {"maximum_message_bytes", kMaxMockMessageBytes}}},
-        {"mock_transport", "bounded fixture framing; local worker transport "
-                           "remains Candidate through PB.7"},
+         {{"major", 1}, {"minor", 0}, {"maximum_message_bytes", kMaxMockMessageBytes}}},
+        {"frame_schema", {{"major", 1}, {"minor", 0}}},
+        {"native_scene", {{"read_major_min", 1}, {"read_major_max", 2}, {"write_major", 2}}},
+        {"mock_transport", "bounded conformance fixture for Worker Protocol 1.x"},
         {"loader_exports", {"ureGetRuntimeManifest", "ureQueryInterface"}}};
     manifest["schemas"] = nlohmann::json::array();
     for (const std::string_view name : schemas) {
@@ -690,11 +696,11 @@ void generate_contract_package(const Registry &registry,
         manifest["schemas"].push_back(
             {{"path", std::string("schemas/") + std::string(name)}, {"sha256", sha256_file(path)}});
     }
-    write_text(output_directory / "runtime_manifest_candidate.json", manifest.dump(2) + "\n");
+    write_text(output_directory / "runtime_manifest_1.json", manifest.dump(2) + "\n");
 
     nlohmann::json uuid_golden{
         {"schema", "ure.scene.uuid-golden/2.0"},
-        {"publication_state", "Candidate"},
+        {"publication_state", "Stable"},
         {"byte_order", "RFC9562 network order"},
         {"text_format", "lower-case hyphenated"},
         {"generation", "UUIDv8(SHA-256, document-id, object-kind, legacy-alias)"},
@@ -720,8 +726,8 @@ void generate_contract_package(const Registry &registry,
                uuid_golden.dump(2) + "\n");
 
     nlohmann::json scenario_manifest{
-        {"schema", "ure.public.mock-scenarios/0.1"},
-        {"publication_state", "Candidate"},
+        {"schema", "ure.public.mock-scenarios/1.0"},
+        {"publication_state", "Stable"},
         {"registry_digest", registry.digest_hex},
         {"framing", "uint32-little-endian-byte-count followed by one FlatBuffer"},
         {"maximum_message_bytes", kMaxMockMessageBytes},

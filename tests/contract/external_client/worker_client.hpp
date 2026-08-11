@@ -12,11 +12,11 @@
 #include <string>
 #include <vector>
 
-#include "ure_worker_candidate_generated.h"
+#include "ure_worker_v1_generated.h"
 
 namespace ure::contract_test {
 
-namespace fb = ultrarender::contract::candidate;
+namespace fb = ultrarender::contract::v1;
 
 class WorkerClient {
   public:

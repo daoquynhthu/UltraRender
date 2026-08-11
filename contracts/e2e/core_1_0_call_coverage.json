@@ -1,0 +1,51 @@
+{
+  "schema": "ure.public.call-coverage/1.0",
+  "publication_state": "Stable",
+  "release": "1.0.0",
+  "calling_modes": [
+    {
+      "mode": "in_process_c11_dynamic_loader",
+      "test": "test_scene_boundary",
+      "runtime": "ultrarender_runtime_1.dll",
+      "image_artifacts": ["direct_map.pfm", "direct_copy.pfm"],
+      "image_requirements": ["finite_rgb", "nonzero_rgb", "nonuniform_rgb", "map_copy_exact_evidence"]
+    },
+    {
+      "mode": "in_process_cpp23_unstable_transaction_extension",
+      "test": "test_scene_transaction",
+      "runtime": "ultrarender_runtime_1.dll",
+      "image_artifacts": ["transaction_replay.pfm", "transaction_replace.pfm"],
+      "image_requirements": ["finite_rgb", "nonzero_rgb", "nonuniform_rgb", "semantic_replay_identity"]
+    },
+    {
+      "mode": "out_of_process_local_worker",
+      "test": "test_external_client_package",
+      "worker": "ultrarender_worker_1.exe",
+      "runtime": "ultrarender_runtime_1.dll",
+      "image_artifacts": ["worker_first.pfm", "worker_restart.pfm"],
+      "image_requirements": ["finite_rgb", "nonzero_rgb", "nonuniform_rgb", "shared_memory_digest", "restart_exact_evidence"]
+    }
+  ],
+  "bootstrap_exports": ["ureGetRuntimeManifest", "ureQueryInterface"],
+  "core_functions": {
+    "ure_runtime_interface_t": ["create_instance"],
+    "ure_instance_interface_t": ["retain", "release", "close", "query_capability"],
+    "ure_error_interface_t": ["retain", "release", "get_info"],
+    "ure_operation_interface_t": ["retain", "release", "get_info", "wait", "request_cancel"],
+    "ure_event_interface_t": ["poll", "wait"],
+    "ure_frame_interface_t": ["retain", "release", "get_info", "get_plane_info", "map_plane_read", "unmap_plane", "copy_plane"],
+    "ure_scene_interface_t": ["validate", "create", "replace", "retain", "release", "get_revision"],
+    "ure_session_interface_t": ["create", "retain", "release", "close", "get_info", "bind_scene", "start", "pause", "resume", "reset", "acquire_frame"]
+  },
+  "unstable_extension_functions": {
+    "ure_scene_transaction_interface_t": ["apply_transaction"]
+  },
+  "excluded_non_pb_calling_surfaces": [
+    "legacy_ure_c_api",
+    "legacy_pyure_ctypes",
+    "ure_cli_internal_orchestration",
+    "hydra_adapter",
+    "distributed_internal_contracts",
+    "abandoned_repository_gui"
+  ]
+}

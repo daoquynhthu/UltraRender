@@ -2,6 +2,7 @@
 #define ULTRARENDER_RUNTIME_OBJECTS_HPP
 
 #include "runtime_adapter.hpp"
+#include "abi_core_1_0.hpp"
 
 #include <array>
 #include <atomic>
@@ -156,7 +157,8 @@ ure_result_t make_error(ure_result_t result, std::uint32_t detail,
 
 template <class T>
 bool valid_input(const T *value, std::uint32_t type) noexcept {
-    if (!value || value->header.type != type || value->header.size < sizeof(T))
+    if (!value || value->header.type != type ||
+        value->header.size < core_1_0_size<T>())
         return false;
     std::array<const void *, 32> pointers{};
     std::array<std::uint32_t, 32> types{};

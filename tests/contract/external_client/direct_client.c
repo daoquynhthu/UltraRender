@@ -7,6 +7,8 @@
 
 #include <ultrarender/ure_loader.h>
 
+#include "image_artifact.h"
+
 static int check(int condition, const char *message) {
     if (!condition) {
         fprintf(stderr, "scene boundary: %s\n", message);
@@ -22,7 +24,8 @@ static void *query_table(ure_query_interface_fn query, const uint8_t id[16],
     request.header.type = URE_STRUCTURE_INTERFACE_QUERY;
     request.header.size = sizeof(request);
     memcpy(request.interface_id.bytes, id, 16);
-    request.maximum_minor = 1;
+    request.minimum_major = 1;
+    request.maximum_major = 1;
     response.header.type = URE_STRUCTURE_INTERFACE_RESPONSE;
     response.header.size = sizeof(response);
     if (query(&request, &response, NULL) != URE_RESULT_SUCCESS ||
@@ -143,7 +146,7 @@ int main(int argc, char **argv) {
     ure_handle_t package_scene = NULL;
     ure_scene_revision_info_t replacement = {0};
     int ok = 1;
-    if (argc != 6)
+    if (argc != 8)
         return 2;
     bytes = read_bytes(argv[2], &byte_count);
     text_bytes = read_bytes(argv[3], &text_byte_count);
@@ -200,11 +203,12 @@ int main(int argc, char **argv) {
         ure_runtime_manifest_t manifest = {0};
         request.header.type = URE_STRUCTURE_RUNTIME_MANIFEST_REQUEST;
         request.header.size = sizeof(request);
-        request.maximum_minor = 1;
+        request.minimum_major = 1;
+        request.maximum_major = 1;
         manifest.header.type = URE_STRUCTURE_RUNTIME_MANIFEST;
         manifest.header.size = sizeof(manifest);
         ok &= check(get_manifest(&request, &manifest, NULL) == URE_RESULT_SUCCESS &&
-                        manifest.runtime_major == 0 && manifest.runtime_minor == 1 &&
+                        manifest.runtime_major == 1 && manifest.runtime_minor == 0 &&
                         manifest.abi_manifest_json.size != 0,
                     "runtime manifest negotiation failed");
     }
@@ -232,6 +236,26 @@ int main(int argc, char **argv) {
     }
     if (!ok)
         goto cleanup;
+
+    ok &= check(instances->retain(instance, NULL) == URE_RESULT_SUCCESS &&
+                    instances->release(instance, NULL) == URE_RESULT_SUCCESS,
+                "instance retain/release failed");
+    {
+        ure_capability_query_t query_capability = {0};
+        ure_capability_descriptor_t descriptor = {0};
+        query_capability.header.type = URE_STRUCTURE_CAPABILITY_QUERY;
+        query_capability.header.size = sizeof(query_capability);
+        query_capability.capability_id = URE_CAPABILITY_LIFECYCLE;
+        query_capability.required = 1;
+        descriptor.header.type = URE_STRUCTURE_CAPABILITY_DESCRIPTOR;
+        descriptor.header.size = sizeof(descriptor);
+        ok &= check(instances->query_capability(instance, &query_capability,
+                                                &descriptor, NULL) ==
+                            URE_RESULT_SUCCESS &&
+                        descriptor.capability_id == URE_CAPABILITY_LIFECYCLE &&
+                        descriptor.version_major == 1,
+                    "capability query failed");
+    }
 
     ure_native_scene_blob_t blob = scene_blob(bytes, byte_count);
     {
@@ -316,6 +340,9 @@ int main(int argc, char **argv) {
     ok &= check(scenes->create(instance, &blob, &scene, &revision, NULL) ==
                     URE_RESULT_SUCCESS && revision.revision == 1,
                 "scene creation failed");
+    ok &= check(scenes->retain(scene, NULL) == URE_RESULT_SUCCESS &&
+                    scenes->release(scene, NULL) == URE_RESULT_SUCCESS,
+                "scene retain/release failed");
     if (!ok)
         goto cleanup;
 
@@ -338,8 +365,14 @@ int main(int argc, char **argv) {
         }
         ok &= check(result == URE_RESULT_SUCCESS, "session creation failed");
     }
+    ok &= check(sessions->retain(session, NULL) == URE_RESULT_SUCCESS &&
+                    sessions->release(session, NULL) == URE_RESULT_SUCCESS,
+                "session retain/release failed");
     ok &= check(sessions->start(session, &operation, NULL) == URE_RESULT_SUCCESS,
                 "render start failed");
+    ok &= check(operations->retain(operation, NULL) == URE_RESULT_SUCCESS &&
+                    operations->release(operation, NULL) == URE_RESULT_SUCCESS,
+                "operation retain/release failed");
     replacement = revision_output();
     ok &= check(scenes->replace(scene, &blob, &replacement, NULL) ==
                     URE_RESULT_SUCCESS && replacement.revision == 2,
@@ -359,6 +392,16 @@ int main(int argc, char **argv) {
         }
         ok &= check(result == URE_RESULT_SUCCESS, "render operation failed");
     }
+    {
+        ure_operation_info_t info = {0};
+        info.header.type = URE_STRUCTURE_OPERATION_INFO;
+        info.header.size = sizeof(info);
+        ok &= check(operations->get_info(operation, &info, NULL) ==
+                            URE_RESULT_SUCCESS &&
+                        info.state == URE_OPERATION_STATE_SUCCEEDED &&
+                        info.completed_work == info.total_work,
+                    "terminal operation information is invalid");
+    }
     ok &= check(sessions->acquire_frame(session, &frame, NULL) == URE_RESULT_SUCCESS,
                 "frame acquisition failed");
     if (frame) {
@@ -367,6 +410,11 @@ int main(int argc, char **argv) {
         ure_frame_map_t map = {0};
         ure_frame_copy_info_t copy = {0};
         uint8_t *snapshot = NULL;
+        ure_image_evidence_t mapped_evidence = {0};
+        ure_image_evidence_t copied_evidence = {0};
+        ok &= check(frames->retain(frame, NULL) == URE_RESULT_SUCCESS &&
+                        frames->release(frame, NULL) == URE_RESULT_SUCCESS,
+                    "frame retain/release failed");
         info.header.type = URE_STRUCTURE_FRAME_INFO;
         info.header.size = sizeof(info);
         ok &= check(frames->get_info(frame, &info, NULL) == URE_RESULT_SUCCESS &&
@@ -390,6 +438,11 @@ int main(int argc, char **argv) {
         ok &= check(snapshot != NULL, "frame snapshot allocation failed");
         if (snapshot && map.data)
             memcpy(snapshot, map.data, (size_t)plane.byte_extent);
+        if (map.data)
+            ok &= check(ure_write_pfm_rgba(argv[6], map.data, info.width,
+                                           info.height, map.row_stride,
+                                           &mapped_evidence),
+                        "mapped render image is invalid");
         if (map.map_token)
             ok &= check(frames->unmap_plane(frame, map.map_token, NULL) ==
                             URE_RESULT_SUCCESS,
@@ -408,6 +461,19 @@ int main(int argc, char **argv) {
                 ok &= check(frames->copy_plane(&copy, NULL) == URE_RESULT_SUCCESS &&
                                 memcmp(snapshot, copied, (size_t)plane.byte_extent) == 0,
                             "immutable frame copy differs from mapped bytes");
+                ok &= check(ure_write_pfm_rgba(argv[7], copied, info.width,
+                                               info.height, plane.row_stride,
+                                               &copied_evidence),
+                            "copied render image is invalid");
+                ok &= check(mapped_evidence.pixel_count ==
+                                    copied_evidence.pixel_count &&
+                                mapped_evidence.minimum_rgb ==
+                                    copied_evidence.minimum_rgb &&
+                                mapped_evidence.maximum_rgb ==
+                                    copied_evidence.maximum_rgb &&
+                                mapped_evidence.mean_rgb ==
+                                    copied_evidence.mean_rgb,
+                            "map and copy image evidence differs");
                 free(copied);
             }
             free(snapshot);
@@ -416,6 +482,13 @@ int main(int argc, char **argv) {
 
     {
         uint32_t event_count = 0;
+        ure_event_record_t first_event = {0};
+        first_event.header.type = URE_STRUCTURE_EVENT_RECORD;
+        first_event.header.size = sizeof(first_event);
+        ok &= check(events->wait(instance, UINT64_C(1000000000), &first_event,
+                                 NULL) == URE_RESULT_SUCCESS,
+                    "event wait failed");
+        ++event_count;
         for (;;) {
             ure_event_record_t event = {0};
             ure_result_t result = URE_RESULT_SUCCESS;
@@ -444,6 +517,30 @@ int main(int argc, char **argv) {
                             URE_RESULT_SUCCESS,
                     "cancelable objective could not start");
         if (cancel_operation) {
+            ure_session_info_t session_info = {0};
+            ure_operation_info_t operation_info = {0};
+            uint32_t attempt = 0;
+            session_info.header.type = URE_STRUCTURE_SESSION_INFO;
+            session_info.header.size = sizeof(session_info);
+            operation_info.header.type = URE_STRUCTURE_OPERATION_INFO;
+            operation_info.header.size = sizeof(operation_info);
+            for (attempt = 0; attempt != 1000; ++attempt) {
+                if (operations->get_info(cancel_operation, &operation_info,
+                                         NULL) == URE_RESULT_SUCCESS &&
+                    operation_info.state == URE_OPERATION_STATE_RUNNING)
+                    break;
+                Sleep(1);
+            }
+            ok &= check(sessions->get_info(cancel_session, &session_info, NULL) ==
+                                URE_RESULT_SUCCESS &&
+                            session_info.state == URE_SESSION_STATE_RUNNING &&
+                            operation_info.state == URE_OPERATION_STATE_RUNNING,
+                        "running session information is invalid");
+            ok &= check(sessions->pause(cancel_session, NULL) ==
+                                URE_RESULT_SUCCESS &&
+                            sessions->resume(cancel_session, NULL) ==
+                                URE_RESULT_SUCCESS,
+                        "session pause/resume failed");
             ok &= check(operations->request_cancel(cancel_operation, &accepted,
                                                    NULL) == URE_RESULT_SUCCESS &&
                             accepted,
@@ -459,9 +556,26 @@ int main(int argc, char **argv) {
     {
         bytes[0] ^= UINT8_C(0xff);
         ure_scene_revision_info_t rejected = revision_output();
-        ok &= check(scenes->replace(scene, &blob, &rejected, NULL) ==
-                        URE_RESULT_MALFORMED_DATA,
+        ure_handle_t replacement_error = NULL;
+        ok &= check(scenes->replace(scene, &blob, &rejected,
+                                    &replacement_error) ==
+                            URE_RESULT_MALFORMED_DATA &&
+                        replacement_error != NULL,
                     "corrupt replacement was not rejected");
+        if (replacement_error) {
+            ure_error_info_t error_info = {0};
+            error_info.header.type = URE_STRUCTURE_ERROR_INFO;
+            error_info.header.size = sizeof(error_info);
+            ok &= check(errors->retain(replacement_error) == URE_RESULT_SUCCESS &&
+                            errors->get_info(replacement_error, &error_info) ==
+                                URE_RESULT_SUCCESS &&
+                            error_info.result == URE_RESULT_MALFORMED_DATA &&
+                            errors->release(replacement_error) ==
+                                URE_RESULT_SUCCESS &&
+                            errors->release(replacement_error) ==
+                                URE_RESULT_SUCCESS,
+                        "retained structured error lifecycle failed");
+        }
         bytes[0] ^= UINT8_C(0xff);
         ure_scene_revision_info_t retained = revision_output();
         ok &= check(scenes->get_revision(scene, &retained, NULL) ==
@@ -491,6 +605,19 @@ int main(int argc, char **argv) {
         ok &= check(scenes->validate(instance, &bounded, &validation, NULL) ==
                         URE_RESULT_BUDGET_EXHAUSTED,
                     "resident-memory budget exhaustion was not fail-loud");
+    }
+
+    {
+        ure_session_info_t session_info = {0};
+        session_info.header.type = URE_STRUCTURE_SESSION_INFO;
+        session_info.header.size = sizeof(session_info);
+        ok &= check(sessions->get_info(session, &session_info, NULL) ==
+                            URE_RESULT_SUCCESS &&
+                        session_info.bound_scene_revision == 2,
+                    "rebound session information is invalid");
+        ok &= check(sessions->reset(session, URE_SCENE_RESET_EXPLICIT, NULL) ==
+                            URE_RESULT_SUCCESS,
+                    "explicit session reset failed");
     }
 
 cleanup:

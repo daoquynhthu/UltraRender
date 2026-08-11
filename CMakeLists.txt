@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(UltraRender VERSION 1.0.0 LANGUAGES C CXX)
+project(UltraRender LANGUAGES C CXX)
 
 option(UR_BUILD_TESTS "Build tests" ON)
 option(UR_BUILD_CLI "Build CLI" ON)
@@ -143,6 +143,11 @@ install(
 )
 
 install(
+    FILES ${CMAKE_SOURCE_DIR}/LICENSE
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/UltraRender
+)
+
+install(
     EXPORT UltraRender_Targets
     FILE UltraRenderTargets.cmake
     NAMESPACE UltraRender::
@@ -168,4 +173,4 @@ if(UR_ENABLE_VULKAN OR UR_ENABLE_D3D12)
     )
 endif()
 
-message(STATUS "UltraRender v${PROJECT_VERSION} configured.")
+message(STATUS "UltraRender development tree configured (Core ABI 1.0 / Worker Protocol 1.0).")

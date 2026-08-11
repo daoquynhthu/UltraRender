@@ -7,7 +7,6 @@ $ErrorActionPreference = "Stop"
 $required = @(
     "contracts/reports/ure_phase_pb_validation_v1.schema.json",
     "contracts/reports/pb7_fuzz_corpus.json",
-    "docs/Public_API_Candidate_Integration.md",
     "docs/PB7_Compatibility_Report.md",
     "scripts/run_phase_pb_validation_suite.ps1",
     "tests/contract/external_client/CMakeLists.txt",
@@ -22,7 +21,7 @@ foreach ($relative in $required) {
 $scenarioManifest = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot "contracts/generated/mock_scenarios.json") | ConvertFrom-Json
 $requiredScenarios = @(
     "normal_lifecycle", "missing_optional_capability",
-    "missing_required_capability", "registry_mismatch", "old_minor",
+    "missing_required_capability", "registry_mismatch", "incompatible_protocol_version",
     "unknown_optional_field", "worker_crash", "malformed_message",
     "truncated_message", "oversized_message"
 )
@@ -50,11 +49,10 @@ foreach ($fixture in $fixtures) {
     }
 }
 
-$ledger = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot "contracts/public_interaction_surface_ledger.json") | ConvertFrom-Json
-$boundary = $ledger.entries | Where-Object id -EQ "pb_public_boundary_candidate"
+$report = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot "docs/PB7_Compatibility_Report.md")
 foreach ($evidence in @("test_candidate_compatibility", "test_pb7_fuzz", "test_worker_runtime_security", "test_external_client_package")) {
-    if ($boundary.conformance_evidence -notcontains $evidence) {
-        throw "Public boundary ledger lacks PB.7 evidence: $evidence"
+    if ($report -notmatch [regex]::Escape($evidence)) {
+        throw "Historical PB.7 report lacks evidence: $evidence"
     }
 }
 

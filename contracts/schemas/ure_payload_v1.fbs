@@ -1,4 +1,4 @@
-namespace ultrarender.contract.candidate;
+namespace ultrarender.contract.v1;
 
 enum ResultCode:int {
   Success = 0,

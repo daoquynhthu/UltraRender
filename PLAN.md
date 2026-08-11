@@ -1,6 +1,6 @@
 # UltraRender 高阶能力与公共边界研究实施路线图
 
-最后更新: 2026-08-09（PB.7 Candidate public-boundary validation 闭环）
+最后更新: 2026-08-11（PB.8 已闭环；Core ABI 1.0 / Worker Protocol 1.0 已声明，游标恢复 HR.3）
 
 本文档是 UltraRender 当前唯一的行动纲领。2026-08-01 以前的主体建设路线已归档为
 [`docs/archive/Legacy_Construction_PLAN_2026-08-01.md`](docs/archive/Legacy_Construction_PLAN_2026-08-01.md)，
@@ -15,7 +15,7 @@
 
 ## 0. 权威状态
 
-当前游标: PB.8 — Stable 1.0 declaration gate（等待单独明确批准，不得自行进入）
+当前游标: HR.3 — Learned proposal 与 neural control variate
 
 ### 0.1 唯一生产施工队列
 
@@ -34,11 +34,11 @@ HO.2 executable research substrate                      [done]
     ├──────────────┬────────────────┬────────────────┐
     ▼              ▼                ▼                ▼
 HT transport     HR reconstruction HW physical world HD differentiation
-[HT.5 done]      [HR.2 done; HR.3 suspended]
+[HT.5 done]      [HR.2 done; HR.3 current]
                        │
                        ▼
 PB.0 -> PB.1 -> PB.2 -> PB.3 -> PB.4 -> PB.5 -> PB.6 -> PB.7 -> PB.8
-[done]   [done]   [done]   [done]   [done]   [done]   [done]   [done]  [approval gate]
+[done]   [done]   [done]   [done]   [done]   [done]   [done]   [done]  [done: Core ABI / Worker Protocol 1.0]
                        │
                        ▼
                  resume HR.3
@@ -48,8 +48,8 @@ PB.0 -> PB.1 -> PB.2 -> PB.3 -> PB.4 -> PB.5 -> PB.6 -> PB.7 -> PB.8
                      HO.C integrated closures
 ```
 
-队列游标只表示默认/生产路径的唯一施工阶段。为解除独立前端与后端的接口阻塞，Phase PB 在 HR.2
-之后成为唯一施工路径；HR.3 及其后续高阶能力暂缓，但不改变已经完成的 HT/HR 证据。HO.1 之后，
+队列游标只表示默认/生产路径的唯一施工阶段。为解除独立前端与后端的接口阻塞，Phase PB 曾在 HR.2
+之后成为唯一施工路径；PB.8 已闭环，当前恢复 HR.3，并保留已经完成的 HT/HR 证据。HO.1 之后，
 满足依赖的研究实验仍可存在，但不得借“研究中”宣称生产完成，也不得在没有适用域、证据和回退语义时进入默认执行路径。
 
 ### 0.2 当前基础
@@ -83,9 +83,10 @@ PB.0 -> PB.1 -> PB.2 -> PB.3 -> PB.4 -> PB.5 -> PB.6 -> PB.7 -> PB.8
 
 Phase PB 冻结的是极小的交互语法和生命周期，不冻结积分器、MaterialGraph、SceneIR、RenderConfig、
 MeasurementBundle、WorldState、GPU 调度、模型格式或研究算法。合同稳定性、证据成熟度和运行时状态
-是三个独立维度。PB.0-PB.7 只产生 Candidate 0.x，不形成公共稳定承诺；PB.8 必须经过旧客户端二进制、
-新客户端/旧 runtime、协议、生命周期、安全、独立客户端端到端和文档支持策略门禁后，才允许显式宣布
-Windows x64 Core ABI 1.0 与本地 Worker Protocol 1.0。
+是三个独立维度。PB.0-PB.7 只产生 Candidate 0.x，不形成公共稳定承诺；PB.8 已经过旧客户端二进制、
+新客户端/旧 runtime、协议、生命周期、安全、独立客户端端到端和文档支持策略门禁，并于 2026-08-11
+显式声明 Windows x64 Core ABI 1.0 与本地 Worker Protocol 1.0。该声明不是 UltraRender 1.0 产品发布，
+也不表示软件包已经公开分发。
 
 ```text
 PB.0 现有边界冻结、完整 Public Interaction Surface Ledger、legacy inventory 与兼容基线
@@ -121,6 +122,8 @@ public transport、versioned extension、internal contract、legacy migration �
 **PB.6 状态**: 已完成（2026-08-09）。SceneIR schema 2 为 editable objects 持久化 RFC 9562 UUID，并保留 legacy source ID 为非权威 alias；schema 1 通过 UUIDv8/SHA-256 确定性迁移，binary/text/package roundtrip、重复与悬空引用均受门禁约束。180-entry Candidate registry（digest `0e56eea2d03b2528ceefe2f686de3b63510d956738ee19cf107835abb297f554`）生成 transaction/result C11 布局、operation identities 与 additive FlatBuffers schema。Scene table 和 product worker 以 transaction UUID、base revision、有序 typed edits、required capabilities 与 client metadata 执行全量预校验和原子 swap；stale base 明确返回 retry revision 且不自动 merge。精确实现 transform、canonical physical camera、material/mesh reference、URI payload、add/remove、light 与 environment；visibility 与 binary mesh replacement 仅接受显式 full-scene fallback，否则拒绝。direct ABI/worker 门禁验证 sizing 不提交、rollback、conflict/retry、hot/partial/full/rejected strategy、rebuilt identities、semantic replay 与 frame identity parity；Release 95/95 CTest 通过。所有产物仍为 Candidate 0.1，不形成兼容承诺；游标进入 PB.7。
 
 **PB.7 状态**: 已完成（2026-08-09）。PB.2-PB.6 的五份 Windows x64 C11 compiled client fixture 绑定 historical SDK/source/binary/compiler identity，并以各阶段已知 table prefix 对当前 runtime 执行真实加载；Candidate 支持策略明确只保留 current client/current content-digested runtime 作为反向支持行，未把旧 Candidate runtime 偷换为承诺。SDK 与 runtime 独立分包，clean out-of-tree client 仅用分包 headers/schemas/FlatBuffers/fixtures 和 product binaries 完成 manifest/capability、native scene/objective、operation/event、immutable frame map/copy、camera transaction、conflict、cancel、full reload、worker shared-memory、crash/restart E2E。13 组 golden messages 增加 exact registry mismatch，固定种子/预算 corpus 覆盖 loader chain、registry、FlatBuffers、scene、transaction、handle、mapping/cancel/crash 类别；静态 import 与运行中 TCP/UDP 检查确认无网络端点、防火墙触发路径、ambient discovery 或 orphan worker。完整 ledger 仍为零未分类/重复权威/bypass；`ure.phase_pb.validation.v1` schema 与确定性聚合脚本绑定 source/runtime/worker/registry/package/ABI/matrix/fuzz/behavior/CTest 证据。Release 100/100 CTest 通过后以 clean-tree validation report 再闭环。所有产物仍为 Candidate 0.1；PB.8 未获单独明确批准，当前必须停在稳定承诺门前。
+
+**PB.8 状态**: 已完成（2026-08-11）。逐项稳定性复核把 telemetry、Spectrum/Stokes plane、renderer update strategy 与 UUID transaction 从 Core 移出；11 个预发布 Core ID 永久 tombstone，transaction 由独立 `UnstableExtension` table 查询，初始 `StableExtension` 列表为空。Core caller structure 校验绑定冻结的 1.0 prefix，而非当前实现 `sizeof(T)`。release-named runtime/worker、Windows x64 ABI、v1 schemas、支持策略、最终 Candidate layout seed 与首个 stable-major 的诚实 `NotApplicable` 反向矩阵已落地。独立 C11、C++23 extension 和 local-worker 三种调用方式覆盖全部 39 个 Core call 与 transaction call，并写出 6 个 finite、nonzero、spatially nonuniform PFM 图像。Release 101/101、安全、兼容、ledger 和聚合报告门禁通过；用户在 REPORT 后明确批准声明 Core ABI 1.0 / Worker Protocol 1.0，并单独授权创建范围化本地 tag。该声明不等于 UltraRender 1.0、push、公开包分发或支持时钟开始。游标恢复 HR.3。
 
 ---
 
@@ -515,7 +518,7 @@ MeasurementBundle 至少支持可预算选择的以下层次：
 
 **依赖**: HT.1、HR.0。
 
-**状态**: 暂缓。Phase PB 成为当前唯一施工路线；PB.8 闭环后，HR.3 通过版本化 Research/Experimental extension 继续，不扩张稳定 Core。
+**状态**: 当前游标（2026-08-11）。Phase PB 已闭环；HR.3 通过版本化 Research/Experimental extension 继续，不扩张稳定 Core。
 
 - learned component 优先作为 proposal、control variate、residual 或 budget allocator；
 - 若进入无偏 estimator，必须有严格 correction、独立 holdout 或 unbiased residual estimator；

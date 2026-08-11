@@ -1,0 +1,25 @@
+{
+  "schema": "ure.public.compatibility-matrix/1.0",
+  "publication_state": "Stable",
+  "release": "1.0.0",
+  "initial_stable_release": true,
+  "rows": {
+    "oldest_core_1_client_current_runtime": {
+      "status": "Passed",
+      "client": "tests/fixtures/contracts/old_clients/core_1_0_seed_from_pb7/windows_x64/core_1_0_seed_client.exe",
+      "runtime": "ultrarender_runtime_1.dll",
+      "rule": "Every future runtime_1 build must continue to run this compiled client without recompilation."
+    },
+    "current_client_current_runtime": {
+      "status": "Passed",
+      "client": "test_loader_client",
+      "runtime": "ultrarender_runtime_1.dll"
+    },
+    "current_client_prior_stable_runtime": {
+      "status": "NotApplicable",
+      "reason": "No prior stable Core 1.x runtime exists before the initial 1.0 declaration.",
+      "future_rule": "Beginning with the first post-1.0 runtime_1 release, retain the preceding stable runtime and run the then-current client against it."
+    }
+  },
+  "historical_candidate_policy": "PB.2-PB.6 binaries remain immutable pre-release evidence and carry no Stable compatibility promise. They are not aliases for Core 1.0."
+}

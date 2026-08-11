@@ -1,8 +1,8 @@
-include "ure_payload_candidate.fbs";
-include "ure_frame_candidate.fbs";
-include "ure_scene_candidate.fbs";
+include "ure_payload_v1.fbs";
+include "ure_frame_v1.fbs";
+include "ure_scene_v1.fbs";
 
-namespace ultrarender.contract.candidate;
+namespace ultrarender.contract.v1;
 
 enum MessageKind:uint {
   HandshakeRequest = 500,
@@ -69,4 +69,4 @@ table WorkerEnvelope {
 }
 
 root_type WorkerEnvelope;
-file_identifier "URW0";
+file_identifier "URW1";

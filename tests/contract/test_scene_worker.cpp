@@ -18,7 +18,7 @@
 
 namespace {
 
-namespace fb = ultrarender::contract::candidate;
+namespace fb = ultrarender::contract::v1;
 
 struct DirectResult {
     ure_scene_revision_info_t revision{};
@@ -39,7 +39,8 @@ const Table *query_table(ure_query_interface_fn query,
     ure_interface_response_t response{};
     request.header = {URE_STRUCTURE_INTERFACE_QUERY, sizeof(request), nullptr};
     std::memcpy(request.interface_id.bytes, id, sizeof(id));
-    request.maximum_minor = 1;
+    request.minimum_major = 1;
+    request.maximum_major = 1;
     response.header = {URE_STRUCTURE_INTERFACE_RESPONSE, sizeof(response),
                        nullptr};
     if (query(&request, &response, nullptr) != URE_RESULT_SUCCESS ||

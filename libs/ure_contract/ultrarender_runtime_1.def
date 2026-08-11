@@ -1,4 +1,4 @@
-LIBRARY ultrarender_runtime_candidate
+LIBRARY ultrarender_runtime_1
 EXPORTS
     ureGetRuntimeManifest
     ureQueryInterface

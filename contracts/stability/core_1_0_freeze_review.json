@@ -1,0 +1,81 @@
+{
+  "schema": "ure.public.core-freeze-review/1.0",
+  "publication_state": "Stable",
+  "release": "1.0.0",
+  "registry_digest": "c358276424a2cdc71cfefc6edac290ee78fa75a2bf918edecb8f37f4d991af42",
+  "review_rule": "A Core identity is retained only when a payload schema, capability parameter, or separately versioned extension cannot replace the cross-boundary interaction grammar.",
+  "groups": [
+    {
+      "name": "abi_value_and_table_structures",
+      "registry_ids": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41],
+      "decision": "Freeze",
+      "extension_impossibility": "These are the memory, ownership, sizing, discovery, scene-revision, objective-envelope, and lease prefixes needed before any versioned payload can be interpreted. Internal SceneIR, RenderConfig, estimator, backend, and resource layouts are absent.",
+      "evolution": "Existing prefixes and successful semantics are immutable; compatible additions are tail-only and validated against the frozen 1.0 prefix size. New domains use new tables or schemas."
+    },
+    {
+      "name": "result_and_error_grammar",
+      "registry_ids": [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 200],
+      "decision": "Freeze",
+      "extension_impossibility": "Bootstrap, table calls, and worker envelopes require one result vocabulary before extension discovery. Details remain versioned structured payloads.",
+      "evolution": "New detail uses structured error schemas; new universal outcomes append identities without changing existing numeric values."
+    },
+    {
+      "name": "capability_axes_and_boundary_families",
+      "registry_ids": [300, 301, 302, 304, 305],
+      "decision": "Freeze",
+      "extension_impossibility": "Bootstrap, lifecycle, frame lease, native-scene fallback, and generic render-session availability correspond to the frozen calling families themselves. Algorithm, provider, format-feature, and research availability remains outside Core.",
+      "evolution": "Capability descriptors carry independent stability, maturity, runtime state, dependencies, limits, and reason data; optional functionality receives extension identities."
+    },
+    {
+      "name": "core_events",
+      "registry_ids": [400, 401, 402, 403, 404, 405],
+      "decision": "Freeze",
+      "extension_impossibility": "Operation state, frame readiness, loss/gap, diagnostics, and full-scene revision replacement are required to coordinate the stable asynchronous lifetimes. Event payload detail stays schema-versioned.",
+      "evolution": "New events use new IDs and payload schemas; transaction-specific events were removed from Core."
+    },
+    {
+      "name": "worker_core_payload_schemas",
+      "registry_ids": [500, 501, 502, 503, 504, 505, 506, 507, 508, 509, 510],
+      "decision": "Freeze",
+      "extension_impossibility": "The isolated worker must negotiate, report errors/capabilities/operations/events, transfer immutable frames, and carry the same generic scene/revision/objective envelopes without a second authority.",
+      "evolution": "FlatBuffers field IDs and 1.0 meanings are immutable; additive fields remain optional and new incompatible semantics use a new schema major."
+    },
+    {
+      "name": "minimum_display_plane",
+      "registry_ids": [600],
+      "decision": "Freeze",
+      "extension_impossibility": "One generic color plane is the minimum interoperable render result and is not an estimator, spectrum, polarization, reconstruction, or display-transform commitment.",
+      "evolution": "Spectral, Stokes, MeasurementBundle, and research planes use independently versioned extensions."
+    },
+    {
+      "name": "core_interfaces",
+      "registry_ids": [700, 701, 702, 703, 704, 705, 706, 707],
+      "decision": "Freeze",
+      "extension_impossibility": "The loader, lifecycle, immutable-frame, full-scene fallback, and generic session tables are the interaction grammar that enables clients to evolve independently. The pre-release transaction function was removed from the Scene table.",
+      "evolution": "Tables may only grow at the tail inside runtime major 1; transaction and future research behavior use separate interface UUIDs."
+    },
+    {
+      "name": "lifecycle_and_envelope_semantics",
+      "registry_ids": [800, 801, 802, 803, 804, 805, 806, 807, 900, 901, 902, 903, 904, 905, 906, 907, 920, 921, 922, 930, 931, 932, 933, 940, 941, 942, 943, 950, 951, 952, 953, 960, 961, 962, 963, 964, 965, 966, 967, 968, 969, 970, 971, 972, 973, 974, 975, 976, 977, 978, 979],
+      "decision": "Freeze",
+      "extension_impossibility": "These numeric values define table state machines, concurrency, maturity/state axes, immutable byte interpretation, source carriers, full replacement, and generic session states. They do not select algorithms or expose internal execution policy.",
+      "evolution": "New semantics append identities; successful meanings and terminal/lifetime behavior of existing values do not change."
+    }
+  ],
+  "pre_release_demotions": [
+    {"old_registry_id": 42, "replacement_registry_id": 2147483676, "reason": "Transaction request layout is an Experimental schema carrier, not Core."},
+    {"old_registry_id": 43, "replacement_registry_id": 2147483677, "reason": "Transaction result and renderer strategy evidence must evolve outside Core."},
+    {"old_registry_id": 303, "replacement_registry_id": 2147483669, "reason": "Telemetry providers and limits are optional implementation capabilities."},
+    {"old_registry_id": 406, "replacement_registry_id": 2147483680, "reason": "Transaction events belong to the transaction extension."},
+    {"old_registry_id": 601, "replacement_registry_id": 2147483670, "reason": "Spectral measurement layout requires independent schema evolution."},
+    {"old_registry_id": 602, "replacement_registry_id": 2147483671, "reason": "Polarimetric measurement layout requires independent schema evolution."},
+    {"old_registry_id": 808, "replacement_registry_id": 2147483681, "reason": "Transaction execution is discovered through an extension interface."},
+    {"old_registry_id": 980, "replacement_registry_id": 2147483672, "reason": "Hot-update strategy is renderer implementation evidence."},
+    {"old_registry_id": 981, "replacement_registry_id": 2147483673, "reason": "Partial-rebuild strategy is renderer implementation evidence."},
+    {"old_registry_id": 982, "replacement_registry_id": 2147483674, "reason": "Full-reload strategy is renderer implementation evidence."},
+    {"old_registry_id": 983, "replacement_registry_id": 2147483675, "reason": "Rejected strategy is extension-specific diagnostic evidence."}
+  ],
+  "stable_extensions": [],
+  "unstable_extension_interfaces": [2147483679],
+  "frozen_core_registry_entry_count": 140
+}

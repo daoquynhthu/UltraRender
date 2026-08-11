@@ -610,7 +610,7 @@ ure_result_t URE_CALL frame_copy(const ure_frame_copy_info_t *info,
 
 const ure_frame_interface_t &frame_interface() noexcept {
     static const ure_frame_interface_t table{
-        {sizeof(table), 0, 1}, frame_retain, frame_release, frame_get_info, frame_get_plane_info, frame_map, frame_unmap, frame_copy};
+        {sizeof(table), 1, 0}, frame_retain, frame_release, frame_get_info, frame_get_plane_info, frame_map, frame_unmap, frame_copy};
     return table;
 }
 

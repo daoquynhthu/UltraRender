@@ -3,7 +3,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$schema = Get-Content -LiteralPath (Join-Path $RepoRoot 'contracts/schemas/ure_scene_candidate.fbs') -Raw
+$schema = Get-Content -LiteralPath (Join-Path $RepoRoot 'contracts/schemas/ure_scene_v1.fbs') -Raw
 $loader = Get-Content -LiteralPath (Join-Path $RepoRoot 'contracts/generated/include/ultrarender/ure_loader.h') -Raw
 $adapter = Get-Content -LiteralPath (Join-Path $RepoRoot 'libs/ure_contract/src/scene_transaction.cpp') -Raw
 $worker = Get-Content -LiteralPath (Join-Path $RepoRoot 'apps/ure_worker/main.cpp') -Raw

@@ -85,12 +85,12 @@ static int make_path(wchar_t *path, size_t capacity, const wchar_t *root, const 
 
 int wmain(int argc, wchar_t **argv) {
     static const wchar_t *scenarios[] = {
-        L"normal_lifecycle", L"missing_optional_capability", L"missing_required_capability", L"registry_mismatch", L"old_minor",
+        L"normal_lifecycle", L"missing_optional_capability", L"missing_required_capability", L"registry_mismatch", L"incompatible_protocol_version",
         L"unknown_optional_field", L"event_gap", L"backpressure", L"device_loss", L"worker_crash",
         L"malformed_message", L"truncated_message", L"oversized_message"
     };
     if (argc != 4) return 2;
-    if (sizeof(ure_uuid_t) != 16 || sizeof(ure_digest256_t) != 32 || URE_REGISTRY_CANDIDATE_MINOR != 1) return 3;
+    if (sizeof(ure_uuid_t) != 16 || sizeof(ure_digest256_t) != 32 || URE_REGISTRY_VERSION_MAJOR != 1) return 3;
     CreateDirectoryW(argv[3], NULL);
     for (size_t index = 0; index < sizeof(scenarios) / sizeof(scenarios[0]); ++index) {
         wchar_t request[32768];

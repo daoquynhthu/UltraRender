@@ -1,0 +1,59 @@
+{
+  "canonical_registry": {
+    "path": "registry/public_contract_registry.canonical.json",
+    "sha256": "a37f12975476e3e4d8195580f94d0d75d41d18aaf8dbd8d20b5200ca70d1aa46"
+  },
+  "compatibility_promise": "Core ABI 1.x and Worker Protocol 1.x within the declared support window",
+  "core_abi": {
+    "major": 1,
+    "minor": 0
+  },
+  "frame_schema": {
+    "major": 1,
+    "minor": 0
+  },
+  "loader_exports": [
+    "ureGetRuntimeManifest",
+    "ureQueryInterface"
+  ],
+  "mock_transport": "bounded conformance fixture for Worker Protocol 1.x",
+  "native_scene": {
+    "read_major_max": 2,
+    "read_major_min": 1,
+    "write_major": 2
+  },
+  "platform_profiles": [
+    "windows-x64-msvc-c11"
+  ],
+  "public_header_language": "C11",
+  "publication_state": "Stable",
+  "registry_canonicalization": "RFC8785 restricted to integers and decimal strings",
+  "registry_digest": "c358276424a2cdc71cfefc6edac290ee78fa75a2bf918edecb8f37f4d991af42",
+  "registry_entry_count": 182,
+  "schema": "ure.public.runtime-manifest/1.0",
+  "schema_compiler": "flatc version 25.12.19",
+  "schemas": [
+    {
+      "path": "schemas/ure_payload_v1.fbs",
+      "sha256": "d444b6878669b92590682ced171962ba5109a5a27baa8a0ccbbbba58e4ae6e0a"
+    },
+    {
+      "path": "schemas/ure_frame_v1.fbs",
+      "sha256": "d3b239ec15ef27a50d7744a94b99705fc351c08af53b949c217816313a9b9ef1"
+    },
+    {
+      "path": "schemas/ure_scene_v1.fbs",
+      "sha256": "4744d2043cd7519a0c1a8088727fa06ab94a6d6bc9df3232bec48c8ec7447017"
+    },
+    {
+      "path": "schemas/ure_worker_v1.fbs",
+      "sha256": "50f9a0e72b2e09c15b556d35279c2626de96cc1f0b5c4fb07fbf26dc3f905265"
+    }
+  ],
+  "version": "1.0.0",
+  "worker_protocol": {
+    "major": 1,
+    "maximum_message_bytes": 1048576,
+    "minor": 0
+  }
+}

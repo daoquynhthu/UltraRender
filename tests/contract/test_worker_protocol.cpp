@@ -29,7 +29,8 @@ const Table *query_table(ure_query_interface_fn query,
     ure_interface_response_t response{};
     request.header = {URE_STRUCTURE_INTERFACE_QUERY, sizeof(request), nullptr};
     std::memcpy(request.interface_id.bytes, id, sizeof(id));
-    request.maximum_minor = 1;
+    request.minimum_major = 1;
+    request.maximum_major = 1;
     response.header = {URE_STRUCTURE_INTERFACE_RESPONSE, sizeof(response),
                        nullptr};
     if (query(&request, &response, nullptr) != URE_RESULT_SUCCESS ||
@@ -143,7 +144,8 @@ bool private_interface_unavailable(const std::filesystem::path &runtime_path) {
     request.header = {URE_STRUCTURE_INTERFACE_QUERY, sizeof(request), nullptr};
     std::memcpy(request.interface_id.bytes, conformance_id,
                 sizeof(conformance_id));
-    request.maximum_minor = 1;
+    request.minimum_major = 1;
+    request.maximum_major = 1;
     response.header = {URE_STRUCTURE_INTERFACE_RESPONSE, sizeof(response),
                        nullptr};
     const bool unavailable = query && query(&request, &response, nullptr) ==

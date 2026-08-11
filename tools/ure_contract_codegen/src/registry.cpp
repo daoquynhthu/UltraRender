@@ -123,15 +123,15 @@ Registry load_registry(const std::filesystem::path& path) {
     registry.source = parse_strict(read_text(path), path);
     reject_floating_point(registry.source, "registry");
     require_exact_keys(registry.source, {
-        "schema", "candidate_version", "publication_state", "authoring_format", "digest", "rules",
+        "schema", "version", "publication_state", "authoring_format", "digest", "rules",
         "public_header_policy", "namespaces", "identity_kinds", "entries", "tombstones"}, "Registry root");
     if (registry.source.at("schema") != "ure.public.contract-registry-source/1.0" ||
-        registry.source.at("publication_state") != "Candidate" ||
+        registry.source.at("publication_state") != "Stable" ||
         registry.source.at("authoring_format") != "canonical-json-integer-or-decimal-string") {
         throw std::runtime_error("Unexpected registry identity");
     }
-    registry.candidate_version = registry.source.at("candidate_version").get<std::string>();
-    const auto candidate_version = parse_version(registry.candidate_version);
+    registry.version = registry.source.at("version").get<std::string>();
+    const auto registry_version = parse_version(registry.version);
     if (registry.source.at("digest").at("algorithm") != "SHA-256" ||
         registry.source.at("digest").at("domain") != "UltraRender.PublicRegistry.v1" ||
         registry.source.at("digest").at("canonicalization") != "RFC8785-with-integers-and-decimal-strings-only") {
@@ -139,13 +139,15 @@ Registry load_registry(const std::filesystem::path& path) {
     }
     require_exact_keys(registry.source.at("rules"), {
         "explicit_numeric_ids", "derive_ids_from_names", "reuse_published_ids", "reuse_tombstones",
-        "stable_core_requires_extension_impossibility_evidence", "candidate_breaks_require_compatibility_record"},
+        "stable_core_requires_extension_impossibility_evidence", "pre_release_breaks_require_compatibility_record",
+        "stable_changes_require_compatibility_record"},
         "Registry rules");
     const auto& rules = registry.source.at("rules");
     if (!rules.at("explicit_numeric_ids").get<bool>() || rules.at("derive_ids_from_names").get<bool>() ||
         rules.at("reuse_published_ids").get<bool>() || rules.at("reuse_tombstones").get<bool>() ||
         !rules.at("stable_core_requires_extension_impossibility_evidence").get<bool>() ||
-        !rules.at("candidate_breaks_require_compatibility_record").get<bool>()) {
+        !rules.at("pre_release_breaks_require_compatibility_record").get<bool>() ||
+        !rules.at("stable_changes_require_compatibility_record").get<bool>()) {
         throw std::runtime_error("Registry governance rules were weakened");
     }
 
@@ -224,7 +226,7 @@ Registry load_registry(const std::filesystem::path& path) {
             throw std::runtime_error("Registry entry is outside its namespace or stability range: " + entry.canonical_name);
         }
         if (!valid_kinds.contains(entry.kind) || !valid_maturity.contains(entry.maturity) ||
-            !valid_runtime_state.contains(entry.default_runtime_state) || parse_version(entry.since) > candidate_version ||
+            !valid_runtime_state.contains(entry.default_runtime_state) || parse_version(entry.since) > registry_version ||
             !std::regex_match(entry.canonical_name, canonical_pattern) || !std::regex_match(entry.c_name, c_pattern) ||
             !canonical_names.insert(entry.canonical_name).second || !c_names.insert(entry.c_name).second ||
             !index_by_id.emplace(entry.registry_id, registry.entries.size()).second) {
@@ -236,7 +238,7 @@ Registry load_registry(const std::filesystem::path& path) {
         registry.entries.push_back(std::move(entry));
     }
     if (registry.entries.empty()) {
-        throw std::runtime_error("Candidate 0.1 registry must publish entries");
+        throw std::runtime_error("Stable registry must publish entries");
     }
     for (const auto& entry : registry.entries) {
         std::unordered_set<std::uint32_t> unique_dependencies;
@@ -273,11 +275,12 @@ Registry load_registry(const std::filesystem::path& path) {
         });
         if (!in_range || !valid_kinds.contains(tombstone.at("kind").get<std::string>()) ||
             !std::regex_match(tombstone.at("canonical_name").get<std::string>(), canonical_pattern) ||
-            parse_version(tombstone.at("removed_in").get<std::string>()) > candidate_version ||
+            parse_version(tombstone.at("removed_in").get<std::string>()) > registry_version ||
             tombstone.at("reason").get<std::string>().empty() || index_by_id.contains(id) ||
             !tombstone_ids.insert(id).second) {
             throw std::runtime_error("Reused or duplicate tombstone ID");
         }
+        registry.tombstones.push_back(id);
     }
     std::ranges::sort(registry.entries, {}, &RegistryEntry::registry_id);
     registry.canonical_bytes = registry.source.dump();
@@ -294,18 +297,18 @@ void validate_compatibility(const std::filesystem::path& path, const Registry& r
     const Json value = parse_strict(read_text(path), path);
     reject_floating_point(value, "compatibility");
     require_exact_keys(value, {
-        "schema", "candidate_version", "baseline", "allowed_change_classes", "changes", "tombstones"},
+        "schema", "release_version", "pre_release_baseline", "allowed_change_classes", "changes", "tombstones"},
         "Compatibility root");
-    if (value.at("schema") != "ure.public.registry-compatibility/1.0" ||
-        value.at("candidate_version") != registry.candidate_version || !value.at("changes").is_array() ||
+    if (value.at("schema") != "ure.public.registry-compatibility/2.0" ||
+        value.at("release_version") != registry.version || !value.at("changes").is_array() ||
         !value.at("tombstones").is_array()) {
         throw std::runtime_error("Registry compatibility metadata is inconsistent");
     }
-    if (!value.at("baseline").is_null()) {
-        require_exact_keys(value.at("baseline"), {"candidate_version", "registry_digest"}, "Compatibility baseline");
-        if (value.at("baseline").at("candidate_version") != registry.candidate_version ||
+    if (!value.at("pre_release_baseline").is_null()) {
+        require_exact_keys(value.at("pre_release_baseline"), {"version", "registry_digest"}, "Compatibility baseline");
+        if (value.at("pre_release_baseline").at("version") != "0.1.0" ||
             !std::regex_match(
-                value.at("baseline").at("registry_digest").get<std::string>(),
+                value.at("pre_release_baseline").at("registry_digest").get<std::string>(),
                 std::regex("[0-9a-f]{64}"))) {
             throw std::runtime_error("Registry compatibility baseline is invalid");
         }
@@ -313,6 +316,7 @@ void validate_compatibility(const std::filesystem::path& path, const Registry& r
     const std::set<std::string> allowed(value.at("allowed_change_classes").begin(), value.at("allowed_change_classes").end());
     std::unordered_set<std::uint32_t> registry_ids;
     for (const auto& entry : registry.entries) registry_ids.insert(entry.registry_id);
+    for (const std::uint32_t id : registry.tombstones) registry_ids.insert(id);
     std::unordered_set<std::uint32_t> changed;
     for (const auto& change : value.at("changes")) {
         require_exact_keys(change, {"registry_id", "change_class", "phase", "summary"}, "Compatibility change");
@@ -323,10 +327,20 @@ void validate_compatibility(const std::filesystem::path& path, const Registry& r
             throw std::runtime_error("Invalid registry compatibility change record");
         }
     }
+    const auto compatibility_tombstones =
+        value.at("tombstones").get<std::vector<std::uint32_t>>();
+    auto expected_tombstones = registry.tombstones;
+    auto actual_tombstones = compatibility_tombstones;
+    std::ranges::sort(expected_tombstones);
+    std::ranges::sort(actual_tombstones);
+    if (actual_tombstones != expected_tombstones ||
+        std::ranges::adjacent_find(actual_tombstones) != actual_tombstones.end()) {
+        throw std::runtime_error("Registry compatibility tombstones differ from the stable registry");
+    }
 }
 
 void validate_schemas(const std::filesystem::path& schema_directory) {
-    const std::array names{"ure_payload_candidate.fbs", "ure_frame_candidate.fbs", "ure_scene_candidate.fbs", "ure_worker_candidate.fbs"};
+    const std::array names{"ure_payload_v1.fbs", "ure_frame_v1.fbs", "ure_scene_v1.fbs", "ure_worker_v1.fbs"};
     const std::regex field_pattern(R"(^\s*[A-Za-z0-9_]+\s*:[^;]+\(id:\s*([0-9]+)\)\s*;\s*$)");
     for (const std::string_view name : names) {
         const std::string text = read_text(schema_directory / name);

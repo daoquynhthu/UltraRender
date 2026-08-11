@@ -2,6 +2,7 @@
 #define NOMINMAX
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -46,16 +47,18 @@ struct ConformanceInterface {
 
 template <class Table>
 const Table *query_table(ure_query_interface_fn query,
-                         const std::uint8_t (&id)[16]) {
+                         const std::uint8_t (&id)[16],
+                         std::size_t required_prefix_size) {
     ure_interface_query_t request{};
     ure_interface_response_t response{};
     request.header = {URE_STRUCTURE_INTERFACE_QUERY, sizeof(request), nullptr};
     std::memcpy(request.interface_id.bytes, id, sizeof(id));
-    request.maximum_minor = 1;
+    request.minimum_major = 1;
+    request.maximum_major = 1;
     response.header = {URE_STRUCTURE_INTERFACE_RESPONSE, sizeof(response),
                        nullptr};
     if (query(&request, &response, nullptr) != URE_RESULT_SUCCESS ||
-        !response.table || response.table_size < sizeof(Table))
+        !response.table || response.table_size < required_prefix_size)
         return nullptr;
     return static_cast<const Table *>(response.table);
 }
@@ -74,6 +77,7 @@ struct RuntimeClient::Impl {
     const ure_error_interface_t *errors{};
     const ure_frame_interface_t *frames{};
     const ure_scene_interface_t *scenes{};
+    const ure_scene_transaction_interface_t *transactions{};
     const ure_session_interface_t *sessions{};
     const ure_operation_interface_t *operations{};
 #if defined(URE_WORKER_CONFORMANCE)
@@ -148,7 +152,8 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
     ure_runtime_manifest_t manifest{};
     manifest_request.header = {URE_STRUCTURE_RUNTIME_MANIFEST_REQUEST,
                                sizeof(manifest_request), nullptr};
-    manifest_request.maximum_minor = 1;
+    manifest_request.minimum_major = 1;
+    manifest_request.maximum_major = 1;
     manifest.header = {URE_STRUCTURE_RUNTIME_MANIFEST, sizeof(manifest), nullptr};
     const ure_result_t manifest_result =
         get_manifest(&manifest_request, &manifest, nullptr);
@@ -166,18 +171,45 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
     static constexpr std::uint8_t error_id[16] = URE_INTERFACE_ERROR_UUID_BYTES;
     static constexpr std::uint8_t frame_id[16] = URE_INTERFACE_FRAME_UUID_BYTES;
     static constexpr std::uint8_t scene_id[16] = URE_INTERFACE_SCENE_UUID_BYTES;
+    static constexpr std::uint8_t transaction_id[16] =
+        URE_INTERFACE_SCENE_TRANSACTION_UUID_BYTES;
     static constexpr std::uint8_t session_id[16] = URE_INTERFACE_SESSION_UUID_BYTES;
     static constexpr std::uint8_t operation_id[16] = URE_INTERFACE_OPERATION_UUID_BYTES;
-    const auto runtime = query_table<ure_runtime_interface_t>(query, runtime_id);
-    impl_->instances = query_table<ure_instance_interface_t>(query, instance_id);
-    impl_->errors = query_table<ure_error_interface_t>(query, error_id);
-    impl_->frames = query_table<ure_frame_interface_t>(query, frame_id);
-    impl_->scenes = query_table<ure_scene_interface_t>(query, scene_id);
-    impl_->sessions = query_table<ure_session_interface_t>(query, session_id);
-    impl_->operations = query_table<ure_operation_interface_t>(query, operation_id);
+    const auto runtime = query_table<ure_runtime_interface_t>(
+        query, runtime_id,
+        offsetof(ure_runtime_interface_t, create_instance) +
+            sizeof(((ure_runtime_interface_t *)nullptr)->create_instance));
+    impl_->instances = query_table<ure_instance_interface_t>(
+        query, instance_id,
+        offsetof(ure_instance_interface_t, query_capability) +
+            sizeof(((ure_instance_interface_t *)nullptr)->query_capability));
+    impl_->errors = query_table<ure_error_interface_t>(
+        query, error_id,
+        offsetof(ure_error_interface_t, get_info) +
+            sizeof(((ure_error_interface_t *)nullptr)->get_info));
+    impl_->frames = query_table<ure_frame_interface_t>(
+        query, frame_id,
+        offsetof(ure_frame_interface_t, copy_plane) +
+            sizeof(((ure_frame_interface_t *)nullptr)->copy_plane));
+    impl_->scenes = query_table<ure_scene_interface_t>(
+        query, scene_id,
+        offsetof(ure_scene_interface_t, get_revision) +
+            sizeof(((ure_scene_interface_t *)nullptr)->get_revision));
+    impl_->transactions =
+        query_table<ure_scene_transaction_interface_t>(
+            query, transaction_id, sizeof(ure_scene_transaction_interface_t));
+    impl_->sessions = query_table<ure_session_interface_t>(
+        query, session_id,
+        offsetof(ure_session_interface_t, acquire_frame) +
+            sizeof(((ure_session_interface_t *)nullptr)->acquire_frame));
+    impl_->operations = query_table<ure_operation_interface_t>(
+        query, operation_id,
+        offsetof(ure_operation_interface_t, request_cancel) +
+            sizeof(((ure_operation_interface_t *)nullptr)->request_cancel));
 #if defined(URE_WORKER_CONFORMANCE)
     impl_->conformance =
-        query_table<ConformanceInterface>(query, kConformanceInterfaceId);
+        query_table<ConformanceInterface>(query, kConformanceInterfaceId,
+                                          sizeof(ConformanceInterface));
 #endif
     if (!runtime || !impl_->instances || !impl_->errors || !impl_->frames ||
         !impl_->scenes || !impl_->sessions || !impl_->operations
@@ -278,6 +310,11 @@ bool RuntimeClient::apply_scene_transaction(
                    "worker scene identity is unknown"};
         return false;
     }
+    if (!impl_->transactions) {
+        failure = {URE_RESULT_CAPABILITY_UNAVAILABLE, URE_ERROR_DOMAIN_CORE,
+                   403, "scene transaction extension is unavailable"};
+        return false;
+    }
     ure_scene_transaction_t transaction{};
     transaction.header = {URE_STRUCTURE_SCENE_TRANSACTION,
                           sizeof(transaction), nullptr};
@@ -295,7 +332,7 @@ bool RuntimeClient::apply_scene_transaction(
     snapshot.result.header = {URE_STRUCTURE_SCENE_TRANSACTION_RESULT,
                               sizeof(snapshot.result), nullptr};
     ure_handle_t error_handle{};
-    ure_result_t result = impl_->scenes->apply_transaction(
+    ure_result_t result = impl_->transactions->apply_transaction(
         impl_->scene, &transaction, &snapshot.result, &error_handle);
     const bool conflict = result == URE_RESULT_REVISION_CONFLICT;
     if (result != URE_RESULT_BUFFER_TOO_SMALL &&
@@ -314,8 +351,8 @@ bool RuntimeClient::apply_scene_transaction(
                               sizeof(snapshot.result), nullptr};
     snapshot.result.result_payload = {snapshot.payload.data(),
                                       snapshot.payload.size()};
-    result = impl_->scenes->apply_transaction(impl_->scene, &transaction,
-                                              &snapshot.result, &error_handle);
+    result = impl_->transactions->apply_transaction(
+        impl_->scene, &transaction, &snapshot.result, &error_handle);
     if (result == URE_RESULT_REVISION_CONFLICT) {
         snapshot.payload.resize(
             static_cast<std::size_t>(snapshot.result.result_written));

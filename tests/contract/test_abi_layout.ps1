@@ -24,6 +24,6 @@ if ($cLayout -cne $cppLayout) {
     throw "C and C++ ABI layouts differ"
 }
 if ($cLayout -cne $expectedLayout) {
-    throw "Windows x64 candidate ABI layout drifted"
+    throw "Windows x64 Core 1.0 ABI layout drifted"
 }
-Write-Output "Windows x64 C/C++ ABI layout matched the candidate manifest"
+Write-Output "Windows x64 C/C++ ABI layout matched the Core 1.0 manifest"

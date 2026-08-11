@@ -58,6 +58,10 @@ target_include_directories(external_client PRIVATE ${UR_PB1_STAGE_DIR}/include)
 add_dependencies(external_client ure_public_stage_headers)
 
 if(TARGET ure_contract)
+    add_library(contract_image_artifact STATIC external_client/image_artifact.c)
+    target_include_directories(contract_image_artifact PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/external_client)
+
     add_executable(test_abi_layout_c test_abi_layout_c.c)
     set_target_properties(test_abi_layout_c PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
     target_include_directories(test_abi_layout_c PRIVATE ${UR_PB1_STAGE_DIR}/include)
@@ -86,11 +90,12 @@ if(TARGET ure_contract)
         ${CMAKE_CURRENT_SOURCE_DIR}/external_client/direct_client.c)
     set_target_properties(test_scene_boundary PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
     target_include_directories(test_scene_boundary PRIVATE ${UR_PB1_STAGE_DIR}/include)
+    target_link_libraries(test_scene_boundary PRIVATE contract_image_artifact)
     add_dependencies(test_scene_boundary ure_public_stage_headers ure_contract)
 
     add_executable(test_scene_transaction external_client/transaction_client.cpp)
     target_link_libraries(test_scene_transaction PRIVATE
-        ure_public ure_contract_schema bcrypt)
+        ure_public ure_contract_schema bcrypt contract_image_artifact)
     add_dependencies(test_scene_transaction ure_public_stage_headers ure_contract)
 
     add_library(worker_test_support STATIC external_client/worker_client.cpp)
@@ -131,7 +136,7 @@ if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
     endforeach()
     if(TARGET ure_contract)
-        foreach(target test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
+        foreach(target contract_image_artifact test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
             target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
         endforeach()
         target_compile_options(test_loader_client PRIVATE /wd4191)
@@ -150,27 +155,16 @@ add_custom_target(ure_public_sdk_stage ALL
     VERBATIM)
 
 if(TARGET ure_contract)
-    set(UR_PB2_STAGE_DIR ${CMAKE_BINARY_DIR}/pb2_runtime)
-    add_custom_target(ure_contract_runtime_stage ALL
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/contracts/generated ${UR_PB2_STAGE_DIR}
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/contracts/abi ${UR_PB2_STAGE_DIR}/abi
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${UR_PB2_STAGE_DIR}/bin
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:ure_contract> ${UR_PB2_STAGE_DIR}/bin/
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:ure_worker> ${UR_PB2_STAGE_DIR}/bin/
-        COMMAND ${CMAKE_COMMAND} -E rm -f ${UR_PB2_STAGE_DIR}/bin/$<TARGET_FILE_NAME:ure_worker_conformance>
-        DEPENDS ure_contract ure_worker ure_public_stage_headers
-        VERBATIM)
-
-    set(UR_PB7_SDK_STAGE_DIR ${CMAKE_BINARY_DIR}/pb7_packages/sdk)
-    set(UR_PB7_RUNTIME_STAGE_DIR ${CMAKE_BINARY_DIR}/pb7_packages/runtime)
-    add_custom_target(ure_candidate_packages ALL
+    set(UR_PB8_SDK_STAGE_DIR ${CMAKE_BINARY_DIR}/pb8_packages/sdk)
+    set(UR_PB8_RUNTIME_STAGE_DIR ${CMAKE_BINARY_DIR}/pb8_packages/runtime)
+    add_custom_target(ure_release_packages ALL
         COMMAND
             ${UR_PWSH_EXECUTABLE}
             -NoProfile
-            -File ${CMAKE_CURRENT_SOURCE_DIR}/stage_candidate_packages.ps1
+            -File ${CMAKE_CURRENT_SOURCE_DIR}/stage_release_packages.ps1
             -RepoRoot ${CMAKE_SOURCE_DIR}
-            -SdkStage ${UR_PB7_SDK_STAGE_DIR}
-            -RuntimeStage ${UR_PB7_RUNTIME_STAGE_DIR}
+            -SdkStage ${UR_PB8_SDK_STAGE_DIR}
+            -RuntimeStage ${UR_PB8_RUNTIME_STAGE_DIR}
             -RuntimeDll $<TARGET_FILE:ure_contract>
             -WorkerExecutable $<TARGET_FILE:ure_worker>
             -MockWorkerExecutable $<TARGET_FILE:ultrarender_mock_worker>
@@ -190,13 +184,13 @@ add_test(
 add_test(
     NAME test_contract_schema_conform
     COMMAND ${UR_FLATC_EXECUTABLE} --conform
-        ${CMAKE_SOURCE_DIR}/contracts/schemas/baseline/0.1/ure_worker_candidate.fbs
-        ${CMAKE_SOURCE_DIR}/contracts/schemas/ure_worker_candidate.fbs)
+        ${CMAKE_SOURCE_DIR}/contracts/schemas/baseline/1.0/ure_worker_v1.fbs
+        ${CMAKE_SOURCE_DIR}/contracts/schemas/ure_worker_v1.fbs)
 add_test(
     NAME test_scene_contract_schema_conform
     COMMAND ${UR_FLATC_EXECUTABLE} --conform
-        ${CMAKE_SOURCE_DIR}/contracts/schemas/baseline/0.1/ure_scene_candidate.fbs
-        ${CMAKE_SOURCE_DIR}/contracts/schemas/ure_scene_candidate.fbs)
+        ${CMAKE_SOURCE_DIR}/contracts/schemas/baseline/1.0/ure_scene_v1.fbs
+        ${CMAKE_SOURCE_DIR}/contracts/schemas/ure_scene_v1.fbs)
 add_test(
     NAME test_public_loader_header_mirror
     COMMAND ${CMAKE_COMMAND} -E compare_files
@@ -248,6 +242,13 @@ add_test(
         -File ${CMAKE_CURRENT_SOURCE_DIR}/test_phase_pb7_static.ps1
         -RepoRoot ${CMAKE_SOURCE_DIR})
 add_test(
+    NAME test_phase_pb8_static
+    COMMAND
+        ${UR_PWSH_EXECUTABLE}
+        -NoProfile
+        -File ${CMAKE_CURRENT_SOURCE_DIR}/test_phase_pb8_static.ps1
+        -RepoRoot ${CMAKE_SOURCE_DIR})
+add_test(
     NAME test_mock_worker_external_client
     COMMAND external_client
         ${UR_PB1_STAGE_DIR}/bin/ultrarender_mock_worker.exe
@@ -255,16 +256,16 @@ add_test(
         ${CMAKE_CURRENT_BINARY_DIR}/mock_client_output)
 if(TARGET ure_contract)
     add_test(
-        NAME test_candidate_abi_layout
+        NAME test_core_1_0_abi_layout
         COMMAND
             ${UR_PWSH_EXECUTABLE}
             -NoProfile
             -File ${CMAKE_CURRENT_SOURCE_DIR}/test_abi_layout.ps1
             -CExecutable $<TARGET_FILE:test_abi_layout_c>
             -CppExecutable $<TARGET_FILE:test_abi_layout_cpp>
-            -Expected ${CMAKE_SOURCE_DIR}/contracts/abi/windows_x64_candidate.json)
+            -Expected ${CMAKE_SOURCE_DIR}/contracts/abi/windows_x64_core_1_0.json)
     add_test(
-        NAME test_candidate_loader_exports
+        NAME test_core_1_0_loader_exports
         COMMAND
             ${UR_PWSH_EXECUTABLE}
             -NoProfile
@@ -272,7 +273,7 @@ if(TARGET ure_contract)
             -RuntimeDll $<TARGET_FILE:ure_contract>
             -ClientExecutable $<TARGET_FILE:test_loader_client>)
     add_test(
-        NAME test_candidate_loader_client
+        NAME test_core_1_0_loader_client
         COMMAND test_loader_client $<TARGET_FILE:ure_contract>)
     add_test(
         NAME test_runtime_lifecycle
@@ -287,12 +288,16 @@ if(TARGET ure_contract)
             ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene
             ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.ure
             ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb5_public_boundary/single_scene.urepkg
-            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb5_public_boundary/ambiguous_scenes.urepkg)
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb5_public_boundary/ambiguous_scenes.urepkg
+            ${CMAKE_CURRENT_BINARY_DIR}/direct_map.pfm
+            ${CMAKE_CURRENT_BINARY_DIR}/direct_copy.pfm)
     add_test(
         NAME test_scene_transaction
         COMMAND test_scene_transaction
             $<TARGET_FILE:ure_contract>
-            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb6_scene_transaction_full/base_scene.urescene)
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb6_scene_transaction_full/base_scene.urescene
+            ${CMAKE_CURRENT_BINARY_DIR}/transaction_replay.pfm
+            ${CMAKE_CURRENT_BINARY_DIR}/transaction_replace.pfm)
     add_test(
         NAME test_worker_protocol
         COMMAND test_worker_protocol
@@ -322,7 +327,7 @@ if(TARGET ure_contract)
             -WorkerExecutable $<TARGET_FILE:ure_worker>
             -ConformanceExecutable $<TARGET_FILE:ure_worker_conformance>
             -ConformanceRuntime $<TARGET_FILE:ure_contract_conformance>
-            -RuntimeStage ${UR_PB2_STAGE_DIR}
+            -RuntimeStage ${UR_PB8_RUNTIME_STAGE_DIR}
             -RepoRoot ${CMAKE_SOURCE_DIR})
     add_test(
         NAME test_worker_runtime_security
@@ -335,11 +340,11 @@ if(TARGET ure_contract)
             $<TARGET_FILE:ure_contract>
             ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/pb6_scene_transaction_full/base_scene.urescene)
     add_test(
-        NAME test_candidate_compatibility
+        NAME test_core_1_0_compatibility
         COMMAND
             ${UR_PWSH_EXECUTABLE}
             -NoProfile
-            -File ${CMAKE_CURRENT_SOURCE_DIR}/test_candidate_compatibility.ps1
+            -File ${CMAKE_CURRENT_SOURCE_DIR}/test_core_1_0_compatibility.ps1
             -RepoRoot ${CMAKE_SOURCE_DIR}
             -CurrentClient $<TARGET_FILE:test_loader_client>
             -CurrentRuntime $<TARGET_FILE:ure_contract>)
@@ -350,9 +355,9 @@ if(TARGET ure_contract)
             -NoProfile
             -File ${CMAKE_CURRENT_SOURCE_DIR}/test_external_client_package.ps1
             -SourceDir ${CMAKE_CURRENT_SOURCE_DIR}/external_client
-            -BuildDir ${CMAKE_BINARY_DIR}/pb7_external_client_build
-            -SdkStage ${UR_PB7_SDK_STAGE_DIR}
-            -RuntimeStage ${UR_PB7_RUNTIME_STAGE_DIR}
+            -BuildDir ${CMAKE_BINARY_DIR}/pb8_external_client_build
+            -SdkStage ${UR_PB8_SDK_STAGE_DIR}
+            -RuntimeStage ${UR_PB8_RUNTIME_STAGE_DIR}
             -Flatc ${UR_FLATC_EXECUTABLE}
             -CMake ${CMAKE_COMMAND}
             -Ninja ${CMAKE_MAKE_PROGRAM})
@@ -371,14 +376,15 @@ set_tests_properties(
     test_scene_uuid_golden
     test_phase_pb6_static
     test_phase_pb7_static
+    test_phase_pb8_static
     test_mock_worker_external_client
     PROPERTIES TIMEOUT 60)
 
 if(TARGET ure_contract)
     set_tests_properties(
-        test_candidate_abi_layout
-        test_candidate_loader_exports
-        test_candidate_loader_client
+        test_core_1_0_abi_layout
+        test_core_1_0_loader_exports
+        test_core_1_0_loader_client
         test_runtime_lifecycle
         test_frame_leases
         test_scene_boundary
@@ -389,7 +395,7 @@ if(TARGET ure_contract)
         test_worker_security
         test_worker_runtime_security
         test_pb7_fuzz
-        test_candidate_compatibility
+        test_core_1_0_compatibility
         test_external_client_package
         PROPERTIES TIMEOUT 60)
     set_tests_properties(test_external_client_package PROPERTIES TIMEOUT 300)

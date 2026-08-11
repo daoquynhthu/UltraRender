@@ -33,7 +33,8 @@ static ure_runtime_manifest_request_t make_manifest_request(void) {
     ure_runtime_manifest_request_t request = {0};
     request.header.type = URE_STRUCTURE_RUNTIME_MANIFEST_REQUEST;
     request.header.size = (uint32_t)sizeof(request);
-    request.maximum_minor = 1;
+    request.minimum_major = 1;
+    request.maximum_major = 1;
     return request;
 }
 
@@ -50,7 +51,8 @@ static ure_interface_query_t make_runtime_query(void) {
     query.header.type = URE_STRUCTURE_INTERFACE_QUERY;
     query.header.size = (uint32_t)sizeof(query);
     memcpy(query.interface_id.bytes, runtime_id, sizeof(runtime_id));
-    query.maximum_minor = 1;
+    query.minimum_major = 1;
+    query.maximum_major = 1;
     return query;
 }
 
@@ -78,7 +80,7 @@ static int run_tests(ure_get_runtime_manifest_fn get_manifest, ure_query_interfa
     ure_runtime_manifest_request_t request = make_manifest_request();
     ure_runtime_manifest_t manifest = make_manifest();
     CHECK(get_manifest(&request, &manifest, &diagnostic) == URE_RESULT_SUCCESS);
-    CHECK(manifest.runtime_major == 0 && manifest.runtime_minor == 1 && manifest.runtime_patch == 0);
+    CHECK(manifest.runtime_major == 1 && manifest.runtime_minor == 0 && manifest.runtime_patch == 0);
     CHECK(memcmp(manifest.registry_digest.bytes, registry_digest, sizeof(registry_digest)) == 0);
     CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "windows-x64-msvc-c11"));
     CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "runtime_build_digest"));
@@ -95,7 +97,15 @@ static int run_tests(ure_get_runtime_manifest_fn get_manifest, ure_query_interfa
         large_request.value.header.size = (uint32_t)sizeof(large_request);
         large_manifest.value = make_manifest();
         large_manifest.value.header.size = (uint32_t)sizeof(large_manifest);
+        for (size_t index = 0; index < 4; ++index) {
+            large_request.tail[index] = UINT64_C(0x1122334455667788);
+            large_manifest.tail[index] = UINT64_C(0x8877665544332211);
+        }
         CHECK(get_manifest(&large_request.value, &large_manifest.value, &diagnostic) == URE_RESULT_SUCCESS);
+        for (size_t index = 0; index < 4; ++index) {
+            CHECK(large_request.tail[index] == UINT64_C(0x1122334455667788));
+            CHECK(large_manifest.tail[index] == UINT64_C(0x8877665544332211));
+        }
     }
     {
         ure_input_header_t optional = {0x80000001u, (uint32_t)sizeof(optional), NULL};
@@ -147,8 +157,8 @@ static int run_tests(ure_get_runtime_manifest_fn get_manifest, ure_query_interfa
     manifest = make_manifest();
     CHECK(get_manifest(&request, &manifest, &diagnostic) == URE_RESULT_INVALID_ARGUMENT);
     request = make_manifest_request();
-    request.minimum_minor = 2;
-    request.maximum_minor = 3;
+    request.minimum_minor = 1;
+    request.maximum_minor = 2;
     manifest = make_manifest();
     CHECK(get_manifest(&request, &manifest, &diagnostic) == URE_RESULT_INCOMPATIBLE_VERSION);
     request = make_manifest_request();
@@ -180,7 +190,7 @@ static int run_tests(ure_get_runtime_manifest_fn get_manifest, ure_query_interfa
         ure_interface_response_t response = make_response();
         const void* first_table = NULL;
         CHECK(query_interface(&query, &response, &diagnostic) == URE_RESULT_SUCCESS);
-        CHECK(response.version_major == 0 && response.version_minor == 1);
+        CHECK(response.version_major == 1 && response.version_minor == 0);
         CHECK(response.table_size == sizeof(ure_runtime_interface_t));
         CHECK(response.table != NULL);
         CHECK(((const ure_runtime_interface_t*)response.table)->header.struct_size == sizeof(ure_runtime_interface_t));
@@ -188,8 +198,8 @@ static int run_tests(ure_get_runtime_manifest_fn get_manifest, ure_query_interfa
         response = make_response();
         CHECK(query_interface(&query, &response, &diagnostic) == URE_RESULT_SUCCESS);
         CHECK(response.table == first_table);
-        query.minimum_minor = 2;
-        query.maximum_minor = 3;
+        query.minimum_minor = 1;
+        query.maximum_minor = 2;
         response = make_response();
         CHECK(query_interface(&query, &response, &diagnostic) == URE_RESULT_INCOMPATIBLE_VERSION);
         query = make_runtime_query();

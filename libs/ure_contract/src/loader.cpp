@@ -7,11 +7,12 @@
 #include <ultrarender/ure_loader.h>
 
 #include "runtime_adapter.hpp"
+#include "abi_core_1_0.hpp"
 
 namespace {
 
-constexpr std::uint32_t kRuntimeMajor = 0;
-constexpr std::uint32_t kRuntimeMinor = 1;
+constexpr std::uint32_t kRuntimeMajor = 1;
+constexpr std::uint32_t kRuntimeMinor = 0;
 constexpr std::uint32_t kRuntimePatch = 0;
 constexpr std::size_t kMaximumChainLength = 32;
 
@@ -46,13 +47,15 @@ bool validate_chain(const void *next, std::uint32_t root_type) noexcept {
 
 template <class T> bool validate_input_root(const T *value, std::uint32_t expected_type) noexcept {
     if (value == nullptr) return false;
-    if (value->header.type != expected_type || value->header.size < sizeof(T)) return false;
+    if (value->header.type != expected_type ||
+        value->header.size < ure::contract::core_1_0_size<T>()) return false;
     return validate_chain(value->header.next, value->header.type);
 }
 
 template <class T> bool validate_output_root(T *value, std::uint32_t expected_type) noexcept {
     if (value == nullptr) return false;
-    if (value->header.type != expected_type || value->header.size < sizeof(T)) return false;
+    if (value->header.type != expected_type ||
+        value->header.size < ure::contract::core_1_0_size<T>()) return false;
     return validate_chain(value->header.next, value->header.type);
 }
 
@@ -172,6 +175,8 @@ ure_result_t query_interface(const ure_interface_query_t *query, ure_interface_r
     static constexpr std::array<std::uint8_t, 16> event_id URE_INTERFACE_EVENT_UUID_BYTES;
     static constexpr std::array<std::uint8_t, 16> frame_id URE_INTERFACE_FRAME_UUID_BYTES;
     static constexpr std::array<std::uint8_t, 16> scene_id URE_INTERFACE_SCENE_UUID_BYTES;
+    static constexpr std::array<std::uint8_t, 16> scene_transaction_id
+        URE_INTERFACE_SCENE_TRANSACTION_UUID_BYTES;
     static constexpr std::array<std::uint8_t, 16> session_id URE_INTERFACE_SESSION_UUID_BYTES;
 #if defined(URE_CONTRACT_CONFORMANCE)
     static constexpr std::array<std::uint8_t, 16> conformance_id{0xe1, 0xf2, 0x20, 0x01, 0x41, 0x20,
@@ -193,6 +198,8 @@ ure_result_t query_interface(const ure_interface_query_t *query, ure_interface_r
         table = &ure::contract::frame_interface().header;
     } else if (uuid_equal(query->interface_id, scene_id)) {
         table = &ure::contract::scene_interface().header;
+    } else if (uuid_equal(query->interface_id, scene_transaction_id)) {
+        table = &ure::contract::scene_transaction_interface().header;
     } else if (uuid_equal(query->interface_id, session_id)) {
         table = &ure::contract::session_interface().header;
     }

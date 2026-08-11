@@ -8,6 +8,7 @@ set(UR_WORKER_SOURCES
     runtime_client.cpp)
 
 add_executable(ure_worker ${UR_WORKER_SOURCES})
+set_target_properties(ure_worker PROPERTIES OUTPUT_NAME ultrarender_worker_1)
 target_link_libraries(ure_worker PRIVATE
     ure_public
     ure_contract_schema

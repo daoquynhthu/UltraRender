@@ -35,7 +35,7 @@ foreach ($executable in @($WorkerExecutable, $ConformanceExecutable)) {
         throw "dumpbin dependency inspection failed for $executable"
     }
     $dependencyText = $dependencies -join "`n"
-    if ($dependencyText -match '(?i)(ws2_32|wininet|winhttp|urlmon|ultrarender_runtime_candidate)\.dll') {
+    if ($dependencyText -match '(?i)(ws2_32|wininet|winhttp|urlmon|ultrarender_runtime(?:_candidate|_1)?)\.dll') {
         throw "Worker acquired a network stack or linked the product runtime: $executable"
     }
 }
@@ -44,13 +44,13 @@ $productName = Split-Path -Leaf $WorkerExecutable
 $conformanceName = Split-Path -Leaf $ConformanceExecutable
 $conformanceRuntimeName = Split-Path -Leaf $ConformanceRuntime
 if (-not (Test-Path -LiteralPath (Join-Path $RuntimeStage "bin/$productName") -PathType Leaf)) {
-    throw "Product worker is absent from the candidate runtime stage"
+    throw "Product worker is absent from the release runtime stage"
 }
 if (Test-Path -LiteralPath (Join-Path $RuntimeStage "bin/$conformanceName") -PathType Leaf) {
-    throw "Conformance-only worker was included in the candidate runtime stage"
+    throw "Conformance-only worker was included in the release runtime stage"
 }
 if (Test-Path -LiteralPath (Join-Path $RuntimeStage "bin/$conformanceRuntimeName") -PathType Leaf) {
-    throw "Conformance-only runtime was included in the candidate runtime stage"
+    throw "Conformance-only runtime was included in the release runtime stage"
 }
 
 $binFiles = @(Get-ChildItem -LiteralPath (Join-Path $RuntimeStage "bin") -File)

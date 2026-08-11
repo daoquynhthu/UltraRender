@@ -41,20 +41,20 @@ $exports = @(
 )
 $expected = @("ureGetRuntimeManifest", "ureQueryInterface") | Sort-Object
 if ($exports.Count -ne 2 -or (Compare-Object $exports $expected)) {
-    throw "Candidate runtime exports are not exactly the two loader symbols: $($exports -join ', ')"
+    throw "Core 1.0 runtime exports are not exactly the two loader symbols: $($exports -join ', ')"
 }
 $runtimeDependencies = @(& $dumpbin /nologo /dependents $RuntimeDll 2>&1)
 if ($LASTEXITCODE -ne 0) {
     throw "dumpbin runtime dependency inspection failed"
 }
 if (($runtimeDependencies -join "`n") -match '(?i)pyure_native\.dll') {
-    throw "candidate runtime acquired a legacy product dependency"
+    throw "Core 1.0 runtime acquired a legacy product dependency"
 }
 $dependencies = @(& $dumpbin /nologo /dependents $ClientExecutable 2>&1)
 if ($LASTEXITCODE -ne 0) {
     throw "dumpbin dependency inspection failed"
 }
-if (($dependencies -join "`n") -match '(?i)ultrarender_runtime_candidate\.dll') {
-    throw "External loader client imported the candidate runtime instead of using LoadLibraryW"
+if (($dependencies -join "`n") -match '(?i)ultrarender_runtime_1\.dll') {
+    throw "External loader client imported the Core runtime instead of using LoadLibraryW"
 }
-Write-Output "Candidate runtime exports exactly two undecorated loader symbols"
+Write-Output "Core 1.0 runtime exports exactly two undecorated loader symbols"

@@ -1,195 +1,105 @@
 # UltraRender Current Status
 
-Last reviewed: 2026-08-09
+Last reviewed: 2026-08-11
 
-This document summarizes the current repository state for users and integrators. `PLAN.md` remains authoritative for construction order and phase completion criteria. Source, CMake registration, and fresh test output take precedence over prose when they disagree.
+This document is the current capability summary. [`PLAN.md`](PLAN.md) is authoritative for execution order; source code, generated manifests, and fresh verification output take precedence over prose.
 
-## Project maturity
+## Maturity and cursor
 
-UltraRender is a research and development renderer, not a stable public release. The repository has a tested CUDA execution path and several completed subsystem contracts, but it also exposes configuration and schema vocabulary for future algorithms that are deliberately rejected at runtime.
+UltraRender remains a research and development renderer. There is no “UltraRender 1.0” product release.
 
-The authoritative cursor is `PB.8 — Stable 1.0 declaration gate`, awaiting separate explicit approval; HR.3 is suspended until Phase PB closes. PB.0-PB.7 are complete: the 180-entry Candidate 0.1 registry drives a two-export Windows x64 runtime with lifecycle, immutable Frame, Scene, Session, and atomic UUID transaction tables plus a local `ure_worker`. Five retained PB.2-PB.6 clients load the current runtime through their historical table prefixes, while the reverse supported-runtime range deliberately contains only the current content-digested Candidate runtime. Independent SDK/runtime packages build clean out-of-tree direct, transaction, and worker clients. Fixed-corpus malformed-input, worker crash/restart, live no-network, no-ambient-discovery and complete interaction-ledger gates are closed. Test-only fault and frame producers remain excluded from the Candidate package. This is not a stable ABI/protocol. Phase Q, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 remain complete. Only PB.8 may declare Core ABI 1.0 / Worker Protocol 1.0 after separate approval.
+Phase PB is complete. The project declares **Core ABI 1.0** and **Worker Protocol 1.0** for the exact Windows x64 profile described below. The declaration freezes a small client interaction grammar, not the renderer as a product and not its algorithms, internal data models, feature set, or cross-platform behavior. The declaration tag is a repository evidence marker; packages have not been publicly distributed and the support clock has not started.
 
-The reconstruction layer has a raw-preserving statistical baseline plus a sample/technique/path/spectral/phase-aware Research boundary. Analytic splatting and provider-bound kernel/point-set/hybrid outputs are executable in the SDK-free oracle, with Spectrum/Stokes/Complex physical policies, OOD masks and calibration diagnostics. No trained model or production model ABI is shipped, and the current complete-scene CUDA bridge still does not populate every high-order plane. CLI/JSON and pyure default to automatic integration objectives, while the low-level C++ default and named manual modes remain compatibility/reproducibility presets. The former Phase X plugin ABI remains frozen. Production coherent and partially coherent sessions still reject before GPU allocation.
+The authoritative implementation cursor resumes at `HR.3 — Learned proposal and neural control variate`. Phase Q, R, T, V, the declared bounded scope of W, U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2, and PB.0-PB.8 are complete within their documented boundaries.
 
-Research, Experimental and Production are now separate maturity levels. Research may use provisional implementations when it preserves a reproducible hypothesis, input/seed, baseline, metric, artifact and failure domain. This does not upgrade the capability matrix below; default paths still require the relevant production gates.
+## Declared public boundary
+
+| Item | Declared scope |
+|---|---|
+| Core ABI | 1.0, Windows 11 x64, little-endian x86-64, C11-compatible headers, Windows x64 C calling convention |
+| Loader | `ultrarender_runtime_1.dll`; exactly `ureGetRuntimeManifest` and `ureQueryInterface` |
+| Worker protocol | 1.0; same-user local Named Pipe plus read-only shared-memory leases |
+| Worker | `ultrarender_worker_1.exe`; no TCP/UDP listener, firewall exception, or ambient plugin/script/solver/model discovery |
+| Core surface | 39 table functions for discovery, lifetime, capabilities/errors, operations/events, scene replacement, sessions, and immutable frames |
+| Registry | 182 live identities, 140 reviewed Core identities, 11 pre-release tombstones |
+| Stable extensions | None initially |
+| Unstable extensions | UUID scene transaction table; exact registry/runtime identity required |
+| Stable fallback | Bounded native full-scene validation and atomic replacement |
+| Legacy APIs | `ure_c_api.h`, `pyure_native.dll`, and pyure ctypes remain experimental and are not Core ABI 1.0 |
+
+PB.0-PB.7 remain Candidate 0.x history and receive no retroactive compatibility promise. The first stable major has no prior stable runtime, so the current-client/prior-stable-runtime matrix row is honestly `NotApplicable`. The retained final-Candidate layout seed is the oldest Core 1 client that future `runtime_1` builds must continue to execute.
+
+The stable Core deliberately excludes telemetry, spectral/Stokes plane schemas, renderer update strategies, transactions, integrators, MaterialGraph, SceneIR layout, RenderConfig, MeasurementBundle, WorldState, GPU scheduling, models, solvers, providers, Hydra, and distributed/farm internals. Those capabilities evolve through schemas, capabilities, or separately versioned stable/unstable extensions.
 
 ## Supported execution baseline
 
 | Area | Current baseline |
 |---|---|
-| Host OS/toolchain | Windows 11, Visual Studio 2026, MSVC 19.51, Windows SDK 10.0.28000, C++23 |
+| Complete-scene reference backend | CUDA |
+| Host | Windows 11, Visual Studio 2026, MSVC 19.51, Windows SDK 10.0.28000, C++23 |
 | GPU toolchain | CUDA 13.3, CUDA C++20 |
 | Validated GPU | RTX 5060 Laptop, compute capability 12.0 |
-| Build tree | `build_modular_x64` using Ninja |
-| Primary executable | `build_modular_x64/apps/ure_cli/ure_cli.exe` |
-| Registered tests | 100 CTest entries at this snapshot |
+| Build | Ninja, `build_modular_x64`, Release gate |
+| Portable backends | Vulkan 1.3 and D3D12/DXR foundations; bounded native acceleration/parity, not full SceneIR rendering |
 
-The full renderer baseline remains Windows/CUDA. The full SceneIR renderer remains unavailable on the portable native backends. Vulkan additionally has a Linux GCC/Ninja gate, Windows NVIDIA native ray-query evidence, and Windows NVIDIA/Intel compute-BVH evidence. D3D12 additionally has Windows NVIDIA DXR 1.1, compute fallback, typed texture/descriptor and cross-queue fence evidence. macOS, older CUDA architectures, and complete Linux/non-NVIDIA/D3D12 scene rendering do not have equivalent evidence.
+macOS, ARM64, 32-bit, complete Linux/non-NVIDIA rendering, C++ ABI, COM, static linking, and portable native-handle interop are not promised by Core ABI 1.0.
 
-## Current module boundaries
+## Subsystem status
 
-| Module | Responsibility | Status |
+| Subsystem | Current state | Important boundary |
 |---|---|---|
-| `ure_types` | Backend-neutral types, SceneIR, native contracts | Active |
-| `ure_runtime` | SDK-free device/resource/synchronization/dispatch/execution/acceleration/scheduling contracts | Active; implemented by CUDA and bounded Vulkan/D3D12 foundations |
-| `ure_transport` | SDK-free observable, measure, estimator, Technique Graph, support grammar, composition, pilot qualification, portfolio scheduling and automatic closure contracts | HO.1 and HT.0-HT.5 implemented; ResearchExtension remains opt-in |
-| `ure_research` | SDK-free research execution, transport experiment, artifact, comparison, capability, oracle and promotion contracts | HO.2 and HT.4 platform implemented; research callbacks and C++ object layout are not a stable production ABI |
-| `ure_reconstruction` | SDK-free typed measurement schemas, sufficient statistics, canonical merge/checkpoint, statistical reconstruction and sample-level Research contracts | HR.0-HR.2 implemented; bounded HR.1 CUDA filtering and HR.2 SDK-free sample oracle are verified, while complete-scene sample-plane production, trained inference and estimator use remain unavailable |
-| `ure_vulkan` | Vulkan 1.3 adapter/resource/compute/synchronization/acceleration backend | Active foundation; full SceneIR renderer not yet lowered |
-| `ure_d3d12` | Windows D3D12/DXR adapter/resource/compute/synchronization/acceleration backend | Active optional foundation; full SceneIR renderer not yet lowered |
-| `ure_core` | Renderer/session/C ABI plus private CUDA backend | Active |
-| `ure_sceneio` | Native scene I/O, glTF/MaterialX adapters, image/SPD/Mie I/O | Active |
-| `ure_config` | JSON configuration and CLI parsing | Active |
-| `ure_diag` | Logging and diagnostics | Active |
-| `ure_physics` | Optional physics/acoustic experiments | Experimental |
-| `ure_public` | Generated Candidate 0.1 C11 loader/value declarations | Active frontend-development surface; no runtime implementation or stable promise |
-| `ure_contract` | Windows x64 Candidate runtime bootstrap and private semantic adapters | PB.7 Candidate runtime, compatibility, package and external-client gates implemented; stable promises remain pending |
-| `ure_worker` | Isolated Windows local worker using only the loader ABI | PB.7 native scene/transaction/render/frame, crash/restart, local-only and package gates implemented; product package has no conformance producer |
-| `ure_cli` | Offline rendering and native tooling orchestration | Active |
-| `pyure` | ctypes wrapper around the C session ABI | Active but not version-stable |
+| CUDA renderer | Implemented and tested | Complete-scene reference path; no CPU production integrator |
+| Spectral/polarization | Runtime spectral domain, packet cap 32, Stokes/Mueller on covered paths | Not general coherent field transport |
+| Automatic integration | Technique Graph, support/measure composition, pilot qualification and portfolio closure implemented | Applicability and fallback remain explicit; manual modes remain for compatibility/reproduction |
+| Advanced estimators | ReSTIR DI, bounded ReSTIR PT, BDPT/VCM, bounded specular manifold and PSSMLT verified | Unsupported combinations such as MLT+BDPT remain rejected |
+| Measurement/reconstruction | Typed MeasurementBundle, statistical baseline and sample-level Research boundary implemented | No trained model, production model ABI, or complete high-order plane producer |
+| Native scene | `.ure`, `.urescene`, `.urepkg`, `.urecache` contracts and tooling implemented | Schema versions are independent from Core ABI |
+| Materials/assets | MaterialGraph, glTF/GLB, bounded MaterialX, image/SPD/Mie paths implemented | MaterialGraph C++ layout is internal |
+| Portable GPU runtime | SDK-free runtime and multi-backend scheduling contracts implemented | Full arbitrary-scene renderer remains CUDA-only |
+| GPU acceleration | CUDA self-compute plus bounded OptiX/Vulkan RT/DXR construction/traversal parity | Native providers do not yet run the complete radiometric renderer |
+| Wave optics | Bounded diffraction, fluorescence, partial-coherence, anisotropic and local full-wave contracts/references | No production general coherent scene solver |
+| USD/Hydra | Bounded adapter/delegate/export path implemented | OpenUSD ABI is external; Hydra is not a Core extension |
+| Physics/acoustics | Optional experimental foundations | Unified time-varying physical world remains future work |
 
-PB.0 implements the complete interaction-surface and legacy baseline. PB.1 implements the authoring registry, deterministic generator, `ure_public` Candidate headers, schema/manifest/reference package, golden messages and renderer-free mock kit. PB.2 implements the two-export loader ABI. PB.3 implements the Candidate Core object lifecycle. PB.4 adds immutable frame leases and the bounded local worker while keeping its deterministic producer test-only. PB.5 adds bounded native full-scene validation/replacement and real CUDA session rendering through the same direct ABI and worker semantics. PB.6 adds persistent RFC 9562 UUID transactions, deterministic migration, explicit conflict/full-reload policy and the canonical physical camera extension. PB.7 closes mixed-version client fixtures, bounded fuzz/security/crash evidence, independent packages, clean external-client E2E and the deterministic validation report. PB.8 remains an unapproved stability gate.
+## Public-boundary evidence
 
-The deleted root `include/` and `src/` trees are not valid development paths.
+The PB.8 freeze has:
 
-## Rendering capability matrix
+- frozen Core 1.0 structure/table prefixes and a two-symbol export list;
+- one generated registry for C ABI and worker semantics;
+- deterministic v1 schemas, ABI manifest, tombstones and compatibility records;
+- lifetime, lease, backpressure, cancellation, security, malformed-input and crash/restart gates;
+- a closed 25-surface interaction ledger with no duplicate authority or unresolved migration;
+- independent C11, C++23 unstable-extension and local-worker consumers;
+- all 39 Core calls plus the transaction call exercised;
+- six finite, nonzero, spatially nonuniform PFM render artifacts;
+- a complete Windows x64 Release build and 101/101 registered CTest snapshot.
 
-| Capability | Status | Boundary |
-|---|---|---|
-| CUDA wavefront path tracing | Implemented and tested | Primary runtime path |
-| Backend identity/capability selection | Implemented and tested | CUDA is Auto/default; Vulkan and D3D12 inventories record hardware capability, while providers advertise only executable native ray query or compute fallback; unsupported requests reject and full portable-backend rendering remains unavailable |
-| Portable kernel toolchain | Slang selected and feasibility-tested | Prototypes compile to PTX/SPIR-V/DXIL; Vulkan operators and D3D12 foundation/acceleration operators consume shared semantics; pinned DXC emits deterministic release DXIL plus separate debug artifacts; CUDA production kernels remain a private fast path |
-| Backend-neutral execution graph | Implemented and tested | Stable path/guiding/ReSTIR/advanced-integrator/wave graphs freeze estimator and PDF order; the CUDA backend lowers and submits the contract through runtime-owned queues and timelines |
-| CUDA runtime backend | Implemented and tested | Real stream/fence/event, buffer/image/sampler, PTX module/pipeline, DAG submission, wave resources, multi-GPU compatibility and device-loss errors |
-| Vulkan compute runtime | T.7 implemented and tested | Vulkan 1.3 adapter/queue/timeline, buffer/image/sampler, SPIR-V, uniform/storage/image descriptors, specialization, cache identity, validation/debug-utils and structured loss mapping; Windows NVIDIA/Intel plus Linux build/execution gates |
-| Vulkan acceleration bridge | V.7 traversal parity complete | SDK-free provider/selection/hit contract; multi-BLAS/TLAS lifecycle plus shared SceneIR closest/shadow, transform, material, UV/normal/tangent and AOV parity; arbitrary-scene integrator lowering remains unavailable |
-| D3D12/DXR optional runtime | V.7 traversal parity complete | Windows-only SDK-neutral public surface; DXR lifecycle plus shared SceneIR inline-ray-query/compute parity; arbitrary-scene integrator lowering remains unavailable |
-| Multi-backend scheduling | T.10 implemented and tested | Canonical weighted sample partition, feature/precision/coherence/budget/semantic negotiation, backend-native resource cache identity, versioned distributed provenance and overlap rejection; actual CUDA, NVIDIA/Intel Vulkan and NVIDIA/Intel D3D12 inventory plus SDK-free gate |
-| Cross-backend validation | T.11 implemented and tested | Machine-readable physical-unit, hit/framebuffer, CUDA reference, variance/MSE, loss, budget, cache, cold/warm launch, VRAM and throughput report; CUDA/Vulkan required, DXR capability-driven, all differences thresholded and classified |
-| GPU geometry acceleration | V.0-V.11 complete | CUDA self-compute, optional OptiX, Vulkan RT and DXR share one canonical traversal fixture. Cluster resource/LoD and dynamic lifecycle contracts classify rigid/deforming/topology changes into refit, rebuild or recluster actions. The `ure.phase_v.validation.v1` local/farm suite freezes dense build/trace/VRAM, provider parity, dynamic updates and distributed resource/worker/cache provenance without claiming arbitrary native SceneIR rendering |
-| Runtime spectral domain / wavelength packets | Implemented and tested | Packet cap 32; sampled lane mode supported |
-| Stokes/Mueller polarization | Implemented for covered boundary/transport paths | Not coherent field transport |
-| Lambertian/metal/dielectric/cloth | Implemented for tested paths | Material model coverage is not exhaustive |
-| Rough dielectric microfacet BTDF | Implemented with eval/PDF/sample tests | Reference-scene coverage remains finite |
-| MaterialGraph and finite dielectric layer | Implemented for supported node/model set | Unsupported combinations fail loudly |
-| HG/Rayleigh/Mie volume scattering | Implemented for current resource and transport contract | Mie uses precomputed/imported resources at runtime |
-| NEE, light tree and path guiding | Implemented for current Phase R-P1/R-P2 scope | Does not imply all advanced integrators are complete |
-| Production ReSTIR DI | Implemented and tested | Unbiased temporal/spatial GRIS policy is separate from biased preview metadata |
-| ReSTIR PT path reuse | Implemented and verified for bounded diffuse surface and supported volume suffixes | Unsupported suffix classes remain explicit rather than silently approximated |
-| GPU BDPT/VCM | Implemented and tested for the R-P4 bounded estimator contract | Does not imply arbitrary path-space techniques or unrestricted merge support |
-| Specular-manifold estimator | Implemented for the exact R-P4 support partition with up to four smooth-delta events | Independent technique AOV and four-scene statistical gate; unsupported paths remain wavefront-owned |
-| Primary-sample-space MLT | Implemented under R-P5 | GPU chains, production wavefront replay, symmetric Laplace mutation, stratified bootstrap seeding, normalization, diagnostics and shard identities; replicated disjoint-range validation retains SDS small light as the positive time-to-error workload and records the remaining difficult scenes as boundaries. MLT+BDPT is rejected until both subpaths share one spectral primary sample |
-| Industrial validation | R-P7 complete | Clean-tree versioned eight-category report, artifact hashes, runtime boundaries, independent BDPT/VCM and MLT benefit/boundary evidence, disjoint 4,096-SPP farm merge, measured Nsight/VRAM evidence, and strict Closure validator passed |
-| Multi-GPU/farm sample scheduling and merge | Implemented contract | CUDA private multi-GPU uses the shared scheduler; heterogeneous compatible sample shards preserve backend/compiler/cache provenance. Cross-machine transport and worker orchestration remain outside this closure |
-| Statistical reconstruction | HR.1 host/CUDA baseline implemented and tested | Training-free variance/tail-aware spatial-temporal filtering preserves raw Spectrum/Stokes estimates, uncertainty, support and rejection provenance; it is not auto-enabled without the required planes and does not cover complex/Jones/CSD data |
-| Sample-level reconstruction research | HR.2 SDK-free Research boundary implemented and tested | Permutation-invariant analytic splat and provider-bound kernel/point-set/hybrid outputs preserve sample/path/spectral metadata; physical Spectrum/Stokes/Complex fixtures, OOD and calibration diagnostics pass, but no trained artifact, production ABI or complete-scene GPU producer is claimed |
-| Diffraction camera | W.2 implemented and tested | Explicit CUDA `Wavefront` mode; wavelength PSF bank and spectral-film resolve, with geometric AOVs left unfiltered |
-| Diffractive materials | W.5 implemented and tested | Grating, sinusoidal phase-mask, ideal zone-plate, blazed DOE and bounded passive Jones scattering-table operators in ordinary CUDA `Wavefront`; no cross-path coherent interference |
-| Fluorescence/phosphorescence | W.6 implemented and tested | Bounded excitation-emission surface resource in ordinary CUDA `Wavefront`; camera paths use adjoint wavelength conversion, preserve detector wavelength, depolarize the shifted lane and carry lifetime delay; film output remains steady-state |
-| Partial coherence/generalized transport | W.7 reference contract implemented and tested | Bounded Hermitian PSD CSD, Gaussian-Schell sources, deterministic coherent realizations, Jones/OPL generalized rays, temporal/interferometric oracles, host/CUDA ensemble reduction and coherent-before-incoherent raw-field merge; W.11 serializes sufficient statistics, but no production scene transport or worker emission exists |
-| Anisotropic/modal media | W.9 reference contract implemented and tested | Bounded spectral dielectric/extinction tensors, transverse displacement eigenmodes, birefringence, dichroism, optical activity, liquid-crystal and stress-optic factories, exact homogeneous complex generator and host/CUDA parity; no scene-integrated anisotropic interface or ray splitting |
-| Local full-wave coupling | W.10 provider/cache contract implemented and tested | Bounded binary RCWA/FDTD/FEM/BEM/FMM/DDA/S-matrix exchange, exact capability/version/content identity, solver evidence and deterministic cache; verified W.5 Jones tables enter CUDA, but no solver is bundled and no scene-scale Maxwell solve is claimed |
-| Coherent distributed frames | W.11 sufficient-statistics contract implemented and tested | v6 metadata separates radiance, complex field, mutual intensity and coherent realization; phase/layout/source/group/range provenance, content-digested files and transactional coherent-before-power merges are enforced, but production workers do not yet emit these frames |
-| Wave-optics validation | W.12 complete | `ure.phase_w.validation.v1` binds source/artifact identities to eleven physical, estimator, merge, fail-loud and API evidence categories plus full Release CTest and static gates; it does not claim scene-integrated coherent transport |
-| General wave-optics host/CUDA references | Partially implemented | Scene-integrated coherent/partial-coherent transport and scalable general propagation remain incomplete |
+The machine-readable report is [`docs/reports/phase_pb_validation_v2.json`](docs/reports/phase_pb_validation_v2.json). Exact promise and non-promise language is in [`docs/Public_API_Support_Policy.md`](docs/Public_API_Support_Policy.md).
 
-## Scene and API capability matrix
+## Explicitly incomplete
 
-| Capability | Status | Boundary |
-|---|---|---|
-| `.ure` canonical text | Implemented | Review/source-control projection |
-| `.urescene` binary scene | Implemented | Native production source container |
-| `.urepkg` package | Implemented | Indexed package and embedded scene payloads |
-| `.urecache` compiled cache | Implemented contract | Disposable, identity-checked, non-authoritative |
-| Native validate/build/pack/unpack/inspect/migrate/export | Implemented in `ure_cli` | USDA export is strict by default; multi-scene packages require an explicit scene ID and lossy output requires a durable report |
-| glTF/GLB import | Implemented through native validation boundary | glTF is an adapter, not core schema |
-| MaterialX import/export | Implemented for accepted subset | Unsupported nodes fail; URE graph remains authoritative |
-| USD/Hydra | U.1-U.6 schema adapter, delegate/plugin, polygonal mesh, bounded material conversion, progressive CUDA RenderSession bridge and native-to-USDA export implemented | GPU-enabled plugin supports camera, float render buffers, Beauty and existing AOVs without a graphics context. USDA export covers the documented Preview Surface/mesh-instance/sphere/camera/rigid subset; subdivision, Hydra instancing, file/stage ingestion, complete USDShade and time-sampled stage integration remain unavailable |
-| RenderSession / legacy C ABI / pyure | Implemented and tested | Legacy experimental compatibility surface; not Core ABI 1.0 and not version-stable |
-| PB boundary inventory/audit | PB.0 implemented and tested | 25 surfaces, 14 authority domains, deterministic audit, legacy header/DLL/client evidence; no runtime API is created |
-| PB generated SDK / mock kit | PB.7 implemented and tested | 180 registry identities, deterministic C11/schema/manifest/reference outputs, 13 golden exchanges including registry mismatch, independently staged SDK; Candidate only |
-| PB candidate runtime / local worker | PB.7 implemented and tested | Two-export DLL provides Candidate lifecycle/frame/scene/session/transaction tables; five historical clients and one supported reverse runtime row, clean external consumers, fixed fuzz/security and same-user worker crash/restart/frame evidence pass. Every stable promise remains pending |
-| Native procedural graph | Implemented | Deterministic build graph, not runtime GPU interpretation |
-| Script build hook | Contract implemented, disabled by default | Requires explicit opt-in and attestable external runner |
-| Native procedural plugin | Not implemented | Deferred until the high-order world/transport/measurement/solver boundaries are stable |
+- learned proposals and neural control variates beyond the HR.2 Research substrate;
+- automatic production reconstruction without all required measurement planes;
+- coherent/partial-coherent production scene sessions and worker frame emission;
+- scene-integrated anisotropic interfaces, walk-off and ray splitting;
+- bundled general full-wave solvers and engine-owned solver discovery/execution;
+- arbitrary-scene radiometric rendering on Vulkan, D3D12/DXR, or OptiX;
+- a unified dynamic physical world and production-grade general fluid/acoustic solver;
+- an in-repository GUI or general plugin ecosystem.
 
-## Explicitly incomplete algorithms
+Unsupported capability requests are expected to fail with structured diagnostics. A fail-loud boundary may represent policy, resource limits, missing evidence, or remaining implementation debt; it is not by itself proof of a defect.
 
-The following must not be described as production capabilities merely because enums, configuration fields, schemas, tests for rejection, or host references exist:
-
-- ReSTIR PT suffix classes outside the bounded production replay contract;
-- MLT combined with BDPT/VCM/manifold or adaptive reuse schedulers;
-- coherent/partial-coherent production scene transport and film output;
-- production worker emission of coherent/partial-coherent distributed frames and scalable general propagation backends;
-- anisotropic interface boundary matching, walk-off/ray splitting and SceneIR material integration;
-- bundled local full-wave solvers, engine-owned process discovery/execution and a stable general dynamic provider ABI;
-- transient fluorescence film output, anti-Stokes resources, fluorescent participating media and advanced-integrator fluorescence;
-- Vulkan/D3D12/OptiX arbitrary-scene radiometric integrator lowering and DispatchRays;
-- OpenUSD file/stage ingestion, Hydra subdivision/instancing, complete USDShade conversion, time-sampled stage integration and the general plugin ecosystem; USDA adapter output exists only for the documented native subset;
-- production-grade general fluid or acoustic simulation.
-- Core ABI 1.0, Worker Protocol 1.0, UUID public transactions, canonical camera edits, and mixed-version compatibility support; these are later Phase PB work, not current capabilities.
-
-## Verification
-
-Full Release build:
+## Verification commands
 
 ```powershell
 .\scripts\build_x64.ps1 -BuildDir build_modular_x64 -Config Release
-```
-
-Full registered test gate:
-
-```powershell
 ctest --test-dir build_modular_x64 -C Release --output-on-failure
+.\scripts\run_phase_pb_validation_suite.ps1 -BuildDir build_modular_x64 -Config Release
 ```
 
-CUDA runtime/reference/performance and SDK-free package gate:
+CTest counts are snapshots. Use `ctest --test-dir build_modular_x64 -C Release -N` for the live inventory.
 
-```powershell
-.\scripts\run_phase_t6_cuda_backend_gate.ps1
-```
+## License
 
-Vulkan compute foundation, deterministic SPIR-V, Windows cross-vendor, and Linux/CUDA-free gate:
-
-```powershell
-.\scripts\run_phase_t7_vulkan_foundation_gate.ps1
-```
-
-Vulkan acceleration, deterministic ray-query/compute-BVH SPIR-V, CUDA traversal parity, capability fallback/rejection, Windows cross-vendor, and Linux/CUDA-free gate:
-
-```powershell
-.\scripts\run_phase_t8_vulkan_acceleration_gate.ps1
-```
-
-D3D12/DXR deterministic DXIL, descriptor/image resources, queue/fence/DRED, CUDA/Vulkan parity, native DXR and no-D3D12 isolation gate:
-
-```powershell
-.\scripts\run_phase_t9_d3d12_gate.ps1
-```
-
-Native RT multi-BLAS build, compaction, refit/rebuild, scratch rejection and optional OptiX lifecycle gate:
-
-```powershell
-.\scripts\run_phase_v6_native_provider_gate.ps1 -OptixRoot <optix-sdk-or-optix-dev-root>
-```
-
-Cross-provider SceneIR shadow/closest-hit, transform, material, interpolation and AOV parity gate:
-
-```powershell
-.\scripts\run_phase_v7_cross_provider_parity.ps1
-```
-
-Native scene closure gate:
-
-```powershell
-.\scripts\run_phase_q_validation_suite.ps1 -BuildDir build_modular_x64 -Config Release
-```
-
-R-P5 closure includes deterministic chain replay, replicated fixed-NMSE evidence with disjoint reference/sample ranges and non-overlapping chain-identity intervals, standalone BDPT energy regression, and an explicit MLT+BDPT rejection contract. The earlier two-workload claim used a reference-correlated wavefront prefix and is superseded; the hardened gate retains one reproducible SDS small-light benefit workload plus explicit non-benefit boundaries, matching the R-P7 per-mode criterion. R-P4 retains its independent four-scene manifold evidence.
-
-R-P7 `Closure` passes on clean commit `56d1121`. The replicated `rough_indirect` workload gives independent positive time-to-error for BDPT and VCM while `glass_caustic` verifies the camera-delta rejection boundary. The manifold bias gate uses per-SPP technique-energy moments; the 1,048,576-SPP small-emitter wavefront reference remains below the 35% confidence threshold. Farm, Nsight, and the final benchmark binary share SHA-256 `7b32d2a64bc03dd412874075bf3b6df62f128d39319fdfcf69cb451abad7a95d`.
-
-## Known documentation rule
-
-[`docs/Public_API_ABI_Architecture.md`](docs/Public_API_ABI_Architecture.md) is the approved PB semantic authority and [`docs/PB_Public_Boundary_PLAN.md`](docs/PB_Public_Boundary_PLAN.md) is its active subordinate execution plan. Files under `docs/superpowers/specs/` and `docs/superpowers/plans/` remain archived records; their dates, test counts, unchecked boxes, proposed file names and “next step” statements are historical. Use `docs/README.md` to distinguish current references from archives.
+Project code is licensed under the [Apache License 2.0](LICENSE). Third-party components retain their own licenses.

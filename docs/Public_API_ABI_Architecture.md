@@ -1,12 +1,12 @@
 # UltraRender Public API/ABI and Worker Boundary Architecture
 
-Document status: approved normative architecture for the PB candidate program
+Document status: approved normative architecture; PB.8 declaration complete
 
-Last reviewed: 2026-08-08
+Last reviewed: 2026-08-11
 
-Compatibility status: no stable public ABI or worker-protocol promise exists yet
+Compatibility status: Core ABI 1.0 and Worker Protocol 1.0 are declared for the documented Windows x64 profile. This is not an UltraRender 1.0 product release; packages are not publicly distributed and the support clock has not started.
 
-This document defines the public interaction boundary that UltraRender will build before resuming `HR.3`. It replaces the external `UltraRender_Stable_Public_API_ABI_Architecture_v1.md` draft as the repository-owned design authority. The draft's central decision—one semantic contract exposed through an in-process C ABI and an isolated worker protocol—is retained, while the stability surface is narrowed and several ABI, identity, transport, lifetime, and release details are made explicit.
+This document defines the public interaction boundary completed before resuming `HR.3`. It replaces the external `UltraRender_Stable_Public_API_ABI_Architecture_v1.md` draft as the repository-owned design authority. The draft's central decision—one semantic contract exposed through an in-process C ABI and an isolated worker protocol—is retained, while the stability surface is narrowed and several ABI, identity, transport, lifetime, and release details are made explicit.
 
 The executable phase order and graduation evidence are defined by [`PB_Public_Boundary_PLAN.md`](PB_Public_Boundary_PLAN.md). The root [`PLAN.md`](../PLAN.md) remains authoritative for the global cursor.
 
@@ -23,7 +23,7 @@ The boundary has four goals:
 
 The terms **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY** are normative. A conforming implementation must satisfy every applicable MUST/MUST NOT rule and the gates assigned to its declared maturity.
 
-This is an architecture contract for candidate implementation. It is not a declaration that Core ABI 1.0 or Worker Protocol 1.0 already exists.
+This architecture governs both the retained Candidate history and the declared 1.0 contracts. The repository declaration and its scoped evidence tag do not constitute package publication or public distribution.
 
 ## 2. Baseline and reason for a new boundary
 
@@ -83,7 +83,7 @@ Core stability covers the interaction grammar and lifecycle:
 - capability and extension negotiation;
 - result and structured error semantics;
 - asynchronous operation, event, wait, and cancellation semantics;
-- native scene blob, revision, and transaction envelopes;
+- native scene blob, revision, and full-replacement lifecycle;
 - objective-oriented session requests;
 - immutable frame and plane discovery plus CPU map/copy;
 - schema, semantic, registry, runtime, and build identities.
@@ -114,11 +114,11 @@ Every advertised capability carries three independent classifications:
 
 These axes MUST NOT be collapsed into one enum or inferred from product version. A stable transport for a Research capability does not make the algorithm Production. A Production algorithm behind an unstable research callback does not create an ABI promise.
 
-### 3.4 Candidate period and promise point
+### 3.4 Candidate history and promise point
 
-PB.0 through PB.7 publish only `Core ABI Candidate 0.x` and `Worker Protocol Candidate 0.x`. Candidate artifacts MAY break between candidate minors when the registry records the break and fixtures migrate.
+PB.0 through PB.7 produced only `Core ABI Candidate 0.x` and `Worker Protocol Candidate 0.x`. Candidate artifacts could break between candidate minors when the registry recorded the break and fixtures migrated.
 
-Core ABI 1.0 and Worker Protocol 1.0 MUST NOT be declared until PB.8 accepts the compatibility evidence in this document. Documentation, library filenames, manifests, packages, and release notes MUST continue to say candidate until that point.
+PB.8 staged release-named binaries, manifests, schemas, packages, and exact compatibility evidence for verification. After the required post-REPORT approval on 2026-08-11, Core ABI 1.0 and Worker Protocol 1.0 were declared. Candidate artifacts remain historical evidence and never inherit the 1.0 promise retroactively. Declaration, tagging, package publication, public distribution, and the UltraRender product version are separate states.
 
 ### 3.5 Escape hatches for future research
 
@@ -410,21 +410,21 @@ external authoring state
     -> accepted scene revision or structured rejection
 ```
 
-Fallback is never silent. A commit result reports `HotUpdate`, `PartialRebuild`, `FullReload`, or `Rejected`, reset reason, rebuilt resource identities, warnings, and new revision/digest.
+Fallback is never silent. Stable Core reports success through the accepted revision identity or returns a structured rejection. Renderer update strategy, rebuilt-resource detail, and transaction-specific diagnostics are extension data, not Core semantics.
 
 PB.5 implements the Candidate full-replacement subset on Windows x64. The public Scene table accepts bounded memory/file native blobs, returns validation diagnostics and immutable revision identities, and swaps revisions atomically. The Session table binds an accepted revision, lowers generic objective and resource budgets to the internal automatic path, exposes operation progress, and publishes immutable PB.4 frames. The local worker invokes the same tables through the two loader exports; it does not define a second scene, error, session, or framebuffer authority.
 
-PB.6 adds the same generated transaction contract to the Scene table and worker transport. SceneIR schema 2 persists RFC 9562 UUIDs while legacy source IDs remain aliases. Exact edits are validated against an isolated candidate archive and swapped only after the complete result fits caller storage; stale bases return a retry revision without merge, and unsupported edits either consume an explicit full-scene fallback or reject without changing scene, renderer binding, revision, or accumulation. The Candidate camera extension carries one right-handed `world_from_camera` matrix and physical projection state; look-at and FOV remain pre-submission authoring conveniences. These Candidate 0.1 schemas and tables remain subject to change before PB.8.
+PB.6 historically added a generated transaction function to the Candidate Scene table and worker transport. SceneIR schema 2 persists RFC 9562 UUIDs while legacy source IDs remain aliases. PB.8 removed that function from the stable Scene prefix and exposes it only through the separately queried `URE_INTERFACE_SCENE_TRANSACTION` UnstableExtension. Exact edits are validated against isolated state and swapped only after the complete result fits caller storage; stale bases return a retry revision without merge, and unsupported edits either consume an explicit full-scene fallback or reject without changing scene, renderer binding, revision, or accumulation. Camera payloads, transaction results, renderer update strategies, and transaction events remain independently evolving extension semantics.
 
 PB.7 validates, but does not stabilize, this boundary. Historical PB.2-PB.6 C11 clients are retained with source, SDK, compiler and binary identities and exercise only their compiled table prefixes against the current runtime. Earlier Candidate runtime DLLs are not retained as supported releases; the reverse supported matrix contains only the current client/current content-digested runtime. The SDK and runtime are independently content-digested: the SDK carries headers, schemas, registry, mock worker, goldens, fixtures, FlatBuffers headers/license and integration guide; the runtime carries the product DLL/worker, registry, ABI/runtime manifests, inspection schemas, license and compatibility record. A clean out-of-tree client builds direct, transaction and worker workflows solely from these packages. This remains Candidate evidence, not a cross-release promise.
 
-### 10.2 Revisions and transactions
+### 10.2 Revisions and unstable transactions
 
-Every accepted state has a monotonic revision, semantic digest, source-schema version, and resource-manifest digest. A transaction envelope contains transaction UUID, base revision, ordered schema-tagged operations, required capabilities, and client metadata.
+Every accepted state has a monotonic revision, semantic digest, source-schema version, and resource-manifest digest. The unstable transaction extension carries transaction UUID, base revision, ordered schema-tagged operations, required capabilities, and client metadata.
 
-Operations address UUIDs, never container indices. A stale base revision returns `RevisionConflict`; Core 1.0 performs no automatic merge. Validation and apply are atomic: rejection leaves the old scene and accumulation state unchanged.
+Operations address UUIDs, never container indices. A stale base revision returns `RevisionConflict`; the extension performs no automatic merge. Validation and apply are atomic: rejection leaves the old scene and accumulation state unchanged.
 
-The Core freezes only the transaction envelope. Camera edits, transform edits, material payloads, mesh replacement, object creation/removal, lights, environments, animation, and world-state changes use versioned operation schemas/extensions.
+Core freezes no transaction envelope or edit vocabulary. Camera edits, transform edits, material payloads, mesh replacement, object creation/removal, lights, environments, animation, and world-state changes use versioned operation schemas/extensions. Clients that cannot or choose not to use the unstable transaction extension retain full-scene replacement as the stable fallback.
 
 PB.6 migrates native objects that currently use arbitrary strings or indices to a canonical UUID field through a new schema version and migration tool. Existing source identifiers may be retained as aliases, but duplicate UUIDs fail validation.
 
@@ -443,7 +443,7 @@ Look-at target, Euler angles, horizontal/vertical FOV, and derived aspect values
 
 A session binds an instance, exact scene revision, enabled capabilities, device/backend constraints, requested outputs, and a versioned render-objective payload.
 
-Session states are `Created`, `SceneBound`, `Ready`, `Running`, `Paused`, `CancelPending`, `Failed`, `DeviceLost`, and `Closed`. State-changing calls either complete atomically or return an operation whose terminal state determines the transition. Reset records the accumulation reason and never changes the bound scene revision implicitly.
+Session states are `Created`, `Ready`, `Running`, `Paused`, `Failed`, `DeviceLost`, and `Closed`. Cancellation state belongs to the operation handle rather than creating a second session-state machine. State-changing calls either complete atomically or return an operation whose terminal state determines the transition. Reset records the accumulation reason and never changes the bound scene revision implicitly.
 
 Core knows only the objective envelope and generic budgets:
 
@@ -551,7 +551,7 @@ The client MUST NOT link private renderer libraries, retain legacy framebuffer p
 
 The current `ure_c_api.h`, `pyure_native.dll`, and ctypes surface remain legacy experimental compatibility interfaces during PB. They receive compatibility and safety fixes needed for migration, but new high-order feature vocabulary SHOULD first receive registry/schema identities rather than expanding legacy mega-structures.
 
-The stable candidate adapter may initially lower to current `RenderSession`, native-scene tooling, `SceneDiff`, and framebuffer implementations. That is an implementation detail, not a promise to preserve those layouts.
+The Core adapter may lower to current `RenderSession`, native-scene tooling, `SceneDiff`, and framebuffer implementations. That is an implementation detail, not a promise to preserve those layouts.
 
 Legacy removal requires all of:
 
@@ -605,12 +605,14 @@ Core ABI 1.0 and Worker Protocol 1.0 are declared only when all are true:
 3. structured errors, capabilities, operations, events, cancellation, and lifetime behavior are complete;
 4. immutable frames, lease budgets, map/copy, backpressure, and crash invalidation pass;
 5. native full-scene load/replacement and revision conflict behavior pass;
-6. UUID transactions and canonical camera extension pass with explicit full-reload fallback;
-7. current client against old runtime and old compiled clients against current runtime pass without recompilation inside the declared range;
+6. UUID transactions and canonical camera extension pass as an UnstableExtension with explicit full-reload fallback;
+7. the retained final-Candidate layout seed runs unchanged against runtime 1.0, and current/current passes; because no prior stable runtime exists for the first stable major, current-client/prior-stable-runtime is explicitly `NotApplicable` rather than simulated. Both directions become mandatory after the first post-1.0 runtime is retained;
 8. malformed protocol/ABI fuzz corpus and worker crash/restart gates pass;
-9. an independently built external Studio/client end-to-end workflow uses only the released SDK/worker package;
+9. independently built C11, C++, and worker clients use only the staged SDK/runtime packages, cover every Core call plus the unstable transaction call, and produce validated nontrivial image files through in-process map/copy and worker shared memory;
 10. release documentation states exact platform, support window, extension availability, schema read/write ranges, and non-promises.
 11. the Public Interaction Surface Ledger has zero unknown, duplicate-authority, bypass, or unresolved-migration entries, and cross-entry conformance evidence covers every maintained external adapter/client path.
+
+PB.8 satisfied these gates and received explicit post-REPORT approval on 2026-08-11. The declaration is limited to Core ABI 1.0 and Worker Protocol 1.0; it does not assign version 1.0 to UltraRender as a product or imply public package distribution.
 
 ### 17.3 Stable-major policy
 
@@ -634,6 +636,8 @@ No schedule pressure, frontend convenience, or existing internal layout is suffi
 12. Research interfaces bind exact identities and can evolve or disappear without burdening stable Core.
 13. Runtime majors coexist when a genuine breaking change is required.
 14. The current C API remains legacy experimental and is not retroactively stabilized.
+15. The initial StableExtension list is empty; telemetry, spectral/Stokes planes, transaction semantics, and renderer update strategy identities are UnstableExtension or tombstoned pre-release identities.
+16. The annotated tag `public-boundary-v1.0.0` identifies the declaration commit only; it is not an UltraRender product-release tag and does not start the public support clock.
 
 ## 19. Standards references
 

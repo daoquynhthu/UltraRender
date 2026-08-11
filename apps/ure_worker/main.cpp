@@ -19,7 +19,7 @@
 
 #include "local_transport.hpp"
 #include "runtime_client.hpp"
-#include "ure_worker_candidate_generated.h"
+#include "ure_worker_v1_generated.h"
 #if defined(URE_WORKER_CONFORMANCE)
 #include "ure_worker_conformance_generated.h"
 #endif
@@ -27,7 +27,7 @@
 namespace ure::worker {
 namespace {
 
-namespace fb = ultrarender::contract::candidate;
+namespace fb = ultrarender::contract::v1;
 
 inline constexpr std::uint64_t kTransportNamedPipe = UINT64_C(1) << 0U;
 inline constexpr std::uint64_t kTransportDuplicatedMapping = UINT64_C(1) << 1U;
@@ -108,8 +108,8 @@ response_base(std::uint64_t sequence, std::uint64_t correlation,
               const std::array<std::uint8_t, 32> &registry,
               const std::array<std::uint8_t, 32> &worker_identity) {
     fb::WorkerEnvelopeT response;
-    response.protocol_major = 0;
-    response.protocol_minor = 1;
+    response.protocol_major = 1;
+    response.protocol_minor = 0;
     response.registry_digest.assign(registry.begin(), registry.end());
     response.sequence = sequence;
     response.correlation_id = correlation;
@@ -370,8 +370,8 @@ frame_descriptor(const FrameSnapshot &snapshot, std::uint64_t lease_id,
 bool validate_envelope(const fb::WorkerEnvelope *envelope,
                        std::uint64_t expected_sequence,
                        const std::array<std::uint8_t, 32> &registry) {
-    if (!envelope || envelope->protocol_major() != 0 ||
-        envelope->protocol_minor() > 1 ||
+    if (!envelope || envelope->protocol_major() != 1 ||
+        envelope->protocol_minor() != 0 ||
         envelope->sequence() != expected_sequence ||
         envelope->correlation_id() == 0 ||
         !digest_equal(envelope->registry_digest(), registry))
@@ -411,16 +411,13 @@ int run_worker(const Arguments &arguments) {
         !handshake_envelope->handshake())
         return 25;
     const auto *handshake = handshake_envelope->handshake();
-    if (handshake->protocol_min_major() != 0 ||
-        handshake->protocol_max_major() != 0 ||
-        handshake->protocol_min_minor() > 1 ||
-        handshake->protocol_max_minor() < 1 || handshake->core_min_major() != 0 ||
-        handshake->core_max_major() != 0 || handshake->core_min_minor() > 1 ||
-        handshake->core_max_minor() < 1 ||
-        handshake->frame_schema_min_major() != 0 ||
-        handshake->frame_schema_max_major() != 0 ||
-        handshake->frame_schema_min_minor() > 1 ||
-        handshake->frame_schema_max_minor() < 1 ||
+    if (handshake->protocol_min_major() != 1 ||
+        handshake->protocol_max_major() != 1 ||
+        handshake->protocol_min_minor() > 0 || handshake->core_min_major() != 1 ||
+        handshake->core_max_major() != 1 || handshake->core_min_minor() > 0 ||
+        handshake->frame_schema_min_major() != 1 ||
+        handshake->frame_schema_max_major() != 1 ||
+        handshake->frame_schema_min_minor() > 0 ||
         !digest_equal(handshake->registry_digest(), runtime.registry_digest()) ||
         !handshake->required_capabilities() ||
         handshake->required_capabilities()->size() > 64 ||
@@ -459,9 +456,12 @@ int run_worker(const Arguments &arguments) {
     handshake_response.message_kind = fb::MessageKind::HandshakeResponse;
     handshake_response.handshake = std::make_unique<fb::WorkerHandshakeT>();
     auto &selected = *handshake_response.handshake;
-    selected.protocol_max_minor = 1;
-    selected.core_max_minor = 1;
-    selected.frame_schema_max_minor = 1;
+    selected.protocol_min_major = 1;
+    selected.protocol_max_major = 1;
+    selected.core_min_major = 1;
+    selected.core_max_major = 1;
+    selected.frame_schema_min_major = 1;
+    selected.frame_schema_max_major = 1;
     selected.registry_digest.assign(runtime.registry_digest().begin(),
                                     runtime.registry_digest().end());
     selected.runtime_build_digest.assign(runtime_file_identity.begin(),

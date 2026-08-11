@@ -36,11 +36,12 @@ try {
     }
     $report = Get-Content -LiteralPath $reportA -Raw | ConvertFrom-Json -Depth 100
     if ($report.schema -ne "ure.pb.boundary-audit/1.0" -or
+        $report.registry_version -ne "1.0.0" -or
         [int]$report.unresolved_classification_count -ne 0 -or
         [int]$report.duplicate_authority_count -ne 0 -or
         [int]$report.forbidden_inspection_count -ne 0 -or
         [int]$report.forbidden_public_header_count -ne 0 -or
-        [int]$report.registry_entry_count -ne 180 -or
+        [int]$report.registry_entry_count -ne 182 -or
         [int]$report.legacy.intended_c_export_count -ne 55 -or
         [int]$report.legacy.client_fixture_exit_code -ne 0) {
         throw "PB.0 audit report does not preserve the closure evidence"

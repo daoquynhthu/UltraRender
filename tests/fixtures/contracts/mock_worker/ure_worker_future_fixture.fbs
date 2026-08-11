@@ -1,5 +1,5 @@
-include "ure_payload_candidate.fbs";
-include "ure_frame_candidate.fbs";
+include "ure_payload_v1.fbs";
+include "ure_frame_v1.fbs";
 
 namespace ultrarender.contract.fixture_future;
 
@@ -22,15 +22,15 @@ table WorkerEnvelopeFuture {
   operation_kind:uint (id: 5);
   required_capabilities:[uint] (id: 6);
   optional_capabilities:[uint] (id: 7);
-  result:ultrarender.contract.candidate.ResultCode = Success (id: 8);
-  error:ultrarender.contract.candidate.ErrorDescriptor (id: 9);
-  operation:ultrarender.contract.candidate.OperationDescriptor (id: 10);
-  event:ultrarender.contract.candidate.EventDescriptor (id: 11);
-  frame:ultrarender.contract.candidate.FrameReadyDescriptor (id: 12);
-  shared_blob:ultrarender.contract.candidate.SharedBlobDescriptor (id: 13);
+  result:ultrarender.contract.v1.ResultCode = Success (id: 8);
+  error:ultrarender.contract.v1.ErrorDescriptor (id: 9);
+  operation:ultrarender.contract.v1.OperationDescriptor (id: 10);
+  event:ultrarender.contract.v1.EventDescriptor (id: 11);
+  frame:ultrarender.contract.v1.FrameReadyDescriptor (id: 12);
+  shared_blob:ultrarender.contract.v1.SharedBlobDescriptor (id: 13);
   payload:[ubyte] (id: 14);
   unknown_optional:uint (id: 15);
 }
 
 root_type WorkerEnvelopeFuture;
-file_identifier "URW0";
+file_identifier "URW1";

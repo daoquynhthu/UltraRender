@@ -161,7 +161,8 @@ struct WorkerClient::Impl {
 
     std::unique_ptr<fb::WorkerEnvelopeT> exchange(fb::WorkerEnvelopeT &request,
                                                   std::string &error) {
-        request.protocol_minor = 1;
+        request.protocol_major = 1;
+        request.protocol_minor = 0;
         request.registry_digest.assign(kRegistry.begin(), kRegistry.end());
         request.sequence = request_sequence++;
         request.correlation_id = correlation++;
@@ -206,7 +207,7 @@ struct WorkerClient::Impl {
             return {};
         }
         const auto *response = fb::GetWorkerEnvelope(response_bytes.data());
-        if (response->protocol_major() != 0 || response->protocol_minor() != 1 ||
+        if (response->protocol_major() != 1 || response->protocol_minor() != 0 ||
             response->sequence() != response_sequence++ ||
             response->correlation_id() != request.correlation_id ||
             !response->registry_digest() ||
@@ -298,9 +299,12 @@ bool WorkerClient::handshake_with_limits(std::uint64_t max_control_bytes,
     request.message_kind = fb::MessageKind::HandshakeRequest;
     request.handshake = std::make_unique<fb::WorkerHandshakeT>();
     auto &handshake = *request.handshake;
-    handshake.protocol_max_minor = 1;
-    handshake.core_max_minor = 1;
-    handshake.frame_schema_max_minor = 1;
+    handshake.protocol_min_major = 1;
+    handshake.protocol_max_major = 1;
+    handshake.core_min_major = 1;
+    handshake.core_max_major = 1;
+    handshake.frame_schema_min_major = 1;
+    handshake.frame_schema_max_major = 1;
     handshake.registry_digest.assign(kRegistry.begin(), kRegistry.end());
     handshake.frontend_build_digest.resize(32, 0x5aU);
     handshake.required_capabilities = {URE_CAPABILITY_LIFECYCLE,
@@ -317,6 +321,18 @@ bool WorkerClient::handshake_with_limits(std::uint64_t max_control_bytes,
     if (!response ||
         response->message_kind != fb::MessageKind::HandshakeResponse ||
         response->result != fb::ResultCode::Success || !response->handshake ||
+        response->handshake->protocol_min_major != 1 ||
+        response->handshake->protocol_min_minor != 0 ||
+        response->handshake->protocol_max_major != 1 ||
+        response->handshake->protocol_max_minor != 0 ||
+        response->handshake->core_min_major != 1 ||
+        response->handshake->core_min_minor != 0 ||
+        response->handshake->core_max_major != 1 ||
+        response->handshake->core_max_minor != 0 ||
+        response->handshake->frame_schema_min_major != 1 ||
+        response->handshake->frame_schema_min_minor != 0 ||
+        response->handshake->frame_schema_max_major != 1 ||
+        response->handshake->frame_schema_max_minor != 0 ||
         response->handshake->worker_instance_identity.size() != 32 ||
         response->handshake->runtime_build_digest.size() != 32 ||
         response->handshake->transport_features != transport_features ||
@@ -412,7 +428,7 @@ bool WorkerClient::shutdown(std::string &error) {
 
 bool WorkerClient::send_shutdown_without_wait(std::string &error) {
     fb::WorkerEnvelopeT request;
-    request.protocol_minor = 1;
+    request.protocol_major = 1;
     request.registry_digest.assign(kRegistry.begin(), kRegistry.end());
     request.sequence = impl_->request_sequence++;
     request.correlation_id = impl_->correlation++;
@@ -458,15 +474,18 @@ bool WorkerClient::send_malformed_message(std::string &error) {
 
 bool WorkerClient::send_registry_mismatch(std::string &error) {
     fb::WorkerEnvelopeT request;
-    request.protocol_minor = 1;
+    request.protocol_major = 1;
     request.registry_digest.resize(32, 0x7bU);
     request.sequence = impl_->request_sequence++;
     request.correlation_id = impl_->correlation++;
     request.message_kind = fb::MessageKind::HandshakeRequest;
     request.handshake = std::make_unique<fb::WorkerHandshakeT>();
-    request.handshake->protocol_max_minor = 1;
-    request.handshake->core_max_minor = 1;
-    request.handshake->frame_schema_max_minor = 1;
+    request.handshake->protocol_min_major = 1;
+    request.handshake->protocol_max_major = 1;
+    request.handshake->core_min_major = 1;
+    request.handshake->core_max_major = 1;
+    request.handshake->frame_schema_min_major = 1;
+    request.handshake->frame_schema_max_major = 1;
     request.handshake->registry_digest = request.registry_digest;
     request.handshake->required_capabilities = {URE_CAPABILITY_LIFECYCLE};
     request.handshake->transport_features = 7;
@@ -491,7 +510,7 @@ bool WorkerClient::send_registry_mismatch(std::string &error) {
 
 bool WorkerClient::send_truncated_message(std::string &error) {
     fb::WorkerEnvelopeT request;
-    request.protocol_minor = 1;
+    request.protocol_major = 1;
     request.registry_digest.assign(kRegistry.begin(), kRegistry.end());
     request.sequence = impl_->request_sequence++;
     request.correlation_id = impl_->correlation++;

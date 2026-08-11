@@ -1,6 +1,6 @@
-include "ure_payload_candidate.fbs";
+include "ure_payload_v1.fbs";
 
-namespace ultrarender.contract.candidate;
+namespace ultrarender.contract.v1;
 
 enum SceneSourceKind:uint {
   Memory = 966,
@@ -244,4 +244,4 @@ table PublicScenePayload {
 }
 
 root_type PublicScenePayload;
-file_identifier "URS0";
+file_identifier "URS1";

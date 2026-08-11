@@ -2,13 +2,13 @@
 
 Document status: authoritative subordinate execution plan for Phase PB
 
-Last reviewed: 2026-08-09
+Last reviewed: 2026-08-11
 
 > **For agentic workers:** Execute this plan under [`AGENTS.md`](../AGENTS.md) using the repository's single-agent `PLAN -> IMPLEMENT -> VERIFY -> REVIEW -> REPORT -> COMMIT` workflow. The root [`PLAN.md`](../PLAN.md) owns the global cursor; this document owns PB subcursor details. Do not dispatch subagents. The user granted standing authorization on 2026-08-08 for autonomous plan-scoped PB commits without intermediate progress prompts; push remains prohibited without separate authorization.
 
 **Goal:** Build and graduate a minimal, version-negotiated public interaction boundary that lets an external frontend and UltraRender evolve independently without freezing renderer algorithms or internal layouts.
 
-**Architecture:** One generated contract registry drives a Windows x64 C loader ABI and a local Named Pipe/shared-memory worker protocol. A private adapter lowers stable semantic envelopes to current native-scene, session, transport, reconstruction, world, and GPU implementations. Candidate 0.x remains breakable until mixed-version, security, lifetime, and external-client evidence permits PB.8 to declare Core ABI 1.0 and Worker Protocol 1.0.
+**Architecture:** One generated contract registry drives a Windows x64 C loader ABI and a local Named Pipe/shared-memory worker protocol. A private adapter lowers stable semantic envelopes to current native-scene, session, transport, reconstruction, world, and GPU implementations. PB.0-PB.7 Candidate 0.x remains historical; PB.8 declared the minimal audited 1.0 contracts without versioning UltraRender as a product.
 
 **Tech stack:** C++23 host code, C11-compatible installed headers, CMake/Ninja/MSVC, FlatBuffers 25.12.19, nlohmann/json, Windows Named Pipes/file mappings/Job Objects, PowerShell validation, CTest.
 
@@ -21,10 +21,10 @@ The approved architecture is [`Public_API_ABI_Architecture.md`](Public_API_ABI_A
 Current PB cursor:
 
 ```text
-PB.8 — Stable 1.0 declaration gate; awaiting separate explicit approval
+PB.8 — Complete; Core ABI 1.0 and Worker Protocol 1.0 declared on 2026-08-11
 ```
 
-The HR route is suspended after completed HR.2. `HR.3` resumes only after PB.8 or an explicit root-PLAN revision. PB establishes the carrier; it does not promote learned proposals, reconstruction, world state, material graph, wave optics, or solver functionality to stable extensions.
+The HR route resumed at `HR.3` after PB.8. PB establishes the carrier; it does not promote learned proposals, reconstruction, world state, material graph, wave optics, or solver functionality to stable extensions.
 
 Global constraints:
 
@@ -84,12 +84,15 @@ contracts/
     public_contract_registry.json       canonical authoring registry
     registry_compatibility.json         version/change classification
   schemas/
-    ure_worker_candidate.fbs            control handshake/envelope/messages
-    ure_payload_candidate.fbs           common schema-tagged payload envelopes
-    ure_frame_candidate.fbs             frame/plane descriptors
-    ure_scene_transaction_candidate.fbs transaction and camera extension
-  baselines/
-    candidate/                          layouts, exports, manifests, golden wire data
+    ure_worker_v1.fbs                   control handshake/envelope/messages
+    ure_payload_v1.fbs                  common schema-tagged payload envelopes
+    ure_frame_v1.fbs                    frame/plane descriptors
+    ure_scene_v1.fbs                    scene/objective plus unstable transaction payloads
+    baseline/{0.1,1.0}/                 retained Candidate and stable schema baselines
+  abi/windows_x64_core_1_0.json         frozen Core layouts and tables
+  stability/                            freeze review and compatibility matrix
+  e2e/                                  complete call/image coverage declaration
+  reports/                              versioned validation schemas and fuzz corpus
   public_interaction_surface_ledger.json complete historical/external surface classification
 
 tools/ure_contract_codegen/
@@ -106,40 +109,34 @@ libs/ure_public/
 libs/ure_contract/
   CMakeLists.txt
   src/loader.cpp                         the only two exported loader functions
-  src/runtime_adapter.cpp                runtime/instance bridge
-  src/handle_table.cpp                   typed owner/generation/state validation
-  src/error_adapter.cpp                  retained structured errors
-  src/capability_adapter.cpp             three-axis capability descriptors
-  src/operation_adapter.cpp              operation state/wait/cancel
-  src/event_queue.cpp                    bounded events and gap records
+  src/runtime_adapter.cpp                runtime tables and inspection manifest
+  src/lifecycle.cpp                      handles/errors/capabilities/operations/events
   src/frame_adapter.cpp                  immutable frame leases/map/copy
   src/scene_adapter.cpp                  native blob/revision/replacement
-  src/transaction_adapter.cpp            UUID transaction lowering/rollback
+  src/scene_transaction.cpp              unstable UUID transaction lowering/rollback
   src/session_adapter.cpp                objective/session bridge
+  src/abi_core_1_0.hpp                   frozen caller-structure prefixes
+  ultrarender_runtime_1.def              exact two-export list
 
 apps/ure_worker/
   CMakeLists.txt
-  src/main.cpp                            process/bootstrap/job lifecycle
-  src/runtime_client.cpp                  dynamic DLL loader; public ABI only
-  src/named_pipe_transport.cpp            same-user local control channel
-  src/shared_blob_transport.cpp           duplicated mapping handles and leases
-  src/protocol_dispatch.cpp               verified message-to-ABI translation
+  main.cpp                                verified protocol dispatch
+  runtime_client.cpp                      dynamic DLL loader; public ABI only
+  local_transport.cpp                     same-user pipe, Job Object and shared mappings
 
 tests/contract/
   CMakeLists.txt
   test_registry.cpp
   test_abi_layout.cpp
   test_loader_exports.ps1
-  test_runtime_lifecycle.cpp
-  test_capabilities.cpp
-  test_operations_events.cpp
-  test_frame_leases.cpp
+  test_runtime_lifecycle.c
+  test_frame_leases.c
   test_worker_protocol.cpp
   test_worker_crash.cpp
-  test_scene_boundary.cpp
-  test_scene_transactions.cpp
-  test_mixed_versions.ps1
-  test_untrusted_inputs.cpp
+  test_scene_worker.cpp
+  test_pb7_fuzz.cpp
+  test_core_1_0_compatibility.ps1
+  test_phase_pb8_static.ps1
   external_client/                        standalone SDK/package consumer
 
 tests/fixtures/contracts/
@@ -152,7 +149,7 @@ scripts/
   run_phase_pb_validation_suite.ps1       unified machine-readable PB gate
 ```
 
-`libs/ure_contract` depends inward on renderer modules. Existing internal libraries do not depend on adapter implementation files. `apps/ure_worker` discovers `ultrarender_runtime_candidate.dll`/`ultrarender_runtime_1.dll` dynamically and links no private renderer library.
+`libs/ure_contract` depends inward on renderer modules. Existing internal libraries do not depend on adapter implementation files. `apps/ure_worker` discovers the supplied runtime path dynamically, uses only `ureGetRuntimeManifest` and `ureQueryInterface`, and links no private renderer library or runtime import library.
 
 ## 3. PB.0 — Boundary freeze, inventory, and compatibility baseline
 
@@ -391,7 +388,7 @@ scripts/
 
 **Dependencies:** PB.7 green; architecture §17.2 satisfied; explicit user approval to create the stable promise.
 
-**Outcome:** The candidate becomes the first published stable major without expanding its feature surface.
+**Outcome:** The first stable-major client contracts are declared without expanding the candidate feature surface or implying an UltraRender product release or public distribution.
 
 **Files:** registry/manifest version records; stable schema baselines; DLL/worker/package names; public reference documentation; support policy; old-client fixtures; root README/STATUS/PLAN/AGENTS synchronization.
 
@@ -399,16 +396,18 @@ scripts/
 
 **Execution checklist:**
 
-- [ ] Review every Core type/function and remove or demote anything expressible as a schema/capability/extension before freeze.
-- [ ] Freeze loader exports, interface IDs/tables, enum values, layouts, semantics, registry tombstones, Windows x64 profile, worker handshake/envelope, frame lifecycle, and support window.
-- [ ] Rerun PB.7 using release-named `ultrarender_runtime_1.dll` and worker packages without candidate compatibility shortcuts.
-- [ ] Preserve the final Candidate client binaries as Core 1.0 old-client seeds and store content-digested ABI/protocol/registry/package manifests.
-- [ ] Publish exact promises and non-promises, including optional extension availability, platform scope, scene-schema ranges, worker locality, cancellation semantics, frame limits, and research exclusions.
-- [ ] Obtain explicit user approval for stable declaration after REPORT; do not infer approval from earlier implementation authorization.
-- [ ] Tag/version only when separately authorized; this plan never authorizes push or public release by itself.
-- [ ] Advance the root cursor to HR.3 and require future HR/HW/HD capabilities to enter through versioned stable/unstable extensions rather than Core growth.
+- [x] Review every Core type/function and remove or demote anything expressible as a schema/capability/extension before freeze.
+- [x] Freeze loader exports, interface IDs/tables, enum values, layouts, semantics, registry tombstones, Windows x64 profile, worker handshake/envelope, frame lifecycle, and support window.
+- [x] Rerun PB.7 using release-named `ultrarender_runtime_1.dll` and worker packages without candidate compatibility shortcuts.
+- [x] Preserve the final Candidate client binaries as Core 1.0 old-client seeds and store content-digested ABI/protocol/registry/package manifests.
+- [x] Publish exact promises and non-promises, including optional extension availability, platform scope, scene-schema ranges, worker locality, cancellation semantics, frame limits, and research exclusions.
+- [x] Obtain explicit user approval for stable declaration after REPORT; do not infer approval from earlier implementation authorization.
+- [x] Keep tag, push, and public release outside PB.8 execution unless separately authorized.
+- [x] Advance the root cursor to HR.3 and require future HR/HW/HD capabilities to enter through versioned stable/unstable extensions rather than Core growth.
 
 **Completion evidence:** every architecture 1.0 gate is green; release artifacts and documentation contain one exact compatibility statement; no advanced capability was batch-promoted merely to finish PB.
+
+**Recorded completion evidence:** The 182-entry registry contains 140 reviewed Core identities and 11 pre-release tombstones; the initial StableExtension list is empty. Core tables expose 39 functions, while UUID transaction apply is isolated behind one UnstableExtension table. The retained final-PB.7-layout seed and current client load the release-named runtime without Candidate shortcuts; the nonexistent prior-stable-runtime row is explicitly `NotApplicable`. Independent C11, C++23 extension, and local-worker clients cover every declared call and write six validated PFM images. The Windows x64 Release build and 101/101 CTest gate pass, and `ure.phase_pb.validation.v2` validates against its schema. Explicit post-REPORT approval declared Core ABI 1.0 and Worker Protocol 1.0 on 2026-08-11; this is not an UltraRender 1.0 product release or public package distribution. The root cursor advanced to HR.3.
 
 ## 12. Unified verification contract
 
@@ -464,4 +463,4 @@ At each completed PB phase:
 - retain scope, verification, and review findings in the phase evidence;
 - use the standing 2026-08-08 plan-scoped commit authorization after VERIFY/REVIEW, following the repository phase commit convention.
 
-No PB phase authorizes push, tag, public package publication, deletion of legacy APIs, or declaration of stable 1.0 before PB.8.
+No PB phase authorizes push, public package publication, or deletion of legacy APIs. The user separately authorized the scoped `public-boundary-v1.0.0` declaration tag on 2026-08-11; no push or public distribution is authorized.

@@ -22,7 +22,8 @@ static const void *query_table(ure_query_interface_fn query,
     request.header.type = URE_STRUCTURE_INTERFACE_QUERY;
     request.header.size = (uint32_t)sizeof(request);
     memcpy(request.interface_id.bytes, id, 16);
-    request.maximum_minor = 1;
+    request.minimum_major = 1;
+    request.maximum_major = 1;
     response.header.type = URE_STRUCTURE_INTERFACE_RESPONSE;
     response.header.size = (uint32_t)sizeof(response);
     if (query(&request, &response, NULL) != URE_RESULT_SUCCESS ||

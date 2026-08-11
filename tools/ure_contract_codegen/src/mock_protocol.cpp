@@ -15,13 +15,13 @@
 #include <flatbuffers/verifier.h>
 
 #include "mock_protocol.hpp"
-#include "ure_worker_candidate_generated.h"
+#include "ure_worker_v1_generated.h"
 #include "ure_worker_future_fixture_generated.h"
 
 namespace ure::contract_codegen {
 namespace {
 
-namespace wire = ultrarender::contract::candidate;
+namespace wire = ultrarender::contract::v1;
 
 std::vector<std::uint8_t> frame(std::span<const std::uint8_t> payload) {
     std::vector<std::uint8_t> result(4 + payload.size());
@@ -44,8 +44,8 @@ std::vector<std::uint8_t> encode(wire::WorkerEnvelopeT envelope) {
 std::vector<std::uint8_t> encode_future(const Registry& registry) {
     namespace future = ultrarender::contract::fixture_future;
     future::WorkerEnvelopeFutureT envelope;
-    envelope.protocol_major = 0;
-    envelope.protocol_minor = 1;
+    envelope.protocol_major = 1;
+    envelope.protocol_minor = 0;
     envelope.registry_digest = registry.digest_bytes;
     envelope.sequence = 5;
     envelope.message_kind = future::FutureMessageKind::HandshakeRequest;
@@ -75,7 +75,7 @@ wire::WorkerEnvelopeT request(
     std::vector<std::uint32_t> optional = {},
     std::vector<std::uint8_t> payload = {}) {
     wire::WorkerEnvelopeT value;
-    value.protocol_major = 0;
+    value.protocol_major = 1;
     value.protocol_minor = minor;
     value.registry_digest = registry.digest_bytes;
     value.sequence = sequence;
@@ -89,8 +89,8 @@ wire::WorkerEnvelopeT request(
 
 std::vector<std::uint8_t> malformed_response(std::vector<std::uint8_t> digest = {}) {
     wire::WorkerEnvelopeT response;
-    response.protocol_major = 0;
-    response.protocol_minor = 1;
+    response.protocol_major = 1;
+    response.protocol_minor = 0;
     response.registry_digest = std::move(digest);
     response.message_kind = wire::MessageKind::OperationResponse;
     response.result = wire::ResultCode::MalformedData;
@@ -98,7 +98,7 @@ std::vector<std::uint8_t> malformed_response(std::vector<std::uint8_t> digest = 
     response.error->result = wire::ResultCode::MalformedData;
     response.error->domain = 200;
     response.error->detail = 1;
-    response.error->message = "Malformed candidate worker message";
+    response.error->message = "Malformed Worker Protocol 1 message";
     return encode(std::move(response));
 }
 
@@ -117,13 +117,13 @@ std::vector<std::uint8_t> process_mock_request(
     flatbuffers::Verifier verifier(body.data(), body.size(), 64, 100000);
     if (!wire::VerifyWorkerEnvelopeBuffer(verifier)) return malformed_response();
     std::unique_ptr<wire::WorkerEnvelopeT> input(wire::GetWorkerEnvelope(body.data())->UnPack());
-    if (input->registry_digest.size() != 32 || input->protocol_major != 0 ||
-        input->protocol_minor > 1 ||
+    if (input->registry_digest.size() != 32 || input->protocol_major != 1 ||
+        input->protocol_minor != 0 ||
         (!expected_registry.empty() &&
          !std::ranges::equal(input->registry_digest, expected_registry))) {
         wire::WorkerEnvelopeT response;
-        response.protocol_major = 0;
-        response.protocol_minor = 1;
+        response.protocol_major = 1;
+        response.protocol_minor = 0;
         response.registry_digest = input->registry_digest;
         response.sequence = input->sequence;
         response.message_kind = wire::MessageKind::HandshakeResponse;
@@ -136,7 +136,7 @@ std::vector<std::uint8_t> process_mock_request(
     }
 
     wire::WorkerEnvelopeT response;
-    response.protocol_major = 0;
+    response.protocol_major = 1;
     response.protocol_minor = input->protocol_minor;
     response.registry_digest = input->registry_digest;
     response.sequence = input->sequence;
@@ -145,7 +145,7 @@ std::vector<std::uint8_t> process_mock_request(
         : wire::MessageKind::OperationResponse;
     response.operation_kind = input->operation_kind;
     response.result = wire::ResultCode::Success;
-    const std::unordered_set<std::uint32_t> supported{300, 301, 302, 303};
+    const std::unordered_set<std::uint32_t> supported{300, 301, 302, 2147483669u};
     const auto missing_required = std::ranges::find_if(input->required_capabilities, [&supported](std::uint32_t id) {
         return !supported.contains(id);
     });
@@ -188,20 +188,22 @@ std::vector<MockExchange> build_mock_exchanges(const Registry& registry) {
                                              registry.digest_bytes);
         result.push_back({std::move(name), std::move(bytes), std::move(response), exit_code});
     };
-    add("normal_lifecycle", encode(request(registry, 1, 1, wire::MessageKind::OperationRequest, 801, {300, 301}, {303})));
-    add("missing_optional_capability", encode(request(registry, 1, 2, wire::MessageKind::HandshakeRequest, 0, {300}, {999999})));
-    add("missing_required_capability", encode(request(registry, 1, 3, wire::MessageKind::HandshakeRequest, 0, {999999}))) ;
-    auto mismatch = request(registry, 1, 13, wire::MessageKind::HandshakeRequest, 0, {300});
+    add("normal_lifecycle", encode(request(registry, 0, 1, wire::MessageKind::OperationRequest, 801, {300, 301}, {2147483669u})));
+    add("missing_optional_capability", encode(request(registry, 0, 2, wire::MessageKind::HandshakeRequest, 0, {300}, {999999})));
+    add("missing_required_capability", encode(request(registry, 0, 3, wire::MessageKind::HandshakeRequest, 0, {999999}))) ;
+    auto mismatch = request(registry, 0, 13, wire::MessageKind::HandshakeRequest, 0, {300});
     std::ranges::fill(mismatch.registry_digest, std::uint8_t{0x7b});
     add("registry_mismatch", encode(std::move(mismatch)));
-    add("old_minor", encode(request(registry, 0, 4, wire::MessageKind::HandshakeRequest, 0, {300})));
+    auto incompatible = request(registry, 0, 4, wire::MessageKind::HandshakeRequest, 0, {300});
+    incompatible.protocol_major = 0;
+    add("incompatible_protocol_version", encode(std::move(incompatible)));
     add("unknown_optional_field", encode_future(registry));
-    add("event_gap", encode(request(registry, 1, 6, wire::MessageKind::OperationRequest, 4026531842u, {301})));
-    add("backpressure", encode(request(registry, 1, 7, wire::MessageKind::OperationRequest, 4026531843u, {302})));
-    add("device_loss", encode(request(registry, 1, 8, wire::MessageKind::OperationRequest, 4026531840u, {301})));
-    add("worker_crash", encode(request(registry, 1, 9, wire::MessageKind::OperationRequest, 4026531841u, {301})));
+    add("event_gap", encode(request(registry, 0, 6, wire::MessageKind::OperationRequest, 4026531842u, {301})));
+    add("backpressure", encode(request(registry, 0, 7, wire::MessageKind::OperationRequest, 4026531843u, {302})));
+    add("device_loss", encode(request(registry, 0, 8, wire::MessageKind::OperationRequest, 4026531840u, {301})));
+    add("worker_crash", encode(request(registry, 0, 9, wire::MessageKind::OperationRequest, 4026531841u, {301})));
     add("malformed_message", std::vector<std::uint8_t>{8, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8});
-    auto valid = encode(request(registry, 1, 10, wire::MessageKind::HandshakeRequest, 0, {300}));
+    auto valid = encode(request(registry, 0, 10, wire::MessageKind::HandshakeRequest, 0, {300}));
     valid.pop_back();
     add("truncated_message", std::move(valid));
     add("oversized_message", std::vector<std::uint8_t>{1, 0, 16, 0});

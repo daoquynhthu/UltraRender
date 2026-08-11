@@ -1,9 +1,9 @@
 {
-  "schema": "ure.public.registry-compatibility/1.0",
-  "candidate_version": "0.1.0",
-  "baseline": {
-    "candidate_version": "0.1.0",
-    "registry_digest": "bb9a25aacb63bd88b4e79b67d7932a8b66174627beada11fa068475ca76e1513"
+  "schema": "ure.public.registry-compatibility/2.0",
+  "release_version": "1.0.0",
+  "pre_release_baseline": {
+    "version": "0.1.0",
+    "registry_digest": "0e56eea2d03b2528ceefe2f686de3b63510d956738ee19cf107835abb297f554"
   },
   "allowed_change_classes": [
     "AdditiveCandidate",
@@ -656,51 +656,51 @@
     },
     {
       "registry_id": 42,
-      "change_class": "AdditiveCandidate",
-      "phase": "PB.6",
-      "summary": "Add bounded scene transaction envelope"
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Tombstone the pre-release Core transaction envelope before the 1.0 freeze"
     },
     {
       "registry_id": 43,
-      "change_class": "AdditiveCandidate",
-      "phase": "PB.6",
-      "summary": "Add extensible scene transaction result"
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Tombstone the pre-release Core transaction result before the 1.0 freeze"
     },
     {
       "registry_id": 406,
-      "change_class": "AdditiveCandidate",
-      "phase": "PB.6",
-      "summary": "Add committed scene transaction event"
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Tombstone the pre-release Core transaction event before the 1.0 freeze"
     },
     {
       "registry_id": 808,
-      "change_class": "AdditiveCandidate",
-      "phase": "PB.6",
-      "summary": "Add scene transaction operation"
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Tombstone the pre-release Core transaction operation before the 1.0 freeze"
     },
     {
       "registry_id": 980,
-      "change_class": "AdditiveCandidate",
-      "phase": "PB.6",
-      "summary": "Add hot-update strategy"
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Tombstone pre-release Core hot-update strategy before the 1.0 freeze"
     },
     {
       "registry_id": 981,
-      "change_class": "AdditiveCandidate",
-      "phase": "PB.6",
-      "summary": "Add partial-rebuild strategy"
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Tombstone pre-release Core partial-rebuild strategy before the 1.0 freeze"
     },
     {
       "registry_id": 982,
-      "change_class": "AdditiveCandidate",
-      "phase": "PB.6",
-      "summary": "Add full-reload strategy"
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Tombstone pre-release Core full-reload strategy before the 1.0 freeze"
     },
     {
       "registry_id": 983,
-      "change_class": "AdditiveCandidate",
-      "phase": "PB.6",
-      "summary": "Add rejected update strategy"
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Tombstone pre-release Core rejected strategy before the 1.0 freeze"
     },
     {
       "registry_id": 2147483648,
@@ -827,7 +827,85 @@
       "change_class": "AdditiveCandidate",
       "phase": "PB.6",
       "summary": "Add environment object identity"
+    },
+    {
+      "registry_id": 2147483669,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Reissue optional telemetry as an unstable extension identity"
+    },
+    {
+      "registry_id": 2147483670,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Reissue spectral plane semantics outside stable Core"
+    },
+    {
+      "registry_id": 2147483671,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Reissue Stokes plane semantics outside stable Core"
+    },
+    {
+      "registry_id": 2147483672,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Reissue advisory hot-update strategy outside stable Core"
+    },
+    {
+      "registry_id": 2147483673,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Reissue advisory partial-rebuild strategy outside stable Core"
+    },
+    {
+      "registry_id": 2147483674,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Reissue advisory full-reload strategy outside stable Core"
+    },
+    {
+      "registry_id": 2147483675,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Reissue advisory rejected strategy outside stable Core"
+    },
+    {
+      "registry_id": 2147483676,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Reissue the transaction envelope as an unstable extension structure"
+    },
+    {
+      "registry_id": 2147483677,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Reissue the transaction result as an unstable extension structure"
+    },
+    {
+      "registry_id": 2147483678,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Add an isolated unstable transaction function table"
+    },
+    {
+      "registry_id": 2147483679,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Move transaction discovery to an unstable extension interface"
+    },
+    {
+      "registry_id": 2147483680,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Reissue transaction commit events outside stable Core"
+    },
+    {
+      "registry_id": 2147483681,
+      "change_class": "BreakingCandidate",
+      "phase": "PB.8",
+      "summary": "Reissue the transaction operation outside stable Core"
     }
   ],
-  "tombstones": []
+  "tombstones": [42, 43, 303, 406, 601, 602, 808, 980, 981, 982, 983]
 }

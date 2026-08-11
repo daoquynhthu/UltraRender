@@ -1,0 +1,27 @@
+{
+  "schema": "ure.pb.core-client-seed/1.0",
+  "publication_state": "StableSeed",
+  "core_abi": "1.0",
+  "source_layout": "Final PB.7 generated table and value prefixes",
+  "baseline_commit": "0de7e5cad21d4f372d5254c18bbbdfdbd6e1c408",
+  "platform": "windows-x64-msvc-c11",
+  "source": "core_1_0_seed_client.c",
+  "source_sha256": "7ef4572d328036bd556447c6c4e24004aa9dffd8ec9258b7df168e22ef9ae647",
+  "binary": "core_1_0_seed_client.exe",
+  "binary_bytes": 143872,
+  "binary_sha256": "309842525619b62f61c39a7cab19663a6f3dd00f19aa87ee1060e254e78cf64a",
+  "sdk_header_sha256": "5ae8cfe2e2360bfd66e4d553ee61d72521c9e916827c4eb0e0ed35ec913860fb",
+  "compiler": "Microsoft (R) C/C++ Optimizing Compiler Version 19.51.36252 for x64",
+  "windows_sdk": "10.0.28000.0",
+  "compile_flags": [
+    "/TC",
+    "/std:c11",
+    "/W4",
+    "/WX",
+    "/O2",
+    "/Brepro",
+    "/INCREMENTAL:NO"
+  ],
+  "expected_behavior": "The final PB.7 ABI prefixes negotiate Core 1.0 and load every frozen table without recompilation.",
+  "compatibility_promise": "Retained as the oldest Core 1.x client seed for every future runtime_1 build."
+}

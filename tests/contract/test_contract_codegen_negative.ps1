@@ -78,13 +78,13 @@ try {
     Invoke-CodegenFailure $path $schemas "dependency cycle" "Dependency cycle"
 
     $registry = Get-Content -LiteralPath $registrySource -Raw | ConvertFrom-Json -Depth 100
-    $registry.entries[0].since = "0.2.0"
+    $registry.entries[0].since = "2.0.0"
     $path = Join-Path $temp "future_version.json"
     Write-Json $registry $path
     Invoke-CodegenFailure $path $schemas "Invalid or duplicate registry entry" "Future version"
 
     $registry = Get-Content -LiteralPath $registrySource -Raw | ConvertFrom-Json -Depth 100
-    ($registry.entries | Where-Object canonical_name -eq "ure.capability.telemetry").default_enabled = $true
+    ($registry.entries | Where-Object canonical_name -eq "ure.experimental.capability.telemetry").default_enabled = $true
     $path = Join-Path $temp "default_dependency.json"
     Write-Json $registry $path
     Invoke-CodegenFailure $path $schemas "Enabled-by-default entry is only compiled" "Default state closure"
@@ -103,7 +103,7 @@ try {
 
     $badSchemas = Join-Path $temp "bad_schemas"
     Copy-Item -LiteralPath $schemas -Destination $badSchemas -Recurse
-    $workerSchema = Join-Path $badSchemas "ure_worker_candidate.fbs"
+    $workerSchema = Join-Path $badSchemas "ure_worker_v1.fbs"
     $text = Get-Content -LiteralPath $workerSchema -Raw
     $text = $text.Replace('protocol_major:ushort (id: 0);', 'protocol_major:ushort;')
     Set-Content -LiteralPath $workerSchema -Value $text -Encoding utf8
@@ -119,11 +119,11 @@ try {
 
     $breakingSchemas = Join-Path $temp "breaking_schemas"
     Copy-Item -LiteralPath $schemas -Destination $breakingSchemas -Recurse
-    $workerSchema = Join-Path $breakingSchemas "ure_worker_candidate.fbs"
+    $workerSchema = Join-Path $breakingSchemas "ure_worker_v1.fbs"
     $text = Get-Content -LiteralPath $workerSchema -Raw
     $text = $text.Replace('protocol_major:ushort (id: 0);', 'protocol_major:uint (id: 0);')
     Set-Content -LiteralPath $workerSchema -Value $text -Encoding utf8
-    & $Flatc --conform (Join-Path $schemas "baseline/0.1/ure_worker_candidate.fbs") $workerSchema 2>$null
+    & $Flatc --conform (Join-Path $schemas "baseline/1.0/ure_worker_v1.fbs") $workerSchema 2>$null
     if ($LASTEXITCODE -eq 0) {
         throw "Breaking schema unexpectedly conformed"
     }

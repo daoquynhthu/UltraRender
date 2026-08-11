@@ -731,7 +731,7 @@ ure_result_t URE_CALL acquire_session_frame(ure_handle_t session,
 
 const ure_session_interface_t &session_interface() noexcept {
     static const ure_session_interface_t table{
-        {sizeof(table), 0, 1}, create_session, retain_session, release_session,
+        {sizeof(table), 1, 0}, create_session, retain_session, release_session,
         close_session, get_session_info, bind_session_scene, start_session,
         pause_session, resume_session, reset_session, acquire_session_frame};
     return table;

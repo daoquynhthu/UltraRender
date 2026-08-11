@@ -1,104 +1,104 @@
 {
   "framing": "uint32-little-endian-byte-count followed by one FlatBuffer",
   "maximum_message_bytes": 1048576,
-  "publication_state": "Candidate",
-  "registry_digest": "0e56eea2d03b2528ceefe2f686de3b63510d956738ee19cf107835abb297f554",
+  "publication_state": "Stable",
+  "registry_digest": "c358276424a2cdc71cfefc6edac290ee78fa75a2bf918edecb8f37f4d991af42",
   "scenarios": [
     {
       "name": "normal_lifecycle",
       "request": "golden_messages/normal_lifecycle.request.bin",
       "request_bytes": 124,
-      "request_sha256": "70d34990c9523ed188edff0de6150da54909e0f6e52d303d8d8ed8d71258d33f",
+      "request_sha256": "6c56c993a1d5b92f30304048fe9d6936fd73a024451cedf0de812e413395428f",
       "response": "golden_messages/normal_lifecycle.response.bin",
       "response_bytes": 148,
-      "response_sha256": "388df324ec5af29da486319ca30dcda229f9eddd4cdda7bc6c5497556074f882",
+      "response_sha256": "06f5543b888ddcb5fc729e2648eccad9e96ca0eb2bbe1833dc895b27fc330de9",
       "worker_exit_code": 0
     },
     {
       "name": "missing_optional_capability",
       "request": "golden_messages/missing_optional_capability.request.bin",
       "request_bytes": 116,
-      "request_sha256": "cae3dc9973906af41c5362347243013c13bb9ed2b7634fc067eaf1e523be7433",
+      "request_sha256": "3aba91f807d9a459a82565975fc4665b05de55c7bde733ac1149e2158ed62b0c",
       "response": "golden_messages/missing_optional_capability.response.bin",
       "response_bytes": 92,
-      "response_sha256": "38e3a654585791fdc915d884ecefdc06211afebfa2a355674085918e516bb0ba",
+      "response_sha256": "ca20b62543216d7f9f7abba6b494e9e855ca103010dccdcdc73c0c5ba4aaad49",
       "worker_exit_code": 0
     },
     {
       "name": "missing_required_capability",
       "request": "golden_messages/missing_required_capability.request.bin",
       "request_bytes": 108,
-      "request_sha256": "f1a43a295c4fc0efc2d648c05549025de2bf27ee988bccb5b6b9b1f4ebc2b340",
+      "request_sha256": "cfa3c64fe063294f41319b0d11c51905669b492e082012a094ecad055abc8e01",
       "response": "golden_messages/missing_required_capability.response.bin",
       "response_bytes": 180,
-      "response_sha256": "0f5cdd7833a7abb5d9b0dc9563d3fead7646faf8f102393ad19192c2252933fc",
+      "response_sha256": "ff2d5358de31d606fa78390418201cc9330581228bab00dbf49ed07e0e22f9ea",
       "worker_exit_code": 0
     },
     {
       "name": "registry_mismatch",
       "request": "golden_messages/registry_mismatch.request.bin",
       "request_bytes": 108,
-      "request_sha256": "7c68202c1affad9ba31a77699c7c5ad5fddc89c89f8c83a1fc240f910be649c0",
+      "request_sha256": "cba39d06d08a35a4ad18718b8bcb234e4b4ba8aefa8ba3de065eac6c08141559",
       "response": "golden_messages/registry_mismatch.response.bin",
       "response_bytes": 108,
-      "response_sha256": "f47e521bd86768eaa582ea2274af032aa4997be72e996bd4d70c06d5780d2c03",
+      "response_sha256": "7b09643da2a776b10abe90e4d7de0709538b7210dde13fa84c47b33f134c7a53",
       "worker_exit_code": 0
     },
     {
-      "name": "old_minor",
-      "request": "golden_messages/old_minor.request.bin",
+      "name": "incompatible_protocol_version",
+      "request": "golden_messages/incompatible_protocol_version.request.bin",
       "request_bytes": 100,
-      "request_sha256": "7a000414f64bcf62af085155380439d3dba22f7c7d340830d5076c111ad52bec",
-      "response": "golden_messages/old_minor.response.bin",
-      "response_bytes": 92,
-      "response_sha256": "c20a54d58e6dabf0f8e40e9fe41da3a9bb341b31dd3db161456060de67f45710",
+      "request_sha256": "0ae9b328d3d3ba3447bb67600810bf9d6cce5354683585f571f7a18c3223ce2d",
+      "response": "golden_messages/incompatible_protocol_version.response.bin",
+      "response_bytes": 108,
+      "response_sha256": "e2ebccd9274144a3675135c025006bc632dea8256ae9b282ac76b713cdebd476",
       "worker_exit_code": 0
     },
     {
       "name": "unknown_optional_field",
       "request": "golden_messages/unknown_optional_field.request.bin",
       "request_bytes": 124,
-      "request_sha256": "a856392af7f7bb14f33e124ff76919cdd8dd72a1d04d4c2917a72643ca9f546c",
+      "request_sha256": "27792b2f409430f4bbb676e0c12850dea63c732c9886af47e8aa6180b5d7c793",
       "response": "golden_messages/unknown_optional_field.response.bin",
       "response_bytes": 92,
-      "response_sha256": "89efc411917510392efe85c2dbc4dd63c6bdbd9a9ea2a3b3ac68067293ca422b",
+      "response_sha256": "84b916bae551f0b4672a29bd16e4ee31e927b7270f1ae5bae081743a08ce8629",
       "worker_exit_code": 0
     },
     {
       "name": "event_gap",
       "request": "golden_messages/event_gap.request.bin",
       "request_bytes": 116,
-      "request_sha256": "e6b211b6a9e8884a0e069f610246e973eb36b4d2f57d216ecec168df2673fc34",
+      "request_sha256": "7351e6da262be6286e76b6ac3af4e750abb2050c9d73eb81eac1cc0d0c356929",
       "response": "golden_messages/event_gap.response.bin",
       "response_bytes": 156,
-      "response_sha256": "42d9e9f379405981e5b678d50d14e64c93aec3e11622b594e17150adf1f91bbe",
+      "response_sha256": "5ee763dc393aab95db176e1155b415d87ad18f10b270c4beff297f6ef111a9ca",
       "worker_exit_code": 0
     },
     {
       "name": "backpressure",
       "request": "golden_messages/backpressure.request.bin",
       "request_bytes": 116,
-      "request_sha256": "51b5374722666964eb6462c52bac697b1460d5fddf6cf481388b3e5959e9cb9e",
+      "request_sha256": "a815d50acbab334a313d74e41dd8a783929ab834cd6e7a8383c4b8b456d686bf",
       "response": "golden_messages/backpressure.response.bin",
       "response_bytes": 108,
-      "response_sha256": "67b12e08a0760e7c25b9fa4a584cfe2e1a33043f317a3146465d8b5ce0c31d46",
+      "response_sha256": "3b26ce722abb04910eb7989d752f0b0bfa9615709a06f2504f57bc7f0635249d",
       "worker_exit_code": 0
     },
     {
       "name": "device_loss",
       "request": "golden_messages/device_loss.request.bin",
       "request_bytes": 116,
-      "request_sha256": "387d214d315eeb79abe05469d659470f25db2b8dc4f5a6f4cfbb50f26b8ab5d5",
+      "request_sha256": "902f839794540268476400cf9fe39f0bc2d87f12a813544716ddd1631e9e6fd0",
       "response": "golden_messages/device_loss.response.bin",
       "response_bytes": 148,
-      "response_sha256": "75eea1198eac22bc75e581e27a9481f3a5cfa56a8ed71ba242e70530de897025",
+      "response_sha256": "ad7d5a19ccda5bdc0534c8fd055bfacae8172800864c6b3796d1c23036a6b2fb",
       "worker_exit_code": 0
     },
     {
       "name": "worker_crash",
       "request": "golden_messages/worker_crash.request.bin",
       "request_bytes": 116,
-      "request_sha256": "89c345f398f589f7efc88bba38d9b0b3919c32be3a0e84b9cb98482b502a28d3",
+      "request_sha256": "190b5fa23a7fcbaefd71f34b062298669b2360143b5c18a9ba17070e69f616da",
       "response": "golden_messages/worker_crash.response.bin",
       "response_bytes": 0,
       "response_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -111,17 +111,17 @@
       "request_sha256": "9e3cab7d07b6fad0397be91b0c02a98610a5ecd02b5209055f214bc6d39e0600",
       "response": "golden_messages/malformed_message.response.bin",
       "response_bytes": 128,
-      "response_sha256": "546c41f50934ca1e4e7ea6dc5d29e88acbbbff37daa215c4c1439f137660228c",
+      "response_sha256": "45cacdd68091626a6bf4adea52e0eb20952ac9149314e566b1f670cb7fa33451",
       "worker_exit_code": 0
     },
     {
       "name": "truncated_message",
       "request": "golden_messages/truncated_message.request.bin",
       "request_bytes": 107,
-      "request_sha256": "df813c0c13685a17b1c05aad4aa9655ad4cee0cc9a53e6189750aa2ab0b4ac87",
+      "request_sha256": "10fd5db8669996c4f214a8edfc54bfeec448e4805a3eb2269ec854bb486c6055",
       "response": "golden_messages/truncated_message.response.bin",
       "response_bytes": 128,
-      "response_sha256": "546c41f50934ca1e4e7ea6dc5d29e88acbbbff37daa215c4c1439f137660228c",
+      "response_sha256": "45cacdd68091626a6bf4adea52e0eb20952ac9149314e566b1f670cb7fa33451",
       "worker_exit_code": 0
     },
     {
@@ -131,9 +131,9 @@
       "request_sha256": "7cbf6392784b4b6db6cf35518924ffb236297171d5094691e6d67c047665ffef",
       "response": "golden_messages/oversized_message.response.bin",
       "response_bytes": 128,
-      "response_sha256": "546c41f50934ca1e4e7ea6dc5d29e88acbbbff37daa215c4c1439f137660228c",
+      "response_sha256": "45cacdd68091626a6bf4adea52e0eb20952ac9149314e566b1f670cb7fa33451",
       "worker_exit_code": 0
     }
   ],
-  "schema": "ure.public.mock-scenarios/0.1"
+  "schema": "ure.public.mock-scenarios/1.0"
 }

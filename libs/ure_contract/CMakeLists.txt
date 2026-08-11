@@ -1,10 +1,10 @@
 if(NOT WIN32 OR NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-    message(STATUS "PB.2 candidate runtime disabled outside the Windows x64 MSVC profile")
+    message(STATUS "Core 1.0 runtime disabled outside the Windows x64 MSVC profile")
     return()
 endif()
 
 set(UR_CONTRACT_RUNTIME_INPUT
-    "UltraRender.RuntimeCandidate.v1|${CMAKE_CXX_COMPILER_ID}|${CMAKE_CXX_COMPILER_VERSION}|${MSVC_TOOLSET_VERSION}|${CMAKE_SYSTEM_VERSION}|windows-x64-msvc-c11")
+    "UltraRender.Runtime.Core1|${CMAKE_CXX_COMPILER_ID}|${CMAKE_CXX_COMPILER_VERSION}|${MSVC_TOOLSET_VERSION}|${CMAKE_SYSTEM_VERSION}|windows-x64-msvc-c11")
 foreach(source
     ${CMAKE_SOURCE_DIR}/CMakeLists.txt
     ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
@@ -16,9 +16,10 @@ foreach(source
     ${CMAKE_CURRENT_SOURCE_DIR}/src/scene_transaction.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/session_adapter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime_adapter.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/abi_core_1_0.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime_objects.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/private_conformance.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ultrarender_runtime_candidate.def
+    ${CMAKE_CURRENT_SOURCE_DIR}/ultrarender_runtime_1.def
     ${CMAKE_SOURCE_DIR}/libs/ure_public/include/ultrarender/ure_loader.h
     ${CMAKE_SOURCE_DIR}/libs/ure_public/include/ultrarender/ure_registry.h)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${source})
@@ -40,7 +41,7 @@ add_library(ure_contract SHARED
     src/scene_adapter.cpp
     src/scene_transaction.cpp
     src/session_adapter.cpp
-    ultrarender_runtime_candidate.def)
+    ultrarender_runtime_1.def)
 target_link_libraries(ure_contract PRIVATE ure_public ure_contract_schema ure_core ure_sceneio bcrypt)
 target_include_directories(ure_contract PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -48,7 +49,7 @@ target_include_directories(ure_contract PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party)
 target_compile_definitions(ure_contract PRIVATE URE_PUBLIC_IMPLEMENTATION)
 set_target_properties(ure_contract PROPERTIES
-    OUTPUT_NAME ultrarender_runtime_candidate
+    OUTPUT_NAME ultrarender_runtime_1
     PREFIX ""
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON
@@ -56,7 +57,7 @@ set_target_properties(ure_contract PROPERTIES
 
 if(MSVC)
     target_compile_options(ure_contract PRIVATE /W4 /WX /utf-8 /EHsc /wd4819)
-    target_link_options(ure_contract PRIVATE /Brepro /DEF:${CMAKE_CURRENT_SOURCE_DIR}/ultrarender_runtime_candidate.def)
+    target_link_options(ure_contract PRIVATE /Brepro /DEF:${CMAKE_CURRENT_SOURCE_DIR}/ultrarender_runtime_1.def)
 else()
     target_compile_options(ure_contract PRIVATE -Wall -Wextra -pedantic)
 endif()
@@ -69,7 +70,7 @@ add_library(ure_contract_conformance SHARED
     src/scene_adapter.cpp
     src/scene_transaction.cpp
     src/session_adapter.cpp
-    ultrarender_runtime_candidate.def)
+    ultrarender_runtime_1.def)
 target_link_libraries(ure_contract_conformance PRIVATE ure_public ure_contract_schema ure_core ure_sceneio bcrypt)
 target_include_directories(ure_contract_conformance PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -87,10 +88,10 @@ set_target_properties(ure_contract_conformance PROPERTIES
 target_compile_options(ure_contract_conformance PRIVATE /W4 /WX /utf-8 /EHsc /wd4819)
 target_link_options(ure_contract_conformance PRIVATE
     /Brepro
-    /DEF:${CMAKE_CURRENT_SOURCE_DIR}/ultrarender_runtime_candidate.def)
+    /DEF:${CMAKE_CURRENT_SOURCE_DIR}/ultrarender_runtime_1.def)
 
 install(TARGETS ure_contract
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES ${CMAKE_SOURCE_DIR}/contracts/abi/windows_x64_candidate.json
+install(FILES ${CMAKE_SOURCE_DIR}/contracts/abi/windows_x64_core_1_0.json
     DESTINATION ${CMAKE_INSTALL_DATADIR}/ultrarender/abi)

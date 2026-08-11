@@ -22,12 +22,12 @@
 #include <ure/native_scene_hash.hpp>
 #include <ure/native_scene_uuid.hpp>
 
-#include "ure_scene_candidate_generated.h"
+#include "ure_scene_v1_generated.h"
 
 namespace ure::contract {
 namespace {
 
-namespace fb = ultrarender::contract::candidate;
+namespace fb = ultrarender::contract::v1;
 using native_scene::Uuid;
 using Digest = std::array<std::uint8_t, 32>;
 

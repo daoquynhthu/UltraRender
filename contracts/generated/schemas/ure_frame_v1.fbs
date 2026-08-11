@@ -1,6 +1,6 @@
-include "ure_payload_candidate.fbs";
+include "ure_payload_v1.fbs";
 
-namespace ultrarender.contract.candidate;
+namespace ultrarender.contract.v1;
 
 table FramePlaneDescriptor {
   semantic_id:uint (id: 0);

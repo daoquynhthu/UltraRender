@@ -1,0 +1,72 @@
+include "ure_payload_v1.fbs";
+include "ure_frame_v1.fbs";
+include "ure_scene_v1.fbs";
+
+namespace ultrarender.contract.v1;
+
+enum MessageKind:uint {
+  HandshakeRequest = 500,
+  HandshakeResponse = 501,
+  OperationRequest = 504,
+  OperationResponse = 505,
+  Event = 506,
+  FrameReady = 507,
+  Shutdown = 508,
+  ReleaseLease = 509,
+  ReleaseLeaseResponse = 510
+}
+
+table WorkerHandshake {
+  protocol_min_major:ushort (id: 0);
+  protocol_min_minor:ushort (id: 1);
+  protocol_max_major:ushort (id: 2);
+  protocol_max_minor:ushort (id: 3);
+  core_min_major:ushort (id: 4);
+  core_min_minor:ushort (id: 5);
+  core_max_major:ushort (id: 6);
+  core_max_minor:ushort (id: 7);
+  frame_schema_min_major:ushort (id: 8);
+  frame_schema_min_minor:ushort (id: 9);
+  frame_schema_max_major:ushort (id: 10);
+  frame_schema_max_minor:ushort (id: 11);
+  registry_digest:[ubyte] (id: 12);
+  frontend_build_digest:[ubyte] (id: 13);
+  runtime_build_digest:[ubyte] (id: 14);
+  required_capabilities:[uint] (id: 15);
+  optional_capabilities:[uint] (id: 16);
+  transport_features:ulong (id: 17);
+  max_control_bytes:ulong (id: 18);
+  max_blob_bytes:ulong (id: 19);
+  max_frame_bytes:ulong (id: 20);
+  client_process_id:uint (id: 21);
+  worker_instance_identity:[ubyte] (id: 22);
+}
+
+table WorkerEnvelope {
+  protocol_major:ushort (id: 0);
+  protocol_minor:ushort (id: 1);
+  registry_digest:[ubyte] (id: 2);
+  sequence:ulong (id: 3);
+  message_kind:MessageKind = HandshakeRequest (id: 4);
+  operation_kind:uint (id: 5);
+  required_capabilities:[uint] (id: 6);
+  optional_capabilities:[uint] (id: 7);
+  result:ResultCode = Success (id: 8);
+  error:ErrorDescriptor (id: 9);
+  operation:OperationDescriptor (id: 10);
+  event:EventDescriptor (id: 11);
+  frame:FrameReadyDescriptor (id: 12);
+  shared_blob:SharedBlobDescriptor (id: 13);
+  payload:[ubyte] (id: 14);
+  flags:uint (id: 15);
+  correlation_id:ulong (id: 16);
+  instance_id:ulong (id: 17);
+  payload_schema:uint (id: 18);
+  payload_version_major:ushort (id: 19);
+  payload_version_minor:ushort (id: 20);
+  declared_payload_bytes:ulong (id: 21);
+  handshake:WorkerHandshake (id: 22);
+}
+
+root_type WorkerEnvelope;
+file_identifier "URW1";

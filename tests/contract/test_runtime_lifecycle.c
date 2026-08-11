@@ -33,7 +33,8 @@ static const void* query_table(ure_query_interface_fn query,
     request.header.type = URE_STRUCTURE_INTERFACE_QUERY;
     request.header.size = (uint32_t)sizeof(request);
     memcpy(request.interface_id.bytes, id, 16);
-    request.maximum_minor = 1;
+    request.minimum_major = 1;
+    request.maximum_major = 1;
     response.header.type = URE_STRUCTURE_INTERFACE_RESPONSE;
     response.header.size = (uint32_t)sizeof(response);
     if (query(&request, &response, &diag) != URE_RESULT_SUCCESS ||
@@ -60,12 +61,13 @@ static DWORD WINAPI query_thread(void* parameter) {
             diagnostic(text, (uint32_t)sizeof(text));
         request.header.type = URE_STRUCTURE_RUNTIME_MANIFEST_REQUEST;
         request.header.size = (uint32_t)sizeof(request);
-        request.maximum_minor = 1;
+        request.minimum_major = 1;
+        request.maximum_major = 1;
         manifest.header.type = URE_STRUCTURE_RUNTIME_MANIFEST;
         manifest.header.size = (uint32_t)sizeof(manifest);
         if (context->get_manifest(&request, &manifest, &diag) !=
                 URE_RESULT_SUCCESS ||
-            manifest.runtime_minor != 1 ||
+            manifest.runtime_major != 1 || manifest.runtime_minor != 0 ||
             manifest.abi_manifest_json.size == 0) {
             InterlockedIncrement(&context->failures);
         }
@@ -223,7 +225,7 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
                                           &error) == URE_RESULT_SUCCESS);
         CHECK(descriptor.enabled && descriptor.applicable &&
               descriptor.runtime_state == URE_RUNTIME_STATE_APPLICABLE);
-        CHECK(descriptor.version_major == 0 && descriptor.version_minor == 1 &&
+        CHECK(descriptor.version_major == 1 && descriptor.version_minor == 0 &&
               descriptor.version_patch == 0);
         CHECK(descriptor.stability == URE_STABILITY_CORE &&
               descriptor.maturity == URE_MATURITY_NOT_APPLICABLE);

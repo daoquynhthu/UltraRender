@@ -8,7 +8,7 @@ This file defines the rules, conventions, and workflow that any AI agent must fo
 
 ## 1. Project Identity
 
-**UltraRender** is a research-oriented spectral/polarimetric renderer whose current complete-scene reference backend is CUDA. Its forward roadmap develops automatic estimator composition, measurement reconstruction, a unified time-varying physical world, and differentiable inverse workflows without weakening the existing physically explicit boundaries. Phase PB currently has priority: it establishes a minimal client interaction grammar through one generated contract registry, a Windows x64 C ABI, and an isolated local worker without freezing those research subsystems.
+**UltraRender** is a research-oriented spectral/polarimetric renderer whose current complete-scene reference backend is CUDA. Its forward roadmap develops automatic estimator composition, measurement reconstruction, a unified time-varying physical world, and differentiable inverse workflows without weakening the existing physically explicit boundaries. Phase PB established a minimal client interaction grammar through one generated contract registry, a Windows x64 C ABI, and an isolated local worker without freezing those research subsystems; the high-order route has resumed at HR.3.
 
 ### Architecture (Modular — Phase F Target State)
 
@@ -32,13 +32,13 @@ ure_cli       — Thin orchestrator EXE; links ure_core + ure_sceneio + ure_conf
 ### Phase PB Approved Target (implemented progressively)
 
 ```text
-contracts      — Single source for public IDs, schemas, manifests, compatibility baselines, golden messages and validation-report schema (PB.0-PB.7 implemented).
-ure_public     — Generated C11-compatible loader/value headers; contains no renderer or backend implementation (PB.1 implemented as Candidate).
-ure_contract   — Candidate product runtime DLL with two bootstrap exports and lifecycle/Frame/Scene/Session/transaction tables (PB.7 validated).
-ure_worker     — Candidate local Windows worker that loads the product runtime only through the public loader ABI and applies bounded scene transactions/renders (PB.7 validated).
+contracts      — Single source for public IDs, schemas, manifests, compatibility baselines, golden messages and validation-report schemas (Core ABI / Worker Protocol 1.0 declared).
+ure_public     — Generated C11-compatible Core 1.0 loader/value headers; contains no renderer or backend implementation.
+ure_contract   — Release-named Windows x64 runtime with two bootstrap exports and audited lifecycle/Frame/Scene/Session Core tables; transactions are an UnstableExtension.
+ure_worker     — Release-named local Windows worker that loads the product runtime only through the public loader ABI and applies bounded scene transactions/renders.
 ```
 
-PB.0-PB.7 remain Candidate 0.x and create no stable public promise. The current `ure_c_api.h`, `pyure_native.dll`, and pyure ctypes surface remain legacy experimental during migration.
+PB.0-PB.7 remain Candidate 0.x history and create no stable public promise. PB.8 declared Core ABI 1.0 and Worker Protocol 1.0 on Windows x64; this is not an UltraRender 1.0 product release or public package distribution. The current `ure_c_api.h`, `pyure_native.dll`, and pyure ctypes surface remain legacy experimental during migration.
 
 ### Phase Completion Status (see PLAN.md for details)
 
@@ -69,8 +69,8 @@ PB.0-PB.7 remain Candidate 0.x and create no stable public promise. The current 
 | V (GPU Acceleration) | Done | V.0-V.11 complete; unified local/farm validation freezes construction, traversal, memory, parity, dynamic and distributed evidence |
 | W (Wave Optics Solver) | Done | W.0-W.12 complete within the declared production/reference boundary; unified physical, API, fail-loud, distributed and static validation closed |
 | U (USD/Hydra Adapter) | Done | U.1-U.6 complete; schema adapter, actual-OpenUSD delegate, mesh/material conversion, progressive RenderSession bridge and strict native-to-USDA export closed |
-| HO (High-order capabilities) | Paused after HR.2 | HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 complete; HR.3 resumes after Phase PB |
-| PB (Public Boundary) | Awaiting approval gate | PB.0-PB.7 complete; current cursor: `PB.8 — Stable 1.0 declaration gate`, which requires separate explicit approval |
+| HO (High-order capabilities) | HR.3 active | HO.0-HO.2, HT.0-HT.5 and HR.0-HR.2 complete; HR.3 resumed after Phase PB |
+| PB (Public Boundary) | Done | PB.0-PB.7 retained as Candidate history; PB.8 declared Windows x64 Core ABI 1.0 and Worker Protocol 1.0 |
 | **Cleanup** | **Done** | **GPU tests include paths migrated; old `include/` + `src/` + `tests/{unit,integration}` + legacy CMake block removed** |
 
 ### Core Commitments
@@ -249,9 +249,9 @@ ctest --test-dir build_modular_x64 -C Release -R "test_gltf_frontend|gpu_tangent
 | Vulkan | `vulkan_runtime`, `vulkan_acceleration` |
 | D3D12 | `d3d12_runtime` |
 | Multi-backend | `multi_backend_inventory` |
-| Public boundary | `test_public_boundary_audit`, `test_contract_registry`, `test_public_headers_cpp`, `test_contract_codegen_compare`, `test_contract_schema_conform`, `test_scene_contract_schema_conform`, `test_public_loader_header_mirror`, `test_public_registry_header_mirror`, `test_contract_codegen_negative`, `test_golden_message_mirror`, `test_scene_uuid_golden`, `test_phase_pb6_static`, `test_phase_pb7_static`, `test_mock_worker_external_client`, `test_candidate_abi_layout`, `test_candidate_loader_exports`, `test_candidate_loader_client`, `test_runtime_lifecycle`, `test_frame_leases`, `test_scene_boundary`, `test_scene_transaction`, `test_worker_protocol`, `test_worker_crash`, `test_scene_worker`, `test_worker_security`, `test_worker_runtime_security`, `test_pb7_fuzz`, `test_candidate_compatibility`, `test_external_client_package` |
+| Public boundary | `test_public_boundary_audit`, `test_contract_registry`, `test_public_headers_cpp`, `test_contract_codegen_compare`, `test_contract_schema_conform`, `test_scene_contract_schema_conform`, `test_public_loader_header_mirror`, `test_public_registry_header_mirror`, `test_contract_codegen_negative`, `test_golden_message_mirror`, `test_scene_uuid_golden`, `test_phase_pb6_static`, `test_phase_pb7_static`, `test_phase_pb8_static`, `test_mock_worker_external_client`, `test_core_1_0_abi_layout`, `test_core_1_0_loader_exports`, `test_core_1_0_loader_client`, `test_runtime_lifecycle`, `test_frame_leases`, `test_scene_boundary`, `test_scene_transaction`, `test_worker_protocol`, `test_worker_crash`, `test_scene_worker`, `test_worker_security`, `test_worker_runtime_security`, `test_pb7_fuzz`, `test_core_1_0_compatibility`, `test_external_client_package` |
 | Optional Hydra build | `test_hydra_render_delegate`, `test_hydra_plugin_discovery`, `test_hydra_mesh_rprim`, `test_hydra_material_sprim`, `test_hydra_render_buffer`, `test_hydra_progressive_render`, plus SDK-only `test_usda_export` |
-| **CTest total** | **100 registered tests** in `build_modular_x64` |
+| **CTest total** | **101 registered tests** in `build_modular_x64` at the PB.8 declaration snapshot |
 
 ### Test Writing Rules
 - GPU kernel tests: render a minimal scene (1 sphere + environment), produce 4x4 pixel block, compare against known-correct values
@@ -529,11 +529,13 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 74 | 2026-08-09 PB.5 | Closed the Candidate native full-scene and real render boundary | The 151-entry registry generates Scene/Session tables and native-scene/objective worker schemas. Phase Q validates bounded memory/file/package blobs; accepted revisions bind content, semantic, resource, schema and package identities and replace atomically. The two-export product runtime and worker run the same CUDA automatic session and immutable frame path; corrupt/ambiguous packages, unsupported schemas, missing resources, budgets, active-work replacement, device loss, and direct/worker parity pass with the Release 91/91 gate. The cursor advances to PB.6 without creating a stable promise. |
 | 75 | 2026-08-09 PB.6 | Closed persistent UUID scene transactions and canonical camera semantics | SceneIR schema 2 persists deterministic RFC 9562 UUIDs while retaining aliases; the 180-entry Candidate registry generates atomic base-revision transactions for the direct Scene table and product worker. Exact edits, explicit full-reload fallback, rollback, conflict/retry, canonical physical camera, semantic replay and frame-identity parity pass with the Release 95/95 gate. The cursor advances to PB.7 without creating a stable promise. |
 | 76 | 2026-08-09 PB.7 | Closed Candidate mixed-version, security, package and independent-client validation | Five historical compiled clients bind their source/SDK/compiler identities and load the current runtime through phase-known prefixes; only the current runtime is retained as supported in reverse. Independent SDK/runtime packages build clean direct, transaction and worker consumers. Registry-mismatch goldens, bounded fuzz, live no-network/no-ambient-discovery, shared-memory/crash/restart and ledger gates feed deterministic `ure.phase_pb.validation.v1`; Release 100/100 and clean-tree report reproduction pass. PB.8 remains an unapproved stable-promise gate. |
+| 77 | 2026-08-11 PB.8 implementation | Staged the audited Core 1.0 and Worker Protocol 1.0 freeze candidate | Eleven pre-release Core IDs are tombstoned; telemetry, spectral/Stokes planes, renderer strategies and UUID transactions moved out of Core, with transactions isolated behind an UnstableExtension table and no initial StableExtension. Frozen-prefix validation, release-named packages, a retained PB.7-layout seed, three external calling modes and six real PFM renders are implemented. Full validation and post-REPORT stable declaration approval remain open. |
+| 78 | 2026-08-11 PB.8 declaration | Declared the bounded Windows x64 client contracts and resumed the high-order route | Core ABI 1.0 and Worker Protocol 1.0 are stable contracts, not an UltraRender 1.0 product release. Apache License 2.0 now governs project code; declared packages remain locally staged and not publicly distributed. The user separately authorized a scoped declaration tag; HR.3 is the current cursor. |
 
 ### Consolidated Truth
 
 - The authoritative build tree is `build_modular_x64` using Ninja and the Visual Studio 2026 x64 toolchain.
-- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2 and PB.0-PB.7 are complete. HR.3 is suspended and the authoritative cursor is the unapproved `PB.8 — Stable 1.0 declaration gate`. The approved architecture and detailed execution authority are `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Boundary_PLAN.md`. PB establishes a minimal client boundary, not the former Phase X plugin ecosystem; PB.0-PB.7 remain Candidate 0.x with no stable promise.
+- Phase Q, Phase M, Phase R, Phase T, Phase V, the declared bounded scope of Phase W, Phase U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2 and PB.0-PB.8 are complete. Core ABI 1.0 and Worker Protocol 1.0 are declared only for the documented Windows x64 boundary; there is no UltraRender 1.0 product release or public package distribution. The authoritative cursor is HR.3. The approved PB architecture and closure record are `docs/Public_API_ABI_Architecture.md` and `docs/PB_Public_Boundary_PLAN.md`; PB.0-PB.7 remain Candidate 0.x history with no retroactive promise.
 - The CUDA automatic bridge does not yet populate every high-order measurement plane, HR.1/HR.2 reconstruction remains explicit, and HR.2 ships no trained model or production inference ABI. Future high-order capabilities enter the public boundary through independently versioned extensions instead of expanding stable Core.
 - The repository `gui/` tree is abandoned and excluded from inspection, development, migration and acceptance evidence. A future Studio/editor is an independent client of generated PB fixtures and packages.
 - The four generated glTF scenes and their three deterministic generator scripts are retained as project test assets.

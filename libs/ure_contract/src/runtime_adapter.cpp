@@ -20,9 +20,9 @@ template <class T> void field(Json &type, std::string_view name, std::size_t off
 
 Json build_manifest() {
     Json root{
-        {"schema", "ure.public.abi-layout/windows-x64/0.1"},
-        {"publication_state", "Candidate"},
-        {"compatibility_promise", "None before PB.8"},
+        {"schema", "ure.public.abi-layout/windows-x64/1.0"},
+        {"publication_state", "Stable"},
+        {"compatibility_promise", "Core ABI 1.x within the published support window"},
         {"platform_profile", "windows-x64-msvc-c11"},
         {"calling_convention", "windows-x64-c"},
         {"pointer_size", sizeof(void *)},
@@ -35,9 +35,9 @@ Json build_manifest() {
         {"registry_digest", URE_REGISTRY_DIGEST_HEX},
         {"runtime_build_digest", URE_RUNTIME_BUILD_DIGEST},
         {"runtime_build_digest_scheme", "sha256(domain|toolchain|runtime-sources|public-headers)"},
-        {"core_abi_range", Json{{"minimum", "0.1"}, {"maximum", "0.1"}}},
+        {"core_abi_range", Json{{"minimum", "1.0"}, {"maximum", "1.0"}}},
         {"worker_protocol_range",
-         Json{{"minimum", "0.1"}, {"maximum", "0.1"}, {"implementation", "product_and_conformance"}}},
+          Json{{"minimum", "1.0"}, {"maximum", "1.0"}, {"implementation", "product_and_conformance"}}},
         {"limits", Json{{"maximum_structure_chain", 32},
                         {"maximum_message_bytes", 1048576},
                         {"maximum_event_capacity", 4096},
@@ -48,6 +48,7 @@ Json build_manifest() {
                           {"external_execution", true}}}};
 
     auto &types = root["types"];
+    auto &extension_types = root["unstable_extension_types"];
     types["ure_input_header_t"] = layout<ure_input_header_t>();
     field<std::uint32_t>(types["ure_input_header_t"], "type", offsetof(ure_input_header_t, type));
     field<std::uint32_t>(types["ure_input_header_t"], "size", offsetof(ure_input_header_t, size));
@@ -243,33 +244,33 @@ Json build_manifest() {
     field<std::uint32_t>(types["ure_native_scene_blob_t"], "schema_max_minor", offsetof(ure_native_scene_blob_t, schema_max_minor));
     field<ure_scene_budget_t>(types["ure_native_scene_blob_t"], "budget", offsetof(ure_native_scene_blob_t, budget));
     field<std::uint64_t[2]>(types["ure_native_scene_blob_t"], "reserved", offsetof(ure_native_scene_blob_t, reserved));
-    types["ure_scene_transaction_t"] = layout<ure_scene_transaction_t>();
-    field<ure_input_header_t>(types["ure_scene_transaction_t"], "header", offsetof(ure_scene_transaction_t, header));
-    field<ure_uuid_t>(types["ure_scene_transaction_t"], "transaction_id", offsetof(ure_scene_transaction_t, transaction_id));
-    field<std::uint64_t>(types["ure_scene_transaction_t"], "base_revision", offsetof(ure_scene_transaction_t, base_revision));
-    field<std::uint32_t>(types["ure_scene_transaction_t"], "payload_schema", offsetof(ure_scene_transaction_t, payload_schema));
-    field<std::uint32_t>(types["ure_scene_transaction_t"], "payload_version_major", offsetof(ure_scene_transaction_t, payload_version_major));
-    field<std::uint32_t>(types["ure_scene_transaction_t"], "payload_version_minor", offsetof(ure_scene_transaction_t, payload_version_minor));
-    field<std::uint32_t>(types["ure_scene_transaction_t"], "max_operation_count", offsetof(ure_scene_transaction_t, max_operation_count));
-    field<std::uint64_t>(types["ure_scene_transaction_t"], "max_payload_bytes", offsetof(ure_scene_transaction_t, max_payload_bytes));
-    field<ure_byte_span_t>(types["ure_scene_transaction_t"], "payload", offsetof(ure_scene_transaction_t, payload));
-    field<ure_digest256_t>(types["ure_scene_transaction_t"], "payload_digest", offsetof(ure_scene_transaction_t, payload_digest));
-    field<std::uint64_t[2]>(types["ure_scene_transaction_t"], "reserved", offsetof(ure_scene_transaction_t, reserved));
-    types["ure_scene_transaction_result_t"] = layout<ure_scene_transaction_result_t>();
-    field<ure_output_header_t>(types["ure_scene_transaction_result_t"], "header", offsetof(ure_scene_transaction_result_t, header));
-    field<ure_uuid_t>(types["ure_scene_transaction_result_t"], "transaction_id", offsetof(ure_scene_transaction_result_t, transaction_id));
-    field<std::uint32_t>(types["ure_scene_transaction_result_t"], "strategy", offsetof(ure_scene_transaction_result_t, strategy));
-    field<std::uint32_t>(types["ure_scene_transaction_result_t"], "reset_reason", offsetof(ure_scene_transaction_result_t, reset_reason));
-    field<std::uint64_t>(types["ure_scene_transaction_result_t"], "base_revision", offsetof(ure_scene_transaction_result_t, base_revision));
-    field<std::uint64_t>(types["ure_scene_transaction_result_t"], "resulting_revision", offsetof(ure_scene_transaction_result_t, resulting_revision));
-    field<ure_digest256_t>(types["ure_scene_transaction_result_t"], "revision_identity", offsetof(ure_scene_transaction_result_t, revision_identity));
-    field<ure_digest256_t>(types["ure_scene_transaction_result_t"], "semantic_digest", offsetof(ure_scene_transaction_result_t, semantic_digest));
-    field<std::uint32_t>(types["ure_scene_transaction_result_t"], "applied_operation_count", offsetof(ure_scene_transaction_result_t, applied_operation_count));
-    field<std::uint32_t>(types["ure_scene_transaction_result_t"], "warning_count", offsetof(ure_scene_transaction_result_t, warning_count));
-    field<std::uint64_t>(types["ure_scene_transaction_result_t"], "result_required", offsetof(ure_scene_transaction_result_t, result_required));
-    field<std::uint64_t>(types["ure_scene_transaction_result_t"], "result_written", offsetof(ure_scene_transaction_result_t, result_written));
-    field<ure_mutable_byte_span_t>(types["ure_scene_transaction_result_t"], "result_payload", offsetof(ure_scene_transaction_result_t, result_payload));
-    field<std::uint64_t[2]>(types["ure_scene_transaction_result_t"], "reserved", offsetof(ure_scene_transaction_result_t, reserved));
+    extension_types["ure_scene_transaction_t"] = layout<ure_scene_transaction_t>();
+    field<ure_input_header_t>(extension_types["ure_scene_transaction_t"], "header", offsetof(ure_scene_transaction_t, header));
+    field<ure_uuid_t>(extension_types["ure_scene_transaction_t"], "transaction_id", offsetof(ure_scene_transaction_t, transaction_id));
+    field<std::uint64_t>(extension_types["ure_scene_transaction_t"], "base_revision", offsetof(ure_scene_transaction_t, base_revision));
+    field<std::uint32_t>(extension_types["ure_scene_transaction_t"], "payload_schema", offsetof(ure_scene_transaction_t, payload_schema));
+    field<std::uint32_t>(extension_types["ure_scene_transaction_t"], "payload_version_major", offsetof(ure_scene_transaction_t, payload_version_major));
+    field<std::uint32_t>(extension_types["ure_scene_transaction_t"], "payload_version_minor", offsetof(ure_scene_transaction_t, payload_version_minor));
+    field<std::uint32_t>(extension_types["ure_scene_transaction_t"], "max_operation_count", offsetof(ure_scene_transaction_t, max_operation_count));
+    field<std::uint64_t>(extension_types["ure_scene_transaction_t"], "max_payload_bytes", offsetof(ure_scene_transaction_t, max_payload_bytes));
+    field<ure_byte_span_t>(extension_types["ure_scene_transaction_t"], "payload", offsetof(ure_scene_transaction_t, payload));
+    field<ure_digest256_t>(extension_types["ure_scene_transaction_t"], "payload_digest", offsetof(ure_scene_transaction_t, payload_digest));
+    field<std::uint64_t[2]>(extension_types["ure_scene_transaction_t"], "reserved", offsetof(ure_scene_transaction_t, reserved));
+    extension_types["ure_scene_transaction_result_t"] = layout<ure_scene_transaction_result_t>();
+    field<ure_output_header_t>(extension_types["ure_scene_transaction_result_t"], "header", offsetof(ure_scene_transaction_result_t, header));
+    field<ure_uuid_t>(extension_types["ure_scene_transaction_result_t"], "transaction_id", offsetof(ure_scene_transaction_result_t, transaction_id));
+    field<std::uint32_t>(extension_types["ure_scene_transaction_result_t"], "strategy", offsetof(ure_scene_transaction_result_t, strategy));
+    field<std::uint32_t>(extension_types["ure_scene_transaction_result_t"], "reset_reason", offsetof(ure_scene_transaction_result_t, reset_reason));
+    field<std::uint64_t>(extension_types["ure_scene_transaction_result_t"], "base_revision", offsetof(ure_scene_transaction_result_t, base_revision));
+    field<std::uint64_t>(extension_types["ure_scene_transaction_result_t"], "resulting_revision", offsetof(ure_scene_transaction_result_t, resulting_revision));
+    field<ure_digest256_t>(extension_types["ure_scene_transaction_result_t"], "revision_identity", offsetof(ure_scene_transaction_result_t, revision_identity));
+    field<ure_digest256_t>(extension_types["ure_scene_transaction_result_t"], "semantic_digest", offsetof(ure_scene_transaction_result_t, semantic_digest));
+    field<std::uint32_t>(extension_types["ure_scene_transaction_result_t"], "applied_operation_count", offsetof(ure_scene_transaction_result_t, applied_operation_count));
+    field<std::uint32_t>(extension_types["ure_scene_transaction_result_t"], "warning_count", offsetof(ure_scene_transaction_result_t, warning_count));
+    field<std::uint64_t>(extension_types["ure_scene_transaction_result_t"], "result_required", offsetof(ure_scene_transaction_result_t, result_required));
+    field<std::uint64_t>(extension_types["ure_scene_transaction_result_t"], "result_written", offsetof(ure_scene_transaction_result_t, result_written));
+    field<ure_mutable_byte_span_t>(extension_types["ure_scene_transaction_result_t"], "result_payload", offsetof(ure_scene_transaction_result_t, result_payload));
+    field<std::uint64_t[2]>(extension_types["ure_scene_transaction_result_t"], "reserved", offsetof(ure_scene_transaction_result_t, reserved));
     types["ure_scene_validation_result_t"] = layout<ure_scene_validation_result_t>();
     field<ure_output_header_t>(types["ure_scene_validation_result_t"], "header", offsetof(ure_scene_validation_result_t, header));
     field<ure_bool32_t>(types["ure_scene_validation_result_t"], "valid", offsetof(ure_scene_validation_result_t, valid));
@@ -515,7 +516,9 @@ Json build_manifest() {
     field<decltype(ure_scene_interface_t::retain)>(types["ure_scene_interface_t"], "retain", offsetof(ure_scene_interface_t, retain));
     field<decltype(ure_scene_interface_t::release)>(types["ure_scene_interface_t"], "release", offsetof(ure_scene_interface_t, release));
     field<decltype(ure_scene_interface_t::get_revision)>(types["ure_scene_interface_t"], "get_revision", offsetof(ure_scene_interface_t, get_revision));
-    field<decltype(ure_scene_interface_t::apply_transaction)>(types["ure_scene_interface_t"], "apply_transaction", offsetof(ure_scene_interface_t, apply_transaction));
+    extension_types["ure_scene_transaction_interface_t"] = layout<ure_scene_transaction_interface_t>();
+    field<ure_interface_table_header_t>(extension_types["ure_scene_transaction_interface_t"], "header", offsetof(ure_scene_transaction_interface_t, header));
+    field<decltype(ure_scene_transaction_interface_t::apply_transaction)>(extension_types["ure_scene_transaction_interface_t"], "apply_transaction", offsetof(ure_scene_transaction_interface_t, apply_transaction));
     types["ure_session_interface_t"] = layout<ure_session_interface_t>();
     field<ure_interface_table_header_t>(types["ure_session_interface_t"], "header", offsetof(ure_session_interface_t, header));
     field<decltype(ure_session_interface_t::create)>(types["ure_session_interface_t"], "create", offsetof(ure_session_interface_t, create));
@@ -734,7 +737,7 @@ const std::array<std::uint8_t, 32> &runtime_build_digest() noexcept {
     return digest;
 }
 
-std::string_view runtime_identity() noexcept { return "UltraRender Candidate Runtime 0.1.0"; }
+std::string_view runtime_identity() noexcept { return "UltraRender Runtime 1.0.0"; }
 
 std::string_view abi_manifest_json() {
     static const std::string manifest = build_manifest().dump();

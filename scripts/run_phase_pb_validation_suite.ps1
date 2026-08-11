@@ -1,7 +1,7 @@
 param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [string]$BuildDir = (Join-Path $RepoRoot "build_modular_x64"),
-    [string]$ReportPath = (Join-Path $BuildDir "phase_pb_validation.json"),
+    [string]$ReportPath = (Join-Path $BuildDir "phase_pb_validation_v2.json"),
     [switch]$RequireClean
 )
 
@@ -55,32 +55,53 @@ if ($audit.unresolved_classification_count -ne 0 -or
 
 $tracked = @(& git -C $RepoRoot ls-files --cached --others --exclude-standard |
     Where-Object {
-        $_ -ne "docs/reports/phase_pb_validation.json" -and
+        $_ -notin @("docs/reports/phase_pb_validation.json", "docs/reports/phase_pb_validation_v2.json") -and
         (Test-Path -LiteralPath (Join-Path $RepoRoot $_) -PathType Leaf)
     } | ForEach-Object { Get-Item -LiteralPath (Join-Path $RepoRoot $_) })
 $sourceDigest = Get-TreeDigest $tracked $RepoRoot
-$runtime = Join-Path $BuildDir "libs/ure_contract/ultrarender_runtime_candidate.dll"
-$worker = Join-Path $BuildDir "apps/ure_worker/ure_worker.exe"
-$sdkManifest = Join-Path $BuildDir "pb7_packages/sdk/package_manifest.json"
-$runtimeManifest = Join-Path $BuildDir "pb7_packages/runtime/package_manifest.json"
-foreach ($required in @($runtime, $worker, $sdkManifest, $runtimeManifest)) {
+$runtime = Join-Path $BuildDir "libs/ure_contract/ultrarender_runtime_1.dll"
+$worker = Join-Path $BuildDir "apps/ure_worker/ultrarender_worker_1.exe"
+$sdkManifest = Join-Path $BuildDir "pb8_packages/sdk/package_manifest.json"
+$runtimeManifest = Join-Path $BuildDir "pb8_packages/runtime/package_manifest.json"
+$freezeReview = Join-Path $RepoRoot "contracts/stability/core_1_0_freeze_review.json"
+$callCoverage = Join-Path $RepoRoot "contracts/e2e/core_1_0_call_coverage.json"
+$compatibilityMatrix = Join-Path $RepoRoot "contracts/stability/core_1_0_compatibility_matrix.json"
+$seedManifest = Join-Path $RepoRoot "tests/fixtures/contracts/old_clients/core_1_0_seed_from_pb7/windows_x64/manifest.json"
+$reportSchema = Join-Path $RepoRoot "contracts/reports/ure_phase_pb_validation_v2.schema.json"
+foreach ($required in @($runtime, $worker, $sdkManifest, $runtimeManifest, $freezeReview, $callCoverage, $compatibilityMatrix, $seedManifest, $reportSchema)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
         throw "Required validation artifact is missing: $required"
     }
 }
 
-$oldClientManifests = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot "tests/fixtures/contracts/old_clients") -Filter manifest.json -File -Recurse |
+$preReleaseClientManifests = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot "tests/fixtures/contracts/old_clients") -Filter manifest.json -File -Recurse |
     Where-Object FullName -Match 'candidate_0_1_pb[2-6]' | Sort-Object FullName)
-if ($oldClientManifests.Count -ne 5) {
-    throw "Candidate client retention matrix is incomplete"
+if ($preReleaseClientManifests.Count -ne 5) {
+    throw "Pre-release client retention history is incomplete"
 }
-$compatibilityEntries = foreach ($manifest in $oldClientManifests) {
+$preReleaseClientEntries = foreach ($manifest in $preReleaseClientManifests) {
     $value = Get-Content -Raw -LiteralPath $manifest | ConvertFrom-Json
     [ordered]@{
         phase = $value.phase
         baseline_commit = $value.baseline_commit
         sdk_header_sha256 = $value.sdk_header_sha256
         binary_sha256 = $value.binary_sha256
+    }
+}
+
+$seed = Get-Content -Raw -LiteralPath $seedManifest | ConvertFrom-Json
+$imageRoot = Join-Path $BuildDir "pb8_external_client_build/rendered_images"
+$imageNames = @("direct_map.pfm", "direct_copy.pfm", "transaction_replay.pfm", "transaction_replace.pfm", "worker_first.pfm", "worker_restart.pfm")
+$imageEvidence = foreach ($name in $imageNames) {
+    $path = Join-Path $imageRoot $name
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 32) {
+        throw "Required rendered image evidence is missing or empty: $name"
+    }
+    [ordered]@{
+        calling_mode = if ($name.StartsWith("direct_")) { "in_process_core_c11" } elseif ($name.StartsWith("transaction_")) { "in_process_unstable_transaction_cpp" } else { "local_worker_named_pipe_shared_memory" }
+        file = $name
+        bytes = (Get-Item -LiteralPath $path).Length
+        sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
     }
 }
 
@@ -94,13 +115,17 @@ $fuzzFiles = @(
 $fuzzDigest = Get-TreeDigest $fuzzFiles $RepoRoot
 
 $core = [ordered]@{
-    schema = "ure.phase_pb.validation.v1"
-    publication_state = "Candidate"
-    compatibility_promise = "None before PB.8"
+    schema = "ure.phase_pb.validation.v2"
+    publication_state = "Stable"
+    declaration_state = "Declared"
+    compatibility_promise = "Core ABI 1.0 and local Worker Protocol 1.0 on Windows x64; this is not an UltraRender 1.0 product release and public distribution requires separate authorization"
     source = [ordered]@{
         tree_sha256 = $sourceDigest
         registry_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RepoRoot "contracts/generated/registry/public_contract_registry.canonical.json")).Hash.ToLowerInvariant()
-        registry_semantic_digest = "0e56eea2d03b2528ceefe2f686de3b63510d956738ee19cf107835abb297f554"
+        registry_semantic_digest = "c358276424a2cdc71cfefc6edac290ee78fa75a2bf918edecb8f37f4d991af42"
+        freeze_review_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $freezeReview).Hash.ToLowerInvariant()
+        call_coverage_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $callCoverage).Hash.ToLowerInvariant()
+        report_schema_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $reportSchema).Hash.ToLowerInvariant()
     }
     artifacts = [ordered]@{
         runtime_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $runtime).Hash.ToLowerInvariant()
@@ -109,15 +134,22 @@ $core = [ordered]@{
         runtime_package_manifest_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeManifest).Hash.ToLowerInvariant()
     }
     abi = [ordered]@{
-        manifest_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RepoRoot "contracts/abi/windows_x64_candidate.json")).Hash.ToLowerInvariant()
+        manifest_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RepoRoot "contracts/abi/windows_x64_core_1_0.json")).Hash.ToLowerInvariant()
         exports = @("ureGetRuntimeManifest", "ureQueryInterface")
         platform = "windows-x64-msvc-c11"
     }
     compatibility_matrix = [ordered]@{
-        historical_clients_to_current_runtime = @($compatibilityEntries)
-        current_client_supported_runtimes = @("PB.7 current content-digested runtime")
-        worker_protocol = @("Candidate protocol/core/frame 0.1 with exact registry digest")
+        core_1_0_seed = [ordered]@{
+            baseline_commit = $seed.baseline_commit
+            sdk_header_sha256 = $seed.sdk_header_sha256
+            binary_sha256 = $seed.binary_sha256
+        }
+        pre_release_history = @($preReleaseClientEntries)
+        matrix_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $compatibilityMatrix).Hash.ToLowerInvariant()
+        current_client_prior_stable_runtime = "NotApplicable for the first stable major; mandatory after a post-1.0 runtime is retained"
+        worker_protocol = "1.0 exact major/minor negotiation with registry digest"
     }
+    image_e2e = @($imageEvidence)
     fuzz_corpus = [ordered]@{
         seed = "0x8d12e519a73bc641"
         loader_cases = 256
@@ -140,6 +172,9 @@ $core = [ordered]@{
         "no_network_or_ambient_discovery",
         "interaction_surface_ledger_closed",
         "independent_sdk_runtime_external_client"
+        "all_core_calls_covered_by_external_clients"
+        "six_nontrivial_rendered_images"
+        "unstable_scene_transaction_isolated_from_core"
     )
     ctest = [ordered]@{
         configuration = "Release"
@@ -162,10 +197,15 @@ $report.environment = [ordered]@{
 }
 $report.semantic_digest = Get-Sha256Bytes ([Text.Encoding]::UTF8.GetBytes($semanticJson))
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ReportPath) | Out-Null
-$report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ReportPath -Encoding utf8NoBOM
+$reportJson = (($report | ConvertTo-Json -Depth 10) -replace "`r`n", "`n") + "`n"
+[IO.File]::WriteAllText($ReportPath, $reportJson, [Text.UTF8Encoding]::new($false))
 
 $roundTrip = Get-Content -Raw -LiteralPath $ReportPath | ConvertFrom-Json
-if ($roundTrip.schema -ne "ure.phase_pb.validation.v1" -or
+if (-not ($reportJson | Test-Json -SchemaFile $reportSchema) -or
+    $roundTrip.schema -ne "ure.phase_pb.validation.v2" -or
+    $roundTrip.publication_state -ne "Stable" -or
+    $roundTrip.declaration_state -ne "Declared" -or
+    @($roundTrip.image_e2e).Count -ne 6 -or
     $roundTrip.semantic_digest -ne $report.semantic_digest -or
     $roundTrip.ctest.failed -ne 0) {
     throw "Generated PB validation report failed schema invariants"

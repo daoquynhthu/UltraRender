@@ -1,0 +1,149 @@
+{
+  "schema": "ure.phase_pb.validation.v2",
+  "publication_state": "Stable",
+  "declaration_state": "Declared",
+  "compatibility_promise": "Core ABI 1.0 and local Worker Protocol 1.0 on Windows x64; this is not an UltraRender 1.0 product release and public distribution requires separate authorization",
+  "source": {
+    "tree_sha256": "c597bf3a899745bfc13620063b26468a50d286039e88833ab3f1827c5da68980",
+    "registry_sha256": "a37f12975476e3e4d8195580f94d0d75d41d18aaf8dbd8d20b5200ca70d1aa46",
+    "registry_semantic_digest": "c358276424a2cdc71cfefc6edac290ee78fa75a2bf918edecb8f37f4d991af42",
+    "freeze_review_sha256": "e7c0b5259dab84cbccf76f888bd7ba367c6acf7027beda3a097b8105e3b2cc68",
+    "call_coverage_sha256": "e42bb2647ab7c58b26211f91135875b253d9c715074e726109d8a450e8d2ce78",
+    "report_schema_sha256": "4511400ad14625ce57c1cad836daeb9bf9bdaa0360b2cb525258e85fb6b4a848"
+  },
+  "artifacts": {
+    "runtime_sha256": "4517f50335437f9c800ad5d3cf55a1ebd0582ea37d8c4b3be8c35b7999cd9817",
+    "worker_sha256": "7e5468fa462f769c22f8225e3b0a15bfbc32c139ba30bbf7f78522735b156a97",
+    "sdk_package_manifest_sha256": "3cf83fb29780a6bd0c1f6dac6bd7120e6ccab458ed388bdf6c5c709b60510267",
+    "runtime_package_manifest_sha256": "68d134967da95286e8c89410f2f14ea717a0a7c8119283ec6470da21f4fc6b1c"
+  },
+  "abi": {
+    "manifest_sha256": "30442716d91b024ec6afb1b599e8c49344a2ae397557d0d44b78d45cd8f7a746",
+    "exports": [
+      "ureGetRuntimeManifest",
+      "ureQueryInterface"
+    ],
+    "platform": "windows-x64-msvc-c11"
+  },
+  "compatibility_matrix": {
+    "core_1_0_seed": {
+      "baseline_commit": "0de7e5cad21d4f372d5254c18bbbdfdbd6e1c408",
+      "sdk_header_sha256": "5ae8cfe2e2360bfd66e4d553ee61d72521c9e916827c4eb0e0ed35ec913860fb",
+      "binary_sha256": "309842525619b62f61c39a7cab19663a6f3dd00f19aa87ee1060e254e78cf64a"
+    },
+    "pre_release_history": [
+      {
+        "phase": "PB.2",
+        "baseline_commit": "aaf8c1ee20cb350c35143406c3afa5f2bb423c85",
+        "sdk_header_sha256": "80482706f5984b3bc08891c292c565a6f6da42c4e9eb34ba5554633cd04f7d0b",
+        "binary_sha256": "6ca8aca2f91ed87a65273e781a5f7b462f7d1792789fcfc2d0c7a7dc59035ecb"
+      },
+      {
+        "phase": "PB.3",
+        "baseline_commit": "cdd0746e2e5b37534ae3865184839867e5dba314",
+        "sdk_header_sha256": "f4d0056d2a5d6c801d07e321ca2b28d3e1dfb73e3e823fab788241852e3f7ed9",
+        "binary_sha256": "495c5b26a78b974f3a0b37aefd2d4a5430213b4f99782d166b472a45a4fd4912"
+      },
+      {
+        "phase": "PB.4",
+        "baseline_commit": "193f4408c95decb6a99311f14f9b1990791d2288",
+        "sdk_header_sha256": "0e3c24bd0638e8d38c9860c4d3854a0bdc17cd9e1482bb6c0ca8c23dcfdfe78a",
+        "binary_sha256": "b990b2fed600ab627a314232a90aab669a1e5bcbb82c48e3009bef4419dfcfbe"
+      },
+      {
+        "phase": "PB.5",
+        "baseline_commit": "d1b08b81e412a08fce974231206d45656c224bef",
+        "sdk_header_sha256": "c9a5c5e3d635554f06c87963f1c242a3a15e5933fc1c9826b99d203fd8c7080b",
+        "binary_sha256": "0480eb49e7fe60e890fcee484716c724c1fc43cab24322f9fd5870b09d40ebd0"
+      },
+      {
+        "phase": "PB.6",
+        "baseline_commit": "5592aac151ee9d4e7e64cb35dca77b3053ab1bdc",
+        "sdk_header_sha256": "5ae8cfe2e2360bfd66e4d553ee61d72521c9e916827c4eb0e0ed35ec913860fb",
+        "binary_sha256": "20b0064c8d234e1e4920c981a4777a34a7d1cc92e63f2115c7b21517705d8c76"
+      }
+    ],
+    "matrix_sha256": "75d3b2346dc3fa717c3b50189cd3836455d60c48afc1cc2828529e57a6b37819",
+    "current_client_prior_stable_runtime": "NotApplicable for the first stable major; mandatory after a post-1.0 runtime is retained",
+    "worker_protocol": "1.0 exact major/minor negotiation with registry digest"
+  },
+  "image_e2e": [
+    {
+      "calling_mode": "in_process_core_c11",
+      "file": "direct_map.pfm",
+      "bytes": 49166,
+      "sha256": "357fb5754224969bebb77a4bf237627b5ba7d2c5e9e153ca5cc8822a4c519394"
+    },
+    {
+      "calling_mode": "in_process_core_c11",
+      "file": "direct_copy.pfm",
+      "bytes": 49166,
+      "sha256": "357fb5754224969bebb77a4bf237627b5ba7d2c5e9e153ca5cc8822a4c519394"
+    },
+    {
+      "calling_mode": "in_process_unstable_transaction_cpp",
+      "file": "transaction_replay.pfm",
+      "bytes": 24590,
+      "sha256": "11dbc09b94b53128cc302c861f04f51de0facd84d155d43e4cd88d5d81a00ee9"
+    },
+    {
+      "calling_mode": "in_process_unstable_transaction_cpp",
+      "file": "transaction_replace.pfm",
+      "bytes": 24590,
+      "sha256": "11dbc09b94b53128cc302c861f04f51de0facd84d155d43e4cd88d5d81a00ee9"
+    },
+    {
+      "calling_mode": "local_worker_named_pipe_shared_memory",
+      "file": "worker_first.pfm",
+      "bytes": 49166,
+      "sha256": "357fb5754224969bebb77a4bf237627b5ba7d2c5e9e153ca5cc8822a4c519394"
+    },
+    {
+      "calling_mode": "local_worker_named_pipe_shared_memory",
+      "file": "worker_restart.pfm",
+      "bytes": 49166,
+      "sha256": "357fb5754224969bebb77a4bf237627b5ba7d2c5e9e153ca5cc8822a4c519394"
+    }
+  ],
+  "fuzz_corpus": {
+    "seed": "0x8d12e519a73bc641",
+    "loader_cases": 256,
+    "scene_blob_cases": 128,
+    "transaction_payload_cases": 128,
+    "identity_sha256": "47418c2bab8f38587a39391a0d293ffcf08bbdd008561bc2b847f148aeedfbc4",
+    "policy": "fixed corpus and bounded budgets"
+  },
+  "behavioral_gates": [
+    "manifest_and_interface_negotiation",
+    "table_size_prefix_bounds",
+    "required_optional_capabilities",
+    "native_scene_and_objective_session",
+    "progressive_operations_events",
+    "immutable_frame_map_copy",
+    "camera_transaction_revision_conflict",
+    "cancellation_and_full_reload_fallback",
+    "worker_shared_memory_misuse",
+    "worker_crash_restart_identity",
+    "no_network_or_ambient_discovery",
+    "interaction_surface_ledger_closed",
+    "independent_sdk_runtime_external_client",
+    "all_core_calls_covered_by_external_clients",
+    "six_nontrivial_rendered_images",
+    "unstable_scene_transaction_isolated_from_core"
+  ],
+  "ctest": {
+    "configuration": "Release",
+    "total": 101,
+    "failed": 0,
+    "inventory_sha256": "e01ab07d8aac30c3d8059b28adca55bec26d781f087c30244e86d226faffb130",
+    "boundary_audit_sha256": "7b3c9124877d937448d47914e5ba2a83b92eef67f956e1a42a005906078b8c3d"
+  },
+  "environment": {
+    "excluded_from_semantic_digest": true,
+    "os": "Microsoft Windows NT 10.0.26200.0",
+    "powershell": "7.6.4",
+    "cmake": "cmake version 4.3.1-msvc1",
+    "flatc": "flatc version 25.12.19"
+  },
+  "semantic_digest": "9c9d3703075d15250705f5b45534951ef77de9095659ae93fd2f9c287dcd4226"
+}

@@ -129,12 +129,12 @@ if ($ledger.schema -ne "ure.pb.public-interaction-surface-ledger/1.0") {
     throw "Unexpected public interaction surface ledger schema"
 }
 if ($registry.schema -ne "ure.public.contract-registry-source/1.0" -or
-    $registry.publication_state -ne "Candidate" -or
-    $registry.candidate_version -ne "0.1.0") {
+    $registry.publication_state -ne "Stable" -or
+    $registry.version -ne "1.0.0") {
     throw "Unexpected public contract registry identity"
 }
-if ($compatibility.schema -ne "ure.public.registry-compatibility/1.0" -or
-    $compatibility.candidate_version -ne $registry.candidate_version) {
+if ($compatibility.schema -ne "ure.public.registry-compatibility/2.0" -or
+    $compatibility.release_version -ne $registry.version) {
     throw "Registry compatibility metadata does not match the registry"
 }
 if ($legacy.schema -ne "ure.pb.legacy-surface/1.0" -or
@@ -189,17 +189,26 @@ if ($tombstoneIds.Count -ne @($tombstoneIds | Sort-Object -Unique).Count -or
     @($tombstoneIds | Where-Object { $registryEntryById.ContainsKey($_) }).Count -ne 0) {
     throw "Registry tombstones are duplicate or reused"
 }
-if ($compatibility.baseline.candidate_version -ne "0.1.0" -or
-    $compatibility.baseline.registry_digest -ne "bb9a25aacb63bd88b4e79b67d7932a8b66174627beada11fa068475ca76e1513" -or
-    @($compatibility.changes).Count -ne 136 -or
-    @($compatibility.changes | Where-Object { $_.change_class -ne "AdditiveCandidate" }).Count -ne 0 -or
+if ($compatibility.pre_release_baseline.version -ne "0.1.0" -or
+    $compatibility.pre_release_baseline.registry_digest -ne "0e56eea2d03b2528ceefe2f686de3b63510d956738ee19cf107835abb297f554" -or
+    @($compatibility.changes).Count -ne 149 -or
     @($compatibility.changes | Where-Object { $_.phase -eq "PB.3" }).Count -ne 53 -or
     @($compatibility.changes | Where-Object { $_.phase -eq "PB.4" }).Count -ne 20 -or
     @($compatibility.changes | Where-Object { $_.phase -eq "PB.5" }).Count -ne 34 -or
-    @($compatibility.changes | Where-Object { $_.phase -eq "PB.6" }).Count -ne 29 -or
-    @($compatibility.changes | Where-Object { $_.phase -notin @("PB.3", "PB.4", "PB.5", "PB.6") }).Count -ne 0 -or
-    @($compatibility.tombstones).Count -ne 0) {
-    throw "PB candidate compatibility history is incomplete"
+    @($compatibility.changes | Where-Object { $_.phase -eq "PB.6" }).Count -ne 21 -or
+    @($compatibility.changes | Where-Object { $_.phase -in @("PB.3", "PB.4", "PB.5", "PB.6") -and $_.change_class -ne "AdditiveCandidate" }).Count -ne 0 -or
+    @($compatibility.changes | Where-Object { $_.phase -eq "PB.8" -and $_.change_class -eq "BreakingCandidate" }).Count -ne 21 -or
+    @($compatibility.changes | Where-Object { $_.phase -notin @("PB.3", "PB.4", "PB.5", "PB.6", "PB.8") }).Count -ne 0) {
+    throw "PB compatibility history is incomplete"
+}
+$expectedTombstones = @([uint64]42, [uint64]43, [uint64]303, [uint64]406, [uint64]601, [uint64]602, [uint64]808, [uint64]980, [uint64]981, [uint64]982, [uint64]983)
+$registryTombstones = @($registry.tombstones | ForEach-Object { [uint64]$_.registry_id })
+$compatibilityTombstones = @($compatibility.tombstones | ForEach-Object { [uint64]$_ })
+if ($registryTombstones.Count -ne $expectedTombstones.Count -or
+    $compatibilityTombstones.Count -ne $expectedTombstones.Count -or
+    (Compare-Object $expectedTombstones $registryTombstones) -or
+    (Compare-Object $expectedTombstones $compatibilityTombstones)) {
+    throw "PB.8 registry tombstones do not match the frozen pre-release demotions"
 }
 
 Assert-UniqueNonempty $registry.public_header_policy.extensions "Public header extension"
@@ -302,8 +311,8 @@ foreach ($entry in $entries) {
     if ($entry.disposition -eq "CanonicalAuthority" -and @($entry.authority_claims).Count -eq 0) {
         throw "Canonical authority $($entry.id) has no authority claim"
     }
-    if ($entry.disposition -eq "PublicTransport" -and $entry.contract_stability -ne "CoreCandidate") {
-        throw "PB.0 public transport $($entry.id) must remain CoreCandidate"
+    if ($entry.disposition -eq "PublicTransport" -and $entry.contract_stability -ne "Core") {
+        throw "PB public transport $($entry.id) must use frozen Core stability"
     }
     if ($entry.disposition -eq "Adapter" -and
         (@($entry.authority_refs).Count -eq 0 -or [string]::IsNullOrWhiteSpace([string]$entry.loss_policy))) {
@@ -482,7 +491,7 @@ if ($LASTEXITCODE -ne 0) {
 $report = [ordered]@{
     schema = "ure.pb.boundary-audit/1.0"
     source_head = $head
-    registry_candidate = [string]$registry.candidate_version
+    registry_version = [string]$registry.version
     registry_source_sha256 = (Get-FileHash -LiteralPath $registryPathResolved -Algorithm SHA256).Hash
     registry_entry_count = @($registry.entries).Count
     compatibility_sha256 = (Get-FileHash -LiteralPath $compatibilityPathResolved -Algorithm SHA256).Hash

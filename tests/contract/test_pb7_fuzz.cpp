@@ -67,7 +67,8 @@ const Table *query_table(ure_query_interface_fn query,
     ure_interface_response_t response{};
     request.header = {URE_STRUCTURE_INTERFACE_QUERY, sizeof(request), nullptr};
     std::memcpy(request.interface_id.bytes, id, sizeof(id));
-    request.maximum_minor = 1;
+    request.minimum_major = 1;
+    request.maximum_major = 1;
     response.header = {URE_STRUCTURE_INTERFACE_RESPONSE, sizeof(response),
                        nullptr};
     if (query(&request, &response, nullptr) != URE_RESULT_SUCCESS ||
@@ -124,11 +125,15 @@ int run(const std::filesystem::path &runtime_path,
     static constexpr std::uint8_t instance_id[16] =
         URE_INTERFACE_INSTANCE_UUID_BYTES;
     static constexpr std::uint8_t scene_id[16] = URE_INTERFACE_SCENE_UUID_BYTES;
+    static constexpr std::uint8_t transaction_id[16] =
+        URE_INTERFACE_SCENE_TRANSACTION_UUID_BYTES;
     const auto *runtime = query_table<ure_runtime_interface_t>(query, runtime_id);
     const auto *instances =
         query_table<ure_instance_interface_t>(query, instance_id);
     const auto *scenes = query_table<ure_scene_interface_t>(query, scene_id);
-    CHECK(manifest_fn && query && runtime && instances && scenes);
+    const auto *transactions =
+        query_table<ure_scene_transaction_interface_t>(query, transaction_id);
+    CHECK(manifest_fn && query && runtime && instances && scenes && transactions);
 
     Generator generator;
     for (std::uint32_t index = 0; index < 256; ++index) {
@@ -137,7 +142,8 @@ int run(const std::filesystem::path &runtime_path,
         ure_runtime_manifest_t manifest{};
         request.header = {URE_STRUCTURE_RUNTIME_MANIFEST_REQUEST,
                           sizeof(request), nullptr};
-        request.maximum_minor = 1;
+        request.minimum_major = 1;
+        request.maximum_major = 1;
         manifest.header = {URE_STRUCTURE_RUNTIME_MANIFEST, sizeof(manifest),
                            nullptr};
         const auto mode = generator.next() % 8;
@@ -229,7 +235,8 @@ int run(const std::filesystem::path &runtime_path,
                          nullptr};
         result.result_payload = {result_bytes.data(), result_bytes.size()};
         CHECK(bounded_result(
-            scenes->apply_transaction(scene, &transaction, &result, nullptr)));
+            transactions->apply_transaction(scene, &transaction, &result,
+                                            nullptr)));
     }
     revision = {};
     revision.header = {URE_STRUCTURE_SCENE_REVISION_INFO, sizeof(revision),
