@@ -15,9 +15,13 @@ $manifest = Read-Json "contracts/generated/runtime_manifest_1.json"
 $ledger = Read-Json "contracts/public_interaction_surface_ledger.json"
 $header = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot "contracts/generated/include/ultrarender/ure_loader.h")
 $registryHeader = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot "contracts/generated/include/ultrarender/ure_registry.h")
+$currentDigest = [regex]::Match(
+    $registryHeader,
+    'URE_REGISTRY_DIGEST_HEX "(?<digest>[0-9a-f]{64})"').Groups['digest'].Value
 
 if ($registry.publication_state -ne "Stable" -or $registry.version -ne "1.0.0" -or
-    $review.registry_digest -ne $manifest.registry_digest -or
+    $review.registry_digest -notmatch '^[0-9a-f]{64}$' -or
+    $currentDigest -ne $manifest.registry_digest -or
     $manifest.publication_state -ne "Stable" -or $manifest.version -ne "1.0.0" -or
     $manifest.core_abi.major -ne 1 -or $manifest.worker_protocol.major -ne 1 -or
     $manifest.frame_schema.major -ne 1) {

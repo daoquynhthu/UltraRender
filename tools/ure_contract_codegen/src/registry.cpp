@@ -340,7 +340,7 @@ void validate_compatibility(const std::filesystem::path& path, const Registry& r
 }
 
 void validate_schemas(const std::filesystem::path& schema_directory) {
-    const std::array names{"ure_payload_v1.fbs", "ure_frame_v1.fbs", "ure_scene_v1.fbs", "ure_worker_v1.fbs"};
+    const std::array names{"ure_payload_v1.fbs", "ure_frame_v1.fbs", "ure_scene_v1.fbs", "ure_worker_v1.fbs", "ure_product_v0.fbs"};
     const std::regex field_pattern(R"(^\s*[A-Za-z0-9_]+\s*:[^;]+\(id:\s*([0-9]+)\)\s*;\s*$)");
     for (const std::string_view name : names) {
         const std::string text = read_text(schema_directory / name);

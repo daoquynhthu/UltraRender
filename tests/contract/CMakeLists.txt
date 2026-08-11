@@ -111,6 +111,10 @@ if(TARGET ure_contract)
         ure_public ure_contract_schema bcrypt contract_image_artifact)
     add_dependencies(test_scene_transaction ure_public_stage_headers ure_contract)
 
+    add_executable(test_product_extension test_product_extension.cpp)
+    target_link_libraries(test_product_extension PRIVATE ure_public)
+    add_dependencies(test_product_extension ure_public_stage_headers ure_contract)
+
     add_library(worker_test_support STATIC external_client/worker_client.cpp)
     target_link_libraries(worker_test_support PUBLIC
         ure_public
@@ -149,13 +153,14 @@ if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
     endforeach()
     if(TARGET ure_contract)
-        foreach(target contract_image_artifact test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
+        foreach(target contract_image_artifact test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction test_product_extension worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
             target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
         endforeach()
         target_compile_options(test_loader_client PRIVATE /wd4191)
         target_compile_options(test_runtime_lifecycle PRIVATE /wd4191)
         target_compile_options(test_frame_leases PRIVATE /wd4191)
         target_compile_options(test_scene_boundary PRIVATE /wd4191)
+        target_compile_options(test_product_extension PRIVATE /wd4191)
         target_compile_options(test_worker_protocol PRIVATE /wd4191)
     endif()
 endif()
@@ -314,6 +319,11 @@ if(TARGET ure_contract)
             ${CMAKE_CURRENT_BINARY_DIR}/transaction_replay.pfm
             ${CMAKE_CURRENT_BINARY_DIR}/transaction_replace.pfm)
     add_test(
+        NAME test_product_extension
+        COMMAND test_product_extension
+            $<TARGET_FILE:ure_contract>
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene)
+    add_test(
         NAME test_worker_protocol
         COMMAND test_worker_protocol
             $<TARGET_FILE:ure_worker>
@@ -404,6 +414,7 @@ if(TARGET ure_contract)
         test_frame_leases
         test_scene_boundary
         test_scene_transaction
+        test_product_extension
         test_worker_protocol
         test_worker_crash
         test_scene_worker

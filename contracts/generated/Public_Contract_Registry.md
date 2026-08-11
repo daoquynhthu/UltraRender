@@ -2,7 +2,7 @@
 
 This generated reference freezes the Core ABI 1.x and Worker Protocol 1.x identity space. Extension maturity remains independent.
 
-Registry digest: `c358276424a2cdc71cfefc6edac290ee78fa75a2bf918edecb8f37f4d991af42`
+Registry digest: `62501eff808502857828856d4a83f4a9be3322725747d2cb1e12343d6ef06c56`
 
 | Registry ID | Kind | Canonical name | Stability | Maturity | Since | Default | Dependencies |
 |---:|---|---|---|---|---|---|---|
@@ -180,6 +180,16 @@ Registry digest: `c358276424a2cdc71cfefc6edac290ee78fa75a2bf918edecb8f37f4d991af
 |2147483679|Interface|`ure.experimental.interface.scene_transaction`|UnstableExtension|Experimental|1.0.0|disabled|304, 2147483648|
 |2147483680|Event|`ure.experimental.event.scene_transaction_committed`|UnstableExtension|Experimental|1.0.0|disabled|304, 2147483681|
 |2147483681|Semantic|`ure.experimental.operation.apply_scene_transaction`|UnstableExtension|Experimental|1.0.0|disabled|304, 2147483648|
+|2147483682|Capability|`ure.preview.capability.product_job`|UnstableExtension|Experimental|1.0.0|disabled|301, 302, 304, 305|
+|2147483683|PayloadSchema|`ure.preview.payload.product_job`|UnstableExtension|Experimental|1.0.0|disabled|2147483682|
+|2147483684|Structure|`ure.preview.structure.product_job_info`|UnstableExtension|Experimental|1.0.0|disabled|2, 4, 27, 2147483682|
+|2147483685|Structure|`ure.preview.structure.product_artifact_manifest`|UnstableExtension|Experimental|1.0.0|disabled|2, 4, 2147483682|
+|2147483686|Structure|`ure.preview.structure.product_job_interface`|UnstableExtension|Experimental|1.0.0|disabled|13, 27, 35, 38, 2147483684, 2147483685, 2147483687|
+|2147483687|Interface|`ure.preview.interface.product_job`|UnstableExtension|Experimental|1.0.0|disabled|2147483682, 2147483683|
+|2147483688|Semantic|`ure.preview.operation.create_product_job`|UnstableExtension|Experimental|1.0.0|disabled|2147483682, 2147483683|
+|2147483689|Semantic|`ure.preview.operation.start_product_job`|UnstableExtension|Experimental|1.0.0|disabled|2147483682, 2147483683|
+|2147483690|Semantic|`ure.preview.operation.cancel_product_job`|UnstableExtension|Experimental|1.0.0|disabled|2147483682, 2147483683|
+|2147483691|Semantic|`ure.preview.operation.acquire_product_artifact`|UnstableExtension|Experimental|1.0.0|disabled|2147483682, 2147483683|
 |4026531840|Semantic|`ure.private.mock.device_loss`|Private|NotApplicable|1.0.0|disabled|403|
 |4026531841|Semantic|`ure.private.mock.worker_crash`|Private|NotApplicable|1.0.0|disabled||
 |4026531842|Semantic|`ure.private.mock.event_gap`|Private|NotApplicable|1.0.0|disabled|402|

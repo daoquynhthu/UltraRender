@@ -89,14 +89,24 @@ ure_result_t fail(ure_bootstrap_diagnostic_t *diagnostic, ure_result_t result, s
 }
 
 bool version_contains(std::uint32_t minimum_major, std::uint32_t minimum_minor,
-                      std::uint32_t maximum_major, std::uint32_t maximum_minor) noexcept {
+                      std::uint32_t maximum_major, std::uint32_t maximum_minor,
+                      std::uint32_t actual_major, std::uint32_t actual_minor) noexcept {
     const std::uint64_t minimum =
         (static_cast<std::uint64_t>(minimum_major) << 32U) | minimum_minor;
     const std::uint64_t maximum =
         (static_cast<std::uint64_t>(maximum_major) << 32U) | maximum_minor;
-    const std::uint64_t runtime =
-        (static_cast<std::uint64_t>(kRuntimeMajor) << 32U) | kRuntimeMinor;
-    return minimum <= maximum && minimum <= runtime && runtime <= maximum;
+    const std::uint64_t actual =
+        (static_cast<std::uint64_t>(actual_major) << 32U) | actual_minor;
+    return minimum <= maximum && minimum <= actual && actual <= maximum;
+}
+
+bool version_range_valid(std::uint32_t minimum_major, std::uint32_t minimum_minor,
+                         std::uint32_t maximum_major, std::uint32_t maximum_minor) noexcept {
+    const std::uint64_t minimum =
+        (static_cast<std::uint64_t>(minimum_major) << 32U) | minimum_minor;
+    const std::uint64_t maximum =
+        (static_cast<std::uint64_t>(maximum_major) << 32U) | maximum_minor;
+    return minimum <= maximum;
 }
 
 bool digest_is_zero(const ure_digest256_t &digest) noexcept {
@@ -123,8 +133,9 @@ ure_result_t get_runtime_manifest(const ure_runtime_manifest_request_t *request,
     if (request->reserved[0] != 0 || request->reserved[1] != 0 || manifest->reserved != 0) {
         return fail(diagnostic, URE_RESULT_INVALID_ARGUMENT, 3, "reserved fields must be zero");
     }
-    if (!version_contains(request->minimum_major, request->minimum_minor, request->maximum_major,
-                          request->maximum_minor)) {
+    if (!version_contains(request->minimum_major, request->minimum_minor,
+                          request->maximum_major, request->maximum_minor,
+                          kRuntimeMajor, kRuntimeMinor)) {
         return fail(diagnostic, URE_RESULT_INCOMPATIBLE_VERSION, 4,
                     "runtime version range is incompatible");
     }
@@ -162,8 +173,8 @@ ure_result_t query_interface(const ure_interface_query_t *query, ure_interface_r
         response->reserved[1] != 0) {
         return fail(diagnostic, URE_RESULT_INVALID_ARGUMENT, 8, "reserved fields must be zero");
     }
-    if (!version_contains(query->minimum_major, query->minimum_minor, query->maximum_major,
-                          query->maximum_minor)) {
+    if (!version_range_valid(query->minimum_major, query->minimum_minor,
+                             query->maximum_major, query->maximum_minor)) {
         return fail(diagnostic, URE_RESULT_INCOMPATIBLE_VERSION, 9,
                     "interface version range is incompatible");
     }
@@ -177,6 +188,8 @@ ure_result_t query_interface(const ure_interface_query_t *query, ure_interface_r
     static constexpr std::array<std::uint8_t, 16> scene_id URE_INTERFACE_SCENE_UUID_BYTES;
     static constexpr std::array<std::uint8_t, 16> scene_transaction_id
         URE_INTERFACE_SCENE_TRANSACTION_UUID_BYTES;
+    static constexpr std::array<std::uint8_t, 16> product_job_id
+        URE_INTERFACE_PRODUCT_JOB_UUID_BYTES;
     static constexpr std::array<std::uint8_t, 16> session_id URE_INTERFACE_SESSION_UUID_BYTES;
 #if defined(URE_CONTRACT_CONFORMANCE)
     static constexpr std::array<std::uint8_t, 16> conformance_id{0xe1, 0xf2, 0x20, 0x01, 0x41, 0x20,
@@ -200,6 +213,8 @@ ure_result_t query_interface(const ure_interface_query_t *query, ure_interface_r
         table = &ure::contract::scene_interface().header;
     } else if (uuid_equal(query->interface_id, scene_transaction_id)) {
         table = &ure::contract::scene_transaction_interface().header;
+    } else if (uuid_equal(query->interface_id, product_job_id)) {
+        table = &ure::contract::product_job_interface().header;
     } else if (uuid_equal(query->interface_id, session_id)) {
         table = &ure::contract::session_interface().header;
     }
@@ -211,6 +226,12 @@ ure_result_t query_interface(const ure_interface_query_t *query, ure_interface_r
     else {
         return fail(diagnostic, URE_RESULT_CAPABILITY_UNAVAILABLE, 11,
                     "interface is not available");
+    }
+    if (!version_contains(query->minimum_major, query->minimum_minor,
+                          query->maximum_major, query->maximum_minor,
+                          table->version_major, table->version_minor)) {
+        return fail(diagnostic, URE_RESULT_INCOMPATIBLE_VERSION, 9,
+                    "interface version range is incompatible");
     }
     response->interface_id = query->interface_id;
     response->version_major = table->version_major;

@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -35,6 +36,7 @@ struct SessionObject final : Object {
     std::shared_ptr<const SceneRevisionData> revision;
     std::unique_ptr<product::ProductJob> job;
     ObjectiveData objective;
+    std::optional<product::ProductArtifactManifest> latest_artifact;
     ure_handle_t active_operation{};
     ure_handle_t latest_frame{};
     std::uint64_t completed_samples{};
@@ -94,8 +96,9 @@ bool digest_zero(const ure_digest256_t &digest) noexcept {
                                [](std::uint8_t value) { return value == 0; });
 }
 
-bool valid_objective(const ure_objective_envelope_t *objective,
-                     ObjectiveData &output) {
+ure_result_t decode_objective(const ure_objective_envelope_t *objective,
+                              ObjectiveData &output,
+                              std::string &message) {
     bool conformance_device_loss = false;
 #if defined(URE_CONTRACT_CONFORMANCE)
     conformance_device_loss =
@@ -115,16 +118,44 @@ bool valid_objective(const ure_objective_envelope_t *objective,
          (objective->payload_schema != 0 || objective->payload_version_major != 0 ||
           objective->payload_version_minor != 0)) ||
         (conformance_device_loss && objective->payload.size != 0))
-        return false;
+        return URE_RESULT_INVALID_ARGUMENT;
     if (objective->payload.size == 0) {
         if (!digest_zero(objective->payload_digest))
-            return false;
+            return URE_RESULT_INVALID_ARGUMENT;
     } else {
         const auto payload = hash(std::span(objective->payload.data,
                                             static_cast<std::size_t>(objective->payload.size)));
         if (std::memcmp(payload.data(), objective->payload_digest.bytes,
                         payload.size()) != 0)
-            return false;
+            return URE_RESULT_INVALID_ARGUMENT;
+    }
+    if (objective->determinism_policy != 0) {
+        message = "determinism policy is not executable in Product 0.1";
+        return URE_RESULT_CAPABILITY_UNAVAILABLE;
+    }
+    if (objective->usage_policy != 0) {
+        message = "usage policy is not executable in Product 0.1";
+        return URE_RESULT_CAPABILITY_UNAVAILABLE;
+    }
+    if (objective->latency_budget_ns != 0) {
+        message = "latency budget is not executable in Product 0.1";
+        return URE_RESULT_CAPABILITY_UNAVAILABLE;
+    }
+    if (objective->wall_time_budget_ns != 0 &&
+        objective->wall_time_budget_ns % UINT64_C(1000000) != 0) {
+        message = "wall-time budget must be expressed in whole milliseconds";
+        return URE_RESULT_CAPABILITY_UNAVAILABLE;
+    }
+    if (objective->memory_budget_bytes != 0 &&
+        objective->memory_budget_bytes % UINT64_C(1048576) != 0) {
+        message = "memory budget must be expressed in whole mebibytes";
+        return URE_RESULT_CAPABILITY_UNAVAILABLE;
+    }
+    for (std::uint32_t index = 0; index < objective->output_count; ++index) {
+        if (objective->output_semantics[index] != URE_FRAME_PLANE_COLOR) {
+            message = "requested output semantic is not executable in Product 0.1";
+            return URE_RESULT_CAPABILITY_UNAVAILABLE;
+        }
     }
     output.identity = objective_identity(*objective);
     output.wall_time_budget_ns = objective->wall_time_budget_ns;
@@ -133,11 +164,12 @@ bool valid_objective(const ure_objective_envelope_t *objective,
     output.latency_budget_ns = objective->latency_budget_ns;
     output.determinism_policy = objective->determinism_policy;
     output.usage_policy = objective->usage_policy;
-    output.output_semantics.assign(
-        objective->output_semantics,
-        objective->output_semantics + objective->output_count);
+    if (objective->output_count != 0)
+        output.output_semantics.assign(
+            objective->output_semantics,
+            objective->output_semantics + objective->output_count);
     output.force_device_loss = conformance_device_loss;
-    return true;
+    return URE_RESULT_SUCCESS;
 }
 
 void store(ure_digest256_t &output, const Digest &value) noexcept {
@@ -264,6 +296,7 @@ void run_render(const std::shared_ptr<SessionObject> &session,
         {
             std::scoped_lock lock(session->mutex);
             old_frame = std::exchange(session->latest_frame, frame);
+            session->latest_artifact = artifact;
             session->state = URE_SESSION_STATE_READY;
         }
         if (old_frame)
@@ -313,13 +346,20 @@ ure_result_t create_impl(ure_handle_t instance_handle, ure_handle_t scene_handle
         handles().get<InstanceObject>(instance_handle, ObjectType::Instance);
     const auto scene = handles().get<SceneObject>(scene_handle, ObjectType::Scene);
     ObjectiveData objective_data;
+    std::string objective_message;
     if (!instance || !scene || scene->owner != instance_handle)
         return make_error(URE_RESULT_INVALID_HANDLE, 504,
                           "invalid session parent handle", error);
-    if (!instance->session_enabled || !output ||
-        !valid_objective(objective, objective_data))
+    if (!instance->session_enabled || !output)
         return make_error(URE_RESULT_INVALID_ARGUMENT, 505,
                           "invalid render objective", error);
+    const ure_result_t objective_result =
+        decode_objective(objective, objective_data, objective_message);
+    if (objective_result != URE_RESULT_SUCCESS)
+        return make_error(objective_result, 505,
+                          objective_message.empty() ? "invalid render objective"
+                                                    : objective_message,
+                          error);
     const auto revision = scene_revision(scene_handle, error);
     if (!revision)
         return URE_RESULT_INVALID_HANDLE;
@@ -461,6 +501,7 @@ ure_result_t bind_scene_impl(ure_handle_t session_handle,
         std::scoped_lock lock(session->mutex);
         session->revision = next_revision;
         session->completed_samples = 0;
+        session->latest_artifact.reset();
         session->reset_reason = URE_SCENE_RESET_FULL_REPLACEMENT;
         session->state = URE_SESSION_STATE_READY;
         old_frame = std::exchange(session->latest_frame, nullptr);
@@ -514,6 +555,7 @@ ure_result_t start_impl(ure_handle_t session_handle, ure_handle_t *output,
         std::scoped_lock lock(session->mutex);
         session->active_operation = *output;
         session->completed_samples = 0;
+        session->latest_artifact.reset();
         session->state = URE_SESSION_STATE_RUNNING;
     }
     operation->worker = std::jthread(
@@ -595,6 +637,7 @@ ure_result_t reset_impl(ure_handle_t session_handle, std::uint32_t reason,
     {
         std::scoped_lock lock(session->mutex);
         session->completed_samples = 0;
+        session->latest_artifact.reset();
         session->reset_reason = reason;
         session->state = URE_SESSION_STATE_READY;
         old_frame = std::exchange(session->latest_frame, nullptr);
@@ -628,12 +671,114 @@ ure_result_t acquire_frame_impl(ure_handle_t session_handle,
     return URE_RESULT_SUCCESS;
 }
 
+ure_result_t get_product_info_impl(ure_handle_t session_handle,
+                                   ure_product_job_info_t *info,
+                                   ure_handle_t *error) {
+    clear_error(error);
+    const auto session =
+        handles().get<SessionObject>(session_handle, ObjectType::Session, true);
+    if (!session)
+        return make_error(URE_RESULT_INVALID_HANDLE, 531,
+                          "invalid product job handle", error);
+    if (!valid_output(info, URE_STRUCTURE_PRODUCT_JOB_INFO) ||
+        info->reserved32 != 0 || info->reserved[0] != 0 ||
+        info->reserved[1] != 0)
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 532,
+                          "invalid product job info output", error);
+    std::scoped_lock lock(session->mutex);
+    const auto progress = session->job->operation();
+    const auto &identities = session->job->identities();
+    info->state = session->state;
+    info->requested_samples = progress.requested_samples;
+    info->accepted_samples = progress.accepted_samples;
+    info->active_operation = session->active_operation;
+    info->latest_frame = session->latest_frame;
+    store(info->build_identity, identities.build);
+    store(info->snapshot_identity, identities.snapshot);
+    store(info->objective_identity, identities.objective);
+    store(info->plan_identity, identities.plan);
+    return URE_RESULT_SUCCESS;
+}
+
+ure_result_t request_product_cancel_impl(ure_handle_t session_handle,
+                                         ure_bool32_t *accepted,
+                                         ure_handle_t *error) {
+    clear_error(error);
+    if (accepted)
+        *accepted = 0;
+    const auto session =
+        handles().get<SessionObject>(session_handle, ObjectType::Session);
+    if (!session)
+        return make_error(URE_RESULT_INVALID_HANDLE, 533,
+                          "invalid product job handle", error);
+    if (!accepted)
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 534,
+                          "cancel acceptance output is required", error);
+    ure_handle_t operation{};
+    {
+        std::scoped_lock lock(session->mutex);
+        operation = session->active_operation;
+    }
+    if (!operation)
+        return make_error(URE_RESULT_BUSY, 535,
+                          "product job has no active operation", error);
+    return operation_interface().request_cancel(operation, accepted, error);
+}
+
+ure_result_t get_product_artifact_impl(
+    ure_handle_t session_handle, ure_product_artifact_manifest_t *manifest,
+    ure_handle_t *error) {
+    clear_error(error);
+    const auto session =
+        handles().get<SessionObject>(session_handle, ObjectType::Session, true);
+    if (!session)
+        return make_error(URE_RESULT_INVALID_HANDLE, 536,
+                          "invalid product job handle", error);
+    if (!valid_output(manifest, URE_STRUCTURE_PRODUCT_ARTIFACT_MANIFEST) ||
+        manifest->reserved[0] != 0 || manifest->reserved[1] != 0)
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 537,
+                          "invalid product artifact manifest output", error);
+    std::scoped_lock lock(session->mutex);
+    if (!session->latest_artifact)
+        return make_error(URE_RESULT_INCOMPLETE, 538,
+                          "product job has no published artifact", error);
+    const auto &artifact = *session->latest_artifact;
+    manifest->accepted_samples = artifact.accepted_samples;
+    manifest->rgb_value_count = artifact.rgb_value_count;
+    store(manifest->build_identity, artifact.identities.build);
+    store(manifest->snapshot_identity, artifact.identities.snapshot);
+    store(manifest->objective_identity, artifact.identities.objective);
+    store(manifest->plan_identity, artifact.identities.plan);
+    store(manifest->frame_content_identity, artifact.frame_content);
+    return URE_RESULT_SUCCESS;
+}
+
 ure_result_t URE_CALL create_session(
     ure_handle_t instance, ure_handle_t scene,
     const ure_objective_envelope_t *objective, ure_handle_t *session,
     ure_handle_t *error) noexcept {
     return guard_entry(error, [&] {
         return create_impl(instance, scene, objective, session, error);
+    });
+}
+
+ure_result_t URE_CALL create_product_job(
+    ure_handle_t instance_handle, ure_handle_t scene,
+    const ure_objective_envelope_t *objective, ure_handle_t *job,
+    ure_handle_t *error) noexcept {
+    return guard_entry(error, [&] {
+        const auto instance =
+            handles().get<InstanceObject>(instance_handle, ObjectType::Instance);
+        if (!instance)
+            return make_error(URE_RESULT_INVALID_HANDLE, 539,
+                              "invalid product instance handle", error);
+        {
+            std::scoped_lock lock(instance->mutex);
+            if (!instance->product_enabled)
+                return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 540,
+                                  "product job capability is not enabled", error);
+        }
+        return create_impl(instance_handle, scene, objective, job, error);
     });
 }
 
@@ -696,6 +841,28 @@ ure_result_t URE_CALL acquire_session_frame(ure_handle_t session,
                        [&] { return acquire_frame_impl(session, frame, error); });
 }
 
+ure_result_t URE_CALL get_product_job_info(
+    ure_handle_t job, ure_product_job_info_t *info,
+    ure_handle_t *error) noexcept {
+    return guard_entry(error,
+                       [&] { return get_product_info_impl(job, info, error); });
+}
+
+ure_result_t URE_CALL request_product_cancel(
+    ure_handle_t job, ure_bool32_t *accepted, ure_handle_t *error) noexcept {
+    return guard_entry(error, [&] {
+        return request_product_cancel_impl(job, accepted, error);
+    });
+}
+
+ure_result_t URE_CALL get_product_artifact_manifest(
+    ure_handle_t job, ure_product_artifact_manifest_t *manifest,
+    ure_handle_t *error) noexcept {
+    return guard_entry(error, [&] {
+        return get_product_artifact_impl(job, manifest, error);
+    });
+}
+
 }
 
 const ure_session_interface_t &session_interface() noexcept {
@@ -703,6 +870,21 @@ const ure_session_interface_t &session_interface() noexcept {
         {sizeof(table), 1, 0}, create_session, retain_session, release_session,
         close_session, get_session_info, bind_session_scene, start_session,
         pause_session, resume_session, reset_session, acquire_session_frame};
+    return table;
+}
+
+const ure_product_job_interface_t &product_job_interface() noexcept {
+    static const ure_product_job_interface_t table{
+        {sizeof(table), 0, 1},
+        create_product_job,
+        retain_session,
+        release_session,
+        close_session,
+        get_product_job_info,
+        start_session,
+        request_product_cancel,
+        acquire_session_frame,
+        get_product_artifact_manifest};
     return table;
 }
 

@@ -18,7 +18,7 @@ The approved target has one product execution authority. Maintained clients use 
 
 | Product area | Highest current evidence | Preview gap |
 |---|---|---|
-| Core/Worker scene render | Product E2E for the bounded PB.8 fixture; runtime adapter now delegates rendering to the internal `ure_product` job | Product extension, shared client and general objectives/artifacts are not closed |
+| Core/Worker scene render | Product E2E for the bounded PB.8 fixture; runtime adapter delegates rendering to `ure_product`, and the generated ProductJob 0.1 direct extension exposes identities, accepted samples, frames and artifact manifests | Shared `ure_client`, Worker extension forwarding and CLI convergence are not closed |
 | CLI render | Client-reachable legacy direct path | Bypasses the product runtime and owns separate load/output orchestration |
 | Native advanced blocks | Contract / component executable | Procedural, resource, solver and simulation declarations are not uniformly realized by the renderer |
 | Automatic transport | Component executable with a bounded CUDA bridge | The product renderer does not yet consume the full HT support, pilot and portfolio authority |
@@ -30,6 +30,8 @@ The approved target has one product execution authority. Maintained clients use 
 PRV.0 now backs this snapshot with a machine-validated closure ledger. It records 44 maintained capabilities and entry points: 2 Contract, 18 ComponentExecutable, 15 RendererIntegrated, 7 ClientReachable and 2 ProductE2E. The two ProductE2E classifications are limited to the bounded Core/Worker PB fixture; none of the twelve retained Preview product scenarios is ProductE2E.
 
 The accompanying semantic audit covers 25 maintained inputs and finds 12 accepted-but-ignored semantics plus 4 executed-with-debt semantics. The retained scenario manifest binds twelve required workflows across eight coverage dimensions. See [`docs/PRV0_Product_Truth_Baseline.md`](docs/PRV0_Product_Truth_Baseline.md) and the machine report [`docs/reports/ure_preview_baseline_v1.json`](docs/reports/ure_preview_baseline_v1.json).
+
+PRV.1 has completed its internal service and ProductJob 0.1 slices. The current live ledger has 46 entries; ProductJob remains an `UnstableExtension`, Core ABI 1.0 prefixes are unchanged, non-executable Objective semantics reject, and accepted-sample/frame/artifact accounting is tested through the real CUDA path. PRV.1 is not complete until one maintained `ure_client` provides explicit Direct/Worker transports and CLI render migrates to it.
 
 ## Declared public boundary
 

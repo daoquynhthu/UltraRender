@@ -36,6 +36,8 @@ Runtime 1.0 reports native-scene read majors 1 through 2 and write major 2. Nati
 
 The initial StableExtension list is empty. UUID transactions and all spectral/polarimetric, estimator, reconstruction, physical-world, differentiable, telemetry, material, solver/provider, and model interfaces are absent from the Stable Core promise unless a separate extension document says otherwise. `UnstableExtension` and Research/Experimental interfaces may require an exact registry/runtime/provider/artifact identity and may change or disappear without a Core-major change.
 
+The registry digest identifies an exact complete registry snapshot, not only its frozen Core subset. Adding or changing an UnstableExtension changes that digest without changing Core major 1. A nonzero `expected_registry_digest` is therefore an explicit exact-package pin and may reject a newer runtime whose Core 1 prefixes remain compatible. A Core-compatible client leaves that field zero, negotiates the required Core/interface versions, and separately queries optional extension UUIDs.
+
 Stability, evidence maturity, and runtime state are independent. A stable capability identity does not promise that a provider is compiled, available, enabled, applicable, Production-mature, or successful for a particular scene.
 
 ## Operational semantics

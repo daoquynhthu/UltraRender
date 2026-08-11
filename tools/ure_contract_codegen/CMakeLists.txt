@@ -14,12 +14,14 @@ set(UR_CONTRACT_SCHEMAS
     ${UR_CONTRACT_SCHEMA_DIR}/ure_payload_v1.fbs
     ${UR_CONTRACT_SCHEMA_DIR}/ure_frame_v1.fbs
     ${UR_CONTRACT_SCHEMA_DIR}/ure_scene_v1.fbs
-    ${UR_CONTRACT_SCHEMA_DIR}/ure_worker_v1.fbs)
+    ${UR_CONTRACT_SCHEMA_DIR}/ure_worker_v1.fbs
+    ${UR_CONTRACT_SCHEMA_DIR}/ure_product_v0.fbs)
 set(UR_CONTRACT_GENERATED_HEADERS
     ${UR_CONTRACT_GENERATED_DIR}/ure_payload_v1_generated.h
     ${UR_CONTRACT_GENERATED_DIR}/ure_frame_v1_generated.h
     ${UR_CONTRACT_GENERATED_DIR}/ure_scene_v1_generated.h
     ${UR_CONTRACT_GENERATED_DIR}/ure_worker_v1_generated.h
+    ${UR_CONTRACT_GENERATED_DIR}/ure_product_v0_generated.h
     ${UR_CONTRACT_GENERATED_DIR}/ure_worker_future_fixture_generated.h)
 
 add_custom_command(

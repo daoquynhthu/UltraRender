@@ -20,9 +20,14 @@ int main() {
     const auto registry = ure::contract_codegen::load_registry(URE_TEST_REGISTRY_PATH);
     ure::contract_codegen::validate_compatibility(URE_TEST_COMPATIBILITY_PATH, registry);
     ure::contract_codegen::validate_schemas(URE_TEST_SCHEMA_DIR);
-    if (registry.version != "1.0.0" || registry.entries.size() != 182 || registry.tombstones.size() != 11 ||
+    const auto product_interface = std::ranges::find(
+        registry.entries, "ure.preview.interface.product_job",
+        &ure::contract_codegen::RegistryEntry::canonical_name);
+    if (registry.version != "1.0.0" || registry.entries.size() != 192 || registry.tombstones.size() != 11 ||
         registry.digest_hex != URE_REGISTRY_DIGEST_HEX || sizeof(ure_uuid_t) != 16 ||
-        sizeof(ure_digest256_t) != 32 || sizeof(ure_input_header_t) != sizeof(ure_output_header_t)) {
+        sizeof(ure_digest256_t) != 32 || sizeof(ure_input_header_t) != sizeof(ure_output_header_t) ||
+        product_interface == registry.entries.end() ||
+        product_interface->stability != "UnstableExtension") {
         throw std::runtime_error("Core 1.0 registry or C value surface drifted");
     }
     const auto exchanges = ure::contract_codegen::build_mock_exchanges(registry);

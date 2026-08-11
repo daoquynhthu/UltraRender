@@ -23,6 +23,7 @@ const ure_event_interface_t &event_interface() noexcept;
 const ure_frame_interface_t &frame_interface() noexcept;
 const ure_scene_interface_t &scene_interface() noexcept;
 const ure_scene_transaction_interface_t &scene_transaction_interface() noexcept;
+const ure_product_job_interface_t &product_job_interface() noexcept;
 const ure_session_interface_t &session_interface() noexcept;
 ure_result_t create_frame_snapshot(
     ure_handle_t instance, ure_handle_t operation,

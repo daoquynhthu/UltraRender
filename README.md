@@ -14,6 +14,8 @@ Preview 路线要求 CLI、Python、Hydra 和后续编辑器通过同一个产�
 
 PRV.0 已建立机器可验证的[产品真相基线](docs/PRV0_Product_Truth_Baseline.md)：44 项能力/入口闭环记录、25 项维护语义审计和 12 个保留产品场景。当前只有 Core/Worker 的有界 PB fixture 具备 ProductE2E 证据；十二个 Preview 产品场景均尚未达到 ProductE2E。基线明确记录 12 项 accepted-but-ignored 和 4 项执行语义债务，后续阶段必须执行、拒绝、保留为工具语义或冻结为研究，不得静默忽略。
 
+PRV.1 当前已建立内部 `ure_product` 服务和 generated ProductJob 0.1 `UnstableExtension`。Direct 调用可取得 build/snapshot/objective/plan identity、实际 accepted samples、Frame 和 artifact manifest；无法执行的非默认 Objective 语义会明确拒绝。共享 `ure_client`、Worker forwarding 与 CLI 迁移尚未完成，因此这仍不是 Preview 产品闭环。
+
 ## 公共交互边界
 
 项目现已声明以下两个独立版本化合同：

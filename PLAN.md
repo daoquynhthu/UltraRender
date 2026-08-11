@@ -222,6 +222,8 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 
 **状态**: 当前游标。
 
+**当前进度**: PRV.1.1 与 PRV.1.2 已实现并通过局部门禁；当前施工子游标为 PRV.1.3。
+
 **目标**: 建立 `ure_product` 和 `ure_client`，让 CLI render 首先退出 renderer 实现，证明 direct 与 Worker 通过同一 runtime 服务执行当前基础场景。
 
 **依赖**: PRV.0。

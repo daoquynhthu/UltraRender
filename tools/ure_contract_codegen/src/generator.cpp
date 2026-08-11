@@ -501,6 +501,33 @@ typedef struct ure_session_info_t {
     uint64_t reserved[2];
 } ure_session_info_t;
 
+typedef struct ure_product_job_info_t {
+    ure_output_header_t header;
+    uint32_t state;
+    uint32_t reserved32;
+    uint64_t requested_samples;
+    uint64_t accepted_samples;
+    ure_handle_t active_operation;
+    ure_handle_t latest_frame;
+    ure_digest256_t build_identity;
+    ure_digest256_t snapshot_identity;
+    ure_digest256_t objective_identity;
+    ure_digest256_t plan_identity;
+    uint64_t reserved[2];
+} ure_product_job_info_t;
+
+typedef struct ure_product_artifact_manifest_t {
+    ure_output_header_t header;
+    uint64_t accepted_samples;
+    uint64_t rgb_value_count;
+    ure_digest256_t build_identity;
+    ure_digest256_t snapshot_identity;
+    ure_digest256_t objective_identity;
+    ure_digest256_t plan_identity;
+    ure_digest256_t frame_content_identity;
+    uint64_t reserved[2];
+} ure_product_artifact_manifest_t;
+
 typedef struct ure_runtime_interface_t {
     ure_interface_table_header_t header;
     ure_result_t (URE_CALL *create_instance)(
@@ -568,6 +595,19 @@ typedef struct ure_scene_transaction_interface_t {
     ure_interface_table_header_t header;
     ure_result_t (URE_CALL *apply_transaction)(ure_handle_t scene, const ure_scene_transaction_t *transaction, ure_scene_transaction_result_t *result, ure_handle_t *error);
 } ure_scene_transaction_interface_t;
+
+typedef struct ure_product_job_interface_t {
+    ure_interface_table_header_t header;
+    ure_result_t (URE_CALL *create)(ure_handle_t instance, ure_handle_t scene, const ure_objective_envelope_t *objective, ure_handle_t *job, ure_handle_t *error);
+    ure_result_t (URE_CALL *retain)(ure_handle_t job, ure_handle_t *error);
+    ure_result_t (URE_CALL *release)(ure_handle_t job, ure_handle_t *error);
+    ure_result_t (URE_CALL *close)(ure_handle_t job, ure_handle_t *error);
+    ure_result_t (URE_CALL *get_info)(ure_handle_t job, ure_product_job_info_t *info, ure_handle_t *error);
+    ure_result_t (URE_CALL *start)(ure_handle_t job, ure_handle_t *operation, ure_handle_t *error);
+    ure_result_t (URE_CALL *request_cancel)(ure_handle_t job, ure_bool32_t *accepted, ure_handle_t *error);
+    ure_result_t (URE_CALL *acquire_frame)(ure_handle_t job, ure_handle_t *frame, ure_handle_t *error);
+    ure_result_t (URE_CALL *get_artifact_manifest)(ure_handle_t job, ure_product_artifact_manifest_t *manifest, ure_handle_t *error);
+} ure_product_job_interface_t;
 
 typedef struct ure_session_interface_t {
     ure_interface_table_header_t header;
@@ -663,7 +703,8 @@ void generate_contract_package(const Registry &registry,
     write_text(output_directory / "registry/public_contract_registry.canonical.json",
                registry.canonical_bytes);
     const std::array schemas{"ure_payload_v1.fbs", "ure_frame_v1.fbs",
-                              "ure_scene_v1.fbs", "ure_worker_v1.fbs"};
+                              "ure_scene_v1.fbs", "ure_worker_v1.fbs",
+                              "ure_product_v0.fbs"};
     for (const std::string_view name : schemas) {
         write_text(output_directory / "schemas" / name, read_text(schema_directory / name));
     }

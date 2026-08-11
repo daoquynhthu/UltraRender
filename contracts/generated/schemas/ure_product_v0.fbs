@@ -1,0 +1,52 @@
+namespace ultrarender.contract.preview.v0;
+
+enum ProductMessageKind:uint {
+  CreateJob = 2147483688,
+  StartJob = 2147483689,
+  CancelJob = 2147483690,
+  AcquireArtifact = 2147483691
+}
+
+table ProductIdentitySet {
+  build:[ubyte] (id: 0);
+  snapshot:[ubyte] (id: 1);
+  objective:[ubyte] (id: 2);
+  plan:[ubyte] (id: 3);
+}
+
+table ProductJobRequest {
+  scene_id:ulong (id: 0);
+  job_id:ulong (id: 1);
+  objective:[ubyte] (id: 2);
+  objective_schema:uint (id: 3);
+  objective_version_major:ushort (id: 4);
+  objective_version_minor:ushort (id: 5);
+}
+
+table ProductJobStatus {
+  job_id:ulong (id: 0);
+  operation_id:ulong (id: 1);
+  frame_id:ulong (id: 2);
+  state:uint (id: 3);
+  requested_samples:ulong (id: 4);
+  accepted_samples:ulong (id: 5);
+  identities:ProductIdentitySet (id: 6);
+}
+
+table ProductArtifactManifest {
+  job_id:ulong (id: 0);
+  accepted_samples:ulong (id: 1);
+  rgb_value_count:ulong (id: 2);
+  frame_content:[ubyte] (id: 3);
+  identities:ProductIdentitySet (id: 4);
+}
+
+table ProductEnvelope {
+  kind:ProductMessageKind = CreateJob (id: 0);
+  request:ProductJobRequest (id: 1);
+  status:ProductJobStatus (id: 2);
+  artifact:ProductArtifactManifest (id: 3);
+}
+
+root_type ProductEnvelope;
+file_identifier "URP0";
