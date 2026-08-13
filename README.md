@@ -4,17 +4,19 @@ UltraRender 是一个处于持续研发阶段的光谱/偏振离线渲染器。�
 
 本项目尚不是通用生产渲染器，也没有发布“UltraRender 1.0”。功能与成熟度以 [STATUS.md](STATUS.md) 为准，施工顺序以 [PLAN.md](PLAN.md) 为准。Research、Experimental、Production 是不同的证据等级；类型、配置项或拒绝测试的存在不代表对应能力已经可用。
 
-当前权威实施游标为 `PRV.2 — 完整场景实现与自包含包`。项目暂时冻结 learned/neural、新积分器、广义统一物理世界和可微路线，优先把已有能力接入一个可验证的 `UltraRender_preview` 产品闭环。该名称是尚未达成的里程碑，不是现有发布版本。
+当前权威实施游标为 `PRV.1R — Product Runtime 阻塞性修复与可信 E2E 基线`。项目暂时冻结 learned/neural、新积分器、广义统一物理世界和可微路线；PRV.2 及后续产品总装在 PRV.1R 修复样本会计、重复执行、Worker 长任务控制、资源根和可信图像门禁前暂停。`UltraRender_preview` 是尚未达成的里程碑，不是现有发布版本。
 
 ## Preview 集成方向
 
 Preview 路线要求 CLI、Python、Hydra 和后续编辑器通过同一个产品服务工作：客户端使用共享 `ure_client`，显式选择进程内 direct transport 或本地 Worker transport；两者最终调用同一 runtime/product implementation。Worker 只负责隔离、协议和共享内存传输，CLI 也不再拥有第二套场景加载、积分器选择、重建或输出实现。
 
-PRV.1 已让 CLI render 退出 renderer 实现：共享 `ure_client` 提供显式 Direct/Worker transport，两路均使用 ProductJob 0.1 与同一个 `ure_product` 服务；CLI 默认 Worker，启动失败不会回退 direct。Hydra、legacy pyure、自动渲染桥、原生高级块、MeasurementBundle、重建、可移植 backend、多设备/farm/cache 仍未全部进入同一个完整场景工作流。[Preview 架构](docs/UltraRender_Preview_Architecture.md) 定义目标边界，[PLAN.md](PLAN.md) 按 `PRV.0` 至 `PRV.11` 逐步完成迁移和真实图像门禁。
+PRV.1 已让 CLI render 退出 renderer 实现：共享 `ure_client` 提供显式 Direct/Worker transport，两路均使用 ProductJob 0.1 与同一个 `ure_product` 服务；CLI 默认 Worker，启动失败不会回退 direct。这个结构保留，但后续调查证明原有 64×64 smoke 不能支撑 ProductE2E 结论。Hydra、legacy pyure、自动渲染桥、原生高级块、MeasurementBundle、重建、可移植 backend、多设备/farm/cache 仍未全部进入同一个完整场景工作流。[Preview 架构](docs/UltraRender_Preview_Architecture.md) 定义目标边界，[PLAN.md](PLAN.md) 以新增 PRV.1R 为当前阻塞修复阶段。
 
-PRV.0 的历史[产品真相基线](docs/PRV0_Product_Truth_Baseline.md)记录了当时的 44 项能力/入口、25 项维护语义和 12 个保留产品场景。PRV.1 后现役账本有 46 项记录，其中 5 项达到有界 ProductE2E；维护语义中已无 accepted-but-ignored，仍有 2 项明确的执行语义债务。十二个最终 Preview 产品场景仍未闭环，后续阶段必须继续执行、拒绝、保留为工具语义或冻结为研究。
+PRV.0 的历史[产品真相基线](docs/PRV0_Product_Truth_Baseline.md)记录了当时的 44 项能力/入口、25 项维护语义和 12 个保留产品场景。PRV.1 后现役账本曾把 5 项标为有界 ProductE2E；PRV.1R 调查已撤回这一解释，首个子步骤将以追加的 supersession record 重分类，而不改写历史报告。维护语义中已无 accepted-but-ignored，仍有 2 项明确执行语义债务；十二个最终 Preview 产品场景均未闭环。
 
-PRV.1 已闭环内部 `ure_product` 服务、generated ProductJob 0.1 `UnstableExtension`、共享 `ure_client`、Worker forwarding 与 CLI render 迁移。Direct/Worker 返回一致的 build/snapshot/objective/plan identity、accepted samples、Frame 与 artifact manifest；无法执行的 Objective/CLI 语义明确拒绝。两路真实 64×64 PFM 逐字节一致，证据见 [PRV.1 验证报告](docs/reports/phase_prv1_validation_v1.json)。这只完成客户端主干，不代表 `UltraRender_preview` 已完成。
+PRV.1 闭环了内部 `ure_product` 服务、generated ProductJob 0.1 `UnstableExtension`、共享 `ure_client`、Worker forwarding 与 CLI render 迁移。其[验证报告](docs/reports/phase_prv1_validation_v1.json)中的 64×64 PFM 与身份一致性仍是有效的路由/传输 smoke，但不是质量或工作量正确性证明。当前已确认 Product `sample_budget` 会触发重复全量重渲染并形成几何增长，Worker 存在固定 60 秒等待边界，预算完成、取消、相对资源根和显存适用性也需要修复。
+
+错误与诊断被视为贯穿 Preview 路线的产品能力，而不是 PRV.1R 的一次性补丁。PRV.1R 先建立 result/domain/detail、correlation、cause、operation terminal error、恢复建议和设备信息的公共基础；之后每个场景、材质、输出、重建、积分器、session、backend、farm 和客户端阶段都必须补齐自身结构化错误、负向 E2E 与文档目录。已知失败不得长期塌缩成无上下文 `Internal` 或普通 null Error。
 
 ## 公共交互边界
 
@@ -91,7 +93,7 @@ Ninja 可并行构建普通目标；高内存 CUDA 编译由 `ur_cuda_heavy_comp
 
 GitHub Actions 另行在 Ubuntu 24.04 的 GCC 13/Clang 18 与 Windows 2025 的 MSVC 上执行 CUDA-off 根构建、33 项纯 host/contract 测试、15 项 warnings-as-errors SDK-free 测试，以及安装后 `find_package()` 消费测试。该门禁验证非 GPU 源码和包边界的可移植性，不扩张完整场景渲染的平台承诺。矩阵、排除项和缓存策略见 [CI 说明](docs/CI.md)。
 
-最新已冻结的 PB.8 证据为 Release 构建与 101/101 CTest，通过三种独立调用方式生成六幅实际 PFM 图像。PRV.1 另有 Direct/Worker/CLI 产品主干及两幅一致 PFM 的独立证据；两者都不证明完整 Preview 产品闭环。测试数量均为阶段快照。
+最新已冻结的 PB.8 证据为 Release 构建与 101/101 CTest，通过三种独立调用方式生成六幅实际 PFM 图像；当前构建目录登记 108 项 CTest。PRV.1 另有 Direct/Worker/CLI 客户端主干及两幅一致 PFM 的 smoke 证据；这些证据不证明产品工作量、质量、尺度或完整 Preview 闭环。PRV.1R 将测试分为 32-128 px contract smoke、480p product functional、720p/1080p product quality 和单独调度的 QHD/UHD 500+ spp stress，并要求正式证据走实际产品路径且不关闭 production profile 能力。
 
 ## 已知边界
 

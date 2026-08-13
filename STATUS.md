@@ -1,6 +1,6 @@
 # UltraRender Current Status
 
-Last reviewed: 2026-08-11
+Last reviewed: 2026-08-13
 
 This document is the current capability summary. [`PLAN.md`](PLAN.md) is authoritative for execution order; source code, generated manifests, and fresh verification output take precedence over prose.
 
@@ -10,7 +10,7 @@ UltraRender remains a research and development renderer. There is no “UltraRen
 
 Phase PB is complete. The project declares **Core ABI 1.0** and **Worker Protocol 1.0** for the exact Windows x64 profile described below. The declaration freezes a small client interaction grammar, not the renderer as a product and not its algorithms, internal data models, feature set, or cross-platform behavior. The declaration tag is a repository evidence marker; packages have not been publicly distributed and the support clock has not started.
 
-The authoritative implementation cursor is `PRV.2 — 完整场景实现与自包含包`. PRV.0-PRV.1, Phase Q, R, T, V, the declared bounded scope of W, U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2, and PB.0-PB.8 are complete within their documented contract, component, or evidence boundaries. Those completion records do not imply product E2E closure. HR.3, neural systems, new estimator research, the broader high-order physical world, and differentiation are frozen during the Preview route.
+The authoritative implementation cursor is `PRV.1R — Product Runtime 阻塞性修复与可信 E2E 基线`. PRV.0 and the PRV.1 structural client spine, Phase Q, R, T, V, the declared bounded scope of W, U, HO.0-HO.2, HT.0-HT.5, HR.0-HR.2, and PB.0-PB.8 are complete within their documented contract, component, or evidence boundaries. PRV.1's former ProductE2E interpretation has been superseded by the runtime audit; PRV.2 and later product work are blocked until PRV.1R closes. HR.3, neural systems, new estimator research, the broader high-order physical world, and differentiation remain frozen during the Preview route.
 
 ## Preview integration state
 
@@ -18,8 +18,8 @@ The current render-client spine has one product execution authority. `ure_client
 
 | Product area | Highest current evidence | Preview gap |
 |---|---|---|
-| Core/Worker scene render | Product E2E for the bounded PRV.1 native-scene path; runtime adapter and Worker both delegate ProductJob 0.1 to `ure_product` | Complete archive realization, measurements and official output remain later PRV phases |
-| CLI render | Product E2E for the PRV.1 subset through `ure_client`; Worker is default and Direct is explicit | Rich scene/output/tooling semantics are not yet exposed by ProductJob 0.1 |
+| Core/Worker scene render | ClientReachable structural spine; runtime adapter and Worker both delegate ProductJob 0.1 to `ure_product` | Sample/work accounting, persistent execution, long-operation control, resource roots and meaningful product-image evidence are blocking defects |
+| CLI render | ClientReachable through `ure_client`; Worker is default and Direct is explicit | Current smoke does not prove trustworthy samples, quality, budget/cancel semantics or self-contained execution |
 | Native advanced blocks | Contract / component executable | Procedural, resource, solver and simulation declarations are not uniformly realized by the renderer |
 | Automatic transport | Component executable with a bounded CUDA bridge | The product renderer does not yet consume the full HT support, pilot and portfolio authority |
 | Measurement/reconstruction | Component executable | No complete-scene product producer/output chain for all required planes |
@@ -27,11 +27,13 @@ The current render-client spine has one product execution authority. `ure_client
 | Multi-device/farm/cache | Component executable | Not reachable through one canonical product job and artifact workflow |
 | Hydra/legacy Python | Client-reachable internal paths | Bypass the canonical product service and require convergence |
 
-PRV.0 preserves the historical product baseline. The current machine-validated closure ledger records 46 maintained capabilities and entry points: 2 Contract, 18 ComponentExecutable, 14 RendererIntegrated, 7 ClientReachable and 5 ProductE2E. The five ProductE2E classifications cover only the bounded Core/ProductJob/Worker/CLI spine; none of the twelve final Preview product scenarios is ProductE2E.
+PRV.0 preserves the historical product baseline. The live machine ledger still records 46 maintained capabilities and entry points with five PRV.1-era `ProductE2E` classifications; the PRV.1R audit has withdrawn that interpretation. PRV.1R.0 must add a supersession record and reclassify those entries to their actually demonstrated `ClientReachable` or `RendererIntegrated` level without rewriting historical reports. None of the twelve final Preview product scenarios is ProductE2E.
 
-The current semantic audit covers 25 maintained inputs: 15 reject outside the executable ProductJob 0.1 subset, 4 execute, 4 are preserved for tooling and 2 execute with explicit semantic debt. No maintained input is accepted-but-ignored. The retained scenario manifest binds twelve required workflows across eight coverage dimensions. See the historical [`PRV.0 baseline`](docs/PRV0_Product_Truth_Baseline.md), its [machine report](docs/reports/ure_preview_baseline_v1.json), and the current [PRV.1 validation report](docs/reports/phase_prv1_validation_v1.json).
+The current semantic audit covers 25 maintained inputs: 15 reject outside the executable ProductJob 0.1 subset, 4 execute, 4 are preserved for tooling and 2 execute with explicit semantic debt. No maintained input is accepted-but-ignored. The retained scenario manifest binds twelve required workflows across eight coverage dimensions. See the historical [`PRV.0 baseline`](docs/PRV0_Product_Truth_Baseline.md), its [machine report](docs/reports/ure_preview_baseline_v1.json), and the historical [PRV.1 validation report](docs/reports/phase_prv1_validation_v1.json); the latter remains valid for routing/smoke parity but is no longer sufficient ProductE2E evidence.
 
-PRV.1 is complete. ProductJob remains an `UnstableExtension`; Core ABI 1.0 prefixes are unchanged. The shared `ure_client` provides explicit Direct/Worker transports, Worker uses the two bootstrap exports and shared-memory frame leases, and CLI render owns no renderer/SceneIR/image-save implementation. Direct/Worker/CLI load, render, cancellation, error, frame and artifact behavior is gated, including two byte-identical 64×64 PFM renders and failure isolation without transport fallback.
+PRV.1's architectural slice is retained. ProductJob remains an `UnstableExtension`; Core ABI 1.0 prefixes are unchanged. The shared `ure_client` provides explicit Direct/Worker transports, Worker uses the two bootstrap exports and shared-memory frame leases, and CLI render owns no renderer/SceneIR/image-save implementation. Its two byte-identical 64×64 PFM renders establish smoke-scale transport parity only. The audit found geometric effective work growth from repeated full rerenders, a fixed 60-second Worker wait boundary, incorrect budget/complete semantics, coarse cancellation, current-directory resource dependence, and a default-profile UHD memory/paging cliff without preflight.
+
+Diagnostics are now a continuous Preview workstream. PRV.1R establishes stable result/domain mapping, versioned detail and catalog, correlation/cause/recovery data, terminal operation errors, device reporting and cross-process parity. PRV.2-PRV.10 must add their own scene, material, output, reconstruction, automatic, session, backend, distributed and adapter diagnostics as those product paths are integrated; PRV.11 only performs unified closure.
 
 ## Declared public boundary
 
@@ -75,7 +77,7 @@ GPU backends, CUDA-coupled renderer/session/product-runtime targets, and optiona
 
 | Subsystem | Current state | Important boundary |
 |---|---|---|
-| Product client/runtime | `ure_product`, ProductJob 0.1 and `ure_client` Direct/Worker transports execute the same bounded native scene; CLI render uses this path | ProductJob is unstable and currently exposes only the PRV.1 objective/frame/artifact subset |
+| Product client/runtime | `ure_product`, ProductJob 0.1 and `ure_client` Direct/Worker transports share one structural execution spine; CLI render uses this path | PRV.1R must repair actual sample/work semantics, persistent execution, async control, resource roots and trusted ProductE2E before further product integration |
 | CUDA renderer | Implemented and tested | Complete-scene reference path; no CPU production integrator |
 | Spectral/polarization | Runtime spectral domain, packet cap 32, Stokes/Mueller on covered paths | Not general coherent field transport |
 | Automatic integration | Technique Graph, support/measure composition, pilot qualification and portfolio contracts plus a bounded CUDA bridge implemented | Current product auto renderer does not yet consume the entire HT authority; manual modes remain for reproduction |
@@ -109,6 +111,11 @@ This report is a point-in-time public-boundary declaration record. PRV.0 separat
 
 ## Explicitly incomplete
 
+- trustworthy ProductJob sample/work accounting, persistent incremental execution, bounded cancellation and long-running Worker control;
+- self-contained resource execution independent of process current directory, plus pre-allocation GPU memory/applicability decisions;
+- a real-product Direct/Worker/CLI/external-client matrix with 480p functional, 720p/1080p quality and separately scheduled QHD/UHD stress evidence;
+- monotonic progressive events/latest-frame acquisition, explicit device selection/reporting, unambiguous `sample_budget`/scene/per-frame precedence, and an SDK that carries pre-generated protocol headers plus a renderer-free reference client;
+- comprehensive structured diagnostics beyond the current Core lifecycle subset, including domain catalogs, cross-process correlation, terminal-operation errors and actionable recovery guidance;
 - migration of Python and Hydra onto the canonical product service already used by CLI, Direct and Worker;
 - complete realization or explicit rejection of native procedural/resource/solver/simulation semantics;
 - full HT-contract-driven automatic transport in the product renderer;
@@ -137,6 +144,7 @@ pwsh -NoProfile -File scripts/run_phase_prv1_validation.ps1 -RepoRoot . -BuildDi
 ```
 
 CTest counts are snapshots. Use `ctest --test-dir build_modular_x64 -C Release -N` for the live inventory.
+The current configured `build_modular_x64` inventory contains 108 registered tests; this is an inventory count, not a Preview maturity claim.
 
 ## License
 

@@ -1,6 +1,6 @@
 # UltraRender Preview 产品集成与端到端闭环路线图
 
-最后更新: 2026-08-11（PRV.1 唯一 Product Runtime 与客户端主干闭环；当前进入 PRV.2 完整场景实现与自包含包）
+最后更新: 2026-08-13（PRV.1 客户端主干保留；新增 PRV.1R 修复阻塞性运行时语义并重建可信产品 E2E 基线）
 
 本文档是 UltraRender 当前唯一的全局施工权威。它将项目重心从继续扩展高阶研究能力，切换为已有非研究能力的产品总装、端到端闭环，以及训练无关重建/降噪的生产接入。
 
@@ -17,7 +17,7 @@
 
 ## 0. 权威状态
 
-当前游标: PRV.2 — 完整场景实现与自包含包
+当前游标: PRV.1R — Product Runtime 阻塞性修复与可信 E2E 基线
 
 ### 0.1 唯一施工队列
 
@@ -32,7 +32,10 @@ PRV.0 product truth baseline and closure ledger    [done]
 PRV.1 one product runtime and client spine         [done]
                   |
                   v
-PRV.2 complete scene realization and packages      [current]
+PRV.1R runtime correctness and trusted E2E         [current]
+                  |
+                  v
+PRV.2 complete scene realization and packages      [blocked by PRV.1R]
                   |
                   v
 PRV.3 material, asset and bounded wave composition
@@ -93,6 +96,9 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - 不恢复 Phase X 通用插件系统，不引入 ambient provider/model/script discovery。
 - OpenEXR 产品输出采用官方 OpenEXR 3.4.12 作为首选基线，固定源码、许可证与构建身份；依赖门禁失败时不得以自制不完整 EXR writer 替代。
 - 所有产品阶段使用 Windows Release 完整门禁；CUDA-off Linux GCC/Clang 与 Windows MSVC CI 继续验证可移植 host/package 边界。
+- `ProductE2E` 证据必须走维护中的外部产品调用链；直接调用 `ure_core`、`RenderSession`、内部 helper 或临时诊断程序只能作为组件/定位证据。
+- 例行正确性、产品质量与压力/尺度证据分层执行；QHD/UHD 500+ spp 属于压力/尺度验证，不进入普通提交门禁。
+- 正向产品证据不得为了适应本机而关闭产品声明中的光谱、积分器、重建或输出语义；降级配置只能作为明确标注的诊断对照。
 
 ### 0.4 冻结路线
 
@@ -167,7 +173,40 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 
 低层证据不能替代高层证据。
 
-### 1.4 提交与游标
+### 1.4 产品 E2E、质量与尺度证据
+
+产品 E2E 的权威调用链是 `ure_client` 或 generated SDK → 显式 Direct/Worker transport → runtime Product extension → `ure_product` → 正式 artifact 获取。CLI 是该客户端模型的人类适配器，不是第三套实现。mock、内部 renderer API、专用测试 renderer、临时 harness 和仅验证 schema/hash 的 fixture 都不能单独建立 ProductE2E。
+
+验证分四层，分辨率名称使用精确尺寸而不使用含混的“2K/4K”：
+
+| 层级 | 建议基线 | 目的与门禁位置 |
+|---|---|---|
+| Contract smoke | 32-128 px，1-4 spp | 生命周期、ABI/protocol、错误与快速回归；可进入每次提交 |
+| Product functional | 854×480，16-64 spp | 真实产品路径、非平凡 artifact、资源与调用方式；进入维护分支门禁 |
+| Product quality | 1280×720 / 1920×1080，128-512+ spp | 收敛、材质/光谱/AOV/重建和视觉质量；进入定时、里程碑及发布候选门禁 |
+| Stress/scale | 2560×1440 / 3840×2160，500+ spp | VRAM、吞吐、长时取消与稳定性；定时或人工实机执行，不作为普通提交门禁 |
+
+精确样本数由场景和统计设计决定，上表不是用低成本 smoke 替代质量证据的许可。产品质量和尺度层必须使用产品默认或明确请求的 production profile；任何关闭能力的运行仅作为诊断对照，必须记录差异且不得用于能力毕业。
+
+所有真实图像门禁保留 renderer 的权威 raw artifact，并通过一个确定性的派生查看流程生成 PNG，固定方向、色彩空间、曝光和 tone-map identity。自动检查至少覆盖维度、finite、非零/非平凡、能量/统计范围、收敛或 reference metric；质量与发布层同时保留人工视觉审阅记录。文件存在、header 可读、hash 相同或 Direct/Worker 字节一致本身不证明图像正确。
+
+调用矩阵按风险和 pairwise 设计，不要求无意义的全笛卡尔积，但每个维护中的调用方式至少完成一条真实渲染与 artifact 获取，代表性场景必须跨 Direct、Worker、CLI 和外部 SDK 客户端复用。证据绑定 runtime/build、GPU、driver、VRAM、production profile、分辨率、样本域和耗时；同机同配置用相对回归判定，跨硬件使用声明的 applicability/class 约束。
+
+当内存、设备或预计工期不适用时，产品必须在执行前结构化拒绝或选择已声明且语义等价的计划；不得通过隐式能力降级、失控 paging 或超时后伪装成功来通过门禁。
+
+### 1.5 持续诊断成熟度
+
+错误和诊断不是一次性基础设施切片，而是每个 Preview 阶段的持续交付物。PRV.1R 建立统一诊断信封、关联身份和最低质量门槛；PRV.2-PRV.10 分别扩展本领域的版本化 detail schema、恢复建议和真实负向 E2E；PRV.11 只做全局一致性与包内目录封口，不能首次补写前序阶段缺失的错误语义。
+
+每个非成功结果至少保留稳定 result、domain、版本化 detail code/schema、人类可读消息、operation/session/job、scene/snapshot/objective/plan、runtime/build、transport/backend/device 和 cause/retryability 中适用的字段。调用链必须携带 correlation identity，使 CLI、SDK、Worker、runtime、product service 和 backend 日志能关联同一次请求；不得只返回 `Internal`、裸 vendor code 或“无 Error object”字符串。
+
+Error 对象分配失败是唯一允许没有 retained Error handle 的资源极限边界，此时仍返回原始稳定 result，并通过预分配/无分配的 emergency diagnostic 保留最小 domain/detail/correlation。普通失败、跨进程失败和 operation terminal failure 必须可检查。Core result 中的 `Timeout`、`Incomplete`、`BudgetExhausted`、`Canceled`、`DeviceLost`、`CapabilityUnavailable` 和 `Internal` 不得混用；`NotApplicable` 等产品状态作为版本化detail表达，不伪造新的Core result。
+
+诊断 detail 可以随 0.x schema 演进，但稳定 result/domain 和 Core 1.0 行为不得原地改义。消息不得泄漏绝对私有路径、内存地址、密钥或未清理的 vendor 文本；事件、cause chain、structured payload 和日志必须受大小、深度、速率和保留预算约束。
+
+每个阶段的完成门禁必须包含本领域的正向诊断、失败注入、Direct/Worker parity、CLI/SDK 可读性和文档化枚举/恢复建议。新增 fail-loud 路径若没有结构化诊断、可复现负向测试和 owner，不得视为完成。
+
+### 1.6 提交与游标
 
 每个 PRV 子步骤按 `PLAN -> IMPLEMENT -> VERIFY -> REVIEW -> REPORT -> COMMIT` 执行。当前文档切换提交已获用户明确授权；后续生产施工仍按 AGENTS.md 的授权和报告规则执行。只有完整 phase gate 通过后才能将根游标推进到下一阶段。
 
@@ -220,9 +259,9 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 
 ## 3. PRV.1 — 唯一 Product Runtime 与客户端主干
 
-**状态**: 已完成。
+**状态**: 架构主干已完成；其历史 ProductE2E/运行时正确性结论已由 PRV.1R 重新分类，不能作为后续阶段的可信产品基线。
 
-**完成记录**: `ure_product`、ProductJob 0.1、`ure_client` Direct/Worker transport 与 CLI render 已收敛到同一产品执行权威。CLI 默认 Worker、显式 direct，渲染链接图不再包含 `ure_core`/`ure_sceneio`；原生场景工具暂由隔离的 `ultrarender_native_tool` 保持可用，语义权威在 PRV.2 迁入 runtime scene-tool extension。Direct/Worker 的 load/render/cancel/error/frame/artifact、无隐式回退与两幅逐字节一致的 64×64 PFM 由 `docs/reports/phase_prv1_validation_v1.json` 固定。
+**完成记录**: `ure_product`、ProductJob 0.1、`ure_client` Direct/Worker transport 与 CLI render 已收敛到同一产品执行权威。CLI 默认 Worker、显式 direct，渲染链接图不再包含 `ure_core`/`ure_sceneio`；原生场景工具暂由隔离的 `ultrarender_native_tool` 保持可用，语义权威在 PRV.2 迁入 runtime scene-tool extension。`docs/reports/phase_prv1_validation_v1.json` 保留了 64×64 smoke、transport parity 与结构性证据，但后续调查证明它没有覆盖真实 sample work、长时控制、资源根和产品质量，因此不再足以支持 ProductE2E 声明。
 
 **目标**: 建立 `ure_product` 和 `ure_client`，让 CLI render 首先退出 renderer 实现，证明 direct 与 Worker 通过同一 runtime 服务执行当前基础场景。
 
@@ -267,13 +306,115 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 
 ---
 
+## 3A. PRV.1R — Product Runtime 阻塞性修复与可信 E2E 基线
+
+**状态**: 当前游标；PRV.2-PRV.11 在本阶段闭环前不得继续生产施工。
+
+**目标**: 修复已确认的 sample/work accounting、重复重建执行、Worker 长时控制、预算完成语义、资源根和显存适用性缺陷，并建立可以被后续所有 Preview 阶段复用的真实产品调用与图像证据基础设施。PRV.1 的单一执行权威和冻结 Core/Worker 1.0 前缀保持不变；本阶段不提前完成 PRV.6 的完整自动积分器产品化。
+
+**已确认阻塞事实**:
+
+- Product `sample_budget` 当前按外层 operation 次数驱动，而 automatic renderer 每次重新创建 renderer、重新加载场景并提高 technique target，导致实际目标工作呈几何增长；`sample_budget=50` 已对应约 163,840 target spp，而非 50 个规范样本；
+- Stable Core Worker 存在固定 60 秒同步 wait，长任务可返回 `Timeout` 且没有 artifact；Worker 主循环和产品 render 调用缺乏可抢占的有界工作量；
+- wall-time budget 仅中止外层循环后仍可能发布成功，Frame adapter 可无条件报告 complete；CLI 另有与 ProductObjective 无关的固定 deadline；
+- package fixture 的相对 SPD 依赖当前工作目录，隔离目录/外部客户端不能自包含执行；
+- 当前 PRV.1 证据主要是 64×64、1-2 spp 的 smoke 与字节 parity，未验证收敛、质量、尺度、完整调用矩阵或产品默认能力；
+- QHD/UHD 500 spp 的临时 `ure_core` harness 证明 CUDA core 可产生结构一致的 Cornell 图像，但它绕过产品路径且使用过诊断降级配置，只能作为定位证据；默认配置下 UHD 1 spp 的本机显存/paging cliff 需要产品预检与 applicability 处理，不能混同为算法正确性失败。
+
+### PRV.1R.0 — 证据重新分类与回归基线
+
+- 将现役 closure ledger 中仅由 PRV.1 smoke 支撑的 `ProductE2E` 项降级到真实达到的 `ClientReachable` 或 `RendererIntegrated`；历史报告保持不可篡改，以 additive supersession record 说明证据撤回原因；
+- 建立最小回归场景，记录 requested/accepted/completed work domain、scene realization 次数、executor 创建次数、实际 renderer samples、取消延迟和 artifact 状态；
+- 固定问题复现：小样本结构计数、50/60 sample 长时路径、不同 CWD package、budget early-stop 和 cancel-in-flight；
+- 禁止将临时诊断 harness、内部 core 调用或 capability-reduced 输出登记为 ProductE2E。
+
+### PRV.1R.1 — 规范 Work Domain 与持久化基础执行
+
+- ProductObjective 的 sample budget 映射为唯一、无重叠、可审计的 accepted work domain；pilot、production、technique、tile、wavelength 与 chain 工作分别计数；
+- 当前 bounded automatic bridge 在一个 ProductJob 内持久保存 scene realization 与 candidate executor state，不得每次 progress step 重新 load scene、重建 renderer 或从零累计；
+- 一个 public progress quantum 对应有界真实工作，而不是调用次数；completed work 只在实际完成后推进；
+- 修复只建立 PRV.6 所需的正确增量地基，不替代后续 HT Technique Graph、qualification、portfolio 和 support/measure 产品化。
+
+### PRV.1R.2 — Operation、预算、取消与完成状态
+
+- 统一 Core session、ProductJob、Worker 与 CLI 的 requested/accepted/completed/canceled/failed 状态映射；
+- wall-time、latency、sample、memory budget 必须进入执行计划；未完成请求不得发布成功 complete，允许的 partial result 必须由 objective 明确请求并在 artifact/progress 中标注；
+- render kernel/executor 以测得的有界 work quantum 暴露取消点；取消、deadline 与 Worker disconnect 不等待一个无上界整帧调用结束；
+- Worker wait timeout 是客户端观察窗口，不是作业预算或作业失败定义；移除固定 60 秒语义耦合和 CLI 独立 10 分钟产品 deadline；
+- cancel/timeout/error 后的 frame lease、operation、session、shared memory 和临时 artifact 生命周期可重复验证。
+
+### PRV.1R.3 — Worker 并发控制面与反压
+
+- Worker 的长时 render 不阻塞 cancel、poll/event、heartbeat 与 shutdown 控制请求；
+- 明确单 session 串行语义与跨 session 并发边界，禁止无界线程/队列；
+- operation event/progress 在 Direct 与 Worker 单调且语义一致，slow consumer、disconnect、crash 与 backpressure 有结构化结果；
+- 保持 Worker Protocol 1.0 冻结字段语义，通过内部调度或 additive negotiated extension 修复，不把 Worker 变成 renderer。
+
+### PRV.1R.4 — 执行根、资源与最小自包含产品 fixture
+
+- runtime 以明确的 scene/package execution root 或内容 URI 解析资源，不依赖进程 current directory；
+- 修复 PB/PRV 维护场景的 SPD、纹理和其他相对资源，使外部客户端在任意隔离目录通过 Direct 与 Worker 渲染；
+- fixture 打包并校验所有 required payload；测试不得通过临时切换 CWD 掩盖资源缺失；
+- 完整 `.urepkg` 语义仍由 PRV.2 建设，本步骤只闭环已有维护产品场景和阻塞性 package truth。
+
+### PRV.1R.5 — 显存/尺度适用性与预检
+
+- 在 GPU allocation 前估算 framebuffer、spectral planes、queues、acceleration、executor state、scratch 与输出峰值，并记录预算分解；
+- 对明显超过可用显存或触发不可接受 residency 风险的计划返回 Core `BudgetExhausted` 与结构化 `NotApplicable` detail，或选择 objective 明确允许且语义等价的计划；
+- 禁止为适应设备静默减少 spectral lanes、积分器、AOV、重建或精度；
+- 性能证据绑定 GPU/driver/VRAM/config，区分结构性复杂度回归、产品资源策略缺陷和本机硬件不适用。
+
+### PRV.1R.6 — 诊断、设备与采样语义基础
+
+- 在现有Core Error/Operation语义上增加versioned Product Diagnostic detail/catalog，而非建立平行错误体系：保留稳定result/domain，并补充cause、retryability、recovery hint、correlation identity与operation/session/job/snapshot/plan/build identity；
+- runtime 普通失败必须产生 retained Error 或可查询 terminal error；Error 分配失败走有界 emergency diagnostic，不得把普通 `Internal` 降为 null error；
+- 建立跨 Direct/Worker/CLI 的错误映射表，明确 `Timeout`、`Incomplete`、`BudgetExhausted`、`Canceled`、`DeviceLost`、`CapabilityUnavailable` 和 `Internal`；backend/vendor code只作为有类型的嵌套detail，`NotApplicable`保留为产品状态/detail；
+- 通过独立 0.x Device/Execution extension 枚举 adapter/backend/provider、驱动、设备身份、总量/可用显存与能力，消费 objective 的设备约束，并在plan/artifact/diagnostic中报告实际选择；不扩张Core 1.0；
+- 固定 ProductObjective sample budget、NativeScene `scene.spp`、simulation `spp_per_frame`、pilot、production和progressive accumulation的优先级/覆盖/重置表；禁止隐式相乘和重复累计，冲突输入在job compile阶段拒绝；
+- 发布可机器读取的 result/domain/detail 目录和集成者恢复指南；对敏感字段清理、cause深度、payload大小、事件速率和日志保留设预算。
+
+### PRV.1R.7 — 渐进反馈与外部集成基础包
+
+- ProductJob 在有界work quantum后发布单调progress event；事件含accepted/completed domain、阶段、预算消耗、预计剩余范围和最新frame generation，不以每sample强制同步；
+- Direct与Worker允许独立poll/wait event并获取最新immutable progressive frame；发布频率、合并、丢帧、backpressure和lease lifetime明确，慢客户端不能阻塞renderer；
+- PRV.1R移除Worker和`ure_client`中的单plane snapshot/`planes.size()==1`假设，建立任意已发布Frame plane的有界descriptor/lease传输；PRV.4再以真实AOV/Measurement planes完成产品语义和质量门禁；
+- SDK直接携带与registry/runtime manifest一致的预生成Worker/Frame/Scene/Product C++协议头、FlatBuffers runtime headers、生成器版本/命令/identity，不要求普通集成者本机运行`flatc`；schema仍同时分发供审计和其他语言生成；
+- 将测试目录中的Worker client提炼为renderer-free exact-build参考库/源码包，提供`find_package(UltraRender)`目标、最小Direct/Worker示例和out-of-tree构建；它不得成为第二套客户端语义权威；
+- 场景构建使用generated serialization/builder helper和PRV.2 scene-tool extension；不发布或冻结`ure_sceneio`、SceneIR或MaterialGraph的内部C++ ABI。
+
+### PRV.1R.8 — 可信产品 E2E 矩阵与图像证据
+
+- 建立共享 product scenario runner，经维护中的 `ure_client`/generated SDK 驱动 Direct、Worker 和 CLI；测试代码不链接 renderer-private 库；
+- 所有维护调用方式至少一条真实 render→frame/artifact 流程，代表性 Cornell/PB 场景采用风险 pairwise 覆盖 transport、client、cancel/error 和隔离 CWD；
+- 每次提交保留 contract smoke；Windows GPU 维护门禁至少包含 854×480、16-64 spp 的 production-profile product functional 场景；
+- 定时/里程碑门禁包含 1280×720 与 1920×1080、最高 512 spp 的 Cornell/材质产品质量场景；QHD/UHD 500+ spp 仅进入有硬件身份的 stress/scale suite；
+- 权威 raw artifact 经固定转换生成 PNG，自动验证 finite、非平凡、能量、空间结构、收敛/reference metric，并为 quality/stress 证据保留人工视觉审阅结果；
+- Direct/Worker/CLI parity 比较相同 plan/work identity 下的统计或确定性输出，hash/字节一致只能作为附加传输证据。
+
+**完成门禁**:
+
+- 对固定场景，请求 N 个 production samples 实际只完成 N 个无重叠 work items；pilot 单独披露，scene realization 与 executor 创建次数不随 progress step 或 spp 几何增长；
+- 1→2N 的结构计数保持线性，实测同机耗时没有由重复全量重渲染造成的超线性曲线；
+- Direct/Worker/CLI/外部 C/C++ 客户端均通过 canonical product path 生成真实 artifact，Worker 长任务不再受固定 60 秒失败边界；
+- budget、partial completion、cancel 与 failure 状态不再伪装为 complete，取消延迟受声明 work quantum 上界约束；
+- Blender类外部客户端可在渲染期间取得单调进度、最新渐进帧并及时取消；设备选择和实际执行设备可查询且写入证据；
+- `sample_budget`、`scene.spp`、`spp_per_frame`及progressive reset/accumulate组合均通过表驱动正负向门禁，无隐式乘法；
+- SDK在没有`flatc`和renderer-private头/库的clean out-of-tree工程中构建并运行Direct/Worker真实渲染；
+- 代表性runtime、Worker、resource、budget、cancel、device和malformed失败均返回可关联、可分类、可恢复的结构化诊断；普通失败不存在null Error退化；
+- 维护场景从非作者 CWD 和隔离 package 目录成功运行，缺失/越界资源在 allocation 前拒绝；
+- 480p functional 与 720p/1080p quality 证据在 production profile 下通过；QHD/UHD stress 结果按硬件适用性记录而不阻塞普通提交；
+- closure ledger、baseline、STATUS、README 和架构文档不再包含由 smoke、mock、internal harness 或降级配置支持的虚假 ProductE2E 声明；
+- Windows Release 维护门禁、Core ABI 1.0/Worker Protocol 1.0 compatibility 和 hosted non-GPU CI 保持绿色。
+
+---
+
 ## 4. PRV.2 — 完整场景实现与自包含包
 
-**状态**: 当前游标。
+**状态**: 等待 PRV.1R 完成。
 
 **目标**: 让一个产品作业消费完整 NativeSceneArchive，并让验证、实现和渲染对 required feature 得出同一结论。
 
-**依赖**: PRV.1。
+**依赖**: PRV.1、PRV.1R。
 
 ### PRV.2.1 — Scene Realizer
 
@@ -306,13 +447,21 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - direct 与 Worker 对同一输入返回相同 diagnostics、feature disposition和snapshot identity；
 - script build 继续显式 opt-in，runtime 不执行 ambient script。
 
+### PRV.2.5 — Scene/package diagnostic maturity
+
+- 为parse、schema、feature disposition、resource resolution、procedural realization、solver/simulation compile和package publication分配稳定domain与版本化detail；
+- 诊断包含scene/package/resource identity、JSON/FlatBuffer字段路径或source span、required/optional disposition、预算分解与安全清理后的resolution trace；
+- CLI、Direct和Worker返回同一cause graph与correlation identity，恢复建议区分修复输入、补资源、升级schema、提高预算和明确不支持。
+
 **完成门禁**:
 
 - retained Q.3-Q.12 advanced fixtures全部被 Executed、Rejected 或 PreservedForTooling，无 ignored block；
 - procedural package实际生成几何/光源/光谱资源并渲染非平凡图像；
 - solver/simulation/resource required declarations不能只通过 schema 后被丢弃；
 - self-contained package在隔离临时目录由独立客户端完成 validate→realize→render；
+- 该 render 必须复用 PRV.1R product scenario runner，以 production profile 生成至少 480p 非平凡 artifact；native tool 或直接 `ure_core` 调用不能替代；
 - corrupt、ambiguous、oversized、missing-resource和unsupported-feature负向门禁通过。
+- scene/package错误目录、真实负向fixture、Direct/Worker/CLI parity和redacted输出门禁通过；未知异常不得塌缩为无上下文`Internal`。
 
 ---
 
@@ -350,12 +499,19 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - reconstruction producer保留transport/detector wavelength、Stokes和lifetime/time identity；
 - wave feature不能被tone-map或RGB-only intermediate提前压平。
 
+### PRV.3.5 — Material/asset diagnostic maturity
+
+- MaterialGraph compile、adapter loss、texture/SPD/Mie加载、spectral domain、medium、wave feature和estimator applicability具有版本化detail与node/resource path；
+- adapter loss report与runtime rejection共享identity，明确unsupported、lossy、resource missing、domain mismatch和backend limitation，禁止fallback material掩盖错误。
+
 **完成门禁**:
 
 - native、glTF、MaterialX-derived、preset和Hydra-derived material都通过canonical graph生成artifact；
 - retained material风险矩阵覆盖真实CUDA渲染、mutation、package和loss report；
 - volume/Mie、diffractive和fluorescent场景有raw measurement和可查看图像；
 - unsupported graph、resource、estimator和wave组合在计划阶段拒绝。
+- 共享产品矩阵至少以480p functional覆盖主要材质组合，并以720p/1080p quality场景验证glass/caustic、volume/Mie、spectral和wave-material；不得用内部integrator fixture代替。
+- 材质/资产错误在Direct、Worker、CLI及适用authoring adapter间保持分类与cause parity，并包含可操作恢复建议。
 
 ---
 
@@ -394,6 +550,12 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - external client可选择只读取raw planes，不强制runtime写文件；
 - unsupported output semantic、layout、precision或budget在job compile阶段拒绝。
 
+### PRV.4.5 — Plane transfer and output diagnostics
+
+- Worker与`ure_client`透传runtime Frame的全部planes，不保留单plane snapshot或`planes.size()==1`假设；每个plane使用独立或明确分段的lease、extent、digest和lifetime；
+- 输出诊断区分producer plane缺失、unsupported semantic、layout/precision、transfer corruption、backpressure、disk/permission、codec和atomic publication failure；
+- 多plane partial acquisition失败不得损坏已发布的immutable frame，manifest标记complete/partial/failed及可重试范围。
+
 **完成门禁**:
 
 - 完整场景producer满足HR.0/HR.1训练无关重建所需最小plane集合；
@@ -401,6 +563,8 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - EXR经官方reader重开，channels、metadata、finite值和content identity通过；
 - direct/Worker measurement bytes与manifest一致；
 - CLI tone-map、output semantic和SPD/resource路径中已知no-op被消除或拒绝。
+- Direct、Worker、CLI和外部SDK读取同一正式artifact graph；raw权威与确定性PNG派生查看产物的方向、色彩、曝光和tone-map identity由门禁固定。
+- Beauty、Z/depth、normal、albedo、motion、denoise inputs及适用Spectrum/Stokes planes经Worker完整传输；多plane错误注入、lease/backpressure和诊断parity通过。
 
 ---
 
@@ -438,6 +602,11 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - 至少保留一组负结果/不适用场景，证明rejection不是测试空洞；
 - quality提升不能通过裁剪高能样本、显示域压平或引用泄漏获得。
 
+### PRV.5.5 — Reconstruction diagnostic maturity
+
+- applicability、missing plane、insufficient support、heavy tail、history invalidation、OOD、calibration、physical projection和budget failure均使用版本化reason/detail；
+- rejection明确raw结果仍是否有效、fallback是否允许、哪一历史或measurement identity失效，以及用户可采取的恢复动作。
+
 **完成门禁**:
 
 - CLI/direct/Worker均可请求raw-only或raw+reconstruction；
@@ -445,6 +614,8 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - camera/material/transform变化触发正确history invalidation；
 - Spectrum/Stokes物理约束和缺plane fallback通过；
 - 无model、weight、inference runtime或neural ABI进入产品包。
+- 训练无关重建质量门禁使用production-profile 720p/1080p、多重复与足够样本的完整产品路径；1-4 spp smoke只能验证生命周期，不能证明降噪质量。
+- reconstruction rejection/partial结果在artifact、CLI、SDK和Worker中保持一致，不以一般`NotApplicable`掩盖具体原因。
 
 ---
 
@@ -470,7 +641,7 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 
 ### PRV.6.3 — Persistent portfolio execution
 
-- 每个selected technique保留renderer/executor state，progressive pass不重新load scene或从零渲染；
+- 扩展PRV.1R已建立的规范work domain与持久executor；每个selected technique保留renderer/executor state，progressive pass不重新load scene或从零渲染；
 - 使用HT.3 work domain分配tile/wavelength/time/device/sample/chain；
 - support partition与normalization决定组合，不能只按整图均值variance混合完整frame；
 - wavefront defensive coverage、exploration、starvation和drift policy可观测。
@@ -489,6 +660,11 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - 多重复统计验证combined estimator、raw measurement和reconstruction；
 - manual preset与automatic plan在显式reproduction场景保持可解释关系。
 
+### PRV.6.6 — Automatic decision diagnostics
+
+- 每个technique的selected/rejected/deferred原因绑定support、measure、maturity、scene/material/backend、pilot统计、memory和objective证据；
+- schedule drift、qualification失败、defensive fallback、budget exhaustion和normalization拒绝使用机器可读decision trace，不暴露仅供内部的指针或vendor文本。
+
 **完成门禁**:
 
 - product runtime不再调用simplified candidate list/whole-frame pilot authority；
@@ -496,6 +672,8 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - progressive work不重复已接受sample range；
 - public sample/progress/quality accounting与actual schedule一致；
 - automatic成为CLI和ProductJob默认，无需用户选择积分器。
+- PRV.1R的线性结构计数、长时取消、production-profile产品矩阵和显存预检不得因完整portfolio接入回归。
+- external client可解释“为什么选择/排除某technique”及对应恢复边界，Direct/Worker decision trace identity一致。
 
 ---
 
@@ -533,6 +711,12 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - runtime/Worker/CLI进程退出后可从checkpoint恢复，不重复或遗漏accepted work；
 - corrupt、partial、stale、wrong-runtime、wrong-scene和overlap checkpoint拒绝。
 
+### PRV.7.5 — Multi-frame and session diagnostics
+
+- 明确普通序列渲染的frame/time/camera revision语义，与bounded simulation解耦；同一scene连续frame定义哪些state累积、复用或重置；
+- camera、shutter、scene transaction和frame jump分别产生结构化invalidation/reset reason，frame identity绑定sequence/frame/time和snapshot；
+- session state transition、illegal operation、stale frame、checkpoint incompatibility与恢复失败具有版本化detail和last-valid state。
+
 **完成门禁**:
 
 - progressive render经多次mutation仍能继续并输出正确reset reason；
@@ -540,6 +724,8 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - bounded rigid simulation生成连续非平凡图像与motion evidence；
 - Worker kill/restart和CLI restart均能恢复checkpoint；
 - unsupported simulation domain不再被场景loader接受后忽略。
+- 长时session、pause/resume/cancel/checkpoint通过PRV.1R异步控制面执行，任何单次work quantum都不形成无界控制延迟。
+- 同一scene的多帧序列、重复帧、跳帧、camera revision和transaction更新经CLI/SDK/Worker E2E验证累积/重置语义及诊断。
 
 ---
 
@@ -584,6 +770,12 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - nonresident、unsafe proxy、budget和recluster/refit缺失均fail-loud；
 - dense scene artifact证明实际选择coarse LoD并保持物理可见性门禁。
 
+### PRV.8.6 — Backend/device diagnostic maturity
+
+- adapter/provider selection、feature/precision mismatch、shader/pipeline compile、allocation、residency、device loss、DRED/validation和driver failure映射到公共诊断目录；
+- vendor payload作为有界、版本化、redacted nested detail保留，稳定result/domain不随CUDA/Vulkan/D3D12 vendor code改变；
+- device inventory与实际选择、预算、driver/compiler和failure correlation写入plan/artifact/report。
+
 **完成门禁**:
 
 - CUDA、Vulkan、D3D12各自通过独立外部ProductJob生成Common Profile真实图像、AOV和measurement；
@@ -591,6 +783,8 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - self-compute/OptiX/Vulkan RT/DXR至少各有一条complete-scene provider E2E；
 - clustered geometry由产品renderer消费，不再只是resource/selector fixture；
 - cross-backend报告记录physical/statistical parity、性能、VRAM、driver/compiler和明确差异。
+- 每个backend/provider先通过显存与capability预检再执行共享480p functional场景；720p/1080p质量及QHD/UHD压力结果按硬件适用性分层，不以静默降级或paging cliff冒充支持。
+- backend/provider/device失败在CLI、Direct和Worker保持同一顶层分类与关联identity，并保留适用的native detail。
 
 ---
 
@@ -628,6 +822,12 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - farm interruption从checkpoint恢复未完成domain；
 - merged artifact与单机reference在声明统计阈值内一致。
 
+### PRV.9.5 — Distributed/cache diagnostic maturity
+
+- scheduler、cache miss/invalidation、worker admission、shard gap/overlap/provenance、network/deployment、merge和recovery分别使用版本化detail；
+- 多worker cause graph保留worker/shard/device identity和可重试范围，聚合错误不得丢失首因或产生无界cause chain；
+- cache miss是可观测状态而非错误，cache corruption、identity mismatch和untrusted payload明确区分。
+
 **完成门禁**:
 
 - 实际多设备ProductJob由CLI/Worker入口触发，不直接调用MultiGpuContext test API；
@@ -635,6 +835,8 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - 至少两个实际worker完成disjoint shard→merge→reconstruction→EXR；
 - kill/restart不重复sample/spectral/chain domain；
 - single-device、multi-device和farm report共享plan/measurement identity体系。
+- CLI/Worker触发的实际产品路径必须保留PRV.1R requested/accepted/completed work不重叠不遗漏的会计不变量，组件级merge fixture不能替代产品E2E。
+- farm/cache/merge负向E2E证明诊断可定位到具体worker/shard/cache identity并给出安全恢复策略。
 
 ---
 
@@ -672,12 +874,20 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - internal C++ APIs可以保留实现用途，但安装/文档不暗示稳定产品入口；
 - 无duplicate authority、MustConverge bypass、expired migration gate或unclassified public-looking surface。
 
+### PRV.10.5 — Integrator-facing diagnostics and SDK closure
+
+- generated SDK直接分发预生成协议头、`ure_client`参考库/源码、CMake package、诊断目录/decoder与示例；普通consumer不依赖`flatc`或renderer-private C++ ABI；
+- C/C++/Python/Hydra将同一结构化diagnostic映射到各自语言异常/结果模型而不丢失result/domain/detail/correlation/cause；
+- 建立Blender类host集成fixture，覆盖进度、Esc取消、多帧、multi-plane、设备选择、错误恢复与日志关联；它是外部client evidence，不进入仓库GUI范围。
+
 **完成门禁**:
 
 - CLI、C11、C++23、Python、Worker和Hydra对共享场景取得兼容snapshot/plan/output identity；
+- 上述每种维护调用方式至少直接完成一条真实render→artifact；mock只验证合同，不能满足产品E2E，跨调用方式采用共享场景的风险pairwise矩阵；
 - repo client binaries的链接/import audit不包含绕过runtime的renderer入口；
 - legacy API兼容测试保持绿色但不接收Preview-only semantics；
 - generated SDK与runtime分包、安装、许可证和out-of-tree消费通过。
+- SDK诊断目录与预生成协议头绑定registry/runtime identity，跨语言golden及无`flatc`clean consumer通过。
 
 ---
 
@@ -700,14 +910,25 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 
 每个required cell绑定artifact、identity、metric、runtime、hardware、driver/compiler、repeat count和failure policy。可选环境缺失必须标记NotAvailable，不能用mock替代required release evidence。
 
+矩阵按风险pairwise覆盖而不是机械构造全笛卡尔积，但每个维护client/transport、输入家族、输出家族、backend profile和恢复路径都有真实产品调用。PRV.11只汇总此前阶段持续运行的证据，不允许在声明门禁首次发现这些路径从未产生过产品artifact。
+
 ### PRV.11.2 — Quality, performance and reliability
 
 - correctness覆盖reference、bias/variance、spectral/Stokes physical domain、AOV和reconstruction uncertainty coverage；
 - performance覆盖cold/warm scene realization、render、reconstruction、output、VRAM/RAM、cache和Worker transfer；
 - reliability覆盖100-run lifecycle、cancel race、backpressure、corrupt input、Worker crash、device loss、checkpoint和artifact atomicity；
 - security保持same-user local Worker、no TCP/UDP listener、no firewall request、no ambient code/model/provider discovery。
+- routine smoke、480p functional、720p/1080p quality与QHD/UHD 500+ spp stress分别报告；stress绑定适用硬件且不倒灌为普通提交门禁，质量层不得关闭production profile能力。
+- raw measurement/artifact保留为权威，固定PNG派生、自动图像指标与人工视觉审阅共同进入release evidence；文件存在或跨transport hash相同不构成质量证明。
 
-### PRV.11.3 — Cross-platform build and execution evidence
+### PRV.11.3 — Unified diagnostic closure
+
+- 聚合所有现役result/domain/detail schema、事件、operation terminal error、recovery hint与redaction policy，生成machine-readable catalog和human integration guide；
+- 每个PRV领域至少一条真实失败注入贯穿CLI/SDK→Direct/Worker→runtime/product/backend并保持correlation/cause；未知异常、Error分配失败、cause truncation和diagnostic budget exhaustion具有安全应急路径；
+- 运行fuzz、cross-version、message/redaction、bounded payload/rate、100-run failure lifecycle和跨语言golden，确认诊断本身不泄漏、不死锁、不遮蔽原始result；
+- `Internal`占比和无detail fallback受release gate审计：除批准的emergency path外，不得存在普通失败无retained/terminal诊断。
+
+### PRV.11.4 — Cross-platform build and execution evidence
 
 - Windows x64 MSVC/CUDA/Vulkan/D3D12完整bundle构建；
 - Linux GCC/Clang CUDA-off host/package保持绿色；
@@ -715,18 +936,19 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - Windows retained Core 1.0 client和Worker Protocol 1.0兼容矩阵继续通过；
 - 不声明macOS、ARM64或未验证平台。
 
-### PRV.11.4 — Product package
+### PRV.11.5 — Product package
 
-- package包含runtime、Worker、CLI、generated SDK、client library、schemas、manifest、fixtures、licenses、examples和validation report；
+- package包含runtime、Worker、CLI、generated SDK、client library、预生成协议头、diagnostic catalog/guide/decoder、schemas、manifest、fixtures、licenses、examples和validation report；
 - artifact目录、install layout、explicit runtime path和dependency manifest稳定；
 - package在clean machine/isolated directory完成安装后E2E；
 - 软件包仍标记Preview，extensions保持0.x，支持策略不偷换为UltraRender 1.0。
 
-### PRV.11.5 — Declaration gate
+### PRV.11.6 — Declaration gate
 
 - 输出`ure.preview.validation.v1`和human-readable closure report；
 - root README、STATUS、docs index、architecture、support policy和AGENTS口径一致；
 - product closure ledger为零accepted-but-ignored、duplicate authority、MustConverge bypass和false ProductE2E；
+- diagnostic catalog覆盖全部现役失败域，普通失败为零无上下文`Internal`/null Error，所有调用方式保留可关联结构化错误；
 - 完成REPORT后停下，必须获得用户对`UltraRender_preview`声明、tag、push和分发的分别批准。
 
 **完成门禁**:

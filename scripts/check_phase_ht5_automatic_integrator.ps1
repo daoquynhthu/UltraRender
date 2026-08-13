@@ -51,8 +51,9 @@ Require-Text $bridge @(
     "SpecularManifold", "VCM", "MLT", "Wavefront")
 Require-Text "libs/ure_config/include/ure/config.hpp" @(
     'std::string mode = "automatic"', "sample_index_offset")
-Require-Text "apps/ure_cli/src/main.cpp" @(
-    "automatic_integrator", "Automatic portfolio:", "sample_index_offset")
+Require-Text "libs/ure_product/src/product_service.cpp" @(
+    "IntegratorMode::Automatic", "automatic_integrator.enabled",
+    "sample_index_offset")
 Require-Text "libs/ure_core/include/ure/ure_c_api.h" @(
     "URE_INTEGRATOR_AUTOMATIC", "ure_automatic_integrator_config_t",
     "ure_session_create_execution_config_v3",
