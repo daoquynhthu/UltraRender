@@ -133,7 +133,7 @@ class DirectConnection final : public ClientTransport,
         scenes_ = query_table<ure_scene_interface_t>(query, scene_id, 1, 0, 1,
                                                      0);
         products_ = query_table<ure_product_job_interface_t>(
-            query, product_id, 0, 1, 0, 1);
+            query, product_id, 0, 1, 0, 2);
         if (!runtime_ || !instances_ || !errors_ || !operations_ || !frames_ ||
             !scenes_ || !products_)
             throw_error(URE_RESULT_CAPABILITY_UNAVAILABLE,
@@ -241,9 +241,14 @@ class DirectJob final : public JobTransport {
         connection_->check(connection_->products_->request_cancel(
                                job_, &accepted, &error),
                            error);
-        if (!accepted)
+        if (!accepted) {
+            const auto state = info().state;
+            if (state == JobState::Succeeded || state == JobState::Canceled ||
+                state == JobState::Failed || state == JobState::DeviceLost)
+                return;
             throw_error(URE_RESULT_BUSY, URE_ERROR_DOMAIN_CORE, 18,
                         "direct product cancellation was not accepted");
+        }
     }
 
     JobInfo info() const override {
@@ -258,6 +263,7 @@ class DirectJob final : public JobTransport {
         result.state = JobState::Created;
         result.requested_samples = product_info.requested_samples;
         result.accepted_samples = product_info.accepted_samples;
+        result.completed_samples = product_info.completed_samples;
         result.identities = identities(product_info);
         if (operation_) {
             ure_operation_info_t operation_info{};

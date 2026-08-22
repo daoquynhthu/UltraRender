@@ -134,7 +134,7 @@ bool allowed_render_arguments(int argc, char **argv, std::string &error) {
             argument.starts_with("--cancel-after-ms="))
             continue;
         if (argument.starts_with('-')) {
-            error = "render option is not executable through ProductJob 0.1: " +
+            error = "render option is not executable through ProductJob 0.2: " +
                     std::string(argument);
             return false;
         }
@@ -160,7 +160,7 @@ ure::client::SceneFormat scene_format(const std::filesystem::path &path) {
     if (extension == ".urepkg")
         return ure::client::SceneFormat::UrePackage;
     throw std::runtime_error(
-        "ProductJob 0.1 accepts only .ure, .urescene, or .urepkg inputs");
+        "ProductJob 0.2 accepts only .ure, .urescene, or .urepkg inputs");
 }
 
 std::string digest_hex(std::span<const std::uint8_t, 32> digest) {
@@ -209,6 +209,7 @@ int render(const ure::config::CliResult &cli) {
         std::cout << "transport=" << cli.transport << '\n'
                   << "state=succeeded\n"
                   << "accepted_samples=" << result.info.accepted_samples << '\n'
+                  << "completed_samples=" << result.info.completed_samples << '\n'
                   << "frame=" << result.frame.width << 'x'
                   << result.frame.height << '\n'
                   << "frame_bytes="

@@ -10,11 +10,11 @@ UltraRender 是一个处于持续研发阶段的光谱/偏振离线渲染器。�
 
 Preview 路线要求 CLI、Python、Hydra 和后续编辑器通过同一个产品服务工作：客户端使用共享 `ure_client`，显式选择进程内 direct transport 或本地 Worker transport；两者最终调用同一 runtime/product implementation。Worker 只负责隔离、协议和共享内存传输，CLI 也不再拥有第二套场景加载、积分器选择、重建或输出实现。
 
-PRV.1 已让 CLI render 退出 renderer 实现：共享 `ure_client` 提供显式 Direct/Worker transport，两路均使用 ProductJob 0.1 与同一个 `ure_product` 服务；CLI 默认 Worker，启动失败不会回退 direct。这个结构保留，但后续调查证明原有 64×64 smoke 不能支撑 ProductE2E 结论。Hydra、legacy pyure、自动渲染桥、原生高级块、MeasurementBundle、重建、可移植 backend、多设备/farm/cache 仍未全部进入同一个完整场景工作流。[Preview 架构](docs/UltraRender_Preview_Architecture.md) 定义目标边界，[PLAN.md](PLAN.md) 以新增 PRV.1R 为当前阻塞修复阶段。
+PRV.1 已让 CLI render 退出 renderer 实现：共享 `ure_client` 提供显式 Direct/Worker transport，两路均使用同一个 `ure_product` 服务；PRV.1R 当前的 exact-build ProductJob 0.2 明确区分 requested/accepted/completed work。CLI 默认 Worker，启动失败不会回退 direct。这个结构保留，但后续调查证明原有 64×64 smoke 不能支撑 ProductE2E 结论。Hydra、legacy pyure、自动渲染桥、原生高级块、MeasurementBundle、重建、可移植 backend、多设备/farm/cache 仍未全部进入同一个完整场景工作流。[Preview 架构](docs/UltraRender_Preview_Architecture.md) 定义目标边界，[PLAN.md](PLAN.md) 以新增 PRV.1R 为当前阻塞修复阶段。
 
 PRV.0 的历史[产品真相基线](docs/PRV0_Product_Truth_Baseline.md)记录了当时的 44 项能力/入口、25 项维护语义和 12 个保留产品场景。PRV.1 后现役账本曾把 5 项标为有界 ProductE2E；PRV.1R 已用追加的 supersession record 将其重分类为实际达到的 `ClientReachable` 或 `RendererIntegrated`，历史报告保持不变。维护语义中已无 accepted-but-ignored，仍有 2 项明确执行语义债务；十二个最终 Preview 产品场景均未闭环。
 
-PRV.1 闭环了内部 `ure_product` 服务、generated ProductJob 0.1 `UnstableExtension`、共享 `ure_client`、Worker forwarding 与 CLI render 迁移。其[验证报告](docs/reports/phase_prv1_validation_v1.json)中的 64×64 PFM 与身份一致性仍只是路由/传输 smoke。PRV.1R 当前实现已把 production work 改为逐样本持久执行，分离 requested/accepted/completed 与 pilot 计数，移除 Worker 60 秒和 CLI 10 分钟的作业语义，阻止预算提前结束伪装成功，并在 allocation 前校验执行根、资源边界和显存计划。Worker/`ure_client` 也已能传递一个 Frame 中的任意有界 plane 集；这些修复仍不足以建立 ProductE2E 或 Preview 声明。
+PRV.1 闭环了内部 `ure_product` 服务、generated ProductJob 0.1 `UnstableExtension`、共享 `ure_client`、Worker forwarding 与 CLI render 迁移。其[验证报告](docs/reports/phase_prv1_validation_v1.json)中的 64×64 PFM 与身份一致性仍只是路由/传输 smoke。PRV.1R 已将 exact-build ProductJob 演进到 0.2：production work 逐样本持久执行，requested/accepted/completed 与 pilot 计数分离，Worker wait、poll、cancel 可并发交错，跨 session 默认限制为一个并以 `Backpressure` 拒绝超额工作。固定 Worker 60 秒和 CLI 10 分钟作业语义已移除，预算提前结束不能伪装成功，执行根、资源边界和显存计划在 allocation 前校验。Worker/`ure_client` 也能传递一个 Frame 中的任意有界 plane 集；这些修复仍不足以建立 ProductE2E 或 Preview 声明。
 
 错误与诊断被视为贯穿 Preview 路线的产品能力，而不是 PRV.1R 的一次性补丁。PRV.1R 先建立 result/domain/detail、correlation、cause、operation terminal error、恢复建议和设备信息的公共基础；之后每个场景、材质、输出、重建、积分器、session、backend、farm 和客户端阶段都必须补齐自身结构化错误、负向 E2E 与文档目录。已知失败不得长期塌缩成无上下文 `Internal` 或普通 null Error。
 
@@ -27,7 +27,7 @@ PRV.1 闭环了内部 `ure_product` 服务、generated ProductJob 0.1 `UnstableE
 
 这是客户端交互合同的 1.0，不是 UltraRender 产品版本 1.0，也不表示仓库整体 API、算法或平台均已稳定。声明不等于公开分发；当前标签与仓库内构建用于固定声明证据，支持时钟仅在另行批准并公开分发软件包后开始。
 
-稳定 Core 只覆盖运行时发现、句柄与生命周期、能力/错误、异步操作与事件、原生场景完整替换、通用渲染目标和不可变 frame lease。它不冻结积分器、MaterialGraph、SceneIR、RenderConfig、MeasurementBundle、WorldState、GPU 调度、模型格式、求解器或研究算法。初始 `StableExtension` 列表为空；UUID transaction 与 ProductJob 0.1 均是独立的 `UnstableExtension`。现有 `ure_c_api.h`、`pyure_native.dll` 和 pyure ctypes 仍是 legacy experimental 接口。
+稳定 Core 只覆盖运行时发现、句柄与生命周期、能力/错误、异步操作与事件、原生场景完整替换、通用渲染目标和不可变 frame lease。它不冻结积分器、MaterialGraph、SceneIR、RenderConfig、MeasurementBundle、WorldState、GPU 调度、模型格式、求解器或研究算法。初始 `StableExtension` 列表为空；UUID transaction 与 exact-build ProductJob 0.x 均是独立的 `UnstableExtension`。现有 `ure_c_api.h`、`pyure_native.dll` 和 pyure ctypes 仍是 legacy experimental 接口。
 
 公共边界的规范与使用说明：
 

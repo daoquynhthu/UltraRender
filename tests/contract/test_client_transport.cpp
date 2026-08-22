@@ -1,6 +1,7 @@
 #include <ure/client/client.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -185,10 +186,10 @@ void cancel(ure::client::TransportMode mode,
     job.start();
     const auto progress_deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(10);
-    while (job.info().accepted_samples == 0 &&
+    while (job.info().completed_samples == 0 &&
            std::chrono::steady_clock::now() < progress_deadline)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    check(job.info().accepted_samples > 0,
+    check(job.info().completed_samples > 0,
           "client job exposed no in-flight progress before cancellation");
     const auto cancel_started = std::chrono::steady_clock::now();
     job.request_cancel();
@@ -200,6 +201,9 @@ void cancel(ure::client::TransportMode mode,
               "client cancellation returned the wrong error");
         check(job.info().state == ure::client::JobState::Canceled,
               "client cancellation did not reach a terminal state");
+        job.request_cancel();
+        check(job.info().state == ure::client::JobState::Canceled,
+              "repeated client cancellation changed terminal state");
         check(std::chrono::steady_clock::now() - cancel_started <
                   std::chrono::seconds(5),
               "client cancellation exceeded the bounded work quantum");
@@ -238,8 +242,93 @@ void multiple_jobs(ure::client::TransportMode mode,
         const auto result = job.result();
         check(result.info.state == ure::client::JobState::Succeeded &&
                   result.info.accepted_samples == 1 &&
+                  result.info.completed_samples == 1 &&
                   !result.frame.planes.empty(),
               "multiple-job client lifecycle is transport-dependent");
+    }
+}
+
+void concurrent_worker_control(const std::filesystem::path &runtime,
+                               const std::filesystem::path &worker,
+                               const std::filesystem::path &scene_path) {
+    auto client = ure::client::Client::connect(
+        options(ure::client::TransportMode::Worker, runtime, worker));
+    ure::client::Objective objective;
+    objective.sample_budget = 100000;
+    auto job = client.create_job(scene(scene_path), objective);
+    const auto created = job.info();
+    check(created.requested_samples == objective.sample_budget &&
+              created.accepted_samples == objective.sample_budget &&
+              created.completed_samples == 0,
+          "worker did not separate requested, accepted, and completed work");
+    job.start();
+    std::atomic<int> wait_outcome{};
+    std::jthread waiter([&] {
+        try {
+            wait_outcome.store(job.wait(std::chrono::seconds(30)) ? 1 : 4,
+                               std::memory_order_release);
+        } catch (const ure::client::Error &error) {
+            wait_outcome.store(error.info().result == URE_RESULT_CANCELED ? 2
+                                                                          : 3,
+                               std::memory_order_release);
+        }
+    });
+    std::uint64_t previous_completed{};
+    for (int probe = 0; probe < 8; ++probe) {
+        const auto started = std::chrono::steady_clock::now();
+        const auto progress = job.info();
+        check(std::chrono::steady_clock::now() - started <
+                  std::chrono::seconds(1),
+              "worker control probe was blocked by long-running work");
+        check(progress.completed_samples >= previous_completed &&
+                  progress.completed_samples <= progress.accepted_samples,
+              "worker progress was non-monotonic or exceeded accepted work");
+        previous_completed = progress.completed_samples;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    const auto cancel_started = std::chrono::steady_clock::now();
+    job.request_cancel();
+    waiter.join();
+    const auto terminal = job.info();
+    check(wait_outcome.load(std::memory_order_acquire) == 2 &&
+              terminal.state == ure::client::JobState::Canceled &&
+              terminal.completed_samples <= terminal.accepted_samples &&
+              std::chrono::steady_clock::now() - cancel_started <
+                  std::chrono::seconds(5),
+          "worker wait, poll, and cancel control did not remain preemptible");
+}
+
+void bounded_worker_sessions(const std::filesystem::path &runtime,
+                             const std::filesystem::path &worker,
+                             const std::filesystem::path &scene_path) {
+    auto connection = options(ure::client::TransportMode::Worker, runtime,
+                              worker);
+    connection.max_worker_sessions = 1;
+    auto client = ure::client::Client::connect(connection);
+    ure::client::Objective objective;
+    objective.sample_budget = 1;
+    auto first = client.create_job(scene(scene_path), objective);
+    try {
+        static_cast<void>(client.create_job(scene(scene_path), objective));
+        check(false, "worker accepted an unbounded concurrent session");
+    } catch (const ure::client::Error &error) {
+        check(error.info().result == URE_RESULT_BACKPRESSURE,
+              "worker session limit returned the wrong result");
+    }
+    first = {};
+    auto next = client.create_job(scene(scene_path), objective);
+    next.start();
+    check(next.wait(std::chrono::seconds(30)) &&
+              next.result().info.completed_samples == 1,
+          "worker session capacity was not restored after release");
+
+    connection.max_worker_sessions = 0;
+    try {
+        static_cast<void>(ure::client::Client::connect(connection));
+        check(false, "worker accepted an invalid session limit");
+    } catch (const ure::client::Error &error) {
+        check(error.info().result == URE_RESULT_INVALID_ARGUMENT,
+              "invalid worker session limit returned the wrong result");
     }
 }
 
@@ -271,7 +360,9 @@ int main(int argc, char **argv) {
                   isolated.info.state == ure::client::JobState::Succeeded,
               "client transports did not report successful jobs");
         check(direct.info.accepted_samples == 2 &&
-                  isolated.info.accepted_samples == 2,
+                  isolated.info.accepted_samples == 2 &&
+                  direct.info.completed_samples == 2 &&
+                  isolated.info.completed_samples == 2,
               "client accepted-sample accounting is inconsistent");
         check(direct.info.identities.build == isolated.info.identities.build &&
                   direct.info.identities.snapshot ==
@@ -307,6 +398,8 @@ int main(int argc, char **argv) {
                       scene_path);
         multiple_jobs(ure::client::TransportMode::Worker, runtime, worker,
                       scene_path);
+        concurrent_worker_control(runtime, worker, scene_path);
+        bounded_worker_sessions(runtime, worker, scene_path);
         try {
             auto missing = options(ure::client::TransportMode::Worker, runtime,
                                    worker.parent_path() / "missing_worker.exe");

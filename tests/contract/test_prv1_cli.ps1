@@ -23,7 +23,7 @@ if ($directResult.ExitCode -ne 0) {
     throw "Direct CLI render failed: $($directResult.Output)"
 }
 
-$keys = @("accepted_samples", "frame", "frame_bytes", "build_identity", "snapshot_identity", "objective_identity", "plan_identity", "frame_content_identity")
+$keys = @("accepted_samples", "completed_samples", "frame", "frame_bytes", "build_identity", "snapshot_identity", "objective_identity", "plan_identity", "frame_content_identity")
 foreach ($key in $keys) {
     $workerValue = [regex]::Match($workerResult.Output, "(?m)^$key=(.+)$").Groups[1].Value.Trim()
     $directValue = [regex]::Match($directResult.Output, "(?m)^$key=(.+)$").Groups[1].Value.Trim()
@@ -37,7 +37,7 @@ if ($workerResult.Output -notmatch "(?m)^transport=worker\r?$" -or
 }
 
 $unsupported = Invoke-Cli @("render", $Scene, "--width", "8")
-if ($unsupported.ExitCode -ne 2 -or $unsupported.Output -notmatch "not executable through ProductJob 0.1") {
+if ($unsupported.ExitCode -ne 2 -or $unsupported.Output -notmatch "not executable through ProductJob 0.2") {
     throw "CLI did not reject an unimplemented product option"
 }
 

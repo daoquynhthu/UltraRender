@@ -513,7 +513,8 @@ typedef struct ure_product_job_info_t {
     ure_digest256_t snapshot_identity;
     ure_digest256_t objective_identity;
     ure_digest256_t plan_identity;
-    uint64_t reserved[2];
+    uint64_t completed_samples;
+    uint64_t reserved[1];
 } ure_product_job_info_t;
 
 typedef struct ure_product_artifact_manifest_t {

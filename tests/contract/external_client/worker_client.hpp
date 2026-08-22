@@ -48,6 +48,9 @@ class WorkerClient {
     std::unique_ptr<fb::WorkerEnvelopeT>
     render_scene(std::uint64_t scene_id, std::uint64_t session_id,
                  std::string &error);
+    std::unique_ptr<fb::WorkerEnvelopeT>
+    request_product_version(std::uint16_t major, std::uint16_t minor,
+                            std::string &error);
     std::unique_ptr<fb::WorkerEnvelopeT> release_lease(std::uint64_t lease,
                                                        std::string &error);
     bool shutdown(std::string &error);

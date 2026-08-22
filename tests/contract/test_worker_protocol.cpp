@@ -302,6 +302,13 @@ int run(const std::filesystem::path &product_worker,
     WorkerClient product;
     CHECK_ERROR(product.launch(product_worker, product_runtime, error));
     CHECK_ERROR(product.handshake(error));
+    auto incompatible_product = product.request_product_version(0, 1, error);
+    CHECK_ERROR(incompatible_product);
+    CHECK(incompatible_product->result ==
+              fb::ResultCode::IncompatibleVersion &&
+          incompatible_product->error &&
+          incompatible_product->error->result ==
+              fb::ResultCode::IncompatibleVersion);
     auto unavailable = product.request_frame(2, 2, 7, error);
     CHECK_ERROR(unavailable);
     CHECK(unavailable->message_kind == fb::MessageKind::OperationResponse &&

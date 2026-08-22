@@ -223,7 +223,10 @@ class MappedSharedLease {
 
 JobInfo parse_status(const product_fb::ProductJobStatus &status,
                      std::uint64_t expected_job) {
-    if (status.job_id() != expected_job || !status.identities() ||
+    if (status.job_id() != expected_job ||
+        status.completed_samples() > status.accepted_samples() ||
+        status.accepted_samples() > status.requested_samples() ||
+        !status.identities() ||
         !status.identities()->build() ||
         status.identities()->build()->size() != 32 ||
         !status.identities()->snapshot() ||
@@ -238,6 +241,7 @@ JobInfo parse_status(const product_fb::ProductJobStatus &status,
     result.state = job_state(status.state());
     result.requested_samples = status.requested_samples();
     result.accepted_samples = status.accepted_samples();
+    result.completed_samples = status.completed_samples();
     std::copy(status.identities()->build()->begin(),
               status.identities()->build()->end(), result.identities.build.begin());
     std::copy(status.identities()->snapshot()->begin(),
@@ -410,7 +414,7 @@ class WorkerConnection final
         create.message_kind = fb::MessageKind::OperationRequest;
         create.operation_kind = URE_OPERATION_CREATE_PRODUCT_JOB;
         create.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
-        create.payload_version_minor = 1;
+        create.payload_version_minor = 2;
         create.payload = product_payload(product_fb::ProductMessageKind::CreateJob,
                                          scene_id, job_id, &objective);
         response = exchange_locked(create);
@@ -432,7 +436,7 @@ class WorkerConnection final
         request.message_kind = fb::MessageKind::OperationRequest;
         request.operation_kind = operation;
         request.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
-        request.payload_version_minor = 1;
+        request.payload_version_minor = 2;
         request.payload = product_payload(kind, scene_id, job_id);
         return exchange_locked(request);
     }
@@ -746,6 +750,10 @@ class WorkerConnection final
 class WorkerClient final : public ClientTransport {
   public:
     void open(const ConnectionOptions &options) {
+        if (options.max_worker_sessions == 0 ||
+            options.max_worker_sessions > 16)
+            throw_error(URE_RESULT_INVALID_ARGUMENT, URE_ERROR_DOMAIN_CORE,
+                        59, "worker session limit must be between 1 and 16");
         options_ = options;
         first_ = std::make_shared<WorkerConnection>();
         first_->open(options_);
@@ -757,18 +765,27 @@ class WorkerClient final : public ClientTransport {
         std::shared_ptr<WorkerConnection> connection;
         {
             std::scoped_lock lock(mutex_);
+            std::erase_if(active_connections_,
+                          [](const auto &entry) { return entry.expired(); });
+            if (active_connections_.size() >= options_.max_worker_sessions)
+                throw_error(URE_RESULT_BACKPRESSURE,
+                            URE_ERROR_DOMAIN_CORE, 60,
+                            "worker session concurrency limit is reached");
             connection = std::move(first_);
             if (!connection) {
                 connection = std::make_shared<WorkerConnection>();
                 connection->open(options_);
             }
+            auto job = connection->create_job(scene, objective);
+            active_connections_.push_back(connection);
+            return job;
         }
-        return connection->create_job(scene, objective);
     }
 
   private:
     ConnectionOptions options_;
     std::shared_ptr<WorkerConnection> first_;
+    std::vector<std::weak_ptr<WorkerConnection>> active_connections_;
     std::mutex mutex_;
 };
 

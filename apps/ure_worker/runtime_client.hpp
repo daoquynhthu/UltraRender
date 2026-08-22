@@ -101,6 +101,7 @@ struct ProductStatusSnapshot {
     std::uint32_t state{};
     std::uint64_t requested_samples{};
     std::uint64_t accepted_samples{};
+    std::uint64_t completed_samples{};
     std::array<std::uint8_t, 32> build_identity{};
     std::array<std::uint8_t, 32> snapshot_identity{};
     std::array<std::uint8_t, 32> objective_identity{};

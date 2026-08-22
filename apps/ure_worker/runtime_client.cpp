@@ -74,8 +74,8 @@ const Table *query_product_table(ure_query_interface_fn query,
     ure_interface_response_t response{};
     request.header = {URE_STRUCTURE_INTERFACE_QUERY, sizeof(request), nullptr};
     std::memcpy(request.interface_id.bytes, id, sizeof(id));
-    request.minimum_minor = 1;
-    request.maximum_minor = 1;
+    request.minimum_minor = 2;
+    request.maximum_minor = 2;
     response.header = {URE_STRUCTURE_INTERFACE_RESPONSE, sizeof(response),
                        nullptr};
     if (query(&request, &response, nullptr) != URE_RESULT_SUCCESS ||
@@ -104,6 +104,13 @@ ure_objective_envelope_t objective_envelope(const ObjectiveRequest &request) {
     std::memcpy(objective.payload_digest.bytes, request.payload_digest.data(),
                 request.payload_digest.size());
     return objective;
+}
+
+bool terminal_operation_state(std::uint32_t state) noexcept {
+    return state == URE_OPERATION_STATE_SUCCEEDED ||
+           state == URE_OPERATION_STATE_CANCELED ||
+           state == URE_OPERATION_STATE_FAILED ||
+           state == URE_OPERATION_STATE_DEVICE_LOST;
 }
 
 }
@@ -255,6 +262,7 @@ struct RuntimeClient::Impl {
         status.state = info.state;
         status.requested_samples = info.requested_samples;
         status.accepted_samples = info.accepted_samples;
+        status.completed_samples = info.completed_samples;
         std::memcpy(status.build_identity.data(), info.build_identity.bytes,
                     status.build_identity.size());
         std::memcpy(status.snapshot_identity.data(), info.snapshot_identity.bytes,
@@ -677,12 +685,14 @@ bool RuntimeClient::cancel_product_job(std::uint64_t job_id,
         impl_->error(result, error_handle, failure);
         return false;
     }
-    if (!accepted) {
+    if (!impl_->product_status(status, failure))
+        return false;
+    if (!accepted && !terminal_operation_state(status.state)) {
         failure = {URE_RESULT_BUSY, URE_ERROR_DOMAIN_CORE, 409,
                    "worker product cancellation was not accepted"};
         return false;
     }
-    return impl_->product_status(status, failure);
+    return true;
 }
 
 bool RuntimeClient::inspect_product_job(std::uint64_t job_id,
@@ -761,7 +771,7 @@ bool RuntimeClient::acquire_product_artifact(
                             nullptr};
     frame.session.state = status.state;
     frame.session.requested_samples = status.requested_samples;
-    frame.session.completed_samples = status.accepted_samples;
+    frame.session.completed_samples = status.completed_samples;
     frame.session_id = job_id;
     return true;
 }

@@ -301,6 +301,7 @@ std::vector<std::uint8_t> product_response_payload(
     envelope.status->state = status.state;
     envelope.status->requested_samples = status.requested_samples;
     envelope.status->accepted_samples = status.accepted_samples;
+    envelope.status->completed_samples = status.completed_samples;
     envelope.status->identities = product_identities(status);
     if (artifact) {
         envelope.artifact =
@@ -653,6 +654,14 @@ int run_worker(const Arguments &arguments) {
             response.result = fb::ResultCode::CapabilityUnavailable;
             failure = {URE_RESULT_CAPABILITY_UNAVAILABLE, URE_ERROR_DOMAIN_CORE, 302,
                        "operation is unavailable in this worker package"};
+            response.error = error_descriptor(failure);
+        } else if (request->payload_schema() == URE_PAYLOAD_PRODUCT_JOB &&
+                   (request->payload_version_major() != 0 ||
+                    request->payload_version_minor() != 2)) {
+            response.result = fb::ResultCode::IncompatibleVersion;
+            failure = {URE_RESULT_INCOMPATIBLE_VERSION,
+                       URE_ERROR_DOMAIN_CORE, 317,
+                       "product payload version is incompatible"};
             response.error = error_descriptor(failure);
         } else if (request->operation_kind() == URE_OPERATION_REPLACE_SCENE &&
                    request->payload_schema() == URE_PAYLOAD_NATIVE_SCENE) {

@@ -150,15 +150,15 @@ ure_result_t decode_objective(const ure_objective_envelope_t *objective,
             return URE_RESULT_INVALID_ARGUMENT;
     }
     if (objective->determinism_policy != 0) {
-        message = "determinism policy is not executable in Product 0.1";
+        message = "determinism policy is not executable in Product 0.2";
         return URE_RESULT_CAPABILITY_UNAVAILABLE;
     }
     if (objective->usage_policy != 0) {
-        message = "usage policy is not executable in Product 0.1";
+        message = "usage policy is not executable in Product 0.2";
         return URE_RESULT_CAPABILITY_UNAVAILABLE;
     }
     if (objective->latency_budget_ns != 0) {
-        message = "latency budget is not executable in Product 0.1";
+        message = "latency budget is not executable in Product 0.2";
         return URE_RESULT_CAPABILITY_UNAVAILABLE;
     }
     if (objective->wall_time_budget_ns != 0 &&
@@ -173,7 +173,7 @@ ure_result_t decode_objective(const ure_objective_envelope_t *objective,
     }
     for (std::uint32_t index = 0; index < objective->output_count; ++index) {
         if (objective->output_semantics[index] != URE_FRAME_PLANE_COLOR) {
-            message = "requested output semantic is not executable in Product 0.1";
+            message = "requested output semantic is not executable in Product 0.2";
             return URE_RESULT_CAPABILITY_UNAVAILABLE;
         }
     }
@@ -726,8 +726,7 @@ ure_result_t get_product_info_impl(ure_handle_t session_handle,
         return make_error(URE_RESULT_INVALID_HANDLE, 531,
                           "invalid product job handle", error);
     if (!valid_output(info, URE_STRUCTURE_PRODUCT_JOB_INFO) ||
-        info->reserved32 != 0 || info->reserved[0] != 0 ||
-        info->reserved[1] != 0)
+        info->reserved32 != 0 || info->reserved[0] != 0)
         return make_error(URE_RESULT_INVALID_ARGUMENT, 532,
                           "invalid product job info output", error);
     std::scoped_lock lock(session->mutex);
@@ -735,7 +734,8 @@ ure_result_t get_product_info_impl(ure_handle_t session_handle,
     const auto &identities = session->job->identities();
     info->state = session->state;
     info->requested_samples = progress.requested_samples;
-    info->accepted_samples = progress.completed_samples;
+    info->accepted_samples = progress.accepted_samples;
+    info->completed_samples = progress.completed_samples;
     info->active_operation = session->active_operation;
     info->latest_frame = session->latest_frame;
     store(info->build_identity, identities.build);
@@ -920,7 +920,7 @@ const ure_session_interface_t &session_interface() noexcept {
 
 const ure_product_job_interface_t &product_job_interface() noexcept {
     static const ure_product_job_interface_t table{
-        {sizeof(table), 0, 1},
+        {sizeof(table), 0, 2},
         create_product_job,
         retain_session,
         release_session,

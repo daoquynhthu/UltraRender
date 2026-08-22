@@ -46,6 +46,7 @@ struct ConnectionOptions {
     std::filesystem::path runtime_path;
     std::filesystem::path worker_path;
     std::chrono::milliseconds launch_timeout{10000};
+    std::uint32_t max_worker_sessions{1};
 };
 
 struct SceneBudget {
@@ -113,6 +114,7 @@ struct JobInfo {
     JobState state{JobState::Created};
     std::uint64_t requested_samples{};
     std::uint64_t accepted_samples{};
+    std::uint64_t completed_samples{};
     IdentitySet identities;
 };
 

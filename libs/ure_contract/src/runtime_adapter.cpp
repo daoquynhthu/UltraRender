@@ -277,6 +277,7 @@ Json build_manifest() {
     field<std::uint32_t>(extension_types["ure_product_job_info_t"], "reserved32", offsetof(ure_product_job_info_t, reserved32));
     field<std::uint64_t>(extension_types["ure_product_job_info_t"], "requested_samples", offsetof(ure_product_job_info_t, requested_samples));
     field<std::uint64_t>(extension_types["ure_product_job_info_t"], "accepted_samples", offsetof(ure_product_job_info_t, accepted_samples));
+    field<std::uint64_t>(extension_types["ure_product_job_info_t"], "completed_samples", offsetof(ure_product_job_info_t, completed_samples));
     field<ure_handle_t>(extension_types["ure_product_job_info_t"], "active_operation", offsetof(ure_product_job_info_t, active_operation));
     field<ure_handle_t>(extension_types["ure_product_job_info_t"], "latest_frame", offsetof(ure_product_job_info_t, latest_frame));
     field<ure_digest256_t>(extension_types["ure_product_job_info_t"], "build_identity", offsetof(ure_product_job_info_t, build_identity));

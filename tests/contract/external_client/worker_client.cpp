@@ -368,7 +368,7 @@ WorkerClient::request_frame(std::uint32_t width, std::uint32_t height,
     request.message_kind = fb::MessageKind::OperationRequest;
     request.operation_kind = URE_OPERATION_ACQUIRE_FRAME;
     request.payload_schema = kConformanceFrameSchema;
-    request.payload_version_minor = 1;
+    request.payload_version_minor = 2;
     request.payload = frame_request(width, height, seed);
     return impl_->exchange(request, error);
 #endif
@@ -381,7 +381,7 @@ WorkerClient::replace_scene(const std::vector<std::uint8_t> &content,
     request.message_kind = fb::MessageKind::OperationRequest;
     request.operation_kind = URE_OPERATION_REPLACE_SCENE;
     request.payload_schema = URE_PAYLOAD_NATIVE_SCENE;
-    request.payload_version_minor = 1;
+    request.payload_version_minor = 2;
     request.payload = scene_request(content, scene_id);
     return impl_->exchange(request, error);
 }
@@ -404,8 +404,22 @@ WorkerClient::render_scene(std::uint64_t scene_id, std::uint64_t session_id,
     request.message_kind = fb::MessageKind::OperationRequest;
     request.operation_kind = URE_OPERATION_RENDER_SESSION;
     request.payload_schema = URE_PAYLOAD_RENDER_OBJECTIVE;
-    request.payload_version_minor = 1;
+    request.payload_version_minor = 2;
     request.payload = objective_request(scene_id, session_id);
+    return impl_->exchange(request, error);
+}
+
+std::unique_ptr<fb::WorkerEnvelopeT>
+WorkerClient::request_product_version(std::uint16_t major,
+                                      std::uint16_t minor,
+                                      std::string &error) {
+    fb::WorkerEnvelopeT request;
+    request.message_kind = fb::MessageKind::OperationRequest;
+    request.operation_kind = URE_OPERATION_CREATE_PRODUCT_JOB;
+    request.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+    request.payload_version_major = major;
+    request.payload_version_minor = minor;
+    request.payload = {0};
     return impl_->exchange(request, error);
 }
 

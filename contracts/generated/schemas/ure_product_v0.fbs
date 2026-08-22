@@ -39,6 +39,7 @@ table ProductJobStatus {
   requested_samples:ulong (id: 4);
   accepted_samples:ulong (id: 5);
   identities:ProductIdentitySet (id: 6);
+  completed_samples:ulong (id: 7);
 }
 
 table ProductArtifactManifest {
