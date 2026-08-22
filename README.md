@@ -4,7 +4,7 @@ UltraRender 是一个处于持续研发阶段的光谱/偏振离线渲染器。�
 
 本项目尚不是通用生产渲染器，也没有发布“UltraRender 1.0”。功能与成熟度以 [STATUS.md](STATUS.md) 为准，施工顺序以 [PLAN.md](PLAN.md) 为准。Research、Experimental、Production 是不同的证据等级；类型、配置项或拒绝测试的存在不代表对应能力已经可用。
 
-当前权威实施游标为 `PRV.1R — Product Runtime 阻塞性修复与可信 E2E 基线`。项目暂时冻结 learned/neural、新积分器、广义统一物理世界和可微路线；PRV.2 及后续产品总装在 PRV.1R 修复样本会计、重复执行、Worker 长任务控制、资源根和可信图像门禁前暂停。`UltraRender_preview` 是尚未达成的里程碑，不是现有发布版本。
+当前权威实施游标为 `PRV.1R — Product Runtime 阻塞性修复与可信 E2E 基线`。项目暂时冻结 learned/neural、新积分器、广义统一物理世界和可微路线；PRV.2 及后续产品总装仍等待 PRV.1R 完成渐进反馈、设备/采样语义、外部 SDK 和分层真实图像门禁。`UltraRender_preview` 是尚未达成的里程碑，不是现有发布版本。
 
 ## Preview 集成方向
 
@@ -12,9 +12,9 @@ Preview 路线要求 CLI、Python、Hydra 和后续编辑器通过同一个产�
 
 PRV.1 已让 CLI render 退出 renderer 实现：共享 `ure_client` 提供显式 Direct/Worker transport，两路均使用 ProductJob 0.1 与同一个 `ure_product` 服务；CLI 默认 Worker，启动失败不会回退 direct。这个结构保留，但后续调查证明原有 64×64 smoke 不能支撑 ProductE2E 结论。Hydra、legacy pyure、自动渲染桥、原生高级块、MeasurementBundle、重建、可移植 backend、多设备/farm/cache 仍未全部进入同一个完整场景工作流。[Preview 架构](docs/UltraRender_Preview_Architecture.md) 定义目标边界，[PLAN.md](PLAN.md) 以新增 PRV.1R 为当前阻塞修复阶段。
 
-PRV.0 的历史[产品真相基线](docs/PRV0_Product_Truth_Baseline.md)记录了当时的 44 项能力/入口、25 项维护语义和 12 个保留产品场景。PRV.1 后现役账本曾把 5 项标为有界 ProductE2E；PRV.1R 调查已撤回这一解释，首个子步骤将以追加的 supersession record 重分类，而不改写历史报告。维护语义中已无 accepted-but-ignored，仍有 2 项明确执行语义债务；十二个最终 Preview 产品场景均未闭环。
+PRV.0 的历史[产品真相基线](docs/PRV0_Product_Truth_Baseline.md)记录了当时的 44 项能力/入口、25 项维护语义和 12 个保留产品场景。PRV.1 后现役账本曾把 5 项标为有界 ProductE2E；PRV.1R 已用追加的 supersession record 将其重分类为实际达到的 `ClientReachable` 或 `RendererIntegrated`，历史报告保持不变。维护语义中已无 accepted-but-ignored，仍有 2 项明确执行语义债务；十二个最终 Preview 产品场景均未闭环。
 
-PRV.1 闭环了内部 `ure_product` 服务、generated ProductJob 0.1 `UnstableExtension`、共享 `ure_client`、Worker forwarding 与 CLI render 迁移。其[验证报告](docs/reports/phase_prv1_validation_v1.json)中的 64×64 PFM 与身份一致性仍是有效的路由/传输 smoke，但不是质量或工作量正确性证明。当前已确认 Product `sample_budget` 会触发重复全量重渲染并形成几何增长，Worker 存在固定 60 秒等待边界，预算完成、取消、相对资源根和显存适用性也需要修复。
+PRV.1 闭环了内部 `ure_product` 服务、generated ProductJob 0.1 `UnstableExtension`、共享 `ure_client`、Worker forwarding 与 CLI render 迁移。其[验证报告](docs/reports/phase_prv1_validation_v1.json)中的 64×64 PFM 与身份一致性仍只是路由/传输 smoke。PRV.1R 当前实现已把 production work 改为逐样本持久执行，分离 requested/accepted/completed 与 pilot 计数，移除 Worker 60 秒和 CLI 10 分钟的作业语义，阻止预算提前结束伪装成功，并在 allocation 前校验执行根、资源边界和显存计划。Worker/`ure_client` 也已能传递一个 Frame 中的任意有界 plane 集；这些修复仍不足以建立 ProductE2E 或 Preview 声明。
 
 错误与诊断被视为贯穿 Preview 路线的产品能力，而不是 PRV.1R 的一次性补丁。PRV.1R 先建立 result/domain/detail、correlation、cause、operation terminal error、恢复建议和设备信息的公共基础；之后每个场景、材质、输出、重建、积分器、session、backend、farm 和客户端阶段都必须补齐自身结构化错误、负向 E2E 与文档目录。已知失败不得长期塌缩成无上下文 `Internal` 或普通 null Error。
 

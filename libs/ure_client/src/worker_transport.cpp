@@ -185,6 +185,42 @@ bool checked_product(std::uint64_t left, std::uint64_t right,
     return true;
 }
 
+bool checked_add(std::uint64_t left, std::uint64_t right,
+                 std::uint64_t &result) noexcept {
+    if (right > std::numeric_limits<std::uint64_t>::max() - left)
+        return false;
+    result = left + right;
+    return true;
+}
+
+class MappedSharedLease {
+  public:
+    explicit MappedSharedLease(const fb::SharedBlobDescriptorT *source)
+        : descriptor(source),
+          mapping(reinterpret_cast<HANDLE>(source->mapping_handle)) {}
+
+    ~MappedSharedLease() {
+        if (view)
+            UnmapViewOfFile(view);
+        close_handle(mapping);
+    }
+
+    MappedSharedLease(MappedSharedLease &&other) noexcept
+        : descriptor(other.descriptor), mapping(other.mapping),
+          view(other.view) {
+        other.mapping = nullptr;
+        other.view = nullptr;
+    }
+
+    MappedSharedLease &operator=(MappedSharedLease &&) = delete;
+    MappedSharedLease(const MappedSharedLease &) = delete;
+    MappedSharedLease &operator=(const MappedSharedLease &) = delete;
+
+    const fb::SharedBlobDescriptorT *descriptor{};
+    HANDLE mapping{};
+    const std::uint8_t *view{};
+};
+
 JobInfo parse_status(const product_fb::ProductJobStatus &status,
                      std::uint64_t expected_job) {
     if (status.job_id() != expected_job || !status.identities() ||
@@ -435,74 +471,136 @@ class WorkerConnection final
     JobResult frame_result(const fb::WorkerEnvelopeT &response,
                            const JobInfo &info) {
         if (response.message_kind != fb::MessageKind::FrameReady ||
-            !response.frame || response.frame->planes.size() != 1 ||
+            !response.frame || response.frame->planes.empty() ||
+            response.frame->planes.size() > 64 ||
+            !response.frame->planes.front() ||
             !response.frame->planes.front()->blob)
             throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 43,
                         "worker product frame descriptor is malformed");
-        const auto &wire_plane = *response.frame->planes.front();
-        const auto &blob = *wire_plane.blob;
-        if (blob.mapping_handle == 0 || blob.byte_length == 0 ||
-            blob.byte_length > kMaximumFrameBytes || blob.byte_offset != 0 ||
-            blob.lease_id == 0 || blob.lease_generation == 0 ||
-            blob.access != URE_SHARED_BLOB_ACCESS_READ ||
-            blob.digest_algorithm != URE_DIGEST_ALGORITHM_SHA256 ||
-            blob.digest.size() != 32 || blob.producer_identity.size() != 32 ||
-            wire_plane.width == 0 || wire_plane.height == 0 ||
-            wire_plane.depth == 0 || wire_plane.element_stride == 0 ||
-            wire_plane.byte_extent != blob.byte_length ||
-            response.frame->width != wire_plane.width ||
-            response.frame->height != wire_plane.height ||
-            response.frame->retained_bytes != blob.byte_length)
-            throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 44,
-                        "worker product shared lease is invalid");
-        std::uint64_t minimum_row{};
-        std::uint64_t minimum_slice{};
-        std::uint64_t minimum_extent{};
-        if (!checked_product(wire_plane.width, wire_plane.element_stride,
-                             minimum_row) ||
-            wire_plane.row_stride < minimum_row ||
-            !checked_product(wire_plane.height, wire_plane.row_stride,
-                             minimum_slice) ||
-            wire_plane.slice_stride < minimum_slice ||
-            !checked_product(wire_plane.depth, wire_plane.slice_stride,
-                             minimum_extent) ||
-            blob.byte_length < minimum_extent)
-            throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 59,
-                        "worker product frame layout is invalid");
-        HANDLE mapping = reinterpret_cast<HANDLE>(blob.mapping_handle);
-        const auto *view = static_cast<const std::uint8_t *>(MapViewOfFile(
-            mapping, FILE_MAP_READ, 0, 0,
-            static_cast<SIZE_T>(blob.byte_length)));
-        if (!view) {
-            close_handle(mapping);
-            throw_error(URE_RESULT_WORKER_LOST, URE_ERROR_DOMAIN_CORE, 45,
-                        "worker product shared lease could not be mapped");
+        std::vector<MappedSharedLease> leases;
+        leases.reserve(response.frame->planes.size());
+        std::uint64_t retained_bytes{};
+        for (const auto &plane_pointer : response.frame->planes) {
+            if (!plane_pointer || !plane_pointer->blob)
+                throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE,
+                            59, "worker product frame plane is missing");
+            const auto &wire_plane = *plane_pointer;
+            const auto &wire_blob = *wire_plane.blob;
+            std::uint64_t minimum_row{};
+            std::uint64_t minimum_slice{};
+            std::uint64_t minimum_extent{};
+            std::uint64_t plane_end{};
+            if (wire_blob.mapping_handle == 0 ||
+                wire_blob.byte_length == 0 ||
+                wire_blob.byte_length > kMaximumFrameBytes ||
+                wire_blob.lease_id == 0 ||
+                wire_blob.lease_generation == 0 ||
+                wire_blob.access != URE_SHARED_BLOB_ACCESS_READ ||
+                wire_blob.digest_algorithm != URE_DIGEST_ALGORITHM_SHA256 ||
+                wire_blob.digest.size() != 32 ||
+                wire_blob.producer_identity.size() != 32 ||
+                wire_plane.width == 0 || wire_plane.height == 0 ||
+                wire_plane.depth == 0 || wire_plane.element_stride == 0 ||
+                wire_plane.byte_extent == 0 ||
+                response.frame->width != wire_plane.width ||
+                response.frame->height != wire_plane.height ||
+                !checked_product(wire_plane.width,
+                                 wire_plane.element_stride, minimum_row) ||
+                wire_plane.row_stride < minimum_row ||
+                !checked_product(wire_plane.height,
+                                 wire_plane.row_stride, minimum_slice) ||
+                wire_plane.slice_stride < minimum_slice ||
+                !checked_product(wire_plane.depth,
+                                 wire_plane.slice_stride, minimum_extent) ||
+                wire_plane.byte_extent < minimum_extent ||
+                !checked_add(wire_blob.byte_offset,
+                             wire_plane.byte_extent, plane_end) ||
+                plane_end > wire_blob.byte_length)
+                throw_error(URE_RESULT_MALFORMED_DATA,
+                            URE_ERROR_DOMAIN_CORE, 59,
+                            "worker product frame layout is invalid");
+            const auto existing = std::ranges::find_if(
+                leases, [&wire_blob](const MappedSharedLease &lease) {
+                    return lease.descriptor->lease_id == wire_blob.lease_id;
+                });
+            if (existing == leases.end()) {
+                std::uint64_t next_retained{};
+                if (!checked_add(retained_bytes, wire_blob.byte_length,
+                                 next_retained) ||
+                    next_retained > kMaximumFrameBytes)
+                    throw_error(URE_RESULT_MALFORMED_DATA,
+                                URE_ERROR_DOMAIN_CORE, 44,
+                                "worker product frame lease total is invalid");
+                retained_bytes = next_retained;
+                leases.emplace_back(&wire_blob);
+            } else {
+                const auto &known = *existing->descriptor;
+                if (known.mapping_handle != wire_blob.mapping_handle ||
+                    known.lease_generation !=
+                        wire_blob.lease_generation ||
+                    known.byte_length != wire_blob.byte_length ||
+                    known.access != wire_blob.access ||
+                    known.digest_algorithm !=
+                        wire_blob.digest_algorithm ||
+                    known.digest != wire_blob.digest ||
+                    known.producer_identity !=
+                        wire_blob.producer_identity)
+                    throw_error(URE_RESULT_MALFORMED_DATA,
+                                URE_ERROR_DOMAIN_CORE, 44,
+                                "worker product shared lease identity changed");
+            }
         }
-        FramePlane plane;
-        plane.semantic = wire_plane.semantic_id;
-        plane.scalar_type = wire_plane.scalar_type;
-        plane.component_layout = wire_plane.component_layout;
-        plane.width = wire_plane.width;
-        plane.height = wire_plane.height;
-        plane.depth = wire_plane.depth;
-        plane.row_stride = wire_plane.row_stride;
-        plane.slice_stride = wire_plane.slice_stride;
-        plane.element_stride = wire_plane.element_stride;
-        plane.bytes.assign(view, view + blob.byte_length);
-        std::array<std::uint8_t, 32> digest{};
-        const bool digest_valid =
-            shared_digest(view, blob.byte_length, digest);
-        UnmapViewOfFile(view);
-        close_handle(mapping);
-        if (!digest_valid ||
-            !std::equal(digest.begin(), digest.end(), blob.digest.begin()))
-            throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 46,
-                        "worker product shared lease digest is invalid");
-        fb::WorkerEnvelopeT release;
-        release.message_kind = fb::MessageKind::ReleaseLease;
-        release.shared_blob = std::make_unique<fb::SharedBlobDescriptorT>();
-        release.shared_blob->lease_id = blob.lease_id;
-        {
+        if (response.frame->retained_bytes != retained_bytes)
+            throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 44,
+                        "worker product retained-byte accounting is invalid");
+        for (auto &lease : leases) {
+            lease.view = static_cast<const std::uint8_t *>(MapViewOfFile(
+                lease.mapping, FILE_MAP_READ, 0, 0,
+                static_cast<SIZE_T>(lease.descriptor->byte_length)));
+            if (!lease.view)
+                throw_error(URE_RESULT_WORKER_LOST, URE_ERROR_DOMAIN_CORE, 45,
+                            "worker product shared lease could not be mapped");
+            std::array<std::uint8_t, 32> digest{};
+            if (!shared_digest(lease.view, lease.descriptor->byte_length,
+                               digest) ||
+                !std::equal(digest.begin(), digest.end(),
+                            lease.descriptor->digest.begin()))
+                throw_error(URE_RESULT_MALFORMED_DATA,
+                            URE_ERROR_DOMAIN_CORE, 46,
+                            "worker product shared lease digest is invalid");
+        }
+        std::vector<FramePlane> decoded_planes;
+        decoded_planes.reserve(response.frame->planes.size());
+        for (const auto &plane_pointer : response.frame->planes) {
+            const auto &wire_plane = *plane_pointer;
+            const auto lease = std::ranges::find_if(
+                leases, [&wire_plane](const MappedSharedLease &candidate) {
+                    return candidate.descriptor->lease_id ==
+                        wire_plane.blob->lease_id;
+                });
+            FramePlane plane;
+            plane.semantic = wire_plane.semantic_id;
+            plane.scalar_type = wire_plane.scalar_type;
+            plane.component_layout = wire_plane.component_layout;
+            plane.width = wire_plane.width;
+            plane.height = wire_plane.height;
+            plane.depth = wire_plane.depth;
+            plane.row_stride = wire_plane.row_stride;
+            plane.slice_stride = wire_plane.slice_stride;
+            plane.element_stride = wire_plane.element_stride;
+            const auto begin = static_cast<std::size_t>(
+                wire_plane.blob->byte_offset);
+            const auto end = begin + static_cast<std::size_t>(
+                wire_plane.byte_extent);
+            plane.bytes.assign(lease->view + begin, lease->view + end);
+            decoded_planes.push_back(std::move(plane));
+        }
+        for (const auto &lease : leases) {
+            fb::WorkerEnvelopeT release;
+            release.message_kind = fb::MessageKind::ReleaseLease;
+            release.shared_blob =
+                std::make_unique<fb::SharedBlobDescriptorT>();
+            release.shared_blob->lease_id = lease.descriptor->lease_id;
             std::scoped_lock lock(mutex_);
             auto released = exchange_locked(release);
             check_response(*released);
@@ -531,7 +629,7 @@ class WorkerConnection final
             std::copy(response.frame->frame_identity.begin(),
                       response.frame->frame_identity.end(),
                       result.frame.identity.begin());
-        result.frame.planes.push_back(std::move(plane));
+        result.frame.planes = std::move(decoded_planes);
         return result;
     }
 

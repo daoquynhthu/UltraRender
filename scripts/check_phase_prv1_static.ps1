@@ -39,6 +39,7 @@ $workerSource = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot "apps/ure_wor
 $productSchema = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot "contracts/schemas/ure_product_v0.fbs")
 $manifest = Read-Json "contracts/generated/runtime_manifest_1.json"
 $ledger = Read-Json "contracts/product_closure_ledger.json"
+$supersessions = Read-Json "contracts/product_evidence_supersessions.json"
 $schema = Read-Json "contracts/reports/ure_phase_prv1_validation_v1.schema.json"
 
 if ($rootCMake -notmatch 'add_subdirectory\(libs/ure_client\)' -or
@@ -56,6 +57,10 @@ if ($clientHeader -notmatch 'enum class TransportMode' -or
     $clientHeader -notmatch '\bWorker\b' -or
     $clientCMake -match 'ure_core|ure_sceneio|ure_product') {
     throw "ure_client does not preserve a renderer-free explicit transport boundary"
+}
+if ($cliSource -match 'minutes\(10\)|product job exceeded the CLI wait bound' -or
+    $workerSource -match '60000000000') {
+    throw "PRV.1 runtime paths retain an independent fixed render deadline"
 }
 
 $exportNames = @([regex]::Matches($workerSource, 'GetProcAddress\([^,]+,\s*"(?<name>[^"]+)"') |
@@ -102,19 +107,6 @@ if (@($report.image_e2e).Count -ne 2 -or
     $report.image_e2e[0].bytes -lt 1024) {
     throw "PRV.1 direct/Worker real-image evidence is missing or divergent"
 }
-$sourceHashes = @{
-    product_schema_sha256 = Get-Sha256 "contracts/schemas/ure_product_v0.fbs"
-    client_api_sha256 = Get-Sha256 "libs/ure_client/include/ure/client/client.hpp"
-    direct_transport_sha256 = Get-Sha256 "libs/ure_client/src/direct_transport.cpp"
-    worker_transport_sha256 = Get-Sha256 "libs/ure_client/src/worker_transport.cpp"
-    cli_sha256 = Get-Sha256 "apps/ure_cli/src/main.cpp"
-    worker_sha256 = Get-Sha256 "apps/ure_worker/runtime_client.cpp"
-}
-foreach ($pair in $sourceHashes.GetEnumerator()) {
-    if ($report.source.($pair.Key) -ne $pair.Value) {
-        throw "PRV.1 report source identity drifted: $($pair.Key)"
-    }
-}
 if ($report.source.registry_digest -ne $manifest.registry_digest) {
     throw "PRV.1 report registry identity drifted"
 }
@@ -125,18 +117,21 @@ if ($recordedDigest -ne $actualDigest) {
     throw "PRV.1 validation report semantic digest is invalid"
 }
 
-$prv1Evidence = @($ledger.entries | Where-Object {
-    $_.closure_level -eq "ProductE2E" -and $_.migration_phase -eq "PRV.1"
+$supersession = @($supersessions.records | Where-Object {
+    $_.superseded_report -eq "docs/reports/phase_prv1_validation_v1.json"
 })
-if ($prv1Evidence.Count -lt 4) {
-    throw "PRV.1 closure ledger lacks the product service/client spine"
+if ($supersession.Count -ne 1 -or
+    $supersession[0].superseded_report_sha256 -ne
+        (Get-Sha256 "docs/reports/phase_prv1_validation_v1.json") -or
+    $supersession[0].historical_report_policy -ne "Immutable") {
+    throw "PRV.1 historical validation is not bound by one immutable supersession record"
 }
-foreach ($entry in $prv1Evidence) {
-    if (@($entry.evidence | Where-Object {
-        $_.kind -eq "ExternalArtifact" -and $_.path -eq "docs/reports/phase_prv1_validation_v1.json"
-    }).Count -ne 1) {
-        throw "PRV.1 ProductE2E entry lacks the shared validation artifact: $($entry.id)"
-    }
+$supersededIds = @($supersession[0].claims | ForEach-Object capability_id)
+if ($supersededIds.Count -ne 5 -or
+    @($ledger.entries | Where-Object {
+        $_.id -in $supersededIds -and $_.closure_level -eq "ProductE2E"
+    }).Count -ne 0) {
+    throw "PRV.1 smoke-supported ProductE2E claims were not withdrawn"
 }
 
-Write-Output "PRV.1 static audit passed: one product service, explicit Direct/Worker clients, two matching image artifacts"
+Write-Output "PRV.1 structural audit passed: one product service, explicit Direct/Worker clients, historical smoke evidence superseded"

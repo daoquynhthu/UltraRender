@@ -391,6 +391,8 @@ Error 对象分配失败是唯一允许没有 retained Error handle 的资源极
 - 权威 raw artifact 经固定转换生成 PNG，自动验证 finite、非平凡、能量、空间结构、收敛/reference metric，并为 quality/stress 证据保留人工视觉审阅结果；
 - Direct/Worker/CLI parity 比较相同 plan/work identity 下的统计或确定性输出，hash/字节一致只能作为附加传输证据。
 
+**实施进度（2026-08-14）**: PRV.1R.0 的 additive evidence supersession 已落地；规范 production work quantum、持久 candidate executor、独立 pilot/production/realization/executor 计数、预算未完成失败、固定 Worker/CLI deadline 移除、显式资源根、allocation 前显存计划和 Direct/Worker typed memory/resource error 已进入生产路径。Worker 与 `ure_client` 的单-plane 假设已移除，并由共享 lease 的双-plane conformance frame 验证。渐进 latest frame/event、完整诊断信封、设备 extension、采样优先级表、外部 SDK 和 functional/quality E2E 仍未闭环，因此游标保持 PRV.1R。
+
 **完成门禁**:
 
 - 对固定场景，请求 N 个 production samples 实际只完成 N 个无重叠 work items；pilot 单独披露，scene realization 与 executor 创建次数不随 progress step 或 spp 几何增长；

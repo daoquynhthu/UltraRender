@@ -7,6 +7,7 @@ $checker = Join-Path $RepoRoot "scripts/check_phase_prv0_static.ps1"
 $closurePath = Join-Path $RepoRoot "contracts/product_closure_ledger.json"
 $semanticPath = Join-Path $RepoRoot "contracts/product_semantic_audit.json"
 $scenarioPath = Join-Path $RepoRoot "contracts/product_e2e_scenarios.json"
+$supersessionPath = Join-Path $RepoRoot "contracts/product_evidence_supersessions.json"
 $temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("ure_prv0_" + [guid]::NewGuid().ToString("N"))
 
 function Read-Json([string]$Path) {
@@ -17,24 +18,27 @@ function Save-Json($Value, [string]$Path) {
     $Value | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $Path -Encoding utf8NoBOM
 }
 
-function Expect-Failure([string]$Label, [scriptblock]$Mutation, [ValidateSet("Closure", "Semantic", "Scenario")][string]$Kind) {
+function Expect-Failure([string]$Label, [scriptblock]$Mutation, [ValidateSet("Closure", "Semantic", "Scenario", "Supersession")][string]$Kind) {
     $closureCopy = Join-Path $temporary "closure.json"
     $semanticCopy = Join-Path $temporary "semantic.json"
     $scenarioCopy = Join-Path $temporary "scenario.json"
+    $supersessionCopy = Join-Path $temporary "supersession.json"
     Copy-Item -LiteralPath $closurePath -Destination $closureCopy -Force
     Copy-Item -LiteralPath $semanticPath -Destination $semanticCopy -Force
     Copy-Item -LiteralPath $scenarioPath -Destination $scenarioCopy -Force
+    Copy-Item -LiteralPath $supersessionPath -Destination $supersessionCopy -Force
     $target = switch ($Kind) {
         "Closure" { $closureCopy }
         "Semantic" { $semanticCopy }
         "Scenario" { $scenarioCopy }
+        "Supersession" { $supersessionCopy }
     }
     $document = Read-Json $target
     & $Mutation $document
     Save-Json $document $target
     $failed = $false
     try {
-        & $checker -RepoRoot $RepoRoot -ClosureLedgerPath $closureCopy -SemanticAuditPath $semanticCopy -ScenarioManifestPath $scenarioCopy *> $null
+        & $checker -RepoRoot $RepoRoot -ClosureLedgerPath $closureCopy -SemanticAuditPath $semanticCopy -ScenarioManifestPath $scenarioCopy -EvidenceSupersessionPath $supersessionCopy *> $null
     } catch {
         $failed = $true
     }
@@ -75,6 +79,8 @@ try {
     } Scenario
     Expect-Failure "scenario source drift" { param($j) $j.scenarios[0].source.sha256 = ("0" * 64) } Scenario
     Expect-Failure "unknown scenario capability" { param($j) $j.scenarios[0].required_capabilities[0] = "unknown_capability" } Scenario
+    Expect-Failure "supersession closure mismatch" { param($j) $j.records[0].claims[0].current_closure = "RendererIntegrated" } Supersession
+    Expect-Failure "superseded report drift" { param($j) $j.records[0].superseded_report_sha256 = ("0" * 64) } Supersession
 
     Write-Output "PRV.0 static positive, deterministic, and negative-fixture gates passed"
 } finally {

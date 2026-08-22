@@ -369,9 +369,15 @@ produce_frame_impl(ure_handle_t instance_handle,
         return make_error(URE_RESULT_INVALID_ARGUMENT, 219,
                           "invalid conformance frame request", error);
     std::uint64_t pixels{};
-    std::uint64_t bytes{};
+    std::uint64_t plane_bytes{};
+    std::uint64_t retained_bytes{};
+    const bool multiple_planes =
+        (request->seed & UINT32_C(0x80000000)) != 0;
     if (!checked_multiply(request->width, request->height, pixels) ||
-        !checked_multiply(pixels, 16, bytes) || bytes > UINT64_C(1073741824))
+        !checked_multiply(pixels, 16, plane_bytes) ||
+        !checked_multiply(plane_bytes, multiple_planes ? 2 : 1,
+                          retained_bytes) ||
+        retained_bytes > UINT64_C(1073741824))
         return make_error(URE_RESULT_BUDGET_EXHAUSTED, 220,
                           "frame extent exceeds the hard byte limit", error);
     {
@@ -380,7 +386,8 @@ produce_frame_impl(ure_handle_t instance_handle,
             return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 221,
                               "frame capability is not enabled", error);
         if (instance->retained_frames >= instance->max_retained_frames ||
-            bytes > instance->max_retained_bytes - instance->retained_bytes)
+            retained_bytes >
+                instance->max_retained_bytes - instance->retained_bytes)
             return make_error(URE_RESULT_BACKPRESSURE, 222,
                               "frame lease budget is exhausted", error);
     }
@@ -394,13 +401,13 @@ produce_frame_impl(ure_handle_t instance_handle,
         frame->width = request->width;
         frame->height = request->height;
         frame->created_ns = timestamp_ns();
-        frame->retained_bytes = bytes;
+        frame->retained_bytes = retained_bytes;
         PlaneData plane;
         plane.width = request->width;
         plane.height = request->height;
         plane.row_stride = static_cast<std::uint64_t>(request->width) * 16;
-        plane.slice_stride = bytes;
-        plane.bytes.resize(static_cast<std::size_t>(bytes));
+        plane.slice_stride = plane_bytes;
+        plane.bytes.resize(static_cast<std::size_t>(plane_bytes));
         for (std::uint32_t y = 0; y < request->height; ++y) {
             for (std::uint32_t x = 0; x < request->width; ++x) {
                 const std::array<float, 4> values{
@@ -420,23 +427,50 @@ produce_frame_impl(ure_handle_t instance_handle,
         plane.uncertainty = digest("UltraRender.Uncertainty.None.v1");
         plane.provenance =
             digest("UltraRender.FramePlane.Conformance.v1", plane.bytes);
+        std::vector<std::uint8_t> frame_payload = plane.bytes;
+        if (multiple_planes) {
+            auto spectral = plane;
+            spectral.schema = URE_FRAME_PLANE_SPECTRAL;
+            for (std::size_t offset = 0; offset < spectral.bytes.size();
+                 offset += sizeof(float)) {
+                float value{};
+                std::memcpy(&value, spectral.bytes.data() + offset,
+                            sizeof(value));
+                value *= 0.5F;
+                std::memcpy(spectral.bytes.data() + offset, &value,
+                            sizeof(value));
+            }
+            spectral.observable =
+                digest("UltraRender.Observable.ConformanceSpectrum.v1");
+            spectral.provenance = digest(
+                "UltraRender.FramePlane.ConformanceSpectrum.v1",
+                spectral.bytes);
+            frame_payload.insert(frame_payload.end(), spectral.bytes.begin(),
+                                 spectral.bytes.end());
+            frame->planes.push_back(std::move(plane));
+            frame->planes.push_back(std::move(spectral));
+        } else {
+            frame->planes.push_back(std::move(plane));
+        }
         frame->frame_identity =
-            digest("UltraRender.Frame.Conformance.v1", plane.bytes);
+            digest("UltraRender.Frame.Conformance.v1", frame_payload);
         frame->scene_revision = digest("UltraRender.SceneRevision.Conformance.v1");
         frame->camera_revision =
             digest("UltraRender.CameraRevision.Conformance.v1");
         frame->objective = digest("UltraRender.Objective.Conformance.v1");
         frame->estimator = digest("UltraRender.Estimator.Conformance.v1");
-        frame->provenance = plane.provenance;
-        frame->planes.push_back(std::move(plane));
+        frame->provenance =
+            digest("UltraRender.Frame.Provenance.Conformance.v1",
+                   frame_payload);
         {
             std::scoped_lock lock(instance->mutex);
             if (instance->retained_frames >= instance->max_retained_frames ||
-                bytes > instance->max_retained_bytes - instance->retained_bytes)
+                retained_bytes >
+                    instance->max_retained_bytes - instance->retained_bytes)
                 return make_error(URE_RESULT_BACKPRESSURE, 222,
                                   "frame lease budget is exhausted", error);
             ++instance->retained_frames;
-            instance->retained_bytes += bytes;
+            instance->retained_bytes += retained_bytes;
             frame->budget_accounted = true;
         }
         *output = handles().insert(frame);

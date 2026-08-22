@@ -200,13 +200,9 @@ int render(const ure::config::CliResult &cli) {
             std::chrono::milliseconds(cli.cancel_after_ms));
         job.request_cancel();
     }
-    const auto deadline =
-        std::chrono::steady_clock::now() + std::chrono::minutes(10);
     while (!job.wait(std::chrono::milliseconds(100))) {
         if (cancel_requested.exchange(false, std::memory_order_relaxed))
             job.request_cancel();
-        if (std::chrono::steady_clock::now() >= deadline)
-            throw std::runtime_error("product job exceeded the CLI wait bound");
     }
     const auto result = job.result();
     if (!cli.quiet) {

@@ -3,6 +3,7 @@ param(
     [string]$ClosureLedgerPath = "",
     [string]$SemanticAuditPath = "",
     [string]$ScenarioManifestPath = "",
+    [string]$EvidenceSupersessionPath = "",
     [string]$ReportPath = "",
     [switch]$RequireCurrentReportContracts
 )
@@ -61,9 +62,11 @@ function Assert-RequiredIds($Items, $Required, [string]$Label) {
 $closurePath = Resolve-InputPath $ClosureLedgerPath "contracts/product_closure_ledger.json"
 $semanticPath = Resolve-InputPath $SemanticAuditPath "contracts/product_semantic_audit.json"
 $scenarioPath = Resolve-InputPath $ScenarioManifestPath "contracts/product_e2e_scenarios.json"
+$supersessionPath = Resolve-InputPath $EvidenceSupersessionPath "contracts/product_evidence_supersessions.json"
 $closure = Read-Json $closurePath
 $semantic = Read-Json $semanticPath
 $scenarios = Read-Json $scenarioPath
+$supersessions = Read-Json $supersessionPath
 
 if ($closure.schema -ne "ure.preview.product-closure-ledger/1.0") {
     throw "Unexpected product closure ledger schema"
@@ -120,6 +123,51 @@ if ($authorityClaims.Count -ne @($authorityClaims | Sort-Object -Unique).Count) 
 $missingAuthorityClaims = @($closure.required_authority_claims | Where-Object { $authorityClaims -notcontains [string]$_ })
 if ($missingAuthorityClaims.Count -ne 0 -or $authorityClaims.Count -ne @($closure.required_authority_claims).Count) {
     throw "The product closure ledger authority claims are incomplete or unclassified"
+}
+
+if ($supersessions.schema -ne "ure.preview.product-evidence-supersessions/1.0") {
+    throw "Unexpected product evidence supersession schema"
+}
+Assert-UniqueIds $supersessions.records "Product evidence supersession record"
+$supersededCapabilities = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+foreach ($record in $supersessions.records) {
+    $supersededReportPath = Assert-RepositoryFile $record.superseded_report "Supersession $($record.id) report"
+    $reportHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $supersededReportPath).Hash.ToLowerInvariant()
+    if ($reportHash -ne ([string]$record.superseded_report_sha256).ToLowerInvariant() -or
+        $record.historical_report_policy -ne "Immutable" -or
+        $record.recovery_gate -notmatch '^PRV\.[0-9]+[A-Z]?$' -or
+        [string]::IsNullOrWhiteSpace([string]$record.evidence_scope)) {
+        throw "Supersession $($record.id) does not preserve an immutable historical report and recovery gate"
+    }
+    $reasonCodes = @($record.reason_codes | ForEach-Object { [string]$_ })
+    if ($reasonCodes.Count -eq 0 -or $reasonCodes.Count -ne @($reasonCodes | Sort-Object -Unique).Count -or $reasonCodes -contains "") {
+        throw "Supersession $($record.id) reason codes must be nonempty and unique"
+    }
+    $claimIds = @($record.claims | ForEach-Object { [string]$_.capability_id })
+    if ($claimIds.Count -eq 0 -or $claimIds.Count -ne @($claimIds | Sort-Object -Unique).Count -or $claimIds -contains "") {
+        throw "Supersession $($record.id) capability claims must be nonempty and unique"
+    }
+    foreach ($claim in $record.claims) {
+        $entry = @($closure.entries | Where-Object id -eq $claim.capability_id)
+        if ($entry.Count -ne 1 -or
+            $claim.previous_closure -ne "ProductE2E" -or
+            $claim.current_closure -notin @("RendererIntegrated", "ClientReachable") -or
+            $entry[0].closure_level -ne $claim.current_closure) {
+            throw "Supersession $($record.id) claim $($claim.capability_id) does not match the current closure ledger"
+        }
+        if (@($entry[0].evidence | Where-Object { $_.kind -eq "Supersession" -and $_.path -eq "contracts/product_evidence_supersessions.json" }).Count -ne 1) {
+            throw "Superseded capability $($claim.capability_id) does not cite the additive supersession record"
+        }
+        if (-not $supersededCapabilities.Add([string]$claim.capability_id)) {
+            throw "Capability $($claim.capability_id) is superseded more than once"
+        }
+    }
+}
+foreach ($entry in $closure.entries) {
+    if (@($entry.evidence | Where-Object kind -eq "Supersession").Count -ne 0 -and
+        -not $supersededCapabilities.Contains([string]$entry.id)) {
+        throw "Closure entry $($entry.id) cites an unclaimed supersession"
+    }
 }
 
 $requiredBypass = @{
@@ -246,4 +294,4 @@ if (-not [string]::IsNullOrWhiteSpace($ReportPath)) {
     }
 }
 
-Write-Output "PRV.0 static audit passed: $(@($closure.entries).Count) closure entries, $(@($semantic.entries).Count) semantics, $(@($scenarios.scenarios).Count) retained scenarios"
+Write-Output "PRV.0 static audit passed: $(@($closure.entries).Count) closure entries, $(@($semantic.entries).Count) semantics, $(@($scenarios.scenarios).Count) retained scenarios, $($supersededCapabilities.Count) superseded claims"

@@ -156,9 +156,11 @@ bool valid_frame_request(std::span<const std::uint8_t> payload,
     seed = request->seed();
     std::uint64_t pixels{};
     std::uint64_t frame_bytes{};
+    const std::uint64_t bytes_per_pixel =
+        (seed & UINT32_C(0x80000000)) != 0 ? 32 : 16;
     return width != 0 && height != 0 && width <= 8192 && height <= 8192 &&
            checked_product(width, height, pixels) &&
-           checked_product(pixels, 16, frame_bytes) &&
+           checked_product(pixels, bytes_per_pixel, frame_bytes) &&
            frame_bytes <= kMaximumFrameBytes;
 #endif
 }
@@ -378,10 +380,12 @@ revision_payload(const SceneRevisionSnapshot &snapshot) {
 std::unique_ptr<fb::SharedBlobDescriptorT>
 blob_descriptor(std::uint64_t lease_id, std::uint64_t generation,
                 std::uint64_t remote_handle, std::uint64_t size,
+                std::uint64_t byte_offset,
                 const std::array<std::uint8_t, 32> &digest,
                 const std::array<std::uint8_t, 32> &worker_identity) {
     auto blob = std::make_unique<fb::SharedBlobDescriptorT>();
     blob->lease_id = lease_id;
+    blob->byte_offset = byte_offset;
     blob->byte_length = size;
     blob->digest.assign(digest.begin(), digest.end());
     blob->access = URE_SHARED_BLOB_ACCESS_READ;
@@ -398,32 +402,36 @@ frame_descriptor(const FrameSnapshot &snapshot, std::uint64_t lease_id,
                  std::uint64_t generation, std::uint64_t remote_handle,
                  const std::array<std::uint8_t, 32> &content_digest,
                  const std::array<std::uint8_t, 32> &worker_identity) {
-    auto plane = std::make_unique<fb::FramePlaneDescriptorT>();
-    plane->semantic_id = snapshot.plane.plane_schema;
-    plane->width = snapshot.plane.width;
-    plane->height = snapshot.plane.height;
-    plane->row_stride = snapshot.plane.row_stride;
-    plane->element_stride = snapshot.plane.element_stride;
-    plane->blob =
-        blob_descriptor(lease_id, generation, remote_handle,
-                        snapshot.bytes.size(), content_digest, worker_identity);
-    plane->plane_id = 1;
-    plane->scalar_type = snapshot.plane.scalar_type;
-    plane->component_layout = snapshot.plane.component_layout;
-    plane->depth = snapshot.plane.depth;
-    plane->slice_stride = snapshot.plane.slice_stride;
-    plane->byte_extent = snapshot.plane.byte_extent;
-    plane->observable_identity = bytes(snapshot.plane.observable_identity);
-    plane->unit_identity = bytes(snapshot.plane.unit_identity);
-    plane->measure_identity = bytes(snapshot.plane.measure_identity);
-    plane->time_identity = bytes(snapshot.plane.time_identity);
-    plane->uncertainty_identity = bytes(snapshot.plane.uncertainty_identity);
-    plane->provenance_identity = bytes(snapshot.plane.provenance_identity);
-    plane->normalization = snapshot.plane.normalization;
     auto frame = std::make_unique<fb::FrameReadyDescriptorT>();
     frame->frame_id = lease_id;
     frame->revision = generation;
-    frame->planes.push_back(std::move(plane));
+    for (std::size_t index = 0; index < snapshot.planes.size(); ++index) {
+        const auto &source = snapshot.planes[index];
+        const auto &info = source.info;
+        auto plane = std::make_unique<fb::FramePlaneDescriptorT>();
+        plane->semantic_id = info.plane_schema;
+        plane->width = info.width;
+        plane->height = info.height;
+        plane->row_stride = info.row_stride;
+        plane->element_stride = info.element_stride;
+        plane->blob = blob_descriptor(
+            lease_id, generation, remote_handle, snapshot.bytes.size(),
+            source.byte_offset, content_digest, worker_identity);
+        plane->plane_id = index + 1;
+        plane->scalar_type = info.scalar_type;
+        plane->component_layout = info.component_layout;
+        plane->depth = info.depth;
+        plane->slice_stride = info.slice_stride;
+        plane->byte_extent = info.byte_extent;
+        plane->observable_identity = bytes(info.observable_identity);
+        plane->unit_identity = bytes(info.unit_identity);
+        plane->measure_identity = bytes(info.measure_identity);
+        plane->time_identity = bytes(info.time_identity);
+        plane->uncertainty_identity = bytes(info.uncertainty_identity);
+        plane->provenance_identity = bytes(info.provenance_identity);
+        plane->normalization = info.normalization;
+        frame->planes.push_back(std::move(plane));
+    }
     frame->retained_bytes = snapshot.bytes.size();
     frame->frame_identity = bytes(snapshot.frame.frame_identity);
     frame->scene_revision_identity =
@@ -899,8 +907,11 @@ int run_worker(const Arguments &arguments) {
             } else {
                 std::uint64_t pixels{};
                 std::uint64_t requested_bytes{};
+                const std::uint64_t bytes_per_pixel =
+                    (seed & UINT32_C(0x80000000)) != 0 ? 32 : 16;
                 if (!checked_product(width, height, pixels) ||
-                    !checked_product(pixels, 16, requested_bytes) ||
+                    !checked_product(pixels, bytes_per_pixel,
+                                     requested_bytes) ||
                     requested_bytes > negotiated_blob_bytes ||
                     requested_bytes > negotiated_frame_bytes) {
                     response.result = fb::ResultCode::Backpressure;

@@ -473,7 +473,7 @@ Diagnostics are maintained product contracts that mature with every Preview phas
 ## 9. Build Environment
 
 - **OS**: Windows 11
-- **Compiler**: MSVC 19.52 through Visual Studio 2026 18.8.2
+- **Compiler**: MSVC 19.52.36615 through Visual Studio 2026 18.9.0
 - **Windows SDK**: 10.0.28000
 - **CUDA**: 13.3
 - **GPU**: RTX 5060 Laptop (CC 12.0, 8 GB VRAM, 26 SMs)
@@ -589,6 +589,7 @@ ctest --test-dir build_modular_x64 -C Release -R "^gpu_hardware$" --output-on-fa
 | 81 | 2026-08-11 PRV.1 | Converged the bounded product runtime and maintained client spine | `ure_product`, ProductJob 0.1, explicit Direct/Worker `ure_client` transports and CLI render now share one execution authority. Worker still uses only two bootstrap exports and shared-memory leases; CLI owns no renderer and defaults to Worker without fallback. Direct/Worker load, render, cancel, error, frame and artifact parity includes two byte-identical real PFM images. Native tooling is isolated pending PRV.2 runtime extension convergence; cursor advances to PRV.2. |
 | 82 | 2026-08-13 PRV.1 runtime audit | Reclassified the PRV.1 evidence and inserted a blocking repair phase | Product `sample_budget` drives geometric target growth through repeated renderer construction and full rerender; Worker has a fixed 60-second synchronous wait; budget/completion, cancellation, relative resource roots and hardware-memory applicability are not trustworthy. The 64×64 smoke and byte parity remain structural evidence but no longer prove ProductE2E. `PRV.1R` is the cursor and blocks PRV.2 while it establishes canonical work accounting, persistent execution, asynchronous control, self-contained fixtures and tiered real-product image evidence. |
 | 83 | 2026-08-13 downstream integration review | Strengthened PRV.1R and made diagnostics a continuous Preview maturity track | PRV.1R now includes monotonic progress/latest frames, generic multi-plane Worker transport, device enumeration/selection/reporting, explicit sample precedence, pre-generated protocol headers and an out-of-tree reference client without publishing internal `ure_sceneio` ABI. Structured diagnostics begin with a shared correlation/cause/recovery envelope, then scene, material, output, reconstruction, automatic, session, backend, distributed and client phases each add domain detail and negative E2E before PRV.11 unified closure. |
+| 84 | 2026-08-14 PRV.1R runtime foundation | Repaired canonical incremental work and began trusted product infrastructure | Product work now advances one actual production sample per bounded quantum over persistent candidate executors with separate pilot/production/realization/construction counts. Incomplete wall-budget work cannot publish success; fixed Worker/CLI product deadlines are removed. Explicit resource roots, pre-allocation memory applicability, typed resource/memory errors, isolated-CWD Direct/Worker coverage and generic multi-plane shared leases are implemented. Progressive latest frames, full diagnostic/device/sample semantics, external SDK and functional/quality E2E remain open, so the cursor stays PRV.1R. |
 
 ### Consolidated Truth
 

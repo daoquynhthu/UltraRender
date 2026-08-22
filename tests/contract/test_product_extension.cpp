@@ -91,17 +91,19 @@ int main(int argc, char **argv) {
 
     constexpr std::uint8_t runtime_id[16] URE_INTERFACE_RUNTIME_UUID_BYTES;
     constexpr std::uint8_t instance_id[16] URE_INTERFACE_INSTANCE_UUID_BYTES;
+    constexpr std::uint8_t error_id[16] URE_INTERFACE_ERROR_UUID_BYTES;
     constexpr std::uint8_t operation_id[16] URE_INTERFACE_OPERATION_UUID_BYTES;
     constexpr std::uint8_t frame_id[16] URE_INTERFACE_FRAME_UUID_BYTES;
     constexpr std::uint8_t scene_id[16] URE_INTERFACE_SCENE_UUID_BYTES;
     constexpr std::uint8_t product_id[16] URE_INTERFACE_PRODUCT_JOB_UUID_BYTES;
     const auto *runtime = query_table<ure_runtime_interface_t>(query, runtime_id, 1, 0);
     const auto *instances = query_table<ure_instance_interface_t>(query, instance_id, 1, 0);
+    const auto *errors = query_table<ure_error_interface_t>(query, error_id, 1, 0);
     const auto *operations = query_table<ure_operation_interface_t>(query, operation_id, 1, 0);
     const auto *frames = query_table<ure_frame_interface_t>(query, frame_id, 1, 0);
     const auto *scenes = query_table<ure_scene_interface_t>(query, scene_id, 1, 0);
     const auto *products = query_table<ure_product_job_interface_t>(query, product_id, 0, 1);
-    check(runtime && instances && operations && frames && scenes && products,
+    check(runtime && instances && errors && operations && frames && scenes && products,
           "required interface query failed");
 
     ure_interface_query_t wrong_version{};
@@ -115,7 +117,7 @@ int main(int argc, char **argv) {
     check(query(&wrong_version, &wrong_response, nullptr) ==
               URE_RESULT_INCOMPATIBLE_VERSION,
           "extension accepted an incompatible interface version");
-    if (!runtime || !instances || !operations || !frames || !scenes || !products) {
+    if (!runtime || !instances || !errors || !operations || !frames || !scenes || !products) {
         FreeLibrary(module);
         return 1;
     }
@@ -193,6 +195,25 @@ int main(int argc, char **argv) {
     objective.output_count = 1;
     objective.output_semantics = &color_output;
     objective.sample_budget = 2;
+    objective.memory_budget_bytes = UINT64_C(1048576);
+    ure_handle_t memory_error{};
+    ure_handle_t memory_job{};
+    check(products->create(instance, scene, &objective, &memory_job,
+                           &memory_error) == URE_RESULT_BUDGET_EXHAUSTED &&
+              !memory_job && memory_error,
+          "memory-inapplicable product plan was not retained as a budget error");
+    ure_error_info_t memory_error_info{};
+    memory_error_info.header = {URE_STRUCTURE_ERROR_INFO,
+                                sizeof(memory_error_info), nullptr};
+    check(memory_error &&
+              errors->get_info(memory_error, &memory_error_info) ==
+                  URE_RESULT_SUCCESS &&
+              memory_error_info.result == URE_RESULT_BUDGET_EXHAUSTED &&
+              memory_error_info.detail == 543,
+          "memory preflight error lost its product classification");
+    if (memory_error)
+        errors->release(memory_error);
+    objective.memory_budget_bytes = 0;
     ure_handle_t job{};
     check(products->create(instance, scene, &objective, &job, nullptr) ==
               URE_RESULT_SUCCESS,
@@ -239,9 +260,42 @@ int main(int argc, char **argv) {
     if (operation)
         operations->release(operation, nullptr);
 
+    objective.sample_budget = 100;
+    objective.wall_time_budget_ns = UINT64_C(1000000);
+    ure_handle_t budget_job{};
+    ure_handle_t budget_operation{};
+    check(products->create(instance, scene, &objective, &budget_job, nullptr) ==
+                  URE_RESULT_SUCCESS &&
+              products->start(budget_job, &budget_operation, nullptr) ==
+                  URE_RESULT_SUCCESS &&
+              operations->wait(budget_operation, UINT64_C(30000000000), nullptr) ==
+                  URE_RESULT_BUDGET_EXHAUSTED,
+          "wall-time budget exhaustion did not fail the operation");
+    ure_operation_info_t budget_info{};
+    budget_info.header = {URE_STRUCTURE_OPERATION_INFO,
+                          sizeof(budget_info), nullptr};
+    check(operations->get_info(budget_operation, &budget_info, nullptr) ==
+                  URE_RESULT_SUCCESS &&
+              budget_info.state == URE_OPERATION_STATE_FAILED &&
+              budget_info.completed_work < budget_info.total_work,
+          "budget-exhausted operation reported complete work");
+    artifact = {};
+    artifact.header = {URE_STRUCTURE_PRODUCT_ARTIFACT_MANIFEST,
+                       sizeof(artifact), nullptr};
+    check(products->get_artifact_manifest(budget_job, &artifact, nullptr) ==
+              URE_RESULT_INCOMPLETE,
+          "budget-exhausted operation published a complete artifact");
+    if (budget_operation)
+        operations->release(budget_operation, nullptr);
+    if (budget_job) {
+        products->close(budget_job, nullptr);
+        products->release(budget_job, nullptr);
+    }
+
     objective.output_count = 0;
     objective.output_semantics = nullptr;
     objective.sample_budget = 100000;
+    objective.wall_time_budget_ns = 0;
     ure_handle_t cancel_job{};
     ure_handle_t cancel_operation{};
     ure_bool32_t cancel_accepted{};

@@ -185,8 +185,10 @@ std::uint64_t current_available_device_bytes(
 struct CandidateState {
     RenderConfig config;
     AutomaticTechniqueReport report;
+    std::unique_ptr<IRenderEngine> executor;
     double maximum_absolute_pilot = 0.0;
     int rendered_spp = 0;
+    std::uint64_t available_device_bytes_before_executor = 0;
     std::uint64_t measured_resident_device_bytes = 0;
     std::uint64_t estimated_peak_device_bytes = 0;
     std::vector<float> framebuffer;
@@ -204,6 +206,7 @@ public:
         scene_ = scene_ir;
         loaded_ = true;
         clear_all();
+        scene_realization_count_ = 1;
         auto baseline = RenderEngineFactory::create_gpu_renderer(
             candidate_config(config_, IntegratorMode::Wavefront));
         baseline->load_scene_ir(scene_);
@@ -255,9 +258,7 @@ public:
         const auto index = selected_indices_[next_selected_];
         next_selected_ = (next_selected_ + 1) % selected_indices_.size();
         const auto current = candidates_[index].rendered_spp;
-        const auto target = current == 0
-            ? std::max(1, config_.samples_per_pass)
-            : std::max(current + config_.samples_per_pass, current * 2);
+        const auto target = current + 1;
         const auto start = Clock::now();
         render_candidate(index, target);
         production_elapsed_nanoseconds_ += elapsed_nanoseconds(start);
@@ -365,11 +366,17 @@ private:
         pilot_elapsed_nanoseconds_ = 0;
         acceleration_stats_ = {};
         dynamic_geometry_stats_ = {};
+        scene_realization_count_ = 0;
+        pilot_executor_creation_count_ = 0;
+        production_executor_creation_count_ = 0;
+        pilot_sample_count_ = 0;
         reset_production();
     }
 
     void reset_production() {
         for (auto& candidate : candidates_) {
+            if (candidate.executor)
+                candidate.executor->reset_accumulation();
             candidate.rendered_spp = 0;
             candidate.framebuffer.clear();
             candidate.report.allocated_spp = 0;
@@ -380,6 +387,7 @@ private:
         current_spp_ = 0;
         next_selected_ = 0;
         production_elapsed_nanoseconds_ = 0;
+        production_sample_count_ = 0;
         report_ = {};
     }
 
@@ -419,6 +427,7 @@ private:
         auto pilot_config = state.config;
         pilot_config.sample_index_offset = config_.sample_index_offset;
         auto engine = RenderEngineFactory::create_gpu_renderer(pilot_config);
+        ++pilot_executor_creation_count_;
         engine->load_scene_ir(scene_);
         engine->reset_accumulation();
         std::vector<double> samples;
@@ -446,6 +455,8 @@ private:
                     "candidate produced a non-finite pilot contribution");
             }
             samples.push_back(contribution);
+            pilot_sample_count_ += static_cast<std::uint64_t>(
+                current_spp - previous_spp);
             state.maximum_absolute_pilot = std::max(
                 state.maximum_absolute_pilot,
                 std::abs(contribution));
@@ -599,37 +610,47 @@ private:
 
     void render_candidate(std::size_t index, int spp) {
         auto& state = candidates_.at(index);
-        if (!state.report.selected || spp <= 0) return;
-        const auto available_before = current_available_device_bytes(
-            backend_selection_);
-        auto engine = RenderEngineFactory::create_gpu_renderer(state.config);
-        engine->load_scene_ir(scene_);
-        RenderSettings settings;
-        settings.width = scene_.width;
-        settings.height = scene_.height;
-        settings.spp = spp;
-        engine->render(settings);
+        if (!state.report.selected || spp <= state.rendered_spp) return;
+        if (!state.executor) {
+            state.available_device_bytes_before_executor =
+                current_available_device_bytes(backend_selection_);
+            state.executor = RenderEngineFactory::create_gpu_renderer(
+                state.config);
+            ++production_executor_creation_count_;
+            state.executor->load_scene_ir(scene_);
+            state.executor->reset_accumulation();
+        }
+        while (state.rendered_spp < spp) {
+            const auto previous = state.rendered_spp;
+            const auto current = state.executor->render_pass();
+            if (current != previous + 1) {
+                throw std::runtime_error(
+                    "Automatic candidate violated the canonical one-sample work quantum");
+            }
+            state.rendered_spp = current;
+            ++production_sample_count_;
+        }
         const auto available_during = current_available_device_bytes(
             backend_selection_);
-        state.framebuffer = engine->get_framebuffer();
-        state.rendered_spp = spp;
-        state.report.allocated_spp = spp;
+        state.framebuffer = state.executor->get_framebuffer();
+        state.report.allocated_spp = state.rendered_spp;
         state.measured_resident_device_bytes =
-            available_before > available_during
-            ? available_before - available_during
+            state.available_device_bytes_before_executor > available_during
+            ? state.available_device_bytes_before_executor - available_during
             : 0;
         const auto candidate_acceleration =
-            engine->get_acceleration_stats();
+            state.executor->get_acceleration_stats();
         state.estimated_peak_device_bytes =
             state.measured_resident_device_bytes +
             candidate_acceleration.build_temporary_bytes_peak;
         if (state.report.mode == IntegratorMode::Wavefront) {
             for (std::size_t value = 1; value < aov_buffers_.size(); ++value) {
-                aov_buffers_[value] = engine->get_aov(
+                aov_buffers_[value] = state.executor->get_aov(
                     static_cast<AovType>(value));
             }
-            acceleration_stats_ = engine->get_acceleration_stats();
-            dynamic_geometry_stats_ = engine->get_dynamic_geometry_stats();
+            acceleration_stats_ = state.executor->get_acceleration_stats();
+            dynamic_geometry_stats_ =
+                state.executor->get_dynamic_geometry_stats();
         }
     }
 
@@ -712,6 +733,13 @@ private:
         report_.pilot_precision_weighted = true;
         report_.conservative_uncertainty_bound = true;
         report_.auxiliary_outputs_wavefront_only = true;
+        report_.scene_realization_count = scene_realization_count_;
+        report_.pilot_executor_creation_count =
+            pilot_executor_creation_count_;
+        report_.production_executor_creation_count =
+            production_executor_creation_count_;
+        report_.pilot_sample_count = pilot_sample_count_;
+        report_.production_sample_count = production_sample_count_;
         for (const auto index : selected_indices_) {
             const auto& state = candidates_[index];
             if (state.rendered_spp <= 0) continue;
@@ -746,6 +774,11 @@ private:
     int current_spp_ = 0;
     std::uint64_t pilot_elapsed_nanoseconds_ = 0;
     std::uint64_t production_elapsed_nanoseconds_ = 0;
+    std::uint64_t scene_realization_count_ = 0;
+    std::uint64_t pilot_executor_creation_count_ = 0;
+    std::uint64_t production_executor_creation_count_ = 0;
+    std::uint64_t pilot_sample_count_ = 0;
+    std::uint64_t production_sample_count_ = 0;
     AccelerationStats acceleration_stats_;
     runtime::DynamicGeometryStats dynamic_geometry_stats_;
     AutomaticIntegratorReport report_;

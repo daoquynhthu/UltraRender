@@ -266,6 +266,35 @@ int run(const std::filesystem::path &product_worker,
                                   second_blob.byte_length, error));
     second_lease.close();
     CHECK_ERROR(client.release_lease(second_blob.lease_id, error));
+    auto multiple = client.request_frame(2, 2, UINT32_C(0x80000009), error);
+    CHECK_ERROR(multiple && multiple->frame &&
+                multiple->frame->planes.size() == 2);
+    const auto &multiple_frame = *multiple->frame;
+    const auto &color_plane = *multiple_frame.planes[0];
+    const auto &spectral_plane = *multiple_frame.planes[1];
+    CHECK(color_plane.blob && spectral_plane.blob &&
+          color_plane.semantic_id == URE_FRAME_PLANE_COLOR &&
+          spectral_plane.semantic_id == URE_FRAME_PLANE_SPECTRAL &&
+          color_plane.byte_extent == 64 && spectral_plane.byte_extent == 64 &&
+          color_plane.blob->lease_id == spectral_plane.blob->lease_id &&
+          color_plane.blob->mapping_handle ==
+              spectral_plane.blob->mapping_handle &&
+          color_plane.blob->byte_offset == 0 &&
+          spectral_plane.blob->byte_offset == 64 &&
+          color_plane.blob->byte_length == 128 &&
+          spectral_plane.blob->byte_length == 128 &&
+          multiple_frame.retained_bytes == 128);
+    MappedLease multiple_lease;
+    CHECK_ERROR(multiple_lease.open(color_plane.blob->mapping_handle, 0,
+                                    color_plane.blob->byte_length, error));
+    const auto multiple_digest = shared_blob_digest(
+        multiple_lease.data(), multiple_lease.size());
+    CHECK(std::equal(multiple_digest.begin(), multiple_digest.end(),
+                     color_plane.blob->digest.begin()) &&
+          !std::equal(multiple_lease.data(), multiple_lease.data() + 64,
+                      multiple_lease.data() + 64));
+    multiple_lease.close();
+    CHECK_ERROR(client.release_lease(color_plane.blob->lease_id, error));
     CHECK_ERROR(client.shutdown(error));
     std::uint32_t exit_code{};
     CHECK(client.wait(5000, exit_code) && exit_code == 0);

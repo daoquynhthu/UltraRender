@@ -61,6 +61,7 @@ struct CanonicalCamera {
 };
 
 struct NativeSceneArchive {
+    std::filesystem::path execution_root;
     SceneDocument document;
     scene_ir::SceneIR scene;
     NativeSceneSourceIds source_ids;

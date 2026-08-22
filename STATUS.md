@@ -1,6 +1,6 @@
 # UltraRender Current Status
 
-Last reviewed: 2026-08-13
+Last reviewed: 2026-08-22
 
 This document is the current capability summary. [`PLAN.md`](PLAN.md) is authoritative for execution order; source code, generated manifests, and fresh verification output take precedence over prose.
 
@@ -18,8 +18,8 @@ The current render-client spine has one product execution authority. `ure_client
 
 | Product area | Highest current evidence | Preview gap |
 |---|---|---|
-| Core/Worker scene render | ClientReachable structural spine; runtime adapter and Worker both delegate ProductJob 0.1 to `ure_product` | Sample/work accounting, persistent execution, long-operation control, resource roots and meaningful product-image evidence are blocking defects |
-| CLI render | ClientReachable through `ure_client`; Worker is default and Direct is explicit | Current smoke does not prove trustworthy samples, quality, budget/cancel semantics or self-contained execution |
+| Core/Worker scene render | ClientReachable; canonical incremental work, persistent candidate executors, explicit resource roots, memory preflight and generic multi-plane leases are implemented | Progressive latest-frame control, device/sample-precedence contracts and meaningful product-image evidence remain open |
+| CLI render | ClientReachable through `ure_client`; Worker is default and Direct is explicit; fixed client-side product deadline removed | Current smoke does not prove product functional/quality evidence or the external SDK matrix |
 | Native advanced blocks | Contract / component executable | Procedural, resource, solver and simulation declarations are not uniformly realized by the renderer |
 | Automatic transport | Component executable with a bounded CUDA bridge | The product renderer does not yet consume the full HT support, pilot and portfolio authority |
 | Measurement/reconstruction | Component executable | No complete-scene product producer/output chain for all required planes |
@@ -27,11 +27,11 @@ The current render-client spine has one product execution authority. `ure_client
 | Multi-device/farm/cache | Component executable | Not reachable through one canonical product job and artifact workflow |
 | Hydra/legacy Python | Client-reachable internal paths | Bypass the canonical product service and require convergence |
 
-PRV.0 preserves the historical product baseline. The live machine ledger still records 46 maintained capabilities and entry points with five PRV.1-era `ProductE2E` classifications; the PRV.1R audit has withdrawn that interpretation. PRV.1R.0 must add a supersession record and reclassify those entries to their actually demonstrated `ClientReachable` or `RendererIntegrated` level without rewriting historical reports. None of the twelve final Preview product scenarios is ProductE2E.
+PRV.0 preserves the historical product baseline. The live machine ledger records 46 maintained capabilities and entry points; five PRV.1-era `ProductE2E` classifications are now reclassified to their actually demonstrated `ClientReachable` or `RendererIntegrated` levels. An additive, schema-validated supersession record binds the unchanged historical report and states why its smoke evidence was withdrawn. None of the twelve final Preview product scenarios is ProductE2E.
 
 The current semantic audit covers 25 maintained inputs: 15 reject outside the executable ProductJob 0.1 subset, 4 execute, 4 are preserved for tooling and 2 execute with explicit semantic debt. No maintained input is accepted-but-ignored. The retained scenario manifest binds twelve required workflows across eight coverage dimensions. See the historical [`PRV.0 baseline`](docs/PRV0_Product_Truth_Baseline.md), its [machine report](docs/reports/ure_preview_baseline_v1.json), and the historical [PRV.1 validation report](docs/reports/phase_prv1_validation_v1.json); the latter remains valid for routing/smoke parity but is no longer sufficient ProductE2E evidence.
 
-PRV.1's architectural slice is retained. ProductJob remains an `UnstableExtension`; Core ABI 1.0 prefixes are unchanged. The shared `ure_client` provides explicit Direct/Worker transports, Worker uses the two bootstrap exports and shared-memory frame leases, and CLI render owns no renderer/SceneIR/image-save implementation. Its two byte-identical 64×64 PFM renders establish smoke-scale transport parity only. The audit found geometric effective work growth from repeated full rerenders, a fixed 60-second Worker wait boundary, incorrect budget/complete semantics, coarse cancellation, current-directory resource dependence, and a default-profile UHD memory/paging cliff without preflight.
+PRV.1's architectural slice is retained. ProductJob remains an `UnstableExtension`; Core ABI 1.0 prefixes are unchanged. PRV.1R now advances one canonical production item per quantum over persistent candidate executors, records pilot/production/realization/executor counts, and refuses complete Frame publication until accepted work closes. Worker observation no longer imposes a 60-second job failure and CLI has no independent ten-minute product deadline. Wall-budget exhaustion remains failed/incomplete; file scenes resolve resources against an explicit root from isolated working directories; memory planning rejects inapplicable jobs before renderer allocation. Worker and `ure_client` carry bounded generic multi-plane Frame leases. Functional/quality E2E, progressive latest frames, full diagnostics, device selection/reporting and sample-precedence closure remain open.
 
 Diagnostics are now a continuous Preview workstream. PRV.1R establishes stable result/domain mapping, versioned detail and catalog, correlation/cause/recovery data, terminal operation errors, device reporting and cross-process parity. PRV.2-PRV.10 must add their own scene, material, output, reconstruction, automatic, session, backend, distributed and adapter diagnostics as those product paths are integrated; PRV.11 only performs unified closure.
 
@@ -77,7 +77,7 @@ GPU backends, CUDA-coupled renderer/session/product-runtime targets, and optiona
 
 | Subsystem | Current state | Important boundary |
 |---|---|---|
-| Product client/runtime | `ure_product`, ProductJob 0.1 and `ure_client` Direct/Worker transports share one structural execution spine; CLI render uses this path | PRV.1R must repair actual sample/work semantics, persistent execution, async control, resource roots and trusted ProductE2E before further product integration |
+| Product client/runtime | One execution spine with canonical incremental work, persistent executors, explicit resource roots, memory preflight and generic multi-plane Worker transfer | PRV.1R still requires progressive control, device/sample semantics, external SDK and trusted ProductE2E before further product integration |
 | CUDA renderer | Implemented and tested | Complete-scene reference path; no CPU production integrator |
 | Spectral/polarization | Runtime spectral domain, packet cap 32, Stokes/Mueller on covered paths | Not general coherent field transport |
 | Automatic integration | Technique Graph, support/measure composition, pilot qualification and portfolio contracts plus a bounded CUDA bridge implemented | Current product auto renderer does not yet consume the entire HT authority; manual modes remain for reproduction |
@@ -111,8 +111,8 @@ This report is a point-in-time public-boundary declaration record. PRV.0 separat
 
 ## Explicitly incomplete
 
-- trustworthy ProductJob sample/work accounting, persistent incremental execution, bounded cancellation and long-running Worker control;
-- self-contained resource execution independent of process current directory, plus pre-allocation GPU memory/applicability decisions;
+- progressive latest-frame acquisition, long-duration control/backpressure characterization and cancellation bounds at functional/quality scale;
+- complete pre-allocation estimates for later output/reconstruction planes and hardware-class applicability evidence beyond the current bounded color workflow;
 - a real-product Direct/Worker/CLI/external-client matrix with 480p functional, 720p/1080p quality and separately scheduled QHD/UHD stress evidence;
 - monotonic progressive events/latest-frame acquisition, explicit device selection/reporting, unambiguous `sample_budget`/scene/per-frame precedence, and an SDK that carries pre-generated protocol headers plus a renderer-free reference client;
 - comprehensive structured diagnostics beyond the current Core lifecycle subset, including domain catalogs, cross-process correlation, terminal-operation errors and actionable recovery guidance;

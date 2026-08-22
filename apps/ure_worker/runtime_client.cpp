@@ -17,6 +17,9 @@
 namespace ure::worker {
 namespace {
 
+inline constexpr std::uint64_t kMaximumSnapshotBytes =
+    UINT64_C(256) * 1024 * 1024;
+
 #if defined(URE_WORKER_CONFORMANCE)
 inline constexpr std::uint32_t kConformanceFrameRequest = 4026531847U;
 inline constexpr std::uint8_t kConformanceInterfaceId[16]{
@@ -169,6 +172,69 @@ struct RuntimeClient::Impl {
             failure.message = "runtime Error object could not be inspected";
         }
         errors->release(handle);
+    }
+
+    bool copy_frame(ure_handle_t handle, FrameSnapshot &snapshot,
+                    RuntimeFailure &failure) const {
+        snapshot = {};
+        snapshot.frame.header = {URE_STRUCTURE_FRAME_INFO,
+                                 sizeof(snapshot.frame), nullptr};
+        ure_handle_t error_handle{};
+        ure_result_t result = frames->get_info(
+            handle, &snapshot.frame, &error_handle);
+        if (result != URE_RESULT_SUCCESS) {
+            error(result, error_handle, failure);
+            return false;
+        }
+        if (snapshot.frame.plane_count == 0 ||
+            snapshot.frame.plane_count > 64) {
+            failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 414,
+                       "runtime frame has an invalid plane count"};
+            return false;
+        }
+        snapshot.planes.resize(snapshot.frame.plane_count);
+        std::uint64_t total_bytes{};
+        for (std::uint32_t index = 0;
+             index < snapshot.frame.plane_count; ++index) {
+            auto &plane = snapshot.planes[index];
+            plane.info.header = {URE_STRUCTURE_FRAME_PLANE_INFO,
+                                 sizeof(plane.info), nullptr};
+            result = frames->get_plane_info(
+                handle, index, &plane.info, &error_handle);
+            if (result != URE_RESULT_SUCCESS) {
+                error(result, error_handle, failure);
+                return false;
+            }
+            if (plane.info.byte_extent == 0 ||
+                plane.info.byte_extent >
+                    kMaximumSnapshotBytes - total_bytes) {
+                failure = {URE_RESULT_BACKPRESSURE, URE_ERROR_DOMAIN_CORE, 415,
+                           "runtime frame exceeds the worker snapshot budget"};
+                return false;
+            }
+            plane.byte_offset = total_bytes;
+            total_bytes += plane.info.byte_extent;
+        }
+        snapshot.bytes.resize(static_cast<std::size_t>(total_bytes));
+        for (std::uint32_t index = 0;
+             index < snapshot.frame.plane_count; ++index) {
+            const auto &plane = snapshot.planes[index];
+            ure_frame_copy_info_t copy{};
+            copy.header = {URE_STRUCTURE_FRAME_COPY_INFO, sizeof(copy),
+                           nullptr};
+            copy.frame = handle;
+            copy.plane_index = index;
+            copy.destination = snapshot.bytes.data() + plane.byte_offset;
+            copy.destination_size = plane.info.byte_extent;
+            copy.destination_row_stride = plane.info.row_stride;
+            copy.destination_slice_stride = plane.info.slice_stride;
+            result = frames->copy_plane(&copy, &error_handle);
+            if (result != URE_RESULT_SUCCESS) {
+                error(result, error_handle, failure);
+                return false;
+            }
+        }
+        return true;
     }
 
     bool product_status(ProductStatusSnapshot &status,
@@ -510,9 +576,12 @@ bool RuntimeClient::render_scene(const ObjectiveRequest &request,
     }
     ure_handle_t operation{};
     result = impl_->sessions->start(impl_->session, &operation, &error_handle);
-    if (result == URE_RESULT_SUCCESS)
-        result = impl_->operations->wait(operation, UINT64_C(60000000000),
-                                         &error_handle);
+    if (result == URE_RESULT_SUCCESS) {
+        do {
+            result = impl_->operations->wait(
+                operation, UINT64_C(1000000000), &error_handle);
+        } while (result == URE_RESULT_TIMEOUT);
+    }
     ure_handle_t frame{};
     if (result == URE_RESULT_SUCCESS)
         result = impl_->sessions->acquire_frame(impl_->session, &frame,
@@ -523,33 +592,16 @@ bool RuntimeClient::render_scene(const ObjectiveRequest &request,
         impl_->error(result, error_handle, failure);
         return false;
     }
-    snapshot = {};
-    snapshot.frame.header = {URE_STRUCTURE_FRAME_INFO, sizeof(snapshot.frame),
-                             nullptr};
-    result = impl_->frames->get_info(frame, &snapshot.frame, &error_handle);
-    if (result == URE_RESULT_SUCCESS) {
+    if (!impl_->copy_frame(frame, snapshot, failure)) {
+        impl_->frames->release(frame, nullptr);
+        return false;
+    }
+    {
         snapshot.session.header = {URE_STRUCTURE_SESSION_INFO,
                                    sizeof(snapshot.session), nullptr};
         result = impl_->sessions->get_info(impl_->session, &snapshot.session,
                                            &error_handle);
         snapshot.session_id = impl_->session_id;
-    }
-    if (result == URE_RESULT_SUCCESS) {
-        snapshot.plane.header = {URE_STRUCTURE_FRAME_PLANE_INFO,
-                                 sizeof(snapshot.plane), nullptr};
-        result = impl_->frames->get_plane_info(frame, 0, &snapshot.plane,
-                                               &error_handle);
-    }
-    if (result == URE_RESULT_SUCCESS) {
-        snapshot.bytes.resize(static_cast<std::size_t>(snapshot.plane.byte_extent));
-        ure_frame_copy_info_t copy{};
-        copy.header = {URE_STRUCTURE_FRAME_COPY_INFO, sizeof(copy), nullptr};
-        copy.frame = frame;
-        copy.destination = snapshot.bytes.data();
-        copy.destination_size = snapshot.bytes.size();
-        copy.destination_row_stride = snapshot.plane.row_stride;
-        copy.destination_slice_stride = snapshot.plane.slice_stride;
-        result = impl_->frames->copy_plane(&copy, &error_handle);
     }
     impl_->frames->release(frame, nullptr);
     if (result != URE_RESULT_SUCCESS) {
@@ -700,31 +752,11 @@ bool RuntimeClient::acquire_product_artifact(
     std::memcpy(artifact.frame_content_identity.data(),
                 manifest.frame_content_identity.bytes,
                 artifact.frame_content_identity.size());
-    frame = {};
-    frame.frame.header = {URE_STRUCTURE_FRAME_INFO, sizeof(frame.frame), nullptr};
-    result = impl_->frames->get_info(frame_handle, &frame.frame, &error_handle);
-    if (result == URE_RESULT_SUCCESS) {
-        frame.plane.header = {URE_STRUCTURE_FRAME_PLANE_INFO,
-                              sizeof(frame.plane), nullptr};
-        result = impl_->frames->get_plane_info(frame_handle, 0, &frame.plane,
-                                               &error_handle);
-    }
-    if (result == URE_RESULT_SUCCESS) {
-        frame.bytes.resize(static_cast<std::size_t>(frame.plane.byte_extent));
-        ure_frame_copy_info_t copy{};
-        copy.header = {URE_STRUCTURE_FRAME_COPY_INFO, sizeof(copy), nullptr};
-        copy.frame = frame_handle;
-        copy.destination = frame.bytes.data();
-        copy.destination_size = frame.bytes.size();
-        copy.destination_row_stride = frame.plane.row_stride;
-        copy.destination_slice_stride = frame.plane.slice_stride;
-        result = impl_->frames->copy_plane(&copy, &error_handle);
-    }
+    const bool frame_copied = impl_->copy_frame(
+        frame_handle, frame, failure);
     impl_->frames->release(frame_handle, nullptr);
-    if (result != URE_RESULT_SUCCESS) {
-        impl_->error(result, error_handle, failure);
+    if (!frame_copied)
         return false;
-    }
     frame.session.header = {URE_STRUCTURE_SESSION_INFO, sizeof(frame.session),
                             nullptr};
     frame.session.state = status.state;
@@ -761,33 +793,9 @@ bool RuntimeClient::produce_conformance_frame(std::uint32_t width,
         impl_->error(result, error_handle, failure);
         return false;
     }
-    snapshot = {};
-    snapshot.frame.header = {URE_STRUCTURE_FRAME_INFO, sizeof(snapshot.frame),
-                             nullptr};
-    result = impl_->frames->get_info(frame, &snapshot.frame, &error_handle);
-    if (result == URE_RESULT_SUCCESS) {
-        snapshot.plane.header = {URE_STRUCTURE_FRAME_PLANE_INFO,
-                                 sizeof(snapshot.plane), nullptr};
-        result =
-            impl_->frames->get_plane_info(frame, 0, &snapshot.plane, &error_handle);
-    }
-    if (result == URE_RESULT_SUCCESS) {
-        snapshot.bytes.resize(static_cast<std::size_t>(snapshot.plane.byte_extent));
-        ure_frame_copy_info_t copy{};
-        copy.header = {URE_STRUCTURE_FRAME_COPY_INFO, sizeof(copy), nullptr};
-        copy.frame = frame;
-        copy.destination = snapshot.bytes.data();
-        copy.destination_size = snapshot.bytes.size();
-        copy.destination_row_stride = snapshot.plane.row_stride;
-        copy.destination_slice_stride = snapshot.plane.slice_stride;
-        result = impl_->frames->copy_plane(&copy, &error_handle);
-    }
+    const bool frame_copied = impl_->copy_frame(frame, snapshot, failure);
     impl_->frames->release(frame, nullptr);
-    if (result != URE_RESULT_SUCCESS) {
-        impl_->error(result, error_handle, failure);
-        return false;
-    }
-    return true;
+    return frame_copied;
 #endif
 }
 

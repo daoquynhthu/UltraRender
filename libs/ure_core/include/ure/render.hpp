@@ -66,6 +66,11 @@ struct AutomaticIntegratorReport {
     bool pilot_precision_weighted = false;
     bool conservative_uncertainty_bound = false;
     bool auxiliary_outputs_wavefront_only = false;
+    std::uint64_t scene_realization_count = 0;
+    std::uint64_t pilot_executor_creation_count = 0;
+    std::uint64_t production_executor_creation_count = 0;
+    std::uint64_t pilot_sample_count = 0;
+    std::uint64_t production_sample_count = 0;
     std::vector<AutomaticTechniqueReport> techniques;
 };
 

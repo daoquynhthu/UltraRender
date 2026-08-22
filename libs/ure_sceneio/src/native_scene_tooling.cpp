@@ -239,17 +239,17 @@ NativeSceneArchive migrate_native_scene_archive(
 
 LoadResult<NativeSceneArchive> load_native_asset(const std::filesystem::path& path,
                                                  const ValidationLimits& limits) {
-    if (path.extension() != ".urepkg") {
-        return load_native_scene(
+    auto loaded = path.extension() != ".urepkg"
+        ? load_native_scene(
             path,
             native_tool_capabilities(),
-            limits);
+            limits)
+        : load_package_scene(path, {}, limits, false);
+    if (loaded.value) {
+        loaded.value->execution_root =
+            std::filesystem::absolute(path).lexically_normal().parent_path();
     }
-    return load_package_scene(
-        path,
-        {},
-        limits,
-        false);
+    return loaded;
 }
 
 LoadResult<NativeSceneArchive> load_native_package_scene(
@@ -262,11 +262,16 @@ LoadResult<NativeSceneArchive> load_native_package_scene(
             path,
             "Explicit package scene selection requires a .urepkg input");
     }
-    return load_package_scene(
+    auto loaded = load_package_scene(
         path,
         scene_id,
         limits,
         true);
+    if (loaded.value) {
+        loaded.value->execution_root =
+            std::filesystem::absolute(path).lexically_normal().parent_path();
+    }
+    return loaded;
 }
 
 NativeInspection inspect_native_asset(const std::filesystem::path& path,

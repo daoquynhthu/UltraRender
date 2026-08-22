@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <ure/native_scene_ir.hpp>
@@ -40,10 +42,45 @@ enum class ProductOperationState : std::uint32_t {
     Failed
 };
 
+enum class ProductFailureCode : std::uint32_t {
+    ResourceMissing,
+    ResourceEscape,
+    MemoryNotApplicable,
+    WorkAccounting
+};
+
+class ProductError final : public std::runtime_error {
+public:
+    ProductError(ProductFailureCode code, std::string message);
+    ProductFailureCode code() const noexcept;
+
+private:
+    ProductFailureCode code_;
+};
+
+struct ProductMemoryPlan {
+    std::uint64_t framebuffer_bytes{};
+    std::uint64_t spectral_plane_bytes{};
+    std::uint64_t queue_bytes{};
+    std::uint64_t acceleration_bytes{};
+    std::uint64_t scene_resource_bytes{};
+    std::uint64_t executor_state_bytes{};
+    std::uint64_t scratch_bytes{};
+    std::uint64_t output_bytes{};
+    std::uint64_t estimated_peak_bytes{};
+    std::uint64_t applicable_budget_bytes{};
+    std::uint32_t persistent_executor_count{};
+};
+
 struct ProductOperationSnapshot {
     ProductOperationState state{ProductOperationState::Ready};
     std::uint64_t requested_samples{};
     std::uint64_t accepted_samples{};
+    std::uint64_t completed_samples{};
+    std::uint64_t pilot_samples{};
+    std::uint64_t scene_realizations{};
+    std::uint64_t executor_creations{};
+    std::uint64_t actual_renderer_samples{};
 };
 
 struct ProductFrame {
@@ -74,6 +111,7 @@ public:
 
     virtual const ProductIdentitySet& identities() const noexcept = 0;
     virtual const ProductObjective& objective() const noexcept = 0;
+    virtual const ProductMemoryPlan& memory_plan() const noexcept = 0;
     virtual ProductOperationSnapshot operation() const noexcept = 0;
     virtual void replace_scene(native_scene::NativeSceneArchive archive,
                                Identity snapshot_identity) = 0;

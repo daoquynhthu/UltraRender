@@ -23,6 +23,26 @@ namespace {
 using Digest = product::Identity;
 using ObjectiveData = product::ProductObjective;
 
+struct ProductErrorMapping {
+    ure_result_t result{};
+    std::uint32_t detail{};
+};
+
+ProductErrorMapping map_product_error(
+    product::ProductFailureCode code) noexcept {
+    switch (code) {
+    case product::ProductFailureCode::ResourceMissing:
+        return {URE_RESULT_MALFORMED_DATA, 541};
+    case product::ProductFailureCode::ResourceEscape:
+        return {URE_RESULT_MALFORMED_DATA, 542};
+    case product::ProductFailureCode::MemoryNotApplicable:
+        return {URE_RESULT_BUDGET_EXHAUSTED, 543};
+    case product::ProductFailureCode::WorkAccounting:
+        return {URE_RESULT_INTERNAL, 544};
+    }
+    return {URE_RESULT_INTERNAL, 544};
+}
+
 struct SessionObject final : Object {
     ~SessionObject() override {
         if (latest_frame)
@@ -249,16 +269,27 @@ void run_render(const std::shared_ptr<SessionObject> &session,
             const auto progress = session->job->operation();
             {
                 std::scoped_lock lock(operation->mutex, session->mutex);
-                operation->completed = progress.accepted_samples;
+                operation->completed = progress.completed_samples;
                 ++operation->progress_sequence;
-                session->completed_samples = progress.accepted_samples;
+                session->completed_samples = progress.completed_samples;
             }
             if (session->objective.wall_time_budget_ns != 0 &&
+                progress.completed_samples < progress.accepted_samples &&
                 static_cast<std::uint64_t>(
                     std::chrono::duration_cast<std::chrono::nanoseconds>(
                         std::chrono::steady_clock::now() - started)
-                        .count()) >= session->objective.wall_time_budget_ns)
-                break;
+                        .count()) >= session->objective.wall_time_budget_ns) {
+                session->job->fail();
+                {
+                    std::scoped_lock lock(session->mutex);
+                    session->state = URE_SESSION_STATE_FAILED;
+                }
+                finish_operation(operation, operation_handle,
+                                 URE_OPERATION_STATE_FAILED,
+                                 URE_RESULT_BUDGET_EXHAUSTED, 504,
+                                 "render wall-time budget was exhausted before accepted work completed");
+                return;
+            }
         }
         const auto product_frame = session->job->publish_frame();
         const auto artifact = session->job->artifact_manifest(product_frame);
@@ -304,6 +335,16 @@ void run_render(const std::shared_ptr<SessionObject> &session,
         finish_operation(operation, operation_handle,
                          URE_OPERATION_STATE_SUCCEEDED, URE_RESULT_SUCCESS, 0,
                          {});
+    } catch (const product::ProductError &exception) {
+        session->job->fail();
+        const auto mapping = map_product_error(exception.code());
+        {
+            std::scoped_lock lock(session->mutex);
+            session->state = URE_SESSION_STATE_FAILED;
+        }
+        finish_operation(operation, operation_handle,
+                         URE_OPERATION_STATE_FAILED, mapping.result,
+                         mapping.detail, exception.what());
     } catch (const std::exception &exception) {
         session->job->fail();
         std::string message = exception.what();
@@ -367,6 +408,10 @@ ure_result_t create_impl(ure_handle_t instance_handle, ure_handle_t scene_handle
     try {
         job = product::ProductJob::create(
             revision->archive, revision->revision_identity, objective_data);
+    } catch (const product::ProductError &exception) {
+        const auto mapping = map_product_error(exception.code());
+        return make_error(mapping.result, mapping.detail,
+                          exception.what(), error);
     } catch (const std::exception &exception) {
         return make_error(URE_RESULT_INTERNAL, 505,
                           "renderer scene binding failed: " +
@@ -459,7 +504,7 @@ ure_result_t get_info_impl(ure_handle_t session_handle, ure_session_info_t *info
     store(info->scene_revision_identity, session->revision->revision_identity);
     store(info->objective_identity, session->objective.identity);
     const auto progress = session->job->operation();
-    info->completed_samples = progress.accepted_samples;
+    info->completed_samples = progress.completed_samples;
     info->requested_samples = session->objective.requested_samples;
     info->active_operation = session->active_operation;
     info->latest_frame = session->latest_frame;
@@ -690,7 +735,7 @@ ure_result_t get_product_info_impl(ure_handle_t session_handle,
     const auto &identities = session->job->identities();
     info->state = session->state;
     info->requested_samples = progress.requested_samples;
-    info->accepted_samples = progress.accepted_samples;
+    info->accepted_samples = progress.completed_samples;
     info->active_operation = session->active_operation;
     info->latest_frame = session->latest_frame;
     store(info->build_identity, identities.build);

@@ -101,6 +101,7 @@ native_scene::NativeSceneArchive clone_archive(
     const native_scene::NativeSceneArchive &source) {
     auto output = native_scene::make_native_scene_archive(source.document,
                                                            source.scene);
+    output.execution_root = source.execution_root;
     output.source_ids = source.source_ids;
     output.object_uuids = source.object_uuids;
     output.canonical_camera = source.canonical_camera;
@@ -598,6 +599,7 @@ ure_result_t apply_transaction_impl(
             if (!fallback.revision)
                 throw std::invalid_argument("full-reload fallback is invalid");
             candidate = std::move(fallback.revision->archive);
+            candidate.execution_root = scene->current->archive.execution_root;
             warnings.push_back("transaction used explicit full-reload fallback");
             strategy = URE_SCENE_UPDATE_FULL_RELOAD;
             rebuilt_objects.clear();

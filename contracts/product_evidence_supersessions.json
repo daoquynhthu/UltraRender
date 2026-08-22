@@ -1,0 +1,29 @@
+{
+  "schema": "ure.preview.product-evidence-supersessions/1.0",
+  "records": [
+    {
+      "id": "prv1_runtime_audit_2026_08_13",
+      "recorded_date": "2026-08-13",
+      "superseded_report": "docs/reports/phase_prv1_validation_v1.json",
+      "superseded_report_sha256": "b094a8dd8bd0a89730491ff24b7cdcd47ce2fc989b733397d576a9093b3bf234",
+      "historical_report_policy": "Immutable",
+      "recovery_gate": "PRV.1R",
+      "reason_codes": [
+        "NonCanonicalWorkAccounting",
+        "RepeatedFullRender",
+        "SynchronousWorkerTimeout",
+        "UntrustedCompletionState",
+        "AmbientResourceRoot",
+        "SmokeOnlyImageEvidence"
+      ],
+      "claims": [
+        {"capability_id":"core_runtime","previous_closure":"ProductE2E","current_closure":"ClientReachable"},
+        {"capability_id":"product_service","previous_closure":"ProductE2E","current_closure":"RendererIntegrated"},
+        {"capability_id":"product_extension","previous_closure":"ProductE2E","current_closure":"ClientReachable"},
+        {"capability_id":"worker","previous_closure":"ProductE2E","current_closure":"ClientReachable"},
+        {"capability_id":"cli_render","previous_closure":"ProductE2E","current_closure":"ClientReachable"}
+      ],
+      "evidence_scope": "PRV.1 artifacts retain client reachability, renderer integration, transport parity and smoke-scale frame transfer evidence only. They do not prove canonical sample work, bounded long-operation control, resource-root independence, production-profile image quality or ProductE2E completion."
+    }
+  ]
+}

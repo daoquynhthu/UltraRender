@@ -96,6 +96,33 @@ static double render_reference(
     return mean(engine->get_framebuffer());
 }
 
+static void test_incremental_pass_work_accounting(
+    const ure::scene_ir::SceneIR& input) {
+    auto scene = input;
+    scene.width = 4;
+    scene.height = 4;
+    ure::RenderConfig config;
+    config.integrator.mode = ure::IntegratorMode::Automatic;
+    config.automatic_integrator.enabled = true;
+    config.automatic_integrator.pilot_spp = 2;
+    config.automatic_integrator.maximum_techniques = 2;
+    config.samples_per_pass = 1;
+    auto engine = ure::RenderEngineFactory::create_gpu_renderer(config);
+    engine->load_scene_ir(scene);
+    for (int completed = 1; completed <= 6; ++completed) {
+        CHECK(engine->render_pass() == completed);
+        const auto report = engine->get_automatic_integrator_report();
+        CHECK(report.requested_spp == completed);
+        CHECK(report.total_allocated_spp == completed);
+        CHECK(report.production_sample_count ==
+              static_cast<std::uint64_t>(completed));
+        CHECK(report.scene_realization_count == 1);
+        CHECK(report.production_executor_creation_count <= 2);
+        if (completed >= 2)
+            CHECK(report.production_executor_creation_count == 2);
+    }
+}
+
 static void check_single_report(const RenderEvidence& evidence) {
     CHECK(evidence.framebuffer.size() == 4u * 4u * 3u);
     CHECK(std::ranges::all_of(
@@ -144,6 +171,11 @@ static void check_single_report(const RenderEvidence& evidence) {
     CHECK(report.pilot_precision_weighted);
     CHECK(report.conservative_uncertainty_bound);
     CHECK(report.auxiliary_outputs_wavefront_only);
+    CHECK(report.scene_realization_count == 1);
+    CHECK(report.pilot_executor_creation_count >= 2);
+    CHECK(report.production_executor_creation_count == 2);
+    CHECK(report.pilot_sample_count >= 4);
+    CHECK(report.production_sample_count == 8);
     CHECK(std::isfinite(evidence.maximum_absolute));
 }
 
@@ -199,6 +231,7 @@ int main() {
     if (!imported.ok()) return 1;
     const auto evidence = render_automatic(imported.archive.scene, 0);
     check_single_report(evidence);
+    test_incremental_pass_work_accounting(imported.archive.scene);
     auto metadata_config = ure::RenderConfig{};
     metadata_config.integrator.mode = ure::IntegratorMode::Automatic;
     metadata_config.automatic_integrator.enabled = true;

@@ -136,12 +136,12 @@ ure_scene_budget_t budget() {
     return output;
 }
 
-ure_native_scene_blob_t scene_blob(const std::vector<std::uint8_t> &bytes) {
+ure_native_scene_blob_t scene_blob(std::string_view path) {
     ure_native_scene_blob_t output{};
     output.header = {URE_STRUCTURE_NATIVE_SCENE_BLOB, sizeof(output), nullptr};
-    output.source_kind = URE_SCENE_SOURCE_MEMORY;
+    output.source_kind = URE_SCENE_SOURCE_FILE;
     output.format = URE_SCENE_FORMAT_URESCENE;
-    output.bytes = {bytes.data(), bytes.size()};
+    output.path_utf8 = {path.data(), path.size()};
     output.schema_min_major = 2;
     output.schema_max_major = 2;
     output.budget = budget();
@@ -374,14 +374,25 @@ bool render_identity(const ure_session_interface_t &sessions,
     ure_handle_t session{};
     ure_handle_t operation{};
     ure_handle_t frame{};
-    bool success = sessions.create(instance, scene, &objective, &session,
-                                   nullptr) == URE_RESULT_SUCCESS &&
-                   sessions.start(session, &operation, nullptr) ==
-                       URE_RESULT_SUCCESS &&
-                   operations.wait(operation, UINT64_C(60000000000), nullptr) ==
-                       URE_RESULT_SUCCESS &&
-                   sessions.acquire_frame(session, &frame, nullptr) ==
-                       URE_RESULT_SUCCESS;
+    const ure_result_t create_result =
+        sessions.create(instance, scene, &objective, &session, nullptr);
+    const ure_result_t start_result =
+        create_result == URE_RESULT_SUCCESS
+            ? sessions.start(session, &operation, nullptr)
+            : create_result;
+    const ure_result_t wait_result =
+        start_result == URE_RESULT_SUCCESS
+            ? operations.wait(operation, UINT64_C(60000000000), nullptr)
+            : start_result;
+    const ure_result_t frame_result =
+        wait_result == URE_RESULT_SUCCESS
+            ? sessions.acquire_frame(session, &frame, nullptr)
+            : wait_result;
+    bool success = frame_result == URE_RESULT_SUCCESS;
+    if (!success)
+        std::fprintf(stderr,
+                     "scene transaction render: create=%d start=%d wait=%d frame=%d\n",
+                     create_result, start_result, wait_result, frame_result);
     if (success) {
         ure_frame_info_t info{};
         info.header = {URE_STRUCTURE_FRAME_INFO, sizeof(info), nullptr};
@@ -420,9 +431,10 @@ bool render_identity(const ure_session_interface_t &sessions,
 int main(int argc, char **argv) {
     if (argc != 5)
         return 2;
-    std::filesystem::current_path(
-        std::filesystem::path(argv[2]).parent_path());
-    const auto scene_bytes = read_file(argv[2]);
+    std::filesystem::current_path(std::filesystem::temp_directory_path());
+    const std::string scene_path =
+        std::filesystem::absolute(argv[2]).lexically_normal().string();
+    const auto scene_bytes = read_file(scene_path.c_str());
     check(!scene_bytes.empty(), "v2 scene fixture is empty");
     HMODULE module = LoadLibraryExA(
         argv[1], nullptr,
@@ -471,7 +483,7 @@ int main(int argc, char **argv) {
     check(runtimes->create_instance(&create, &instance, nullptr) ==
               URE_RESULT_SUCCESS,
           "instance creation failed");
-    auto blob = scene_blob(scene_bytes);
+    auto blob = scene_blob(scene_path);
     auto initial = revision_output();
     check(scenes->create(instance, &blob, &scene, &initial, nullptr) ==
               URE_RESULT_SUCCESS && initial.revision == 1,

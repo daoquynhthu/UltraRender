@@ -19,11 +19,16 @@ struct RuntimeFailure {
     std::string message;
 };
 
+struct FramePlaneSnapshot {
+    ure_frame_plane_info_t info{};
+    std::uint64_t byte_offset{};
+};
+
 struct FrameSnapshot {
     ure_frame_info_t frame{};
-    ure_frame_plane_info_t plane{};
     ure_session_info_t session{};
     std::uint64_t session_id{};
+    std::vector<FramePlaneSnapshot> planes;
     std::vector<std::uint8_t> bytes;
 };
 

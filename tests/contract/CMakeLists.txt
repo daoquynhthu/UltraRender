@@ -339,7 +339,7 @@ if(TARGET ure_contract)
         COMMAND test_client_transport
             $<TARGET_FILE:ure_contract>
             $<TARGET_FILE:ure_worker>
-            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene/full_scene.ure
             ${CMAKE_CURRENT_BINARY_DIR}/prv1_direct.pfm
             ${CMAKE_CURRENT_BINARY_DIR}/prv1_worker.pfm)
     if(TARGET ure_cli)
