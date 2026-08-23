@@ -155,10 +155,11 @@ void rejected_objective(ure::client::TransportMode mode,
     }
 }
 
-void rejected_memory(ure::client::TransportMode mode,
-                     const std::filesystem::path &runtime,
-                     const std::filesystem::path &worker,
-                     const std::filesystem::path &scene_path) {
+ure::client::ErrorInfo
+rejected_memory(ure::client::TransportMode mode,
+                const std::filesystem::path &runtime,
+                const std::filesystem::path &worker,
+                const std::filesystem::path &scene_path) {
     try {
         auto client = ure::client::Client::connect(
             options(mode, runtime, worker));
@@ -169,9 +170,22 @@ void rejected_memory(ure::client::TransportMode mode,
         check(false, "memory-inapplicable client Objective was accepted");
     } catch (const ure::client::Error &error) {
         check(error.info().result == URE_RESULT_BUDGET_EXHAUSTED &&
-                  error.info().detail == 543,
+                  error.info().domain == URE_ERROR_DOMAIN_CORE &&
+                  error.info().detail == 543 &&
+                  error.info().structured_detail_schema == URE_PAYLOAD_ERROR &&
+                  !error.info().structured_detail.empty() &&
+                  std::ranges::any_of(
+                      error.info().correlation_identity,
+                      [](std::uint8_t value) { return value != 0; }) &&
+                  error.info().retryability == 1 &&
+                  !error.info().recovery_hint.empty(),
               "memory preflight classification differs by client transport");
+        if (mode == ure::client::TransportMode::Worker)
+            check(error.info().transport_correlation_id != 0,
+                  "Worker error lost its transport correlation identity");
+        return error.info();
     }
+    return {};
 }
 
 void cancel(ure::client::TransportMode mode,
@@ -332,6 +346,31 @@ void bounded_worker_sessions(const std::filesystem::path &runtime,
     }
 }
 
+void sample_precedence(ure::client::TransportMode mode,
+                       const std::filesystem::path &runtime,
+                       const std::filesystem::path &worker,
+                       const std::filesystem::path &scene_path) {
+    auto client = ure::client::Client::connect(
+        options(mode, runtime, worker));
+    ure::client::Objective inherited;
+    {
+        auto job = client.create_job(scene(scene_path), inherited);
+        const auto info = job.info();
+        check(info.requested_samples == 8 && info.accepted_samples == 8 &&
+                  info.completed_samples == 0,
+              "scene spp was not used as the unspecified product default");
+    }
+    ure::client::Objective explicit_samples;
+    explicit_samples.sample_budget = 3;
+    {
+        auto job = client.create_job(scene(scene_path), explicit_samples);
+        const auto info = job.info();
+        check(info.requested_samples == 3 && info.accepted_samples == 3 &&
+                  info.completed_samples == 0,
+              "explicit product samples did not override scene and simulation spp");
+    }
+}
+
 }
 
 int main(int argc, char **argv) {
@@ -387,10 +426,17 @@ int main(int argc, char **argv) {
                            scene_path);
         rejected_objective(ure::client::TransportMode::Worker, runtime, worker,
                            scene_path);
-        rejected_memory(ure::client::TransportMode::Direct, runtime, worker,
-                        scene_path);
-        rejected_memory(ure::client::TransportMode::Worker, runtime, worker,
-                        scene_path);
+        const auto direct_memory = rejected_memory(
+            ure::client::TransportMode::Direct, runtime, worker, scene_path);
+        const auto worker_memory = rejected_memory(
+            ure::client::TransportMode::Worker, runtime, worker, scene_path);
+        check(direct_memory.result == worker_memory.result &&
+                  direct_memory.domain == worker_memory.domain &&
+                  direct_memory.detail == worker_memory.detail &&
+                  direct_memory.retryability == worker_memory.retryability &&
+                  direct_memory.recovery_hint == worker_memory.recovery_hint &&
+                  direct_memory.cause_depth == worker_memory.cause_depth,
+              "structured diagnostic semantics differ by transport");
         cancel(ure::client::TransportMode::Direct, runtime, worker, scene_path);
         cancel(ure::client::TransportMode::Worker, runtime, worker, scene_path);
         negative_wait(runtime, worker, scene_path);
@@ -400,6 +446,10 @@ int main(int argc, char **argv) {
                       scene_path);
         concurrent_worker_control(runtime, worker, scene_path);
         bounded_worker_sessions(runtime, worker, scene_path);
+        sample_precedence(ure::client::TransportMode::Direct, runtime, worker,
+                          scene_path);
+        sample_precedence(ure::client::TransportMode::Worker, runtime, worker,
+                          scene_path);
         try {
             auto missing = options(ure::client::TransportMode::Worker, runtime,
                                    worker.parent_path() / "missing_worker.exe");

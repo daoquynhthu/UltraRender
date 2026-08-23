@@ -41,6 +41,8 @@ $manifest = Read-Json "contracts/generated/runtime_manifest_1.json"
 $ledger = Read-Json "contracts/product_closure_ledger.json"
 $supersessions = Read-Json "contracts/product_evidence_supersessions.json"
 $schema = Read-Json "contracts/reports/ure_phase_prv1_validation_v1.schema.json"
+$diagnostics = Read-Json "contracts/diagnostics/product_diagnostic_catalog_v0.json"
+$sampleSemantics = Read-Json "contracts/product_sample_semantics_v0.json"
 
 if ($rootCMake -notmatch 'add_subdirectory\(libs/ure_client\)' -or
     $cliCMake -notmatch 'target_link_libraries\(ure_cli\s+PRIVATE\s+ure_client\s+ure_config\s*\)' -or
@@ -82,6 +84,19 @@ foreach ($field in @(
 if ($manifest.core_abi.major -ne 1 -or $manifest.core_abi.minor -ne 0 -or
     $manifest.worker_protocol.major -ne 1 -or $manifest.worker_protocol.minor -ne 0) {
     throw "PRV.1 changed the declared Core or Worker major/minor boundary"
+}
+if ($diagnostics.schema -ne "ure.preview.product-diagnostic-catalog/0.1" -or
+    $diagnostics.structured_detail_schema -ne "URE_PAYLOAD_ERROR" -or
+    $diagnostics.limits.cause_depth -ne 8 -or
+    @($diagnostics.results).Count -ne 17 -or
+    @($diagnostics.details | Where-Object { $_.value -eq 543 -and $_.result -eq "BudgetExhausted" }).Count -ne 1) {
+    throw "PRV.1R diagnostic catalog is incomplete or inconsistent"
+}
+if ($sampleSemantics.schema -ne "ure.preview.product-sample-semantics/0.1" -or
+    @($sampleSemantics.production_sample_precedence).Count -ne 3 -or
+    $sampleSemantics.progressive_lifecycle.product_job -ne "SingleUse" -or
+    $sampleSemantics.progressive_lifecycle.implicit_multiplication -ne $false) {
+    throw "PRV.1R sample precedence contract is incomplete or inconsistent"
 }
 
 $report = Read-Json $ReportPath

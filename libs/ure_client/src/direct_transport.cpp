@@ -179,6 +179,18 @@ class DirectConnection final : public ClientTransport,
                 info.detail = runtime_info.detail;
                 info.message.assign(runtime_info.message.data,
                                     runtime_info.message.size);
+                info.structured_detail_schema =
+                    runtime_info.structured_detail_schema;
+                if (runtime_info.structured_detail.size != 0 &&
+                    runtime_info.structured_detail.data) {
+                    info.structured_detail.assign(
+                        runtime_info.structured_detail.data,
+                        runtime_info.structured_detail.data +
+                            runtime_info.structured_detail.size);
+                    decode_error_detail(info);
+                }
+                info.operation_id = static_cast<std::uint64_t>(
+                    reinterpret_cast<std::uintptr_t>(runtime_info.operation));
             }
             errors_->release(error);
         }

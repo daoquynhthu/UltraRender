@@ -463,11 +463,33 @@ class WorkerConnection final
             return;
         ErrorInfo info{static_cast<std::int32_t>(response.result),
                        URE_ERROR_DOMAIN_CORE, 0, "worker request failed"};
+        info.transport_correlation_id = response.correlation_id;
         if (response.error) {
             info.result = static_cast<std::int32_t>(response.error->result);
             info.domain = response.error->domain;
             info.detail = response.error->detail;
             info.message = response.error->message;
+            info.structured_detail_schema =
+                response.error->structured_detail_schema;
+            info.structured_detail = response.error->structured_detail;
+            info.retryability = response.error->retryability;
+            info.recovery_hint = response.error->recovery_hint;
+            info.cause_depth = response.error->cause_depth;
+            info.operation_id = response.error->operation_id;
+            if (!response.error->correlation_identity.empty()) {
+                if (response.error->correlation_identity.size() !=
+                    info.correlation_identity.size())
+                    throw_error(URE_RESULT_MALFORMED_DATA,
+                                URE_ERROR_DOMAIN_CORE, 60,
+                                "worker error correlation identity is malformed");
+                std::copy(response.error->correlation_identity.begin(),
+                          response.error->correlation_identity.end(),
+                          info.correlation_identity.begin());
+            }
+            if (!info.structured_detail.empty() && !decode_error_detail(info))
+                throw_error(URE_RESULT_MALFORMED_DATA,
+                            URE_ERROR_DOMAIN_CORE, 61,
+                            "worker structured error detail is malformed");
         }
         throw Error(std::move(info));
     }

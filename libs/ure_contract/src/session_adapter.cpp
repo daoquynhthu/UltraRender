@@ -62,6 +62,7 @@ struct SessionObject final : Object {
     std::uint64_t completed_samples{};
     std::uint32_t state{URE_SESSION_STATE_CREATED};
     std::uint32_t reset_reason{URE_SCENE_RESET_FULL_REPLACEMENT};
+    bool product_started{};
 };
 
 Digest digest_from_hex(std::string_view text) {
@@ -180,7 +181,7 @@ ure_result_t decode_objective(const ure_objective_envelope_t *objective,
     output.identity = objective_identity(*objective);
     output.wall_time_budget_ns = objective->wall_time_budget_ns;
     output.memory_budget_bytes = objective->memory_budget_bytes;
-    output.requested_samples = objective->sample_budget == 0 ? 1 : objective->sample_budget;
+    output.requested_samples = objective->sample_budget;
     output.latency_budget_ns = objective->latency_budget_ns;
     output.determinism_policy = objective->determinism_policy;
     output.usage_policy = objective->usage_policy;
@@ -222,7 +223,8 @@ void finish_operation(const std::shared_ptr<OperationObject> &operation,
         operation->state = state;
         if (result != URE_RESULT_SUCCESS)
             make_error(result, detail, std::move(message),
-                       &operation->terminal_error, nullptr, operation_handle);
+                       &operation->terminal_error, nullptr, operation_handle,
+                       &operation->diagnostic);
         ++operation->progress_sequence;
         operation->changed.notify_all();
     }
@@ -425,8 +427,8 @@ ure_result_t create_impl(ure_handle_t instance_handle, ure_handle_t scene_handle
     session->thread_policy = URE_THREAD_POLICY_EXTERNALLY_SYNCHRONIZED;
     session->instance = instance;
     session->revision = revision;
+    session->objective = job->objective();
     session->job = std::move(job);
-    session->objective = objective_data;
     session->state = URE_SESSION_STATE_READY;
     *output = handles().insert(session);
     return URE_RESULT_SUCCESS;
@@ -586,6 +588,10 @@ ure_result_t start_impl(ure_handle_t session_handle, ure_handle_t *output,
     operation->steps = static_cast<std::uint32_t>(
         session->objective.requested_samples);
     operation->stage = URE_OPERATION_RENDER_SESSION;
+    const auto &identities = session->job->identities();
+    operation->diagnostic.snapshot_identity = identities.snapshot;
+    operation->diagnostic.objective_identity = identities.objective;
+    operation->diagnostic.plan_identity = identities.plan;
     *output = handles().insert(operation);
     if (!handles().retain(*output, ObjectType::Operation))
         return make_error(URE_RESULT_INTERNAL, 518,
@@ -863,6 +869,32 @@ ure_result_t URE_CALL start_session(ure_handle_t session,
                        [&] { return start_impl(session, operation, error); });
 }
 
+ure_result_t URE_CALL start_product_job(ure_handle_t session_handle,
+                                        ure_handle_t *operation,
+                                        ure_handle_t *error) noexcept {
+    return guard_entry(error, [&] {
+        const auto session = handles().get<SessionObject>(
+            session_handle, ObjectType::Session);
+        if (!session)
+            return make_error(URE_RESULT_INVALID_HANDLE, 545,
+                              "invalid product job handle", error);
+        {
+            std::scoped_lock lock(session->mutex);
+            if (session->product_started)
+                return make_error(URE_RESULT_BUSY, 546,
+                                  "product job is single-use", error);
+            session->product_started = true;
+        }
+        const ure_result_t result = start_impl(
+            session_handle, operation, error);
+        if (result != URE_RESULT_SUCCESS) {
+            std::scoped_lock lock(session->mutex);
+            session->product_started = false;
+        }
+        return result;
+    });
+}
+
 ure_result_t URE_CALL pause_session(ure_handle_t session,
                                     ure_handle_t *error) noexcept {
     return guard_entry(error, [&] { return pause_impl(session, error); });
@@ -926,7 +958,7 @@ const ure_product_job_interface_t &product_job_interface() noexcept {
         release_session,
         close_session,
         get_product_job_info,
-        start_session,
+        start_product_job,
         request_product_cancel,
         acquire_session_frame,
         get_product_artifact_manifest};

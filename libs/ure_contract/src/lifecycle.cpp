@@ -18,7 +18,98 @@
 #include <unordered_map>
 #include <vector>
 
+#include <flatbuffers/flatbuffers.h>
+
+#include "ure_payload_v1_generated.h"
+
 namespace ure::contract {
+
+namespace {
+
+namespace payload_fb = ultrarender::contract::v1;
+
+std::atomic<std::uint64_t> next_error_correlation{1};
+
+std::pair<std::uint32_t, std::string_view>
+recovery_policy(ure_result_t result) noexcept {
+    switch (result) {
+    case URE_RESULT_INCOMPLETE:
+        return {2, "poll or wait for additional progress"};
+    case URE_RESULT_BUSY:
+    case URE_RESULT_BACKPRESSURE:
+    case URE_RESULT_TIMEOUT:
+        return {2, "retry after the bounded resource or observation window clears"};
+    case URE_RESULT_WORKER_LOST:
+    case URE_RESULT_DEVICE_LOST:
+        return {3, "recreate the runtime boundary and re-evaluate device applicability"};
+    case URE_RESULT_INVALID_ARGUMENT:
+    case URE_RESULT_INCOMPATIBLE_VERSION:
+    case URE_RESULT_MALFORMED_DATA:
+    case URE_RESULT_CAPABILITY_UNAVAILABLE:
+    case URE_RESULT_BUFFER_TOO_SMALL:
+    case URE_RESULT_INVALID_HANDLE:
+    case URE_RESULT_BUDGET_EXHAUSTED:
+    case URE_RESULT_REVISION_CONFLICT:
+        return {1, "correct the request or select an applicable declared capability"};
+    case URE_RESULT_CANCELED:
+        return {0, "submit a new job if work is still required"};
+    default:
+        return {0, "preserve the diagnostic and runtime identity for investigation"};
+    }
+}
+
+std::array<std::uint8_t, 32> make_correlation(ure_result_t result,
+                                              std::uint32_t detail) noexcept {
+    std::array<std::uint8_t, 32> output = runtime_build_digest();
+    const std::uint64_t sequence =
+        next_error_correlation.fetch_add(1, std::memory_order_relaxed);
+    for (std::size_t index = 0; index < sizeof(sequence); ++index)
+        output[index] ^= static_cast<std::uint8_t>(sequence >> (index * 8U));
+    const auto result_bits = static_cast<std::uint32_t>(result);
+    for (std::size_t index = 0; index < sizeof(detail); ++index) {
+        output[8 + index] ^=
+            static_cast<std::uint8_t>(detail >> (index * 8U));
+        output[12 + index] ^=
+            static_cast<std::uint8_t>(result_bits >> (index * 8U));
+    }
+    return output;
+}
+
+std::vector<std::uint8_t> encode_error_detail(
+    const ErrorObject &error, const DiagnosticContext *diagnostic) {
+    payload_fb::ErrorDetailT detail;
+    detail.version_major = 0;
+    detail.version_minor = 1;
+    detail.result = static_cast<payload_fb::ResultCode>(error.result);
+    detail.domain = error.domain;
+    detail.detail = error.detail;
+    detail.correlation_identity.assign(error.correlation_identity.begin(),
+                                       error.correlation_identity.end());
+    detail.operation_id = static_cast<std::uint64_t>(
+        reinterpret_cast<std::uintptr_t>(error.operation));
+    const auto build = runtime_build_digest();
+    detail.build_identity.assign(build.begin(), build.end());
+    if (diagnostic) {
+        detail.snapshot_identity.assign(diagnostic->snapshot_identity.begin(),
+                                        diagnostic->snapshot_identity.end());
+        detail.objective_identity.assign(diagnostic->objective_identity.begin(),
+                                         diagnostic->objective_identity.end());
+        detail.plan_identity.assign(diagnostic->plan_identity.begin(),
+                                    diagnostic->plan_identity.end());
+        detail.backend = diagnostic->backend;
+        detail.device_identity.assign(diagnostic->device_identity.begin(),
+                                      diagnostic->device_identity.end());
+    }
+    detail.retryability = error.retryability;
+    detail.recovery_hint = error.recovery_hint;
+    detail.cause_depth = error.cause_depth;
+    flatbuffers::FlatBufferBuilder builder;
+    builder.Finish(payload_fb::CreateErrorDetail(builder, &detail));
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
+}
+
+}
 
 bool HandleTable::retain(ure_handle_t handle, ObjectType type) {
     const auto token = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(handle));
@@ -106,8 +197,10 @@ bool release_error(ure_handle_t handle) noexcept {
     }
 }
 
-ure_result_t make_error(ure_result_t result, std::uint32_t detail, std::string message,
-                        ure_handle_t *output, ure_handle_t cause, ure_handle_t operation) noexcept {
+ure_result_t make_error(ure_result_t result, std::uint32_t detail,
+                        std::string message, ure_handle_t *output,
+                        ure_handle_t cause, ure_handle_t operation,
+                        const DiagnosticContext *diagnostic) noexcept {
     if (output) {
         *output = nullptr;
         if (fail_next_error_allocation().exchange(false, std::memory_order_acq_rel)) return result;
@@ -124,17 +217,19 @@ ure_result_t make_error(ure_result_t result, std::uint32_t detail, std::string m
             error->detail = detail;
             if (message.size() > 1024) message.resize(1024);
             error->message = std::move(message);
-            error->structured_detail = {
-                static_cast<std::uint8_t>(URE_PAYLOAD_ERROR & 0xffU),
-                static_cast<std::uint8_t>((URE_PAYLOAD_ERROR >> 8U) & 0xffU),
-                static_cast<std::uint8_t>((URE_PAYLOAD_ERROR >> 16U) & 0xffU),
-                static_cast<std::uint8_t>((URE_PAYLOAD_ERROR >> 24U) & 0xffU),
-                static_cast<std::uint8_t>(detail & 0xffU),
-                static_cast<std::uint8_t>((detail >> 8U) & 0xffU),
-                static_cast<std::uint8_t>((detail >> 16U) & 0xffU),
-                static_cast<std::uint8_t>((detail >> 24U) & 0xffU)};
             error->cause = cause;
             error->operation = operation;
+            error->correlation_identity = make_correlation(result, detail);
+            const auto [retryability, recovery] = recovery_policy(result);
+            error->retryability = retryability;
+            error->recovery_hint = recovery;
+            if (cause) {
+                if (const auto cause_object = handles().get<ErrorObject>(
+                        cause, ObjectType::Error))
+                    error->cause_depth = std::min(
+                        cause_object->cause_depth + 1U, 8U);
+            }
+            error->structured_detail = encode_error_detail(*error, diagnostic);
             *output = handles().insert(error);
         } catch (...) {
             if (cause_retained) release_error(cause);
@@ -712,7 +807,8 @@ ure_result_t operation_wait_impl(ure_handle_t handle, std::uint64_t timeout_ns,
     if (operation->state == URE_OPERATION_STATE_CANCELED) return URE_RESULT_CANCELED;
     if (operation->state == URE_OPERATION_STATE_DEVICE_LOST) {
         return make_error(URE_RESULT_DEVICE_LOST, 117, "operation reported device loss", error,
-                          operation->terminal_error, handle);
+                          operation->terminal_error, handle,
+                          &operation->diagnostic);
     }
     if (operation->state == URE_OPERATION_STATE_FAILED) {
         ure_result_t terminal_result = URE_RESULT_INTERNAL;
@@ -723,7 +819,8 @@ ure_result_t operation_wait_impl(ure_handle_t handle, std::uint64_t timeout_ns,
             terminal_message = terminal_error->message;
         }
         return make_error(terminal_result, 118, std::move(terminal_message), error,
-                          operation->terminal_error, handle);
+                          operation->terminal_error, handle,
+                          &operation->diagnostic);
     }
     return URE_RESULT_SUCCESS;
 }

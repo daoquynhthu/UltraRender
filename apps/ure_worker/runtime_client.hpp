@@ -17,6 +17,13 @@ struct RuntimeFailure {
     std::uint32_t domain{URE_ERROR_DOMAIN_CORE};
     std::uint32_t detail{};
     std::string message;
+    std::uint32_t structured_detail_schema{};
+    std::vector<std::uint8_t> structured_detail;
+    std::array<std::uint8_t, 32> correlation_identity{};
+    std::uint32_t retryability{};
+    std::string recovery_hint;
+    std::uint32_t cause_depth{};
+    std::uint64_t operation_id{};
 };
 
 struct FramePlaneSnapshot {

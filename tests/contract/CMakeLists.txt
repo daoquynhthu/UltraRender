@@ -112,7 +112,8 @@ if(TARGET ure_contract)
     add_dependencies(test_scene_transaction ure_public_stage_headers ure_contract)
 
     add_executable(test_product_extension test_product_extension.cpp)
-    target_link_libraries(test_product_extension PRIVATE ure_public)
+    target_link_libraries(test_product_extension PRIVATE
+        ure_public ure_contract_schema)
     add_dependencies(test_product_extension ure_public_stage_headers ure_contract)
 
     add_executable(test_client_transport test_client_transport.cpp)

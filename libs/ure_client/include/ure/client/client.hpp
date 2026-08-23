@@ -81,7 +81,7 @@ struct Objective {
     std::vector<std::uint32_t> output_semantics;
     std::uint64_t wall_time_budget_ns{};
     std::uint64_t memory_budget_bytes{};
-    std::uint64_t sample_budget{1};
+    std::uint64_t sample_budget{};
     std::uint64_t latency_budget_ns{};
     std::vector<std::uint8_t> payload;
     std::array<std::uint8_t, 32> payload_digest{};
@@ -92,6 +92,14 @@ struct ErrorInfo {
     std::uint32_t domain{};
     std::uint32_t detail{};
     std::string message;
+    std::uint32_t structured_detail_schema{};
+    std::vector<std::uint8_t> structured_detail;
+    std::array<std::uint8_t, 32> correlation_identity{};
+    std::uint32_t retryability{};
+    std::string recovery_hint;
+    std::uint32_t cause_depth{};
+    std::uint64_t operation_id{};
+    std::uint64_t transport_correlation_id{};
 };
 
 class Error final : public std::runtime_error {

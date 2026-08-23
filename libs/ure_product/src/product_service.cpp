@@ -576,8 +576,12 @@ std::unique_ptr<ProductJob> ProductJob::create(
     native_scene::NativeSceneArchive archive,
     Identity snapshot_identity,
     ProductObjective objective) {
-    if (objective.requested_samples == 0)
-        objective.requested_samples = 1;
+    if (objective.requested_samples == 0) {
+        objective.requested_samples = archive.scene.spp > 0
+                                          ? static_cast<std::uint64_t>(
+                                                archive.scene.spp)
+                                          : UINT64_C(1);
+    }
     return std::make_unique<ProductJobImpl>(
         std::move(archive), snapshot_identity, std::move(objective));
 }

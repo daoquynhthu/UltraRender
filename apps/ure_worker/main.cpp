@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -97,11 +98,86 @@ std::vector<std::uint8_t> encode(fb::WorkerEnvelopeT &envelope) {
 
 std::unique_ptr<fb::ErrorDescriptorT>
 error_descriptor(const RuntimeFailure &failure) {
+    RuntimeFailure normalized = failure;
+    if (normalized.structured_detail.empty()) {
+        static std::atomic<std::uint64_t> next_correlation{1};
+        const std::uint64_t sequence =
+            next_correlation.fetch_add(1, std::memory_order_relaxed);
+        std::memcpy(normalized.correlation_identity.data(), &sequence,
+                    sizeof(sequence));
+        const auto result_bits = static_cast<std::uint32_t>(normalized.result);
+        std::memcpy(normalized.correlation_identity.data() + 8,
+                    &normalized.detail, sizeof(normalized.detail));
+        std::memcpy(normalized.correlation_identity.data() + 12,
+                    &result_bits, sizeof(result_bits));
+        switch (normalized.result) {
+        case URE_RESULT_INCOMPLETE:
+        case URE_RESULT_BUSY:
+        case URE_RESULT_BACKPRESSURE:
+        case URE_RESULT_TIMEOUT:
+            normalized.retryability = 2;
+            normalized.recovery_hint =
+                "retry after the bounded observation or resource window clears";
+            break;
+        case URE_RESULT_WORKER_LOST:
+        case URE_RESULT_DEVICE_LOST:
+            normalized.retryability = 3;
+            normalized.recovery_hint =
+                "recreate the Worker boundary and re-evaluate applicability";
+            break;
+        case URE_RESULT_CANCELED:
+            normalized.recovery_hint =
+                "submit a new job if work is still required";
+            break;
+        case URE_RESULT_INVALID_ARGUMENT:
+        case URE_RESULT_INCOMPATIBLE_VERSION:
+        case URE_RESULT_MALFORMED_DATA:
+        case URE_RESULT_CAPABILITY_UNAVAILABLE:
+        case URE_RESULT_BUFFER_TOO_SMALL:
+        case URE_RESULT_INVALID_HANDLE:
+        case URE_RESULT_BUDGET_EXHAUSTED:
+        case URE_RESULT_REVISION_CONFLICT:
+            normalized.retryability = 1;
+            normalized.recovery_hint =
+                "correct the request using the reported result and detail";
+            break;
+        default:
+            normalized.recovery_hint =
+                "preserve the diagnostic and Worker identity for investigation";
+            break;
+        }
+        fb::ErrorDetailT detail;
+        detail.version_major = 0;
+        detail.version_minor = 1;
+        detail.result = static_cast<fb::ResultCode>(normalized.result);
+        detail.domain = normalized.domain;
+        detail.detail = normalized.detail;
+        detail.correlation_identity.assign(
+            normalized.correlation_identity.begin(),
+            normalized.correlation_identity.end());
+        detail.retryability = normalized.retryability;
+        detail.recovery_hint = normalized.recovery_hint;
+        flatbuffers::FlatBufferBuilder builder;
+        builder.Finish(fb::CreateErrorDetail(builder, &detail));
+        normalized.structured_detail_schema = URE_PAYLOAD_ERROR;
+        normalized.structured_detail.assign(
+            builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize());
+    }
     auto error = std::make_unique<fb::ErrorDescriptorT>();
-    error->result = static_cast<fb::ResultCode>(failure.result);
-    error->domain = failure.domain;
-    error->detail = failure.detail;
-    error->message = failure.message.substr(0, 1024);
+    error->result = static_cast<fb::ResultCode>(normalized.result);
+    error->domain = normalized.domain;
+    error->detail = normalized.detail;
+    error->message = normalized.message.substr(0, 1024);
+    error->structured_detail_schema = normalized.structured_detail_schema;
+    error->structured_detail = normalized.structured_detail;
+    error->correlation_identity.assign(
+        normalized.correlation_identity.begin(),
+        normalized.correlation_identity.end());
+    error->retryability = normalized.retryability;
+    error->recovery_hint = normalized.recovery_hint;
+    error->cause_depth = normalized.cause_depth;
+    error->operation_id = normalized.operation_id;
     return error;
 }
 

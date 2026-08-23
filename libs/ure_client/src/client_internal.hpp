@@ -35,4 +35,6 @@ connect_worker(const ConnectionOptions &options);
 
 JobState job_state(std::uint32_t state);
 
+bool decode_error_detail(ErrorInfo &info) noexcept;
+
 }

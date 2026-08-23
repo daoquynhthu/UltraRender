@@ -10,7 +10,10 @@
 
 #include <windows.h>
 
+#include <flatbuffers/verifier.h>
 #include <ultrarender/ure_loader.h>
+
+#include "ure_payload_v1_generated.h"
 
 namespace {
 
@@ -34,6 +37,19 @@ bool digest_nonzero(const ure_digest256_t &digest) {
 bool digest_equal(const ure_digest256_t &left,
                   const ure_digest256_t &right) {
     return std::memcmp(left.bytes, right.bytes, sizeof(left.bytes)) == 0;
+}
+
+const ultrarender::contract::v1::ErrorDetail *
+error_detail(const ure_error_info_t &info) {
+    if (info.structured_detail_schema != URE_PAYLOAD_ERROR ||
+        !info.structured_detail.data || info.structured_detail.size == 0 ||
+        info.structured_detail.size > UINT64_C(65536))
+        return nullptr;
+    flatbuffers::Verifier verifier(info.structured_detail.data,
+                                   info.structured_detail.size, 32, 4096);
+    const auto *detail = flatbuffers::GetRoot<
+        ultrarender::contract::v1::ErrorDetail>(info.structured_detail.data);
+    return detail && detail->Verify(verifier) ? detail : nullptr;
 }
 
 template <class Table>
@@ -211,6 +227,18 @@ int main(int argc, char **argv) {
               memory_error_info.result == URE_RESULT_BUDGET_EXHAUSTED &&
               memory_error_info.detail == 543,
           "memory preflight error lost its product classification");
+    const auto *memory_detail = error_detail(memory_error_info);
+    check(memory_detail && memory_detail->version_major() == 0 &&
+              memory_detail->result() ==
+                  ultrarender::contract::v1::ResultCode::BudgetExhausted &&
+              memory_detail->correlation_identity() &&
+              memory_detail->correlation_identity()->size() == 32 &&
+              memory_detail->build_identity() &&
+              memory_detail->build_identity()->size() == 32 &&
+              memory_detail->retryability() == 1 &&
+              memory_detail->recovery_hint() &&
+              !memory_detail->recovery_hint()->string_view().empty(),
+          "memory preflight error lost its structured recovery envelope");
     if (memory_error)
         errors->release(memory_error);
     objective.memory_budget_bytes = 0;
@@ -244,6 +272,11 @@ int main(int argc, char **argv) {
     check(products->get_info(job, &info, nullptr) == URE_RESULT_SUCCESS &&
               info.accepted_samples == 2 && info.completed_samples == 2,
           "accepted/completed sample accounting is incorrect");
+    ure_handle_t repeated_operation{};
+    check(products->start(job, &repeated_operation, nullptr) ==
+                  URE_RESULT_BUSY &&
+              !repeated_operation,
+          "single-use product job silently reset progressive accumulation");
     check(products->get_artifact_manifest(job, &artifact, nullptr) ==
                   URE_RESULT_SUCCESS &&
               artifact.accepted_samples == 2 && artifact.rgb_value_count != 0 &&
@@ -268,10 +301,36 @@ int main(int argc, char **argv) {
     check(products->create(instance, scene, &objective, &budget_job, nullptr) ==
                   URE_RESULT_SUCCESS &&
               products->start(budget_job, &budget_operation, nullptr) ==
-                  URE_RESULT_SUCCESS &&
-              operations->wait(budget_operation, UINT64_C(30000000000), nullptr) ==
+                  URE_RESULT_SUCCESS,
+          "wall-time budget operation did not start");
+    ure_handle_t budget_error{};
+    check(operations->wait(budget_operation, UINT64_C(30000000000),
+                           &budget_error) ==
                   URE_RESULT_BUDGET_EXHAUSTED,
           "wall-time budget exhaustion did not fail the operation");
+    ure_error_info_t budget_error_info{};
+    budget_error_info.header = {URE_STRUCTURE_ERROR_INFO,
+                                sizeof(budget_error_info), nullptr};
+    check(budget_error &&
+              errors->get_info(budget_error, &budget_error_info) ==
+                  URE_RESULT_SUCCESS &&
+              budget_error_info.result == URE_RESULT_BUDGET_EXHAUSTED &&
+              budget_error_info.operation == budget_operation &&
+              budget_error_info.cause,
+          "terminal operation error lost its retained cause or operation");
+    const auto *budget_detail = error_detail(budget_error_info);
+    check(budget_detail && budget_detail->operation_id() ==
+                               reinterpret_cast<std::uintptr_t>(budget_operation) &&
+              budget_detail->cause_depth() == 1 &&
+              budget_detail->snapshot_identity() &&
+              budget_detail->snapshot_identity()->size() == 32 &&
+              budget_detail->objective_identity() &&
+              budget_detail->objective_identity()->size() == 32 &&
+              budget_detail->plan_identity() &&
+              budget_detail->plan_identity()->size() == 32,
+          "terminal operation error lost product identities or cause depth");
+    if (budget_error)
+        errors->release(budget_error);
     ure_operation_info_t budget_info{};
     budget_info.header = {URE_STRUCTURE_OPERATION_INFO,
                           sizeof(budget_info), nullptr};

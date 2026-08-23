@@ -12,13 +12,42 @@
 
 #include <windows.h>
 
+#include <flatbuffers/verifier.h>
+
 #include "runtime_client.hpp"
+#include "ure_payload_v1_generated.h"
 
 namespace ure::worker {
 namespace {
 
 inline constexpr std::uint64_t kMaximumSnapshotBytes =
     UINT64_C(256) * 1024 * 1024;
+
+namespace payload_fb = ultrarender::contract::v1;
+
+void decode_failure_detail(RuntimeFailure &failure) {
+    if (failure.structured_detail_schema != URE_PAYLOAD_ERROR ||
+        failure.structured_detail.empty())
+        return;
+    flatbuffers::Verifier verifier(failure.structured_detail.data(),
+                                   failure.structured_detail.size(), 32, 4096);
+    const auto *detail = flatbuffers::GetRoot<payload_fb::ErrorDetail>(
+        failure.structured_detail.data());
+    if (!detail || !detail->Verify(verifier) ||
+        detail->version_major() != 0 || !detail->correlation_identity() ||
+        detail->correlation_identity()->size() !=
+            failure.correlation_identity.size())
+        return;
+    std::copy(detail->correlation_identity()->begin(),
+              detail->correlation_identity()->end(),
+              failure.correlation_identity.begin());
+    failure.retryability = detail->retryability();
+    failure.recovery_hint = detail->recovery_hint()
+                                ? detail->recovery_hint()->str()
+                                : std::string{};
+    failure.cause_depth = detail->cause_depth();
+    failure.operation_id = detail->operation_id();
+}
 
 #if defined(URE_WORKER_CONFORMANCE)
 inline constexpr std::uint32_t kConformanceFrameRequest = 4026531847U;
@@ -175,6 +204,13 @@ struct RuntimeClient::Impl {
             failure.domain = info.domain;
             failure.detail = info.detail;
             failure.message.assign(info.message.data, info.message.size);
+            failure.structured_detail_schema = info.structured_detail_schema;
+            if (info.structured_detail.size != 0)
+                failure.structured_detail.assign(
+                    info.structured_detail.data,
+                    info.structured_detail.data +
+                        info.structured_detail.size);
+            decode_failure_detail(failure);
         } else {
             failure.message = "runtime Error object could not be inspected";
         }

@@ -1,0 +1,48 @@
+{
+  "schema": "ure.preview.product-diagnostic-catalog/0.1",
+  "version": {"major": 0, "minor": 1},
+  "structured_detail_schema": "URE_PAYLOAD_ERROR",
+  "domain": {"name": "Core", "value": 1},
+  "limits": {
+    "message_bytes": 1024,
+    "structured_detail_bytes": 65536,
+    "cause_depth": 8,
+    "correlation_identity_bytes": 32
+  },
+  "retryability": [
+    {"value": 0, "name": "DoNotRetry"},
+    {"value": 1, "name": "CorrectThenRetry"},
+    {"value": 2, "name": "RetryAfterWindow"},
+    {"value": 3, "name": "RecreateBoundaryThenRetry"}
+  ],
+  "results": [
+    {"name": "Success", "value": 0, "retryability": 0},
+    {"name": "Incomplete", "value": 1, "retryability": 2},
+    {"name": "InvalidArgument", "value": -1, "retryability": 1},
+    {"name": "IncompatibleVersion", "value": -2, "retryability": 1},
+    {"name": "MalformedData", "value": -3, "retryability": 1},
+    {"name": "CapabilityUnavailable", "value": -4, "retryability": 1},
+    {"name": "BufferTooSmall", "value": -5, "retryability": 1},
+    {"name": "Backpressure", "value": -6, "retryability": 2},
+    {"name": "WorkerLost", "value": -7, "retryability": 3},
+    {"name": "Internal", "value": -8, "retryability": 0},
+    {"name": "InvalidHandle", "value": -9, "retryability": 1},
+    {"name": "Busy", "value": -10, "retryability": 2},
+    {"name": "Timeout", "value": -11, "retryability": 2},
+    {"name": "Canceled", "value": -12, "retryability": 0},
+    {"name": "DeviceLost", "value": -13, "retryability": 3},
+    {"name": "BudgetExhausted", "value": -14, "retryability": 1},
+    {"name": "RevisionConflict", "value": -15, "retryability": 1}
+  ],
+  "details": [
+    {"value": 500, "owner": "ProductRuntime", "name": "Canceled", "result": "Canceled"},
+    {"value": 501, "owner": "ProductRuntime", "name": "FramePublicationFailed", "result": "Internal"},
+    {"value": 504, "owner": "ProductRuntime", "name": "WallBudgetIncomplete", "result": "BudgetExhausted"},
+    {"value": 541, "owner": "ProductRuntime", "name": "ResourceMissing", "result": "MalformedData"},
+    {"value": 542, "owner": "ProductRuntime", "name": "ResourceEscapesExecutionRoot", "result": "MalformedData"},
+    {"value": 543, "owner": "ProductRuntime", "name": "MemoryNotApplicable", "result": "BudgetExhausted"},
+    {"value": 544, "owner": "ProductRuntime", "name": "WorkAccountingDiverged", "result": "Internal"},
+    {"value": 545, "owner": "ProductRuntime", "name": "ProductJobNotReady", "result": "Busy"},
+    {"value": 546, "owner": "ProductRuntime", "name": "ProductJobSingleUse", "result": "Busy"}
+  ]
+}

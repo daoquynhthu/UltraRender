@@ -245,7 +245,17 @@ int main(int argc, char **argv) {
     } catch (const ure::client::Error &error) {
         std::cerr << "ure_cli: " << error.what() << " (result="
                   << error.info().result << ", domain=" << error.info().domain
-                  << ", detail=" << error.info().detail << ")\n";
+                  << ", detail=" << error.info().detail;
+        if (std::ranges::any_of(error.info().correlation_identity,
+                                [](std::uint8_t value) { return value != 0; }))
+            std::cerr << ", correlation="
+                      << digest_hex(error.info().correlation_identity);
+        if (error.info().transport_correlation_id != 0)
+            std::cerr << ", transport_correlation="
+                      << error.info().transport_correlation_id;
+        if (!error.info().recovery_hint.empty())
+            std::cerr << ", recovery=" << error.info().recovery_hint;
+        std::cerr << ")\n";
         return error.info().result == URE_RESULT_CANCELED ? 130 : 1;
     } catch (const std::exception &error) {
         std::cerr << "ure_cli: " << error.what() << '\n';

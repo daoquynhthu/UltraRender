@@ -41,6 +41,14 @@ struct Object {
     virtual ~Object() = default;
 };
 
+struct DiagnosticContext {
+    std::array<std::uint8_t, 32> snapshot_identity{};
+    std::array<std::uint8_t, 32> objective_identity{};
+    std::array<std::uint8_t, 32> plan_identity{};
+    std::uint32_t backend{};
+    std::array<std::uint8_t, 32> device_identity{};
+};
+
 struct ErrorObject final : Object {
     ure_result_t result{};
     std::uint32_t domain{URE_ERROR_DOMAIN_CORE};
@@ -49,6 +57,10 @@ struct ErrorObject final : Object {
     std::vector<std::uint8_t> structured_detail;
     ure_handle_t cause{};
     ure_handle_t operation{};
+    std::array<std::uint8_t, 32> correlation_identity{};
+    std::uint32_t retryability{};
+    std::string recovery_hint;
+    std::uint32_t cause_depth{};
 };
 
 struct EventData {
@@ -102,6 +114,7 @@ struct OperationObject final : Object {
     bool fail_at_end{};
     bool device_lost_at_end{};
     ure_handle_t terminal_error{};
+    DiagnosticContext diagnostic;
 };
 
 class HandleTable {
@@ -154,7 +167,8 @@ bool release_error(ure_handle_t handle) noexcept;
 ure_result_t make_error(ure_result_t result, std::uint32_t detail,
                         std::string message, ure_handle_t *output,
                         ure_handle_t cause = nullptr,
-                        ure_handle_t operation = nullptr) noexcept;
+                        ure_handle_t operation = nullptr,
+                        const DiagnosticContext *diagnostic = nullptr) noexcept;
 
 template <class T>
 bool valid_input(const T *value, std::uint32_t type) noexcept {

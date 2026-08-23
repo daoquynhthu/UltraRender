@@ -1,9 +1,15 @@
 #include <ure/client/client.hpp>
 
+#include <algorithm>
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 
+#include <flatbuffers/verifier.h>
+
 #include "client_internal.hpp"
+#include "ure_payload_v1_generated.h"
 
 namespace ure::client {
 
@@ -138,6 +144,33 @@ JobState job_state(std::uint32_t state) {
     default:
         return JobState::Created;
     }
+}
+
+bool decode_error_detail(ErrorInfo &info) noexcept {
+    namespace payload_fb = ultrarender::contract::v1;
+    if (info.structured_detail_schema != URE_PAYLOAD_ERROR ||
+        info.structured_detail.empty() ||
+        info.structured_detail.size() > UINT64_C(65536))
+        return false;
+    flatbuffers::Verifier verifier(info.structured_detail.data(),
+                                   info.structured_detail.size(), 32, 4096);
+    const auto *detail = flatbuffers::GetRoot<payload_fb::ErrorDetail>(
+        info.structured_detail.data());
+    if (!detail || !detail->Verify(verifier) || detail->version_major() != 0 ||
+        !detail->correlation_identity() ||
+        detail->correlation_identity()->size() !=
+            info.correlation_identity.size())
+        return false;
+    std::copy(detail->correlation_identity()->begin(),
+              detail->correlation_identity()->end(),
+              info.correlation_identity.begin());
+    info.retryability = detail->retryability();
+    info.recovery_hint = detail->recovery_hint()
+                             ? detail->recovery_hint()->str()
+                             : std::string{};
+    info.cause_depth = detail->cause_depth();
+    info.operation_id = detail->operation_id();
+    return true;
 }
 
 }

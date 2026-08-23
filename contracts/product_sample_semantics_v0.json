@@ -1,0 +1,36 @@
+{
+  "schema": "ure.preview.product-sample-semantics/0.1",
+  "production_sample_precedence": [
+    {
+      "priority": 1,
+      "source": "ProductObjective.sample_budget",
+      "condition": "greater_than_zero",
+      "effect": "accepted_production_samples"
+    },
+    {
+      "priority": 2,
+      "source": "NativeScene.scene.spp",
+      "condition": "objective_unspecified_and_scene_spp_greater_than_zero",
+      "effect": "accepted_production_samples"
+    },
+    {
+      "priority": 3,
+      "source": "ProductRuntime.default",
+      "condition": "objective_unspecified_and_scene_spp_unspecified",
+      "value": 1,
+      "effect": "accepted_production_samples"
+    }
+  ],
+  "independent_domains": [
+    {"source": "NativeScene.simulation.spp_per_frame", "domain": "simulation", "production_multiplier": false, "preview_state": "PreservedForPRV7"},
+    {"source": "automatic pilot work", "domain": "pilot", "production_multiplier": false, "preview_state": "ReportedSeparately"}
+  ],
+  "progressive_lifecycle": {
+    "product_job": "SingleUse",
+    "start": "ResetAccumulatorThenAdvanceAcceptedDomain",
+    "repeated_start": "RejectBusy",
+    "new_job": "NewAccumulatorAndIdentity",
+    "implicit_multiplication": false,
+    "implicit_cross_job_accumulation": false
+  }
+}

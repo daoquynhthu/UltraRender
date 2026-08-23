@@ -308,7 +308,13 @@ int run(const std::filesystem::path &product_worker,
               fb::ResultCode::IncompatibleVersion &&
           incompatible_product->error &&
           incompatible_product->error->result ==
-              fb::ResultCode::IncompatibleVersion);
+              fb::ResultCode::IncompatibleVersion &&
+          incompatible_product->error->structured_detail_schema ==
+              URE_PAYLOAD_ERROR &&
+          !incompatible_product->error->structured_detail.empty() &&
+          incompatible_product->error->correlation_identity.size() == 32 &&
+          incompatible_product->error->retryability == 1 &&
+          !incompatible_product->error->recovery_hint.empty());
     auto unavailable = product.request_frame(2, 2, 7, error);
     CHECK_ERROR(unavailable);
     CHECK(unavailable->message_kind == fb::MessageKind::OperationResponse &&

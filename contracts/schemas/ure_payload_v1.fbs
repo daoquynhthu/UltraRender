@@ -40,6 +40,32 @@ table ErrorDescriptor {
   domain:uint (id: 1);
   detail:uint (id: 2);
   message:string (id: 3);
+  structured_detail_schema:uint (id: 4);
+  structured_detail:[ubyte] (id: 5);
+  cause_depth:uint (id: 6);
+  retryability:uint (id: 7);
+  recovery_hint:string (id: 8);
+  operation_id:ulong (id: 9);
+  correlation_identity:[ubyte] (id: 10);
+}
+
+table ErrorDetail {
+  version_major:ushort (id: 0);
+  version_minor:ushort (id: 1);
+  result:ResultCode = Success (id: 2);
+  domain:uint (id: 3);
+  detail:uint (id: 4);
+  correlation_identity:[ubyte] (id: 5);
+  operation_id:ulong (id: 6);
+  build_identity:[ubyte] (id: 7);
+  snapshot_identity:[ubyte] (id: 8);
+  objective_identity:[ubyte] (id: 9);
+  plan_identity:[ubyte] (id: 10);
+  retryability:uint (id: 11);
+  recovery_hint:string (id: 12);
+  backend:uint (id: 13);
+  device_identity:[ubyte] (id: 14);
+  cause_depth:uint (id: 15);
 }
 
 table OperationDescriptor {
