@@ -520,7 +520,7 @@ ure_result_t query_capability_impl(ure_handle_t instance, const ure_capability_q
             URE_CAPABILITY_FRAME_LEASE, URE_CAPABILITY_NATIVE_SCENE,
             URE_CAPABILITY_RENDER_SESSION, URE_CAPABILITY_DEVICE_EXECUTION};
         descriptor->version_major = 0;
-        descriptor->version_minor = 2;
+        descriptor->version_minor = 3;
         descriptor->stability = URE_STABILITY_UNSTABLE_EXTENSION;
         descriptor->maturity = URE_MATURITY_EXPERIMENTAL;
         descriptor->runtime_state = URE_RUNTIME_STATE_AVAILABLE;

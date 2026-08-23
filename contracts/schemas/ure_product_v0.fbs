@@ -4,7 +4,8 @@ enum ProductMessageKind:uint {
   CreateJob = 2147483688,
   StartJob = 2147483689,
   CancelJob = 2147483690,
-  AcquireArtifact = 2147483691
+  AcquireArtifact = 2147483691,
+  AcquireFrame = 2147483704
 }
 
 table ProductIdentitySet {
@@ -55,6 +56,12 @@ table ProductJobStatus {
   identities:ProductIdentitySet (id: 6);
   completed_samples:ulong (id: 7);
   execution:ProductExecutionInfo (id: 8);
+  progress_sequence:ulong (id: 9);
+  stage:uint (id: 10);
+  elapsed_ns:ulong (id: 11);
+  remaining_min_ns:ulong (id: 12);
+  remaining_max_ns:ulong (id: 13);
+  latest_frame_generation:ulong (id: 14);
 }
 
 table ProductArtifactManifest {

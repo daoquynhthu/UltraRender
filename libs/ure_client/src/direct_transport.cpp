@@ -7,7 +7,9 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include "client_internal.hpp"
@@ -190,7 +192,7 @@ class DirectConnection final : public ClientTransport,
         scenes_ = query_table<ure_scene_interface_t>(query, scene_id, 1, 0, 1,
                                                      0);
         products_ = query_table<ure_product_job_interface_t>(
-            query, product_id, 0, 1, 0, 2);
+            query, product_id, 0, 1, 0, 3);
         device_execution_ = query_table<ure_device_execution_interface_t>(
             query, device_execution_id, 0, 1, 0, 1);
         if (!runtime_ || !instances_ || !errors_ || !operations_ || !frames_ ||
@@ -215,7 +217,9 @@ class DirectConnection final : public ClientTransport,
             static_cast<std::uint32_t>(std::size(capabilities));
         create.required_capabilities = capabilities;
         ure_handle_t error{};
-        check(runtime_->create_instance(&create, &instance_, &error), error);
+        const auto status =
+            runtime_->create_instance(&create, &instance_, &error);
+        check(status, error);
     }
 
     std::shared_ptr<JobTransport>
@@ -225,7 +229,9 @@ class DirectConnection final : public ClientTransport,
     std::vector<DeviceInfo> devices() override {
         std::uint32_t count{};
         ure_handle_t error{};
-        check(device_execution_->enumerate(instance_, &count, &error), error);
+        auto status =
+            device_execution_->enumerate(instance_, &count, &error);
+        check(status, error);
         if (count > 64)
             throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 64,
                         "runtime device inventory exceeds the client limit");
@@ -235,9 +241,9 @@ class DirectConnection final : public ClientTransport,
             ure_device_descriptor_t descriptor{};
             descriptor.header = {URE_STRUCTURE_DEVICE_DESCRIPTOR,
                                  sizeof(descriptor), nullptr};
-            check(device_execution_->get_descriptor(
-                      instance_, index, &descriptor, &error),
-                  error);
+            status = device_execution_->get_descriptor(
+                instance_, index, &descriptor, &error);
+            check(status, error);
             result.push_back(device_info(descriptor));
         }
         return result;
@@ -311,8 +317,9 @@ class DirectJob final : public JobTransport {
             throw_error(URE_RESULT_BUSY, URE_ERROR_DOMAIN_CORE, 16,
                         "direct product job is already started");
         ure_handle_t error{};
-        connection_->check(
-            connection_->products_->start(job_, &operation_, &error), error);
+        const auto status =
+            connection_->products_->start(job_, &operation_, &error);
+        connection_->check(status, error);
     }
 
     bool wait(std::chrono::nanoseconds timeout) override {
@@ -331,9 +338,9 @@ class DirectJob final : public JobTransport {
     void request_cancel() override {
         ure_bool32_t accepted{};
         ure_handle_t error{};
-        connection_->check(connection_->products_->request_cancel(
-                               job_, &accepted, &error),
-                           error);
+        const auto status = connection_->products_->request_cancel(
+            job_, &accepted, &error);
+        connection_->check(status, error);
         if (!accepted) {
             const auto state = info().state;
             if (state == JobState::Succeeded || state == JobState::Canceled ||
@@ -349,32 +356,67 @@ class DirectJob final : public JobTransport {
         product_info.header = {URE_STRUCTURE_PRODUCT_JOB_INFO,
                                sizeof(product_info), nullptr};
         ure_handle_t error{};
-        connection_->check(connection_->products_->get_info(
-                               job_, &product_info, &error),
-                           error);
+        auto status =
+            connection_->products_->get_info(job_, &product_info, &error);
+        connection_->check(status, error);
         JobInfo result;
         result.state = JobState::Created;
         result.requested_samples = product_info.requested_samples;
         result.accepted_samples = product_info.accepted_samples;
         result.completed_samples = product_info.completed_samples;
+        result.progress_sequence = product_info.progress_sequence;
+        result.stage = product_info.stage;
+        result.elapsed_ns = product_info.elapsed_ns;
+        result.remaining_min_ns = product_info.remaining_min_ns;
+        result.remaining_max_ns = product_info.remaining_max_ns;
+        result.latest_frame_generation =
+            product_info.latest_frame_generation;
         result.identities = identities(product_info);
         ure_execution_info_t execution{};
         execution.header = {URE_STRUCTURE_EXECUTION_INFO, sizeof(execution),
                             nullptr};
-        connection_->check(connection_->device_execution_->get_job_execution(
-                               job_, &execution, &error),
-                           error);
+        status = connection_->device_execution_->get_job_execution(
+            job_, &execution, &error);
+        connection_->check(status, error);
         result.execution = execution_info(execution);
         if (operation_) {
             ure_operation_info_t operation_info{};
             operation_info.header = {URE_STRUCTURE_OPERATION_INFO,
                                      sizeof(operation_info), nullptr};
-            connection_->check(connection_->operations_->get_info(
-                                   operation_, &operation_info, &error),
-                               error);
+            status = connection_->operations_->get_info(
+                operation_, &operation_info, &error);
+            connection_->check(status, error);
             result.state = job_state(operation_info.state);
         }
         return result;
+    }
+
+    bool poll_event(ProgressEvent &event) override {
+        if (!operation_)
+            throw_error(URE_RESULT_BUSY, URE_ERROR_DOMAIN_CORE, 20,
+                        "direct product job is not started");
+        const auto current = info();
+        std::scoped_lock lock(event_mutex_);
+        if (current.progress_sequence <= last_progress_sequence_)
+            return false;
+        last_progress_sequence_ = current.progress_sequence;
+        event = progress_event(current);
+        return true;
+    }
+
+    bool wait_event(std::chrono::nanoseconds timeout,
+                    ProgressEvent &event) override {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        do {
+            if (poll_event(event))
+                return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        } while (std::chrono::steady_clock::now() < deadline);
+        return false;
+    }
+
+    Frame latest_frame() const override {
+        return copy_latest_frame();
     }
 
     JobResult result() const override {
@@ -387,18 +429,38 @@ class DirectJob final : public JobTransport {
         artifact.header = {URE_STRUCTURE_PRODUCT_ARTIFACT_MANIFEST,
                            sizeof(artifact), nullptr};
         ure_handle_t error{};
-        connection_->check(connection_->products_->get_artifact_manifest(
-                               job_, &artifact, &error),
-                           error);
+        const auto status = connection_->products_->get_artifact_manifest(
+            job_, &artifact, &error);
+        connection_->check(status, error);
         output.artifact.accepted_samples = artifact.accepted_samples;
         output.artifact.rgb_value_count = artifact.rgb_value_count;
         output.artifact.identities = output.info.identities;
         std::memcpy(output.artifact.frame_content_identity.data(),
                     artifact.frame_content_identity.bytes,
                     output.artifact.frame_content_identity.size());
+        output.frame = copy_latest_frame();
+        return output;
+    }
+
+  private:
+    static ProgressEvent progress_event(const JobInfo &info) {
+        return {info.state,
+                info.progress_sequence,
+                info.stage,
+                info.accepted_samples,
+                info.completed_samples,
+                info.elapsed_ns,
+                info.remaining_min_ns,
+                info.remaining_max_ns,
+                info.latest_frame_generation};
+    }
+
+    Frame copy_latest_frame() const {
         ure_handle_t frame{};
-        connection_->check(
-            connection_->products_->acquire_frame(job_, &frame, &error), error);
+        ure_handle_t error{};
+        const auto acquire_status =
+            connection_->products_->acquire_frame(job_, &frame, &error);
+        connection_->check(acquire_status, error);
         struct FrameRelease {
             const ure_frame_interface_t *interface{};
             ure_handle_t handle{};
@@ -407,19 +469,20 @@ class DirectJob final : public JobTransport {
                     interface->release(handle, nullptr);
             }
         } frame_release{connection_->frames_, frame};
+        Frame output;
         ure_frame_info_t frame_info{};
         frame_info.header = {URE_STRUCTURE_FRAME_INFO, sizeof(frame_info),
                              nullptr};
         ure_result_t status =
             connection_->frames_->get_info(frame, &frame_info, &error);
         if (status == URE_RESULT_SUCCESS) {
-            output.frame.width = frame_info.width;
-            output.frame.height = frame_info.height;
-            output.frame.sample_begin = frame_info.sample_begin;
-            output.frame.sample_count = frame_info.sample_count;
-            std::memcpy(output.frame.identity.data(), frame_info.frame_identity.bytes,
-                        output.frame.identity.size());
-            output.frame.planes.reserve(frame_info.plane_count);
+            output.width = frame_info.width;
+            output.height = frame_info.height;
+            output.sample_begin = frame_info.sample_begin;
+            output.sample_count = frame_info.sample_count;
+            std::memcpy(output.identity.data(), frame_info.frame_identity.bytes,
+                        output.identity.size());
+            output.planes.reserve(frame_info.plane_count);
             for (std::uint32_t index = 0; index < frame_info.plane_count; ++index) {
                 ure_frame_plane_info_t plane{};
                 plane.header = {URE_STRUCTURE_FRAME_PLANE_INFO, sizeof(plane),
@@ -452,18 +515,19 @@ class DirectJob final : public JobTransport {
                 status = connection_->frames_->copy_plane(&copy, &error);
                 if (status != URE_RESULT_SUCCESS)
                     break;
-                output.frame.planes.push_back(std::move(client_plane));
+                output.planes.push_back(std::move(client_plane));
             }
         }
         connection_->check(status, error);
         return output;
     }
 
-  private:
     std::shared_ptr<DirectConnection> connection_;
     ure_handle_t scene_{};
     ure_handle_t job_{};
     ure_handle_t operation_{};
+    std::mutex event_mutex_;
+    std::uint64_t last_progress_sequence_{};
 };
 
 std::shared_ptr<JobTransport>
@@ -498,8 +562,9 @@ DirectConnection::create_job(const SceneInput &scene,
                        nullptr};
     ure_handle_t scene_handle{};
     ure_handle_t error{};
-    check(scenes_->create(instance_, &blob, &scene_handle, &revision, &error),
-          error);
+    const auto scene_status =
+        scenes_->create(instance_, &blob, &scene_handle, &revision, &error);
+    check(scene_status, error);
     ure_objective_envelope_t envelope{};
     envelope.header = {URE_STRUCTURE_OBJECTIVE_ENVELOPE, sizeof(envelope),
                        nullptr};

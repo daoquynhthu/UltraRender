@@ -15,6 +15,10 @@ class JobTransport {
     virtual bool wait(std::chrono::nanoseconds timeout) = 0;
     virtual void request_cancel() = 0;
     virtual JobInfo info() const = 0;
+    virtual bool poll_event(ProgressEvent &event) = 0;
+    virtual bool wait_event(std::chrono::nanoseconds timeout,
+                            ProgressEvent &event) = 0;
+    virtual Frame latest_frame() const = 0;
     virtual JobResult result() const = 0;
 };
 

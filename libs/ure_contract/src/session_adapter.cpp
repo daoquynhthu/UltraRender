@@ -100,10 +100,29 @@ struct SessionObject final : Object {
     ure_handle_t active_operation{};
     ure_handle_t latest_frame{};
     std::uint64_t completed_samples{};
+    std::uint64_t progress_sequence{};
+    std::uint64_t elapsed_ns{};
+    std::uint64_t quantum_min_ns{UINT64_MAX};
+    std::uint64_t quantum_max_ns{};
+    std::uint64_t latest_frame_generation{};
+    std::uint32_t product_stage{URE_PRODUCT_STAGE_QUEUED};
     std::uint32_t state{URE_SESSION_STATE_CREATED};
     std::uint32_t reset_reason{URE_SCENE_RESET_FULL_REPLACEMENT};
     bool product_started{};
 };
+
+std::uint64_t saturated_multiply(std::uint64_t left,
+                                 std::uint64_t right) noexcept {
+    if (left != 0 && right > UINT64_MAX / left)
+        return UINT64_MAX;
+    return left * right;
+}
+
+bool progressive_publish_point(std::uint64_t completed,
+                               std::uint64_t accepted) noexcept {
+    return completed != 0 && completed < accepted &&
+           (completed == 1 || (completed & (completed - 1)) == 0);
+}
 
 Digest digest_from_hex(std::string_view text) {
     Digest output{};
@@ -233,15 +252,15 @@ ure_result_t decode_objective(const ure_objective_envelope_t *objective,
             return URE_RESULT_INVALID_ARGUMENT;
     }
     if (objective->determinism_policy != 0) {
-        message = "determinism policy is not executable in Product 0.2";
+        message = "determinism policy is not executable in Product 0.3";
         return URE_RESULT_CAPABILITY_UNAVAILABLE;
     }
     if (objective->usage_policy != 0) {
-        message = "usage policy is not executable in Product 0.2";
+        message = "usage policy is not executable in Product 0.3";
         return URE_RESULT_CAPABILITY_UNAVAILABLE;
     }
     if (objective->latency_budget_ns != 0) {
-        message = "latency budget is not executable in Product 0.2";
+        message = "latency budget is not executable in Product 0.3";
         return URE_RESULT_CAPABILITY_UNAVAILABLE;
     }
     if (objective->wall_time_budget_ns != 0 &&
@@ -256,7 +275,7 @@ ure_result_t decode_objective(const ure_objective_envelope_t *objective,
     }
     for (std::uint32_t index = 0; index < objective->output_count; ++index) {
         if (objective->output_semantics[index] != URE_FRAME_PLANE_COLOR) {
-            message = "requested output semantic is not executable in Product 0.2";
+            message = "requested output semantic is not executable in Product 0.3";
             return URE_RESULT_CAPABILITY_UNAVAILABLE;
         }
     }
@@ -346,15 +365,48 @@ void finish_operation(const std::shared_ptr<OperationObject> &operation,
                operation_handle);
 }
 
+bool install_frame_snapshot(
+    const std::shared_ptr<SessionObject> &session,
+    ure_handle_t operation_handle, const product::ProductFrame &product_frame,
+    ure_handle_t &frame_error) {
+    ure_handle_t frame{};
+    const ure_digest256_t scene_identity =
+        public_digest(product_frame.identities.snapshot);
+    const ure_digest256_t objective =
+        public_digest(product_frame.identities.objective);
+    const ure_result_t result = create_frame_snapshot(
+        session->owner, operation_handle, scene_identity, objective,
+        product_frame.accepted_samples, product_frame.width,
+        product_frame.height, product_frame.rgb.data(),
+        product_frame.rgb.size(), &frame, &frame_error);
+    if (result != URE_RESULT_SUCCESS)
+        return false;
+    ure_handle_t old_frame{};
+    {
+        std::scoped_lock lock(session->mutex);
+        old_frame = std::exchange(session->latest_frame, frame);
+        ++session->latest_frame_generation;
+        ++session->progress_sequence;
+    }
+    if (old_frame)
+        frame_interface().release(old_frame, nullptr);
+    return true;
+}
+
 void run_render(const std::shared_ptr<SessionObject> &session,
                 const std::shared_ptr<OperationObject> &operation,
                 ure_handle_t operation_handle) noexcept {
     try {
         session->job->begin();
         {
-            std::scoped_lock lock(operation->mutex);
+            std::scoped_lock lock(operation->mutex, session->mutex);
             operation->state = URE_OPERATION_STATE_RUNNING;
             ++operation->progress_sequence;
+            session->product_stage = URE_PRODUCT_STAGE_PRODUCTION;
+            session->progress_sequence = 1;
+            session->elapsed_ns = 0;
+            session->quantum_min_ns = UINT64_MAX;
+            session->quantum_max_ns = 0;
             operation->changed.notify_all();
         }
         emit_event(operation->instance, URE_EVENT_OPERATION_STATE,
@@ -371,6 +423,11 @@ void run_render(const std::shared_ptr<SessionObject> &session,
                     operation->instance->closed.load(std::memory_order_acquire)) {
                     lock.unlock();
                     session->job->cancel();
+                    {
+                        std::scoped_lock session_lock(session->mutex);
+                        session->product_stage = URE_PRODUCT_STAGE_TERMINAL;
+                        ++session->progress_sequence;
+                    }
                     finish_operation(operation, operation_handle,
                                      URE_OPERATION_STATE_CANCELED,
                                      URE_RESULT_CANCELED, 500,
@@ -378,13 +435,38 @@ void run_render(const std::shared_ptr<SessionObject> &session,
                     return;
                 }
             }
+            const auto quantum_started = std::chrono::steady_clock::now();
             session->job->render_sample();
+            const auto quantum_ns = static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() - quantum_started)
+                    .count());
             const auto progress = session->job->operation();
             {
                 std::scoped_lock lock(operation->mutex, session->mutex);
                 operation->completed = progress.completed_samples;
                 ++operation->progress_sequence;
                 session->completed_samples = progress.completed_samples;
+                ++session->progress_sequence;
+                session->elapsed_ns = static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - started)
+                        .count());
+                session->quantum_min_ns =
+                    std::min(session->quantum_min_ns, quantum_ns);
+                session->quantum_max_ns =
+                    std::max(session->quantum_max_ns, quantum_ns);
+                session->product_stage = URE_PRODUCT_STAGE_PRODUCTION;
+            }
+            if (progressive_publish_point(progress.completed_samples,
+                                          progress.accepted_samples)) {
+                ure_handle_t progressive_error{};
+                const auto progressive = session->job->snapshot_frame();
+                if (!install_frame_snapshot(session, operation_handle,
+                                            progressive,
+                                            progressive_error) &&
+                    progressive_error)
+                    release_error(progressive_error);
             }
             if (session->objective.wall_time_budget_ns != 0 &&
                 progress.completed_samples < progress.accepted_samples &&
@@ -396,6 +478,8 @@ void run_render(const std::shared_ptr<SessionObject> &session,
                 {
                     std::scoped_lock lock(session->mutex);
                     session->state = URE_SESSION_STATE_FAILED;
+                    session->product_stage = URE_PRODUCT_STAGE_TERMINAL;
+                    ++session->progress_sequence;
                 }
                 finish_operation(operation, operation_handle,
                                  URE_OPERATION_STATE_FAILED,
@@ -406,25 +490,18 @@ void run_render(const std::shared_ptr<SessionObject> &session,
         }
         const auto product_frame = session->job->publish_frame();
         const auto artifact = session->job->artifact_manifest(product_frame);
-        ure_handle_t frame{};
         ure_handle_t frame_error{};
-        const ure_digest256_t scene_identity =
-            public_digest(product_frame.identities.snapshot);
-        const ure_digest256_t objective =
-            public_digest(product_frame.identities.objective);
-        const ure_result_t frame_result = create_frame_snapshot(
-            session->owner, operation_handle, scene_identity, objective,
-            artifact.accepted_samples, product_frame.width,
-            product_frame.height, product_frame.rgb.data(),
-            product_frame.rgb.size(), &frame,
-            &frame_error);
-        if (frame_result != URE_RESULT_SUCCESS) {
+        if (!install_frame_snapshot(session, operation_handle, product_frame,
+                                    frame_error)) {
             std::string message = "rendered frame snapshot failed";
+            ure_result_t frame_result = URE_RESULT_INTERNAL;
             if (frame_error) {
                 const auto frame_error_object =
                     handles().get<ErrorObject>(frame_error, ObjectType::Error);
-                if (frame_error_object)
+                if (frame_error_object) {
                     message = frame_error_object->message;
+                    frame_result = frame_error_object->result;
+                }
                 release_error(frame_error);
             }
             {
@@ -436,15 +513,13 @@ void run_render(const std::shared_ptr<SessionObject> &session,
                              std::move(message));
             return;
         }
-        ure_handle_t old_frame{};
         {
             std::scoped_lock lock(session->mutex);
-            old_frame = std::exchange(session->latest_frame, frame);
             session->latest_artifact = artifact;
             session->state = URE_SESSION_STATE_READY;
+            session->product_stage = URE_PRODUCT_STAGE_TERMINAL;
+            ++session->progress_sequence;
         }
-        if (old_frame)
-            frame_interface().release(old_frame, nullptr);
         finish_operation(operation, operation_handle,
                          URE_OPERATION_STATE_SUCCEEDED, URE_RESULT_SUCCESS, 0,
                          {});
@@ -454,6 +529,8 @@ void run_render(const std::shared_ptr<SessionObject> &session,
         {
             std::scoped_lock lock(session->mutex);
             session->state = URE_SESSION_STATE_FAILED;
+            session->product_stage = URE_PRODUCT_STAGE_TERMINAL;
+            ++session->progress_sequence;
         }
         finish_operation(operation, operation_handle,
                          URE_OPERATION_STATE_FAILED, mapping.result,
@@ -471,6 +548,8 @@ void run_render(const std::shared_ptr<SessionObject> &session,
             std::scoped_lock lock(session->mutex);
             session->state = device_lost ? URE_SESSION_STATE_DEVICE_LOST
                                          : URE_SESSION_STATE_FAILED;
+            session->product_stage = URE_PRODUCT_STAGE_TERMINAL;
+            ++session->progress_sequence;
         }
         finish_operation(operation, operation_handle,
                          device_lost ? URE_OPERATION_STATE_DEVICE_LOST
@@ -483,6 +562,8 @@ void run_render(const std::shared_ptr<SessionObject> &session,
         {
             std::scoped_lock lock(session->mutex);
             session->state = URE_SESSION_STATE_FAILED;
+            session->product_stage = URE_PRODUCT_STAGE_TERMINAL;
+            ++session->progress_sequence;
         }
         finish_operation(operation, operation_handle,
                          URE_OPERATION_STATE_FAILED, URE_RESULT_INTERNAL, 503,
@@ -847,7 +928,8 @@ ure_result_t get_product_info_impl(ure_handle_t session_handle,
         return make_error(URE_RESULT_INVALID_HANDLE, 531,
                           "invalid product job handle", error);
     if (!valid_output(info, URE_STRUCTURE_PRODUCT_JOB_INFO) ||
-        info->reserved32 != 0 || info->reserved[0] != 0)
+        info->reserved32 != 0 || info->reserved_progress != 0 ||
+        info->reserved[0] != 0)
         return make_error(URE_RESULT_INVALID_ARGUMENT, 532,
                           "invalid product job info output", error);
     std::scoped_lock lock(session->mutex);
@@ -857,6 +939,18 @@ ure_result_t get_product_info_impl(ure_handle_t session_handle,
     info->requested_samples = progress.requested_samples;
     info->accepted_samples = progress.accepted_samples;
     info->completed_samples = progress.completed_samples;
+    info->progress_sequence = session->progress_sequence;
+    info->stage = session->product_stage;
+    info->elapsed_ns = session->elapsed_ns;
+    const std::uint64_t remaining =
+        progress.accepted_samples - progress.completed_samples;
+    info->remaining_min_ns =
+        session->quantum_min_ns == UINT64_MAX
+            ? 0
+            : saturated_multiply(remaining, session->quantum_min_ns);
+    info->remaining_max_ns =
+        saturated_multiply(remaining, session->quantum_max_ns);
+    info->latest_frame_generation = session->latest_frame_generation;
     info->active_operation = session->active_operation;
     info->latest_frame = session->latest_frame;
     store(info->build_identity, identities.build);
@@ -1073,7 +1167,7 @@ const ure_session_interface_t &session_interface() noexcept {
 
 const ure_product_job_interface_t &product_job_interface() noexcept {
     static const ure_product_job_interface_t table{
-        {sizeof(table), 0, 2},
+        {sizeof(table), 0, 3},
         create_product_job,
         retain_session,
         release_session,

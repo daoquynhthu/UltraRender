@@ -380,6 +380,13 @@ std::vector<std::uint8_t> product_response_payload(
     envelope.status->requested_samples = status.requested_samples;
     envelope.status->accepted_samples = status.accepted_samples;
     envelope.status->completed_samples = status.completed_samples;
+    envelope.status->progress_sequence = status.progress_sequence;
+    envelope.status->stage = status.stage;
+    envelope.status->elapsed_ns = status.elapsed_ns;
+    envelope.status->remaining_min_ns = status.remaining_min_ns;
+    envelope.status->remaining_max_ns = status.remaining_max_ns;
+    envelope.status->latest_frame_generation =
+        status.latest_frame_generation;
     envelope.status->identities = product_identities(status);
     envelope.status->execution =
         std::make_unique<product_fb::ProductExecutionInfoT>();
@@ -805,7 +812,7 @@ int run_worker(const Arguments &arguments) {
             response.error = error_descriptor(failure);
         } else if (request->payload_schema() == URE_PAYLOAD_PRODUCT_JOB &&
                    (request->payload_version_major() != 0 ||
-                    request->payload_version_minor() != 2)) {
+                    request->payload_version_minor() != 3)) {
             response.result = fb::ResultCode::IncompatibleVersion;
             failure = {URE_RESULT_INCOMPATIBLE_VERSION,
                        URE_ERROR_DOMAIN_CORE, 317,
@@ -959,6 +966,67 @@ int run_worker(const Arguments &arguments) {
                 response.payload = product_response_payload(
                     product_fb::ProductMessageKind::CancelJob, status);
                 response.declared_payload_bytes = response.payload.size();
+            }
+        } else if (request->operation_kind() ==
+                       URE_OPERATION_ACQUIRE_PRODUCT_FRAME &&
+                   request->payload_schema() == URE_PAYLOAD_PRODUCT_JOB) {
+            const std::span payload(request->payload()->data(),
+                                    request->payload()->size());
+            const auto *wire = product_payload(
+                payload, product_fb::ProductMessageKind::AcquireFrame);
+            ProductStatusSnapshot status;
+            FrameSnapshot snapshot;
+            if (!wire || !wire->request() || wire->request()->job_id() == 0) {
+                response.result = fb::ResultCode::MalformedData;
+                failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE,
+                           318, "product frame request is malformed"};
+                response.error = error_descriptor(failure);
+            } else if (!runtime.acquire_product_frame(
+                           wire->request()->job_id(), status, snapshot,
+                           failure)) {
+                response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+                if (status.job_id != 0) {
+                    response.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+                    response.payload = product_response_payload(
+                        product_fb::ProductMessageKind::AcquireFrame, status);
+                    response.declared_payload_bytes = response.payload.size();
+                }
+            } else if (snapshot.bytes.size() > negotiated_blob_bytes ||
+                       snapshot.bytes.size() > negotiated_frame_bytes ||
+                       leases.size() >= 8 ||
+                       snapshot.bytes.size() >
+                           negotiated_blob_bytes - retained_blob_bytes) {
+                response.result = fb::ResultCode::Backpressure;
+                failure = {URE_RESULT_BACKPRESSURE, URE_ERROR_DOMAIN_CORE,
+                           319,
+                           "progressive frame exceeds the negotiated lease budget"};
+                response.error = error_descriptor(failure);
+            } else {
+                if (next_lease == 0 || next_generation == 0)
+                    return 36;
+                const std::uint64_t lease_id = next_lease++;
+                const std::uint64_t generation = next_generation++;
+                std::uint64_t remote_handle{};
+                Lease lease;
+                if (!create_read_only_shared_mapping(
+                        snapshot.bytes, client_process.get(), lease.mapping,
+                        remote_handle, error))
+                    return 37;
+                lease.generation = generation;
+                lease.retained_bytes = snapshot.bytes.size();
+                const auto content_digest =
+                    sha256("UltraRender.SharedFrameBlob.v1", snapshot.bytes);
+                response.message_kind = fb::MessageKind::FrameReady;
+                response.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+                response.payload = product_response_payload(
+                    product_fb::ProductMessageKind::AcquireFrame, status);
+                response.declared_payload_bytes = response.payload.size();
+                response.frame = frame_descriptor(
+                    snapshot, lease_id, generation, remote_handle,
+                    content_digest, worker_identity);
+                leases.emplace(lease_id, std::move(lease));
+                retained_blob_bytes += snapshot.bytes.size();
             }
         } else if (request->operation_kind() ==
                        URE_OPERATION_ACQUIRE_PRODUCT_ARTIFACT &&

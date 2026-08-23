@@ -35,9 +35,12 @@
     {"name": "RevisionConflict", "value": -15, "retryability": 1}
   ],
   "details": [
+    {"value": 318, "owner": "WorkerProtocol", "name": "MalformedProgressiveFrameRequest", "result": "MalformedData"},
+    {"value": 319, "owner": "WorkerProtocol", "name": "ProgressiveFrameLeaseBackpressure", "result": "Backpressure"},
     {"value": 500, "owner": "ProductRuntime", "name": "Canceled", "result": "Canceled"},
     {"value": 501, "owner": "ProductRuntime", "name": "FramePublicationFailed", "result": "Internal"},
     {"value": 504, "owner": "ProductRuntime", "name": "WallBudgetIncomplete", "result": "BudgetExhausted"},
+    {"value": 529, "owner": "ProductRuntime", "name": "ProgressiveFrameUnavailable", "result": "Incomplete"},
     {"value": 541, "owner": "ProductRuntime", "name": "ResourceMissing", "result": "MalformedData"},
     {"value": 542, "owner": "ProductRuntime", "name": "ResourceEscapesExecutionRoot", "result": "MalformedData"},
     {"value": 543, "owner": "ProductRuntime", "name": "MemoryNotApplicable", "result": "BudgetExhausted"},

@@ -284,7 +284,14 @@ Json build_manifest() {
     field<ure_digest256_t>(extension_types["ure_product_job_info_t"], "snapshot_identity", offsetof(ure_product_job_info_t, snapshot_identity));
     field<ure_digest256_t>(extension_types["ure_product_job_info_t"], "objective_identity", offsetof(ure_product_job_info_t, objective_identity));
     field<ure_digest256_t>(extension_types["ure_product_job_info_t"], "plan_identity", offsetof(ure_product_job_info_t, plan_identity));
-    field<std::uint64_t[2]>(extension_types["ure_product_job_info_t"], "reserved", offsetof(ure_product_job_info_t, reserved));
+    field<std::uint64_t>(extension_types["ure_product_job_info_t"], "progress_sequence", offsetof(ure_product_job_info_t, progress_sequence));
+    field<std::uint32_t>(extension_types["ure_product_job_info_t"], "stage", offsetof(ure_product_job_info_t, stage));
+    field<std::uint32_t>(extension_types["ure_product_job_info_t"], "reserved_progress", offsetof(ure_product_job_info_t, reserved_progress));
+    field<std::uint64_t>(extension_types["ure_product_job_info_t"], "elapsed_ns", offsetof(ure_product_job_info_t, elapsed_ns));
+    field<std::uint64_t>(extension_types["ure_product_job_info_t"], "remaining_min_ns", offsetof(ure_product_job_info_t, remaining_min_ns));
+    field<std::uint64_t>(extension_types["ure_product_job_info_t"], "remaining_max_ns", offsetof(ure_product_job_info_t, remaining_max_ns));
+    field<std::uint64_t>(extension_types["ure_product_job_info_t"], "latest_frame_generation", offsetof(ure_product_job_info_t, latest_frame_generation));
+    field<std::uint64_t[1]>(extension_types["ure_product_job_info_t"], "reserved", offsetof(ure_product_job_info_t, reserved));
     extension_types["ure_product_artifact_manifest_t"] = layout<ure_product_artifact_manifest_t>();
     field<ure_output_header_t>(extension_types["ure_product_artifact_manifest_t"], "header", offsetof(ure_product_artifact_manifest_t, header));
     field<std::uint64_t>(extension_types["ure_product_artifact_manifest_t"], "accepted_samples", offsetof(ure_product_artifact_manifest_t, accepted_samples));

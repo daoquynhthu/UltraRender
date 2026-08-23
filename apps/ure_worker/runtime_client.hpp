@@ -109,6 +109,12 @@ struct ProductStatusSnapshot {
     std::uint64_t requested_samples{};
     std::uint64_t accepted_samples{};
     std::uint64_t completed_samples{};
+    std::uint64_t progress_sequence{};
+    std::uint32_t stage{};
+    std::uint64_t elapsed_ns{};
+    std::uint64_t remaining_min_ns{};
+    std::uint64_t remaining_max_ns{};
+    std::uint64_t latest_frame_generation{};
     std::array<std::uint8_t, 32> build_identity{};
     std::array<std::uint8_t, 32> snapshot_identity{};
     std::array<std::uint8_t, 32> objective_identity{};
@@ -168,6 +174,10 @@ class RuntimeClient {
                                   ProductArtifactSnapshot &artifact,
                                   FrameSnapshot &frame,
                                   RuntimeFailure &failure);
+    bool acquire_product_frame(std::uint64_t job_id,
+                               ProductStatusSnapshot &status,
+                               FrameSnapshot &frame,
+                               RuntimeFailure &failure);
     const std::array<std::uint8_t, 32> &registry_digest() const noexcept;
 
   private:

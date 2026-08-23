@@ -130,6 +130,7 @@ public:
                                Identity snapshot_identity) = 0;
     virtual void begin() = 0;
     virtual void render_sample() = 0;
+    virtual ProductFrame snapshot_frame() const = 0;
     virtual ProductFrame publish_frame() = 0;
     virtual ProductArtifactManifest artifact_manifest(
         const ProductFrame& frame) const = 0;

@@ -15,4 +15,6 @@ Recovery is determined by `retryability`:
 
 `CapabilityUnavailable` with `DeviceNotApplicable` means the requested backend, provider, feature set or stable device identity cannot execute the product objective. Enumerate the Device/Execution 0.1 extension again, choose an `Applicable` descriptor, and compile a new job. `Available` means the adapter exists but does not imply that the current complete-scene product route can execute on it.
 
+`Incomplete` with `ProgressiveFrameUnavailable` means the job is valid but has not published a frame generation yet. Continue observing monotonic progress instead of recreating the job. `Backpressure` with `ProgressiveFrameLeaseBackpressure` means the negotiated Worker mapping or retained-lease budget is full; release older immutable frame leases and retry after a bounded window. A malformed progressive-frame request must be corrected and is never retryable as-is.
+
 Messages are bounded presentation text. Automation should branch on result/domain/detail and versioned structured detail, not match message strings. Absolute private paths, addresses, credentials and unfiltered vendor text are not part of the diagnostic contract.

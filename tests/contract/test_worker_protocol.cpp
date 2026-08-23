@@ -324,6 +324,14 @@ int run(const std::filesystem::path &product_worker,
           malformed_device->error->structured_detail_schema ==
               URE_PAYLOAD_ERROR &&
           malformed_device->error->correlation_identity.size() == 32);
+    auto malformed_progressive = product.request_product_frame({0}, error);
+    CHECK_ERROR(malformed_progressive);
+    CHECK(malformed_progressive->result == fb::ResultCode::MalformedData &&
+          malformed_progressive->error &&
+          malformed_progressive->error->detail == 318 &&
+          malformed_progressive->error->structured_detail_schema ==
+              URE_PAYLOAD_ERROR &&
+          malformed_progressive->error->correlation_identity.size() == 32);
     auto unavailable = product.request_frame(2, 2, 7, error);
     CHECK_ERROR(unavailable);
     CHECK(unavailable->message_kind == fb::MessageKind::OperationResponse &&

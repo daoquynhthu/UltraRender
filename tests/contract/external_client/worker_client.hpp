@@ -54,6 +54,9 @@ class WorkerClient {
     std::unique_ptr<fb::WorkerEnvelopeT>
     request_device_inventory(const std::vector<std::uint8_t> &payload,
                              std::string &error);
+    std::unique_ptr<fb::WorkerEnvelopeT>
+    request_product_frame(const std::vector<std::uint8_t> &payload,
+                          std::string &error);
     std::unique_ptr<fb::WorkerEnvelopeT> release_lease(std::uint64_t lease,
                                                        std::string &error);
     bool shutdown(std::string &error);

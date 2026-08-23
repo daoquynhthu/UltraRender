@@ -417,6 +417,13 @@ typedef struct ure_product_job_info_t {
     ure_digest256_t objective_identity;
     ure_digest256_t plan_identity;
     uint64_t completed_samples;
+    uint64_t progress_sequence;
+    uint32_t stage;
+    uint32_t reserved_progress;
+    uint64_t elapsed_ns;
+    uint64_t remaining_min_ns;
+    uint64_t remaining_max_ns;
+    uint64_t latest_frame_generation;
     uint64_t reserved[1];
 } ure_product_job_info_t;
 

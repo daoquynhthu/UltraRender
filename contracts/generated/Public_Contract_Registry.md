@@ -2,7 +2,7 @@
 
 This generated reference freezes the Core ABI 1.x and Worker Protocol 1.x identity space. Extension maturity remains independent.
 
-Registry digest: `3ce8e0b7259e609de4c3487955ff31fa0f3e1cb7e89a41b50c767de28e9d37b1`
+Registry digest: `b8d2be3deeee30e198067a2098279068e3d1e49e4cba2331a6c52d867bab1384`
 
 | Registry ID | Kind | Canonical name | Stability | Maturity | Since | Default | Dependencies |
 |---:|---|---|---|---|---|---|---|
@@ -202,6 +202,10 @@ Registry digest: `3ce8e0b7259e609de4c3487955ff31fa0f3e1cb7e89a41b50c767de28e9d37
 |2147483701|Semantic|`ure.preview.backend.d3d12`|UnstableExtension|Experimental|1.0.0|disabled|2147483692|
 |2147483702|Semantic|`ure.preview.provider.self_compute`|UnstableExtension|Experimental|1.0.0|disabled|2147483692|
 |2147483703|Semantic|`ure.preview.operation.enumerate_devices`|UnstableExtension|Experimental|1.0.0|disabled|2147483692, 2147483693|
+|2147483704|Semantic|`ure.preview.operation.acquire_product_frame`|UnstableExtension|Experimental|1.0.0|disabled|2147483682, 2147483683, 2147483687|
+|2147483705|Semantic|`ure.preview.stage.queued`|UnstableExtension|Experimental|1.0.0|disabled|2147483682|
+|2147483706|Semantic|`ure.preview.stage.production`|UnstableExtension|Experimental|1.0.0|disabled|2147483682|
+|2147483707|Semantic|`ure.preview.stage.terminal`|UnstableExtension|Experimental|1.0.0|disabled|2147483682|
 |4026531840|Semantic|`ure.private.mock.device_loss`|Private|NotApplicable|1.0.0|disabled|403|
 |4026531841|Semantic|`ure.private.mock.worker_crash`|Private|NotApplicable|1.0.0|disabled||
 |4026531842|Semantic|`ure.private.mock.event_gap`|Private|NotApplicable|1.0.0|disabled|402|

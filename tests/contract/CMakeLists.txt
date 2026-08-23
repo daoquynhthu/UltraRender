@@ -193,7 +193,10 @@ if(TARGET ure_contract)
             -RuntimeDll $<TARGET_FILE:ure_contract>
             -WorkerExecutable $<TARGET_FILE:ure_worker>
             -MockWorkerExecutable $<TARGET_FILE:ultrarender_mock_worker>
-        DEPENDS ure_contract ure_worker ultrarender_mock_worker ure_public_stage_headers
+            -ClientLibrary $<TARGET_FILE:ure_client>
+            -GeneratedProtocolDir ${UR_CONTRACT_GENERATED_DIR}
+            -FlatcExecutable ${UR_FLATC_EXECUTABLE}
+        DEPENDS ure_contract ure_worker ultrarender_mock_worker ure_client ure_public_stage_headers
         VERBATIM)
 endif()
 
@@ -415,7 +418,6 @@ if(TARGET ure_contract)
             -BuildDir ${CMAKE_BINARY_DIR}/pb8_external_client_build
             -SdkStage ${UR_PB8_SDK_STAGE_DIR}
             -RuntimeStage ${UR_PB8_RUNTIME_STAGE_DIR}
-            -Flatc ${UR_FLATC_EXECUTABLE}
             -CMake ${CMAKE_COMMAND}
             -Ninja ${CMAKE_MAKE_PROGRAM})
 endif()

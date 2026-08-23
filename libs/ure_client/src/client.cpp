@@ -73,6 +73,31 @@ JobInfo Job::info() const {
     return impl_->transport_->info();
 }
 
+bool Job::poll_event(ProgressEvent &event) {
+    if (!impl_)
+        detail::throw_error(URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE,
+                            5, "client job is empty");
+    return impl_->transport_->poll_event(event);
+}
+
+bool Job::wait_event(std::chrono::nanoseconds timeout, ProgressEvent &event) {
+    if (!impl_)
+        detail::throw_error(URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE,
+                            5, "client job is empty");
+    if (timeout.count() < 0)
+        detail::throw_error(URE_RESULT_INVALID_ARGUMENT,
+                            URE_ERROR_DOMAIN_CORE, 6,
+                            "client event timeout cannot be negative");
+    return impl_->transport_->wait_event(timeout, event);
+}
+
+Frame Job::latest_frame() const {
+    if (!impl_)
+        detail::throw_error(URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE,
+                            5, "client job is empty");
+    return impl_->transport_->latest_frame();
+}
+
 JobResult Job::result() const {
     if (!impl_)
         detail::throw_error(URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE, 5,

@@ -23,7 +23,7 @@ int main() {
     const auto product_interface = std::ranges::find(
         registry.entries, "ure.preview.interface.product_job",
         &ure::contract_codegen::RegistryEntry::canonical_name);
-    if (registry.version != "1.0.0" || registry.entries.size() != 204 || registry.tombstones.size() != 11 ||
+    if (registry.version != "1.0.0" || registry.entries.size() != 208 || registry.tombstones.size() != 11 ||
         registry.digest_hex != URE_REGISTRY_DIGEST_HEX || sizeof(ure_uuid_t) != 16 ||
         sizeof(ure_digest256_t) != 32 || sizeof(ure_input_header_t) != sizeof(ure_output_header_t) ||
         product_interface == registry.entries.end() ||

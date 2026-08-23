@@ -103,8 +103,8 @@ const Table *query_product_table(ure_query_interface_fn query,
     ure_interface_response_t response{};
     request.header = {URE_STRUCTURE_INTERFACE_QUERY, sizeof(request), nullptr};
     std::memcpy(request.interface_id.bytes, id, sizeof(id));
-    request.minimum_minor = 2;
-    request.maximum_minor = 2;
+    request.minimum_minor = 3;
+    request.maximum_minor = 3;
     response.header = {URE_STRUCTURE_INTERFACE_RESPONSE, sizeof(response),
                        nullptr};
     if (query(&request, &response, nullptr) != URE_RESULT_SUCCESS ||
@@ -318,6 +318,12 @@ struct RuntimeClient::Impl {
         status.requested_samples = info.requested_samples;
         status.accepted_samples = info.accepted_samples;
         status.completed_samples = info.completed_samples;
+        status.progress_sequence = info.progress_sequence;
+        status.stage = info.stage;
+        status.elapsed_ns = info.elapsed_ns;
+        status.remaining_min_ns = info.remaining_min_ns;
+        status.remaining_max_ns = info.remaining_max_ns;
+        status.latest_frame_generation = info.latest_frame_generation;
         std::memcpy(status.build_identity.data(), info.build_identity.bytes,
                     status.build_identity.size());
         std::memcpy(status.snapshot_identity.data(), info.snapshot_identity.bytes,
@@ -828,6 +834,32 @@ bool RuntimeClient::inspect_product_job(std::uint64_t job_id,
         return false;
     }
     return impl_->product_status(status, failure);
+}
+
+bool RuntimeClient::acquire_product_frame(
+    std::uint64_t job_id, ProductStatusSnapshot &status, FrameSnapshot &frame,
+    RuntimeFailure &failure) {
+    if (!inspect_product_job(job_id, status, failure))
+        return false;
+    ure_handle_t frame_handle{};
+    ure_handle_t error_handle{};
+    const ure_result_t result = impl_->products->acquire_frame(
+        impl_->product_job, &frame_handle, &error_handle);
+    if (result != URE_RESULT_SUCCESS) {
+        impl_->error(result, error_handle, failure);
+        return false;
+    }
+    const bool copied = impl_->copy_frame(frame_handle, frame, failure);
+    impl_->frames->release(frame_handle, nullptr);
+    if (!copied)
+        return false;
+    frame.session.header = {URE_STRUCTURE_SESSION_INFO, sizeof(frame.session),
+                            nullptr};
+    frame.session.state = status.state;
+    frame.session.requested_samples = status.requested_samples;
+    frame.session.completed_samples = status.completed_samples;
+    frame.session_id = job_id;
+    return true;
 }
 
 bool RuntimeClient::acquire_product_artifact(

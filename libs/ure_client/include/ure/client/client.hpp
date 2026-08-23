@@ -156,8 +156,26 @@ struct JobInfo {
     std::uint64_t requested_samples{};
     std::uint64_t accepted_samples{};
     std::uint64_t completed_samples{};
+    std::uint64_t progress_sequence{};
+    std::uint32_t stage{};
+    std::uint64_t elapsed_ns{};
+    std::uint64_t remaining_min_ns{};
+    std::uint64_t remaining_max_ns{};
+    std::uint64_t latest_frame_generation{};
     IdentitySet identities;
     ExecutionInfo execution;
+};
+
+struct ProgressEvent {
+    JobState state{JobState::Created};
+    std::uint64_t sequence{};
+    std::uint32_t stage{};
+    std::uint64_t accepted_samples{};
+    std::uint64_t completed_samples{};
+    std::uint64_t elapsed_ns{};
+    std::uint64_t remaining_min_ns{};
+    std::uint64_t remaining_max_ns{};
+    std::uint64_t latest_frame_generation{};
 };
 
 struct FramePlane {
@@ -208,6 +226,9 @@ class Job {
     bool wait(std::chrono::nanoseconds timeout);
     void request_cancel();
     JobInfo info() const;
+    bool poll_event(ProgressEvent &event);
+    bool wait_event(std::chrono::nanoseconds timeout, ProgressEvent &event);
+    Frame latest_frame() const;
     JobResult result() const;
     explicit operator bool() const noexcept;
 

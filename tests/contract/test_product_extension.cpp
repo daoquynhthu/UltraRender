@@ -162,7 +162,7 @@ int main(int argc, char **argv) {
     const auto *operations = query_table<ure_operation_interface_t>(query, operation_id, 1, 0);
     const auto *frames = query_table<ure_frame_interface_t>(query, frame_id, 1, 0);
     const auto *scenes = query_table<ure_scene_interface_t>(query, scene_id, 1, 0);
-    const auto *products = query_table<ure_product_job_interface_t>(query, product_id, 0, 2);
+    const auto *products = query_table<ure_product_job_interface_t>(query, product_id, 0, 3);
     const auto *device_execution =
         query_table<ure_device_execution_interface_t>(
             query, device_execution_id, 0, 1);
@@ -216,7 +216,7 @@ int main(int argc, char **argv) {
                          sizeof(descriptor), nullptr};
     check(instances->query_capability(instance, &capability_query, &descriptor,
                                       nullptr) == URE_RESULT_SUCCESS &&
-              descriptor.version_major == 0 && descriptor.version_minor == 2 &&
+              descriptor.version_major == 0 && descriptor.version_minor == 3 &&
               descriptor.stability == URE_STABILITY_UNSTABLE_EXTENSION &&
               descriptor.enabled == 0,
           "product capability discovery is invalid");

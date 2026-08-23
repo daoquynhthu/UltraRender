@@ -502,7 +502,7 @@ public:
             report.production_sample_count;
     }
 
-    ProductFrame publish_frame() override {
+    ProductFrame snapshot_frame() const override {
         int width{};
         int height{};
         renderer_->get_framebuffer_size(width, height);
@@ -511,17 +511,25 @@ public:
         {
             std::scoped_lock lock(mutex_);
             if (operation_.state != ProductOperationState::Running)
-                throw std::logic_error("product frame publication requires running work");
-            if (operation_.completed_samples != operation_.accepted_samples)
-                throw std::logic_error(
-                    "product frame publication requires complete accepted work");
-            operation_.state = ProductOperationState::Succeeded;
+                throw std::logic_error("product frame snapshot requires running work");
+            if (operation_.completed_samples == 0)
+                throw std::logic_error("product frame snapshot requires completed work");
             frame.identities = identities_;
             frame.accepted_samples = operation_.completed_samples;
         }
         frame.width = static_cast<std::uint32_t>(width);
         frame.height = static_cast<std::uint32_t>(height);
         frame.rgb = framebuffer;
+        return frame;
+    }
+
+    ProductFrame publish_frame() override {
+        auto frame = snapshot_frame();
+        std::scoped_lock lock(mutex_);
+        if (operation_.completed_samples != operation_.accepted_samples)
+            throw std::logic_error(
+                "product frame publication requires complete accepted work");
+        operation_.state = ProductOperationState::Succeeded;
         return frame;
     }
 

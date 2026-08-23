@@ -205,7 +205,39 @@ void cancel(ure::client::TransportMode mode,
     ure::client::Objective objective;
     objective.sample_budget = 100000;
     auto job = client.create_job(scene(scene_path), objective);
+    try {
+        static_cast<void>(job.latest_frame());
+        check(false, "client job exposed a frame before publication");
+    } catch (const ure::client::Error &error) {
+        check(error.info().result == URE_RESULT_INCOMPLETE &&
+                  error.info().domain == URE_ERROR_DOMAIN_CORE &&
+                  error.info().detail == 529,
+              "unpublished frame classification differs by transport: " +
+                  std::to_string(static_cast<int>(mode)) + "/" +
+                  std::to_string(error.info().result) + "/" +
+                  std::to_string(error.info().domain) + "/" +
+                  std::to_string(error.info().detail));
+    }
     job.start();
+    ure::client::ProgressEvent progressive;
+    const auto frame_deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    do {
+        static_cast<void>(job.wait_event(std::chrono::milliseconds(100),
+                                         progressive));
+    } while (progressive.latest_frame_generation == 0 &&
+             std::chrono::steady_clock::now() < frame_deadline);
+    check(progressive.sequence != 0 &&
+              progressive.stage == URE_PRODUCT_STAGE_PRODUCTION &&
+              progressive.completed_samples <= progressive.accepted_samples &&
+              progressive.latest_frame_generation != 0,
+          "client job exposed no monotonic progressive frame event");
+    const auto progressive_frame = job.latest_frame();
+    const auto after_frame = job.info();
+    check(progressive_frame.sample_count != 0 &&
+              progressive_frame.sample_count <= after_frame.completed_samples &&
+              !progressive_frame.planes.empty(),
+          "client job could not acquire an immutable progressive frame");
     const auto progress_deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(10);
     while (job.info().completed_samples == 0 &&

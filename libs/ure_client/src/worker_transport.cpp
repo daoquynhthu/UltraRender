@@ -257,6 +257,12 @@ JobInfo parse_status(const product_fb::ProductJobStatus &status,
     result.requested_samples = status.requested_samples();
     result.accepted_samples = status.accepted_samples();
     result.completed_samples = status.completed_samples();
+    result.progress_sequence = status.progress_sequence();
+    result.stage = status.stage();
+    result.elapsed_ns = status.elapsed_ns();
+    result.remaining_min_ns = status.remaining_min_ns();
+    result.remaining_max_ns = status.remaining_max_ns();
+    result.latest_frame_generation = status.latest_frame_generation();
     std::copy(status.identities()->build()->begin(),
               status.identities()->build()->end(), result.identities.build.begin());
     std::copy(status.identities()->snapshot()->begin(),
@@ -299,6 +305,10 @@ class WorkerJob final : public JobTransport {
     bool wait(std::chrono::nanoseconds timeout) override;
     void request_cancel() override;
     JobInfo info() const override;
+    bool poll_event(ProgressEvent &event) override;
+    bool wait_event(std::chrono::nanoseconds timeout,
+                    ProgressEvent &event) override;
+    Frame latest_frame() const override;
     JobResult result() const override;
 
   private:
@@ -310,6 +320,7 @@ class WorkerJob final : public JobTransport {
     mutable std::mutex mutex_;
     mutable JobInfo info_;
     mutable std::unique_ptr<JobResult> result_;
+    std::uint64_t last_progress_sequence_{};
     bool started_{};
 };
 
@@ -447,7 +458,7 @@ class WorkerConnection final
         create.message_kind = fb::MessageKind::OperationRequest;
         create.operation_kind = URE_OPERATION_CREATE_PRODUCT_JOB;
         create.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
-        create.payload_version_minor = 2;
+        create.payload_version_minor = 3;
         create.payload = product_payload(product_fb::ProductMessageKind::CreateJob,
                                          scene_id, job_id, &objective);
         response = exchange_locked(create);
@@ -531,7 +542,7 @@ class WorkerConnection final
         request.message_kind = fb::MessageKind::OperationRequest;
         request.operation_kind = operation;
         request.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
-        request.payload_version_minor = 2;
+        request.payload_version_minor = 3;
         request.payload = product_payload(kind, scene_id, job_id);
         return exchange_locked(request);
     }
@@ -590,7 +601,9 @@ class WorkerConnection final
     }
 
     JobResult frame_result(const fb::WorkerEnvelopeT &response,
-                           const JobInfo &info) {
+                           const JobInfo &info,
+                           product_fb::ProductMessageKind kind,
+                           bool require_artifact) {
         if (response.message_kind != fb::MessageKind::FrameReady ||
             !response.frame || response.frame->planes.empty() ||
             response.frame->planes.size() > 64 ||
@@ -726,22 +739,25 @@ class WorkerConnection final
             auto released = exchange_locked(release);
             check_response(*released);
         }
-        const auto *product = parse_product(
-            response, product_fb::ProductMessageKind::AcquireArtifact);
-        if (!product->artifact() || !product->artifact()->identities() ||
-            !product->artifact()->frame_content() ||
-            product->artifact()->frame_content()->size() != 32)
-            throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 47,
-                        "worker product artifact manifest is malformed");
+        const auto *product = parse_product(response, kind);
         JobResult result;
         result.info = info;
-        result.artifact.accepted_samples =
-            product->artifact()->accepted_samples();
-        result.artifact.rgb_value_count = product->artifact()->rgb_value_count();
-        result.artifact.identities = info.identities;
-        std::copy(product->artifact()->frame_content()->begin(),
-                  product->artifact()->frame_content()->end(),
-                  result.artifact.frame_content_identity.begin());
+        if (require_artifact) {
+            if (!product->artifact() || !product->artifact()->identities() ||
+                !product->artifact()->frame_content() ||
+                product->artifact()->frame_content()->size() != 32)
+                throw_error(URE_RESULT_MALFORMED_DATA,
+                            URE_ERROR_DOMAIN_CORE, 47,
+                            "worker product artifact manifest is malformed");
+            result.artifact.accepted_samples =
+                product->artifact()->accepted_samples();
+            result.artifact.rgb_value_count =
+                product->artifact()->rgb_value_count();
+            result.artifact.identities = info.identities;
+            std::copy(product->artifact()->frame_content()->begin(),
+                      product->artifact()->frame_content()->end(),
+                      result.artifact.frame_content_identity.begin());
+        }
         result.frame.width = response.frame->width;
         result.frame.height = response.frame->height;
         result.frame.sample_begin = response.frame->sample_begin;
@@ -951,7 +967,9 @@ JobInfo WorkerJob::poll(bool require_result) const {
     info_ = parse_status(*product->status(), job_id_);
     if (response->result == fb::ResultCode::Success) {
         result_ = std::make_unique<JobResult>(
-            connection_->frame_result(*response, info_));
+            connection_->frame_result(
+                *response, info_,
+                product_fb::ProductMessageKind::AcquireArtifact, true));
         return info_;
     }
     if (response->result == fb::ResultCode::Incomplete ||
@@ -1007,6 +1025,52 @@ JobInfo WorkerJob::info() const {
     if (!started_)
         return info_;
     return poll(false);
+}
+
+bool WorkerJob::poll_event(ProgressEvent &event) {
+    std::scoped_lock lock(mutex_);
+    if (!started_)
+        throw_error(URE_RESULT_BUSY, URE_ERROR_DOMAIN_CORE, 62,
+                    "worker product job is not started");
+    const auto current = poll(false);
+    if (current.progress_sequence <= last_progress_sequence_)
+        return false;
+    last_progress_sequence_ = current.progress_sequence;
+    event = {current.state,
+             current.progress_sequence,
+             current.stage,
+             current.accepted_samples,
+             current.completed_samples,
+             current.elapsed_ns,
+             current.remaining_min_ns,
+             current.remaining_max_ns,
+             current.latest_frame_generation};
+    return true;
+}
+
+bool WorkerJob::wait_event(std::chrono::nanoseconds timeout,
+                           ProgressEvent &event) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    do {
+        if (poll_event(event))
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    } while (std::chrono::steady_clock::now() < deadline);
+    return false;
+}
+
+Frame WorkerJob::latest_frame() const {
+    std::scoped_lock lock(mutex_);
+    auto response = connection_->product_request(
+        URE_OPERATION_ACQUIRE_PRODUCT_FRAME,
+        product_fb::ProductMessageKind::AcquireFrame, scene_id_, job_id_);
+    connection_->check_response(*response);
+    const auto *product = connection_->parse_product(
+        *response, product_fb::ProductMessageKind::AcquireFrame);
+    info_ = parse_status(*product->status(), job_id_);
+    return connection_->frame_result(
+        *response, info_, product_fb::ProductMessageKind::AcquireFrame,
+        false).frame;
 }
 
 JobResult WorkerJob::result() const {

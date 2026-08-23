@@ -37,7 +37,7 @@ if ($workerResult.Output -notmatch "(?m)^transport=worker\r?$" -or
 }
 
 $unsupported = Invoke-Cli @("render", $Scene, "--width", "8")
-if ($unsupported.ExitCode -ne 2 -or $unsupported.Output -notmatch "not executable through ProductJob 0.2") {
+if ($unsupported.ExitCode -ne 2 -or $unsupported.Output -notmatch "not executable through ProductJob 0.3") {
     throw "CLI did not reject an unimplemented product option"
 }
 
