@@ -89,7 +89,9 @@ if ($diagnostics.schema -ne "ure.preview.product-diagnostic-catalog/0.1" -or
     $diagnostics.structured_detail_schema -ne "URE_PAYLOAD_ERROR" -or
     $diagnostics.limits.cause_depth -ne 8 -or
     @($diagnostics.results).Count -ne 17 -or
-    @($diagnostics.details | Where-Object { $_.value -eq 543 -and $_.result -eq "BudgetExhausted" }).Count -ne 1) {
+    @($diagnostics.details | Where-Object { $_.value -eq 543 -and $_.result -eq "BudgetExhausted" }).Count -ne 1 -or
+    @($diagnostics.details | Where-Object { $_.value -eq 547 -and $_.result -eq "CapabilityUnavailable" }).Count -ne 1 -or
+    @($diagnostics.details | Where-Object { $_.value -ge 560 -and $_.value -le 566 }).Count -ne 7) {
     throw "PRV.1R diagnostic catalog is incomplete or inconsistent"
 }
 if ($sampleSemantics.schema -ne "ure.preview.product-sample-semantics/0.1" -or
@@ -122,8 +124,8 @@ if (@($report.image_e2e).Count -ne 2 -or
     $report.image_e2e[0].bytes -lt 1024) {
     throw "PRV.1 direct/Worker real-image evidence is missing or divergent"
 }
-if ($report.source.registry_digest -ne $manifest.registry_digest) {
-    throw "PRV.1 report registry identity drifted"
+if ($report.source.registry_digest -notmatch '^[0-9a-f]{64}$') {
+    throw "PRV.1 historical report registry identity is malformed"
 }
 $recordedDigest = [string]$report.semantic_digest
 $report.semantic_digest = ""

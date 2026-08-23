@@ -113,6 +113,7 @@ struct ProductStatusSnapshot {
     std::array<std::uint8_t, 32> snapshot_identity{};
     std::array<std::uint8_t, 32> objective_identity{};
     std::array<std::uint8_t, 32> plan_identity{};
+    ure_execution_info_t execution{};
 };
 
 struct ProductArtifactSnapshot {
@@ -136,6 +137,8 @@ class RuntimeClient {
     RuntimeClient &operator=(const RuntimeClient &) = delete;
 
     bool open(const std::filesystem::path &runtime_path, RuntimeFailure &failure);
+    bool enumerate_devices(std::vector<ure_device_descriptor_t> &devices,
+                           RuntimeFailure &failure);
     bool produce_conformance_frame(std::uint32_t width, std::uint32_t height,
                                    std::uint32_t seed, FrameSnapshot &snapshot,
                                    RuntimeFailure &failure);

@@ -14,6 +14,20 @@ table ProductIdentitySet {
   plan:[ubyte] (id: 3);
 }
 
+table ProductExecutionInfo {
+  backend:uint (id: 0);
+  provider:uint (id: 1);
+  runtime_state:uint (id: 2);
+  ordinal:uint (id: 3);
+  device_identity:[ubyte] (id: 4);
+  required_features:ulong (id: 5);
+  selected_memory_budget_bytes:ulong (id: 6);
+  total_memory_bytes:ulong (id: 7);
+  available_memory_bytes:ulong (id: 8);
+  name:string (id: 9);
+  adapter_id:string (id: 10);
+}
+
 table ProductJobRequest {
   scene_id:ulong (id: 0);
   job_id:ulong (id: 1);
@@ -40,6 +54,7 @@ table ProductJobStatus {
   accepted_samples:ulong (id: 5);
   identities:ProductIdentitySet (id: 6);
   completed_samples:ulong (id: 7);
+  execution:ProductExecutionInfo (id: 8);
 }
 
 table ProductArtifactManifest {

@@ -1,6 +1,6 @@
 # UltraRender Documentation Index
 
-Last reviewed: 2026-08-13
+Last reviewed: 2026-08-23
 
 This index separates current authorities, completed subsystem references, and historical records. The root `PLAN.md` is the only authoritative global execution queue; its current cursor is PRV.1R. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
 
@@ -14,6 +14,8 @@ This index separates current authorities, completed subsystem references, and hi
 | [`../AGENTS.md`](../AGENTS.md) | Agent governance and workflow |
 | [`CI.md`](CI.md) | Hosted non-GPU compiler matrix, test/install coverage, exclusions, pinned tools, and cache policy |
 | [`UltraRender_Preview_Architecture.md`](UltraRender_Preview_Architecture.md) | Normative one-product-service architecture, closure/evidence model, continuous diagnostic maturity, client/transport boundary, backend profiles and Preview completion rules |
+| [`Product_Diagnostic_Recovery_Guide.md`](Product_Diagnostic_Recovery_Guide.md) | PRV.1R common result/detail/correlation/retryability semantics and integrator recovery rules |
+| [`Product_Device_Execution_Extension.md`](Product_Device_Execution_Extension.md) | Exact-build Device/Execution 0.1 inventory, objective constraint, applicability and selected-plan reporting contract |
 | [`PRV0_Product_Truth_Baseline.md`](PRV0_Product_Truth_Baseline.md) | Machine-validated product closure ledger, accepted-semantic audit, retained E2E scenario matrix and baseline-report interpretation |
 | [`reports/phase_prv1_validation_v1.json`](reports/phase_prv1_validation_v1.json) | Historical PRV.1 ProductJob/client/CLI smoke and Direct-Worker parity evidence; superseded as ProductE2E proof by PRV.1R |
 | [`Public_API_ABI_Architecture.md`](Public_API_ABI_Architecture.md) | Normative minimal C ABI/local-worker architecture and PB.8 stable-major gates |

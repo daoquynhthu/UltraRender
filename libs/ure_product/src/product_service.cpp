@@ -51,7 +51,8 @@ std::uint64_t checked_multiply(std::uint64_t left, std::uint64_t right) {
 
 Identity plan_identity(const ProductIdentitySet& identities,
                        const ProductObjective& objective,
-                       const ProductMemoryPlan& memory_plan) {
+                       const ProductMemoryPlan& memory_plan,
+                       const ProductExecutionInfo& execution) {
     std::vector<std::uint8_t> bytes;
     constexpr std::string_view domain = "UltraRender.ProductPlan.v0";
     bytes.insert(bytes.end(), domain.begin(), domain.end());
@@ -65,6 +66,10 @@ Identity plan_identity(const ProductIdentitySet& identities,
     append_bytes(bytes, objective.latency_budget_ns);
     append_bytes(bytes, objective.determinism_policy);
     append_bytes(bytes, objective.usage_policy);
+    append_bytes(bytes, objective.backend);
+    append_identity(bytes, objective.requested_device_identity);
+    append_bytes(bytes, objective.required_features);
+    append_bytes(bytes, objective.has_requested_device);
     for (const auto output : objective.output_semantics)
         append_bytes(bytes, output);
     append_bytes(bytes, memory_plan.framebuffer_bytes);
@@ -77,6 +82,11 @@ Identity plan_identity(const ProductIdentitySet& identities,
     append_bytes(bytes, memory_plan.output_bytes);
     append_bytes(bytes, memory_plan.estimated_peak_bytes);
     append_bytes(bytes, memory_plan.persistent_executor_count);
+    append_identity(bytes, execution.device_identity);
+    append_bytes(bytes, execution.selection.adapter.kind);
+    append_bytes(bytes, execution.provider);
+    append_bytes(bytes, execution.selection.required_features);
+    append_bytes(bytes, execution.selection.memory_budget_bytes);
     return content_identity(bytes);
 }
 
@@ -94,6 +104,8 @@ RenderConfig render_config(const ProductObjective& objective) {
             static_cast<std::uint64_t>(std::numeric_limits<int>::max())));
     config.samples_per_pass = 1;
     config.sample_index_offset = 0;
+    config.backend.kind = objective.backend;
+    config.backend.required_features = objective.required_features;
     return config;
 }
 
@@ -337,24 +349,51 @@ ProductMemoryPlan make_memory_plan(
 struct PreparedRenderer {
     std::unique_ptr<RenderSession> renderer;
     ProductMemoryPlan memory_plan;
+    ProductExecutionInfo execution;
 };
 
 PreparedRenderer make_renderer(
     const native_scene::NativeSceneArchive& archive,
     const ProductObjective& objective) {
-    const auto config = render_config(objective);
+    auto config = render_config(objective);
     auto scene = realize_scene(archive);
     if (scene.width <= 0)
         scene.width = 64;
     if (scene.height <= 0)
         scene.height = 64;
-    const auto selection = select_backend(config);
+    BackendSelection selection;
+    try {
+        if (objective.has_requested_device) {
+            const auto adapters =
+                enumerate_backend_adapters(config.backend.kind);
+            const auto found = std::ranges::find_if(
+                adapters, [&objective](const BackendAdapterInfo& adapter) {
+                    return backend_adapter_identity(adapter) ==
+                           objective.requested_device_identity;
+                });
+            if (found == adapters.end())
+                throw std::invalid_argument(
+                    "requested product device identity is unavailable");
+            config.backend.kind = found->kind;
+            config.backend.adapter_id = found->adapter_id;
+        }
+        selection = select_backend(config);
+    } catch (const std::exception&) {
+        throw ProductError(
+            ProductFailureCode::CapabilityNotApplicable,
+            "requested product backend, provider, or device is not applicable");
+    }
     auto memory_plan = make_memory_plan(
         archive, scene, config, selection, objective);
     auto renderer = std::make_unique<RenderSession>(
         RenderSession::create(config));
     renderer->load_scene(scene);
-    return PreparedRenderer{std::move(renderer), memory_plan};
+    ProductExecutionInfo execution;
+    execution.device_identity = backend_adapter_identity(selection.adapter);
+    execution.selection = selection;
+    execution.provider = 1;
+    return PreparedRenderer{std::move(renderer), memory_plan,
+                            std::move(execution)};
 }
 
 Identity frame_identity(const ProductFrame& frame) {
@@ -375,8 +414,9 @@ public:
         identities_.objective = objective_.identity;
         auto prepared = make_renderer(archive_, objective_);
         memory_plan_ = prepared.memory_plan;
+        execution_ = std::move(prepared.execution);
         identities_.plan = plan_identity(
-            identities_, objective_, memory_plan_);
+            identities_, objective_, memory_plan_, execution_);
         renderer_ = std::move(prepared.renderer);
         operation_.requested_samples = objective_.requested_samples;
         operation_.accepted_samples = objective_.requested_samples;
@@ -394,6 +434,10 @@ public:
         return memory_plan_;
     }
 
+    const ProductExecutionInfo& execution() const noexcept override {
+        return execution_;
+    }
+
     ProductOperationSnapshot operation() const noexcept override {
         std::scoped_lock lock(mutex_);
         return operation_;
@@ -406,9 +450,10 @@ public:
         archive_ = std::move(archive);
         renderer_ = std::move(prepared.renderer);
         memory_plan_ = prepared.memory_plan;
+        execution_ = std::move(prepared.execution);
         identities_.snapshot = snapshot_identity;
         identities_.plan = plan_identity(
-            identities_, objective_, memory_plan_);
+            identities_, objective_, memory_plan_, execution_);
         operation_ = {};
         operation_.requested_samples = objective_.requested_samples;
         operation_.accepted_samples = objective_.requested_samples;
@@ -539,6 +584,7 @@ private:
     ProductObjective objective_;
     ProductIdentitySet identities_;
     ProductMemoryPlan memory_plan_;
+    ProductExecutionInfo execution_;
     std::unique_ptr<RenderSession> renderer_;
     ProductOperationSnapshot operation_;
 };
@@ -570,6 +616,20 @@ Identity identity_from_hex(std::span<const char, 64> text) {
 Identity content_identity(std::span<const std::uint8_t> bytes) {
     const std::string digest = native_scene::sha256_hex(bytes);
     return identity_from_hex(std::span<const char, 64>(digest.data(), 64));
+}
+
+Identity backend_adapter_identity(const BackendAdapterInfo& adapter) {
+    std::vector<std::uint8_t> bytes;
+    constexpr std::string_view domain =
+        "UltraRender.ProductDeviceIdentity.v0";
+    bytes.insert(bytes.end(), domain.begin(), domain.end());
+    bytes.push_back(0);
+    append_bytes(bytes, adapter.kind);
+    append_bytes(bytes, adapter.vendor_id);
+    append_bytes(bytes, adapter.device_id);
+    bytes.insert(bytes.end(), adapter.adapter_id.begin(),
+                 adapter.adapter_id.end());
+    return content_identity(bytes);
 }
 
 std::unique_ptr<ProductJob> ProductJob::create(

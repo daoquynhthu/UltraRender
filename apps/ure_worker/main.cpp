@@ -20,6 +20,7 @@
 
 #include "local_transport.hpp"
 #include "runtime_client.hpp"
+#include "ure_payload_v1_generated.h"
 #include "ure_product_v0_generated.h"
 #include "ure_worker_v1_generated.h"
 #if defined(URE_WORKER_CONFORMANCE)
@@ -30,6 +31,7 @@ namespace ure::worker {
 namespace {
 
 namespace fb = ultrarender::contract::v1;
+namespace payload_fb = ultrarender::contract::v1;
 namespace product_fb = ultrarender::contract::preview::v0;
 
 inline constexpr std::uint64_t kTransportNamedPipe = UINT64_C(1) << 0U;
@@ -379,6 +381,25 @@ std::vector<std::uint8_t> product_response_payload(
     envelope.status->accepted_samples = status.accepted_samples;
     envelope.status->completed_samples = status.completed_samples;
     envelope.status->identities = product_identities(status);
+    envelope.status->execution =
+        std::make_unique<product_fb::ProductExecutionInfoT>();
+    auto &execution = *envelope.status->execution;
+    execution.backend = status.execution.backend;
+    execution.provider = status.execution.provider;
+    execution.runtime_state = status.execution.runtime_state;
+    execution.ordinal = status.execution.ordinal;
+    execution.device_identity.assign(
+        std::begin(status.execution.device_identity.bytes),
+        std::end(status.execution.device_identity.bytes));
+    execution.required_features = status.execution.required_features;
+    execution.selected_memory_budget_bytes =
+        status.execution.selected_memory_budget_bytes;
+    execution.total_memory_bytes = status.execution.total_memory_bytes;
+    execution.available_memory_bytes = status.execution.available_memory_bytes;
+    execution.name.assign(status.execution.name,
+                          status.execution.name_size);
+    execution.adapter_id.assign(status.execution.adapter_id,
+                                status.execution.adapter_id_size);
     if (artifact) {
         envelope.artifact =
             std::make_unique<product_fb::ProductArtifactManifestT>();
@@ -393,6 +414,55 @@ std::vector<std::uint8_t> product_response_payload(
     flatbuffers::FlatBufferBuilder builder;
     product_fb::FinishProductEnvelopeBuffer(
         builder, product_fb::CreateProductEnvelope(builder, &envelope));
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
+}
+
+bool device_inventory_request(std::span<const std::uint8_t> payload) {
+    if (payload.empty())
+        return false;
+    flatbuffers::Verifier verifier(payload.data(), payload.size(), 16, 64);
+    const auto *request =
+        flatbuffers::GetRoot<payload_fb::DeviceExecutionEnvelope>(
+            payload.data());
+    return request && request->Verify(verifier) &&
+           request->version_major() == 0 && request->version_minor() == 1 &&
+           (!request->devices() || request->devices()->empty());
+}
+
+std::vector<std::uint8_t> device_inventory_payload(
+    const std::vector<ure_device_descriptor_t> &devices) {
+    payload_fb::DeviceExecutionEnvelopeT envelope;
+    envelope.version_minor = 1;
+    envelope.devices.reserve(devices.size());
+    for (const auto &source : devices) {
+        auto descriptor = std::make_unique<payload_fb::DeviceDescriptorT>();
+        descriptor->backend = source.backend;
+        descriptor->provider = source.provider;
+        descriptor->runtime_state = source.runtime_state;
+        descriptor->ordinal = source.ordinal;
+        descriptor->device_identity.assign(
+            std::begin(source.device_identity.bytes),
+            std::end(source.device_identity.bytes));
+        descriptor->features = source.features;
+        descriptor->total_memory_bytes = source.total_memory_bytes;
+        descriptor->available_memory_bytes = source.available_memory_bytes;
+        descriptor->applicable_budget_bytes = source.applicable_budget_bytes;
+        descriptor->vendor_id = source.vendor_id;
+        descriptor->device_id = source.device_id;
+        descriptor->name.assign(source.name, source.name_size);
+        descriptor->adapter_id.assign(source.adapter_id,
+                                      source.adapter_id_size);
+        descriptor->driver_identity.assign(source.driver_identity,
+                                           source.driver_identity_size);
+        descriptor->compiler_identity.assign(source.compiler_identity,
+                                             source.compiler_identity_size);
+        envelope.devices.push_back(std::move(descriptor));
+    }
+    flatbuffers::FlatBufferBuilder builder;
+    const auto root = payload_fb::CreateDeviceExecutionEnvelope(
+        builder, &envelope);
+    builder.Finish(root);
     return {builder.GetBufferPointer(),
             builder.GetBufferPointer() + builder.GetSize()};
 }
@@ -608,7 +678,8 @@ int run_worker(const Arguments &arguments) {
             capability != URE_CAPABILITY_FRAME_LEASE &&
             capability != URE_CAPABILITY_NATIVE_SCENE &&
             capability != URE_CAPABILITY_RENDER_SESSION &&
-            capability != URE_CAPABILITY_PRODUCT_JOB)
+            capability != URE_CAPABILITY_PRODUCT_JOB &&
+            capability != URE_CAPABILITY_DEVICE_EXECUTION)
             return 27;
         if (std::find(required_capabilities.begin(), required_capabilities.end(),
                       capability) != required_capabilities.end())
@@ -645,7 +716,8 @@ int run_worker(const Arguments &arguments) {
                                capability == URE_CAPABILITY_FRAME_LEASE ||
                                capability == URE_CAPABILITY_NATIVE_SCENE ||
                                capability == URE_CAPABILITY_RENDER_SESSION ||
-                               capability == URE_CAPABILITY_PRODUCT_JOB;
+                               capability == URE_CAPABILITY_PRODUCT_JOB ||
+                               capability == URE_CAPABILITY_DEVICE_EXECUTION;
         if (supported &&
             !contains_capability(handshake->required_capabilities(), capability) &&
             std::find(selected.optional_capabilities.begin(),
@@ -739,6 +811,29 @@ int run_worker(const Arguments &arguments) {
                        URE_ERROR_DOMAIN_CORE, 317,
                        "product payload version is incompatible"};
             response.error = error_descriptor(failure);
+        } else if (request->operation_kind() ==
+                       URE_OPERATION_ENUMERATE_DEVICES &&
+                   request->payload_schema() == URE_PAYLOAD_DEVICE_EXECUTION &&
+                   request->payload_version_major() == 0 &&
+                   request->payload_version_minor() == 1) {
+            const std::span payload(request->payload()->data(),
+                                    request->payload()->size());
+            std::vector<ure_device_descriptor_t> devices;
+            if (!device_inventory_request(payload)) {
+                response.result = fb::ResultCode::MalformedData;
+                failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE,
+                           566, "device inventory request is malformed"};
+                response.error = error_descriptor(failure);
+            } else if (!runtime.enumerate_devices(devices, failure)) {
+                response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+            } else {
+                response.payload_schema = URE_PAYLOAD_DEVICE_EXECUTION;
+                response.payload_version_major = 0;
+                response.payload_version_minor = 1;
+                response.payload = device_inventory_payload(devices);
+                response.declared_payload_bytes = response.payload.size();
+            }
         } else if (request->operation_kind() == URE_OPERATION_REPLACE_SCENE &&
                    request->payload_schema() == URE_PAYLOAD_NATIVE_SCENE) {
             const std::span payload(request->payload()->data(),

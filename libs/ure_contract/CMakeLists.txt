@@ -15,6 +15,7 @@ foreach(source
     ${CMAKE_CURRENT_SOURCE_DIR}/src/scene_adapter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/scene_transaction.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/session_adapter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/device_execution_adapter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime_adapter.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/abi_core_1_0.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime_objects.hpp
@@ -44,6 +45,7 @@ add_library(ure_contract SHARED
     src/scene_adapter.cpp
     src/scene_transaction.cpp
     src/session_adapter.cpp
+    src/device_execution_adapter.cpp
     ultrarender_runtime_1.def)
 target_link_libraries(ure_contract PRIVATE ure_public ure_contract_schema ure_product ure_core ure_sceneio bcrypt)
 target_include_directories(ure_contract PRIVATE
@@ -73,6 +75,7 @@ add_library(ure_contract_conformance SHARED
     src/scene_adapter.cpp
     src/scene_transaction.cpp
     src/session_adapter.cpp
+    src/device_execution_adapter.cpp
     ultrarender_runtime_1.def)
 target_link_libraries(ure_contract_conformance PRIVATE ure_public ure_contract_schema ure_product ure_core ure_sceneio bcrypt)
 target_include_directories(ure_contract_conformance PRIVATE

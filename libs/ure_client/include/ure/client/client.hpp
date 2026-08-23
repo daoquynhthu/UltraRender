@@ -118,12 +118,46 @@ struct IdentitySet {
     std::array<std::uint8_t, 32> plan{};
 };
 
+struct DeviceInfo {
+    std::uint32_t backend{};
+    std::uint32_t provider{};
+    std::uint32_t runtime_state{};
+    std::uint32_t ordinal{};
+    std::array<std::uint8_t, 32> identity{};
+    std::uint64_t features{};
+    std::uint64_t total_memory_bytes{};
+    std::uint64_t available_memory_bytes{};
+    std::uint64_t applicable_budget_bytes{};
+    std::uint32_t vendor_id{};
+    std::uint32_t device_id{};
+    std::string name;
+    std::string adapter_id;
+    std::string driver_identity;
+    std::string compiler_identity;
+};
+
+struct ExecutionInfo {
+    std::uint32_t backend{};
+    std::uint32_t provider{};
+    std::uint32_t runtime_state{};
+    std::uint32_t ordinal{};
+    std::array<std::uint8_t, 32> device_identity{};
+    std::array<std::uint8_t, 32> plan_identity{};
+    std::uint64_t required_features{};
+    std::uint64_t selected_memory_budget_bytes{};
+    std::uint64_t total_memory_bytes{};
+    std::uint64_t available_memory_bytes{};
+    std::string name;
+    std::string adapter_id;
+};
+
 struct JobInfo {
     JobState state{JobState::Created};
     std::uint64_t requested_samples{};
     std::uint64_t accepted_samples{};
     std::uint64_t completed_samples{};
     IdentitySet identities;
+    ExecutionInfo execution;
 };
 
 struct FramePlane {
@@ -194,6 +228,7 @@ class Client {
     Client &operator=(const Client &) = delete;
 
     static Client connect(const ConnectionOptions &options);
+    std::vector<DeviceInfo> devices() const;
     Job create_job(const SceneInput &scene, const Objective &objective);
     TransportMode transport() const noexcept;
     explicit operator bool() const noexcept;

@@ -423,6 +423,17 @@ WorkerClient::request_product_version(std::uint16_t major,
     return impl_->exchange(request, error);
 }
 
+std::unique_ptr<fb::WorkerEnvelopeT> WorkerClient::request_device_inventory(
+    const std::vector<std::uint8_t> &payload, std::string &error) {
+    fb::WorkerEnvelopeT request;
+    request.message_kind = fb::MessageKind::OperationRequest;
+    request.operation_kind = URE_OPERATION_ENUMERATE_DEVICES;
+    request.payload_schema = URE_PAYLOAD_DEVICE_EXECUTION;
+    request.payload_version_minor = 1;
+    request.payload = payload;
+    return impl_->exchange(request, error);
+}
+
 std::unique_ptr<fb::WorkerEnvelopeT>
 WorkerClient::release_lease(std::uint64_t lease, std::string &error) {
     fb::WorkerEnvelopeT request;

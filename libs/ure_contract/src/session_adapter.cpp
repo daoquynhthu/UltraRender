@@ -14,8 +14,12 @@
 #include <string_view>
 #include <utility>
 
+#include <flatbuffers/verifier.h>
+
 #include <ure/native_scene_hash.hpp>
 #include <ure/product/product_service.hpp>
+
+#include "ure_payload_v1_generated.h"
 
 namespace ure::contract {
 namespace {
@@ -37,10 +41,46 @@ ProductErrorMapping map_product_error(
         return {URE_RESULT_MALFORMED_DATA, 542};
     case product::ProductFailureCode::MemoryNotApplicable:
         return {URE_RESULT_BUDGET_EXHAUSTED, 543};
+    case product::ProductFailureCode::CapabilityNotApplicable:
+        return {URE_RESULT_CAPABILITY_UNAVAILABLE, 547};
     case product::ProductFailureCode::WorkAccounting:
         return {URE_RESULT_INTERNAL, 544};
     }
     return {URE_RESULT_INTERNAL, 544};
+}
+
+BackendKind backend_kind(std::uint32_t value) {
+    if (value == URE_BACKEND_AUTO)
+        return BackendKind::Auto;
+    if (value == URE_BACKEND_CUDA)
+        return BackendKind::Cuda;
+    if (value == URE_BACKEND_VULKAN)
+        return BackendKind::Vulkan;
+    if (value == URE_BACKEND_D3D12)
+        return BackendKind::D3D12;
+    throw std::invalid_argument("unknown product backend identity");
+}
+
+std::uint32_t public_backend(BackendKind value) {
+    switch (value) {
+    case BackendKind::Cuda:
+        return URE_BACKEND_CUDA;
+    case BackendKind::Vulkan:
+        return URE_BACKEND_VULKAN;
+    case BackendKind::D3D12:
+        return URE_BACKEND_D3D12;
+    default:
+        return URE_BACKEND_AUTO;
+    }
+}
+
+template <std::size_t Size>
+std::uint32_t copy_text(char (&output)[Size], std::string_view text) noexcept {
+    const auto count = std::min(text.size(), Size);
+    std::memset(output, 0, Size);
+    if (count != 0)
+        std::memcpy(output, text.data(), count);
+    return static_cast<std::uint32_t>(count);
 }
 
 struct SessionObject final : Object {
@@ -80,6 +120,42 @@ Digest digest_from_hex(std::string_view text) {
         output[index] = static_cast<std::uint8_t>(
             nibble(text[index * 2]) * 16U + nibble(text[index * 2 + 1]));
     return output;
+}
+
+ure_result_t product_job_execution_info_impl(
+    ure_handle_t job_handle, ure_execution_info_t *info,
+    ure_handle_t *error) noexcept {
+    clear_error(error);
+    const auto session = handles().get<SessionObject>(
+        job_handle, ObjectType::Session);
+    if (!session || !session->job)
+        return make_error(URE_RESULT_INVALID_HANDLE, 563,
+                          "invalid product job execution handle", error);
+    if (!valid_output(info, URE_STRUCTURE_EXECUTION_INFO) ||
+        info->reserved[0] != 0 || info->reserved[1] != 0)
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 564,
+                          "invalid product execution output", error);
+    std::scoped_lock lock(session->mutex);
+    const auto &execution = session->job->execution();
+    const auto &adapter = execution.selection.adapter;
+    const auto &identities = session->job->identities();
+    info->backend = public_backend(adapter.kind);
+    info->provider = URE_PROVIDER_SELF_COMPUTE;
+    info->runtime_state = URE_RUNTIME_STATE_APPLICABLE;
+    info->ordinal = adapter.ordinal;
+    std::memcpy(info->device_identity.bytes,
+                execution.device_identity.data(),
+                execution.device_identity.size());
+    std::memcpy(info->plan_identity.bytes, identities.plan.data(),
+                identities.plan.size());
+    info->required_features = execution.selection.required_features;
+    info->selected_memory_budget_bytes =
+        execution.selection.memory_budget_bytes;
+    info->total_memory_bytes = adapter.memory.total_bytes;
+    info->available_memory_bytes = adapter.memory.available_bytes;
+    info->name_size = copy_text(info->name, adapter.name);
+    info->adapter_id_size = copy_text(info->adapter_id, adapter.adapter_id);
+    return URE_RESULT_SUCCESS;
 }
 
 Digest hash(std::span<const std::uint8_t> bytes) {
@@ -135,9 +211,15 @@ ure_result_t decode_objective(const ure_objective_envelope_t *objective,
         objective->memory_budget_bytes > UINT64_C(8589934592) ||
         objective->payload.size > UINT64_C(1048576) ||
         (objective->payload.size != 0 && !objective->payload.data) ||
-        (!conformance_device_loss &&
-         (objective->payload_schema != 0 || objective->payload_version_major != 0 ||
+        (!conformance_device_loss && objective->payload_schema != 0 &&
+         objective->payload_schema != URE_PAYLOAD_DEVICE_EXECUTION) ||
+        (objective->payload_schema == 0 &&
+         (objective->payload_version_major != 0 ||
           objective->payload_version_minor != 0)) ||
+        (objective->payload_schema == URE_PAYLOAD_DEVICE_EXECUTION &&
+         (objective->payload_version_major != 0 ||
+          objective->payload_version_minor != 1 ||
+          objective->payload.size == 0)) ||
         (conformance_device_loss && objective->payload.size != 0))
         return URE_RESULT_INVALID_ARGUMENT;
     if (objective->payload.size == 0) {
@@ -190,6 +272,35 @@ ure_result_t decode_objective(const ure_objective_envelope_t *objective,
             objective->output_semantics,
             objective->output_semantics + objective->output_count);
     output.force_device_loss = conformance_device_loss;
+    if (objective->payload_schema == URE_PAYLOAD_DEVICE_EXECUTION) {
+        flatbuffers::Verifier verifier(objective->payload.data,
+                                       objective->payload.size, 32, 4096);
+        const auto *selection = flatbuffers::GetRoot<
+            ultrarender::contract::v1::DeviceSelection>(
+            objective->payload.data);
+        if (!selection || !selection->Verify(verifier) ||
+            selection->version_major() != 0 ||
+            selection->version_minor() != 1 ||
+            selection->provider() != URE_PROVIDER_SELF_COMPUTE ||
+            (selection->device_identity() &&
+             selection->device_identity()->size() != 32)) {
+            message = "device selection payload is malformed or unsupported";
+            return URE_RESULT_INVALID_ARGUMENT;
+        }
+        try {
+            output.backend = backend_kind(selection->backend());
+        } catch (const std::invalid_argument&) {
+            message = "device selection backend is unknown";
+            return URE_RESULT_INVALID_ARGUMENT;
+        }
+        output.required_features = selection->required_features();
+        if (selection->device_identity()) {
+            std::copy(selection->device_identity()->begin(),
+                      selection->device_identity()->end(),
+                      output.requested_device_identity.begin());
+            output.has_requested_device = true;
+        }
+    }
     return URE_RESULT_SUCCESS;
 }
 
@@ -592,6 +703,10 @@ ure_result_t start_impl(ure_handle_t session_handle, ure_handle_t *output,
     operation->diagnostic.snapshot_identity = identities.snapshot;
     operation->diagnostic.objective_identity = identities.objective;
     operation->diagnostic.plan_identity = identities.plan;
+    const auto &execution = session->job->execution();
+    operation->diagnostic.backend =
+        public_backend(execution.selection.adapter.kind);
+    operation->diagnostic.device_identity = execution.device_identity;
     *output = handles().insert(operation);
     if (!handles().retain(*output, ObjectType::Operation))
         return make_error(URE_RESULT_INTERNAL, 518,
@@ -940,6 +1055,12 @@ ure_result_t URE_CALL get_product_artifact_manifest(
     });
 }
 
+}
+
+ure_result_t product_job_execution_info(
+    ure_handle_t job, ure_execution_info_t *info,
+    ure_handle_t *error) noexcept {
+    return product_job_execution_info_impl(job, info, error);
 }
 
 const ure_session_interface_t &session_interface() noexcept {

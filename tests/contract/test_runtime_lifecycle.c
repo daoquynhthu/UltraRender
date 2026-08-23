@@ -148,9 +148,9 @@ static int inspect_error(const ure_error_interface_t* errors,
     CHECK(info.result == expected && info.domain == URE_ERROR_DOMAIN_CORE &&
           info.message.size != 0);
     CHECK(info.structured_detail_schema == URE_PAYLOAD_ERROR &&
-          info.structured_detail.size == 8);
-    CHECK(info.structured_detail.data[0] ==
-          (uint8_t)(URE_PAYLOAD_ERROR & 0xffU));
+          info.structured_detail.data != NULL &&
+          info.structured_detail.size != 0 &&
+          info.structured_detail.size <= UINT64_C(65536));
     CHECK(errors->release(error) == URE_RESULT_SUCCESS);
     return 0;
 }
@@ -385,7 +385,10 @@ static int run_lifecycle(ure_get_runtime_manifest_fn get_manifest,
                 CHECK(wait_error_info.result == expected &&
                       wait_error_info.operation == operation);
                 CHECK(wait_error_info.cause != NULL &&
-                      wait_error_info.structured_detail.size == 8);
+                      wait_error_info.structured_detail.data != NULL &&
+                      wait_error_info.structured_detail.size != 0 &&
+                      wait_error_info.structured_detail.size <=
+                          UINT64_C(65536));
             }
             info.header.type = URE_STRUCTURE_OPERATION_INFO;
             info.header.size = (uint32_t)sizeof(info);

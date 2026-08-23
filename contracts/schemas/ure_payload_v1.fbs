@@ -68,6 +68,39 @@ table ErrorDetail {
   cause_depth:uint (id: 15);
 }
 
+table DeviceSelection {
+  version_major:ushort (id: 0);
+  version_minor:ushort (id: 1);
+  backend:uint (id: 2);
+  provider:uint (id: 3);
+  device_identity:[ubyte] (id: 4);
+  required_features:ulong (id: 5);
+}
+
+table DeviceDescriptor {
+  backend:uint (id: 0);
+  provider:uint (id: 1);
+  runtime_state:uint (id: 2);
+  ordinal:uint (id: 3);
+  device_identity:[ubyte] (id: 4);
+  features:ulong (id: 5);
+  total_memory_bytes:ulong (id: 6);
+  available_memory_bytes:ulong (id: 7);
+  applicable_budget_bytes:ulong (id: 8);
+  vendor_id:uint (id: 9);
+  device_id:uint (id: 10);
+  name:string (id: 11);
+  adapter_id:string (id: 12);
+  driver_identity:string (id: 13);
+  compiler_identity:string (id: 14);
+}
+
+table DeviceExecutionEnvelope {
+  version_major:ushort (id: 0);
+  version_minor:ushort (id: 1);
+  devices:[DeviceDescriptor] (id: 2);
+}
+
 table OperationDescriptor {
   id:ulong (id: 0);
   kind:uint (id: 1);

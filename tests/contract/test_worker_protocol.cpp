@@ -315,6 +315,15 @@ int run(const std::filesystem::path &product_worker,
           incompatible_product->error->correlation_identity.size() == 32 &&
           incompatible_product->error->retryability == 1 &&
           !incompatible_product->error->recovery_hint.empty());
+    auto malformed_device =
+        product.request_device_inventory({0}, error);
+    CHECK_ERROR(malformed_device);
+    CHECK(malformed_device->result == fb::ResultCode::MalformedData &&
+          malformed_device->error &&
+          malformed_device->error->detail == 566 &&
+          malformed_device->error->structured_detail_schema ==
+              URE_PAYLOAD_ERROR &&
+          malformed_device->error->correlation_identity.size() == 32);
     auto unavailable = product.request_frame(2, 2, 7, error);
     CHECK_ERROR(unavailable);
     CHECK(unavailable->message_kind == fb::MessageKind::OperationResponse &&

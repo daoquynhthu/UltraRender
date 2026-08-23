@@ -1,0 +1,11 @@
+# Product Device/Execution extension 0.1
+
+The Device/Execution extension is an exact-build `UnstableExtension`. It exposes product-executable adapter inventory and the execution selected for a ProductJob without adding fields or functions to Core ABI 1.0. It creates no cross-release compatibility promise.
+
+The generated C surface is `ure_device_execution_interface_t`. `enumerate` and `get_descriptor` return backend, provider, runtime state, stable device identity, feature bits, memory observations and bounded adapter metadata. `get_job_execution` returns the actual selected device and plan identity for a compiled ProductJob. The maintained C++ client exposes the same data through `Client::devices()` and `JobInfo::execution`; Worker operation `URE_OPERATION_ENUMERATE_DEVICES` carries the same `DeviceExecutionEnvelope` 0.1 payload.
+
+Runtime state and product applicability are distinct. `Available` confirms that an adapter was discovered. `Applicable` confirms that the current complete-scene product route can execute on it. During PRV.1R the CUDA self-compute route is applicable; a discovered Vulkan adapter remains available but is not silently substituted for complete-scene CUDA execution. Absence from this inventory means the adapter is not currently exposed by the product runtime, not that a lower-level component never implemented it.
+
+`DeviceSelection` is an objective payload with schema `URE_PAYLOAD_DEVICE_EXECUTION`, version 0.1. It can constrain backend, self-compute provider, required features and a 32-byte stable device identity. The identity is derived from backend, vendor, device and adapter identity; ordinal, driver version and current memory availability do not change it. Selection is validated before GPU allocation. Unsupported or missing constraints return Core `CapabilityUnavailable` with `DeviceNotApplicable` detail rather than falling through to another backend or returning `Internal`.
+
+The Product plan identity includes both the requested constraint and actual selected execution. Device identity, backend, provider, features and memory budget are available through Direct and Worker transports and are intended to be retained in product evidence. Driver/compiler identities and changing available-memory observations remain evidence metadata rather than stable selection keys.

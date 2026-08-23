@@ -77,6 +77,8 @@ Diagnostic messages and payloads are bounded, redacted and versioned. They must 
 
 The Preview architecture has one semantic execution service:
 
+Product adapter discovery and selection use the independent exact-build Device/Execution 0.1 extension documented in `Product_Device_Execution_Extension.md`. It reports runtime state and actual ProductJob execution without expanding the frozen Core 1.0 lifecycle grammar.
+
 ```text
 Human client / SDK client / Hydra adapter / Python adapter
                            |
@@ -101,7 +103,7 @@ Human client / SDK client / Hydra adapter / Python adapter
                     backend executors
 ```
 
-PRV.1 implemented this spine for the bounded native-scene color workflow. `ure_client` supplies explicit Direct and Worker transports, and CLI render uses only this client and defaults to Worker. PRV.1R evolves the exact-build ProductJob extension from 0.1 to 0.2 while leaving Core ABI 1.0 unchanged. The retained 64×64 frame-byte and manifest parity proves routing and transport structure, not trustworthy ProductE2E: PRV.1R must close progressive feedback, diagnostics, device/sample semantics, external integration and tiered image validation before complete archive realization begins. Complete archive realization, scene tooling through the runtime, typed measurements, reconstruction and official artifact publication remain subsequent PRV phases.
+PRV.1 implemented this spine for the bounded native-scene color workflow. `ure_client` supplies explicit Direct and Worker transports, and CLI render uses only this client and defaults to Worker. PRV.1R evolves the exact-build ProductJob extension from 0.1 to 0.2 while leaving Core ABI 1.0 unchanged. The common diagnostic envelope, sample precedence and Device/Execution 0.1 semantics are now implemented, but the retained 64×64 frame-byte and manifest parity still proves only routing and transport structure. PRV.1R must close progressive feedback, external integration and tiered image validation before complete archive realization begins. Complete archive realization, scene tooling through the runtime, typed measurements, reconstruction and official artifact publication remain subsequent PRV phases.
 
 `ure_product` is an internal C++ product-orchestration module. It owns product jobs, scene realization, immutable snapshots, execution planning, measurement production, reconstruction, checkpointing and artifact publication. It may depend on renderer modules; renderer modules must not depend on clients, CLI or Worker transport.
 

@@ -13,4 +13,6 @@ Recovery is determined by `retryability`:
 
 `BudgetExhausted` with `MemoryNotApplicable` is a pre-execution applicability result. Increase the explicit budget or select a declared semantically equivalent device/plan; do not disable spectral, estimator, output or reconstruction semantics silently. `BudgetExhausted` with `WallBudgetIncomplete` means accepted work was not completed and no complete artifact was published.
 
+`CapabilityUnavailable` with `DeviceNotApplicable` means the requested backend, provider, feature set or stable device identity cannot execute the product objective. Enumerate the Device/Execution 0.1 extension again, choose an `Applicable` descriptor, and compile a new job. `Available` means the adapter exists but does not imply that the current complete-scene product route can execute on it.
+
 Messages are bounded presentation text. Automation should branch on result/domain/detail and versioned structured detail, not match message strings. Absolute private paths, addresses, credentials and unfiltered vendor text are not part of the diagnostic contract.

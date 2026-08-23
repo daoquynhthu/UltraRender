@@ -316,13 +316,15 @@ ure_result_t create_instance_impl(const ure_instance_create_info_t *info, ure_ha
     bool scene_required = false;
     bool session_required = false;
     bool product_required = false;
+    bool device_execution_required = false;
     for (std::uint32_t index = 0; index < info->required_capability_count; ++index) {
         const std::uint32_t capability = info->required_capabilities[index];
         if (capability != URE_CAPABILITY_BOOTSTRAP && capability != URE_CAPABILITY_LIFECYCLE &&
             capability != URE_CAPABILITY_FRAME_LEASE &&
             capability != URE_CAPABILITY_NATIVE_SCENE &&
             capability != URE_CAPABILITY_RENDER_SESSION &&
-            capability != URE_CAPABILITY_PRODUCT_JOB) {
+            capability != URE_CAPABILITY_PRODUCT_JOB &&
+            capability != URE_CAPABILITY_DEVICE_EXECUTION) {
             return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 101,
                               "required capability is unavailable", error);
         }
@@ -330,6 +332,8 @@ ure_result_t create_instance_impl(const ure_instance_create_info_t *info, ure_ha
         if (capability == URE_CAPABILITY_NATIVE_SCENE) scene_required = true;
         if (capability == URE_CAPABILITY_RENDER_SESSION) session_required = true;
         if (capability == URE_CAPABILITY_PRODUCT_JOB) product_required = true;
+        if (capability == URE_CAPABILITY_DEVICE_EXECUTION)
+            device_execution_required = true;
     }
     if (session_required && (!frame_required || !scene_required))
         return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 101,
@@ -338,6 +342,8 @@ ure_result_t create_instance_impl(const ure_instance_create_info_t *info, ure_ha
         (!frame_required || !scene_required || !session_required))
         return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 101,
                           "product job dependencies were not requested", error);
+    if (product_required)
+        device_execution_required = true;
     try {
         auto instance = std::make_shared<InstanceObject>();
         instance->type = ObjectType::Instance;
@@ -347,6 +353,7 @@ ure_result_t create_instance_impl(const ure_instance_create_info_t *info, ure_ha
         instance->scene_enabled = scene_required;
         instance->session_enabled = session_required;
         instance->product_enabled = product_required;
+        instance->device_execution_enabled = device_execution_required;
         if (frame_budget) {
             instance->max_retained_frames = frame_budget->max_retained_frames;
             instance->max_retained_bytes = frame_budget->max_retained_bytes;
@@ -511,14 +518,14 @@ ure_result_t query_capability_impl(ure_handle_t instance, const ure_capability_q
     if (query->capability_id == URE_CAPABILITY_PRODUCT_JOB) {
         static constexpr std::uint32_t product_dependencies[]{
             URE_CAPABILITY_FRAME_LEASE, URE_CAPABILITY_NATIVE_SCENE,
-            URE_CAPABILITY_RENDER_SESSION};
+            URE_CAPABILITY_RENDER_SESSION, URE_CAPABILITY_DEVICE_EXECUTION};
         descriptor->version_major = 0;
         descriptor->version_minor = 2;
         descriptor->stability = URE_STABILITY_UNSTABLE_EXTENSION;
         descriptor->maturity = URE_MATURITY_EXPERIMENTAL;
         descriptor->runtime_state = URE_RUNTIME_STATE_AVAILABLE;
         descriptor->dependencies = product_dependencies;
-        descriptor->dependency_count = 3;
+        descriptor->dependency_count = 4;
         {
             std::scoped_lock lock(object->mutex);
             if (query->required || query->request_enable) {
@@ -527,8 +534,32 @@ ure_result_t query_capability_impl(ure_handle_t instance, const ure_capability_q
                     return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 110,
                                       "product job dependencies are not enabled", error);
                 object->product_enabled = true;
+                object->device_execution_enabled = true;
             }
             descriptor->enabled = object->product_enabled ? 1U : 0U;
+            descriptor->applicable = descriptor->enabled;
+            descriptor->runtime_state = descriptor->enabled
+                                            ? URE_RUNTIME_STATE_APPLICABLE
+                                            : URE_RUNTIME_STATE_AVAILABLE;
+        }
+        return URE_RESULT_SUCCESS;
+    }
+    if (query->capability_id == URE_CAPABILITY_DEVICE_EXECUTION) {
+        static constexpr std::uint32_t device_dependencies[]{
+            URE_CAPABILITY_LIFECYCLE};
+        descriptor->version_major = 0;
+        descriptor->version_minor = 1;
+        descriptor->stability = URE_STABILITY_UNSTABLE_EXTENSION;
+        descriptor->maturity = URE_MATURITY_EXPERIMENTAL;
+        descriptor->runtime_state = URE_RUNTIME_STATE_AVAILABLE;
+        descriptor->dependencies = device_dependencies;
+        descriptor->dependency_count = 1;
+        {
+            std::scoped_lock lock(object->mutex);
+            if (query->required || query->request_enable)
+                object->device_execution_enabled = true;
+            descriptor->enabled =
+                object->device_execution_enabled ? 1U : 0U;
             descriptor->applicable = descriptor->enabled;
             descriptor->runtime_state = descriptor->enabled
                                             ? URE_RUNTIME_STATE_APPLICABLE

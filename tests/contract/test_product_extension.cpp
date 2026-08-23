@@ -1,15 +1,20 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <span>
 #include <string>
+#include <vector>
 
 #include <windows.h>
+#include <bcrypt.h>
 
+#include <flatbuffers/flatbuffers.h>
 #include <flatbuffers/verifier.h>
 #include <ultrarender/ure_loader.h>
 
@@ -37,6 +42,43 @@ bool digest_nonzero(const ure_digest256_t &digest) {
 bool digest_equal(const ure_digest256_t &left,
                   const ure_digest256_t &right) {
     return std::memcmp(left.bytes, right.bytes, sizeof(left.bytes)) == 0;
+}
+
+std::array<std::uint8_t, 32>
+sha256(std::span<const std::uint8_t> bytes) {
+    BCRYPT_ALG_HANDLE algorithm{};
+    BCRYPT_HASH_HANDLE hash{};
+    std::array<std::uint8_t, 32> result{};
+    if (BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM,
+                                    nullptr, 0) < 0 ||
+        BCryptCreateHash(algorithm, &hash, nullptr, 0, nullptr, 0, 0) < 0 ||
+        BCryptHashData(hash, const_cast<PUCHAR>(bytes.data()),
+                       static_cast<ULONG>(bytes.size()), 0) < 0 ||
+        BCryptFinishHash(hash, result.data(),
+                         static_cast<ULONG>(result.size()), 0) < 0) {
+        result.fill(0);
+    }
+    if (hash)
+        BCryptDestroyHash(hash);
+    if (algorithm)
+        BCryptCloseAlgorithmProvider(algorithm, 0);
+    return result;
+}
+
+std::vector<std::uint8_t>
+device_selection(std::uint32_t backend,
+                 const std::array<std::uint8_t, 32> &identity) {
+    ultrarender::contract::v1::DeviceSelectionT selection;
+    selection.version_minor = 1;
+    selection.backend = backend;
+    selection.provider = URE_PROVIDER_SELF_COMPUTE;
+    selection.device_identity.assign(identity.begin(), identity.end());
+    flatbuffers::FlatBufferBuilder builder;
+    const auto root = ultrarender::contract::v1::CreateDeviceSelection(
+        builder, &selection);
+    builder.Finish(root);
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
 }
 
 const ultrarender::contract::v1::ErrorDetail *
@@ -112,6 +154,8 @@ int main(int argc, char **argv) {
     constexpr std::uint8_t frame_id[16] URE_INTERFACE_FRAME_UUID_BYTES;
     constexpr std::uint8_t scene_id[16] URE_INTERFACE_SCENE_UUID_BYTES;
     constexpr std::uint8_t product_id[16] URE_INTERFACE_PRODUCT_JOB_UUID_BYTES;
+    constexpr std::uint8_t device_execution_id[16]
+        URE_INTERFACE_DEVICE_EXECUTION_UUID_BYTES;
     const auto *runtime = query_table<ure_runtime_interface_t>(query, runtime_id, 1, 0);
     const auto *instances = query_table<ure_instance_interface_t>(query, instance_id, 1, 0);
     const auto *errors = query_table<ure_error_interface_t>(query, error_id, 1, 0);
@@ -119,7 +163,11 @@ int main(int argc, char **argv) {
     const auto *frames = query_table<ure_frame_interface_t>(query, frame_id, 1, 0);
     const auto *scenes = query_table<ure_scene_interface_t>(query, scene_id, 1, 0);
     const auto *products = query_table<ure_product_job_interface_t>(query, product_id, 0, 2);
-    check(runtime && instances && errors && operations && frames && scenes && products,
+    const auto *device_execution =
+        query_table<ure_device_execution_interface_t>(
+            query, device_execution_id, 0, 1);
+    check(runtime && instances && errors && operations && frames && scenes &&
+              products && device_execution,
           "required interface query failed");
 
     ure_interface_query_t wrong_version{};
@@ -133,7 +181,8 @@ int main(int argc, char **argv) {
     check(query(&wrong_version, &wrong_response, nullptr) ==
               URE_RESULT_INCOMPATIBLE_VERSION,
           "extension accepted an incompatible interface version");
-    if (!runtime || !instances || !errors || !operations || !frames || !scenes || !products) {
+    if (!runtime || !instances || !errors || !operations || !frames ||
+        !scenes || !products || !device_execution) {
         FreeLibrary(module);
         return 1;
     }
@@ -141,7 +190,7 @@ int main(int argc, char **argv) {
     constexpr std::uint32_t capabilities[]{
         URE_CAPABILITY_BOOTSTRAP, URE_CAPABILITY_LIFECYCLE,
         URE_CAPABILITY_FRAME_LEASE, URE_CAPABILITY_NATIVE_SCENE,
-        URE_CAPABILITY_RENDER_SESSION};
+        URE_CAPABILITY_RENDER_SESSION, URE_CAPABILITY_DEVICE_EXECUTION};
     ure_instance_frame_budget_t frame_budget{};
     frame_budget.header = {URE_STRUCTURE_INSTANCE_FRAME_BUDGET,
                            sizeof(frame_budget), nullptr};
@@ -176,6 +225,48 @@ int main(int argc, char **argv) {
                                       nullptr) == URE_RESULT_SUCCESS &&
               descriptor.enabled == 1 && descriptor.applicable == 1,
           "product capability enablement failed");
+    capability_query = {};
+    capability_query.header = {URE_STRUCTURE_CAPABILITY_QUERY,
+                               sizeof(capability_query), nullptr};
+    capability_query.capability_id = URE_CAPABILITY_DEVICE_EXECUTION;
+    descriptor = {};
+    descriptor.header = {URE_STRUCTURE_CAPABILITY_DESCRIPTOR,
+                         sizeof(descriptor), nullptr};
+    check(instances->query_capability(instance, &capability_query, &descriptor,
+                                      nullptr) == URE_RESULT_SUCCESS &&
+              descriptor.version_major == 0 && descriptor.version_minor == 1 &&
+              descriptor.stability == URE_STABILITY_UNSTABLE_EXTENSION &&
+              descriptor.enabled == 1 && descriptor.applicable == 1,
+          "device execution capability discovery is invalid");
+    std::uint32_t device_count{};
+    check(device_execution->enumerate(instance, &device_count, nullptr) ==
+                  URE_RESULT_SUCCESS &&
+              device_count != 0 && device_count <= 64,
+          "device inventory is empty or unbounded");
+    ure_device_descriptor_t selected_device{};
+    bool selected{};
+    for (std::uint32_t index = 0; index < device_count; ++index) {
+        ure_device_descriptor_t candidate{};
+        candidate.header = {URE_STRUCTURE_DEVICE_DESCRIPTOR,
+                            sizeof(candidate), nullptr};
+        check(device_execution->get_descriptor(instance, index, &candidate,
+                                                nullptr) == URE_RESULT_SUCCESS,
+              "device descriptor query failed");
+        if (candidate.backend == URE_BACKEND_CUDA &&
+            candidate.runtime_state == URE_RUNTIME_STATE_APPLICABLE) {
+            selected_device = candidate;
+            selected = true;
+        }
+    }
+    check(selected && digest_nonzero(selected_device.device_identity) &&
+              selected_device.provider == URE_PROVIDER_SELF_COMPUTE &&
+              selected_device.total_memory_bytes != 0 &&
+              selected_device.available_memory_bytes <=
+                  selected_device.total_memory_bytes &&
+              selected_device.applicable_budget_bytes <=
+                  selected_device.total_memory_bytes &&
+              selected_device.name_size != 0,
+          "applicable CUDA device descriptor is invalid");
 
     const std::string scene_path =
         std::filesystem::path(argv[2]).generic_string();
@@ -211,6 +302,43 @@ int main(int argc, char **argv) {
     objective.output_count = 1;
     objective.output_semantics = &color_output;
     objective.sample_budget = 2;
+    std::array<std::uint8_t, 32> missing_device{};
+    missing_device.fill(0xff);
+    auto selection_payload =
+        device_selection(URE_BACKEND_CUDA, missing_device);
+    objective.payload_schema = URE_PAYLOAD_DEVICE_EXECUTION;
+    objective.payload_version_minor = 1;
+    objective.payload = {selection_payload.data(), selection_payload.size()};
+    auto selection_digest = sha256(selection_payload);
+    std::copy(selection_digest.begin(), selection_digest.end(),
+              objective.payload_digest.bytes);
+    ure_handle_t device_error{};
+    ure_handle_t device_job{};
+    check(products->create(instance, scene, &objective, &device_job,
+                           &device_error) ==
+                  URE_RESULT_CAPABILITY_UNAVAILABLE &&
+              !device_job && device_error,
+          "unknown device constraint was not rejected before allocation");
+    ure_error_info_t device_error_info{};
+    device_error_info.header = {URE_STRUCTURE_ERROR_INFO,
+                                sizeof(device_error_info), nullptr};
+    check(device_error &&
+              errors->get_info(device_error, &device_error_info) ==
+                  URE_RESULT_SUCCESS &&
+              device_error_info.result == URE_RESULT_CAPABILITY_UNAVAILABLE &&
+              device_error_info.detail == 547,
+          "device applicability failure lost its public classification");
+    if (device_error)
+        errors->release(device_error);
+    std::array<std::uint8_t, 32> selected_identity{};
+    std::copy(std::begin(selected_device.device_identity.bytes),
+              std::end(selected_device.device_identity.bytes),
+              selected_identity.begin());
+    selection_payload = device_selection(URE_BACKEND_CUDA, selected_identity);
+    objective.payload = {selection_payload.data(), selection_payload.size()};
+    selection_digest = sha256(selection_payload);
+    std::copy(selection_digest.begin(), selection_digest.end(),
+              objective.payload_digest.bytes);
     objective.memory_budget_bytes = UINT64_C(1048576);
     ure_handle_t memory_error{};
     ure_handle_t memory_job{};
@@ -257,6 +385,19 @@ int main(int argc, char **argv) {
               digest_nonzero(info.objective_identity) &&
               digest_nonzero(info.plan_identity),
           "initial product identity or accounting is invalid");
+    ure_execution_info_t execution{};
+    execution.header = {URE_STRUCTURE_EXECUTION_INFO, sizeof(execution),
+                        nullptr};
+    check(device_execution->get_job_execution(job, &execution, nullptr) ==
+                  URE_RESULT_SUCCESS &&
+              execution.backend == URE_BACKEND_CUDA &&
+              execution.provider == URE_PROVIDER_SELF_COMPUTE &&
+              execution.runtime_state == URE_RUNTIME_STATE_APPLICABLE &&
+              digest_equal(execution.device_identity,
+                           selected_device.device_identity) &&
+              digest_equal(execution.plan_identity, info.plan_identity) &&
+              execution.name_size != 0,
+          "selected product execution identity is invalid");
     ure_product_artifact_manifest_t artifact{};
     artifact.header = {URE_STRUCTURE_PRODUCT_ARTIFACT_MANIFEST,
                        sizeof(artifact), nullptr};

@@ -96,6 +96,13 @@ Client Client::connect(const ConnectionOptions &options) {
                                          std::move(transport)));
 }
 
+std::vector<DeviceInfo> Client::devices() const {
+    if (!impl_)
+        detail::throw_error(URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE, 8,
+                            "client is not connected");
+    return impl_->transport_->devices();
+}
+
 Job Client::create_job(const SceneInput &scene, const Objective &objective) {
     if (!impl_)
         detail::throw_error(URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE, 6,

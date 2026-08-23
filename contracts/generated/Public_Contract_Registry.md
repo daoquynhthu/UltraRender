@@ -2,7 +2,7 @@
 
 This generated reference freezes the Core ABI 1.x and Worker Protocol 1.x identity space. Extension maturity remains independent.
 
-Registry digest: `62501eff808502857828856d4a83f4a9be3322725747d2cb1e12343d6ef06c56`
+Registry digest: `3ce8e0b7259e609de4c3487955ff31fa0f3e1cb7e89a41b50c767de28e9d37b1`
 
 | Registry ID | Kind | Canonical name | Stability | Maturity | Since | Default | Dependencies |
 |---:|---|---|---|---|---|---|---|
@@ -190,6 +190,18 @@ Registry digest: `62501eff808502857828856d4a83f4a9be3322725747d2cb1e12343d6ef06c
 |2147483689|Semantic|`ure.preview.operation.start_product_job`|UnstableExtension|Experimental|1.0.0|disabled|2147483682, 2147483683|
 |2147483690|Semantic|`ure.preview.operation.cancel_product_job`|UnstableExtension|Experimental|1.0.0|disabled|2147483682, 2147483683|
 |2147483691|Semantic|`ure.preview.operation.acquire_product_artifact`|UnstableExtension|Experimental|1.0.0|disabled|2147483682, 2147483683|
+|2147483692|Capability|`ure.preview.capability.device_execution`|UnstableExtension|Experimental|1.0.0|disabled|301|
+|2147483693|PayloadSchema|`ure.preview.payload.device_execution`|UnstableExtension|Experimental|1.0.0|disabled|2147483692|
+|2147483694|Structure|`ure.preview.structure.device_descriptor`|UnstableExtension|Experimental|1.0.0|disabled|2, 4, 27, 2147483692|
+|2147483695|Structure|`ure.preview.structure.execution_info`|UnstableExtension|Experimental|1.0.0|disabled|2, 4, 27, 2147483692|
+|2147483696|Structure|`ure.preview.structure.device_execution_interface`|UnstableExtension|Experimental|1.0.0|disabled|13, 27, 2147483694, 2147483695, 2147483697|
+|2147483697|Interface|`ure.preview.interface.device_execution`|UnstableExtension|Experimental|1.0.0|disabled|2147483692, 2147483693|
+|2147483698|Semantic|`ure.preview.backend.auto`|UnstableExtension|Experimental|1.0.0|disabled|2147483692|
+|2147483699|Semantic|`ure.preview.backend.cuda`|UnstableExtension|Experimental|1.0.0|disabled|2147483692|
+|2147483700|Semantic|`ure.preview.backend.vulkan`|UnstableExtension|Experimental|1.0.0|disabled|2147483692|
+|2147483701|Semantic|`ure.preview.backend.d3d12`|UnstableExtension|Experimental|1.0.0|disabled|2147483692|
+|2147483702|Semantic|`ure.preview.provider.self_compute`|UnstableExtension|Experimental|1.0.0|disabled|2147483692|
+|2147483703|Semantic|`ure.preview.operation.enumerate_devices`|UnstableExtension|Experimental|1.0.0|disabled|2147483692, 2147483693|
 |4026531840|Semantic|`ure.private.mock.device_loss`|Private|NotApplicable|1.0.0|disabled|403|
 |4026531841|Semantic|`ure.private.mock.worker_crash`|Private|NotApplicable|1.0.0|disabled||
 |4026531842|Semantic|`ure.private.mock.event_gap`|Private|NotApplicable|1.0.0|disabled|402|

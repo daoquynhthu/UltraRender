@@ -529,6 +529,49 @@ typedef struct ure_product_artifact_manifest_t {
     uint64_t reserved[2];
 } ure_product_artifact_manifest_t;
 
+typedef struct ure_device_descriptor_t {
+    ure_output_header_t header;
+    uint32_t backend;
+    uint32_t provider;
+    uint32_t runtime_state;
+    uint32_t ordinal;
+    ure_digest256_t device_identity;
+    uint64_t features;
+    uint64_t total_memory_bytes;
+    uint64_t available_memory_bytes;
+    uint64_t applicable_budget_bytes;
+    uint32_t vendor_id;
+    uint32_t device_id;
+    uint32_t name_size;
+    uint32_t adapter_id_size;
+    uint32_t driver_identity_size;
+    uint32_t compiler_identity_size;
+    char name[128];
+    char adapter_id[128];
+    char driver_identity[128];
+    char compiler_identity[128];
+    uint64_t reserved[2];
+} ure_device_descriptor_t;
+
+typedef struct ure_execution_info_t {
+    ure_output_header_t header;
+    uint32_t backend;
+    uint32_t provider;
+    uint32_t runtime_state;
+    uint32_t ordinal;
+    ure_digest256_t device_identity;
+    ure_digest256_t plan_identity;
+    uint64_t required_features;
+    uint64_t selected_memory_budget_bytes;
+    uint64_t total_memory_bytes;
+    uint64_t available_memory_bytes;
+    uint32_t name_size;
+    uint32_t adapter_id_size;
+    char name[128];
+    char adapter_id[128];
+    uint64_t reserved[2];
+} ure_execution_info_t;
+
 typedef struct ure_runtime_interface_t {
     ure_interface_table_header_t header;
     ure_result_t (URE_CALL *create_instance)(
@@ -609,6 +652,13 @@ typedef struct ure_product_job_interface_t {
     ure_result_t (URE_CALL *acquire_frame)(ure_handle_t job, ure_handle_t *frame, ure_handle_t *error);
     ure_result_t (URE_CALL *get_artifact_manifest)(ure_handle_t job, ure_product_artifact_manifest_t *manifest, ure_handle_t *error);
 } ure_product_job_interface_t;
+
+typedef struct ure_device_execution_interface_t {
+    ure_interface_table_header_t header;
+    ure_result_t (URE_CALL *enumerate)(ure_handle_t instance, uint32_t *count, ure_handle_t *error);
+    ure_result_t (URE_CALL *get_descriptor)(ure_handle_t instance, uint32_t index, ure_device_descriptor_t *descriptor, ure_handle_t *error);
+    ure_result_t (URE_CALL *get_job_execution)(ure_handle_t job, ure_execution_info_t *info, ure_handle_t *error);
+} ure_device_execution_interface_t;
 
 typedef struct ure_session_interface_t {
     ure_interface_table_header_t header;

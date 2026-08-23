@@ -1,7 +1,7 @@
 {
   "canonical_registry": {
     "path": "registry/public_contract_registry.canonical.json",
-    "sha256": "e3e05c4b88040b112ad97abca1aa85c26fe562f4ec7b7cd60b125fc4a19d0932"
+    "sha256": "c633782ade244e9a346efd22d39139f587a631c2009003d979ee005a42eeb053"
   },
   "compatibility_promise": "Core ABI 1.x and Worker Protocol 1.x within the declared support window",
   "core_abi": {
@@ -28,14 +28,14 @@
   "public_header_language": "C11",
   "publication_state": "Stable",
   "registry_canonicalization": "RFC8785 restricted to integers and decimal strings",
-  "registry_digest": "62501eff808502857828856d4a83f4a9be3322725747d2cb1e12343d6ef06c56",
-  "registry_entry_count": 192,
+  "registry_digest": "3ce8e0b7259e609de4c3487955ff31fa0f3e1cb7e89a41b50c767de28e9d37b1",
+  "registry_entry_count": 204,
   "schema": "ure.public.runtime-manifest/1.0",
   "schema_compiler": "flatc version 25.12.19",
   "schemas": [
     {
       "path": "schemas/ure_payload_v1.fbs",
-      "sha256": "1680a48080c9c603a9a48005f8566d82432dfac02c16966ddf466a72ae26b9b4"
+      "sha256": "96d6093f421e02de31fb034164d0bd9b7a54d3864b404293f37f271f7e0459b3"
     },
     {
       "path": "schemas/ure_frame_v1.fbs",
@@ -51,7 +51,7 @@
     },
     {
       "path": "schemas/ure_product_v0.fbs",
-      "sha256": "9989a27b401ee13a6750e4f58d829574fd1d18e4b161dce0c755c340ab5374d2"
+      "sha256": "8dcc1f5fd6081f35cf10bfef14740461ad9e693951ab4b411267918ca4c4bfa3"
     }
   ],
   "version": "1.0.0",

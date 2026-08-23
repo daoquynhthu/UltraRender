@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "client_internal.hpp"
+#include "ure_payload_v1_generated.h"
 #include "ure_product_v0_generated.h"
 #include "ure_worker_v1_generated.h"
 
@@ -28,6 +29,7 @@ namespace ure::client::detail {
 namespace {
 
 namespace fb = ultrarender::contract::v1;
+namespace payload_fb = ultrarender::contract::v1;
 namespace product_fb = ultrarender::contract::preview::v0;
 
 inline constexpr std::uint32_t kMaximumControlBytes = 1024U * 1024U;
@@ -141,6 +143,17 @@ product_payload(product_fb::ProductMessageKind kind, std::uint64_t scene_id,
             builder.GetBufferPointer() + builder.GetSize()};
 }
 
+std::vector<std::uint8_t> device_inventory_request() {
+    payload_fb::DeviceExecutionEnvelopeT envelope;
+    envelope.version_minor = 1;
+    flatbuffers::FlatBufferBuilder builder;
+    const auto root = payload_fb::CreateDeviceExecutionEnvelope(
+        builder, &envelope);
+    builder.Finish(root);
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
+}
+
 bool shared_digest(const std::uint8_t *data, std::uint64_t size,
                    std::array<std::uint8_t, 32> &output) {
     BCRYPT_ALG_HANDLE algorithm{};
@@ -234,7 +247,9 @@ JobInfo parse_status(const product_fb::ProductJobStatus &status,
         !status.identities()->objective() ||
         status.identities()->objective()->size() != 32 ||
         !status.identities()->plan() ||
-        status.identities()->plan()->size() != 32)
+        status.identities()->plan()->size() != 32 || !status.execution() ||
+        !status.execution()->device_identity() ||
+        status.execution()->device_identity()->size() != 32)
         throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 30,
                     "worker product status is malformed");
     JobInfo result;
@@ -252,6 +267,24 @@ JobInfo parse_status(const product_fb::ProductJobStatus &status,
               result.identities.objective.begin());
     std::copy(status.identities()->plan()->begin(),
               status.identities()->plan()->end(), result.identities.plan.begin());
+    const auto &execution = *status.execution();
+    result.execution.backend = execution.backend();
+    result.execution.provider = execution.provider();
+    result.execution.runtime_state = execution.runtime_state();
+    result.execution.ordinal = execution.ordinal();
+    std::copy(execution.device_identity()->begin(),
+              execution.device_identity()->end(),
+              result.execution.device_identity.begin());
+    result.execution.plan_identity = result.identities.plan;
+    result.execution.required_features = execution.required_features();
+    result.execution.selected_memory_budget_bytes =
+        execution.selected_memory_budget_bytes();
+    result.execution.total_memory_bytes = execution.total_memory_bytes();
+    result.execution.available_memory_bytes = execution.available_memory_bytes();
+    if (execution.name())
+        result.execution.name = execution.name()->str();
+    if (execution.adapter_id())
+        result.execution.adapter_id = execution.adapter_id()->str();
     return result;
 }
 
@@ -375,7 +408,7 @@ class WorkerConnection final
         handshake.required_capabilities = {
             URE_CAPABILITY_LIFECYCLE, URE_CAPABILITY_FRAME_LEASE,
             URE_CAPABILITY_NATIVE_SCENE, URE_CAPABILITY_RENDER_SESSION,
-            URE_CAPABILITY_PRODUCT_JOB};
+            URE_CAPABILITY_PRODUCT_JOB, URE_CAPABILITY_DEVICE_EXECUTION};
         handshake.optional_capabilities = {URE_CAPABILITY_TELEMETRY};
         handshake.transport_features = 7;
         handshake.max_control_bytes = kMaximumControlBytes;
@@ -425,6 +458,68 @@ class WorkerConnection final
         return std::make_shared<WorkerJob>(
             shared_from_this(), scene_id, job_id,
             parse_status(*wire->status(), job_id));
+    }
+
+    std::vector<DeviceInfo> devices() override {
+        std::scoped_lock lock(mutex_);
+        fb::WorkerEnvelopeT request;
+        request.message_kind = fb::MessageKind::OperationRequest;
+        request.operation_kind = URE_OPERATION_ENUMERATE_DEVICES;
+        request.payload_schema = URE_PAYLOAD_DEVICE_EXECUTION;
+        request.payload_version_minor = 1;
+        request.payload = device_inventory_request();
+        auto response = exchange_locked(request);
+        check_response(*response);
+        flatbuffers::Verifier verifier(response->payload.data(),
+                                       response->payload.size(), 32, 4096);
+        const auto *envelope =
+            flatbuffers::GetRoot<payload_fb::DeviceExecutionEnvelope>(
+                response->payload.data());
+        if (response->payload_schema != URE_PAYLOAD_DEVICE_EXECUTION ||
+            response->payload_version_major != 0 ||
+            response->payload_version_minor != 1 || !envelope ||
+            !envelope->Verify(verifier) || envelope->version_major() != 0 ||
+            envelope->version_minor() != 1 || !envelope->devices() ||
+            envelope->devices()->size() > 64)
+            throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 65,
+                        "worker device inventory response is malformed");
+        std::vector<DeviceInfo> result;
+        result.reserve(envelope->devices()->size());
+        for (const auto *source : *envelope->devices()) {
+            if (!source || !source->device_identity() ||
+                source->device_identity()->size() != 32 ||
+                source->available_memory_bytes() >
+                    source->total_memory_bytes() ||
+                source->applicable_budget_bytes() >
+                    source->total_memory_bytes())
+                throw_error(URE_RESULT_MALFORMED_DATA,
+                            URE_ERROR_DOMAIN_CORE, 65,
+                            "worker device descriptor is malformed");
+            DeviceInfo device;
+            device.backend = source->backend();
+            device.provider = source->provider();
+            device.runtime_state = source->runtime_state();
+            device.ordinal = source->ordinal();
+            std::copy(source->device_identity()->begin(),
+                      source->device_identity()->end(), device.identity.begin());
+            device.features = source->features();
+            device.total_memory_bytes = source->total_memory_bytes();
+            device.available_memory_bytes = source->available_memory_bytes();
+            device.applicable_budget_bytes =
+                source->applicable_budget_bytes();
+            device.vendor_id = source->vendor_id();
+            device.device_id = source->device_id();
+            if (source->name())
+                device.name = source->name()->str();
+            if (source->adapter_id())
+                device.adapter_id = source->adapter_id()->str();
+            if (source->driver_identity())
+                device.driver_identity = source->driver_identity()->str();
+            if (source->compiler_identity())
+                device.compiler_identity = source->compiler_identity()->str();
+            result.push_back(std::move(device));
+        }
+        return result;
     }
 
     std::unique_ptr<fb::WorkerEnvelopeT>
@@ -802,6 +897,21 @@ class WorkerClient final : public ClientTransport {
             active_connections_.push_back(connection);
             return job;
         }
+    }
+
+    std::vector<DeviceInfo> devices() override {
+        std::shared_ptr<WorkerConnection> connection;
+        ConnectionOptions options;
+        {
+            std::scoped_lock lock(mutex_);
+            connection = first_;
+            options = options_;
+        }
+        if (!connection) {
+            connection = std::make_shared<WorkerConnection>();
+            connection->open(options);
+        }
+        return connection->devices();
     }
 
   private:

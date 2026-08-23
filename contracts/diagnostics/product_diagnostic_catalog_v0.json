@@ -43,6 +43,14 @@
     {"value": 543, "owner": "ProductRuntime", "name": "MemoryNotApplicable", "result": "BudgetExhausted"},
     {"value": 544, "owner": "ProductRuntime", "name": "WorkAccountingDiverged", "result": "Internal"},
     {"value": 545, "owner": "ProductRuntime", "name": "ProductJobNotReady", "result": "Busy"},
-    {"value": 546, "owner": "ProductRuntime", "name": "ProductJobSingleUse", "result": "Busy"}
+    {"value": 546, "owner": "ProductRuntime", "name": "ProductJobSingleUse", "result": "Busy"},
+    {"value": 547, "owner": "ProductRuntime", "name": "DeviceNotApplicable", "result": "CapabilityUnavailable"},
+    {"value": 560, "owner": "DeviceExecution", "name": "InvalidInstance", "result": "InvalidHandle"},
+    {"value": 561, "owner": "DeviceExecution", "name": "InventoryUnavailable", "result": "CapabilityUnavailable"},
+    {"value": 562, "owner": "DeviceExecution", "name": "InvalidDescriptorQuery", "result": "InvalidArgument"},
+    {"value": 563, "owner": "DeviceExecution", "name": "InvalidProductJob", "result": "InvalidHandle"},
+    {"value": 564, "owner": "DeviceExecution", "name": "InvalidExecutionQuery", "result": "InvalidArgument"},
+    {"value": 565, "owner": "ClientAdapter", "name": "InventoryLimitExceeded", "result": "MalformedData"},
+    {"value": 566, "owner": "WorkerProtocol", "name": "MalformedInventoryRequest", "result": "MalformedData"}
   ]
 }

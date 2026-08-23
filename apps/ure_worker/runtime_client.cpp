@@ -113,6 +113,24 @@ const Table *query_product_table(ure_query_interface_fn query,
     return static_cast<const Table *>(response.table);
 }
 
+template <class Table>
+const Table *query_device_table(ure_query_interface_fn query,
+                                const std::uint8_t (&id)[16],
+                                std::size_t required_prefix_size) {
+    ure_interface_query_t request{};
+    ure_interface_response_t response{};
+    request.header = {URE_STRUCTURE_INTERFACE_QUERY, sizeof(request), nullptr};
+    std::memcpy(request.interface_id.bytes, id, sizeof(id));
+    request.minimum_minor = 1;
+    request.maximum_minor = 1;
+    response.header = {URE_STRUCTURE_INTERFACE_RESPONSE, sizeof(response),
+                       nullptr};
+    if (query(&request, &response, nullptr) != URE_RESULT_SUCCESS ||
+        !response.table || response.table_size < required_prefix_size)
+        return nullptr;
+    return static_cast<const Table *>(response.table);
+}
+
 ure_objective_envelope_t objective_envelope(const ObjectiveRequest &request) {
     ure_objective_envelope_t objective{};
     objective.header = {URE_STRUCTURE_OBJECTIVE_ENVELOPE, sizeof(objective),
@@ -163,6 +181,7 @@ struct RuntimeClient::Impl {
     const ure_session_interface_t *sessions{};
     const ure_operation_interface_t *operations{};
     const ure_product_job_interface_t *products{};
+    const ure_device_execution_interface_t *device_execution{};
 #if defined(URE_WORKER_CONFORMANCE)
     const ConformanceInterface *conformance{};
 #endif
@@ -307,6 +326,21 @@ struct RuntimeClient::Impl {
                     status.objective_identity.size());
         std::memcpy(status.plan_identity.data(), info.plan_identity.bytes,
                     status.plan_identity.size());
+        status.execution.header = {URE_STRUCTURE_EXECUTION_INFO,
+                                   sizeof(status.execution), nullptr};
+        result = device_execution->get_job_execution(
+            product_job, &status.execution, &error_handle);
+        if (result != URE_RESULT_SUCCESS) {
+            error(result, error_handle, failure);
+            return false;
+        }
+        if (status.execution.name_size > sizeof(status.execution.name) ||
+            status.execution.adapter_id_size >
+                sizeof(status.execution.adapter_id)) {
+            failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 565,
+                       "runtime product execution descriptor is malformed"};
+            return false;
+        }
         if (product_operation) {
             ure_operation_info_t operation_info{};
             operation_info.header = {URE_STRUCTURE_OPERATION_INFO,
@@ -378,6 +412,8 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
     static constexpr std::uint8_t operation_id[16] = URE_INTERFACE_OPERATION_UUID_BYTES;
     static constexpr std::uint8_t product_id[16] =
         URE_INTERFACE_PRODUCT_JOB_UUID_BYTES;
+    static constexpr std::uint8_t device_execution_id[16] =
+        URE_INTERFACE_DEVICE_EXECUTION_UUID_BYTES;
     const auto runtime = query_table<ure_runtime_interface_t>(
         query, runtime_id,
         offsetof(ure_runtime_interface_t, create_instance) +
@@ -411,6 +447,10 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
             sizeof(((ure_operation_interface_t *)nullptr)->request_cancel));
     impl_->products = query_product_table<ure_product_job_interface_t>(
         query, product_id, sizeof(ure_product_job_interface_t));
+    impl_->device_execution =
+        query_device_table<ure_device_execution_interface_t>(
+            query, device_execution_id,
+            sizeof(ure_device_execution_interface_t));
 #if defined(URE_WORKER_CONFORMANCE)
     impl_->conformance =
         query_table<ConformanceInterface>(query, kConformanceInterfaceId,
@@ -418,7 +458,7 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
 #endif
     if (!runtime || !impl_->instances || !impl_->errors || !impl_->frames ||
         !impl_->scenes || !impl_->sessions || !impl_->operations ||
-        !impl_->products
+        !impl_->products || !impl_->device_execution
 #if defined(URE_WORKER_CONFORMANCE)
         || !impl_->conformance
 #endif
@@ -430,7 +470,8 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
                                    URE_CAPABILITY_FRAME_LEASE,
                                    URE_CAPABILITY_NATIVE_SCENE,
                                    URE_CAPABILITY_RENDER_SESSION,
-                                   URE_CAPABILITY_PRODUCT_JOB};
+                                   URE_CAPABILITY_PRODUCT_JOB,
+                                   URE_CAPABILITY_DEVICE_EXECUTION};
     ure_instance_frame_budget_t budget{};
     budget.header = {URE_STRUCTURE_INSTANCE_FRAME_BUDGET, sizeof(budget),
                      nullptr};
@@ -448,6 +489,53 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
     if (result != URE_RESULT_SUCCESS) {
         impl_->error(result, error_handle, failure);
         return false;
+    }
+    return true;
+}
+
+bool RuntimeClient::enumerate_devices(
+    std::vector<ure_device_descriptor_t> &devices, RuntimeFailure &failure) {
+    std::uint32_t count{};
+    ure_handle_t error_handle{};
+    ure_result_t result = impl_->device_execution->enumerate(
+        impl_->instance, &count, &error_handle);
+    if (result != URE_RESULT_SUCCESS) {
+        impl_->error(result, error_handle, failure);
+        return false;
+    }
+    if (count > 64) {
+        failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 565,
+                   "runtime device inventory exceeds the worker limit"};
+        return false;
+    }
+    devices.clear();
+    devices.resize(count);
+    for (std::uint32_t index = 0; index < count; ++index) {
+        auto &descriptor = devices[index];
+        descriptor.header = {URE_STRUCTURE_DEVICE_DESCRIPTOR,
+                             sizeof(descriptor), nullptr};
+        result = impl_->device_execution->get_descriptor(
+            impl_->instance, index, &descriptor, &error_handle);
+        if (result != URE_RESULT_SUCCESS) {
+            impl_->error(result, error_handle, failure);
+            devices.clear();
+            return false;
+        }
+        if (descriptor.name_size > sizeof(descriptor.name) ||
+            descriptor.adapter_id_size > sizeof(descriptor.adapter_id) ||
+            descriptor.driver_identity_size >
+                sizeof(descriptor.driver_identity) ||
+            descriptor.compiler_identity_size >
+                sizeof(descriptor.compiler_identity) ||
+            descriptor.available_memory_bytes >
+                descriptor.total_memory_bytes ||
+            descriptor.applicable_budget_bytes >
+                descriptor.total_memory_bytes) {
+            failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 565,
+                       "runtime device descriptor is malformed"};
+            devices.clear();
+            return false;
+        }
     }
     return true;
 }

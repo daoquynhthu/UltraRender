@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include <ure/backend_types.hpp>
 #include <ure/native_scene_ir.hpp>
 
 namespace ure::product {
@@ -23,6 +24,10 @@ struct ProductObjective {
     std::uint32_t determinism_policy{};
     std::uint32_t usage_policy{};
     std::vector<std::uint32_t> output_semantics;
+    BackendKind backend{BackendKind::Auto};
+    Identity requested_device_identity{};
+    BackendFeatureSet required_features{};
+    bool has_requested_device{};
     bool force_device_loss{};
 };
 
@@ -46,6 +51,7 @@ enum class ProductFailureCode : std::uint32_t {
     ResourceMissing,
     ResourceEscape,
     MemoryNotApplicable,
+    CapabilityNotApplicable,
     WorkAccounting
 };
 
@@ -70,6 +76,12 @@ struct ProductMemoryPlan {
     std::uint64_t estimated_peak_bytes{};
     std::uint64_t applicable_budget_bytes{};
     std::uint32_t persistent_executor_count{};
+};
+
+struct ProductExecutionInfo {
+    BackendSelection selection;
+    Identity device_identity{};
+    std::uint32_t provider{};
 };
 
 struct ProductOperationSnapshot {
@@ -112,6 +124,7 @@ public:
     virtual const ProductIdentitySet& identities() const noexcept = 0;
     virtual const ProductObjective& objective() const noexcept = 0;
     virtual const ProductMemoryPlan& memory_plan() const noexcept = 0;
+    virtual const ProductExecutionInfo& execution() const noexcept = 0;
     virtual ProductOperationSnapshot operation() const noexcept = 0;
     virtual void replace_scene(native_scene::NativeSceneArchive archive,
                                Identity snapshot_identity) = 0;
@@ -132,5 +145,6 @@ protected:
 
 Identity identity_from_hex(std::span<const char, 64> text);
 Identity content_identity(std::span<const std::uint8_t> bytes);
+Identity backend_adapter_identity(const BackendAdapterInfo& adapter);
 
 }

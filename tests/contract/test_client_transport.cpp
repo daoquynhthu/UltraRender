@@ -137,6 +137,14 @@ ure::client::JobResult render(ure::client::TransportMode mode,
     return job.result();
 }
 
+std::vector<ure::client::DeviceInfo>
+devices(ure::client::TransportMode mode,
+        const std::filesystem::path &runtime,
+        const std::filesystem::path &worker) {
+    auto client = ure::client::Client::connect(options(mode, runtime, worker));
+    return client.devices();
+}
+
 void rejected_objective(ure::client::TransportMode mode,
                         const std::filesystem::path &runtime,
                         const std::filesystem::path &worker,
@@ -391,6 +399,33 @@ int main(int argc, char **argv) {
     std::filesystem::create_directories(isolated_cwd);
     try {
         CurrentPathGuard cwd_guard(isolated_cwd);
+        const auto direct_devices = devices(
+            ure::client::TransportMode::Direct, runtime, worker);
+        const auto worker_devices = devices(
+            ure::client::TransportMode::Worker, runtime, worker);
+        const auto direct_cuda = std::ranges::find_if(
+            direct_devices, [](const ure::client::DeviceInfo &device) {
+                return device.backend == URE_BACKEND_CUDA &&
+                       device.runtime_state == URE_RUNTIME_STATE_APPLICABLE;
+            });
+        const auto worker_cuda = std::ranges::find_if(
+            worker_devices, [](const ure::client::DeviceInfo &device) {
+                return device.backend == URE_BACKEND_CUDA &&
+                       device.runtime_state == URE_RUNTIME_STATE_APPLICABLE;
+            });
+        check(direct_cuda != direct_devices.end() &&
+                  worker_cuda != worker_devices.end() &&
+                  direct_cuda->identity == worker_cuda->identity &&
+                  direct_cuda->provider == worker_cuda->provider &&
+                  direct_cuda->name == worker_cuda->name &&
+                  direct_cuda->adapter_id == worker_cuda->adapter_id &&
+                  direct_cuda->total_memory_bytes ==
+                      worker_cuda->total_memory_bytes &&
+                  direct_cuda->available_memory_bytes <=
+                      direct_cuda->total_memory_bytes &&
+                  worker_cuda->available_memory_bytes <=
+                      worker_cuda->total_memory_bytes,
+              "device inventory identity differs by client transport");
         const auto direct = render(ure::client::TransportMode::Direct, runtime,
                                    worker, scene_path);
         const auto isolated = render(ure::client::TransportMode::Worker, runtime,
@@ -410,6 +445,22 @@ int main(int argc, char **argv) {
                       isolated.info.identities.objective &&
                   direct.info.identities.plan == isolated.info.identities.plan,
               "client product identities differ by transport");
+        check(direct.info.execution.backend == URE_BACKEND_CUDA &&
+                  direct.info.execution.provider ==
+                      URE_PROVIDER_SELF_COMPUTE &&
+                  direct.info.execution.runtime_state ==
+                      URE_RUNTIME_STATE_APPLICABLE &&
+                  direct.info.execution.device_identity ==
+                      isolated.info.execution.device_identity &&
+                  direct.info.execution.device_identity ==
+                      direct_cuda->identity &&
+                  direct.info.execution.plan_identity ==
+                      direct.info.identities.plan &&
+                  isolated.info.execution.plan_identity ==
+                      isolated.info.identities.plan &&
+                  direct.info.execution.name ==
+                      isolated.info.execution.name,
+              "selected execution identity differs by client transport");
         check(direct.artifact.rgb_value_count ==
                       isolated.artifact.rgb_value_count,
               "client artifact layouts differ by transport");

@@ -56,6 +56,61 @@ IdentitySet identities(const ure_product_job_info_t &info) {
     return result;
 }
 
+ExecutionInfo execution_info(const ure_execution_info_t &info) {
+    if (info.name_size > sizeof(info.name) ||
+        info.adapter_id_size > sizeof(info.adapter_id) ||
+        info.available_memory_bytes > info.total_memory_bytes)
+        throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 62,
+                    "runtime execution descriptor is malformed");
+    ExecutionInfo result;
+    result.backend = info.backend;
+    result.provider = info.provider;
+    result.runtime_state = info.runtime_state;
+    result.ordinal = info.ordinal;
+    std::memcpy(result.device_identity.data(), info.device_identity.bytes,
+                result.device_identity.size());
+    std::memcpy(result.plan_identity.data(), info.plan_identity.bytes,
+                result.plan_identity.size());
+    result.required_features = info.required_features;
+    result.selected_memory_budget_bytes = info.selected_memory_budget_bytes;
+    result.total_memory_bytes = info.total_memory_bytes;
+    result.available_memory_bytes = info.available_memory_bytes;
+    result.name.assign(info.name, info.name_size);
+    result.adapter_id.assign(info.adapter_id, info.adapter_id_size);
+    return result;
+}
+
+DeviceInfo device_info(const ure_device_descriptor_t &info) {
+    if (info.name_size > sizeof(info.name) ||
+        info.adapter_id_size > sizeof(info.adapter_id) ||
+        info.driver_identity_size > sizeof(info.driver_identity) ||
+        info.compiler_identity_size > sizeof(info.compiler_identity) ||
+        info.available_memory_bytes > info.total_memory_bytes ||
+        info.applicable_budget_bytes > info.total_memory_bytes)
+        throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 63,
+                    "runtime device descriptor is malformed");
+    DeviceInfo result;
+    result.backend = info.backend;
+    result.provider = info.provider;
+    result.runtime_state = info.runtime_state;
+    result.ordinal = info.ordinal;
+    std::memcpy(result.identity.data(), info.device_identity.bytes,
+                result.identity.size());
+    result.features = info.features;
+    result.total_memory_bytes = info.total_memory_bytes;
+    result.available_memory_bytes = info.available_memory_bytes;
+    result.applicable_budget_bytes = info.applicable_budget_bytes;
+    result.vendor_id = info.vendor_id;
+    result.device_id = info.device_id;
+    result.name.assign(info.name, info.name_size);
+    result.adapter_id.assign(info.adapter_id, info.adapter_id_size);
+    result.driver_identity.assign(info.driver_identity,
+                                  info.driver_identity_size);
+    result.compiler_identity.assign(info.compiler_identity,
+                                    info.compiler_identity_size);
+    return result;
+}
+
 class DirectConnection final : public ClientTransport,
                                public std::enable_shared_from_this<DirectConnection> {
   public:
@@ -120,6 +175,8 @@ class DirectConnection final : public ClientTransport,
             URE_INTERFACE_SCENE_UUID_BYTES;
         static constexpr std::uint8_t product_id[16] =
             URE_INTERFACE_PRODUCT_JOB_UUID_BYTES;
+        static constexpr std::uint8_t device_execution_id[16] =
+            URE_INTERFACE_DEVICE_EXECUTION_UUID_BYTES;
         runtime_ = query_table<ure_runtime_interface_t>(query, runtime_id, 1, 0,
                                                         1, 0);
         instances_ = query_table<ure_instance_interface_t>(
@@ -134,15 +191,17 @@ class DirectConnection final : public ClientTransport,
                                                      0);
         products_ = query_table<ure_product_job_interface_t>(
             query, product_id, 0, 1, 0, 2);
+        device_execution_ = query_table<ure_device_execution_interface_t>(
+            query, device_execution_id, 0, 1, 0, 1);
         if (!runtime_ || !instances_ || !errors_ || !operations_ || !frames_ ||
-            !scenes_ || !products_)
+            !scenes_ || !products_ || !device_execution_)
             throw_error(URE_RESULT_CAPABILITY_UNAVAILABLE,
                         URE_ERROR_DOMAIN_CORE, 15,
                         "direct runtime is missing a required product interface");
         const std::uint32_t capabilities[]{
             URE_CAPABILITY_LIFECYCLE, URE_CAPABILITY_FRAME_LEASE,
             URE_CAPABILITY_NATIVE_SCENE, URE_CAPABILITY_RENDER_SESSION,
-            URE_CAPABILITY_PRODUCT_JOB};
+            URE_CAPABILITY_PRODUCT_JOB, URE_CAPABILITY_DEVICE_EXECUTION};
         ure_instance_frame_budget_t frame_budget{};
         frame_budget.header = {URE_STRUCTURE_INSTANCE_FRAME_BUDGET,
                                sizeof(frame_budget), nullptr};
@@ -162,6 +221,27 @@ class DirectConnection final : public ClientTransport,
     std::shared_ptr<JobTransport>
     create_job(const SceneInput &scene,
                const Objective &objective) override;
+
+    std::vector<DeviceInfo> devices() override {
+        std::uint32_t count{};
+        ure_handle_t error{};
+        check(device_execution_->enumerate(instance_, &count, &error), error);
+        if (count > 64)
+            throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 64,
+                        "runtime device inventory exceeds the client limit");
+        std::vector<DeviceInfo> result;
+        result.reserve(count);
+        for (std::uint32_t index = 0; index < count; ++index) {
+            ure_device_descriptor_t descriptor{};
+            descriptor.header = {URE_STRUCTURE_DEVICE_DESCRIPTOR,
+                                 sizeof(descriptor), nullptr};
+            check(device_execution_->get_descriptor(
+                      instance_, index, &descriptor, &error),
+                  error);
+            result.push_back(device_info(descriptor));
+        }
+        return result;
+    }
 
     void check(ure_result_t result, ure_handle_t error) const {
         if (result == URE_RESULT_SUCCESS)
@@ -206,6 +286,7 @@ class DirectConnection final : public ClientTransport,
     const ure_frame_interface_t *frames_{};
     const ure_scene_interface_t *scenes_{};
     const ure_product_job_interface_t *products_{};
+    const ure_device_execution_interface_t *device_execution_{};
 };
 
 class DirectJob final : public JobTransport {
@@ -277,6 +358,13 @@ class DirectJob final : public JobTransport {
         result.accepted_samples = product_info.accepted_samples;
         result.completed_samples = product_info.completed_samples;
         result.identities = identities(product_info);
+        ure_execution_info_t execution{};
+        execution.header = {URE_STRUCTURE_EXECUTION_INFO, sizeof(execution),
+                            nullptr};
+        connection_->check(connection_->device_execution_->get_job_execution(
+                               job_, &execution, &error),
+                           error);
+        result.execution = execution_info(execution);
         if (operation_) {
             ure_operation_info_t operation_info{};
             operation_info.header = {URE_STRUCTURE_OPERATION_INFO,
