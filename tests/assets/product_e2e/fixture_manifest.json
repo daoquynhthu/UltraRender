@@ -1,0 +1,35 @@
+{
+  "schema": "ure.preview.product-e2e-fixtures/1.0",
+  "source": {
+    "path": "scenes/cornell_box.gltf",
+    "sha256": "9ccd5f5417b598c4d52577bc65850edc84d1642f31fc47b08e6f146b8f755424"
+  },
+  "generator": {
+    "path": "tests/contract/generate_product_fixtures.cpp",
+    "sha256": "b197dcb11010340c159c316f2a32c879f59ce2f38b2761f3fad3649281d22ef9",
+    "target": "generate_product_fixtures"
+  },
+  "fixtures": [
+    {
+      "id": "cornell_854x480",
+      "path": "tests/assets/product_e2e/cornell_854x480.urescene",
+      "width": 854,
+      "height": 480,
+      "sha256": "7e2521a21e00ac1ed45ec02f2ebd6ef5794eb847d8f86e8e6942010f078ba264"
+    },
+    {
+      "id": "cornell_1280x720",
+      "path": "tests/assets/product_e2e/cornell_1280x720.urescene",
+      "width": 1280,
+      "height": 720,
+      "sha256": "d6158d42513c20353415af96bb71ca7ee9e34ff84b1ea297f6534b16887c4a62"
+    },
+    {
+      "id": "cornell_1920x1080",
+      "path": "tests/assets/product_e2e/cornell_1920x1080.urescene",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "b92c2c2f9928650a4e1a65a35854b546e54e4b90853b53dcf457ae0c825d0e8f"
+    }
+  ]
+}

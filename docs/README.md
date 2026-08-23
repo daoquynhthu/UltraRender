@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-23
 
-This index separates current authorities, completed subsystem references, and historical records. The root `PLAN.md` is the only authoritative global execution queue; its current cursor is PRV.1R. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
+This index separates current authorities, completed subsystem references, and historical records. The root `PLAN.md` is the only authoritative global execution queue; its current cursor is PRV.2, which has not started. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
 
 ## Current project references
 
@@ -10,7 +10,7 @@ This index separates current authorities, completed subsystem references, and hi
 |---|---|
 | [`../README.md`](../README.md) | Project entry, supported baseline and build commands |
 | [`../STATUS.md`](../STATUS.md) | Current capability and limitation matrix |
-| [`../PLAN.md`](../PLAN.md) | Authoritative `UltraRender_preview` integration queue; PRV.1R runtime repair and trusted E2E baseline is current |
+| [`../PLAN.md`](../PLAN.md) | Authoritative `UltraRender_preview` integration queue; PRV.1R is complete and PRV.2 complete-scene realization is next |
 | [`../AGENTS.md`](../AGENTS.md) | Agent governance and workflow |
 | [`CI.md`](CI.md) | Hosted non-GPU compiler matrix, test/install coverage, exclusions, pinned tools, and cache policy |
 | [`UltraRender_Preview_Architecture.md`](UltraRender_Preview_Architecture.md) | Normative one-product-service architecture, closure/evidence model, continuous diagnostic maturity, client/transport boundary, backend profiles and Preview completion rules |
@@ -18,6 +18,9 @@ This index separates current authorities, completed subsystem references, and hi
 | [`Product_Device_Execution_Extension.md`](Product_Device_Execution_Extension.md) | Exact-build Device/Execution 0.1 inventory, objective constraint, applicability and selected-plan reporting contract |
 | [`PRV0_Product_Truth_Baseline.md`](PRV0_Product_Truth_Baseline.md) | Machine-validated product closure ledger, accepted-semantic audit, retained E2E scenario matrix and baseline-report interpretation |
 | [`reports/phase_prv1_validation_v1.json`](reports/phase_prv1_validation_v1.json) | Historical PRV.1 ProductJob/client/CLI smoke and Direct-Worker parity evidence; superseded as ProductE2E proof by PRV.1R |
+| [`reports/phase_prv1r_functional_validation_v1.json`](reports/phase_prv1r_functional_validation_v1.json) | PRV.1R maintained 854×480 Direct/Worker/CLI functional ProductE2E evidence |
+| [`reports/phase_prv1r_quality_validation_v1.json`](reports/phase_prv1r_quality_validation_v1.json) | PRV.1R 1280×720 Direct and 1920×1080 Worker 128-spp quality evidence |
+| [`reports/phase_prv1r_visual_review_v1.json`](reports/phase_prv1r_visual_review_v1.json) | Retained visual review bound to the deterministic quality PNG identities |
 | [`Public_API_ABI_Architecture.md`](Public_API_ABI_Architecture.md) | Normative minimal C ABI/local-worker architecture and PB.8 stable-major gates |
 | [`PB_Public_Boundary_PLAN.md`](PB_Public_Boundary_PLAN.md) | Read-only completed PB.0-PB.8 subordinate sequence and declaration evidence |
 | [`Public_API_Integration.md`](Public_API_Integration.md) | Core 1.0 loader, table-prefix, scene/session/frame, worker, and unstable-transaction integration guide |
@@ -79,7 +82,7 @@ These documents preserve design rationale and closure evidence. Dates, test coun
 
 Files under [`archive/`](archive/) are retained for historical context and are not maintained as current specifications. This includes former root handover/roadmap/progress documents and early physics/acoustic assessments.
 
-[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. [`archive/High_Order_Public_Boundary_PLAN_2026-08-11.md`](archive/High_Order_Public_Boundary_PLAN_2026-08-11.md) preserves the subsequent HO/HT/HR and PB route. Both are read-only design history and cannot override the current PRV.1R cursor or reopen HR.3, HW, HD, Phase X or neural work.
+[`archive/Legacy_Construction_PLAN_2026-08-01.md`](archive/Legacy_Construction_PLAN_2026-08-01.md) is the frozen former root roadmap for completed Q/R/T/V/W/U construction and the deferred Phase X proposal. [`archive/High_Order_Public_Boundary_PLAN_2026-08-11.md`](archive/High_Order_Public_Boundary_PLAN_2026-08-11.md) preserves the subsequent HO/HT/HR and PB route. Both are read-only design history and cannot override the current PRV.2 cursor or reopen HR.3, HW, HD, Phase X or neural work.
 
 Files under [`superpowers/specs/`](superpowers/specs/) and [`superpowers/plans/`](superpowers/plans/) are archived design and execution records. They intentionally preserve proposed paths, old test counts and unchecked implementation steps. They do not override the completed implementation or current PLAN cursor.
 

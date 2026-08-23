@@ -1,0 +1,195 @@
+{
+  "schema": "ure.preview.product-e2e-evidence/1.0",
+  "tier": "ProductFunctional",
+  "status": "Passed",
+  "product_release_declared": false,
+  "product_path": "ure_client/generated SDK -> explicit transport -> ProductJob 0.3 -> ure_product -> immutable Frame/artifact",
+  "production_profile": "ProductJob 0.3 default automatic production profile",
+  "fixture": {
+    "id": "cornell_854x480",
+    "source": "tests/assets/product_e2e/cornell_854x480.urescene",
+    "sha256": "7e2521a21e00ac1ed45ec02f2ebd6ef5794eb847d8f86e8e6942010f078ba264",
+    "source_gltf": "scenes/cornell_box.gltf",
+    "source_gltf_sha256": "9ccd5f5417b598c4d52577bc65850edc84d1642f31fc47b08e6f146b8f755424"
+  },
+  "binaries": {
+    "runtime_sha256": "030332d8844d54cf1a4e1c184cb661bd4a2bb92ad02c58630d1769051c2571a6",
+    "worker_sha256": "46304a95e4e77ecf0027072b8cc3d05ce841f08a80fd2a3c448f3534aae1ec84",
+    "cli_sha256": "31f37a15a99f6db821b15b6af53f424867c129efb3ae0ab038906f7e6c650875",
+    "scenario_runner_sha256": "1ac4aa9b6211c0bc7e2ec5e6bdb3d1f6a65efe32dca67b831531679b9eba63d6"
+  },
+  "runs": [
+    {
+      "transport": "direct",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "low_samples": 4,
+      "mid_samples": 8,
+      "resolution": "854x480",
+      "elapsed_ms": 5574,
+      "build_identity": "9aa7bcf134b3bc1f76196ce00e0c6b3449e6ce55a1cdb4b1c9e2f8544de46d5d",
+      "snapshot_identity": "1fd003a6bb0fd4901c1b5786f8196b0caa1cbf1fcbc6d6c0a6b62291d151edf0",
+      "objective_identity": "1c0abc036e0dd2da79208d83a40166313e78ba41b17b9efbb4e5a61aa3b60503",
+      "plan_identity": "bb6c67c8fd60cbe97056a73eff1b96607631227078dcaed93570343d20977841",
+      "frame_content_identity": "6a93604cc63da3cc75bf781808113dfd46558f9ef1f3a4c3588ebdbb4e174717",
+      "device": {
+        "identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "backend": 2147483699,
+        "provider": 2147483702,
+        "name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "total_memory_bytes": 8546484224,
+        "available_memory_bytes": 7385120768,
+        "selected_memory_budget_bytes": 5908096615
+      },
+      "raw": {
+        "final_sha256": "7ab666d784c183340b4f78be1351b0292ea56d603ad87cf29947064c6491e704",
+        "low_sha256": "17a935e3da8e9f97e85bfea46b0c5c16c7a45e7e85177473dc50235bbf316c17",
+        "mid_sha256": "5fd4ab66056184438027b7377346eed20fe9f04a120b1b35e78fc6239e20e78f"
+      },
+      "derived_png": {
+        "sha256": "4db4f9a6510a87593b241e3e093966853c61b964668124470ce7f2f278a30483",
+        "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0"
+      },
+      "metrics": {
+        "width": 854,
+        "height": 480,
+        "finite": true,
+        "minimum": 0.0,
+        "maximum": 3.8906660079956055,
+        "mean_luminance": 0.11346774913175965,
+        "positive_energy": 46512.69972409044,
+        "luminance_standard_deviation": 0.23957701919082222,
+        "mean_spatial_gradient": 0.013707749534098982,
+        "nonzero_pixel_fraction": 0.9330479117876659,
+        "negative_component_fraction": 0.0
+      },
+      "convergence": {
+        "metric": "relative_rgb_nrmse_to_nested_final",
+        "low_to_final": 0.11025448049870522,
+        "mid_to_final": 0.06939792636186523,
+        "improvement_ratio": 0.6294340696900768
+      }
+    },
+    {
+      "transport": "worker",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "low_samples": 4,
+      "mid_samples": 8,
+      "resolution": "854x480",
+      "elapsed_ms": 5624,
+      "build_identity": "9aa7bcf134b3bc1f76196ce00e0c6b3449e6ce55a1cdb4b1c9e2f8544de46d5d",
+      "snapshot_identity": "1fd003a6bb0fd4901c1b5786f8196b0caa1cbf1fcbc6d6c0a6b62291d151edf0",
+      "objective_identity": "1c0abc036e0dd2da79208d83a40166313e78ba41b17b9efbb4e5a61aa3b60503",
+      "plan_identity": "bb6c67c8fd60cbe97056a73eff1b96607631227078dcaed93570343d20977841",
+      "frame_content_identity": "6a93604cc63da3cc75bf781808113dfd46558f9ef1f3a4c3588ebdbb4e174717",
+      "device": {
+        "identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "backend": 2147483699,
+        "provider": 2147483702,
+        "name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "total_memory_bytes": 8546484224,
+        "available_memory_bytes": 7385120768,
+        "selected_memory_budget_bytes": 5908096615
+      },
+      "raw": {
+        "final_sha256": "7ab666d784c183340b4f78be1351b0292ea56d603ad87cf29947064c6491e704",
+        "low_sha256": "17a935e3da8e9f97e85bfea46b0c5c16c7a45e7e85177473dc50235bbf316c17",
+        "mid_sha256": "5fd4ab66056184438027b7377346eed20fe9f04a120b1b35e78fc6239e20e78f"
+      },
+      "derived_png": {
+        "sha256": "4db4f9a6510a87593b241e3e093966853c61b964668124470ce7f2f278a30483",
+        "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0"
+      },
+      "metrics": {
+        "width": 854,
+        "height": 480,
+        "finite": true,
+        "minimum": 0.0,
+        "maximum": 3.8906660079956055,
+        "mean_luminance": 0.11346774913175965,
+        "positive_energy": 46512.69972409044,
+        "luminance_standard_deviation": 0.23957701919082222,
+        "mean_spatial_gradient": 0.013707749534098982,
+        "nonzero_pixel_fraction": 0.9330479117876659,
+        "negative_component_fraction": 0.0
+      },
+      "convergence": {
+        "metric": "relative_rgb_nrmse_to_nested_final",
+        "low_to_final": 0.11025448049870522,
+        "mid_to_final": 0.06939792636186523,
+        "improvement_ratio": 0.6294340696900768
+      }
+    }
+  ],
+  "cli": [
+    {
+      "transport": "Direct",
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "plan_identity": "bb6c67c8fd60cbe97056a73eff1b96607631227078dcaed93570343d20977841",
+      "frame_content_identity": "6a93604cc63da3cc75bf781808113dfd46558f9ef1f3a4c3588ebdbb4e174717"
+    },
+    {
+      "transport": "Worker",
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "plan_identity": "bb6c67c8fd60cbe97056a73eff1b96607631227078dcaed93570343d20977841",
+      "frame_content_identity": "6a93604cc63da3cc75bf781808113dfd46558f9ef1f3a4c3588ebdbb4e174717"
+    }
+  ],
+  "parity": {
+    "same_plan_identity": true,
+    "same_frame_content_identity": true,
+    "byte_identical_raw_secondary_check": true,
+    "same_device_identity": true
+  },
+  "maintained_call_matrix": [
+    {
+      "call": "ure_client Direct",
+      "evidence": "this report",
+      "artifact": "authoritative PFM plus derived PNG"
+    },
+    {
+      "call": "ure_client Worker",
+      "evidence": "this report",
+      "artifact": "authoritative PFM plus derived PNG"
+    },
+    {
+      "call": "CLI Direct",
+      "evidence": "this report",
+      "artifact": "runtime Frame and artifact identity"
+    },
+    {
+      "call": "CLI Worker",
+      "evidence": "this report",
+      "artifact": "runtime Frame and artifact identity"
+    },
+    {
+      "call": "external C Core client",
+      "evidence": "test_external_client_package",
+      "artifact": "PFM"
+    },
+    {
+      "call": "external C++ exact-build SDK Direct/Worker",
+      "evidence": "test_external_client_package",
+      "artifact": "PFM"
+    },
+    {
+      "call": "cancel/error/isolated CWD",
+      "evidence": "test_client_transport,test_prv1_cli,this report",
+      "artifact": "structured terminal evidence"
+    }
+  ],
+  "semantic_digest": "0a0d5671ac3a43a12d63da6a847b19ffb9465967339da8021778ecb6fc12edd9"
+}

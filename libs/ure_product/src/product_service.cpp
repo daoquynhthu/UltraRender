@@ -301,7 +301,9 @@ ProductMemoryPlan make_memory_plan(
     const auto per_framebuffer = checked_multiply(pixels, 72);
     const auto per_spectral_plane = checked_multiply(pixels, 12);
     const auto per_queue = checked_multiply(
-        pixels, checked_add(288, checked_multiply(lanes, 56)));
+        checked_multiply(
+            pixels, checked_add(288, checked_multiply(lanes, 56))),
+        2);
     constexpr std::uint64_t executor_state = UINT64_C(8388608);
     const auto scratch = checked_add(
         checked_multiply(triangle_count, 256), UINT64_C(4194304));
@@ -383,8 +385,19 @@ PreparedRenderer make_renderer(
             ProductFailureCode::CapabilityNotApplicable,
             "requested product backend, provider, or device is not applicable");
     }
-    auto memory_plan = make_memory_plan(
-        archive, scene, config, selection, objective);
+    ProductMemoryPlan memory_plan;
+    for (;;) {
+        try {
+            memory_plan = make_memory_plan(
+                archive, scene, config, selection, objective);
+            break;
+        } catch (const ProductError& error) {
+            if (error.code() != ProductFailureCode::MemoryNotApplicable ||
+                config.automatic_integrator.maximum_techniques <= 1)
+                throw;
+            --config.automatic_integrator.maximum_techniques;
+        }
+    }
     auto renderer = std::make_unique<RenderSession>(
         RenderSession::create(config));
     renderer->load_scene(scene);

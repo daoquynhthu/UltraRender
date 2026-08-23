@@ -73,6 +73,8 @@ Frames are immutable retained snapshots. Query plane metadata, then either map f
 
 The packaged external E2E builds independent C11, C++23 extension, raw Worker Protocol, and maintained Preview client examples without invoking `flatc`. They render real scenes and write eight PFM images covering direct map/copy, transaction replay/replacement, worker first-run/restart, and `UltraRender::Client` Direct/Worker paths. Each image gate rejects non-finite, all-zero, or spatially constant RGB data; paired paths also compare exact evidence or content identity.
 
+The maintained PRV.1R product matrix adds a shared renderer-free scenario runner. It exercises `ure_client` Direct/Worker and CLI Direct/Worker at 854×480 and retains milestone 1280×720 Direct plus 1920×1080 Worker evidence at 128 spp. The runtime float PFM is authoritative; a deterministic `ure.preview.view.linear-srgb-reinhard-srgb8/1.0` conversion produces review PNGs. Finite values, energy, spatial structure and nested-sample convergence are checked independently of byte parity. The machine records are `phase_prv1r_functional_validation_v1.json`, `phase_prv1r_quality_validation_v1.json` and `phase_prv1r_visual_review_v1.json` under `docs/reports`; they certify only the bounded exact-build color workflow and create no stable extension or product-release promise.
+
 ## Errors, cancellation, and cleanup
 
 Errors are retained handles with stable result/domain/detail and optional versioned structured detail. Retain before extending a lifetime; release every retained handle. A successful cancellation request means the request was recorded, not that terminal state is already `Canceled`. A race may finish successfully. `wait` timeout never cancels work.

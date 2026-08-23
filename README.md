@@ -4,17 +4,19 @@ UltraRender 是一个处于持续研发阶段的光谱/偏振离线渲染器。�
 
 本项目尚不是通用生产渲染器，也没有发布“UltraRender 1.0”。功能与成熟度以 [STATUS.md](STATUS.md) 为准，施工顺序以 [PLAN.md](PLAN.md) 为准。Research、Experimental、Production 是不同的证据等级；类型、配置项或拒绝测试的存在不代表对应能力已经可用。
 
-当前权威实施游标为 `PRV.1R — Product Runtime 阻塞性修复与可信 E2E 基线`。项目暂时冻结 learned/neural、新积分器、广义统一物理世界和可微路线；PRV.2 及后续产品总装仍等待 PRV.1R 完成分层真实产品图像门禁。`UltraRender_preview` 是尚未达成的里程碑，不是现有发布版本。
+当前权威实施游标为 `PRV.2 — 完整场景实现与自包含包`，尚未开始施工。PRV.1R 已完成阻塞性运行时修复和有界原生场景/颜色输出的可信产品 E2E 基线。项目继续冻结 learned/neural、新积分器、广义统一物理世界和可微路线；`UltraRender_preview` 是尚未达成的里程碑，不是现有发布版本。
 
 ## Preview 集成方向
 
 Preview 路线要求 CLI、Python、Hydra 和后续编辑器通过同一个产品服务工作：客户端使用共享 `ure_client`，显式选择进程内 direct transport 或本地 Worker transport；两者最终调用同一 runtime/product implementation。Worker 只负责隔离、协议和共享内存传输，CLI 也不再拥有第二套场景加载、积分器选择、重建或输出实现。
 
-PRV.1 已让 CLI render 退出 renderer 实现：共享 `ure_client` 提供显式 Direct/Worker transport，两路均使用同一个 `ure_product` 服务；PRV.1R 当前的 exact-build ProductJob 0.3 明确区分 requested/accepted/completed work并提供单调进度与最新不可变帧。CLI 默认 Worker，启动失败不会回退 direct。这个结构保留，但后续调查证明原有 64×64 smoke 不能支撑 ProductE2E 结论。Hydra、legacy pyure、自动渲染桥、原生高级块、MeasurementBundle、重建、可移植 backend、多设备/farm/cache 仍未全部进入同一个完整场景工作流。[Preview 架构](docs/UltraRender_Preview_Architecture.md) 定义目标边界，[PLAN.md](PLAN.md) 以新增 PRV.1R 为当前阻塞修复阶段。
+PRV.1 已让 CLI render 退出 renderer 实现：共享 `ure_client` 提供显式 Direct/Worker transport，两路均使用同一个 `ure_product` 服务。PRV.1R 的 exact-build ProductJob 0.3 明确区分 requested/accepted/completed work，并提供单调进度与最新不可变帧。CLI 默认 Worker，启动失败不会回退 direct。原有 64×64 smoke 已被明确保留为合同/路由证据；新的 480p functional 与 720p/1080p quality 证据通过实际产品路径建立了有界原生场景/颜色工作流的 ProductE2E。Hydra、legacy pyure、完整自动积分权威、原生高级块、MeasurementBundle、重建、可移植 backend、多设备/farm/cache 仍未全部进入同一个完整场景工作流。[Preview 架构](docs/UltraRender_Preview_Architecture.md) 定义目标边界，[PLAN.md](PLAN.md) 从 PRV.2 继续产品总装。
 
-PRV.0 的历史[产品真相基线](docs/PRV0_Product_Truth_Baseline.md)记录了当时的 44 项能力/入口、25 项维护语义和 12 个保留产品场景。PRV.1 后现役账本曾把 5 项标为有界 ProductE2E；PRV.1R 已用追加的 supersession record 将其重分类为实际达到的 `ClientReachable` 或 `RendererIntegrated`，历史报告保持不变。维护语义中已无 accepted-but-ignored，仍有 2 项明确执行语义债务；十二个最终 Preview 产品场景均未闭环。
+PRV.0 的历史[产品真相基线](docs/PRV0_Product_Truth_Baseline.md)记录了当时的 44 项能力/入口、25 项维护语义和 12 个保留产品场景。PRV.1 后的 5 项 smoke-only ProductE2E 判断先由追加 supersession record 撤回；PRV.1R 随后用新的功能、质量和视觉证据把 Core/product service/Product extension/Worker/CLI/有界颜色输出 6 项重新提升到当前真实达到的 `ProductE2E`。这不表示十二个最终 Preview 产品场景已经闭环。维护语义中已无 accepted-but-ignored，仍有 2 项明确执行语义债务。
 
-PRV.1 闭环了内部 `ure_product` 服务、generated ProductJob 0.1 `UnstableExtension`、共享 `ure_client`、Worker forwarding 与 CLI render 迁移。其[验证报告](docs/reports/phase_prv1_validation_v1.json)中的 64×64 PFM 与身份一致性仍只是路由/传输 smoke。PRV.1R 已将 exact-build ProductJob 演进到 0.3：production work 逐样本持久执行，requested/accepted/completed 与 pilot 计数分离，Worker wait、poll、cancel 可并发交错，跨 session 默认限制为一个并以 `Backpressure` 拒绝超额工作。固定 Worker 60 秒和 CLI 10 分钟作业语义已移除，预算提前结束不能伪装成功，执行根、资源边界和显存计划在 allocation 前校验。Direct/Worker 发布合并后的单调进度和最新不可变渐进帧，并能传递任意有界 plane 集；统一诊断信封、sample precedence 与 Device/Execution 0.1 覆盖设备枚举、约束和实际执行身份。分阶段 SDK 还提供无 `flatc` 的预生成协议头、`UltraRender::Client` exact-build 目标和真实 Direct/Worker 外部示例。这些修复仍不足以建立 ProductE2E 或 Preview 声明。
+PRV.1 闭环了内部 `ure_product` 服务、generated ProductJob 0.1 `UnstableExtension`、共享 `ure_client`、Worker forwarding 与 CLI render 迁移。其[验证报告](docs/reports/phase_prv1_validation_v1.json)中的 64×64 PFM 与身份一致性仍只是路由/传输 smoke。PRV.1R 已将 exact-build ProductJob 演进到 0.3：production work 逐样本持久执行，requested/accepted/completed 与 pilot 计数分离，Worker wait、poll、cancel 可并发交错，跨 session 默认限制为一个并以 `Backpressure` 拒绝超额工作。固定 Worker 60 秒和 CLI 10 分钟作业语义已移除，预算提前结束不能伪装成功，执行根、资源边界和显存计划在 allocation 前校验。默认自动计划按显存选择最大的适用无偏候选子集，并把选择写入 plan identity；它不会静默降低光谱、精度、输出或重建语义。Direct/Worker 发布合并后的单调进度和最新不可变渐进帧，并能传递任意有界 plane 集；统一诊断信封、sample precedence 与 Device/Execution 0.1 覆盖设备枚举、约束和实际执行身份。分阶段 SDK 还提供无 `flatc` 的预生成协议头、`UltraRender::Client` exact-build 目标和真实 Direct/Worker 外部示例。
+
+PRV.1R 的[功能证据](docs/reports/phase_prv1r_functional_validation_v1.json)覆盖 854×480、16 spp 的 `ure_client` Direct/Worker 与 CLI Direct/Worker；[质量证据](docs/reports/phase_prv1r_quality_validation_v1.json)覆盖 1280×720 Direct 和 1920×1080 Worker 的 128 spp production profile，并保留[视觉审阅](docs/reports/phase_prv1r_visual_review_v1.json)。raw PFM 是权威产物，PNG 使用固定线性 sRGB→Reinhard→sRGB8 查看变换；finite、能量、空间结构和嵌套样本收敛均由门禁检查。这只证明当前有界颜色路径，不宣称完整场景、高级材质、MeasurementBundle、重建、降噪或 Preview 产品完成。
 
 错误与诊断被视为贯穿 Preview 路线的产品能力，而不是 PRV.1R 的一次性补丁。PRV.1R 先建立 result/domain/detail、correlation、cause、operation terminal error、恢复建议和设备信息的公共基础；之后每个场景、材质、输出、重建、积分器、session、backend、farm 和客户端阶段都必须补齐自身结构化错误、负向 E2E 与文档目录。已知失败不得长期塌缩成无上下文 `Internal` 或普通 null Error。
 
@@ -93,7 +95,7 @@ Ninja 可并行构建普通目标；高内存 CUDA 编译由 `ur_cuda_heavy_comp
 
 GitHub Actions 另行在 Ubuntu 24.04 的 GCC 13/Clang 18 与 Windows 2025 的 MSVC 上执行 CUDA-off 根构建、33 项纯 host/contract 测试、15 项 warnings-as-errors SDK-free 测试，以及安装后 `find_package()` 消费测试。该门禁验证非 GPU 源码和包边界的可移植性，不扩张完整场景渲染的平台承诺。矩阵、排除项和缓存策略见 [CI 说明](docs/CI.md)。
 
-最新已冻结的 PB.8 证据为 Release 构建与 101/101 CTest，通过三种独立调用方式生成六幅实际 PFM 图像；当前构建目录登记 108 项 CTest。PRV.1 另有 Direct/Worker/CLI 客户端主干及两幅一致 PFM 的 smoke 证据；这些证据不证明产品工作量、质量、尺度或完整 Preview 闭环。PRV.1R 将测试分为 32-128 px contract smoke、480p product functional、720p/1080p product quality 和单独调度的 QHD/UHD 500+ spp stress，并要求正式证据走实际产品路径且不关闭 production profile 能力。
+最新已冻结的 PB.8 证据为 Release 构建与 101/101 CTest，通过三种独立调用方式生成六幅实际 PFM 图像；当前构建目录登记 111 项 CTest。PRV.1R 将验证分为 32-128 px contract smoke、480p product functional、720p/1080p product quality 和单独调度的 QHD/UHD 500+ spp stress。当前维护门禁包含可重建的 Cornell 产品 fixture、480p 实际产品调用矩阵和留存质量/视觉证据；stress 仍按硬件适用性单独调度，不作为普通提交门禁。
 
 ## 已知边界
 

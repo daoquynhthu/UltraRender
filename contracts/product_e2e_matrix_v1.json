@@ -1,0 +1,47 @@
+{
+  "schema": "ure.preview.product-e2e-matrix/1.0",
+  "product_authority": "ure_client/generated SDK -> explicit Direct or Worker transport -> runtime Product extension -> ure_product -> immutable Frame/artifact",
+  "fixture_manifest": "tests/assets/product_e2e/fixture_manifest.json",
+  "retained_reports": [
+    "docs/reports/phase_prv1r_functional_validation_v1.json",
+    "docs/reports/phase_prv1r_quality_validation_v1.json",
+    "docs/reports/phase_prv1r_visual_review_v1.json"
+  ],
+  "tiers": [
+    {
+      "id": "contract_smoke",
+      "gate": "per_commit",
+      "resolution": "32-128 px",
+      "samples": "1-4",
+      "calls": ["external_c_core", "external_cpp_direct", "external_cpp_worker"],
+      "tests": ["test_external_client_package", "test_client_transport", "test_prv1_cli"]
+    },
+    {
+      "id": "product_functional",
+      "gate": "windows_gpu_maintained",
+      "resolution": "854x480",
+      "samples": "16-64",
+      "calls": ["ure_client_direct", "ure_client_worker", "cli_direct", "cli_worker"],
+      "test": "test_product_functional_e2e",
+      "required_checks": ["requested_accepted_completed", "raw_artifact", "derived_png", "finite", "nontrivial", "energy", "spatial_structure", "nested_convergence", "plan_parity", "isolated_cwd"]
+    },
+    {
+      "id": "product_quality",
+      "gate": "milestone_and_scheduled",
+      "resolutions": ["1280x720", "1920x1080"],
+      "samples": "128-512",
+      "calls": ["ure_client_direct", "ure_client_worker"],
+      "runner": "scripts/run_product_quality_evidence.ps1",
+      "required_checks": ["production_profile", "raw_artifact", "derived_png", "finite", "nontrivial", "energy", "spatial_structure", "nested_convergence", "visual_review", "hardware_identity"]
+    },
+    {
+      "id": "stress_scale",
+      "gate": "manual_hardware_applicability",
+      "resolutions": ["2560x1440", "3840x2160"],
+      "samples": "500+",
+      "calls": ["ure_client_direct_or_worker"],
+      "required_checks": ["hardware_identity", "memory_applicability", "long_running_control", "raw_artifact", "visual_review"],
+      "blocks_per_commit": false
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # UltraRender Preview 产品集成与端到端闭环路线图
 
-最后更新: 2026-08-13（PRV.1 客户端主干保留；新增 PRV.1R 修复阻塞性运行时语义并重建可信产品 E2E 基线）
+最后更新: 2026-08-23（PRV.1R 闭环可信有界产品 E2E；游标推进至尚未施工的 PRV.2）
 
 本文档是 UltraRender 当前唯一的全局施工权威。它将项目重心从继续扩展高阶研究能力，切换为已有非研究能力的产品总装、端到端闭环，以及训练无关重建/降噪的生产接入。
 
@@ -17,7 +17,7 @@
 
 ## 0. 权威状态
 
-当前游标: PRV.1R — Product Runtime 阻塞性修复与可信 E2E 基线
+当前游标: PRV.2 — 完整场景实现与自包含包
 
 ### 0.1 唯一施工队列
 
@@ -32,10 +32,10 @@ PRV.0 product truth baseline and closure ledger    [done]
 PRV.1 one product runtime and client spine         [done]
                   |
                   v
-PRV.1R runtime correctness and trusted E2E         [current]
+PRV.1R runtime correctness and trusted E2E         [done]
                   |
                   v
-PRV.2 complete scene realization and packages      [blocked by PRV.1R]
+PRV.2 complete scene realization and packages      [current, not started]
                   |
                   v
 PRV.3 material, asset and bounded wave composition
@@ -308,7 +308,7 @@ Error 对象分配失败是唯一允许没有 retained Error handle 的资源极
 
 ## 3A. PRV.1R — Product Runtime 阻塞性修复与可信 E2E 基线
 
-**状态**: 当前游标；PRV.2-PRV.11 在本阶段闭环前不得继续生产施工。
+**状态**: 已完成；有界原生场景/颜色路径的可信 ProductE2E 已闭环，PRV.2 可作为下一施工阶段。
 
 **目标**: 修复已确认的 sample/work accounting、重复重建执行、Worker 长时控制、预算完成语义、资源根和显存适用性缺陷，并建立可以被后续所有 Preview 阶段复用的真实产品调用与图像证据基础设施。PRV.1 的单一执行权威和冻结 Core/Worker 1.0 前缀保持不变；本阶段不提前完成 PRV.6 的完整自动积分器产品化。
 
@@ -391,7 +391,9 @@ Error 对象分配失败是唯一允许没有 retained Error handle 的资源极
 - 权威 raw artifact 经固定转换生成 PNG，自动验证 finite、非平凡、能量、空间结构、收敛/reference metric，并为 quality/stress 证据保留人工视觉审阅结果；
 - Direct/Worker/CLI parity 比较相同 plan/work identity 下的统计或确定性输出，hash/字节一致只能作为附加传输证据。
 
-**实施进度（2026-08-23）**: PRV.1R.0-PRV.1R.7 已落地。规范 production work quantum、持久 candidate executor、独立 pilot/production/realization/executor 计数、预算未完成失败、固定 Worker/CLI deadline 移除、显式资源根、allocation 前显存计划和 Direct/Worker typed memory/resource error 已进入生产路径。Exact-build ProductJob 0.3 与 Worker payload 分别携带 requested/accepted/completed work、阶段、耗时/剩余范围和最新 frame generation；长任务期间 wait、status probe、progress、latest frame 与 cancel 可并发交错，重复取消保持终态，单 session 串行且跨 Worker session 默认限一并以 `Backpressure` 拒绝超额请求。Worker 与 `ure_client` 的单-plane 假设已移除，渐进发布按有界频率合并并由共享 lease 验证。统一 ErrorDetail、诊断目录、sample precedence、single-use 累积规则和 Device/Execution 0.1 已闭环。分阶段 SDK 携带预生成 C++ 协议头、FlatBuffers runtime、生成器 identity、`UltraRender::Client` CMake 目标和无 renderer-private 依赖的 Direct/Worker 外部真实渲染示例，普通集成不运行 `flatc`。PRV.1R.8 的 functional/quality 产品图像证据仍未闭环，因此游标保持 PRV.1R。
+**完成记录（2026-08-23）**: PRV.1R.0-PRV.1R.8 已落地。规范 production work quantum、持久 candidate executor、独立 pilot/production/realization/executor 计数、预算未完成失败、固定 Worker/CLI deadline 移除、显式资源根、allocation 前显存计划和 Direct/Worker typed memory/resource error 已进入生产路径。Exact-build ProductJob 0.3 与 Worker payload 携带 requested/accepted/completed work、阶段、耗时/剩余范围和最新 frame generation；长任务期间 wait、status probe、progress、latest frame 与 cancel 可并发交错，重复取消保持终态，单 session 串行且跨 Worker session 默认限一并以 `Backpressure` 拒绝超额请求。Worker 与 `ure_client` 的单-plane 假设已移除，渐进发布按有界频率合并并由共享 lease 验证。统一 ErrorDetail、诊断目录、sample precedence、single-use 累积规则和 Device/Execution 0.1 已闭环。分阶段 SDK 携带预生成 C++ 协议头、FlatBuffers runtime、生成器 identity、`UltraRender::Client` CMake 目标和无 renderer-private 依赖的 Direct/Worker 外部真实渲染示例，普通集成不运行 `flatc`。
+
+共享 product scenario runner 不链接 renderer-private 库。维护门禁在隔离 CWD 以 854×480、16 spp 覆盖 `ure_client` Direct/Worker 和 CLI Direct/Worker；里程碑证据以 production profile 完成 1280×720 Direct 与 1920×1080 Worker 的 128 spp，其中 Worker 运行超过原 60 秒边界。raw PFM、固定方向/色彩/tone-map 的 PNG、finite/能量/空间结构、嵌套样本收敛、设备/构建身份及人工视觉审阅均留存。显存计划计入 queue ping-pong residency，并选择 plan-bound 的最大适用无偏候选子集；不减少光谱、精度、输出或重建语义。该证据只提升当前有界颜色路径，不宣称完整场景、MeasurementBundle、重建、降噪或 `UltraRender_preview` 完成。
 
 **完成门禁**:
 
@@ -412,7 +414,7 @@ Error 对象分配失败是唯一允许没有 retained Error handle 的资源极
 
 ## 4. PRV.2 — 完整场景实现与自包含包
 
-**状态**: 等待 PRV.1R 完成。
+**状态**: 当前游标；依赖已满足，尚未开始施工。
 
 **目标**: 让一个产品作业消费完整 NativeSceneArchive，并让验证、实现和渲染对 required feature 得出同一结论。
 

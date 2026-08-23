@@ -25,5 +25,47 @@
       ],
       "evidence_scope": "PRV.1 artifacts retain client reachability, renderer integration, transport parity and smoke-scale frame transfer evidence only. They do not prove canonical sample work, bounded long-operation control, resource-root independence, production-profile image quality or ProductE2E completion."
     }
+  ],
+  "recoveries": [
+    {
+      "id": "prv1r_core_runtime_2026_08_23",
+      "capability_id": "core_runtime",
+      "recovery_gate": "PRV.1R",
+      "superseded_closure": "ClientReachable",
+      "recovered_closure": "ProductE2E",
+      "evidence": ["docs/reports/phase_prv1r_functional_validation_v1.json"]
+    },
+    {
+      "id": "prv1r_product_service_2026_08_23",
+      "capability_id": "product_service",
+      "recovery_gate": "PRV.1R",
+      "superseded_closure": "RendererIntegrated",
+      "recovered_closure": "ProductE2E",
+      "evidence": ["docs/reports/phase_prv1r_functional_validation_v1.json"]
+    },
+    {
+      "id": "prv1r_product_extension_2026_08_23",
+      "capability_id": "product_extension",
+      "recovery_gate": "PRV.1R",
+      "superseded_closure": "ClientReachable",
+      "recovered_closure": "ProductE2E",
+      "evidence": ["docs/reports/phase_prv1r_functional_validation_v1.json"]
+    },
+    {
+      "id": "prv1r_worker_2026_08_23",
+      "capability_id": "worker",
+      "recovery_gate": "PRV.1R",
+      "superseded_closure": "ClientReachable",
+      "recovered_closure": "ProductE2E",
+      "evidence": ["docs/reports/phase_prv1r_functional_validation_v1.json"]
+    },
+    {
+      "id": "prv1r_cli_render_2026_08_23",
+      "capability_id": "cli_render",
+      "recovery_gate": "PRV.1R",
+      "superseded_closure": "ClientReachable",
+      "recovered_closure": "ProductE2E",
+      "evidence": ["docs/reports/phase_prv1r_functional_validation_v1.json"]
+    }
   ]
 }

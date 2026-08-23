@@ -659,9 +659,14 @@ ure_result_t close_impl(ure_handle_t session_handle, ure_handle_t *error) {
         return make_error(URE_RESULT_INVALID_HANDLE, 509,
                           "invalid session handle", error);
     ure_handle_t operation{};
+    std::shared_ptr<OperationObject> operation_object;
     {
         std::scoped_lock lock(session->mutex);
         operation = session->active_operation;
+    }
+    if (operation) {
+        operation_object = handles().get<OperationObject>(
+            operation, ObjectType::Operation, true);
     }
     if (operation_nonterminal(operation)) {
         ure_bool32_t accepted{};
@@ -671,6 +676,10 @@ ure_result_t close_impl(ure_handle_t session_handle, ure_handle_t *error) {
         if (wait != URE_RESULT_SUCCESS && wait != URE_RESULT_CANCELED)
             return make_error(wait, 510,
                               "session close could not drain active work", error);
+    }
+    if (operation_object && operation_object->worker.joinable() &&
+        operation_object->worker.get_id() != std::this_thread::get_id()) {
+        operation_object->worker.join();
     }
     session->job->cancel();
     session->closed.store(true, std::memory_order_release);

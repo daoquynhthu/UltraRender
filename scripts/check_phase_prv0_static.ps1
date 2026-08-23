@@ -130,6 +130,8 @@ if ($supersessions.schema -ne "ure.preview.product-evidence-supersessions/1.0") 
 }
 Assert-UniqueIds $supersessions.records "Product evidence supersession record"
 $supersededCapabilities = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+$historicalClosures = @{}
+$recoveryGates = @{}
 foreach ($record in $supersessions.records) {
     $supersededReportPath = Assert-RepositoryFile $record.superseded_report "Supersession $($record.id) report"
     $reportHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $supersededReportPath).Hash.ToLowerInvariant()
@@ -151,9 +153,8 @@ foreach ($record in $supersessions.records) {
         $entry = @($closure.entries | Where-Object id -eq $claim.capability_id)
         if ($entry.Count -ne 1 -or
             $claim.previous_closure -ne "ProductE2E" -or
-            $claim.current_closure -notin @("RendererIntegrated", "ClientReachable") -or
-            $entry[0].closure_level -ne $claim.current_closure) {
-            throw "Supersession $($record.id) claim $($claim.capability_id) does not match the current closure ledger"
+            $claim.current_closure -notin @("RendererIntegrated", "ClientReachable")) {
+            throw "Supersession $($record.id) claim $($claim.capability_id) is malformed"
         }
         if (@($entry[0].evidence | Where-Object { $_.kind -eq "Supersession" -and $_.path -eq "contracts/product_evidence_supersessions.json" }).Count -ne 1) {
             throw "Superseded capability $($claim.capability_id) does not cite the additive supersession record"
@@ -161,6 +162,42 @@ foreach ($record in $supersessions.records) {
         if (-not $supersededCapabilities.Add([string]$claim.capability_id)) {
             throw "Capability $($claim.capability_id) is superseded more than once"
         }
+        $historicalClosures[[string]$claim.capability_id] = [string]$claim.current_closure
+        $recoveryGates[[string]$claim.capability_id] = [string]$record.recovery_gate
+    }
+}
+Assert-UniqueIds @($supersessions.recoveries) "Product evidence recovery record"
+$recoveredCapabilities = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+foreach ($recovery in @($supersessions.recoveries)) {
+    $capabilityId = [string]$recovery.capability_id
+    $entry = @($closure.entries | Where-Object id -eq $capabilityId)
+    $evidencePaths = @($recovery.evidence | ForEach-Object { [string]$_ })
+    if (-not $supersededCapabilities.Contains($capabilityId) -or
+        -not $recoveredCapabilities.Add($capabilityId) -or
+        $entry.Count -ne 1 -or
+        $recovery.recovery_gate -ne $recoveryGates[$capabilityId] -or
+        $recovery.superseded_closure -ne $historicalClosures[$capabilityId] -or
+        $recovery.recovered_closure -ne "ProductE2E" -or
+        $entry[0].closure_level -ne $recovery.recovered_closure -or
+        $evidencePaths.Count -eq 0 -or
+        $evidencePaths.Count -ne @($evidencePaths | Sort-Object -Unique).Count -or
+        $evidencePaths -contains "") {
+        throw "Recovery $($recovery.id) does not bind one superseded capability to a valid later gate"
+    }
+    foreach ($evidencePath in $evidencePaths) {
+        [void](Assert-RepositoryFile $evidencePath "Recovery $($recovery.id) evidence")
+        if (@($entry[0].evidence | Where-Object {
+            $_.kind -eq "ExternalArtifact" -and $_.path -eq $evidencePath
+        }).Count -ne 1) {
+            throw "Recovered capability $capabilityId does not cite $evidencePath as external evidence"
+        }
+    }
+}
+foreach ($capabilityId in $supersededCapabilities) {
+    $entry = @($closure.entries | Where-Object id -eq $capabilityId)[0]
+    if (-not $recoveredCapabilities.Contains($capabilityId) -and
+        $entry.closure_level -ne $historicalClosures[$capabilityId]) {
+        throw "Superseded capability $capabilityId changed closure without a recovery record"
     }
 }
 foreach ($entry in $closure.entries) {
@@ -294,4 +331,4 @@ if (-not [string]::IsNullOrWhiteSpace($ReportPath)) {
     }
 }
 
-Write-Output "PRV.0 static audit passed: $(@($closure.entries).Count) closure entries, $(@($semantic.entries).Count) semantics, $(@($scenarios.scenarios).Count) retained scenarios, $($supersededCapabilities.Count) superseded claims"
+Write-Output "PRV.0 static audit passed: $(@($closure.entries).Count) closure entries, $(@($semantic.entries).Count) semantics, $(@($scenarios.scenarios).Count) retained scenarios, $($supersededCapabilities.Count) superseded claims, $($recoveredCapabilities.Count) recovered claims"

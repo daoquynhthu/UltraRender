@@ -120,6 +120,13 @@ if(TARGET ure_contract)
     target_link_libraries(test_client_transport PRIVATE ure_client)
     add_dependencies(test_client_transport ure_worker ure_contract)
 
+    add_executable(product_scenario_runner product_scenario_runner.cpp)
+    target_link_libraries(product_scenario_runner PRIVATE ure_client)
+    add_dependencies(product_scenario_runner ure_worker ure_contract)
+
+    add_executable(generate_product_fixtures generate_product_fixtures.cpp)
+    target_link_libraries(generate_product_fixtures PRIVATE ure_sceneio)
+
     add_library(worker_test_support STATIC external_client/worker_client.cpp)
     target_link_libraries(worker_test_support PUBLIC
         ure_public
@@ -158,7 +165,7 @@ if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
     endforeach()
     if(TARGET ure_contract)
-        foreach(target contract_image_artifact test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction test_product_extension test_client_transport worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
+        foreach(target contract_image_artifact test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction test_product_extension test_client_transport product_scenario_runner generate_product_fixtures worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
             target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
         endforeach()
         target_compile_options(test_loader_client PRIVATE /wd4191)
@@ -339,6 +346,21 @@ if(TARGET ure_contract)
             $<TARGET_FILE:ure_contract>
             ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene)
     add_test(
+        NAME test_product_e2e_assets
+        COMMAND
+            ${UR_PWSH_EXECUTABLE}
+            -NoProfile
+            -File ${CMAKE_CURRENT_SOURCE_DIR}/test_product_e2e_assets.ps1
+            -RepoRoot ${CMAKE_SOURCE_DIR}
+            -Generator $<TARGET_FILE:generate_product_fixtures>)
+    add_test(
+        NAME test_product_e2e_evidence
+        COMMAND
+            ${UR_PWSH_EXECUTABLE}
+            -NoProfile
+            -File ${CMAKE_CURRENT_SOURCE_DIR}/test_product_e2e_evidence.ps1
+            -RepoRoot ${CMAKE_SOURCE_DIR})
+    add_test(
         NAME test_client_transport
         COMMAND test_client_transport
             $<TARGET_FILE:ure_contract>
@@ -357,6 +379,17 @@ if(TARGET ure_contract)
                 -Runtime $<TARGET_FILE:ure_contract>
                 -Worker $<TARGET_FILE:ure_worker>
                 -Scene ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene)
+        add_test(
+            NAME test_product_functional_e2e
+            COMMAND
+                ${UR_PWSH_EXECUTABLE}
+                -NoProfile
+                -File ${CMAKE_SOURCE_DIR}/scripts/run_product_e2e_matrix.ps1
+                -RepoRoot ${CMAKE_SOURCE_DIR}
+                -BuildDir ${CMAKE_BINARY_DIR}
+                -ReportPath ${CMAKE_BINARY_DIR}/artifacts/Release/evidence/prv1r_functional/report.json
+                -ArtifactDir ${CMAKE_BINARY_DIR}/artifacts/Release/evidence/prv1r_functional
+                -Samples 16)
     endif()
     add_test(
         NAME test_worker_protocol
@@ -450,6 +483,8 @@ if(TARGET ure_contract)
         test_scene_boundary
         test_scene_transaction
         test_product_extension
+        test_product_e2e_assets
+        test_product_e2e_evidence
         test_client_transport
         test_worker_protocol
         test_worker_crash
@@ -462,6 +497,10 @@ if(TARGET ure_contract)
         PROPERTIES TIMEOUT 60)
     if(TARGET ure_cli)
         set_tests_properties(test_prv1_cli PROPERTIES TIMEOUT 60)
+        set_tests_properties(test_product_functional_e2e PROPERTIES
+            TIMEOUT 600
+            RUN_SERIAL TRUE
+            LABELS "product_functional;gpu")
     endif()
     set_tests_properties(test_external_client_package PROPERTIES TIMEOUT 300)
 endif()

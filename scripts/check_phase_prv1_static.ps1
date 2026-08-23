@@ -144,11 +144,33 @@ if ($supersession.Count -ne 1 -or
     throw "PRV.1 historical validation is not bound by one immutable supersession record"
 }
 $supersededIds = @($supersession[0].claims | ForEach-Object capability_id)
-if ($supersededIds.Count -ne 5 -or
-    @($ledger.entries | Where-Object {
-        $_.id -in $supersededIds -and $_.closure_level -eq "ProductE2E"
-    }).Count -ne 0) {
-    throw "PRV.1 smoke-supported ProductE2E claims were not withdrawn"
+if ($supersededIds.Count -ne 5) {
+    throw "PRV.1 historical ProductE2E supersession set is incomplete"
+}
+$recoveries = @($supersessions.recoveries | Where-Object {
+    $_.capability_id -in $supersededIds
+})
+if ($recoveries.Count -ne $supersededIds.Count -or
+    @($recoveries.capability_id | Sort-Object -Unique).Count -ne $supersededIds.Count) {
+    throw "PRV.1 superseded claims do not have one independent recovery record each"
+}
+foreach ($recovery in $recoveries) {
+    $entry = @($ledger.entries | Where-Object id -eq $recovery.capability_id)
+    if ($recovery.recovery_gate -ne "PRV.1R" -or
+        $recovery.superseded_closure -ne
+            @($supersession[0].claims | Where-Object capability_id -eq $recovery.capability_id)[0].current_closure -or
+        $recovery.recovered_closure -ne "ProductE2E" -or
+        @($recovery.evidence | Where-Object {
+            $_ -eq "docs/reports/phase_prv1r_functional_validation_v1.json"
+        }).Count -ne 1 -or
+        $entry.Count -ne 1 -or
+        $entry[0].closure_level -ne "ProductE2E" -or
+        @($entry[0].evidence | Where-Object {
+            $_.kind -eq "ExternalArtifact" -and
+            $_.path -eq "docs/reports/phase_prv1r_functional_validation_v1.json"
+        }).Count -ne 1) {
+        throw "PRV.1 claim $($recovery.capability_id) was not independently recovered by PRV.1R evidence"
+    }
 }
 
-Write-Output "PRV.1 structural audit passed: one product service, explicit Direct/Worker clients, historical smoke evidence superseded"
+Write-Output "PRV.1 structural audit passed: one product service, explicit Direct/Worker clients, historical smoke evidence superseded and independently recovered"

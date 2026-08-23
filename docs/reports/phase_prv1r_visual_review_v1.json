@@ -1,0 +1,28 @@
+{
+  "schema": "ure.phase_prv1r.visual-review/1.0",
+  "status": "PassedWithinDeclaredBoundary",
+  "product_release_declared": false,
+  "reviewer": "Codex visual inspection",
+  "source_report": "docs/reports/phase_prv1r_quality_validation_v1.json",
+  "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+  "artifacts": [
+    {
+      "id": "cornell_1280x720_spp128",
+      "png_sha256": "2d9082067904848f943308bf4e594e7e8bc6cf5e046a0fa0158bcd6585dc737f",
+      "finding": "The Cornell enclosure, red and green walls, ceiling emitter, floor, ceiling, back wall, tall box and short box are recognizable with correct top-left viewing orientation and no crop or row-order corruption."
+    },
+    {
+      "id": "cornell_1920x1080_spp128",
+      "png_sha256": "d9670d4a52e1cf904035f283fb538c04da7450607aed81fd60607ba67dfa7455",
+      "finding": "The 1080p artifact preserves the same geometry, framing, color separation and emitter placement as the 720p artifact without missing regions, non-finite pixels or transport corruption."
+    }
+  ],
+  "observations": [
+    "The gray outer field is consistent with the retained camera framing and scene background rather than an orientation or aspect-ratio defect.",
+    "Monte Carlo noise remains visible at 128 spp, especially on low-energy surfaces; this is expected before the later reconstruction and denoising phases and is not represented as final Preview image quality.",
+    "The emitter reaches the bright end of the fixed viewing transform, while the authoritative raw maximum remains finite and bounded by the automated report.",
+    "No NaN pattern, checkerboard fallback, torn shared-memory frame, duplicated scanline, color-channel permutation or visible Direct/Worker transport artifact was observed."
+  ],
+  "boundary": "This review establishes PRV.1R product-path image integrity and quality-tier evidence only. It does not declare UltraRender_preview, complete material coverage, reconstruction maturity or denoising quality.",
+  "semantic_digest": "cc1317a7a630e287e79d813c52a2108de4af44da308de332078943026f381b3c"
+}

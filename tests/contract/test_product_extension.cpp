@@ -523,7 +523,8 @@ int main(int argc, char **argv) {
     if (scene)
         scenes->release(scene, nullptr);
     if (instance)
-        instances->release(instance, nullptr);
+        check(instances->release(instance, nullptr) == URE_RESULT_SUCCESS,
+              "product lifecycle left instance children alive");
     FreeLibrary(module);
     return failures == 0 ? 0 : 1;
 }
