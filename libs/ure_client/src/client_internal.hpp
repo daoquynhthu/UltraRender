@@ -26,6 +26,7 @@ class ClientTransport {
   public:
     virtual ~ClientTransport() = default;
     virtual std::vector<DeviceInfo> devices() = 0;
+    virtual SceneToolResult scene_tool(const SceneToolRequest &request) = 0;
     virtual std::shared_ptr<JobTransport>
     create_job(const SceneInput &scene, const Objective &objective) = 0;
 };

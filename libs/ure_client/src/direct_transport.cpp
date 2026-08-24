@@ -177,6 +177,8 @@ class DirectConnection final : public ClientTransport,
             URE_INTERFACE_SCENE_UUID_BYTES;
         static constexpr std::uint8_t product_id[16] =
             URE_INTERFACE_PRODUCT_JOB_UUID_BYTES;
+        static constexpr std::uint8_t scene_tool_id[16] =
+            URE_INTERFACE_SCENE_TOOL_UUID_BYTES;
         static constexpr std::uint8_t device_execution_id[16] =
             URE_INTERFACE_DEVICE_EXECUTION_UUID_BYTES;
         runtime_ = query_table<ure_runtime_interface_t>(query, runtime_id, 1, 0,
@@ -193,17 +195,20 @@ class DirectConnection final : public ClientTransport,
                                                      0);
         products_ = query_table<ure_product_job_interface_t>(
             query, product_id, 0, 1, 0, 3);
+        scene_tools_ = query_table<ure_scene_tool_interface_t>(
+            query, scene_tool_id, 0, 1, 0, 1);
         device_execution_ = query_table<ure_device_execution_interface_t>(
             query, device_execution_id, 0, 1, 0, 1);
         if (!runtime_ || !instances_ || !errors_ || !operations_ || !frames_ ||
-            !scenes_ || !products_ || !device_execution_)
+            !scenes_ || !products_ || !scene_tools_ || !device_execution_)
             throw_error(URE_RESULT_CAPABILITY_UNAVAILABLE,
                         URE_ERROR_DOMAIN_CORE, 15,
                         "direct runtime is missing a required product interface");
         const std::uint32_t capabilities[]{
             URE_CAPABILITY_LIFECYCLE, URE_CAPABILITY_FRAME_LEASE,
             URE_CAPABILITY_NATIVE_SCENE, URE_CAPABILITY_RENDER_SESSION,
-            URE_CAPABILITY_PRODUCT_JOB, URE_CAPABILITY_DEVICE_EXECUTION};
+            URE_CAPABILITY_PRODUCT_JOB, URE_CAPABILITY_DEVICE_EXECUTION,
+            URE_CAPABILITY_SCENE_TOOL};
         ure_instance_frame_budget_t frame_budget{};
         frame_budget.header = {URE_STRUCTURE_INSTANCE_FRAME_BUDGET,
                                sizeof(frame_budget), nullptr};
@@ -249,9 +254,83 @@ class DirectConnection final : public ClientTransport,
         return result;
     }
 
+    SceneToolResult scene_tool(const SceneToolRequest &request) override {
+        std::vector<std::string> input_storage;
+        std::vector<ure_string_view_t> inputs;
+        input_storage.reserve(request.inputs.size());
+        inputs.reserve(request.inputs.size());
+        for (const auto &input : request.inputs)
+            input_storage.push_back(path_utf8(input));
+        for (const auto &input : input_storage)
+            inputs.push_back({input.data(), input.size()});
+        const auto output = path_utf8(request.output);
+        std::vector<std::uint8_t> report(UINT64_C(524288));
+        ure_scene_tool_request_t wire{};
+        wire.header = {URE_STRUCTURE_SCENE_TOOL_REQUEST, sizeof(wire), nullptr};
+        wire.operation = static_cast<std::uint32_t>(request.operation);
+        wire.input_count = static_cast<std::uint32_t>(inputs.size());
+        wire.input_paths = inputs.data();
+        wire.output_path = {output.data(), output.size()};
+        wire.package_scene_id = {request.package_scene_id.data(),
+                                 request.package_scene_id.size()};
+        wire.budget = {URE_STRUCTURE_SCENE_BUDGET,
+                       sizeof(ure_scene_budget_t),
+                       nullptr,
+                       request.budget.max_content_bytes,
+                       request.budget.max_uncompressed_bytes,
+                       request.budget.max_resident_bytes,
+                       request.budget.max_resource_count,
+                       request.budget.max_object_count,
+                       request.budget.max_nesting_depth,
+                       request.budget.max_decompression_ratio,
+                       {0, 0}};
+        wire.temporary_budget_bytes = request.temporary_budget_bytes;
+        wire.report_buffer = {report.data(), report.size()};
+        wire.allow_script_execution = request.allow_script_execution ? 1U : 0U;
+        ure_scene_tool_result_t result{};
+        result.header = {URE_STRUCTURE_SCENE_TOOL_RESULT, sizeof(result), nullptr};
+        ure_handle_t error{};
+        const auto status = scene_tools_->execute(instance_, &wire, &result, &error);
+        const auto report_size = static_cast<std::size_t>(
+            std::min<std::uint64_t>(result.report_size, report.size()));
+        std::string diagnostic_report(
+            reinterpret_cast<const char *>(report.data()), report_size);
+        if (status != URE_RESULT_SUCCESS) {
+            ErrorInfo info = inspect_error(status, error);
+            info.diagnostic_report = std::move(diagnostic_report);
+            throw Error(std::move(info));
+        }
+        SceneToolResult output_result;
+        output_result.operation = request.operation;
+        output_result.disposition_count = result.disposition_count;
+        output_result.diagnostic_count = result.diagnostic_count;
+        std::memcpy(output_result.snapshot_identity.data(),
+                    result.snapshot_identity.bytes,
+                    output_result.snapshot_identity.size());
+        std::memcpy(output_result.semantic_identity.data(),
+                    result.semantic_identity.bytes,
+                    output_result.semantic_identity.size());
+        output_result.stored_bytes = result.stored_bytes;
+        output_result.decompressed_bytes = result.decompressed_bytes;
+        output_result.resident_bytes = result.resident_bytes;
+        output_result.streamed_bytes = result.streamed_bytes;
+        output_result.temporary_bytes = result.temporary_bytes;
+        output_result.output_bytes = result.output_bytes;
+        output_result.scene_count = result.scene_count;
+        output_result.resource_count = result.resource_count;
+        output_result.cache_count = result.cache_count;
+        output_result.dependency_count = result.dependency_count;
+        output_result.report = std::move(diagnostic_report);
+        return output_result;
+    }
+
     void check(ure_result_t result, ure_handle_t error) const {
         if (result == URE_RESULT_SUCCESS)
             return;
+        throw Error(inspect_error(result, error));
+    }
+
+    ErrorInfo inspect_error(ure_result_t result, ure_handle_t error) const {
         ErrorInfo info{result,
                        URE_ERROR_DOMAIN_CORE, 0,
                        "runtime call failed without an Error object"};
@@ -280,7 +359,7 @@ class DirectConnection final : public ClientTransport,
             }
             errors_->release(error);
         }
-        throw Error(std::move(info));
+        return info;
     }
 
     HMODULE module_{};
@@ -292,6 +371,7 @@ class DirectConnection final : public ClientTransport,
     const ure_frame_interface_t *frames_{};
     const ure_scene_interface_t *scenes_{};
     const ure_product_job_interface_t *products_{};
+    const ure_scene_tool_interface_t *scene_tools_{};
     const ure_device_execution_interface_t *device_execution_{};
 };
 

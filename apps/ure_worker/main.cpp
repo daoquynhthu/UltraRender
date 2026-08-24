@@ -353,6 +353,90 @@ bool product_objective_request(const product_fb::ProductJobRequest &source,
     return true;
 }
 
+bool scene_tool_kind(product_fb::ProductMessageKind kind) noexcept {
+    switch (kind) {
+    case product_fb::ProductMessageKind::SceneToolValidate:
+    case product_fb::ProductMessageKind::SceneToolInspect:
+    case product_fb::ProductMessageKind::SceneToolBuild:
+    case product_fb::ProductMessageKind::SceneToolMigrate:
+    case product_fb::ProductMessageKind::SceneToolPack:
+    case product_fb::ProductMessageKind::SceneToolUnpack:
+    case product_fb::ProductMessageKind::SceneToolRealize:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool scene_tool_request(const product_fb::ProductEnvelope &envelope,
+                        SceneToolRequest &request) {
+    const auto *source = envelope.scene_tool_request();
+    if (!source || !scene_tool_kind(envelope.kind()) ||
+        source->operation() != static_cast<std::uint32_t>(envelope.kind()) ||
+        !source->input_paths() || source->input_paths()->empty() ||
+        source->input_paths()->size() > 256)
+        return false;
+    request = {};
+    request.operation = source->operation();
+    request.input_paths_utf8.reserve(source->input_paths()->size());
+    for (const auto *input : *source->input_paths()) {
+        if (!input || input->size() > 32768)
+            return false;
+        request.input_paths_utf8.push_back(input->str());
+    }
+    request.output_path_utf8 = source->output_path()
+                                   ? source->output_path()->str()
+                                   : std::string{};
+    request.package_scene_id = source->package_scene_id()
+                                   ? source->package_scene_id()->str()
+                                   : std::string{};
+    request.budget = {source->max_content_bytes(),
+                      source->max_uncompressed_bytes(),
+                      source->max_resident_bytes(),
+                      source->max_resource_count(),
+                      source->max_object_count(),
+                      source->max_nesting_depth(),
+                      source->max_decompression_ratio()};
+    request.temporary_budget_bytes = source->temporary_budget_bytes();
+    request.allow_script_execution = source->allow_script_execution();
+    return true;
+}
+
+std::vector<std::uint8_t> scene_tool_response_payload(
+    product_fb::ProductMessageKind kind,
+    const SceneToolSnapshot &snapshot) {
+    product_fb::ProductEnvelopeT envelope;
+    envelope.kind = kind;
+    envelope.scene_tool_result =
+        std::make_unique<product_fb::SceneToolResultT>();
+    auto &result = *envelope.scene_tool_result;
+    result.operation = snapshot.result.operation;
+    result.disposition_count = snapshot.result.disposition_count;
+    result.diagnostic_count = snapshot.result.diagnostic_count;
+    result.snapshot_identity.assign(
+        std::begin(snapshot.result.snapshot_identity.bytes),
+        std::end(snapshot.result.snapshot_identity.bytes));
+    result.semantic_identity.assign(
+        std::begin(snapshot.result.semantic_identity.bytes),
+        std::end(snapshot.result.semantic_identity.bytes));
+    result.stored_bytes = snapshot.result.stored_bytes;
+    result.decompressed_bytes = snapshot.result.decompressed_bytes;
+    result.resident_bytes = snapshot.result.resident_bytes;
+    result.streamed_bytes = snapshot.result.streamed_bytes;
+    result.temporary_bytes = snapshot.result.temporary_bytes;
+    result.output_bytes = snapshot.result.output_bytes;
+    result.scene_count = snapshot.result.scene_count;
+    result.resource_count = snapshot.result.resource_count;
+    result.cache_count = snapshot.result.cache_count;
+    result.dependency_count = snapshot.result.dependency_count;
+    result.report = snapshot.report;
+    flatbuffers::FlatBufferBuilder builder;
+    product_fb::FinishProductEnvelopeBuffer(
+        builder, product_fb::CreateProductEnvelope(builder, &envelope));
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
+}
+
 std::unique_ptr<product_fb::ProductIdentitySetT>
 product_identities(const ProductStatusSnapshot &status) {
     auto identities = std::make_unique<product_fb::ProductIdentitySetT>();
@@ -686,6 +770,7 @@ int run_worker(const Arguments &arguments) {
             capability != URE_CAPABILITY_NATIVE_SCENE &&
             capability != URE_CAPABILITY_RENDER_SESSION &&
             capability != URE_CAPABILITY_PRODUCT_JOB &&
+            capability != URE_CAPABILITY_SCENE_TOOL &&
             capability != URE_CAPABILITY_DEVICE_EXECUTION)
             return 27;
         if (std::find(required_capabilities.begin(), required_capabilities.end(),
@@ -724,6 +809,7 @@ int run_worker(const Arguments &arguments) {
                                capability == URE_CAPABILITY_NATIVE_SCENE ||
                                capability == URE_CAPABILITY_RENDER_SESSION ||
                                capability == URE_CAPABILITY_PRODUCT_JOB ||
+                               capability == URE_CAPABILITY_SCENE_TOOL ||
                                capability == URE_CAPABILITY_DEVICE_EXECUTION;
         if (supported &&
             !contains_capability(handshake->required_capabilities(), capability) &&
@@ -840,6 +926,37 @@ int run_worker(const Arguments &arguments) {
                 response.payload_version_minor = 1;
                 response.payload = device_inventory_payload(devices);
                 response.declared_payload_bytes = response.payload.size();
+            }
+        } else if (scene_tool_kind(static_cast<product_fb::ProductMessageKind>(
+                       request->operation_kind())) &&
+                   request->payload_schema() == URE_PAYLOAD_SCENE_TOOL &&
+                   request->payload_version_major() == 0 &&
+                   request->payload_version_minor() == 1) {
+            const auto kind = static_cast<product_fb::ProductMessageKind>(
+                request->operation_kind());
+            const std::span payload(request->payload()->data(),
+                                    request->payload()->size());
+            const auto *wire = product_payload(payload, kind);
+            SceneToolRequest scene_tool;
+            SceneToolSnapshot snapshot;
+            if (!wire || !scene_tool_request(*wire, scene_tool)) {
+                response.result = fb::ResultCode::MalformedData;
+                failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE,
+                           628, "scene-tool request is malformed"};
+                response.error = error_descriptor(failure);
+            } else {
+                const bool succeeded = runtime.execute_scene_tool(
+                    scene_tool, snapshot, failure);
+                response.payload_schema = URE_PAYLOAD_SCENE_TOOL;
+                response.payload_version_major = 0;
+                response.payload_version_minor = 1;
+                response.payload = scene_tool_response_payload(kind, snapshot);
+                response.declared_payload_bytes = response.payload.size();
+                if (!succeeded) {
+                    response.result =
+                        static_cast<fb::ResultCode>(failure.result);
+                    response.error = error_descriptor(failure);
+                }
             }
         } else if (request->operation_kind() == URE_OPERATION_REPLACE_SCENE &&
                    request->payload_schema() == URE_PAYLOAD_NATIVE_SCENE) {

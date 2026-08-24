@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -82,6 +83,20 @@ ure::client::TransportMode transport_mode(std::string_view value) {
     throw std::invalid_argument("transport must be direct or worker");
 }
 
+ure::client::SceneFormat scene_format(const std::filesystem::path& path) {
+    auto extension = path.extension().string();
+    std::ranges::transform(extension, extension.begin(), [](unsigned char value) {
+        return static_cast<char>(std::tolower(value));
+    });
+    if (extension == ".ure")
+        return ure::client::SceneFormat::Ure;
+    if (extension == ".urescene")
+        return ure::client::SceneFormat::UreScene;
+    if (extension == ".urepkg")
+        return ure::client::SceneFormat::UrePackage;
+    throw std::invalid_argument("scene must use .ure, .urescene, or .urepkg");
+}
+
 std::uint64_t parse_samples(std::string_view value) {
     std::size_t offset{};
     const auto parsed = std::stoull(std::string(value), &offset);
@@ -120,7 +135,7 @@ int main(int argc, char **argv) {
         connection.worker_path = std::filesystem::absolute(argv[3]);
         ure::client::SceneInput scene;
         scene.path = std::filesystem::absolute(argv[4]);
-        scene.format = ure::client::SceneFormat::UreScene;
+        scene.format = scene_format(scene.path);
         ure::client::Objective objective;
         objective.output_semantics = {URE_FRAME_PLANE_COLOR};
         objective.sample_budget = samples;

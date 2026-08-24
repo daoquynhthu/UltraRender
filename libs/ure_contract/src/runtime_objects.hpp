@@ -88,6 +88,7 @@ struct InstanceObject final : Object {
     bool scene_enabled{};
     bool session_enabled{};
     bool product_enabled{};
+    bool scene_tool_enabled{};
     bool device_execution_enabled{};
     std::uint32_t max_retained_frames{4};
     std::uint64_t max_retained_bytes{UINT64_C(16) * 1024 * 1024};

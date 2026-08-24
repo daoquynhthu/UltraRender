@@ -18,3 +18,15 @@ Recovery is determined by `retryability`:
 `Incomplete` with `ProgressiveFrameUnavailable` means the job is valid but has not published a frame generation yet. Continue observing monotonic progress instead of recreating the job. `Backpressure` with `ProgressiveFrameLeaseBackpressure` means the negotiated Worker mapping or retained-lease budget is full; release older immutable frame leases and retry after a bounded window. A malformed progressive-frame request must be corrected and is never retryable as-is.
 
 Messages are bounded presentation text. Automation should branch on result/domain/detail and versioned structured detail, not match message strings. Absolute private paths, addresses, credentials and unfiltered vendor text are not part of the diagnostic contract.
+
+## Scene and package recovery
+
+Scene Tool 0.1 and ProductJob use catalog details 600-628 for PRV.2 failures. Clients should preserve the scene/package semantic identity, operation and sanitized field/resource location supplied with the detail.
+
+- Parse, schema and request-shape details require correcting the input or selecting a supported schema before retry. Corrupt, truncated and ambiguous packages are input errors; do not guess a scene.
+- Feature, solver and simulation details distinguish required unsupported semantics from optional data retained for tooling. A required declaration must be removed, corrected or executed by an applicable product capability; retrying unchanged input cannot succeed.
+- Resource details distinguish missing content, hash mismatch, dependency cycle, domain mismatch and path traversal. Supply the declared payload with the expected content identity, repair the dependency graph/domain, or repack from a trusted root. Never add an ambient search path or expose an author-machine absolute path as a workaround.
+- Stored, decompressed, resident, streamed, temporary and output limits are independent. Increase the specific explicit limit or reduce the declared source within its semantics. A decompression-ratio or container-size rejection must not be bypassed by streaming the same untrusted payload unchecked.
+- Package publication details require a writable explicit destination and an atomic retry after the cause is corrected. A rebuildable cache may be removed; required resource payloads may not.
+
+Direct, Worker and CLI preserve the originating result/domain/detail and cause graph. Worker adds transport context without replacing the scene failure. Presentation output redacts private path prefixes; recovery automation should use content identities and safe relative field locations rather than reconstructing a redacted path.

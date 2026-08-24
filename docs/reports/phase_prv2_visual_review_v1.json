@@ -1,0 +1,25 @@
+{
+  "schema": "ure.phase_prv2.visual-review/1.0",
+  "status": "PassedWithinDeclaredBoundary",
+  "product_release_declared": false,
+  "reviewer": "Codex visual inspection",
+  "review_date": "2026-08-24",
+  "source_report": "docs/reports/phase_prv2_validation_v1.json",
+  "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+  "artifact": {
+    "id": "q4_procedural_854x480_package_spp16",
+    "resolution": "854x480",
+    "samples": 16,
+    "raw_sha256": "8b6798ac663facbbfdfa35b304971b084ccae069c9c413cbf582abbfdb89bbdb",
+    "png_sha256": "ce83913211ed4c32818df1a62a0bdf156f5c581dfeb49e8564f632b4d1d95c5e",
+    "package_sha256": "b23e081a40ab88b9afed1285e06043a0838e8cb43001a61f43da2f8d95593430",
+    "snapshot_identity": "c4a1fc62935f46cbda14201b38ee15ab10b64c6c7ffb4421c041ce0e25bb0bbe"
+  },
+  "observations": [
+    "Three separated procedurally instantiated triangular geometry regions and a distinct overhead generated light group are visibly present.",
+    "The image has the expected landscape aspect ratio and top-left viewing orientation, with no crop, duplicated scanline, channel permutation or shared-memory tear.",
+    "Monte Carlo noise is visible on the generated geometry at 16 spp; this functional gate establishes nontrivial composition and transport, not final image quality or denoising maturity.",
+    "The Direct and Worker authoritative raw artifacts are byte-identical, and the automated evidence independently verifies finite values, positive energy, spatial structure and nested-sample convergence."
+  ],
+  "boundary": "This review closes functional visual integrity for the PRV.2 self-contained procedural-package path only. It does not declare glTF/MaterialX/Hydra product convergence, complete material coverage, reconstruction, denoising or UltraRender_preview."
+}

@@ -207,9 +207,9 @@
     },
     {
       "id": "native_cli_tooling",
-      "surface": "CLI validate/build/pack/unpack/inspect/migrate/export tooling",
+      "surface": "CLI validate/build/pack/unpack/inspect/migrate/realize and isolated export tooling",
       "callers": ["command-line users", "build pipelines"],
-      "owners": ["ure_cli", "ure_native_tool", "ure_sceneio"],
+      "owners": ["ure_cli", "ure_client", "ure_product", "ure_native_tool", "ure_sceneio"],
       "semantic_domains": ["scene_authoring"],
       "authority_claims": [],
       "authority_refs": ["native_scene_authority"],
@@ -221,17 +221,17 @@
       "runtime_states": ["Compiled", "Available", "Enabled", "Applicable"],
       "input_role": "Files and explicit tooling commands",
       "output_role": "Validated/migrated native artifacts and loss reports",
-      "translation_path": "CLI command -> isolated native tooling component -> native scene tooling",
+      "translation_path": "CLI scene command -> ure_client Direct/Worker -> runtime Scene Tool 0.1 -> ure_product; adapter export -> isolated native tool",
       "bypass_status": "None",
-      "bypass_detail": "Format tooling may remain direct and does not define renderer lifecycle",
-      "migration_phase": "None",
-      "terminal_gate": "Q.12",
+      "bypass_detail": "Scene semantics use one runtime authority; isolated export remains an adapter operation",
+      "migration_phase": "PRV.2",
+      "terminal_gate": "PRV.2",
       "loss_policy": "Strict by default; documented-loss export requires report",
-      "conformance_evidence": ["test_native_tooling", "test_native_validation_suite"],
+      "conformance_evidence": ["test_native_tooling", "test_native_validation_suite", "test_scene_tool_extension", "test_prv2_cli"],
       "anchors": [
-        {"path": "apps/ure_cli/src/main.cpp", "pattern": "cmd_native_tool"},
+        {"path": "apps/ure_cli/src/main.cpp", "pattern": "client\\.scene_tool\\(request\\)"},
         {"path": "apps/ure_native_tool/src/main.cpp", "pattern": "cmd_native_tool"},
-        {"path": "libs/ure_sceneio/include/ure/native_scene_tooling.hpp", "pattern": "native"}
+        {"path": "libs/ure_product/include/ure/product/scene_tool_service.hpp", "pattern": "execute_scene_tool"}
       ]
     },
     {

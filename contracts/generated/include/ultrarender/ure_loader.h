@@ -439,6 +439,43 @@ typedef struct ure_product_artifact_manifest_t {
     uint64_t reserved[2];
 } ure_product_artifact_manifest_t;
 
+typedef struct ure_scene_tool_request_t {
+    ure_input_header_t header;
+    uint32_t operation;
+    uint32_t input_count;
+    const ure_string_view_t *input_paths;
+    ure_string_view_t output_path;
+    ure_string_view_t package_scene_id;
+    ure_scene_budget_t budget;
+    uint64_t temporary_budget_bytes;
+    ure_mutable_byte_span_t report_buffer;
+    ure_bool32_t allow_script_execution;
+    uint32_t reserved32;
+    uint64_t reserved[2];
+} ure_scene_tool_request_t;
+
+typedef struct ure_scene_tool_result_t {
+    ure_output_header_t header;
+    uint32_t operation;
+    uint32_t disposition_count;
+    uint32_t diagnostic_count;
+    uint32_t reserved32;
+    ure_digest256_t snapshot_identity;
+    ure_digest256_t semantic_identity;
+    uint64_t stored_bytes;
+    uint64_t decompressed_bytes;
+    uint64_t resident_bytes;
+    uint64_t streamed_bytes;
+    uint64_t temporary_bytes;
+    uint64_t output_bytes;
+    uint64_t scene_count;
+    uint64_t resource_count;
+    uint64_t cache_count;
+    uint64_t dependency_count;
+    uint64_t report_size;
+    uint64_t reserved[2];
+} ure_scene_tool_result_t;
+
 typedef struct ure_device_descriptor_t {
     ure_output_header_t header;
     uint32_t backend;
@@ -562,6 +599,11 @@ typedef struct ure_product_job_interface_t {
     ure_result_t (URE_CALL *acquire_frame)(ure_handle_t job, ure_handle_t *frame, ure_handle_t *error);
     ure_result_t (URE_CALL *get_artifact_manifest)(ure_handle_t job, ure_product_artifact_manifest_t *manifest, ure_handle_t *error);
 } ure_product_job_interface_t;
+
+typedef struct ure_scene_tool_interface_t {
+    ure_interface_table_header_t header;
+    ure_result_t (URE_CALL *execute)(ure_handle_t instance, const ure_scene_tool_request_t *request, ure_scene_tool_result_t *result, ure_handle_t *error);
+} ure_scene_tool_interface_t;
 
 typedef struct ure_device_execution_interface_t {
     ure_interface_table_header_t header;

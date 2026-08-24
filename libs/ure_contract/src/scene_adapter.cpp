@@ -163,72 +163,6 @@ std::vector<std::uint8_t> read_file(const std::filesystem::path &path,
     return bytes;
 }
 
-const native_scene::ContainerChunk *embedded_scene(
-    const native_scene::NativeContainer &container, std::string_view id) {
-    const std::string chunk_id = "scene/" + std::string(id);
-    const auto found = std::ranges::find(container.chunks, chunk_id,
-                                         &native_scene::ContainerChunk::id);
-    return found == container.chunks.end() ? nullptr : &*found;
-}
-
-native_scene::LoadResult<native_scene::NativeSceneArchive>
-load_package_memory(std::span<const std::uint8_t> bytes,
-                    std::string_view selected_scene,
-                    const native_scene::ValidationLimits &budget) {
-    const auto registry = native_scene::native_tool_capabilities();
-    const auto container = native_scene::read_container(bytes, registry, budget);
-    const auto manifest = native_scene::read_package_binary(bytes, registry, budget);
-    native_scene::LoadResult<native_scene::NativeSceneArchive> output;
-    output.diagnostics = container.diagnostics;
-    output.diagnostics.insert(output.diagnostics.end(), manifest.diagnostics.begin(),
-                              manifest.diagnostics.end());
-    if (!container.ok() || !container.value || !manifest.ok() || !manifest.value)
-        return output;
-    if (manifest.value->scenes.empty()) {
-        output.diagnostics.push_back({"URE-PB5-PACKAGE-001",
-                                      native_scene::DiagnosticSeverity::Error,
-                                      "/scenes", "Package contains no scene", {}});
-        return output;
-    }
-    if (selected_scene.empty() && manifest.value->scenes.size() != 1) {
-        output.diagnostics.push_back({
-            "URE-PB5-PACKAGE-002", native_scene::DiagnosticSeverity::Error,
-            "/scenes", "Package scene selection is ambiguous", {}});
-        return output;
-    }
-    auto selected = manifest.value->scenes.begin();
-    if (!selected_scene.empty())
-        selected = std::ranges::find(manifest.value->scenes, selected_scene,
-                                     &native_scene::SceneReference::id);
-    if (selected == manifest.value->scenes.end()) {
-        output.diagnostics.push_back({"URE-PB5-PACKAGE-003",
-                                      native_scene::DiagnosticSeverity::Error,
-                                      "/scenes", "Selected package scene was not found", {}});
-        return output;
-    }
-    const auto *chunk = embedded_scene(*container.value, selected->id);
-    if (!chunk || selected->uri !=
-                      "ure+sha256://" + native_scene::sha256_hex(chunk->payload)) {
-        output.diagnostics.push_back({"URE-PB5-PACKAGE-004",
-                                      native_scene::DiagnosticSeverity::Error,
-                                      "/scenes", "Selected package scene payload is invalid", {}});
-        return output;
-    }
-    auto scene = native_scene::read_scene_ir_binary(chunk->payload, registry, budget);
-    output.diagnostics.insert(output.diagnostics.end(), scene.diagnostics.begin(),
-                              scene.diagnostics.end());
-    if (scene.value &&
-        native_scene::scene_ir_semantic_hash(*scene.value) !=
-            selected->content_hash) {
-        output.diagnostics.push_back({"URE-PB5-PACKAGE-005",
-                                      native_scene::DiagnosticSeverity::Error,
-                                      "/scenes", "Selected scene semantic digest differs", {}});
-        return output;
-    }
-    output.value = std::move(scene.value);
-    return output;
-}
-
 std::uint64_t object_count(const native_scene::NativeSceneArchive &archive) {
     const auto &scene = archive.scene;
     return static_cast<std::uint64_t>(archive.document.features.size()) +
@@ -309,7 +243,8 @@ LoadedSceneData load(const ure_native_scene_blob_t &blob) {
             loaded = native_scene::read_scene_ir_binary(
                 bytes, native_scene::native_tool_capabilities(), validation_limits);
         } else if (blob.format == URE_SCENE_FORMAT_UREPKG) {
-            loaded = load_package_memory(bytes, selected, validation_limits);
+            loaded = native_scene::load_native_package_scene(
+                bytes, selected, validation_limits);
         } else if (blob.format == URE_SCENE_FORMAT_URE) {
             check_json_nesting(bytes, blob.budget.max_nesting_depth);
             native_scene::ExplodedSceneArchive exploded;

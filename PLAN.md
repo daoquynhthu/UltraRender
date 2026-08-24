@@ -1,6 +1,6 @@
 # UltraRender Preview 产品集成与端到端闭环路线图
 
-最后更新: 2026-08-23（PRV.1R 闭环可信有界产品 E2E；游标推进至尚未施工的 PRV.2）
+最后更新: 2026-08-24（PRV.2 闭环完整场景实现与自包含包；游标推进至尚未施工的 PRV.3）
 
 本文档是 UltraRender 当前唯一的全局施工权威。它将项目重心从继续扩展高阶研究能力，切换为已有非研究能力的产品总装、端到端闭环，以及训练无关重建/降噪的生产接入。
 
@@ -17,7 +17,7 @@
 
 ## 0. 权威状态
 
-当前游标: PRV.2 — 完整场景实现与自包含包
+当前游标: PRV.3 — 材质、资产与有界波动能力组合（尚未开始施工）
 
 ### 0.1 唯一施工队列
 
@@ -35,10 +35,10 @@ PRV.1 one product runtime and client spine         [done]
 PRV.1R runtime correctness and trusted E2E         [done]
                   |
                   v
-PRV.2 complete scene realization and packages      [current, not started]
+PRV.2 complete scene realization and packages      [done]
                   |
                   v
-PRV.3 material, asset and bounded wave composition
+PRV.3 material, asset and bounded wave composition [current, not started]
                   |
                   v
 PRV.4 production MeasurementBundle and output
@@ -414,7 +414,7 @@ Error 对象分配失败是唯一允许没有 retained Error handle 的资源极
 
 ## 4. PRV.2 — 完整场景实现与自包含包
 
-**状态**: 当前游标；依赖已满足，尚未开始施工。
+**状态**: 已完成；完整 archive realization、自包含 package 与统一 scene tooling 已在声明边界内闭环，PRV.3 可作为下一施工阶段。
 
 **目标**: 让一个产品作业消费完整 NativeSceneArchive，并让验证、实现和渲染对 required feature 得出同一结论。
 
@@ -466,6 +466,12 @@ Error 对象分配失败是唯一允许没有 retained Error handle 的资源极
 - 该 render 必须复用 PRV.1R product scenario runner，以 production profile 生成至少 480p 非平凡 artifact；native tool 或直接 `ure_core` 调用不能替代；
 - corrupt、ambiguous、oversized、missing-resource和unsupported-feature负向门禁通过。
 - scene/package错误目录、真实负向fixture、Direct/Worker/CLI parity和redacted输出门禁通过；未知异常不得塌缩为无上下文`Internal`。
+
+**完成记录（2026-08-24）**: 唯一 Scene Realizer 现从 native、package 或 adapted archive 生成 immutable ProductSnapshot；deterministic procedural graph 实际执行后重新验证，renderer 只取得深拷贝，required semantics 在 GPU allocation 前执行或拒绝。内容解析器覆盖 dependency/domain/hash/path 与 stored、decompressed、resident、streamed、temporary、output 六类预算；solver 的当前适用子集进入执行约束，unsupported required solver/simulation fail-loud，optional tooling data 保留明确 disposition。
+
+`.urepkg` 现收集 required local payload、resources、provenance 与 optional rebuildable cache，按内容身份去重；package bytes 与 semantic identity 不依赖输出文件名，删除作者资源目录和缓存后仍可 validate、realize、render。Exact-build Scene Tool 0.1 `UnstableExtension` 提供 validate/inspect/build/migrate/pack/unpack/realize，`ure_cli` 经 `ure_client` 显式 Direct/Worker 调用同一 runtime service，独立 native tool 仅保留 adapter export。Q.3-Q.12 disposition matrix 无 ignored block，诊断目录新增 600-628 并覆盖 corrupt、ambiguous、oversized、missing、hash/domain/cycle/path、unsupported 和 redaction parity。
+
+共享 PRV.1R product scenario runner 在删除作者目录后，以 production profile 完成 854×480、16 spp 的 procedural package Direct/Worker 及 CLI Direct/Worker 真渲染；权威 PFM、固定 PNG、finite/能量/空间结构/嵌套样本收敛与人工视觉审阅留存在 `docs/reports/phase_prv2_validation_v1.json` 和 `docs/reports/phase_prv2_visual_review_v1.json`。Core ABI 1.0 与 Worker Protocol 1.0 冻结前缀未变；Core Frame 继续绑定原 scene revision identity，ProductSnapshot identity 仅由 exact-build product extension 报告。Windows Release 完整构建及 117/117 CTest 通过。该证据只提升 bounded procedural-package 完整 archive 路径，不宣称 PRV.3 材质/adapter、MeasurementBundle、重建、非 CUDA complete-scene backend 或 `UltraRender_preview` 完成。
 
 ---
 

@@ -493,7 +493,8 @@ CliResult parse_cli(int argc, char** argv) {
     std::string scene_info;
     info_cmd->add_option("scene", scene_info, "Path to scene file")->required();
 
-    app.add_subcommand("list-devices", "List available backend adapters");
+    auto* list_devices_cmd = app.add_subcommand(
+        "list-devices", "List available backend adapters");
 
     auto* validate_cmd = app.add_subcommand("validate", "Validate a scene file");
     std::string scene_validate;
@@ -523,6 +524,33 @@ CliResult parse_cli(int argc, char** argv) {
     std::string migrate_input, migrate_output;
     migrate_cmd->add_option("input", migrate_input, "Input .ure or .urescene")->required();
     migrate_cmd->add_option("-o,--output", migrate_output, "Migrated .ure or .urescene")->required();
+
+    auto* realize_cmd = app.add_subcommand(
+        "realize", "Realize a native scene or package into a ProductSnapshot");
+    std::string realize_input;
+    realize_cmd->add_option(
+        "input", realize_input, "Input .ure, .urescene, or .urepkg")->required();
+
+    std::string scene_tool_scene_id;
+    const auto add_product_client_options =
+        [&](CLI::App* command, bool package_selection) {
+            command->add_option("--transport", transport_render,
+                                "Product transport: worker or direct");
+            command->add_option(
+                "--runtime", runtime_render,
+                "Absolute or executable-relative product runtime path");
+            command->add_option(
+                "--worker", worker_render,
+                "Absolute or executable-relative Worker path");
+            if (package_selection)
+                command->add_option(
+                    "--scene-id", scene_tool_scene_id,
+                    "Selected scene ID for a multi-scene package");
+        };
+    for (auto* command : {info_cmd, validate_cmd, build_cmd, pack_cmd,
+                          unpack_cmd, inspect_cmd, migrate_cmd, realize_cmd})
+        add_product_client_options(command, true);
+    add_product_client_options(list_devices_cmd, false);
 
     auto* export_cmd = app.add_subcommand(
         "export",
@@ -723,6 +751,9 @@ CliResult parse_cli(int argc, char** argv) {
         result.command = CliCommand::Migrate;
         result.scene_path = migrate_input;
         result.output_path = migrate_output;
+    } else if (*realize_cmd) {
+        result.command = CliCommand::Realize;
+        result.scene_path = realize_input;
     } else if (*export_cmd) {
         result.command = CliCommand::Export;
         result.scene_path = export_input;
@@ -732,6 +763,13 @@ CliResult parse_cli(int argc, char** argv) {
         result.scene_id = export_scene_id;
     } else {
         result.command = CliCommand::ListDevices;
+    }
+    if (result.command != CliCommand::Render &&
+        result.command != CliCommand::Export) {
+        result.transport = transport_render;
+        result.runtime_path = runtime_render;
+        result.worker_path = worker_render;
+        result.scene_id = scene_tool_scene_id;
     }
     return result;
 }

@@ -267,6 +267,7 @@ add_executable(test_native_tooling test_native_tooling.cpp)
 target_link_libraries(test_native_tooling PRIVATE ure_sceneio ure_diag)
 target_compile_definitions(test_native_tooling PRIVATE
     URE_TEST_ASSET_DIR="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene"
+    URE_TEST_PROCEDURAL_ASSET="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene"
 )
 add_test(NAME test_native_tooling COMMAND test_native_tooling)
 
@@ -310,6 +311,22 @@ if(TARGET ure_core)
         URE_PRODUCT_TEST_SCENE="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene"
         URE_PRODUCT_RESOURCE_TEST_SCENE="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene/full_scene.ure")
     add_test(NAME test_product_service COMMAND test_product_service)
+
+    add_executable(test_product_scene_realizer test_product_scene_realizer.cpp)
+    target_link_libraries(test_product_scene_realizer PRIVATE ure_product ure_sceneio)
+    target_compile_definitions(test_product_scene_realizer PRIVATE
+        URE_PRV2_PROCEDURAL_SCENE="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene"
+        URE_PRV2_RESOURCE_SCENE="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene/full_scene.urescene"
+        URE_PRV2_GLTF_SCENE="${CMAKE_SOURCE_DIR}/scenes/cornell_box.gltf")
+add_test(NAME test_product_scene_realizer COMMAND test_product_scene_realizer)
+
+add_executable(test_scene_tool_service test_scene_tool_service.cpp)
+target_link_libraries(test_scene_tool_service PRIVATE ure_product ure_sceneio)
+target_compile_definitions(test_scene_tool_service PRIVATE
+    URE_SCENE_TOOL_PROCEDURAL="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene"
+    URE_SCENE_TOOL_RESOURCE="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene/full_scene.urescene"
+)
+add_test(NAME test_scene_tool_service COMMAND test_scene_tool_service)
 
     add_executable(test_gltf_frontend test_gltf_frontend.cpp)
     target_link_libraries(test_gltf_frontend PRIVATE ure_sceneio ure_core ure_diag)

@@ -73,7 +73,7 @@ std::wstring quote_argument(const std::wstring &value) {
     return output;
 }
 
-int cmd_native_tool(int argc, char **argv) {
+int cmd_adapter_tool(int argc, char **argv) {
     const auto tool = executable_directory() / "ultrarender_native_tool.exe";
     if (!std::filesystem::is_regular_file(tool)) {
         std::cerr << "ure_cli: native tooling component is unavailable\n";
@@ -98,6 +98,22 @@ int cmd_native_tool(int argc, char **argv) {
     const bool inspected = GetExitCodeProcess(process.hProcess, &exit_code) != 0;
     CloseHandle(process.hProcess);
     return inspected ? static_cast<int>(exit_code) : 3;
+}
+
+ure::client::ConnectionOptions connection_options(
+    const ure::config::CliResult &cli) {
+    if (cli.transport != "worker" && cli.transport != "direct")
+        throw std::runtime_error("--transport must be worker or direct");
+    const auto directory = executable_directory();
+    ure::client::ConnectionOptions options;
+    options.transport = cli.transport == "direct"
+                            ? ure::client::TransportMode::Direct
+                            : ure::client::TransportMode::Worker;
+    options.runtime_path = resolve_component(
+        cli.runtime_path, "ultrarender_runtime_1.dll", directory);
+    options.worker_path = resolve_component(
+        cli.worker_path, "ultrarender_worker_1.exe", directory);
+    return options;
 }
 
 bool allowed_render_arguments(int argc, char **argv, std::string &error) {
@@ -172,19 +188,9 @@ std::string digest_hex(std::span<const std::uint8_t, 32> digest) {
 }
 
 int render(const ure::config::CliResult &cli) {
-    if (cli.transport != "worker" && cli.transport != "direct")
-        throw std::runtime_error("--transport must be worker or direct");
     if (cli.config.renderer.spp <= 0)
         throw std::runtime_error("--spp must be positive");
-    const auto directory = executable_directory();
-    ure::client::ConnectionOptions options;
-    options.transport = cli.transport == "direct"
-                            ? ure::client::TransportMode::Direct
-                            : ure::client::TransportMode::Worker;
-    options.runtime_path = resolve_component(
-        cli.runtime_path, "ultrarender_runtime_1.dll", directory);
-    options.worker_path = resolve_component(
-        cli.worker_path, "ultrarender_worker_1.exe", directory);
+    const auto options = connection_options(cli);
     ure::client::SceneInput scene;
     scene.path = std::filesystem::absolute(cli.scene_path);
     scene.format = scene_format(scene.path);
@@ -228,6 +234,61 @@ int render(const ure::config::CliResult &cli) {
     return 0;
 }
 
+ure::client::SceneToolOperation scene_tool_operation(
+    ure::config::CliCommand command) {
+    switch (command) {
+    case ure::config::CliCommand::Info:
+    case ure::config::CliCommand::Inspect:
+        return ure::client::SceneToolOperation::Inspect;
+    case ure::config::CliCommand::Validate:
+        return ure::client::SceneToolOperation::Validate;
+    case ure::config::CliCommand::Build:
+        return ure::client::SceneToolOperation::Build;
+    case ure::config::CliCommand::Pack:
+        return ure::client::SceneToolOperation::Pack;
+    case ure::config::CliCommand::Unpack:
+        return ure::client::SceneToolOperation::Unpack;
+    case ure::config::CliCommand::Migrate:
+        return ure::client::SceneToolOperation::Migrate;
+    case ure::config::CliCommand::Realize:
+        return ure::client::SceneToolOperation::Realize;
+    default:
+        throw std::runtime_error("command is not a scene-tool operation");
+    }
+}
+
+int scene_tool(const ure::config::CliResult &cli) {
+    ure::client::SceneToolRequest request;
+    request.operation = scene_tool_operation(cli.command);
+    if (cli.command == ure::config::CliCommand::Pack) {
+        request.inputs.reserve(cli.input_paths.size());
+        for (const auto &input : cli.input_paths)
+            request.inputs.push_back(std::filesystem::absolute(input));
+    } else {
+        request.inputs = {std::filesystem::absolute(cli.scene_path)};
+    }
+    if (!cli.output_path.empty())
+        request.output = std::filesystem::absolute(cli.output_path);
+    request.package_scene_id = cli.scene_id;
+    auto client = ure::client::Client::connect(connection_options(cli));
+    const auto result = client.scene_tool(request);
+    std::cout << result.report;
+    return 0;
+}
+
+int list_devices(const ure::config::CliResult &cli) {
+    auto client = ure::client::Client::connect(connection_options(cli));
+    for (const auto &device : client.devices())
+        std::cout << "backend=" << device.backend
+                  << " provider=" << device.provider
+                  << " ordinal=" << device.ordinal
+                  << " state=" << device.runtime_state
+                  << " name=" << device.name
+                  << " memory=" << device.available_memory_bytes << '/'
+                  << device.total_memory_bytes << '\n';
+    return 0;
+}
+
 }
 
 int main(int argc, char **argv) {
@@ -239,10 +300,16 @@ int main(int argc, char **argv) {
         }
         SetConsoleCtrlHandler(console_control, TRUE);
         const auto cli = ure::config::parse_cli(argc, argv);
-        if (cli.command != ure::config::CliCommand::Render)
-            return cmd_native_tool(argc, argv);
-        return render(cli);
+        if (cli.command == ure::config::CliCommand::Render)
+            return render(cli);
+        if (cli.command == ure::config::CliCommand::ListDevices)
+            return list_devices(cli);
+        if (cli.command == ure::config::CliCommand::Export)
+            return cmd_adapter_tool(argc, argv);
+        return scene_tool(cli);
     } catch (const ure::client::Error &error) {
+        if (!error.info().diagnostic_report.empty())
+            std::cerr << error.info().diagnostic_report;
         std::cerr << "ure_cli: " << error.what() << " (result="
                   << error.info().result << ", domain=" << error.info().domain
                   << ", detail=" << error.info().detail;

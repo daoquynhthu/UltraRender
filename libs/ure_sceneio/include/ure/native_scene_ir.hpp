@@ -21,6 +21,7 @@ struct NamedResourcePayload {
     std::string id;
     ResourceDescriptor descriptor;
     std::vector<std::uint8_t> payload;
+    std::string source_uri;
 };
 
 struct NativeSceneSourceIds {
@@ -72,6 +73,9 @@ struct NativeSceneArchive {
     std::shared_ptr<const NativeSolverContract> solver_contract;
     std::shared_ptr<const NativeSimulationContract> simulation_contract;
     std::vector<ContainerChunk> preserved_optional_chunks;
+    std::vector<NamedResourcePayload> packaged_resources;
+    std::shared_ptr<const PackageManifest> package_manifest;
+    std::string package_semantic_hash;
 };
 
 struct ExplodedSceneArchive {

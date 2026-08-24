@@ -1,0 +1,78 @@
+{
+  "schema": "ure.preview.prv2-feature-disposition/1.0",
+  "phase": "PRV.2",
+  "ignored_semantics_allowed": false,
+  "allowed_dispositions": ["Executed", "Rejected", "PreservedForTooling"],
+  "entries": [
+    {
+      "source_phase": "Q.3",
+      "capability": "complete-native-scene",
+      "dispositions": ["Executed"],
+      "policy": "Validated SceneIR, identities, camera, geometry, lights and declared resources are frozen into one ProductSnapshot.",
+      "evidence": ["tests/host/test_product_scene_realizer.cpp", "scripts/run_prv2_package_e2e.ps1"]
+    },
+    {
+      "source_phase": "Q.4",
+      "capability": "deterministic-procedural-graph",
+      "dispositions": ["Executed", "Rejected"],
+      "policy": "A valid graph is deterministically realized and revalidated; an invalid required graph rejects before GPU allocation.",
+      "evidence": ["tests/host/test_product_scene_realizer.cpp", "scripts/run_prv2_package_e2e.ps1"]
+    },
+    {
+      "source_phase": "Q.5",
+      "capability": "explicit-script-build",
+      "dispositions": ["Rejected", "PreservedForTooling"],
+      "policy": "The runtime never executes ambient scripts; required script execution rejects and optional build provenance remains tooling metadata.",
+      "evidence": ["tests/host/test_product_scene_realizer.cpp", "tests/host/test_native_script_build.cpp"]
+    },
+    {
+      "source_phase": "Q.6",
+      "capability": "typed-resource-catalog",
+      "dispositions": ["Executed", "Rejected"],
+      "policy": "Content identity, dependency, domain, residency and all resource budgets are resolved; missing, conflicting or unsafe bindings reject.",
+      "evidence": ["tests/host/test_product_scene_realizer.cpp", "tests/contract/test_scene_tool_extension.cpp"]
+    },
+    {
+      "source_phase": "Q.7",
+      "capability": "solver-contract",
+      "dispositions": ["Executed", "Rejected", "PreservedForTooling"],
+      "policy": "The supported solver subset compiles into product constraints; unavailable required modes reject and optional unavailable modes remain explicit.",
+      "evidence": ["tests/host/test_product_scene_realizer.cpp", "tests/host/test_native_solver_contract.cpp"]
+    },
+    {
+      "source_phase": "Q.8",
+      "capability": "bounded-simulation-contract",
+      "dispositions": ["Executed", "Rejected", "PreservedForTooling"],
+      "policy": "A bounded time plan is compiled; required dynamic domains reject until PRV.7 and optional domains remain tooling-visible.",
+      "evidence": ["tests/host/test_product_scene_realizer.cpp", "tests/host/test_native_simulation_contract.cpp"]
+    },
+    {
+      "source_phase": "Q.9",
+      "capability": "native-scene-tooling",
+      "dispositions": ["Executed", "Rejected"],
+      "policy": "Validate, inspect, build, migrate, pack, unpack and realize execute through one versioned runtime extension with Direct, Worker and CLI parity.",
+      "evidence": ["tests/contract/test_scene_tool_extension.cpp", "tests/contract/test_prv2_cli.ps1"]
+    },
+    {
+      "source_phase": "Q.10",
+      "capability": "adapter-loss-and-provenance",
+      "dispositions": ["PreservedForTooling", "Rejected"],
+      "policy": "Adapter provenance and declared loss remain inspectable; required unowned adapter semantics reject and adapters do not create a second renderer.",
+      "evidence": ["tests/host/test_product_scene_realizer.cpp", "tests/host/test_native_adapter.cpp"]
+    },
+    {
+      "source_phase": "Q.11",
+      "capability": "package-cache-and-farm-metadata",
+      "dispositions": ["PreservedForTooling", "Rejected"],
+      "policy": "Rebuildable caches remain optional and excluded from package semantic identity; external dependencies reject self-contained execution.",
+      "evidence": ["tests/host/test_native_tooling.cpp", "tests/host/test_product_scene_realizer.cpp"]
+    },
+    {
+      "source_phase": "Q.12",
+      "capability": "native-validation-suite",
+      "dispositions": ["Executed", "Rejected"],
+      "policy": "Retained positive and negative fixtures execute through the maintained Release gate and scene-tool diagnostic matrix.",
+      "evidence": ["tests/assets/native_scene/q12_validation/fixture_manifest.json", "tests/contract/test_scene_tool_extension.cpp"]
+    }
+  ]
+}

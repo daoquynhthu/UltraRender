@@ -133,6 +133,21 @@ struct ProductArtifactSnapshot {
     std::array<std::uint8_t, 32> frame_content_identity{};
 };
 
+struct SceneToolRequest {
+    std::uint32_t operation{};
+    std::vector<std::string> input_paths_utf8;
+    std::string output_path_utf8;
+    std::string package_scene_id;
+    SceneBudget budget;
+    std::uint64_t temporary_budget_bytes{};
+    bool allow_script_execution{};
+};
+
+struct SceneToolSnapshot {
+    ure_scene_tool_result_t result{};
+    std::string report;
+};
+
 class RuntimeClient {
   public:
     RuntimeClient();
@@ -178,6 +193,9 @@ class RuntimeClient {
                                ProductStatusSnapshot &status,
                                FrameSnapshot &frame,
                                RuntimeFailure &failure);
+    bool execute_scene_tool(const SceneToolRequest &request,
+                            SceneToolSnapshot &snapshot,
+                            RuntimeFailure &failure);
     const std::array<std::uint8_t, 32> &registry_digest() const noexcept;
 
   private:

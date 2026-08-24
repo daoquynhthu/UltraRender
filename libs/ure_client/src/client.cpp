@@ -128,6 +128,13 @@ std::vector<DeviceInfo> Client::devices() const {
     return impl_->transport_->devices();
 }
 
+SceneToolResult Client::scene_tool(const SceneToolRequest &request) const {
+    if (!impl_)
+        detail::throw_error(URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE, 8,
+                            "client is not connected");
+    return impl_->transport_->scene_tool(request);
+}
+
 Job Client::create_job(const SceneInput &scene, const Objective &objective) {
     if (!impl_)
         detail::throw_error(URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE, 6,

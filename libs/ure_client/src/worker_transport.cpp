@@ -143,6 +143,41 @@ product_payload(product_fb::ProductMessageKind kind, std::uint64_t scene_id,
             builder.GetBufferPointer() + builder.GetSize()};
 }
 
+std::vector<std::uint8_t> scene_tool_payload(
+    const SceneToolRequest &request) {
+    product_fb::ProductEnvelopeT envelope;
+    envelope.kind = static_cast<product_fb::ProductMessageKind>(
+        request.operation);
+    envelope.scene_tool_request =
+        std::make_unique<product_fb::SceneToolRequestT>();
+    auto &wire = *envelope.scene_tool_request;
+    wire.operation = static_cast<std::uint32_t>(request.operation);
+    wire.input_paths.reserve(request.inputs.size());
+    for (const auto &input : request.inputs) {
+        const auto utf8 = input.generic_u8string();
+        wire.input_paths.emplace_back(
+            reinterpret_cast<const char *>(utf8.data()), utf8.size());
+    }
+    const auto output = request.output.generic_u8string();
+    wire.output_path.assign(reinterpret_cast<const char *>(output.data()),
+                            output.size());
+    wire.package_scene_id = request.package_scene_id;
+    wire.max_content_bytes = request.budget.max_content_bytes;
+    wire.max_uncompressed_bytes = request.budget.max_uncompressed_bytes;
+    wire.max_resident_bytes = request.budget.max_resident_bytes;
+    wire.max_resource_count = request.budget.max_resource_count;
+    wire.max_object_count = request.budget.max_object_count;
+    wire.max_nesting_depth = request.budget.max_nesting_depth;
+    wire.max_decompression_ratio = request.budget.max_decompression_ratio;
+    wire.temporary_budget_bytes = request.temporary_budget_bytes;
+    wire.allow_script_execution = request.allow_script_execution;
+    flatbuffers::FlatBufferBuilder builder;
+    product_fb::FinishProductEnvelopeBuffer(
+        builder, product_fb::CreateProductEnvelope(builder, &envelope));
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
+}
+
 std::vector<std::uint8_t> device_inventory_request() {
     payload_fb::DeviceExecutionEnvelopeT envelope;
     envelope.version_minor = 1;
@@ -419,7 +454,8 @@ class WorkerConnection final
         handshake.required_capabilities = {
             URE_CAPABILITY_LIFECYCLE, URE_CAPABILITY_FRAME_LEASE,
             URE_CAPABILITY_NATIVE_SCENE, URE_CAPABILITY_RENDER_SESSION,
-            URE_CAPABILITY_PRODUCT_JOB, URE_CAPABILITY_DEVICE_EXECUTION};
+            URE_CAPABILITY_PRODUCT_JOB, URE_CAPABILITY_DEVICE_EXECUTION,
+            URE_CAPABILITY_SCENE_TOOL};
         handshake.optional_capabilities = {URE_CAPABILITY_TELEMETRY};
         handshake.transport_features = 7;
         handshake.max_control_bytes = kMaximumControlBytes;
@@ -533,6 +569,65 @@ class WorkerConnection final
         return result;
     }
 
+    SceneToolResult scene_tool(const SceneToolRequest &request) override {
+        std::scoped_lock lock(mutex_);
+        fb::WorkerEnvelopeT operation;
+        operation.message_kind = fb::MessageKind::OperationRequest;
+        operation.operation_kind =
+            static_cast<std::uint32_t>(request.operation);
+        operation.payload_schema = URE_PAYLOAD_SCENE_TOOL;
+        operation.payload_version_minor = 1;
+        operation.payload = scene_tool_payload(request);
+        auto response = exchange_locked(operation);
+        flatbuffers::Verifier verifier(response->payload.data(),
+                                       response->payload.size(), 64, 100000);
+        if (response->payload_schema != URE_PAYLOAD_SCENE_TOOL ||
+            response->payload_version_major != 0 ||
+            response->payload_version_minor != 1 ||
+            !product_fb::VerifyProductEnvelopeBuffer(verifier))
+            throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 66,
+                        "worker scene-tool response is malformed");
+        const auto *envelope = product_fb::GetProductEnvelope(
+            response->payload.data());
+        const auto expected = static_cast<product_fb::ProductMessageKind>(
+            request.operation);
+        const auto *source = envelope ? envelope->scene_tool_result() : nullptr;
+        if (!envelope || envelope->kind() != expected || !source ||
+            source->operation() !=
+                static_cast<std::uint32_t>(request.operation) ||
+            !source->snapshot_identity() ||
+            source->snapshot_identity()->size() != 32 ||
+            !source->semantic_identity() ||
+            source->semantic_identity()->size() != 32 ||
+            !source->report() || source->report()->size() > UINT64_C(524288))
+            throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 66,
+                        "worker scene-tool result is malformed");
+        SceneToolResult result;
+        result.operation = request.operation;
+        result.disposition_count = source->disposition_count();
+        result.diagnostic_count = source->diagnostic_count();
+        std::copy(source->snapshot_identity()->begin(),
+                  source->snapshot_identity()->end(),
+                  result.snapshot_identity.begin());
+        std::copy(source->semantic_identity()->begin(),
+                  source->semantic_identity()->end(),
+                  result.semantic_identity.begin());
+        result.stored_bytes = source->stored_bytes();
+        result.decompressed_bytes = source->decompressed_bytes();
+        result.resident_bytes = source->resident_bytes();
+        result.streamed_bytes = source->streamed_bytes();
+        result.temporary_bytes = source->temporary_bytes();
+        result.output_bytes = source->output_bytes();
+        result.scene_count = source->scene_count();
+        result.resource_count = source->resource_count();
+        result.cache_count = source->cache_count();
+        result.dependency_count = source->dependency_count();
+        result.report = source->report()->str();
+        if (response->result != fb::ResultCode::Success)
+            throw Error(response_error(*response, result.report));
+        return result;
+    }
+
     std::unique_ptr<fb::WorkerEnvelopeT>
     product_request(std::uint32_t operation,
                     product_fb::ProductMessageKind kind,
@@ -567,9 +662,15 @@ class WorkerConnection final
     void check_response(const fb::WorkerEnvelopeT &response) const {
         if (response.result == fb::ResultCode::Success)
             return;
+        throw Error(response_error(response, {}));
+    }
+
+    ErrorInfo response_error(const fb::WorkerEnvelopeT &response,
+                             std::string diagnostic_report) const {
         ErrorInfo info{static_cast<std::int32_t>(response.result),
                        URE_ERROR_DOMAIN_CORE, 0, "worker request failed"};
         info.transport_correlation_id = response.correlation_id;
+        info.diagnostic_report = std::move(diagnostic_report);
         if (response.error) {
             info.result = static_cast<std::int32_t>(response.error->result);
             info.domain = response.error->domain;
@@ -597,7 +698,7 @@ class WorkerConnection final
                             URE_ERROR_DOMAIN_CORE, 61,
                             "worker structured error detail is malformed");
         }
-        throw Error(std::move(info));
+        return info;
     }
 
     JobResult frame_result(const fb::WorkerEnvelopeT &response,
@@ -928,6 +1029,21 @@ class WorkerClient final : public ClientTransport {
             connection->open(options);
         }
         return connection->devices();
+    }
+
+    SceneToolResult scene_tool(const SceneToolRequest &request) override {
+        std::shared_ptr<WorkerConnection> connection;
+        ConnectionOptions options;
+        {
+            std::scoped_lock lock(mutex_);
+            connection = first_;
+            options = options_;
+        }
+        if (!connection) {
+            connection = std::make_shared<WorkerConnection>();
+            connection->open(options);
+        }
+        return connection->scene_tool(request);
     }
 
   private:

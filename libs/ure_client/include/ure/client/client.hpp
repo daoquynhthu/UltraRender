@@ -30,6 +30,16 @@ enum class SceneFormat : std::uint32_t {
     UrePackage = URE_SCENE_FORMAT_UREPKG
 };
 
+enum class SceneToolOperation : std::uint32_t {
+    Validate = URE_SCENE_TOOL_VALIDATE,
+    Inspect = URE_SCENE_TOOL_INSPECT,
+    Build = URE_SCENE_TOOL_BUILD,
+    Migrate = URE_SCENE_TOOL_MIGRATE,
+    Pack = URE_SCENE_TOOL_PACK,
+    Unpack = URE_SCENE_TOOL_UNPACK,
+    Realize = URE_SCENE_TOOL_REALIZE
+};
+
 enum class JobState {
     Created,
     Queued,
@@ -100,6 +110,36 @@ struct ErrorInfo {
     std::uint32_t cause_depth{};
     std::uint64_t operation_id{};
     std::uint64_t transport_correlation_id{};
+    std::string diagnostic_report;
+};
+
+struct SceneToolRequest {
+    SceneToolOperation operation{SceneToolOperation::Validate};
+    std::vector<std::filesystem::path> inputs;
+    std::filesystem::path output;
+    std::string package_scene_id;
+    SceneBudget budget;
+    std::uint64_t temporary_budget_bytes{UINT64_C(1024) * 1024 * 1024};
+    bool allow_script_execution{};
+};
+
+struct SceneToolResult {
+    SceneToolOperation operation{SceneToolOperation::Validate};
+    std::uint32_t disposition_count{};
+    std::uint32_t diagnostic_count{};
+    std::array<std::uint8_t, 32> snapshot_identity{};
+    std::array<std::uint8_t, 32> semantic_identity{};
+    std::uint64_t stored_bytes{};
+    std::uint64_t decompressed_bytes{};
+    std::uint64_t resident_bytes{};
+    std::uint64_t streamed_bytes{};
+    std::uint64_t temporary_bytes{};
+    std::uint64_t output_bytes{};
+    std::uint64_t scene_count{};
+    std::uint64_t resource_count{};
+    std::uint64_t cache_count{};
+    std::uint64_t dependency_count{};
+    std::string report;
 };
 
 class Error final : public std::runtime_error {
@@ -250,6 +290,7 @@ class Client {
 
     static Client connect(const ConnectionOptions &options);
     std::vector<DeviceInfo> devices() const;
+    SceneToolResult scene_tool(const SceneToolRequest &request) const;
     Job create_job(const SceneInput &scene, const Objective &objective);
     TransportMode transport() const noexcept;
     explicit operator bool() const noexcept;

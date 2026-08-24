@@ -5,7 +5,49 @@ enum ProductMessageKind:uint {
   StartJob = 2147483689,
   CancelJob = 2147483690,
   AcquireArtifact = 2147483691,
-  AcquireFrame = 2147483704
+  AcquireFrame = 2147483704,
+  SceneToolValidate = 2147483714,
+  SceneToolInspect = 2147483715,
+  SceneToolBuild = 2147483716,
+  SceneToolMigrate = 2147483717,
+  SceneToolPack = 2147483718,
+  SceneToolUnpack = 2147483719,
+  SceneToolRealize = 2147483720
+}
+
+table SceneToolRequest {
+  operation:uint (id: 0);
+  input_paths:[string] (id: 1);
+  output_path:string (id: 2);
+  package_scene_id:string (id: 3);
+  max_content_bytes:ulong (id: 4);
+  max_uncompressed_bytes:ulong (id: 5);
+  max_resident_bytes:ulong (id: 6);
+  max_resource_count:ulong (id: 7);
+  max_object_count:ulong (id: 8);
+  max_nesting_depth:uint (id: 9);
+  max_decompression_ratio:uint (id: 10);
+  temporary_budget_bytes:ulong (id: 11);
+  allow_script_execution:bool = false (id: 12);
+}
+
+table SceneToolResult {
+  operation:uint (id: 0);
+  disposition_count:uint (id: 1);
+  diagnostic_count:uint (id: 2);
+  snapshot_identity:[ubyte] (id: 3);
+  semantic_identity:[ubyte] (id: 4);
+  stored_bytes:ulong (id: 5);
+  decompressed_bytes:ulong (id: 6);
+  resident_bytes:ulong (id: 7);
+  streamed_bytes:ulong (id: 8);
+  temporary_bytes:ulong (id: 9);
+  scene_count:ulong (id: 10);
+  resource_count:ulong (id: 11);
+  cache_count:ulong (id: 12);
+  dependency_count:ulong (id: 13);
+  report:string (id: 14);
+  output_bytes:ulong (id: 15);
 }
 
 table ProductIdentitySet {
@@ -77,6 +119,8 @@ table ProductEnvelope {
   request:ProductJobRequest (id: 1);
   status:ProductJobStatus (id: 2);
   artifact:ProductArtifactManifest (id: 3);
+  scene_tool_request:SceneToolRequest (id: 4);
+  scene_tool_result:SceneToolResult (id: 5);
 }
 
 root_type ProductEnvelope;

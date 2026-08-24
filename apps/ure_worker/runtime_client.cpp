@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -181,6 +182,7 @@ struct RuntimeClient::Impl {
     const ure_session_interface_t *sessions{};
     const ure_operation_interface_t *operations{};
     const ure_product_job_interface_t *products{};
+    const ure_scene_tool_interface_t *scene_tools{};
     const ure_device_execution_interface_t *device_execution{};
 #if defined(URE_WORKER_CONFORMANCE)
     const ConformanceInterface *conformance{};
@@ -418,6 +420,8 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
     static constexpr std::uint8_t operation_id[16] = URE_INTERFACE_OPERATION_UUID_BYTES;
     static constexpr std::uint8_t product_id[16] =
         URE_INTERFACE_PRODUCT_JOB_UUID_BYTES;
+    static constexpr std::uint8_t scene_tool_id[16] =
+        URE_INTERFACE_SCENE_TOOL_UUID_BYTES;
     static constexpr std::uint8_t device_execution_id[16] =
         URE_INTERFACE_DEVICE_EXECUTION_UUID_BYTES;
     const auto runtime = query_table<ure_runtime_interface_t>(
@@ -453,6 +457,8 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
             sizeof(((ure_operation_interface_t *)nullptr)->request_cancel));
     impl_->products = query_product_table<ure_product_job_interface_t>(
         query, product_id, sizeof(ure_product_job_interface_t));
+    impl_->scene_tools = query_device_table<ure_scene_tool_interface_t>(
+        query, scene_tool_id, sizeof(ure_scene_tool_interface_t));
     impl_->device_execution =
         query_device_table<ure_device_execution_interface_t>(
             query, device_execution_id,
@@ -464,7 +470,7 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
 #endif
     if (!runtime || !impl_->instances || !impl_->errors || !impl_->frames ||
         !impl_->scenes || !impl_->sessions || !impl_->operations ||
-        !impl_->products || !impl_->device_execution
+        !impl_->products || !impl_->scene_tools || !impl_->device_execution
 #if defined(URE_WORKER_CONFORMANCE)
         || !impl_->conformance
 #endif
@@ -477,7 +483,8 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
                                    URE_CAPABILITY_NATIVE_SCENE,
                                    URE_CAPABILITY_RENDER_SESSION,
                                    URE_CAPABILITY_PRODUCT_JOB,
-                                   URE_CAPABILITY_DEVICE_EXECUTION};
+                                   URE_CAPABILITY_DEVICE_EXECUTION,
+                                   URE_CAPABILITY_SCENE_TOOL};
     ure_instance_frame_budget_t budget{};
     budget.header = {URE_STRUCTURE_INSTANCE_FRAME_BUDGET, sizeof(budget),
                      nullptr};
@@ -929,6 +936,54 @@ bool RuntimeClient::acquire_product_artifact(
     frame.session.requested_samples = status.requested_samples;
     frame.session.completed_samples = status.completed_samples;
     frame.session_id = job_id;
+    return true;
+}
+
+bool RuntimeClient::execute_scene_tool(const SceneToolRequest &request,
+                                       SceneToolSnapshot &snapshot,
+                                       RuntimeFailure &failure) {
+    std::vector<ure_string_view_t> inputs;
+    inputs.reserve(request.input_paths_utf8.size());
+    for (const auto &input : request.input_paths_utf8)
+        inputs.push_back({input.data(), input.size()});
+    std::vector<std::uint8_t> report(UINT64_C(524288));
+    ure_scene_tool_request_t wire{};
+    wire.header = {URE_STRUCTURE_SCENE_TOOL_REQUEST, sizeof(wire), nullptr};
+    wire.operation = request.operation;
+    wire.input_count = static_cast<std::uint32_t>(inputs.size());
+    wire.input_paths = inputs.data();
+    wire.output_path = {request.output_path_utf8.data(),
+                        request.output_path_utf8.size()};
+    wire.package_scene_id = {request.package_scene_id.data(),
+                             request.package_scene_id.size()};
+    wire.budget = {URE_STRUCTURE_SCENE_BUDGET,
+                   sizeof(ure_scene_budget_t),
+                   nullptr,
+                   request.budget.max_content_bytes,
+                   request.budget.max_uncompressed_bytes,
+                   request.budget.max_resident_bytes,
+                   request.budget.max_resource_count,
+                   request.budget.max_object_count,
+                   request.budget.max_nesting_depth,
+                   request.budget.max_decompression_ratio,
+                   {0, 0}};
+    wire.temporary_budget_bytes = request.temporary_budget_bytes;
+    wire.report_buffer = {report.data(), report.size()};
+    wire.allow_script_execution = request.allow_script_execution ? 1U : 0U;
+    snapshot = {};
+    snapshot.result.header = {URE_STRUCTURE_SCENE_TOOL_RESULT,
+                              sizeof(snapshot.result), nullptr};
+    ure_handle_t error_handle{};
+    const ure_result_t result = impl_->scene_tools->execute(
+        impl_->instance, &wire, &snapshot.result, &error_handle);
+    const auto report_size = static_cast<std::size_t>(
+        std::min<std::uint64_t>(snapshot.result.report_size, report.size()));
+    snapshot.report.assign(reinterpret_cast<const char *>(report.data()),
+                           report_size);
+    if (result != URE_RESULT_SUCCESS) {
+        impl_->error(result, error_handle, failure);
+        return false;
+    }
     return true;
 }
 

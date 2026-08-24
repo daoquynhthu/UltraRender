@@ -206,6 +206,7 @@ enum class CliCommand {
     Unpack,
     Inspect,
     Migrate,
+    Realize,
     Export
 };
 

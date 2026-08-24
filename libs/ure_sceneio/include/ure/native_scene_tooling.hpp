@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -18,6 +19,8 @@ struct NativeInspection {
     std::uint64_t resident_bytes = 0;
     std::size_t scene_count = 0;
     std::size_t resource_count = 0;
+    std::size_t cache_count = 0;
+    std::size_t dependency_count = 0;
     std::vector<ValidationDiagnostic> diagnostics;
 
     bool ok() const;
@@ -30,6 +33,10 @@ LoadResult<NativeSceneArchive> load_native_asset(const std::filesystem::path& pa
                                                  const ValidationLimits& limits = {});
 LoadResult<NativeSceneArchive> load_native_package_scene(
     const std::filesystem::path& path,
+    std::string_view scene_id,
+    const ValidationLimits& limits = {});
+LoadResult<NativeSceneArchive> load_native_package_scene(
+    std::span<const std::uint8_t> bytes,
     std::string_view scene_id,
     const ValidationLimits& limits = {});
 NativeInspection inspect_native_asset(const std::filesystem::path& path,

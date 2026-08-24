@@ -120,6 +120,10 @@ if(TARGET ure_contract)
     target_link_libraries(test_client_transport PRIVATE ure_client)
     add_dependencies(test_client_transport ure_worker ure_contract)
 
+    add_executable(test_scene_tool_extension test_scene_tool_extension.cpp)
+    target_link_libraries(test_scene_tool_extension PRIVATE ure_client)
+    add_dependencies(test_scene_tool_extension ure_worker ure_contract)
+
     add_executable(product_scenario_runner product_scenario_runner.cpp)
     target_link_libraries(product_scenario_runner PRIVATE ure_client)
     add_dependencies(product_scenario_runner ure_worker ure_contract)
@@ -165,7 +169,7 @@ if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
     endforeach()
     if(TARGET ure_contract)
-        foreach(target contract_image_artifact test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction test_product_extension test_client_transport product_scenario_runner generate_product_fixtures worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
+        foreach(target contract_image_artifact test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction test_product_extension test_client_transport test_scene_tool_extension product_scenario_runner generate_product_fixtures worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
             target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
         endforeach()
         target_compile_options(test_loader_client PRIVATE /wd4191)
@@ -291,6 +295,13 @@ add_test(
         -File ${CMAKE_SOURCE_DIR}/scripts/check_phase_prv1_static.ps1
         -RepoRoot ${CMAKE_SOURCE_DIR})
 add_test(
+    NAME test_phase_prv2_static
+    COMMAND
+        ${UR_PWSH_EXECUTABLE}
+        -NoProfile
+        -File ${CMAKE_SOURCE_DIR}/scripts/check_phase_prv2_static.ps1
+        -RepoRoot ${CMAKE_SOURCE_DIR})
+add_test(
     NAME test_mock_worker_external_client
     COMMAND external_client
         ${UR_PB1_STAGE_DIR}/bin/ultrarender_mock_worker.exe
@@ -368,6 +379,13 @@ if(TARGET ure_contract)
             ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene/full_scene.ure
             ${CMAKE_CURRENT_BINARY_DIR}/prv1_direct.pfm
             ${CMAKE_CURRENT_BINARY_DIR}/prv1_worker.pfm)
+    add_test(
+        NAME test_scene_tool_extension
+        COMMAND test_scene_tool_extension
+            $<TARGET_FILE:ure_contract>
+            $<TARGET_FILE:ure_worker>
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene)
     if(TARGET ure_cli)
         add_test(
             NAME test_prv1_cli
@@ -380,6 +398,17 @@ if(TARGET ure_contract)
                 -Worker $<TARGET_FILE:ure_worker>
                 -Scene ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene)
         add_test(
+            NAME test_prv2_cli
+            COMMAND
+                ${UR_PWSH_EXECUTABLE}
+                -NoProfile
+                -File ${CMAKE_CURRENT_SOURCE_DIR}/test_prv2_cli.ps1
+                -Cli $<TARGET_FILE:ure_cli>
+                -Runtime $<TARGET_FILE:ure_contract>
+                -Worker $<TARGET_FILE:ure_worker>
+                -Q3 ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene
+                -Q4 ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene)
+        add_test(
             NAME test_product_functional_e2e
             COMMAND
                 ${UR_PWSH_EXECUTABLE}
@@ -389,6 +418,17 @@ if(TARGET ure_contract)
                 -BuildDir ${CMAKE_BINARY_DIR}
                 -ReportPath ${CMAKE_BINARY_DIR}/artifacts/Release/evidence/prv1r_functional/report.json
                 -ArtifactDir ${CMAKE_BINARY_DIR}/artifacts/Release/evidence/prv1r_functional
+                -Samples 16)
+        add_test(
+            NAME test_prv2_package_e2e
+            COMMAND
+                ${UR_PWSH_EXECUTABLE}
+                -NoProfile
+                -File ${CMAKE_SOURCE_DIR}/scripts/run_prv2_package_e2e.ps1
+                -RepoRoot ${CMAKE_SOURCE_DIR}
+                -BuildDir ${CMAKE_BINARY_DIR}
+                -ReportPath ${CMAKE_BINARY_DIR}/artifacts/Release/evidence/prv2_package/report.json
+                -ArtifactDir ${CMAKE_BINARY_DIR}/artifacts/Release/evidence/prv2_package
                 -Samples 16)
     endif()
     add_test(
@@ -470,6 +510,7 @@ set_tests_properties(
     test_phase_pb7_static
     test_phase_pb8_static
     test_phase_prv1_static
+    test_phase_prv2_static
     test_mock_worker_external_client
     PROPERTIES TIMEOUT 60)
 
@@ -486,6 +527,7 @@ if(TARGET ure_contract)
         test_product_e2e_assets
         test_product_e2e_evidence
         test_client_transport
+        test_scene_tool_extension
         test_worker_protocol
         test_worker_crash
         test_scene_worker
@@ -496,8 +538,8 @@ if(TARGET ure_contract)
         test_external_client_package
         PROPERTIES TIMEOUT 60)
     if(TARGET ure_cli)
-        set_tests_properties(test_prv1_cli PROPERTIES TIMEOUT 60)
-        set_tests_properties(test_product_functional_e2e PROPERTIES
+        set_tests_properties(test_prv1_cli test_prv2_cli PROPERTIES TIMEOUT 120)
+        set_tests_properties(test_product_functional_e2e test_prv2_package_e2e PROPERTIES
             TIMEOUT 600
             RUN_SERIAL TRUE
             LABELS "product_functional;gpu")

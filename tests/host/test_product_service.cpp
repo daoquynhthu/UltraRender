@@ -71,8 +71,9 @@ int main() {
           "product memory preflight did not retain a bounded plan");
     check(nonzero(job->identities().build), "build identity is empty");
     check(nonzero(job->identities().plan), "plan identity is empty");
-    check(job->identities().snapshot == snapshot,
-          "snapshot identity was not retained");
+    const auto product_snapshot = job->identities().snapshot;
+    check(nonzero(product_snapshot) && product_snapshot != snapshot,
+          "realized product snapshot identity was not derived");
     check(job->identities().objective == objective.identity,
           "objective identity was not retained");
 
@@ -149,8 +150,9 @@ int main() {
     replacement_snapshot[0] = 3;
     const auto old_plan = job->identities().plan;
     job->replace_scene(*loaded.value, replacement_snapshot);
-    check(job->identities().snapshot == replacement_snapshot,
-          "replacement snapshot identity was not retained");
+    check(job->identities().snapshot != product_snapshot &&
+              job->identities().snapshot != replacement_snapshot,
+          "replacement source identity did not derive a new product snapshot");
     check(job->identities().plan != old_plan,
           "replacement did not change product plan identity");
 
@@ -181,7 +183,8 @@ int main() {
                     std::move(rootless), snapshot, resource_objective));
             } catch (const ure::product::ProductError& error) {
                 rootless_rejected = error.code() ==
-                    ure::product::ProductFailureCode::ResourceMissing;
+                        ure::product::ProductFailureCode::ResourceMissing &&
+                    error.detail() == 612;
             }
             check(rootless_rejected,
                   "relative product resources were accepted without an execution root");

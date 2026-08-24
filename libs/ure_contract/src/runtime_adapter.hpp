@@ -24,6 +24,7 @@ const ure_frame_interface_t &frame_interface() noexcept;
 const ure_scene_interface_t &scene_interface() noexcept;
 const ure_scene_transaction_interface_t &scene_transaction_interface() noexcept;
 const ure_product_job_interface_t &product_job_interface() noexcept;
+const ure_scene_tool_interface_t &scene_tool_interface() noexcept;
 const ure_device_execution_interface_t &device_execution_interface() noexcept;
 const ure_session_interface_t &session_interface() noexcept;
 ure_result_t product_job_execution_info(

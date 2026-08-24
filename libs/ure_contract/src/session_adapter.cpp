@@ -33,20 +33,31 @@ struct ProductErrorMapping {
 };
 
 ProductErrorMapping map_product_error(
-    product::ProductFailureCode code) noexcept {
+    product::ProductFailureCode code, std::uint32_t detail) noexcept {
+    ProductErrorMapping mapping;
     switch (code) {
+    case product::ProductFailureCode::MalformedScene:
+        mapping = {URE_RESULT_MALFORMED_DATA, 600};
+        break;
     case product::ProductFailureCode::ResourceMissing:
-        return {URE_RESULT_MALFORMED_DATA, 541};
+        mapping = {URE_RESULT_MALFORMED_DATA, 541};
+        break;
     case product::ProductFailureCode::ResourceEscape:
-        return {URE_RESULT_MALFORMED_DATA, 542};
+        mapping = {URE_RESULT_MALFORMED_DATA, 542};
+        break;
     case product::ProductFailureCode::MemoryNotApplicable:
-        return {URE_RESULT_BUDGET_EXHAUSTED, 543};
+        mapping = {URE_RESULT_BUDGET_EXHAUSTED, 543};
+        break;
     case product::ProductFailureCode::CapabilityNotApplicable:
-        return {URE_RESULT_CAPABILITY_UNAVAILABLE, 547};
+        mapping = {URE_RESULT_CAPABILITY_UNAVAILABLE, 547};
+        break;
     case product::ProductFailureCode::WorkAccounting:
-        return {URE_RESULT_INTERNAL, 544};
+        mapping = {URE_RESULT_INTERNAL, 544};
+        break;
     }
-    return {URE_RESULT_INTERNAL, 544};
+    if (detail >= 600 && detail <= 619)
+        mapping.detail = detail;
+    return mapping;
 }
 
 BackendKind backend_kind(std::uint32_t value) {
@@ -371,7 +382,7 @@ bool install_frame_snapshot(
     ure_handle_t &frame_error) {
     ure_handle_t frame{};
     const ure_digest256_t scene_identity =
-        public_digest(product_frame.identities.snapshot);
+        public_digest(session->revision->revision_identity);
     const ure_digest256_t objective =
         public_digest(product_frame.identities.objective);
     const ure_result_t result = create_frame_snapshot(
@@ -525,7 +536,8 @@ void run_render(const std::shared_ptr<SessionObject> &session,
                          {});
     } catch (const product::ProductError &exception) {
         session->job->fail();
-        const auto mapping = map_product_error(exception.code());
+        const auto mapping = map_product_error(exception.code(),
+                                               exception.detail());
         {
             std::scoped_lock lock(session->mutex);
             session->state = URE_SESSION_STATE_FAILED;
@@ -601,9 +613,10 @@ ure_result_t create_impl(ure_handle_t instance_handle, ure_handle_t scene_handle
     std::unique_ptr<product::ProductJob> job;
     try {
         job = product::ProductJob::create(
-            revision->archive, revision->revision_identity, objective_data);
+            revision->archive, revision->semantic_digest, objective_data);
     } catch (const product::ProductError &exception) {
-        const auto mapping = map_product_error(exception.code());
+        const auto mapping = map_product_error(exception.code(),
+                                               exception.detail());
         return make_error(mapping.result, mapping.detail,
                           exception.what(), error);
     } catch (const std::exception &exception) {
@@ -737,7 +750,12 @@ ure_result_t bind_scene_impl(ure_handle_t session_handle,
         return URE_RESULT_INVALID_HANDLE;
     try {
         session->job->replace_scene(
-            next_revision->archive, next_revision->revision_identity);
+            next_revision->archive, next_revision->semantic_digest);
+    } catch (const product::ProductError &exception) {
+        const auto mapping = map_product_error(exception.code(),
+                                               exception.detail());
+        return make_error(mapping.result, mapping.detail,
+                          exception.what(), error);
     } catch (const std::exception &exception) {
         return make_error(URE_RESULT_INTERNAL, 515,
                           "renderer scene rebind failed: " +

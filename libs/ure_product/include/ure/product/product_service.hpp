@@ -48,6 +48,7 @@ enum class ProductOperationState : std::uint32_t {
 };
 
 enum class ProductFailureCode : std::uint32_t {
+    MalformedScene,
     ResourceMissing,
     ResourceEscape,
     MemoryNotApplicable,
@@ -57,11 +58,14 @@ enum class ProductFailureCode : std::uint32_t {
 
 class ProductError final : public std::runtime_error {
 public:
-    ProductError(ProductFailureCode code, std::string message);
+    ProductError(ProductFailureCode code, std::string message,
+                 std::uint32_t detail = 0);
     ProductFailureCode code() const noexcept;
+    std::uint32_t detail() const noexcept;
 
 private:
     ProductFailureCode code_;
+    std::uint32_t detail_{};
 };
 
 struct ProductMemoryPlan {
@@ -114,7 +118,7 @@ class ProductJob {
 public:
     static std::unique_ptr<ProductJob> create(
         native_scene::NativeSceneArchive archive,
-        Identity snapshot_identity,
+        Identity source_identity,
         ProductObjective objective);
 
     virtual ~ProductJob() = default;
@@ -127,7 +131,7 @@ public:
     virtual const ProductExecutionInfo& execution() const noexcept = 0;
     virtual ProductOperationSnapshot operation() const noexcept = 0;
     virtual void replace_scene(native_scene::NativeSceneArchive archive,
-                               Identity snapshot_identity) = 0;
+                               Identity source_identity) = 0;
     virtual void begin() = 0;
     virtual void render_sample() = 0;
     virtual ProductFrame snapshot_frame() const = 0;
