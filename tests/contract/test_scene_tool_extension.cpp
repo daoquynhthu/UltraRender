@@ -31,11 +31,30 @@ bool nonzero(const std::array<std::uint8_t, 32> &identity) {
                                [](std::uint8_t value) { return value != 0; });
 }
 
+bool has_report_identity(const std::string &report) {
+    const std::string marker = "\"adapter_loss_report_identity\": \"";
+    const auto begin = report.find(marker);
+    if (begin == std::string::npos)
+        return false;
+    const auto identity_begin = begin + marker.size();
+    const auto identity_end = report.find('"', identity_begin);
+    return identity_end == identity_begin + 64 &&
+           std::ranges::all_of(
+               report.begin() + static_cast<std::ptrdiff_t>(identity_begin),
+               report.begin() + static_cast<std::ptrdiff_t>(identity_end),
+               [](const char value) {
+                   return (value >= '0' && value <= '9') ||
+                          (value >= 'a' && value <= 'f');
+               });
+}
+
 void require_equivalent(const ure::client::SceneToolResult &left,
                         const ure::client::SceneToolResult &right,
                         const char *message) {
     require(left.snapshot_identity == right.snapshot_identity &&
                 left.semantic_identity == right.semantic_identity &&
+                left.material_program_set_identity ==
+                    right.material_program_set_identity &&
                 left.disposition_count == right.disposition_count &&
                 left.diagnostic_count == right.diagnostic_count &&
                 left.stored_bytes == right.stored_bytes &&
@@ -48,6 +67,9 @@ void require_equivalent(const ure::client::SceneToolResult &left,
                 left.resource_count == right.resource_count &&
                 left.cache_count == right.cache_count &&
                 left.dependency_count == right.dependency_count &&
+                left.material_program_count == right.material_program_count &&
+                left.adapter_loss_report_size ==
+                    right.adapter_loss_report_size &&
                 left.report == right.report,
             message);
 }
@@ -56,11 +78,13 @@ void require_equivalent(const ure::client::SceneToolResult &left,
 
 int main(int argc, char **argv) {
     try {
-        require(argc == 5, "expected runtime, worker, Q3, and Q4 paths");
+        require(argc == 6,
+                "expected runtime, worker, Q3, Q4, and glTF paths");
         const auto runtime = std::filesystem::absolute(argv[1]);
         const auto worker = std::filesystem::absolute(argv[2]);
         const auto q3 = std::filesystem::absolute(argv[3]);
         const auto q4 = std::filesystem::absolute(argv[4]);
+        const auto gltf = std::filesystem::absolute(argv[5]);
         const auto unique = std::to_string(
             std::chrono::steady_clock::now().time_since_epoch().count());
         const auto root = std::filesystem::temp_directory_path() /
@@ -168,6 +192,93 @@ int main(int argc, char **argv) {
         require_equivalent(direct.scene_tool(migrate_direct),
                            isolated.scene_tool(migrate_worker),
                            "direct and Worker migrate results differ");
+
+        ure::client::SceneToolRequest preset_direct;
+        preset_direct.operation =
+            ure::client::SceneToolOperation::ApplyMaterialPreset;
+        preset_direct.inputs = {direct_author / "full_scene.urescene"};
+        preset_direct.output = root / "preset-direct.urescene";
+        preset_direct.material_selector = "material/00000000";
+        preset_direct.preset_name = "clear_glass";
+        auto preset_worker = preset_direct;
+        preset_worker.inputs = {worker_author / "full_scene.urescene"};
+        preset_worker.output = root / "preset-worker.urescene";
+        const auto direct_preset = direct.scene_tool(preset_direct);
+        const auto worker_preset = isolated.scene_tool(preset_worker);
+        require_equivalent(direct_preset, worker_preset,
+                           "material preset Direct/Worker results differ");
+        require(nonzero(direct_preset.material_program_set_identity) &&
+                    direct_preset.material_program_count != 0,
+                "material preset omitted canonical program identity");
+
+        ure::client::SceneToolRequest export_direct;
+        export_direct.operation =
+            ure::client::SceneToolOperation::ExportMaterialX;
+        export_direct.inputs = {preset_direct.output};
+        export_direct.output = root / "direct.mtlx";
+        export_direct.material_selector = "material/00000000";
+        auto export_worker = export_direct;
+        export_worker.inputs = {preset_worker.output};
+        export_worker.output = root / "worker.mtlx";
+        const auto direct_export = direct.scene_tool(export_direct);
+        const auto worker_export = isolated.scene_tool(export_worker);
+        require_equivalent(direct_export, worker_export,
+                           "MaterialX export Direct/Worker results differ");
+        require(direct_export.adapter_loss_report_size != 0 &&
+                    nonzero(direct_export.material_program_set_identity) &&
+                    has_report_identity(direct_export.report),
+                "MaterialX export omitted its loss report");
+
+        ure::client::SceneToolRequest import_direct;
+        import_direct.operation =
+            ure::client::SceneToolOperation::ImportMaterialX;
+        import_direct.inputs = {direct_author / "full_scene.urescene",
+                                export_direct.output};
+        import_direct.output = root / "import-direct.urescene";
+        import_direct.material_selector = "material/00000000";
+        auto import_worker = import_direct;
+        import_worker.inputs = {worker_author / "full_scene.urescene",
+                                export_worker.output};
+        import_worker.output = root / "import-worker.urescene";
+        require_equivalent(direct.scene_tool(import_direct),
+                           isolated.scene_tool(import_worker),
+                           "MaterialX import Direct/Worker results differ");
+
+        const auto unsupported_materialx = root / "unsupported.mtlx";
+        {
+            std::ofstream output(unsupported_materialx);
+            output << "<materialx><unsupported_shader name=\"bad\" /></materialx>";
+        }
+        auto unsupported_import = import_direct;
+        unsupported_import.inputs[1] = unsupported_materialx;
+        unsupported_import.output = root / "unsupported.urescene";
+        const auto unsupported_error = expect_failure(
+            unsupported_import, URE_RESULT_INVALID_ARGUMENT, 706,
+            "unsupported MaterialX import");
+        require(has_report_identity(unsupported_error.diagnostic_report),
+                "MaterialX rejection omitted its shared loss identity");
+
+        ure::client::SceneToolRequest gltf_direct;
+        gltf_direct.operation = ure::client::SceneToolOperation::Build;
+        gltf_direct.inputs = {gltf};
+        gltf_direct.output = root / "gltf-direct.urescene";
+        auto gltf_worker = gltf_direct;
+        gltf_worker.output = root / "gltf-worker.urescene";
+        const auto direct_gltf = direct.scene_tool(gltf_direct);
+        const auto worker_gltf = isolated.scene_tool(gltf_worker);
+        require_equivalent(direct_gltf, worker_gltf,
+                           "glTF authoring Direct/Worker results differ");
+        require(direct_gltf.material_program_count != 0 &&
+                    direct_gltf.report.find("ure.adapter.gltf") !=
+                        std::string::npos,
+                "glTF authoring omitted canonical material programs");
+
+        auto unknown_preset = preset_direct;
+        unknown_preset.output = root / "unknown-preset.urescene";
+        unknown_preset.preset_name = "missing-preset";
+        static_cast<void>(expect_failure(
+            unknown_preset, URE_RESULT_INVALID_ARGUMENT, 706,
+            "unknown material preset"));
 
         const auto author = root / "author";
         std::filesystem::copy(q3, author,
@@ -322,6 +433,19 @@ int main(int argc, char **argv) {
         static_cast<void>(expect_failure(
             oversized, URE_RESULT_BUDGET_EXHAUSTED, 614,
             "stored package budget"));
+
+        auto oversized_text = validate;
+        oversized_text.package_scene_id = std::string(1025, 'x');
+        bool oversized_text_failed{};
+        try {
+            static_cast<void>(isolated.scene_tool(oversized_text));
+        } catch (const ure::client::Error& error) {
+            oversized_text_failed =
+                error.info().result == URE_RESULT_INVALID_ARGUMENT &&
+                error.info().detail == 706;
+        }
+        require(oversized_text_failed,
+                "Worker scene-tool bounded strings were not rejected");
 
         const auto missing_author = root / "missing-author";
         std::filesystem::copy(q3, missing_author,

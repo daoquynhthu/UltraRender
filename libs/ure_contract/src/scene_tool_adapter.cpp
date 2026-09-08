@@ -53,6 +53,12 @@ product::SceneToolOperation operation(std::uint32_t value) {
         return product::SceneToolOperation::Unpack;
     case URE_SCENE_TOOL_REALIZE:
         return product::SceneToolOperation::Realize;
+    case URE_SCENE_TOOL_MATERIAL_IMPORT:
+        return product::SceneToolOperation::ImportMaterialX;
+    case URE_SCENE_TOOL_MATERIAL_EXPORT:
+        return product::SceneToolOperation::ExportMaterialX;
+    case URE_SCENE_TOOL_MATERIAL_PRESET:
+        return product::SceneToolOperation::ApplyMaterialPreset;
     default:
         throw std::invalid_argument("unknown scene-tool operation");
     }
@@ -118,6 +124,9 @@ std::pair<ure_result_t, std::uint32_t> public_failure(
     case 604:
     case 605:
     case 627:
+    case 701:
+    case 704:
+    case 705:
         return {URE_RESULT_CAPABILITY_UNAVAILABLE, diagnostic.detail};
     case 606:
     case 614:
@@ -128,6 +137,7 @@ std::pair<ure_result_t, std::uint32_t> public_failure(
         return {URE_RESULT_BUDGET_EXHAUSTED, diagnostic.detail};
     case 622:
     case 623:
+    case 706:
         return {URE_RESULT_INVALID_ARGUMENT, diagnostic.detail};
     default:
         return {URE_RESULT_MALFORMED_DATA, diagnostic.detail};
@@ -170,6 +180,8 @@ ure_result_t execute_impl(ure_handle_t instance_handle,
             internal.inputs.push_back(path(request->input_paths[index]));
         internal.output = path(request->output_path);
         internal.package_scene_id = text(request->package_scene_id);
+        internal.material_selector = text(request->material_selector);
+        internal.preset_name = text(request->preset_name);
         internal.validation = limits(request->budget);
         internal.temporary_bytes = request->temporary_budget_bytes;
         internal.allow_script_execution = request->allow_script_execution != 0;
@@ -205,6 +217,11 @@ ure_result_t execute_impl(ure_handle_t instance_handle,
     result->resource_count = completed.resource_count;
     result->cache_count = completed.cache_count;
     result->dependency_count = completed.dependency_count;
+    std::memcpy(result->material_program_set_identity.bytes,
+                completed.material_program_set_identity.data(),
+                completed.material_program_set_identity.size());
+    result->material_program_count = completed.material_program_count;
+    result->adapter_loss_report_size = completed.adapter_loss_report.size();
     result->report_size = report.size();
     if (report.size() > kMaximumReportBytes)
         return make_error(URE_RESULT_BUDGET_EXHAUSTED, 624,
@@ -236,7 +253,7 @@ ure_result_t URE_CALL execute(ure_handle_t instance,
 
 const ure_scene_tool_interface_t &scene_tool_interface() noexcept {
     static const ure_scene_tool_interface_t table{
-        {sizeof(ure_scene_tool_interface_t), 0, 1}, execute};
+        {sizeof(ure_scene_tool_interface_t), 0, 2}, execute};
     return table;
 }
 

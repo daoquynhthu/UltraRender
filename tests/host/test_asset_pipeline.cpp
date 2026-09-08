@@ -97,6 +97,50 @@ static int test_load_image_bmp() {
     return 0;
 }
 
+static int test_load_image_ppm() {
+    const char* ascii = "test_asset_ascii.ppm";
+    {
+        std::ofstream file(ascii, std::ios::binary);
+        file << "P3\n# product fixture\n2 1\n15\n15 0 0 0 15 7\n";
+    }
+    ure::gpu::HostTexture ascii_texture{};
+    CHECK(ure::io::load_image_rgb32f(ascii, ascii_texture));
+    CHECK(ascii_texture.width == 2);
+    CHECK(ascii_texture.height == 1);
+    CHECK(ascii_texture.data.size() == 6);
+    CHECK_FLOAT_EQ(ascii_texture.data[0], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(ascii_texture.data[4], 1.0f, 1e-6f);
+    CHECK_FLOAT_EQ(ascii_texture.data[5], 7.0f / 15.0f, 1e-6f);
+    std::remove(ascii);
+
+    const char* binary = "test_asset_binary.ppm";
+    {
+        std::ofstream file(binary, std::ios::binary);
+        file << "P6\r\n1 1\r\n255\r\n";
+        const unsigned char pixel[] = {17, 34, 51};
+        file.write(reinterpret_cast<const char*>(pixel), sizeof(pixel));
+    }
+    ure::gpu::HostTexture binary_texture{};
+    CHECK(ure::io::load_image_rgb32f(binary, binary_texture));
+    CHECK(binary_texture.width == 1);
+    CHECK(binary_texture.height == 1);
+    CHECK(binary_texture.data.size() == 3);
+    CHECK_FLOAT_EQ(binary_texture.data[0], 17.0f / 255.0f, 1e-6f);
+    CHECK_FLOAT_EQ(binary_texture.data[2], 51.0f / 255.0f, 1e-6f);
+    std::remove(binary);
+
+    const char* oversized = "test_asset_oversized.ppm";
+    {
+        std::ofstream file(oversized, std::ios::binary);
+        file << "P6\n2147483647 2147483647\n255\n";
+    }
+    ure::gpu::HostTexture oversized_texture{};
+    CHECK(!ure::io::load_image_rgb32f(oversized, oversized_texture));
+    CHECK(oversized_texture.data.empty());
+    std::remove(oversized);
+    return 0;
+}
+
 static int test_save_hdr() {
     const char* tmp = "test_asset_temp.hdr";
     std::vector<ure::core::Vec3f> pixels = {
@@ -254,9 +298,8 @@ static int test_spd_malformed_line() {
     }
 
     auto data = ure::spectral::load_spd_file(tmp);
-    CHECK(data.lambdas.size() == 2);
-    CHECK_FLOAT_EQ(data.lambdas[0], 400.0f, 1e-6f);
-    CHECK_FLOAT_EQ(data.lambdas[1], 500.0f, 1e-6f);
+    CHECK(data.lambdas.empty());
+    CHECK(data.values.empty());
 
     std::remove(tmp);
     return 0;
@@ -274,6 +317,7 @@ int main() {
 
     int failed = 0;
     failed += run("test_load_image_bmp", test_load_image_bmp);
+    failed += run("test_load_image_ppm", test_load_image_ppm);
     failed += run("test_save_hdr", test_save_hdr);
     failed += run("test_unknown_scene_extension_rejected", test_unknown_scene_extension_rejected);
     failed += run("test_spd_loader", test_spd_loader);

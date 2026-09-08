@@ -131,8 +131,10 @@ RenderConfig candidate_config(
 
 std::vector<IntegratorMode> candidate_modes(
     const RenderConfig& config) {
-    std::vector<IntegratorMode> result{
-        IntegratorMode::Wavefront};
+    std::vector<IntegratorMode> result;
+    const auto eligible = config.automatic_integrator.eligible_integrator_modes;
+    if ((eligible & integrator_mode_bit(IntegratorMode::Wavefront)) != 0)
+        result.push_back(IntegratorMode::Wavefront);
     if (!wave_optics_is_radiometric_only(config.wave_optics)) {
         return result;
     }
@@ -145,7 +147,8 @@ std::vector<IntegratorMode> candidate_modes(
         IntegratorMode::VCM,
         IntegratorMode::MLT};
     for (const auto mode : alternatives) {
-        result.push_back(mode);
+        if ((eligible & integrator_mode_bit(mode)) != 0)
+            result.push_back(mode);
     }
     return result;
 }
@@ -334,6 +337,11 @@ private:
             automatic.memory_budget_mb < 0 ||
             automatic.pilot_spp < 2 ||
             automatic.maximum_techniques < 1 ||
+            automatic.eligible_integrator_modes == 0 ||
+            (automatic.eligible_integrator_modes &
+             ~kAllProductionIntegratorModes) != 0 ||
+            (automatic.eligible_integrator_modes &
+             integrator_mode_bit(IntegratorMode::Wavefront)) == 0 ||
             config_.sample_index_offset >
                 static_cast<std::uint64_t>(
                     std::numeric_limits<int>::max() -

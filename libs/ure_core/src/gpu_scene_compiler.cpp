@@ -1467,7 +1467,9 @@ CompiledGpuScene GpuSceneCompiler::compile(const scene_ir::SceneIR& scene_ir, co
 
         ure::gpu::HostTexture host_texture;
         if (!io::load_image_rgb32f(texture->image->uri, host_texture)) {
-            return -1;
+            throw std::runtime_error(
+                "Material texture could not be decoded: " +
+                texture->image->uri);
         }
         io::apply_image_color_space(host_texture, texture->image->color_space);
 

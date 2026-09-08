@@ -11,6 +11,7 @@
 
 #include <ure/detail/cuda_scene_compiler.hpp>
 #include <ure/gltf_scene_frontend.hpp>
+#include <ure/native_adapter.hpp>
 #include <ure/render.hpp>
 #include <ure/render_config.hpp>
 #include <ure/scene_ir.hpp>
@@ -529,6 +530,7 @@ static int test_normal_texture() {
 })";
     std::string path = write_temp(gltf, ".gltf");
     auto scene = ure::GltfSceneFrontend::parse_file_to_ir(path);
+    const auto product_import = ure::native_scene::import_gltf_native(path);
     std::filesystem::remove(path);
 
     CHECK(!scene.materials.empty());
@@ -537,6 +539,10 @@ static int test_normal_texture() {
     CHECK(mat->normal_texture->image != nullptr);
     CHECK(mat->normal_texture->image->uri.find("nonexistent.png") != std::string::npos);
     CHECK_FLOAT_EQ(mat->normal_scale, 2.5f, 1e-6f);
+    CHECK(!product_import.ok());
+    CHECK(!product_import.loss_report.losses.empty());
+    CHECK(product_import.loss_report.losses.front().code ==
+          "URE-PRV3-GLTF-NORMAL-001");
     return 0;
 }
 
@@ -602,6 +608,7 @@ static int test_metallic_roughness_texture_linear() {
 })";
     std::string path = write_temp(gltf, ".gltf");
     auto scene = ure::GltfSceneFrontend::parse_file_to_ir(path);
+    const auto product_import = ure::native_scene::import_gltf_native(path);
     std::filesystem::remove(path);
 
     CHECK(!scene.materials.empty());
@@ -619,6 +626,10 @@ static int test_metallic_roughness_texture_linear() {
         }
     }
     CHECK(found_texture_node);
+    CHECK(!product_import.ok());
+    CHECK(!product_import.loss_report.losses.empty());
+    CHECK(product_import.loss_report.losses.front().code ==
+          "URE-PRV3-GLTF-MR-001");
     return 0;
 }
 

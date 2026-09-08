@@ -38,6 +38,21 @@ void add_loss(AdapterLossReport& report, std::string code, std::string path,
                              std::move(message), std::move(remediation)});
 }
 
+std::string product_relative_uri(const std::filesystem::path& root,
+                                 std::string_view value) {
+    if (value.empty())
+        return {};
+    const std::filesystem::path source(value);
+    if (source.is_relative())
+        return source.lexically_normal().generic_string();
+    const auto relative = source.lexically_normal().lexically_relative(root);
+    if (relative.empty() || relative.is_absolute() ||
+        *relative.begin() == "..")
+        throw std::invalid_argument(
+            "glTF resource escapes its explicit execution root");
+    return relative.generic_string();
+}
+
 }
 
 bool AdapterLossReport::lossless() const { return losses.empty(); }
@@ -47,9 +62,10 @@ bool AdapterLossReport::exportable() const {
 }
 
 bool NativeAdapterResult::ok() const {
-    return std::ranges::none_of(diagnostics, [](const auto& diagnostic) {
-        return diagnostic.severity == DiagnosticSeverity::Error;
-    });
+    return loss_report.exportable() &&
+           std::ranges::none_of(diagnostics, [](const auto& diagnostic) {
+               return diagnostic.severity == DiagnosticSeverity::Error;
+           });
 }
 
 bool MaterialXAdapterResult::ok() const {
@@ -78,10 +94,40 @@ NativeAdapterResult import_gltf_native(const std::filesystem::path& path,
     result.loss_report.format = AdapterFormat::Gltf;
     try {
         auto scene = SceneFrontend::parse_file_to_ir(path.string());
+        const auto execution_root =
+            std::filesystem::absolute(path).lexically_normal().parent_path();
+        for (auto& image : scene.images) {
+            if (image)
+                image->uri = product_relative_uri(execution_root, image->uri);
+        }
+        for (auto& material : scene.materials) {
+            if (!material)
+                continue;
+            if (material->normal_texture)
+                add_loss(
+                    result.loss_report, "URE-PRV3-GLTF-NORMAL-001",
+                    "/materials/normalTexture", "gltf.normal-texture",
+                    "glTF normalTexture has no canonical Product material lowering",
+                    "remove the normal texture or author an equivalent supported MaterialGraph");
+            if (material->roughness_texture)
+                add_loss(
+                    result.loss_report, "URE-PRV3-GLTF-MR-001",
+                    "/materials/pbrMetallicRoughness/metallicRoughnessTexture",
+                    "gltf.metallic-roughness-texture",
+                    "glTF packed metallic-roughness channels cannot be preserved by the current canonical graph",
+                    "split and author supported scalar MaterialGraph inputs before import");
+            if (material->spectral_extension) {
+                material->spectral_extension->albedo_spd = product_relative_uri(
+                    execution_root, material->spectral_extension->albedo_spd);
+                material->spectral_extension->emission_spd = product_relative_uri(
+                    execution_root, material->spectral_extension->emission_spd);
+            }
+        }
         SceneDocument document;
         document.id = path.stem().string();
         document.schema_version = kSceneSchemaVersion;
         result.archive = make_native_scene_archive(std::move(document), scene);
+        result.archive.execution_root = execution_root;
         const auto validation = validate_scene_ir_archive(result.archive, limits);
         result.diagnostics = validation.diagnostics;
         if (scene.physics.enabled) {

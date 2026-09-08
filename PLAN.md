@@ -1,6 +1,6 @@
 # UltraRender Preview 产品集成与端到端闭环路线图
 
-最后更新: 2026-08-24（PRV.2 闭环完整场景实现与自包含包；游标推进至尚未施工的 PRV.3）
+最后更新: 2026-09-07（PRV.3 闭环材质、资产与有界 radiometric-wave 组合；游标推进至尚未施工的 PRV.4）
 
 本文档是 UltraRender 当前唯一的全局施工权威。它将项目重心从继续扩展高阶研究能力，切换为已有非研究能力的产品总装、端到端闭环，以及训练无关重建/降噪的生产接入。
 
@@ -17,7 +17,7 @@
 
 ## 0. 权威状态
 
-当前游标: PRV.3 — 材质、资产与有界波动能力组合（尚未开始施工）
+当前游标: PRV.4 — 生产 MeasurementBundle 与输出系统（尚未开始施工）
 
 ### 0.1 唯一施工队列
 
@@ -38,10 +38,10 @@ PRV.1R runtime correctness and trusted E2E         [done]
 PRV.2 complete scene realization and packages      [done]
                   |
                   v
-PRV.3 material, asset and bounded wave composition [current, not started]
+PRV.3 material, asset and bounded wave composition [done]
                   |
                   v
-PRV.4 production MeasurementBundle and output
+PRV.4 production MeasurementBundle and output      [current, not started]
                   |
                   v
 PRV.5 training-free reconstruction and denoising
@@ -477,13 +477,15 @@ Error 对象分配失败是唯一允许没有 retained Error handle 的资源极
 
 ## 5. PRV.3 — 材质、资产与有界波动能力组合
 
+**状态**: 已完成；canonical material authority、受支持资产与有界 radiometric-wave color ProductE2E 已在声明边界内闭环，PRV.4 可作为下一施工阶段。
+
 **目标**: 使现有 MaterialGraph、glTF、MaterialX、preset、spectral resource、Mie、衍射和荧光能力通过同一 ProductSnapshot 与 renderer path 工作。
 
 **依赖**: PRV.2。
 
 ### PRV.3.1 — Canonical material program set
 
-- Native MaterialGraph 是唯一材质执行权威；
+- canonical material program set 是产品材质执行与身份权威：MaterialGraph 提供拓扑，所有仍由 complete-scene backend 消费的材质状态必须进入同一不可变程序身份；
 - glTF、MaterialX、Hydra material和preset全部先生成 validated MaterialGraph；
 - material program identity绑定graph、resource、spectral domain、compiler和backend semantic；
 - unsupported/lossy adapter semantics产生 structured loss或拒绝，不进入fallback material。
@@ -491,7 +493,7 @@ Error 对象分配失败是唯一允许没有 retained Error handle 的资源极
 ### PRV.3.2 — Product authoring paths
 
 - scene tooling extension支持MaterialX import/export和preset material realization；
-- package可携带MaterialX source provenance，但执行只消费canonical MaterialGraph；
+- package可携带MaterialX source provenance，但执行只消费由canonical MaterialGraph拓扑和全部backend-consumed状态共同形成的material program set；
 - material/texture/resource transaction通过UUID和content identity更新，不使用index-only公共语义；
 - 资源变化按hot update、partial rebuild或full snapshot replacement显式分类。
 
@@ -522,6 +524,12 @@ Error 对象分配失败是唯一允许没有 retained Error handle 的资源极
 - unsupported graph、resource、estimator和wave组合在计划阶段拒绝。
 - 共享产品矩阵至少以480p functional覆盖主要材质组合，并以720p/1080p quality场景验证glass/caustic、volume/Mie、spectral和wave-material；不得用内部integrator fixture代替。
 - 材质/资产错误在Direct、Worker、CLI及适用authoring adapter间保持分类与cause parity，并包含可操作恢复建议。
+
+**完成记录（2026-09-07）**: canonical material program set 现为产品材质执行与身份权威；程序身份绑定 MaterialGraph 拓扑、complete-scene backend 实际消费的完整材质状态、resource、spectral domain、compiler 与 backend semantic，避免图与遗留 lowering 字段发生无身份漂移。glTF、MaterialX、preset 与 Hydra-derived material 均先生成 validated MaterialGraph artifact，其中 bounded glTF、preset 与 MaterialX-derived artifact 已通过 Scene Tool 0.2 的 Direct/Worker authoring 后进入同一 ProductSnapshot/ProductJob 真渲染，Hydra viewport 仍按计划保留为 PRV.10 product-service bypass。UUID/content identity 和 HotUpdate/PartialRebuild/FullSnapshotReplacement/Rejected 分类取代 index-only 更新语义；unsupported/lossy adapter 不产生 fallback material。当前 native normal-map 数据明确标记为 `PreservedForTooling`；glTF `normalTexture` 与 packed metallic-roughness 在缺少产品 lowering 时结构化拒绝，不作为已执行语义。
+
+Product Realizer 在 GPU allocation 前预检 texture、SPD、Mie 与 medium payload；SPD 必须完整覆盖 400–700 nm，边界外采用身份绑定的 endpoint-clamp compiler semantic。MaterialGraph 节点、资源、spectral domain、wave feature 与 estimator applicability 进入计划和结构化诊断。Exact-build ProductJob 0.4 报告 eligible/qualified/executed estimator masks；Scene Tool 0.2 提供 MaterialX import/export、preset realization 与 glTF build，其中 MaterialX 相对纹理被注册为 SceneIR 对象并内容寻址进入自包含作者产物。Core ABI 1.0 / Worker Protocol 1.0 冻结前缀未变，新增内容仍为 exact-build `UnstableExtension`。Mie no-event transport 现受 bounded medium distance 约束；mandatory path-guiding minimum allocation 依据实际可用显存判定，reserve 只约束 discretionary budget。
+
+共享 product scenario runner 以 production profile 完成五类 854×480、16-sample Direct/Worker 主矩阵、self-contained package 与 CLI parity，并补充 glTF 64×64/64-sample adapter smoke、preset 和 MaterialX-derived 854×480/16-sample authoring-to-render 证据；这些补充 smoke 不替代 480p 功能门禁。五个 1280×720、500-sample 场景覆盖 material matrix、glass、Mie volume、diffraction 与 fluorescence，权威 PFM、固定 PNG、finite/能量/空间结构/嵌套收敛和人工视觉审阅留存在 `docs/reports/phase_prv3_*_v1.json`。可见 pre-denoise variance 与 rare-event tails 被如实保留；typed wavelength/Stokes/time MeasurementBundle 属于 PRV.4，training-free denoise 属于 PRV.5，完整 HT portfolio productization 属于 PRV.6。Windows Release 完整构建及 122/122 CTest 通过；该结论不声明 `UltraRender_preview` 或公共产品发布。
 
 ---
 

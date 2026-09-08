@@ -1,0 +1,109 @@
+{
+  "schema": "ure.preview.prv3-fixture-manifest/1.0",
+  "generator": {
+    "path": "tests/contract/generate_prv3_fixtures.cpp",
+    "sha256": "af7a791eafc3caeb00736b015b02cbc94c2ade7baa9ac62ee1da647f3c622755"
+  },
+  "sources": [
+    {
+      "path": "scenes/cornell_box.gltf",
+      "sha256": "9ccd5f5417b598c4d52577bc65850edc84d1642f31fc47b08e6f146b8f755424"
+    },
+    {
+      "path": "tests/assets/native_scene/q3_full_scene/full_scene.urescene",
+      "sha256": "78e84624579e438b1de5e077299b2d120287e0445c4330cf95f96ec858f67bb8"
+    }
+  ],
+  "resources": [
+    {
+      "path": "tests/assets/product_e2e/prv3/spectra/reflectance.spd",
+      "sha256": "ab9eedf5ef5d7bae9889020bdcdf7561a2c79e4bd9177f04ef3235dde547bc43"
+    },
+    {
+      "path": "tests/assets/product_e2e/prv3/textures/checker.bmp",
+      "sha256": "1fcb7c2733e86c8039baebfb81494db133e3c3b1e5ac2a9ef7670eec74de2f4d"
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "material_matrix_functional",
+      "path": "tests/assets/product_e2e/prv3/material_matrix_854x480.urescene",
+      "sha256": "d0c817d0cd01a72806ee7de18b3b58a5793460893e0c9ead5f4637e7f82c19dd",
+      "resolution": "854x480",
+      "features": ["glass", "metal", "mix", "layer", "texture", "spectral_spd"],
+      "eligible_integrator_modes": 55
+    },
+    {
+      "id": "material_matrix_quality",
+      "path": "tests/assets/product_e2e/prv3/material_matrix_1280x720.urescene",
+      "sha256": "c8985cb6ef4f9306a0193cb76243a2396ee673a179cb7ce444ac94b7691546af",
+      "resolution": "1280x720",
+      "features": ["glass", "metal", "mix", "layer", "texture", "spectral_spd"],
+      "eligible_integrator_modes": 55
+    },
+    {
+      "id": "glass_functional",
+      "path": "tests/assets/product_e2e/prv3/glass_854x480.urescene",
+      "sha256": "5c92014233bb4f1040efef690b187810a8999911793b00e289e011b761d154a4",
+      "resolution": "854x480",
+      "features": ["glass"],
+      "eligible_integrator_modes": 255
+    },
+    {
+      "id": "glass_quality",
+      "path": "tests/assets/product_e2e/prv3/glass_1280x720.urescene",
+      "sha256": "e197d9700ebdef0490ebb73d873d8f121cb52d51ae638c1ceac3c20c74379977",
+      "resolution": "1280x720",
+      "features": ["glass"],
+      "eligible_integrator_modes": 255
+    },
+    {
+      "id": "mie_volume_functional",
+      "path": "tests/assets/product_e2e/prv3/mie_volume_854x480.urescene",
+      "sha256": "6147bec6da3aff9aca94596e3dd73d313e05f8daf67ee6ac8652346335bb2570",
+      "resolution": "854x480",
+      "features": ["world_medium", "mie"],
+      "eligible_integrator_modes": 51
+    },
+    {
+      "id": "mie_volume_quality",
+      "path": "tests/assets/product_e2e/prv3/mie_volume_1280x720.urescene",
+      "sha256": "83dff80b9f970c3262fc5667923abde34366d4a6a722dc02b0cb06ea3a0ad7ec",
+      "resolution": "1280x720",
+      "features": ["world_medium", "mie"],
+      "eligible_integrator_modes": 51
+    },
+    {
+      "id": "diffractive_functional",
+      "path": "tests/assets/product_e2e/prv3/diffractive_854x480.urescene",
+      "sha256": "be2e26ce7dcec459e4862905d063918734a7983a3f3b44c8583a6650d72c1f64",
+      "resolution": "854x480",
+      "features": ["bounded_diffraction"],
+      "eligible_integrator_modes": 1
+    },
+    {
+      "id": "diffractive_quality",
+      "path": "tests/assets/product_e2e/prv3/diffractive_1280x720.urescene",
+      "sha256": "5b43ce7f8078fc08d5feb7e493ff787d4fb04f0a05f94bdd4984210c29c12fd3",
+      "resolution": "1280x720",
+      "features": ["bounded_diffraction"],
+      "eligible_integrator_modes": 1
+    },
+    {
+      "id": "fluorescent_functional",
+      "path": "tests/assets/product_e2e/prv3/fluorescent_854x480.urescene",
+      "sha256": "9ce4fa26716a94240e86dbecac62b412efe8b2fac682a14c3de1a1eeba8b9b33",
+      "resolution": "854x480",
+      "features": ["bounded_fluorescence"],
+      "eligible_integrator_modes": 1
+    },
+    {
+      "id": "fluorescent_quality",
+      "path": "tests/assets/product_e2e/prv3/fluorescent_1280x720.urescene",
+      "sha256": "e0acc8f66a3fefe987cc121ca050c2f34f413d96f985608d2f5058bff2d7feb8",
+      "resolution": "1280x720",
+      "features": ["bounded_fluorescence"],
+      "eligible_integrator_modes": 1
+    }
+  ]
+}

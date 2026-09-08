@@ -2,7 +2,7 @@
 
 This generated reference freezes the Core ABI 1.x and Worker Protocol 1.x identity space. Extension maturity remains independent.
 
-Registry digest: `97e1b7e23000f6d9d6b507b771e36dfd6c626a53d5aba7138530038b0c34c9a0`
+Registry digest: `5ffc9242791e567adfdb4c85ff517a8caba2030be8bb3f2a864ca5a4f76b6791`
 
 | Registry ID | Kind | Canonical name | Stability | Maturity | Since | Default | Dependencies |
 |---:|---|---|---|---|---|---|---|
@@ -219,6 +219,9 @@ Registry digest: `97e1b7e23000f6d9d6b507b771e36dfd6c626a53d5aba7138530038b0c34c9
 |2147483718|Semantic|`ure.preview.operation.scene_tool.pack`|UnstableExtension|Experimental|1.0.0|disabled|2147483708|
 |2147483719|Semantic|`ure.preview.operation.scene_tool.unpack`|UnstableExtension|Experimental|1.0.0|disabled|2147483708|
 |2147483720|Semantic|`ure.preview.operation.scene_tool.realize`|UnstableExtension|Experimental|1.0.0|disabled|2147483708|
+|2147483721|Semantic|`ure.preview.operation.scene_tool.material_import`|UnstableExtension|Experimental|1.0.0|disabled|2147483708|
+|2147483722|Semantic|`ure.preview.operation.scene_tool.material_export`|UnstableExtension|Experimental|1.0.0|disabled|2147483708|
+|2147483723|Semantic|`ure.preview.operation.scene_tool.material_preset`|UnstableExtension|Experimental|1.0.0|disabled|2147483708|
 |4026531840|Semantic|`ure.private.mock.device_loss`|Private|NotApplicable|1.0.0|disabled|403|
 |4026531841|Semantic|`ure.private.mock.worker_crash`|Private|NotApplicable|1.0.0|disabled||
 |4026531842|Semantic|`ure.private.mock.event_gap`|Private|NotApplicable|1.0.0|disabled|402|

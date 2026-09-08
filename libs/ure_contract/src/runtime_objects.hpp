@@ -170,7 +170,8 @@ ure_result_t make_error(ure_result_t result, std::uint32_t detail,
                         std::string message, ure_handle_t *output,
                         ure_handle_t cause = nullptr,
                         ure_handle_t operation = nullptr,
-                        const DiagnosticContext *diagnostic = nullptr) noexcept;
+                        const DiagnosticContext *diagnostic = nullptr,
+                        std::string_view recovery_override = {}) noexcept;
 
 template <class T>
 bool valid_input(const T *value, std::uint32_t type) noexcept {

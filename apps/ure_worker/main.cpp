@@ -362,6 +362,9 @@ bool scene_tool_kind(product_fb::ProductMessageKind kind) noexcept {
     case product_fb::ProductMessageKind::SceneToolPack:
     case product_fb::ProductMessageKind::SceneToolUnpack:
     case product_fb::ProductMessageKind::SceneToolRealize:
+    case product_fb::ProductMessageKind::SceneToolMaterialImport:
+    case product_fb::ProductMessageKind::SceneToolMaterialExport:
+    case product_fb::ProductMessageKind::SceneToolMaterialPreset:
         return true;
     default:
         return false;
@@ -384,12 +387,26 @@ bool scene_tool_request(const product_fb::ProductEnvelope &envelope,
             return false;
         request.input_paths_utf8.push_back(input->str());
     }
-    request.output_path_utf8 = source->output_path()
-                                   ? source->output_path()->str()
-                                   : std::string{};
-    request.package_scene_id = source->package_scene_id()
-                                   ? source->package_scene_id()->str()
-                                   : std::string{};
+    const auto bounded_text = [](const auto *value, std::size_t limit,
+                                 std::string &output) {
+        if (!value) {
+            output.clear();
+            return true;
+        }
+        if (value->size() > limit)
+            return false;
+        output = value->str();
+        return true;
+    };
+    if (!bounded_text(source->output_path(), 32768,
+                      request.output_path_utf8) ||
+        !bounded_text(source->package_scene_id(), 1024,
+                      request.package_scene_id) ||
+        !bounded_text(source->material_selector(), 1024,
+                      request.material_selector) ||
+        !bounded_text(source->preset_name(), 256,
+                      request.preset_name))
+        return false;
     request.budget = {source->max_content_bytes(),
                       source->max_uncompressed_bytes(),
                       source->max_resident_bytes(),
@@ -419,6 +436,9 @@ std::vector<std::uint8_t> scene_tool_response_payload(
     result.semantic_identity.assign(
         std::begin(snapshot.result.semantic_identity.bytes),
         std::end(snapshot.result.semantic_identity.bytes));
+    result.material_program_set_identity.assign(
+        std::begin(snapshot.result.material_program_set_identity.bytes),
+        std::end(snapshot.result.material_program_set_identity.bytes));
     result.stored_bytes = snapshot.result.stored_bytes;
     result.decompressed_bytes = snapshot.result.decompressed_bytes;
     result.resident_bytes = snapshot.result.resident_bytes;
@@ -429,6 +449,9 @@ std::vector<std::uint8_t> scene_tool_response_payload(
     result.resource_count = snapshot.result.resource_count;
     result.cache_count = snapshot.result.cache_count;
     result.dependency_count = snapshot.result.dependency_count;
+    result.material_program_count = snapshot.result.material_program_count;
+    result.adapter_loss_report_size =
+        snapshot.result.adapter_loss_report_size;
     result.report = snapshot.report;
     flatbuffers::FlatBufferBuilder builder;
     product_fb::FinishProductEnvelopeBuffer(
@@ -464,6 +487,12 @@ std::vector<std::uint8_t> product_response_payload(
     envelope.status->requested_samples = status.requested_samples;
     envelope.status->accepted_samples = status.accepted_samples;
     envelope.status->completed_samples = status.completed_samples;
+    envelope.status->eligible_integrator_modes =
+        status.eligible_integrator_modes;
+    envelope.status->qualified_integrator_modes =
+        status.qualified_integrator_modes;
+    envelope.status->executed_integrator_modes =
+        status.executed_integrator_modes;
     envelope.status->progress_sequence = status.progress_sequence;
     envelope.status->stage = status.stage;
     envelope.status->elapsed_ns = status.elapsed_ns;
@@ -898,7 +927,7 @@ int run_worker(const Arguments &arguments) {
             response.error = error_descriptor(failure);
         } else if (request->payload_schema() == URE_PAYLOAD_PRODUCT_JOB &&
                    (request->payload_version_major() != 0 ||
-                    request->payload_version_minor() != 3)) {
+                    request->payload_version_minor() != 4)) {
             response.result = fb::ResultCode::IncompatibleVersion;
             failure = {URE_RESULT_INCOMPATIBLE_VERSION,
                        URE_ERROR_DOMAIN_CORE, 317,

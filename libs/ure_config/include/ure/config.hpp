@@ -207,6 +207,9 @@ enum class CliCommand {
     Inspect,
     Migrate,
     Realize,
+    MaterialImport,
+    MaterialExport,
+    MaterialPreset,
     Export
 };
 
@@ -219,6 +222,8 @@ struct CliResult {
     std::vector<std::string> input_paths;
     std::string loss_report_path;
     std::string scene_id;
+    std::string material_selector;
+    std::string preset_name;
     std::string transport = "worker";
     std::string runtime_path;
     std::string worker_path;

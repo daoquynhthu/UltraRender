@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include <filesystem>
+#include <numeric>
 
 #include "test_framework.cuh"
 #include "ure/detail/cuda_context.cuh"
@@ -745,6 +746,29 @@ static int test_mie_scene_ir_generated_and_imported_lifecycle() {
     CHECK(compiled.mie_phase_resources.size() == 2);
     CHECK(compiled.medium_phase_resource_index !=
           compiled.materials[0].header.medium_phase_resource_index);
+
+    auto capped = scene;
+    capped.spheres.clear();
+    capped.materials.clear();
+    capped.quad_lights.clear();
+    capped.medium_density = 1.0e10f;
+    capped.medium_max_distance = 1.0f;
+    auto vacuum = capped;
+    vacuum.medium_density = 0.0f;
+    auto capped_engine = ure::RenderEngineFactory::create_gpu_renderer(config);
+    capped_engine->load_scene_ir(capped);
+    CHECK(capped_engine->render_pass() == 1);
+    auto vacuum_engine = ure::RenderEngineFactory::create_gpu_renderer(config);
+    vacuum_engine->load_scene_ir(vacuum);
+    CHECK(vacuum_engine->render_pass() == 1);
+    const float capped_sum = std::accumulate(
+        capped_engine->get_framebuffer().begin(),
+        capped_engine->get_framebuffer().end(), 0.0f);
+    const float vacuum_sum = std::accumulate(
+        vacuum_engine->get_framebuffer().begin(),
+        vacuum_engine->get_framebuffer().end(), 0.0f);
+    CHECK(capped_sum > vacuum_sum * 0.5f);
+
     auto baseline = scene;
     baseline.medium_density = 0.0f;
     auto baseline_material = std::make_shared<ure::scene_ir::MaterialNode>(*material);

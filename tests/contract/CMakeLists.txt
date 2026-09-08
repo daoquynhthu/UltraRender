@@ -131,6 +131,9 @@ if(TARGET ure_contract)
     add_executable(generate_product_fixtures generate_product_fixtures.cpp)
     target_link_libraries(generate_product_fixtures PRIVATE ure_sceneio)
 
+    add_executable(generate_prv3_fixtures generate_prv3_fixtures.cpp)
+    target_link_libraries(generate_prv3_fixtures PRIVATE ure_sceneio)
+
     add_library(worker_test_support STATIC external_client/worker_client.cpp)
     target_link_libraries(worker_test_support PUBLIC
         ure_public
@@ -302,6 +305,13 @@ add_test(
         -File ${CMAKE_SOURCE_DIR}/scripts/check_phase_prv2_static.ps1
         -RepoRoot ${CMAKE_SOURCE_DIR})
 add_test(
+    NAME test_phase_prv3_static
+    COMMAND
+        ${UR_PWSH_EXECUTABLE}
+        -NoProfile
+        -File ${CMAKE_SOURCE_DIR}/scripts/check_phase_prv3_static.ps1
+        -RepoRoot ${CMAKE_SOURCE_DIR})
+add_test(
     NAME test_mock_worker_external_client
     COMMAND external_client
         ${UR_PB1_STAGE_DIR}/bin/ultrarender_mock_worker.exe
@@ -365,6 +375,14 @@ if(TARGET ure_contract)
             -RepoRoot ${CMAKE_SOURCE_DIR}
             -Generator $<TARGET_FILE:generate_product_fixtures>)
     add_test(
+        NAME test_prv3_assets
+        COMMAND
+            ${UR_PWSH_EXECUTABLE}
+            -NoProfile
+            -File ${CMAKE_CURRENT_SOURCE_DIR}/test_prv3_assets.ps1
+            -RepoRoot ${CMAKE_SOURCE_DIR}
+            -Generator $<TARGET_FILE:generate_prv3_fixtures>)
+    add_test(
         NAME test_product_e2e_evidence
         COMMAND
             ${UR_PWSH_EXECUTABLE}
@@ -385,7 +403,8 @@ if(TARGET ure_contract)
             $<TARGET_FILE:ure_contract>
             $<TARGET_FILE:ure_worker>
             ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene
-            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene)
+            ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene
+            ${CMAKE_SOURCE_DIR}/scenes/cornell_box.gltf)
     if(TARGET ure_cli)
         add_test(
             NAME test_prv1_cli
@@ -409,6 +428,17 @@ if(TARGET ure_contract)
                 -Q3 ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene
                 -Q4 ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene)
         add_test(
+            NAME test_prv3_cli
+            COMMAND
+                ${UR_PWSH_EXECUTABLE}
+                -NoProfile
+                -File ${CMAKE_CURRENT_SOURCE_DIR}/test_prv3_cli.ps1
+                -Cli $<TARGET_FILE:ure_cli>
+                -Runtime $<TARGET_FILE:ure_contract>
+                -Worker $<TARGET_FILE:ure_worker>
+                -Q3 ${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene
+                -Gltf ${CMAKE_SOURCE_DIR}/scenes/cornell_box.gltf)
+        add_test(
             NAME test_product_functional_e2e
             COMMAND
                 ${UR_PWSH_EXECUTABLE}
@@ -429,6 +459,17 @@ if(TARGET ure_contract)
                 -BuildDir ${CMAKE_BINARY_DIR}
                 -ReportPath ${CMAKE_BINARY_DIR}/artifacts/Release/evidence/prv2_package/report.json
                 -ArtifactDir ${CMAKE_BINARY_DIR}/artifacts/Release/evidence/prv2_package
+                -Samples 16)
+        add_test(
+            NAME test_prv3_material_e2e
+            COMMAND
+                ${UR_PWSH_EXECUTABLE}
+                -NoProfile
+                -File ${CMAKE_SOURCE_DIR}/scripts/run_prv3_material_e2e.ps1
+                -RepoRoot ${CMAKE_SOURCE_DIR}
+                -BuildDir ${CMAKE_BINARY_DIR}
+                -ReportPath ${CMAKE_BINARY_DIR}/artifacts/Release/evidence/prv3_functional/report.json
+                -ArtifactDir ${CMAKE_BINARY_DIR}/artifacts/Release/evidence/prv3_functional
                 -Samples 16)
     endif()
     add_test(
@@ -511,6 +552,7 @@ set_tests_properties(
     test_phase_pb8_static
     test_phase_prv1_static
     test_phase_prv2_static
+    test_phase_prv3_static
     test_mock_worker_external_client
     PROPERTIES TIMEOUT 60)
 
@@ -525,6 +567,7 @@ if(TARGET ure_contract)
         test_scene_transaction
         test_product_extension
         test_product_e2e_assets
+        test_prv3_assets
         test_product_e2e_evidence
         test_client_transport
         test_scene_tool_extension
@@ -538,9 +581,9 @@ if(TARGET ure_contract)
         test_external_client_package
         PROPERTIES TIMEOUT 60)
     if(TARGET ure_cli)
-        set_tests_properties(test_prv1_cli test_prv2_cli PROPERTIES TIMEOUT 120)
-        set_tests_properties(test_product_functional_e2e test_prv2_package_e2e PROPERTIES
-            TIMEOUT 600
+        set_tests_properties(test_prv1_cli test_prv2_cli test_prv3_cli PROPERTIES TIMEOUT 120)
+        set_tests_properties(test_product_functional_e2e test_prv2_package_e2e test_prv3_material_e2e PROPERTIES
+            TIMEOUT 900
             RUN_SERIAL TRUE
             LABELS "product_functional;gpu")
     endif()

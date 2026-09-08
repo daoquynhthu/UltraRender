@@ -1,7 +1,12 @@
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
+#include <memory>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include <ure/native_scene_tooling.hpp>
 #include <ure/native_script_build.hpp>
@@ -36,6 +41,61 @@ bool has_detail(const ure::product::ProductRealizationResult& result,
     return std::ranges::any_of(result.diagnostics, [detail](const auto& item) {
         return item.detail == detail;
     });
+}
+
+void check_material_diagnostic(
+    const ure::product::ProductRealizationResult& result,
+    std::uint32_t detail, std::string_view code_prefix,
+    std::string_view field_fragment, const char* message) {
+    const auto found = std::ranges::find_if(
+        result.diagnostics, [detail](const auto& item) {
+            return item.detail == detail;
+        });
+    check(found != result.diagnostics.end(), message);
+    if (found == result.diagnostics.end())
+        return;
+    check(found->domain ==
+              ure::product::ProductSceneDiagnosticDomain::Material,
+          "material preflight diagnostic used the wrong domain");
+    check(found->code.starts_with(code_prefix) &&
+              found->field_path.find(field_fragment) != std::string::npos &&
+              !found->recovery.empty(),
+          "material preflight diagnostic omitted code, path, or recovery");
+}
+
+ure::native_scene::NativeSceneArchive make_material_archive(
+    ure::scene_ir::SceneIR scene, const std::filesystem::path& root,
+    std::string id) {
+    ure::native_scene::SceneDocument document;
+    document.id = std::move(id);
+    document.schema_version = {1, 0};
+    auto archive = ure::native_scene::make_native_scene_archive(
+        std::move(document), scene);
+    archive.execution_root = root;
+    return archive;
+}
+
+std::shared_ptr<ure::scene_ir::MaterialNode> make_lambert_material() {
+    auto material = std::make_shared<ure::scene_ir::MaterialNode>();
+    material->name = "preflight-lambert";
+    return material;
+}
+
+std::shared_ptr<const ure::scene_ir::MiePhaseResource>
+make_nearly_normalized_mie() {
+    auto resource = std::make_shared<ure::scene_ir::MiePhaseResource>();
+    resource->wavelengths_nm = {500.0f, 600.0f};
+    resource->cos_theta = {-1.0f, 1.0f};
+    const float phase = 1.0f / (4.0f * 3.14159265358979323846f) * 1.0005f;
+    resource->phase = {phase, phase, phase, phase};
+    resource->cdf = {0.0f, 1.0f, 0.0f, 1.0f};
+    resource->scattering_cross_section_m2 = {0.0f, 0.0f};
+    resource->extinction_cross_section_m2 = {0.0f, 0.0f};
+    resource->absorption_cross_section_m2 = {0.0f, 0.0f};
+    resource->asymmetry = {0.0f, 0.0f};
+    resource->polarization_model =
+        ure::scene_ir::MiePolarizationModel::ScalarDepolarizing;
+    return resource;
 }
 
 }
@@ -107,7 +167,7 @@ int main() {
                   !adapted_realized.snapshot->render_scene().meshes.empty() &&
                   has_disposition(
                       *adapted_realized.snapshot, "ure.adapter.gltf",
-                      ure::product::ProductFeatureDisposition::PreservedForTooling),
+                      ure::product::ProductFeatureDisposition::Executed),
               "adapted glTF archive did not enter the unique ProductSnapshot realizer");
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAIL: adapted archive threw: %s\n", error.what());
@@ -312,6 +372,108 @@ int main() {
                       ure::product::ProductFeatureDisposition::PreservedForTooling),
               "rebuildable package cache had no explicit disposition");
     }
+
+    const auto material_root = root / "material-preflight";
+    std::filesystem::create_directories(material_root);
+
+    const auto damaged_texture = material_root / "damaged.bmp";
+    {
+        std::ofstream output(damaged_texture, std::ios::binary);
+        output << "not an image";
+    }
+    ure::scene_ir::SceneIR texture_scene;
+    auto texture_material = make_lambert_material();
+    const auto image = texture_scene.register_image(
+        "damaged", damaged_texture.filename().string(),
+        ure::scene_ir::ImageColorSpace::SRGB);
+    auto texture = texture_scene.register_texture("damaged", image);
+    ure::scene_ir::MaterialGraph texture_graph;
+    ure::scene_ir::MaterialGraphNode texture_node;
+    texture_node.kind = ure::scene_ir::MaterialGraphNodeKind::Texture2D;
+    texture_node.texture = texture;
+    const auto texture_id = texture_graph.add_node(std::move(texture_node));
+    ure::scene_ir::MaterialGraphNode lambert_node;
+    lambert_node.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLambert;
+    lambert_node.inputs = {ure::scene_ir::material_graph_input(
+        "base_color", texture_id)};
+    const auto lambert_id = texture_graph.add_node(std::move(lambert_node));
+    ure::scene_ir::MaterialGraphNode texture_output;
+    texture_output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    texture_output.inputs = {ure::scene_ir::material_graph_input(
+        "surface", lambert_id)};
+    texture_graph.output_node_id = texture_graph.add_node(
+        std::move(texture_output));
+    texture_material->graph =
+        std::make_shared<ure::scene_ir::MaterialGraph>(
+            std::move(texture_graph));
+    texture_scene.materials.push_back(std::move(texture_material));
+    const auto texture_result = ure::product::realize_product_scene(
+        make_material_archive(std::move(texture_scene), material_root,
+                              "scene/prv3/preflight-texture"));
+    check_material_diagnostic(
+        texture_result, 711, "URE-PRV3-MATERIAL-TEXTURE-",
+        "/images/", "damaged texture was not rejected by material preflight");
+
+    const auto invalid_spd = material_root / "invalid.spd";
+    {
+        std::ofstream output(invalid_spd);
+        output << "400 0.1\nmalformed SPD row\n700 0.2\n";
+    }
+    ure::scene_ir::SceneIR spd_scene;
+    auto spd_material = make_lambert_material();
+    spd_material->spectral_extension =
+        std::make_shared<ure::scene_ir::SpectralMaterialExtension>();
+    spd_material->spectral_extension->spectral_bands = 2;
+    spd_material->spectral_extension->albedo_spd = invalid_spd.filename().string();
+    spd_scene.materials.push_back(std::move(spd_material));
+    const auto spd_result = ure::product::realize_product_scene(
+        make_material_archive(std::move(spd_scene), material_root,
+                              "scene/prv3/preflight-spd"));
+    check_material_diagnostic(
+        spd_result, 712, "URE-PRV3-MATERIAL-SPD-",
+        "/spectral/albedo-spd", "invalid SPD was not rejected by material preflight");
+
+    const auto narrow_spd = material_root / "narrow.spd";
+    {
+        std::ofstream output(narrow_spd);
+        output << "450 0.1\n650 0.2\n";
+    }
+    ure::scene_ir::SceneIR narrow_scene;
+    auto narrow_material = make_lambert_material();
+    narrow_material->spectral_extension =
+        std::make_shared<ure::scene_ir::SpectralMaterialExtension>();
+    narrow_material->spectral_extension->spectral_bands = 2;
+    narrow_material->spectral_extension->albedo_spd =
+        narrow_spd.filename().string();
+    narrow_scene.materials.push_back(std::move(narrow_material));
+    const auto narrow_result = ure::product::realize_product_scene(
+        make_material_archive(std::move(narrow_scene), material_root,
+                              "scene/prv3/preflight-spd-domain"));
+    check_material_diagnostic(
+        narrow_result, 712, "URE-PRV3-MATERIAL-SPD-003",
+        "/spectral/albedo-spd",
+        "narrow SPD domain was accepted without the identity-bound extrapolation policy");
+
+    ure::scene_ir::SceneIR mie_scene;
+    mie_scene.medium_density = 0.1f;
+    mie_scene.medium_phase = ure::scene_ir::VolumePhaseFunction::Mie;
+    mie_scene.medium_mie_resource = make_nearly_normalized_mie();
+    const auto mie_result = ure::product::realize_product_scene(
+        make_material_archive(std::move(mie_scene), material_root,
+                              "scene/prv3/preflight-mie"));
+    check_material_diagnostic(
+        mie_result, 713, "URE-PRV3-MATERIAL-MIE-", "/scene/medium/mie",
+        "invalid Mie resource was not rejected by material preflight");
+
+    ure::scene_ir::SceneIR medium_scene;
+    medium_scene.medium_density = 0.1f;
+    medium_scene.medium_anisotropy = 1.25f;
+    const auto medium_result = ure::product::realize_product_scene(
+        make_material_archive(std::move(medium_scene), material_root,
+                              "scene/prv3/preflight-medium"));
+    check_material_diagnostic(
+        medium_result, 714, "URE-PRV3-MATERIAL-MEDIUM-", "/scene/medium",
+        "non-physical medium was not rejected by material preflight");
 
     std::filesystem::remove_all(root);
     if (failures == 0)

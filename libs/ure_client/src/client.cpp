@@ -132,6 +132,17 @@ SceneToolResult Client::scene_tool(const SceneToolRequest &request) const {
     if (!impl_)
         detail::throw_error(URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE, 8,
                             "client is not connected");
+    if (request.inputs.size() > 256 ||
+        std::ranges::any_of(request.inputs, [](const auto &path) {
+            return path.generic_string().size() > 32768;
+        }) ||
+        request.output.generic_string().size() > 32768 ||
+        request.package_scene_id.size() > 1024 ||
+        request.material_selector.size() > 1024 ||
+        request.preset_name.size() > 256)
+        detail::throw_error(
+            URE_RESULT_INVALID_ARGUMENT, URE_ERROR_DOMAIN_CORE, 706,
+            "scene-tool request exceeds a bounded string or collection limit");
     return impl_->transport_->scene_tool(request);
 }
 

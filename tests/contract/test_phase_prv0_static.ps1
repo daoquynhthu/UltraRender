@@ -63,7 +63,7 @@ try {
     Expect-Failure "expired PB terminal gate" { param($j) $j.entries[2].terminal_gate = "PB.8" } Closure
     Expect-Failure "unsupported ProductE2E claim" {
         param($j)
-        $entry = $j.entries | Where-Object id -eq "materialx_adapter"
+        $entry = $j.entries | Where-Object id -eq "usd_adapter"
         $entry.closure_level = "ProductE2E"
     } Closure
     Expect-Failure "forbidden GUI anchor" { param($j) $j.entries[0].anchors[0] = "gui/legacy.cpp" } Closure

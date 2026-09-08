@@ -2160,6 +2160,12 @@ static int test_path_guiding_memory_plan_enforces_device_budget() {
     CHECK(plan.required_bytes == (32u + 32u * 16u * 8u) * sizeof(float));
     CHECK(plan.budget_bytes == 64ull * 1024ull * 1024ull);
 
+    const auto reserve_limited = plan_path_guiding_memory(
+        config, 1, 4096, 8ull << 30);
+    CHECK(reserve_limited.required_bytes ==
+          (1u + 16u * 8u) * sizeof(float));
+    CHECK(reserve_limited.budget_bytes >= reserve_limited.required_bytes);
+
     config.path_guiding.spatial_cell_count = 4096;
     config.path_guiding.directional_bin_count = 64;
     config.path_guiding.memory_budget_mb = 1;

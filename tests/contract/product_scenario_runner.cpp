@@ -191,6 +191,12 @@ int main(int argc, char **argv) {
                   << "requested_samples=" << result.info.requested_samples << '\n'
                   << "accepted_samples=" << result.info.accepted_samples << '\n'
                   << "completed_samples=" << result.info.completed_samples << '\n'
+                  << "eligible_integrator_modes="
+                  << result.info.eligible_integrator_modes << '\n'
+                  << "qualified_integrator_modes="
+                  << result.info.qualified_integrator_modes << '\n'
+                  << "executed_integrator_modes="
+                  << result.info.executed_integrator_modes << '\n'
                   << "low_samples=" << low->sample_count << '\n'
                   << "mid_samples=" << mid->sample_count << '\n'
                   << "frame=" << result.frame.width << 'x'

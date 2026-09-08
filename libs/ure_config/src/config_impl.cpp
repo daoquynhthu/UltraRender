@@ -531,6 +531,43 @@ CliResult parse_cli(int argc, char** argv) {
     realize_cmd->add_option(
         "input", realize_input, "Input .ure, .urescene, or .urepkg")->required();
 
+    auto* material_import_cmd = app.add_subcommand(
+        "material-import", "Import MaterialX into a canonical scene material");
+    std::string material_import_scene, material_import_source;
+    std::string material_import_output, material_import_selector;
+    material_import_cmd->add_option("scene", material_import_scene,
+                                    "Input native scene")->required();
+    material_import_cmd->add_option("materialx", material_import_source,
+                                    "Input .mtlx material")->required();
+    material_import_cmd->add_option("-o,--output", material_import_output,
+                                    "Output native scene")->required();
+    material_import_cmd->add_option("--material", material_import_selector,
+                                    "Material UUID, source ID, or name")->required();
+
+    auto* material_export_cmd = app.add_subcommand(
+        "material-export", "Export one canonical material as MaterialX");
+    std::string material_export_scene, material_export_output;
+    std::string material_export_selector;
+    material_export_cmd->add_option("scene", material_export_scene,
+                                    "Input native scene")->required();
+    material_export_cmd->add_option("-o,--output", material_export_output,
+                                    "Output .mtlx material")->required();
+    material_export_cmd->add_option("--material", material_export_selector,
+                                    "Material UUID, source ID, or name")->required();
+
+    auto* material_preset_cmd = app.add_subcommand(
+        "material-preset", "Apply a canonical UltraRender material preset");
+    std::string material_preset_scene, material_preset_output;
+    std::string material_preset_selector, material_preset_name;
+    material_preset_cmd->add_option("scene", material_preset_scene,
+                                    "Input native scene")->required();
+    material_preset_cmd->add_option("-o,--output", material_preset_output,
+                                    "Output native scene")->required();
+    material_preset_cmd->add_option("--material", material_preset_selector,
+                                    "Material UUID, source ID, or name")->required();
+    material_preset_cmd->add_option("--preset", material_preset_name,
+                                    "Canonical preset name")->required();
+
     std::string scene_tool_scene_id;
     const auto add_product_client_options =
         [&](CLI::App* command, bool package_selection) {
@@ -548,7 +585,9 @@ CliResult parse_cli(int argc, char** argv) {
                     "Selected scene ID for a multi-scene package");
         };
     for (auto* command : {info_cmd, validate_cmd, build_cmd, pack_cmd,
-                          unpack_cmd, inspect_cmd, migrate_cmd, realize_cmd})
+                          unpack_cmd, inspect_cmd, migrate_cmd, realize_cmd,
+                          material_import_cmd, material_export_cmd,
+                          material_preset_cmd})
         add_product_client_options(command, true);
     add_product_client_options(list_devices_cmd, false);
 
@@ -754,6 +793,23 @@ CliResult parse_cli(int argc, char** argv) {
     } else if (*realize_cmd) {
         result.command = CliCommand::Realize;
         result.scene_path = realize_input;
+    } else if (*material_import_cmd) {
+        result.command = CliCommand::MaterialImport;
+        result.scene_path = material_import_scene;
+        result.input_paths = {material_import_source};
+        result.output_path = material_import_output;
+        result.material_selector = material_import_selector;
+    } else if (*material_export_cmd) {
+        result.command = CliCommand::MaterialExport;
+        result.scene_path = material_export_scene;
+        result.output_path = material_export_output;
+        result.material_selector = material_export_selector;
+    } else if (*material_preset_cmd) {
+        result.command = CliCommand::MaterialPreset;
+        result.scene_path = material_preset_scene;
+        result.output_path = material_preset_output;
+        result.material_selector = material_preset_selector;
+        result.preset_name = material_preset_name;
     } else if (*export_cmd) {
         result.command = CliCommand::Export;
         result.scene_path = export_input;

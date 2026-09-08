@@ -323,6 +323,54 @@ static int test_materialx_unknown_node_fails_loud() {
     return 0;
 }
 
+static int test_standard_surface_unsupported_input_fails_loud() {
+    bool rejected = false;
+    try {
+        (void)ure::io::import_materialx_graph(
+            "<materialx><standard_surface name=\"shader\">"
+            "<input name=\"metalness\" type=\"float\" value=\"1\" />"
+            "</standard_surface><surfacematerial name=\"mat\">"
+            "<input name=\"surface\" nodename=\"shader\" />"
+            "</surfacematerial></materialx>");
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    CHECK(rejected);
+    return 0;
+}
+
+static int test_texture_color_space_and_xml_escaping_roundtrip() {
+    ure::scene_ir::MaterialGraph graph;
+    ure::scene_ir::MaterialGraphNode texture;
+    texture.id = 1;
+    texture.kind = ure::scene_ir::MaterialGraphNodeKind::Texture2D;
+    texture.texture = std::make_shared<ure::scene_ir::TextureResource>();
+    texture.texture->image = std::make_shared<ure::scene_ir::ImageResource>();
+    texture.texture->image->uri = "textures/a&b<sample>.ppm";
+    texture.texture->image->color_space =
+        ure::scene_ir::ImageColorSpace::Linear;
+    ure::scene_ir::MaterialGraphNode surface;
+    surface.id = 2;
+    surface.kind = ure::scene_ir::MaterialGraphNodeKind::BsdfLambert;
+    surface.inputs.push_back(input("base_color", texture.id));
+    ure::scene_ir::MaterialGraphNode output;
+    output.id = 3;
+    output.kind = ure::scene_ir::MaterialGraphNodeKind::OutputSurface;
+    output.inputs.push_back(input("surface", surface.id));
+    graph.nodes = {texture, surface, output};
+    graph.output_node_id = output.id;
+    const auto xml = ure::io::export_materialx_graph(graph, "A&B<Material>");
+    CHECK(xml.find("a&amp;b&lt;sample&gt;.ppm") != std::string::npos);
+    CHECK(xml.find("A&amp;B&lt;Material&gt;") != std::string::npos);
+    const auto imported = ure::io::import_materialx_graph(xml);
+    const auto& imported_texture = imported.require_node(1, "texture");
+    CHECK(imported_texture.texture->image->uri ==
+          "textures/a&b<sample>.ppm");
+    CHECK(imported_texture.texture->image->color_space ==
+          ure::scene_ir::ImageColorSpace::Linear);
+    return 0;
+}
+
 int main() {
     std::fprintf(stderr, "[MaterialX IO Test]\n");
     auto run = [](const char* name, int (*fn)()) -> int {
@@ -344,6 +392,8 @@ int main() {
     failed += run("test_diffractive_materialx_roundtrip_and_gate", test_diffractive_materialx_roundtrip_and_gate);
     failed += run("test_fluorescence_materialx_roundtrip_and_gate", test_fluorescence_materialx_roundtrip_and_gate);
     failed += run("test_materialx_unknown_node_fails_loud", test_materialx_unknown_node_fails_loud);
+    failed += run("test_standard_surface_unsupported_input_fails_loud", test_standard_surface_unsupported_input_fails_loud);
+    failed += run("test_texture_color_space_and_xml_escaping_roundtrip", test_texture_color_space_and_xml_escaping_roundtrip);
     std::fprintf(stderr, "  passed: %d, failed: %d\n", g_passed, failed);
     g_failed += failed;
     if (g_failed > 0) {

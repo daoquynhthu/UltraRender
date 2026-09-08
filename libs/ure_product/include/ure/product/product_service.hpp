@@ -59,13 +59,22 @@ enum class ProductFailureCode : std::uint32_t {
 class ProductError final : public std::runtime_error {
 public:
     ProductError(ProductFailureCode code, std::string message,
-                 std::uint32_t detail = 0);
+                 std::uint32_t detail = 0,
+                 std::string diagnostic_code = {},
+                 std::string field_path = {},
+                 std::string recovery = {});
     ProductFailureCode code() const noexcept;
     std::uint32_t detail() const noexcept;
+    const std::string& diagnostic_code() const noexcept;
+    const std::string& field_path() const noexcept;
+    const std::string& recovery() const noexcept;
 
 private:
     ProductFailureCode code_;
     std::uint32_t detail_{};
+    std::string diagnostic_code_;
+    std::string field_path_;
+    std::string recovery_;
 };
 
 struct ProductMemoryPlan {
@@ -97,6 +106,9 @@ struct ProductOperationSnapshot {
     std::uint64_t scene_realizations{};
     std::uint64_t executor_creations{};
     std::uint64_t actual_renderer_samples{};
+    std::uint64_t eligible_integrator_modes{};
+    std::uint64_t qualified_integrator_modes{};
+    std::uint64_t executed_integrator_modes{};
 };
 
 struct ProductFrame {

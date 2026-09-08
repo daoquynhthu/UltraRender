@@ -4,9 +4,11 @@ foreach(source
     ${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
     ${CMAKE_CURRENT_SOURCE_DIR}/include/ure/product/product_service.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/ure/product/product_scene.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/ure/product/product_material.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/ure/product/scene_tool_service.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/product_service.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/product_scene.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/product_material.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/scene_tool_service.cpp)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${source})
     file(SHA256 ${source} source_digest)
@@ -22,6 +24,7 @@ configure_file(
 add_library(ure_product STATIC
     src/product_service.cpp
     src/product_scene.cpp
+    src/product_material.cpp
     src/scene_tool_service.cpp)
 target_include_directories(ure_product
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include

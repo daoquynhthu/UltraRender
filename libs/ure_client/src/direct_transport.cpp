@@ -194,9 +194,9 @@ class DirectConnection final : public ClientTransport,
         scenes_ = query_table<ure_scene_interface_t>(query, scene_id, 1, 0, 1,
                                                      0);
         products_ = query_table<ure_product_job_interface_t>(
-            query, product_id, 0, 1, 0, 3);
+            query, product_id, 0, 1, 0, 4);
         scene_tools_ = query_table<ure_scene_tool_interface_t>(
-            query, scene_tool_id, 0, 1, 0, 1);
+            query, scene_tool_id, 0, 2, 0, 2);
         device_execution_ = query_table<ure_device_execution_interface_t>(
             query, device_execution_id, 0, 1, 0, 1);
         if (!runtime_ || !instances_ || !errors_ || !operations_ || !frames_ ||
@@ -287,6 +287,10 @@ class DirectConnection final : public ClientTransport,
         wire.temporary_budget_bytes = request.temporary_budget_bytes;
         wire.report_buffer = {report.data(), report.size()};
         wire.allow_script_execution = request.allow_script_execution ? 1U : 0U;
+        wire.material_selector = {request.material_selector.data(),
+                                  request.material_selector.size()};
+        wire.preset_name = {request.preset_name.data(),
+                            request.preset_name.size()};
         ure_scene_tool_result_t result{};
         result.header = {URE_STRUCTURE_SCENE_TOOL_RESULT, sizeof(result), nullptr};
         ure_handle_t error{};
@@ -310,6 +314,9 @@ class DirectConnection final : public ClientTransport,
         std::memcpy(output_result.semantic_identity.data(),
                     result.semantic_identity.bytes,
                     output_result.semantic_identity.size());
+        std::memcpy(output_result.material_program_set_identity.data(),
+                    result.material_program_set_identity.bytes,
+                    output_result.material_program_set_identity.size());
         output_result.stored_bytes = result.stored_bytes;
         output_result.decompressed_bytes = result.decompressed_bytes;
         output_result.resident_bytes = result.resident_bytes;
@@ -320,6 +327,9 @@ class DirectConnection final : public ClientTransport,
         output_result.resource_count = result.resource_count;
         output_result.cache_count = result.cache_count;
         output_result.dependency_count = result.dependency_count;
+        output_result.material_program_count = result.material_program_count;
+        output_result.adapter_loss_report_size =
+            result.adapter_loss_report_size;
         output_result.report = std::move(diagnostic_report);
         return output_result;
     }
@@ -444,6 +454,12 @@ class DirectJob final : public JobTransport {
         result.requested_samples = product_info.requested_samples;
         result.accepted_samples = product_info.accepted_samples;
         result.completed_samples = product_info.completed_samples;
+        result.eligible_integrator_modes =
+            product_info.eligible_integrator_modes;
+        result.qualified_integrator_modes =
+            product_info.qualified_integrator_modes;
+        result.executed_integrator_modes =
+            product_info.executed_integrator_modes;
         result.progress_sequence = product_info.progress_sequence;
         result.stage = product_info.stage;
         result.elapsed_ns = product_info.elapsed_ns;

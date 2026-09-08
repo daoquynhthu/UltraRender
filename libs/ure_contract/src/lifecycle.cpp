@@ -200,7 +200,8 @@ bool release_error(ure_handle_t handle) noexcept {
 ure_result_t make_error(ure_result_t result, std::uint32_t detail,
                         std::string message, ure_handle_t *output,
                         ure_handle_t cause, ure_handle_t operation,
-                        const DiagnosticContext *diagnostic) noexcept {
+                        const DiagnosticContext *diagnostic,
+                        std::string_view recovery_override) noexcept {
     if (output) {
         *output = nullptr;
         if (fail_next_error_allocation().exchange(false, std::memory_order_acq_rel)) return result;
@@ -222,7 +223,9 @@ ure_result_t make_error(ure_result_t result, std::uint32_t detail,
             error->correlation_identity = make_correlation(result, detail);
             const auto [retryability, recovery] = recovery_policy(result);
             error->retryability = retryability;
-            error->recovery_hint = recovery;
+            error->recovery_hint = recovery_override.empty()
+                                       ? std::string(recovery)
+                                       : std::string(recovery_override);
             if (cause) {
                 if (const auto cause_object = handles().get<ErrorObject>(
                         cause, ObjectType::Error))
@@ -524,7 +527,7 @@ ure_result_t query_capability_impl(ure_handle_t instance, const ure_capability_q
             URE_CAPABILITY_FRAME_LEASE, URE_CAPABILITY_NATIVE_SCENE,
             URE_CAPABILITY_RENDER_SESSION, URE_CAPABILITY_DEVICE_EXECUTION};
         descriptor->version_major = 0;
-        descriptor->version_minor = 3;
+        descriptor->version_minor = 4;
         descriptor->stability = URE_STABILITY_UNSTABLE_EXTENSION;
         descriptor->maturity = URE_MATURITY_EXPERIMENTAL;
         descriptor->runtime_state = URE_RUNTIME_STATE_AVAILABLE;

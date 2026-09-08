@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -12,6 +13,7 @@
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #if defined(_WIN32)
@@ -23,12 +25,15 @@
 #include <unistd.h>
 #endif
 
+#include <ure/image_loader.hpp>
+#include <ure/mie_phase_validation.hpp>
 #include <ure/native_procedural_graph.hpp>
 #include <ure/native_scene_hash.hpp>
 #include <ure/native_scene_validation.hpp>
 #include <ure/native_scene_uuid.hpp>
 #include <ure/native_script_build.hpp>
 #include <ure/product/product_scene.hpp>
+#include <ure/spd_loader.hpp>
 #include <ure/spectral_limits.hpp>
 
 namespace ure::product {
@@ -283,6 +288,189 @@ scene_ir::SceneIR clone_scene(
     return scene;
 }
 
+bool finite_non_negative(core::Vec3f value) {
+    return std::isfinite(value.x) && value.x >= 0.0f &&
+           std::isfinite(value.y) && value.y >= 0.0f &&
+           std::isfinite(value.z) && value.z >= 0.0f;
+}
+
+void validate_medium(float density, float anisotropy,
+                     core::Vec3f scattering, core::Vec3f absorption,
+                     std::string field_path) {
+    if (!std::isfinite(density) || density < 0.0f ||
+        !std::isfinite(anisotropy) || anisotropy < -1.0f ||
+        anisotropy > 1.0f || !finite_non_negative(scattering) ||
+        !finite_non_negative(absorption))
+        throw ProductMaterialError(
+            714, "URE-PRV3-MATERIAL-MEDIUM-001", std::move(field_path),
+            "Material medium contains a non-physical coefficient",
+            "use finite non-negative density and coefficients with anisotropy in [-1, 1]");
+}
+
+void validate_spd_payload(std::string_view path,
+                          std::string field_path) {
+    const auto spd = spectral::load_spd_file(std::string(path));
+    if (spd.lambdas.size() < 2 ||
+        spd.lambdas.size() != spd.values.size())
+        throw ProductMaterialError(
+            712, "URE-PRV3-MATERIAL-SPD-001", std::move(field_path),
+            "Spectral material resource has insufficient valid samples",
+            "package an SPD with at least two finite wavelength/value pairs");
+    for (std::size_t index = 0; index < spd.lambdas.size(); ++index) {
+        if (!std::isfinite(spd.lambdas[index]) ||
+            !std::isfinite(spd.values[index]) ||
+            spd.lambdas[index] <= 0.0f || spd.values[index] < 0.0f ||
+            (index > 0 && spd.lambdas[index] <= spd.lambdas[index - 1]))
+            throw ProductMaterialError(
+                712, "URE-PRV3-MATERIAL-SPD-002", std::move(field_path),
+                "Spectral material resource has an invalid sample domain",
+                "use unique increasing positive wavelengths and finite non-negative values");
+    }
+    constexpr float kProductLambdaMinNm = 400.0f;
+    constexpr float kProductLambdaMaxNm = 700.0f;
+    if (spd.lambdas.front() > kProductLambdaMinNm ||
+        spd.lambdas.back() < kProductLambdaMaxNm)
+        throw ProductMaterialError(
+            712, "URE-PRV3-MATERIAL-SPD-003", std::move(field_path),
+            "Spectral material resource does not cover the renderer wavelength domain",
+            "provide measured samples spanning 400-700 nm; the identity-bound product policy clamps only outside that declared range");
+}
+
+std::shared_ptr<const scene_ir::MiePhaseResource> validate_mie_payload(
+    const std::shared_ptr<const scene_ir::MiePhaseResource>& resource,
+    std::string field_path) {
+    if (!resource)
+        throw ProductMaterialError(
+            713, "URE-PRV3-MATERIAL-MIE-002", std::move(field_path),
+            "Mie medium has no phase resource",
+            "bind a validated content-addressed Mie phase resource");
+    auto validated = std::make_shared<scene_ir::MiePhaseResource>(*resource);
+    try {
+        scene_ir::validate_mie_phase_resource(*validated);
+    } catch (const std::exception& error) {
+        throw ProductMaterialError(
+            713, "URE-PRV3-MATERIAL-MIE-003", std::move(field_path),
+            error.what(), "regenerate and package a normalized Mie phase table");
+    }
+    return validated;
+}
+
+void validate_mie_coefficients(float anisotropy,
+                               core::Vec3f scattering,
+                               core::Vec3f absorption,
+                               std::string field_path) {
+    if (anisotropy != 0.0f || scattering.x != 0.0f ||
+        scattering.y != 0.0f || scattering.z != 0.0f ||
+        absorption.x != 0.0f || absorption.y != 0.0f ||
+        absorption.z != 0.0f)
+        throw ProductMaterialError(
+            714, "URE-PRV3-MATERIAL-MIE-004", std::move(field_path),
+            "Mie phase-table coefficients conflict with analytic medium coefficients",
+            "set analytic anisotropy, scattering and absorption to zero when using Mie cross sections");
+}
+
+void validate_material_payloads(scene_ir::SceneIR& scene) {
+    std::unordered_set<const scene_ir::ImageResource*> visited_images;
+    const auto validate_image = [&visited_images](
+        const std::shared_ptr<scene_ir::ImageResource>& image,
+        std::string field_path) {
+        if (!image || !visited_images.insert(image.get()).second)
+            return;
+        gpu::HostTexture decoded{};
+        if (image->uri.empty() ||
+            !io::load_image_rgb32f(image->uri, decoded) ||
+            decoded.width <= 0 || decoded.height <= 0 ||
+            decoded.channels <= 0 || decoded.data.empty() ||
+            !std::ranges::all_of(decoded.data, [](float value) {
+                return std::isfinite(value);
+            }))
+            throw ProductMaterialError(
+                711, "URE-PRV3-MATERIAL-TEXTURE-002",
+                std::move(field_path),
+                "Material texture could not be decoded into finite samples",
+                "package a supported, readable image with finite sample values");
+    };
+    for (std::size_t index = 0; index < scene.images.size(); ++index)
+        validate_image(scene.images[index],
+                       "/images/" + std::to_string(index));
+    for (std::size_t index = 0; index < scene.textures.size(); ++index) {
+        if (scene.textures[index])
+            validate_image(scene.textures[index]->image,
+                           "/textures/" + std::to_string(index) + "/image");
+    }
+    for (std::size_t index = 0; index < scene.materials.size(); ++index) {
+        auto& material = scene.materials[index];
+        if (!material)
+            continue;
+        const std::string root = "/materials/" + std::to_string(index);
+        const auto validate_texture = [&](const auto& texture,
+                                          std::string_view name) {
+            if (texture)
+                validate_image(texture->image,
+                               root + "/" + std::string(name) + "/image");
+        };
+        validate_texture(material->base_color_texture, "base-color-texture");
+        validate_texture(material->roughness_texture, "roughness-texture");
+        validate_texture(material->emission_texture, "emission-texture");
+        validate_texture(material->normal_texture, "normal-texture");
+        if (material->graph) {
+            for (const auto& node : material->graph->nodes) {
+                if (node.texture)
+                    validate_image(
+                        node.texture->image,
+                        root + "/graph/nodes/" + std::to_string(node.id) +
+                            "/texture/image");
+            }
+        }
+        if (material->spectral_extension) {
+            if (!material->spectral_extension->albedo_spd.empty())
+                validate_spd_payload(
+                    material->spectral_extension->albedo_spd,
+                    root + "/spectral/albedo-spd");
+            if (!material->spectral_extension->emission_spd.empty())
+                validate_spd_payload(
+                    material->spectral_extension->emission_spd,
+                    root + "/spectral/emission-spd");
+        }
+        validate_medium(material->medium_density,
+                        material->medium_anisotropy,
+                        material->medium_scattering,
+                        material->medium_absorption, root + "/medium");
+        if (material->medium_phase == scene_ir::VolumePhaseFunction::Mie &&
+            material->medium_density > 0.0f) {
+            validate_mie_coefficients(
+                material->medium_anisotropy,
+                material->medium_scattering,
+                material->medium_absorption, root + "/medium");
+            material->medium_mie_resource = validate_mie_payload(
+                material->medium_mie_resource, root + "/medium/mie");
+        } else if (material->medium_mie_resource)
+            material->medium_mie_resource = validate_mie_payload(
+                material->medium_mie_resource, root + "/medium/mie");
+    }
+    validate_medium(scene.medium_density, scene.medium_anisotropy,
+                    scene.medium_scattering, scene.medium_absorption,
+                    "/scene/medium");
+    if (!std::isfinite(scene.medium_max_distance) ||
+        scene.medium_max_distance <= 0.0f)
+        throw ProductMaterialError(
+            714, "URE-PRV3-MATERIAL-MEDIUM-002",
+            "/scene/medium/max-distance",
+            "World medium maximum distance is not finite and positive",
+            "set a finite positive world-medium distance bound");
+    if (scene.medium_phase == scene_ir::VolumePhaseFunction::Mie &&
+        scene.medium_density > 0.0f) {
+        validate_mie_coefficients(scene.medium_anisotropy,
+                                  scene.medium_scattering,
+                                  scene.medium_absorption,
+                                  "/scene/medium");
+        scene.medium_mie_resource = validate_mie_payload(
+            scene.medium_mie_resource, "/scene/medium/mie");
+    } else if (scene.medium_mie_resource)
+        scene.medium_mie_resource = validate_mie_payload(
+            scene.medium_mie_resource, "/scene/medium/mie");
+}
+
 native_scene::SolverCapabilityRegistry product_solver_capabilities() {
     native_scene::SolverCapabilityRegistry result;
     result.integrators.insert(native_scene::NativeIntegratorMode::Wavefront);
@@ -311,7 +499,8 @@ Identity snapshot_identity(
     std::span<const native_scene::NativeResolvedResource> resources,
     std::span<const ProductFeatureRecord> dispositions,
     const std::optional<RenderConfig>& solver,
-    const std::optional<PhysicsConfig>& simulation) {
+    const std::optional<PhysicsConfig>& simulation,
+    const ProductMaterialProgramSet& materials) {
     std::string canonical = "UltraRender.ProductSnapshot.v1";
     canonical.push_back('\0');
     canonical.append(reinterpret_cast<const char*>(source_identity.data()),
@@ -364,6 +553,8 @@ Identity snapshot_identity(
             reinterpret_cast<const char*>(&simulation->total_frames),
             sizeof(simulation->total_frames));
     }
+    canonical.append(reinterpret_cast<const char*>(materials.identity.data()),
+                     materials.identity.size());
     return content_identity(std::span(
         reinterpret_cast<const std::uint8_t*>(canonical.data()),
         canonical.size()));
@@ -379,6 +570,7 @@ struct ProductSnapshotBuilder {
         std::vector<ProductFeatureRecord> dispositions,
         std::optional<RenderConfig> solver,
         std::optional<PhysicsConfig> simulation,
+        ProductMaterialProgramSet materials,
         std::shared_ptr<MaterializationRoot> owner,
         scene_ir::SceneIR render_scene,
         Identity source_identity) {
@@ -392,13 +584,14 @@ struct ProductSnapshotBuilder {
         snapshot->feature_dispositions_ = std::move(dispositions);
         snapshot->solver_config_ = std::move(solver);
         snapshot->simulation_plan_ = std::move(simulation);
+        snapshot->material_programs_ = std::move(materials);
         snapshot->materialization_root_ = owner->path;
         snapshot->materialization_owner_ = std::move(owner);
         snapshot->render_scene_ = std::move(render_scene);
         snapshot->identity_ = snapshot_identity(
             snapshot->archive_, snapshot->source_identity_, snapshot->resources_,
             snapshot->feature_dispositions_, snapshot->solver_config_,
-            snapshot->simulation_plan_);
+            snapshot->simulation_plan_, snapshot->material_programs_);
         return snapshot;
     }
 };
@@ -435,6 +628,9 @@ const std::optional<RenderConfig>& ProductSnapshot::solver_config() const noexce
 }
 const std::optional<PhysicsConfig>& ProductSnapshot::simulation_plan() const noexcept {
     return simulation_plan_;
+}
+const ProductMaterialProgramSet& ProductSnapshot::material_programs() const noexcept {
+    return material_programs_;
 }
 const std::filesystem::path& ProductSnapshot::materialization_root() const noexcept {
     return materialization_root_;
@@ -679,6 +875,15 @@ ProductRealizationResult realize_product_scene_impl(
             feature.name == native_scene::kSolverContractFeature ||
             feature.name == native_scene::kSimulationFeature)
             continue;
+        if (feature.name == "ure.adapter.gltf" ||
+            feature.name == "ure.adapter.materialx" ||
+            feature.name == "ure.adapter.material-preset" ||
+            feature.name == "ure.adapter.usd" ||
+            feature.name == "ure.adapter.hydra") {
+            add_disposition(dispositions, feature.name, feature.requirement,
+                            ProductFeatureDisposition::Executed);
+            continue;
+        }
         if (feature.name == native_scene::kScriptBuildFeature) {
             if (feature.requirement ==
                 native_scene::RequirementLevel::Required) {
@@ -730,6 +935,48 @@ ProductRealizationResult realize_product_scene_impl(
                         ProductFeatureDisposition::PreservedForTooling,
                         kRequiredFeatureUnavailable);
     }
+    ProductMaterialProgramSet material_programs;
+    try {
+        RenderConfig material_config = solver.value_or(RenderConfig{});
+        material_programs = canonicalize_product_materials(
+            archive.scene, archive.source_ids, archive.object_uuids,
+            material_config, archive.document.features);
+        for (const auto& program : material_programs.programs) {
+            add_disposition(dispositions,
+                            "material/" + program.material_uuid,
+                            native_scene::RequirementLevel::Required,
+                            ProductFeatureDisposition::Executed);
+            if ((program.features & ProductMaterialFeatureDiffractive) != 0)
+                add_disposition(dispositions,
+                                "material-wave/diffractive/" +
+                                    program.material_uuid,
+                                native_scene::RequirementLevel::Required,
+                                ProductFeatureDisposition::Executed);
+            if ((program.features & ProductMaterialFeatureFluorescent) != 0)
+                add_disposition(dispositions,
+                                "material-wave/fluorescent/" +
+                                    program.material_uuid,
+                                native_scene::RequirementLevel::Required,
+                                ProductFeatureDisposition::Executed);
+        }
+        for (std::size_t index = 0; index < archive.scene.materials.size();
+             ++index) {
+            if (archive.scene.materials[index] &&
+                archive.scene.materials[index]->normal_texture &&
+                index < archive.object_uuids.materials.size())
+                add_disposition(
+                    dispositions,
+                    "material-normal-map/" + native_scene::format_uuid(
+                                                   archive.object_uuids.materials[index]),
+                    native_scene::RequirementLevel::Optional,
+                    ProductFeatureDisposition::PreservedForTooling, 706);
+        }
+    } catch (const ProductMaterialError& error) {
+        add_diagnostic(result, ProductSceneDiagnosticDomain::Material,
+                       error.detail(), error.code(), error.field_path(),
+                       error.what(), error.recovery());
+        return result;
+    }
     const auto realized_validation =
         native_scene::validate_scene_ir_archive(archive, limits.validation);
     if (!realized_validation.ok()) {
@@ -748,6 +995,15 @@ ProductRealizationResult realize_product_scene_impl(
                        resource_detail(cause.code), cause.code, cause.path,
                        cause.message,
                        "supply the content-addressed resource and matching hash");
+        return result;
+    }
+    try {
+        bind_product_material_resources(material_programs,
+                                        resolution.resources);
+    } catch (const ProductMaterialError& error) {
+        add_diagnostic(result, ProductSceneDiagnosticDomain::Material,
+                       error.detail(), error.code(), error.field_path(),
+                       error.what(), error.recovery());
         return result;
     }
     const std::uint64_t output_width = static_cast<std::uint64_t>(
@@ -795,11 +1051,17 @@ ProductRealizationResult realize_product_scene_impl(
             return found->second.string();
         };
         auto render = clone_scene(archive.scene, resolve);
+        validate_material_payloads(render);
         result.snapshot = ProductSnapshotBuilder::build(
             std::move(archive), std::move(resolution.resources),
             resolution.budget, std::move(dispositions), std::move(solver),
-            std::move(simulation), std::move(owner), std::move(render),
+            std::move(simulation), std::move(material_programs),
+            std::move(owner), std::move(render),
             source_identity);
+    } catch (const ProductMaterialError& error) {
+        add_diagnostic(result, ProductSceneDiagnosticDomain::Material,
+                       error.detail(), error.code(), error.field_path(),
+                       error.what(), error.recovery());
     } catch (const std::length_error& error) {
         add_diagnostic(result, ProductSceneDiagnosticDomain::Resource,
                        kTemporaryBudgetExceeded,

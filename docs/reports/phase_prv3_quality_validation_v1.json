@@ -1,0 +1,362 @@
+{
+  "schema": "ure.phase_prv3.quality-validation/1.0",
+  "status": "AutomatedPassed",
+  "product_release_declared": false,
+  "evidence_tier": "ProductQuality",
+  "production_profile": "exact-build ProductJob 0.4 default automatic production profile",
+  "artifact_retention": "Authoritative raw PFM and derived PNG remain in the configured local evidence directory; this report binds their hashes.",
+  "source": {
+    "fixture_manifest": "tests/assets/product_e2e/prv3/fixture_manifest.json",
+    "fixture_manifest_sha256": "8d4aba0d379e5c26f15ffc73c1bcdb6fb550376d3f84bdd2250fcf4a7c847006",
+    "runtime_sha256": "2b8e44c1389c0614e3095fa6a04c2c3c244c1a38fb46c5f59d60922c1ac5990b",
+    "worker_sha256": "6e7c2c6dd63265838a0f70251b441429775b716a3bc89589fdab883d57983c3c",
+    "scenario_runner_sha256": "bcc21c3f4ebd3e62fe121c8b2c7c41ed8c28b29e83da0ba989c02e05ffdcce58",
+    "image_validator_sha256": "2102edb17c3bf94dedaff92d233ac5212dff7a7c303abbabdfeb70fb4a96e64d",
+    "orchestration_sha256": "f02d8e237126267e32d9a76d5dec9e82f93302678cc7d20153772694583c7cf6",
+    "process_wrapper_sha256": "eb628476c753a90e63edf7b4b409a8732a07f93a696934f87c8cc926b78b937d",
+    "image_comparator_sha256": "cc25ec8e1c509812b8c93e872297913ee531bafd233aeb312cbd74abdcefce97",
+    "system_device_identity": "5e53f33592bb8bd9f22768efada06619745a303e420a3ced4e8250f17cc68302"
+  },
+  "runs": [
+    {
+      "id": "material-matrix-1280x720-spp500-direct",
+      "execution_input_identity": "e3c13b139d59c8c93dffa74ec01f9d43587a79fda0cfabe8eea1d9014b2f6917",
+      "capability": "texture/spectral/mix/layer",
+      "transport": "direct",
+      "scene": "tests/assets/product_e2e/prv3/material_matrix_1280x720.urescene",
+      "scene_sha256": "c8985cb6ef4f9306a0193cb76243a2396ee673a179cb7ce444ac94b7691546af",
+      "requested_samples": 500,
+      "accepted_samples": 500,
+      "completed_samples": 500,
+      "resolution": "1280x720",
+      "elapsed_ms": 549800,
+      "eligible_integrator_modes": 55,
+      "qualified_integrator_modes": 7,
+      "executed_integrator_modes": 7,
+      "identities": {
+        "build": "f9630fc52ca0b28be7368cd5b3a5005e1fa94998e971df25a5968c82ff4bef0e",
+        "snapshot": "e1e6a9cba447dacda77f1e18a71f690a82c0ba1fe503f727098c2bdbc88c1835",
+        "objective": "f0aba6e47309db9d53d4b217f44741688df4af8cbd8ccb73237e5e04be067920",
+        "plan": "e7b9a55d7f6ebe3b8e2bacad754214fdf043be0e77ad9014433907851594c602",
+        "frame_content": "d3bccc693e12eb6716b71d95b98e83c4164111f710b9f4cbdf9d1ec7f2447ef1"
+      },
+      "device": {
+        "identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "backend": 2147483699,
+        "provider": 2147483702,
+        "name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "total_memory_bytes": 8546484224,
+        "available_memory_bytes": 7385120768,
+        "selected_memory_budget_bytes": 5908096615
+      },
+      "raw_authority": {
+        "format": "PFM RGB float32 little-endian",
+        "orientation": "bottom-left",
+        "color_space": "linear_sRGB_D65",
+        "low_sha256": "40edaf3c6e249edc8a40787cd9e32b953e78ec7234be20aa36e30073aa544def",
+        "mid_sha256": "6c66f9fb02690fe93112f95e6fe541fff84121ff554fea1793e75c977c9b812e",
+        "final_sha256": "6a098d05e90f51b3d201d35f015069912d4d335491da0811c3522eb6beed902c"
+      },
+      "derived_png": {
+        "file": "material-matrix-1280x720-spp500-direct.png",
+        "sha256": "a20a68ed12fe35bf4096c61fc1e8c9acd0ce50bf6409261feb3523a50fb6bba2",
+        "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0"
+      },
+      "metrics": {
+        "width": 1280,
+        "height": 720,
+        "finite": true,
+        "minimum": 0.0,
+        "maximum": 3.8906667232513428,
+        "mean_luminance": 0.10977362431803438,
+        "positive_energy": 101167.37217149843,
+        "luminance_standard_deviation": 0.24103706126937452,
+        "mean_spatial_gradient": 0.003287402907385787,
+        "nonzero_pixel_fraction": 0.9891655815972222,
+        "negative_component_fraction": 0.0
+      },
+      "convergence": {
+        "metric": "relative_rgb_nrmse_to_nested_final",
+        "low_to_final": 0.05856995396302951,
+        "mid_to_final": 0.038687946089810944,
+        "improvement_ratio": 0.6605425388285523
+      }
+    },
+    {
+      "id": "glass-1280x720-spp500-worker",
+      "execution_input_identity": "5702205d7c40cb6dfc30e6966281323850f88018c89de924ec0c484c7fe25b83",
+      "capability": "dielectric/glass",
+      "transport": "worker",
+      "scene": "tests/assets/product_e2e/prv3/glass_1280x720.urescene",
+      "scene_sha256": "e197d9700ebdef0490ebb73d873d8f121cb52d51ae638c1ceac3c20c74379977",
+      "requested_samples": 500,
+      "accepted_samples": 500,
+      "completed_samples": 500,
+      "resolution": "1280x720",
+      "elapsed_ms": 201015,
+      "eligible_integrator_modes": 255,
+      "qualified_integrator_modes": 7,
+      "executed_integrator_modes": 7,
+      "identities": {
+        "build": "f9630fc52ca0b28be7368cd5b3a5005e1fa94998e971df25a5968c82ff4bef0e",
+        "snapshot": "b287f82624a71bd3ad90747a55817e68cbb4d5e4e378796321de191a3d746965",
+        "objective": "f0aba6e47309db9d53d4b217f44741688df4af8cbd8ccb73237e5e04be067920",
+        "plan": "bbcea4738dfeac27d755535b2f500c916197260480e2280a425bb348c128db57",
+        "frame_content": "fcdb15734d100bdf39fbebad957838823df25091d516c73b1a74efbce48e53e0"
+      },
+      "device": {
+        "identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "backend": 2147483699,
+        "provider": 2147483702,
+        "name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "total_memory_bytes": 8546484224,
+        "available_memory_bytes": 7385120768,
+        "selected_memory_budget_bytes": 5908096615
+      },
+      "raw_authority": {
+        "format": "PFM RGB float32 little-endian",
+        "orientation": "bottom-left",
+        "color_space": "linear_sRGB_D65",
+        "low_sha256": "9bfa40e8c5b99f7f84fadd82b742bb8b9f6a3cf187a415a82d7bb8c7fe3f5179",
+        "mid_sha256": "26786b1843dfe56f862393c3977e035274e33b2dfa00b0044f3532911df700e1",
+        "final_sha256": "31b191bc162a66ddbc42869a9e9139019a53e0fd6f2ba3db7725ab9018176854"
+      },
+      "derived_png": {
+        "file": "glass-1280x720-spp500-worker.png",
+        "sha256": "123ecf662431e351268310bb6698d2750aca474ab9e33517120e7d06dabed12d",
+        "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0"
+      },
+      "metrics": {
+        "width": 1280,
+        "height": 720,
+        "finite": true,
+        "minimum": 0.0,
+        "maximum": 3.8906667232513428,
+        "mean_luminance": 0.11686307675021348,
+        "positive_energy": 107701.0115329919,
+        "luminance_standard_deviation": 0.238987415707779,
+        "mean_spatial_gradient": 0.006095530901245101,
+        "nonzero_pixel_fraction": 0.9999989149305556,
+        "negative_component_fraction": 0.0
+      },
+      "convergence": {
+        "metric": "relative_rgb_nrmse_to_nested_final",
+        "low_to_final": 0.10059491120296746,
+        "mid_to_final": 0.0667755902950004,
+        "improvement_ratio": 0.6638068416827687
+      }
+    },
+    {
+      "id": "mie-volume-1280x720-spp500-direct",
+      "execution_input_identity": "4d4464ef96f373d25f0b84b6bf48a36b2185d7b74bd692089f2984a029e521a5",
+      "capability": "volume/Mie",
+      "transport": "direct",
+      "scene": "tests/assets/product_e2e/prv3/mie_volume_1280x720.urescene",
+      "scene_sha256": "83dff80b9f970c3262fc5667923abde34366d4a6a722dc02b0cb06ea3a0ad7ec",
+      "requested_samples": 500,
+      "accepted_samples": 500,
+      "completed_samples": 500,
+      "resolution": "1280x720",
+      "elapsed_ms": 237489,
+      "eligible_integrator_modes": 51,
+      "qualified_integrator_modes": 3,
+      "executed_integrator_modes": 3,
+      "identities": {
+        "build": "f9630fc52ca0b28be7368cd5b3a5005e1fa94998e971df25a5968c82ff4bef0e",
+        "snapshot": "63cafcd52388db00ee149af2a5910a6bde5371d63f3813bc0a816e6a2d2d2560",
+        "objective": "f0aba6e47309db9d53d4b217f44741688df4af8cbd8ccb73237e5e04be067920",
+        "plan": "6e65d31bb56624557f6bee6b5cd9b5de9be4dfc52609674df1223e1d6788b926",
+        "frame_content": "0a38ad371f428ba08ca424ab53a057aeeea7796878c8e6d1eb06defc97ef0893"
+      },
+      "device": {
+        "identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "backend": 2147483699,
+        "provider": 2147483702,
+        "name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "total_memory_bytes": 8546484224,
+        "available_memory_bytes": 7385120768,
+        "selected_memory_budget_bytes": 5908096615
+      },
+      "raw_authority": {
+        "format": "PFM RGB float32 little-endian",
+        "orientation": "bottom-left",
+        "color_space": "linear_sRGB_D65",
+        "low_sha256": "310e71553a92855f8cfb779db16e6d1393b5717e2b775af0f15fd395de90b731",
+        "mid_sha256": "e6d4afc09dd7d3ec6fd1b124a3274a76a54f25058b8f08bdc2f6c254e7b659e8",
+        "final_sha256": "392acee952d456bd1fc0be15b56eda6d2bf8e2ab5fefaa66fa5cebbafd9817f1"
+      },
+      "derived_png": {
+        "file": "mie-volume-1280x720-spp500-direct.png",
+        "sha256": "de20b9e366a100606b66908d3282757fdfbe14d53532aa662fe6e211b2083167",
+        "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0"
+      },
+      "metrics": {
+        "width": 1280,
+        "height": 720,
+        "finite": true,
+        "minimum": 0.002331712981685996,
+        "maximum": 3.5238242149353027,
+        "mean_luminance": 0.0777735204655868,
+        "positive_energy": 71676.07646108347,
+        "luminance_standard_deviation": 0.21153680745844824,
+        "mean_spatial_gradient": 0.004965381782756032,
+        "nonzero_pixel_fraction": 1.0,
+        "negative_component_fraction": 0.0
+      },
+      "convergence": {
+        "metric": "relative_rgb_nrmse_to_nested_final",
+        "low_to_final": 0.12453455630922984,
+        "mid_to_final": 0.06165031256907516,
+        "improvement_ratio": 0.4950458282116669
+      }
+    },
+    {
+      "id": "diffractive-1280x720-spp500-worker",
+      "execution_input_identity": "756631bcd01919c025c7a8f74634f63ba28d057a8f9d825466f7a18dc2cab6eb",
+      "capability": "radiometric diffractive material",
+      "transport": "worker",
+      "scene": "tests/assets/product_e2e/prv3/diffractive_1280x720.urescene",
+      "scene_sha256": "5b43ce7f8078fc08d5feb7e493ff787d4fb04f0a05f94bdd4984210c29c12fd3",
+      "requested_samples": 500,
+      "accepted_samples": 500,
+      "completed_samples": 500,
+      "resolution": "1280x720",
+      "elapsed_ms": 452201,
+      "eligible_integrator_modes": 1,
+      "qualified_integrator_modes": 1,
+      "executed_integrator_modes": 1,
+      "identities": {
+        "build": "f9630fc52ca0b28be7368cd5b3a5005e1fa94998e971df25a5968c82ff4bef0e",
+        "snapshot": "850127c4d2c3a1b5e72eee98fb477cceec92de647248782799fe6f3cee6fbd1f",
+        "objective": "f0aba6e47309db9d53d4b217f44741688df4af8cbd8ccb73237e5e04be067920",
+        "plan": "7d64d62a758d7e20e1d3d697527ac5f44bcf64e8ca85fa9f437b8cf619833ac1",
+        "frame_content": "be7d39a92924789258fbfbdd94d39d1f95c440b09e71778d48b2e78a8ecb46d9"
+      },
+      "device": {
+        "identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "backend": 2147483699,
+        "provider": 2147483702,
+        "name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "total_memory_bytes": 8546484224,
+        "available_memory_bytes": 7385120768,
+        "selected_memory_budget_bytes": 5908096615
+      },
+      "raw_authority": {
+        "format": "PFM RGB float32 little-endian",
+        "orientation": "bottom-left",
+        "color_space": "linear_sRGB_D65",
+        "low_sha256": "014405b0638f41ee73bc4ef55783626e7169464b0527d1d2556a8e4b57a8eb0b",
+        "mid_sha256": "7a7b9223ba2983477830e96652a073c6622d3f40ca013c1e5ef7c1822a5d7f59",
+        "final_sha256": "30c24ec7b0404728b41b9778401d523608903ef5b0a8a86845f84e620a597bcc"
+      },
+      "derived_png": {
+        "file": "diffractive-1280x720-spp500-worker.png",
+        "sha256": "91b35837569b3a482c912d07e57036bdf12778e2b15f845ee4b7526fd3a42c7a",
+        "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0"
+      },
+      "metrics": {
+        "width": 1280,
+        "height": 720,
+        "finite": true,
+        "minimum": 0.0,
+        "maximum": 3.890650749206543,
+        "mean_luminance": 0.11393746784503551,
+        "positive_energy": 105004.7703659811,
+        "luminance_standard_deviation": 0.2395444406524701,
+        "mean_spatial_gradient": 0.0023700014755472015,
+        "nonzero_pixel_fraction": 1.0,
+        "negative_component_fraction": 0.0
+      },
+      "convergence": {
+        "metric": "relative_rgb_nrmse_to_nested_final",
+        "low_to_final": 0.03419108333430715,
+        "mid_to_final": 0.022467888831595294,
+        "improvement_ratio": 0.6571271407785765
+      }
+    },
+    {
+      "id": "fluorescent-1280x720-spp500-direct",
+      "execution_input_identity": "4adffa3c10d4fd12e3f69b95785b81765c08ce3cc0b47389136c50e5ac3dd78d",
+      "capability": "fluorescent material",
+      "transport": "direct",
+      "scene": "tests/assets/product_e2e/prv3/fluorescent_1280x720.urescene",
+      "scene_sha256": "e0acc8f66a3fefe987cc121ca050c2f34f413d96f985608d2f5058bff2d7feb8",
+      "requested_samples": 500,
+      "accepted_samples": 500,
+      "completed_samples": 500,
+      "resolution": "1280x720",
+      "elapsed_ms": 178959,
+      "eligible_integrator_modes": 1,
+      "qualified_integrator_modes": 1,
+      "executed_integrator_modes": 1,
+      "identities": {
+        "build": "f9630fc52ca0b28be7368cd5b3a5005e1fa94998e971df25a5968c82ff4bef0e",
+        "snapshot": "05d062df2895533ec60368331faeb5d1d88ddaadeb3e3ec4be92687a76f25aed",
+        "objective": "f0aba6e47309db9d53d4b217f44741688df4af8cbd8ccb73237e5e04be067920",
+        "plan": "6c0572960e1353213e1bc356514cf40216d54f0d2bada9a5495959f087336c82",
+        "frame_content": "6db3f0549d59ec53f5362a2c79db54eba1d656f748466b4e80c400daa2f2b345"
+      },
+      "device": {
+        "identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "backend": 2147483699,
+        "provider": 2147483702,
+        "name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "total_memory_bytes": 8546484224,
+        "available_memory_bytes": 7385120768,
+        "selected_memory_budget_bytes": 5908096615
+      },
+      "raw_authority": {
+        "format": "PFM RGB float32 little-endian",
+        "orientation": "bottom-left",
+        "color_space": "linear_sRGB_D65",
+        "low_sha256": "26438c2560da83c3db6f68ecc8708273d7f38b6ec62e1031aa27c57a8296fb56",
+        "mid_sha256": "cb9ba1f1831d255f7aafc36fdcc2b712557c00b2e0094e0fcd29a12b90921b7e",
+        "final_sha256": "3c9b92a2d999f73681e286afab8a7761716bb63931cdc7b5e74a3fd9f78ed91a"
+      },
+      "derived_png": {
+        "file": "fluorescent-1280x720-spp500-direct.png",
+        "sha256": "f53434caa4f409ca4b9a92555bf0b041d65c749cab53030f436beeb59503ecc0",
+        "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0"
+      },
+      "metrics": {
+        "width": 1280,
+        "height": 720,
+        "finite": true,
+        "minimum": 0.0,
+        "maximum": 3.890650749206543,
+        "mean_luminance": 0.11174096714818889,
+        "positive_energy": 102980.4753237704,
+        "luminance_standard_deviation": 0.2403025580053713,
+        "mean_spatial_gradient": 0.0021868026354656804,
+        "nonzero_pixel_fraction": 1.0,
+        "negative_component_fraction": 0.0
+      },
+      "convergence": {
+        "metric": "relative_rgb_nrmse_to_nested_final",
+        "low_to_final": 0.03423868828630269,
+        "mid_to_final": 0.027457304627547405,
+        "improvement_ratio": 0.8019379830778095
+      }
+    }
+  ],
+  "visual_review": {
+    "required": true,
+    "record": "docs/reports/phase_prv3_visual_review_v1.json"
+  },
+  "semantic_digest": "7c50aef4bc5f0cae682f5940e1966585999ff9d99817762c55939edac92f526f"
+}

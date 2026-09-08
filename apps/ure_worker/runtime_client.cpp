@@ -104,8 +104,8 @@ const Table *query_product_table(ure_query_interface_fn query,
     ure_interface_response_t response{};
     request.header = {URE_STRUCTURE_INTERFACE_QUERY, sizeof(request), nullptr};
     std::memcpy(request.interface_id.bytes, id, sizeof(id));
-    request.minimum_minor = 3;
-    request.maximum_minor = 3;
+    request.minimum_minor = 4;
+    request.maximum_minor = 4;
     response.header = {URE_STRUCTURE_INTERFACE_RESPONSE, sizeof(response),
                        nullptr};
     if (query(&request, &response, nullptr) != URE_RESULT_SUCCESS ||
@@ -117,13 +117,14 @@ const Table *query_product_table(ure_query_interface_fn query,
 template <class Table>
 const Table *query_device_table(ure_query_interface_fn query,
                                 const std::uint8_t (&id)[16],
-                                std::size_t required_prefix_size) {
+                                std::size_t required_prefix_size,
+                                std::uint32_t minor = 1) {
     ure_interface_query_t request{};
     ure_interface_response_t response{};
     request.header = {URE_STRUCTURE_INTERFACE_QUERY, sizeof(request), nullptr};
     std::memcpy(request.interface_id.bytes, id, sizeof(id));
-    request.minimum_minor = 1;
-    request.maximum_minor = 1;
+    request.minimum_minor = minor;
+    request.maximum_minor = minor;
     response.header = {URE_STRUCTURE_INTERFACE_RESPONSE, sizeof(response),
                        nullptr};
     if (query(&request, &response, nullptr) != URE_RESULT_SUCCESS ||
@@ -320,6 +321,9 @@ struct RuntimeClient::Impl {
         status.requested_samples = info.requested_samples;
         status.accepted_samples = info.accepted_samples;
         status.completed_samples = info.completed_samples;
+        status.eligible_integrator_modes = info.eligible_integrator_modes;
+        status.qualified_integrator_modes = info.qualified_integrator_modes;
+        status.executed_integrator_modes = info.executed_integrator_modes;
         status.progress_sequence = info.progress_sequence;
         status.stage = info.stage;
         status.elapsed_ns = info.elapsed_ns;
@@ -458,7 +462,7 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
     impl_->products = query_product_table<ure_product_job_interface_t>(
         query, product_id, sizeof(ure_product_job_interface_t));
     impl_->scene_tools = query_device_table<ure_scene_tool_interface_t>(
-        query, scene_tool_id, sizeof(ure_scene_tool_interface_t));
+        query, scene_tool_id, sizeof(ure_scene_tool_interface_t), 2);
     impl_->device_execution =
         query_device_table<ure_device_execution_interface_t>(
             query, device_execution_id,
@@ -970,6 +974,10 @@ bool RuntimeClient::execute_scene_tool(const SceneToolRequest &request,
     wire.temporary_budget_bytes = request.temporary_budget_bytes;
     wire.report_buffer = {report.data(), report.size()};
     wire.allow_script_execution = request.allow_script_execution ? 1U : 0U;
+    wire.material_selector = {request.material_selector.data(),
+                              request.material_selector.size()};
+    wire.preset_name = {request.preset_name.data(),
+                        request.preset_name.size()};
     snapshot = {};
     snapshot.result.header = {URE_STRUCTURE_SCENE_TOOL_RESULT,
                               sizeof(snapshot.result), nullptr};

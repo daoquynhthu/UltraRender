@@ -171,6 +171,8 @@ std::vector<std::uint8_t> scene_tool_payload(
     wire.max_decompression_ratio = request.budget.max_decompression_ratio;
     wire.temporary_budget_bytes = request.temporary_budget_bytes;
     wire.allow_script_execution = request.allow_script_execution;
+    wire.material_selector = request.material_selector;
+    wire.preset_name = request.preset_name;
     flatbuffers::FlatBufferBuilder builder;
     product_fb::FinishProductEnvelopeBuffer(
         builder, product_fb::CreateProductEnvelope(builder, &envelope));
@@ -292,6 +294,12 @@ JobInfo parse_status(const product_fb::ProductJobStatus &status,
     result.requested_samples = status.requested_samples();
     result.accepted_samples = status.accepted_samples();
     result.completed_samples = status.completed_samples();
+    result.eligible_integrator_modes =
+        status.eligible_integrator_modes();
+    result.qualified_integrator_modes =
+        status.qualified_integrator_modes();
+    result.executed_integrator_modes =
+        status.executed_integrator_modes();
     result.progress_sequence = status.progress_sequence();
     result.stage = status.stage();
     result.elapsed_ns = status.elapsed_ns();
@@ -494,7 +502,7 @@ class WorkerConnection final
         create.message_kind = fb::MessageKind::OperationRequest;
         create.operation_kind = URE_OPERATION_CREATE_PRODUCT_JOB;
         create.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
-        create.payload_version_minor = 3;
+        create.payload_version_minor = 4;
         create.payload = product_payload(product_fb::ProductMessageKind::CreateJob,
                                          scene_id, job_id, &objective);
         response = exchange_locked(create);
@@ -612,6 +620,13 @@ class WorkerConnection final
         std::copy(source->semantic_identity()->begin(),
                   source->semantic_identity()->end(),
                   result.semantic_identity.begin());
+        if (!source->material_program_set_identity() ||
+            source->material_program_set_identity()->size() != 32)
+            throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 66,
+                        "worker material-program identity is malformed");
+        std::copy(source->material_program_set_identity()->begin(),
+                  source->material_program_set_identity()->end(),
+                  result.material_program_set_identity.begin());
         result.stored_bytes = source->stored_bytes();
         result.decompressed_bytes = source->decompressed_bytes();
         result.resident_bytes = source->resident_bytes();
@@ -622,6 +637,9 @@ class WorkerConnection final
         result.resource_count = source->resource_count();
         result.cache_count = source->cache_count();
         result.dependency_count = source->dependency_count();
+        result.material_program_count = source->material_program_count();
+        result.adapter_loss_report_size =
+            source->adapter_loss_report_size();
         result.report = source->report()->str();
         if (response->result != fb::ResultCode::Success)
             throw Error(response_error(*response, result.report));
@@ -637,7 +655,7 @@ class WorkerConnection final
         request.message_kind = fb::MessageKind::OperationRequest;
         request.operation_kind = operation;
         request.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
-        request.payload_version_minor = 3;
+        request.payload_version_minor = 4;
         request.payload = product_payload(kind, scene_id, job_id);
         return exchange_locked(request);
     }

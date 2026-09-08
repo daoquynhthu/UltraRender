@@ -102,6 +102,14 @@ int main() {
               first_progress.executor_creations > 0 &&
               first_progress.pilot_samples > 0,
           "first renderer work evidence is incomplete");
+    check(first_progress.eligible_integrator_modes != 0 &&
+              first_progress.qualified_integrator_modes != 0 &&
+              first_progress.executed_integrator_modes != 0 &&
+              (first_progress.qualified_integrator_modes &
+               ~first_progress.eligible_integrator_modes) == 0 &&
+              (first_progress.executed_integrator_modes &
+               ~first_progress.qualified_integrator_modes) == 0,
+          "integrator observation masks are incomplete or inconsistent");
     job->render_sample();
     bool budget_rejected = false;
     try {
@@ -144,7 +152,10 @@ int main() {
 
     job->reset();
     check(job->operation().state ==
-              ure::product::ProductOperationState::Ready,
+              ure::product::ProductOperationState::Ready &&
+              job->operation().eligible_integrator_modes != 0 &&
+              job->operation().qualified_integrator_modes == 0 &&
+              job->operation().executed_integrator_modes == 0,
           "reset did not return the product job to ready");
     ure::product::Identity replacement_snapshot{};
     replacement_snapshot[0] = 3;

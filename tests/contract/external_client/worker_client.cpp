@@ -440,7 +440,7 @@ std::unique_ptr<fb::WorkerEnvelopeT> WorkerClient::request_product_frame(
     request.message_kind = fb::MessageKind::OperationRequest;
     request.operation_kind = URE_OPERATION_ACQUIRE_PRODUCT_FRAME;
     request.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
-    request.payload_version_minor = 3;
+    request.payload_version_minor = 4;
     request.payload = payload;
     return impl_->exchange(request, error);
 }

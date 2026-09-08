@@ -98,7 +98,7 @@ foreach ($required in @(
 $sceneToolEntries = @($registry.entries | Where-Object {
     $_.canonical_name -match 'scene_tool'
 })
-if ($sceneToolEntries.Count -ne 13 -or
+if ($sceneToolEntries.Count -ne 16 -or
     @($sceneToolEntries | Where-Object {
         $_.stability -ne "UnstableExtension" -or
         $_.namespace -ne "unstable_experimental"

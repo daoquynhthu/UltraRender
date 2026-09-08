@@ -28,6 +28,47 @@ std::string trim(std::string_view text) {
     return std::string(text.substr(first, last - first));
 }
 
+std::string xml_unescape(std::string_view value) {
+    std::string result;
+    result.reserve(value.size());
+    for (std::size_t index = 0; index < value.size();) {
+        if (value.substr(index).starts_with("&amp;")) {
+            result.push_back('&');
+            index += 5;
+        } else if (value.substr(index).starts_with("&quot;")) {
+            result.push_back('"');
+            index += 6;
+        } else if (value.substr(index).starts_with("&apos;")) {
+            result.push_back('\'');
+            index += 6;
+        } else if (value.substr(index).starts_with("&lt;")) {
+            result.push_back('<');
+            index += 4;
+        } else if (value.substr(index).starts_with("&gt;")) {
+            result.push_back('>');
+            index += 4;
+        } else {
+            result.push_back(value[index++]);
+        }
+    }
+    return result;
+}
+
+std::string xml_escape(std::string_view value) {
+    std::string result;
+    for (const char character : value) {
+        switch (character) {
+        case '&': result += "&amp;"; break;
+        case '"': result += "&quot;"; break;
+        case '\'': result += "&apos;"; break;
+        case '<': result += "&lt;"; break;
+        case '>': result += "&gt;"; break;
+        default: result.push_back(character); break;
+        }
+    }
+    return result;
+}
+
 std::vector<XmlElement> parse_xml_elements(std::string_view xml) {
     std::vector<XmlElement> elements;
     size_t pos = 0;
@@ -60,7 +101,8 @@ std::vector<XmlElement> parse_xml_elements(std::string_view xml) {
             char quote_char = tag[quote++];
             size_t end_quote = tag.find(quote_char, quote);
             if (end_quote == std::string::npos) throw std::runtime_error("MaterialX XML attribute quote is not closed");
-            element.attrs[key] = tag.substr(quote, end_quote - quote);
+            element.attrs[key] = xml_unescape(
+                std::string_view(tag).substr(quote, end_quote - quote));
             attr_pos = end_quote + 1;
         }
         elements.push_back(std::move(element));
@@ -179,7 +221,8 @@ const scene_ir::MaterialGraphNode& require_node(const scene_ir::MaterialGraph& g
 }
 
 void emit_input(std::ostringstream& out, const scene_ir::MaterialGraphInput& input) {
-    out << "    <input name=\"" << input.name << "\" nodename=\"n" << input.node_id << "\" />\n";
+    out << "    <input name=\"" << xml_escape(input.name)
+        << "\" nodename=\"n" << input.node_id << "\" />\n";
 }
 
 std::string export_kind(scene_ir::MaterialGraphNodeKind kind) {
@@ -426,6 +469,7 @@ scene_ir::MaterialGraph import_materialx_graph(std::string_view xml) {
     std::vector<XmlElement> elements = parse_xml_elements(xml);
     std::map<std::string, scene_ir::MaterialGraphNodeId> name_to_id;
     std::map<scene_ir::MaterialGraphNodeId, std::vector<scene_ir::MaterialGraphInput>> pending_inputs;
+    std::set<scene_ir::MaterialGraphNodeId> standard_surface_nodes;
 
     for (const XmlElement& element : elements) {
         if (element.name == "input") continue;
@@ -435,6 +479,8 @@ scene_ir::MaterialGraph import_materialx_graph(std::string_view xml) {
         std::string node_name = attr(element, "name");
         node.id = is_exported_node_id(node_name) ? parse_node_id(node_name) : graph.next_node_id();
         node.name = node_name;
+        if (element.name == "standard_surface")
+            standard_surface_nodes.insert(node.id);
         if (node.kind == scene_ir::MaterialGraphNodeKind::ConstantColor) {
             node.color = parse_color(attr(element, "value"));
         } else if (node.kind == scene_ir::MaterialGraphNodeKind::ConstantFloat) {
@@ -446,6 +492,13 @@ scene_ir::MaterialGraph import_materialx_graph(std::string_view xml) {
         } else if (node.kind == scene_ir::MaterialGraphNodeKind::Texture2D) {
             auto image = std::make_shared<scene_ir::ImageResource>();
             image->uri = attr(element, "file");
+            const auto color_space = attr(element, "URE:color_space", "srgb");
+            if (color_space == "linear")
+                image->color_space = scene_ir::ImageColorSpace::Linear;
+            else if (color_space == "srgb")
+                image->color_space = scene_ir::ImageColorSpace::SRGB;
+            else
+                throw std::runtime_error("MaterialX texture color space is unsupported");
             auto texture = std::make_shared<scene_ir::TextureResource>();
             texture->image = image;
             node.texture = texture;
@@ -577,6 +630,14 @@ scene_ir::MaterialGraph import_materialx_graph(std::string_view xml) {
     for (auto& node : graph.nodes) {
         auto it = pending_inputs.find(node.id);
         if (it != pending_inputs.end()) node.inputs = std::move(it->second);
+        if (standard_surface_nodes.contains(node.id)) {
+            for (const auto& input : node.inputs) {
+                if (input.name != "base_color" && input.name != "roughness")
+                    throw std::runtime_error(
+                        "MaterialX standard_surface input is outside the bounded base_color/roughness projection: " +
+                        input.name);
+            }
+        }
         if (node.kind == scene_ir::MaterialGraphNodeKind::OutputSurface) {
             graph.output_node_id = node.id;
         }
@@ -592,7 +653,8 @@ std::string export_materialx_graph(const scene_ir::MaterialGraph& graph, std::st
     for (const auto& node : graph.nodes) {
         const std::string kind = export_kind(node.kind);
         if (node.kind == scene_ir::MaterialGraphNodeKind::OutputSurface) {
-            out << "  <surfacematerial name=\"n" << node.id << "\" material=\"" << material_name << "\">\n";
+            out << "  <surfacematerial name=\"n" << node.id
+                << "\" material=\"" << xml_escape(material_name) << "\">\n";
             for (const auto& input : node.inputs) emit_input(out, input);
             out << "  </surfacematerial>\n";
             continue;
@@ -604,7 +666,13 @@ std::string export_materialx_graph(const scene_ir::MaterialGraph& graph, std::st
             if (!node.texture || !node.texture->image || node.texture->image->uri.empty()) {
                 throw std::runtime_error("MaterialX export requires Texture2D nodes to carry an image URI");
             }
-            out << " file=\"" << node.texture->image->uri << "\"";
+            out << " file=\"" << xml_escape(node.texture->image->uri)
+                << "\" URE:color_space=\""
+                << (node.texture->image->color_space ==
+                            scene_ir::ImageColorSpace::Linear
+                        ? "linear"
+                        : "srgb")
+                << "\"";
         }
         if (is_diffractive_kind(node.kind)) {
             const auto expected =

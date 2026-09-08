@@ -162,7 +162,7 @@ int main(int argc, char **argv) {
     const auto *operations = query_table<ure_operation_interface_t>(query, operation_id, 1, 0);
     const auto *frames = query_table<ure_frame_interface_t>(query, frame_id, 1, 0);
     const auto *scenes = query_table<ure_scene_interface_t>(query, scene_id, 1, 0);
-    const auto *products = query_table<ure_product_job_interface_t>(query, product_id, 0, 3);
+    const auto *products = query_table<ure_product_job_interface_t>(query, product_id, 0, 4);
     const auto *device_execution =
         query_table<ure_device_execution_interface_t>(
             query, device_execution_id, 0, 1);
@@ -216,7 +216,7 @@ int main(int argc, char **argv) {
                          sizeof(descriptor), nullptr};
     check(instances->query_capability(instance, &capability_query, &descriptor,
                                       nullptr) == URE_RESULT_SUCCESS &&
-              descriptor.version_major == 0 && descriptor.version_minor == 3 &&
+              descriptor.version_major == 0 && descriptor.version_minor == 4 &&
               descriptor.stability == URE_STABILITY_UNSTABLE_EXTENSION &&
               descriptor.enabled == 0,
           "product capability discovery is invalid");
@@ -380,6 +380,9 @@ int main(int argc, char **argv) {
     check(products->get_info(job, &info, nullptr) == URE_RESULT_SUCCESS &&
               info.requested_samples == 2 && info.accepted_samples == 2 &&
               info.completed_samples == 0 &&
+              info.eligible_integrator_modes != 0 &&
+              info.qualified_integrator_modes == 0 &&
+              info.executed_integrator_modes == 0 &&
               digest_nonzero(info.build_identity) &&
               digest_nonzero(info.snapshot_identity) &&
               digest_nonzero(info.objective_identity) &&
@@ -411,7 +414,13 @@ int main(int argc, char **argv) {
                   URE_RESULT_SUCCESS,
           "product render failed");
     check(products->get_info(job, &info, nullptr) == URE_RESULT_SUCCESS &&
-              info.accepted_samples == 2 && info.completed_samples == 2,
+              info.accepted_samples == 2 && info.completed_samples == 2 &&
+              info.qualified_integrator_modes != 0 &&
+              info.executed_integrator_modes != 0 &&
+              (info.qualified_integrator_modes &
+               ~info.eligible_integrator_modes) == 0 &&
+              (info.executed_integrator_modes &
+               ~info.qualified_integrator_modes) == 0,
           "accepted/completed sample accounting is incorrect");
     ure_handle_t repeated_operation{};
     check(products->start(job, &repeated_operation, nullptr) ==

@@ -1,0 +1,92 @@
+{
+  "schema": "ure.phase_prv3.visual-review/1.0",
+  "status": "PassedWithinDeclaredBoundary",
+  "product_release_declared": false,
+  "reviewer": "Codex visual inspection",
+  "review_date": "2026-09-07",
+  "source_report": "docs/reports/phase_prv3_quality_validation_v1.json",
+  "source_report_sha256": "48ce1f881b922f5307418069b5cdcd9bdfdd470519d9448fc948679aceafcb7e",
+  "supplementary_authoring_report": "docs/reports/phase_prv3_functional_validation_v1.json",
+  "supplementary_authoring_report_sha256": "0c9fe19cf7ab9147478856e57d34babae83ec04840e90571a04e30224db7241b",
+  "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+  "reviews": [
+    {
+      "id": "material-matrix-1280x720-spp500-direct",
+      "resolution": "1280x720",
+      "samples": 500,
+      "png_sha256": "a20a68ed12fe35bf4096c61fc1e8c9acd0ce50bf6409261feb3523a50fb6bba2",
+      "verdict": "Pass",
+      "noise_assessment": "ElevatedConvergingPreDenoise",
+      "finding": "The texture, spectral, mix and layer regions are distinct and the spectral color variation is visible. Grain and warm tail samples remain conspicuous on low-energy surfaces, but the nested relative NRMSE falls from 0.05857 to 0.03869 and no spatially fixed corruption or fallback pattern is visible."
+    },
+    {
+      "id": "glass-1280x720-spp500-worker",
+      "resolution": "1280x720",
+      "samples": 500,
+      "png_sha256": "123ecf662431e351268310bb6698d2750aca474ab9e33517120e7d06dabed12d",
+      "verdict": "Pass",
+      "noise_assessment": "ElevatedConvergingPreDenoise",
+      "finding": "The two dielectric objects, enclosure, emitter and colored-wall transport remain coherent through the Worker path. High-frequency grain is visible in the glass and indirect field, while nested relative NRMSE improves from 0.10059 to 0.06678 without a stuck or divergent pattern."
+    },
+    {
+      "id": "mie-volume-1280x720-spp500-direct",
+      "resolution": "1280x720",
+      "samples": 500,
+      "png_sha256": "de20b9e366a100606b66908d3282757fdfbe14d53532aa662fe6e211b2083167",
+      "verdict": "Pass",
+      "noise_assessment": "ModerateConvergingVolumeVariance",
+      "finding": "The former near-black result is gone: bounded participating-medium attenuation and in-scattering are visible while the emitter, objects and wall colors remain identifiable. Nested relative NRMSE improves from 0.12453 to 0.06165 after the bounded no-event distance correction and physically scaled Mie density fixture."
+    },
+    {
+      "id": "diffractive-1280x720-spp500-worker",
+      "resolution": "1280x720",
+      "samples": 500,
+      "png_sha256": "91b35837569b3a482c912d07e57036bdf12778e2b15f845ee4b7526fd3a42c7a",
+      "verdict": "Pass",
+      "noise_assessment": "LowConvergingVariance",
+      "finding": "The radiometric diffractive object shows a stable violet-blue response distinct from the neutral object, with intact enclosure geometry and no RGB flattening artifact. Nested relative NRMSE improves from 0.03419 to 0.02247."
+    },
+    {
+      "id": "fluorescent-1280x720-spp500-direct",
+      "resolution": "1280x720",
+      "samples": 500,
+      "png_sha256": "f53434caa4f409ca4b9a92555bf0b041d65c749cab53030f436beeb59503ecc0",
+      "verdict": "Pass",
+      "noise_assessment": "SparseConvergingRareEventTails",
+      "finding": "The fluorescent object has the expected warm shifted response and remains distinct from the neutral control. Sparse bright wavelength-conversion samples remain visible, but every raw component is finite and nested relative NRMSE improves from 0.03424 to 0.02746; this is retained as an explicit rare-event variance boundary rather than hidden by clipping or fallback."
+    }
+  ],
+  "authoring_reviews": [
+    {
+      "id": "gltf-derived-product-render",
+      "resolution": "64x64",
+      "samples": 64,
+      "png_sha256": "49a3b851bc7bd7f2be0b266423bd566847fd1b7b12a6c491c92655296fcb1950",
+      "verdict": "Pass",
+      "finding": "The glTF-derived canonical scene renders the intended textured quad with spatially varying red, green and blue texture regions. This is supplementary adapter smoke and is not counted as the 480p functional gate."
+    },
+    {
+      "id": "preset-derived-product-render",
+      "resolution": "854x480",
+      "samples": 16,
+      "png_sha256": "4f375f76328c35767d22a17d4d3176ce66e90cfed6edc243e8cd2f06da86a56f",
+      "verdict": "Pass",
+      "finding": "The clear-glass preset-derived canonical scene retains the Cornell enclosure, emitter and material regions without a fallback pattern. The visible raw variance is consistent with the separate pre-denoise quality assessment."
+    },
+    {
+      "id": "materialx-derived-product-render",
+      "resolution": "854x480",
+      "samples": 16,
+      "png_sha256": "f4191f5ffece0c295fc41f4d3df4c24260dfd841e431338ffe706fab1ebf4483",
+      "verdict": "Pass",
+      "finding": "The MaterialX-export/import-derived canonical scene reproduces the preset-authored scene structure and material response through the formal ProductJob path, with byte-identical Direct and Worker raw artifacts."
+    }
+  ],
+  "diagnosis": [
+    "The visible variance is stochastic and continues to decrease in every nested sample comparison; no fixed-pattern, row-order, shared-memory, non-finite or fallback-material artifact was observed.",
+    "The current exact-build automatic bridge distributes the 500-sample product work domain among qualified independent endpoints and weights them from a four-sample scalar pilot. This is honest PRV.1R work accounting, but it is not the complete per-pixel pilot and portfolio policy reserved for PRV.6, so a 500-sample portfolio image is not equivalent to 500 samples for every endpoint.",
+    "Repeated glTF product runs showed that cost-times-variance ranking can choose a different fourth qualified unbiased endpoint under small timing changes. Runs with the same executed mask remain byte-identical; cross-mask Direct/Worker output stayed within the 0.5 percent perceptual NRMSE gate. Deterministic full-portfolio scheduling remains PRV.6 rather than being hidden by cherry-picked evidence.",
+    "PRV.3 validates raw transport and material execution before the PRV.5 training-free reconstruction and denoising stage. The elevated material/glass grain and sparse fluorescence tails therefore remain visible and are not represented as final Preview image quality."
+  ],
+  "boundary": "This review closes PRV.3 material, asset, Mie and bounded radiometric wave execution through the shared product path. It does not declare reconstruction or denoising maturity, complete automatic portfolio productization, UltraRender_preview, or a public product release."
+}

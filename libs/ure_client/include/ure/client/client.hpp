@@ -37,7 +37,10 @@ enum class SceneToolOperation : std::uint32_t {
     Migrate = URE_SCENE_TOOL_MIGRATE,
     Pack = URE_SCENE_TOOL_PACK,
     Unpack = URE_SCENE_TOOL_UNPACK,
-    Realize = URE_SCENE_TOOL_REALIZE
+    Realize = URE_SCENE_TOOL_REALIZE,
+    ImportMaterialX = URE_SCENE_TOOL_MATERIAL_IMPORT,
+    ExportMaterialX = URE_SCENE_TOOL_MATERIAL_EXPORT,
+    ApplyMaterialPreset = URE_SCENE_TOOL_MATERIAL_PRESET
 };
 
 enum class JobState {
@@ -118,6 +121,8 @@ struct SceneToolRequest {
     std::vector<std::filesystem::path> inputs;
     std::filesystem::path output;
     std::string package_scene_id;
+    std::string material_selector;
+    std::string preset_name;
     SceneBudget budget;
     std::uint64_t temporary_budget_bytes{UINT64_C(1024) * 1024 * 1024};
     bool allow_script_execution{};
@@ -129,6 +134,7 @@ struct SceneToolResult {
     std::uint32_t diagnostic_count{};
     std::array<std::uint8_t, 32> snapshot_identity{};
     std::array<std::uint8_t, 32> semantic_identity{};
+    std::array<std::uint8_t, 32> material_program_set_identity{};
     std::uint64_t stored_bytes{};
     std::uint64_t decompressed_bytes{};
     std::uint64_t resident_bytes{};
@@ -139,6 +145,8 @@ struct SceneToolResult {
     std::uint64_t resource_count{};
     std::uint64_t cache_count{};
     std::uint64_t dependency_count{};
+    std::uint64_t material_program_count{};
+    std::uint64_t adapter_loss_report_size{};
     std::string report;
 };
 
@@ -196,6 +204,9 @@ struct JobInfo {
     std::uint64_t requested_samples{};
     std::uint64_t accepted_samples{};
     std::uint64_t completed_samples{};
+    std::uint64_t eligible_integrator_modes{};
+    std::uint64_t qualified_integrator_modes{};
+    std::uint64_t executed_integrator_modes{};
     std::uint64_t progress_sequence{};
     std::uint32_t stage{};
     std::uint64_t elapsed_ns{};

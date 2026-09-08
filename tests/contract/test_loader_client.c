@@ -89,6 +89,11 @@ static int run_tests(ure_get_runtime_manifest_fn get_manifest, ure_query_interfa
     CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "\"renderer\":true"));
     CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "ure_native_scene_blob_t"));
     CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "ure_session_interface_t"));
+    CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "material_selector"));
+    CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "preset_name"));
+    CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "material_program_set_identity"));
+    CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "material_program_count"));
+    CHECK(contains_bytes(manifest.abi_manifest_json.data, manifest.abi_manifest_json.size, "adapter_loss_report_size"));
 
     {
         oversized_request_t large_request = {0};

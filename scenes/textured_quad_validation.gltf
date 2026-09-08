@@ -49,7 +49,7 @@
   ],
   "images": [
     {
-      "uri": "../output/scene_ir_smoke_v7.bmp"
+      "uri": "textured_quad_validation.ppm"
     }
   ],
   "buffers": [

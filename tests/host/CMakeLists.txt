@@ -320,11 +320,16 @@ if(TARGET ure_core)
         URE_PRV2_GLTF_SCENE="${CMAKE_SOURCE_DIR}/scenes/cornell_box.gltf")
 add_test(NAME test_product_scene_realizer COMMAND test_product_scene_realizer)
 
+add_executable(test_product_material test_product_material.cpp)
+target_link_libraries(test_product_material PRIVATE ure_product ure_sceneio)
+add_test(NAME test_product_material COMMAND test_product_material)
+
 add_executable(test_scene_tool_service test_scene_tool_service.cpp)
 target_link_libraries(test_scene_tool_service PRIVATE ure_product ure_sceneio)
 target_compile_definitions(test_scene_tool_service PRIVATE
     URE_SCENE_TOOL_PROCEDURAL="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q4_procedural_scene/procedural_scene.urescene"
     URE_SCENE_TOOL_RESOURCE="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene/full_scene.urescene"
+    URE_SCENE_TOOL_GLTF="${CMAKE_SOURCE_DIR}/scenes/cornell_box.gltf"
 )
 add_test(NAME test_scene_tool_service COMMAND test_scene_tool_service)
 

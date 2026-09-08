@@ -109,6 +109,9 @@ struct ProductStatusSnapshot {
     std::uint64_t requested_samples{};
     std::uint64_t accepted_samples{};
     std::uint64_t completed_samples{};
+    std::uint64_t eligible_integrator_modes{};
+    std::uint64_t qualified_integrator_modes{};
+    std::uint64_t executed_integrator_modes{};
     std::uint64_t progress_sequence{};
     std::uint32_t stage{};
     std::uint64_t elapsed_ns{};
@@ -138,6 +141,8 @@ struct SceneToolRequest {
     std::vector<std::string> input_paths_utf8;
     std::string output_path_utf8;
     std::string package_scene_id;
+    std::string material_selector;
+    std::string preset_name;
     SceneBudget budget;
     std::uint64_t temporary_budget_bytes{};
     bool allow_script_execution{};

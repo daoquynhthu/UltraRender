@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <ure/native_resource_resolution.hpp>
+#include <ure/product/product_material.hpp>
 #include <ure/product/product_service.hpp>
 
 namespace ure::product {
@@ -28,7 +29,9 @@ enum class ProductSceneDiagnosticDomain : std::uint32_t {
     Solver = 6,
     Simulation = 7,
     Package = 8,
-    Publication = 9
+    Publication = 9,
+    Material = 10,
+    Adapter = 11
 };
 
 struct ProductFeatureRecord {
@@ -73,6 +76,7 @@ public:
         const noexcept;
     const std::optional<RenderConfig>& solver_config() const noexcept;
     const std::optional<PhysicsConfig>& simulation_plan() const noexcept;
+    const ProductMaterialProgramSet& material_programs() const noexcept;
     const std::filesystem::path& materialization_root() const noexcept;
 
 private:
@@ -87,6 +91,7 @@ private:
     std::vector<ProductFeatureRecord> feature_dispositions_;
     std::optional<RenderConfig> solver_config_;
     std::optional<PhysicsConfig> simulation_plan_;
+    ProductMaterialProgramSet material_programs_;
     std::filesystem::path materialization_root_;
     std::shared_ptr<void> materialization_owner_;
 };

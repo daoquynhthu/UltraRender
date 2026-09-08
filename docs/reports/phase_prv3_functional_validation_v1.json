@@ -1,0 +1,2667 @@
+{
+  "schema": "ure.preview.prv3-material-e2e/1.0",
+  "status": "Passed",
+  "tier": "ProductFunctional",
+  "product_release_declared": false,
+  "product_surface": "exact-build ProductJob 0.4 / Scene Tool 0.2",
+  "samples": 16,
+  "source": {
+    "runtime_sha256": "2b8e44c1389c0614e3095fa6a04c2c3c244c1a38fb46c5f59d60922c1ac5990b",
+    "worker_sha256": "6e7c2c6dd63265838a0f70251b441429775b716a3bc89589fdab883d57983c3c",
+    "cli_sha256": "f25d127c97f126930c3067e8bdd03873412c28099fccf60cf5c05254596dd100",
+    "scenario_runner_sha256": "bcc21c3f4ebd3e62fe121c8b2c7c41ed8c28b29e83da0ba989c02e05ffdcce58",
+    "image_validator_sha256": "2102edb17c3bf94dedaff92d233ac5212dff7a7c303abbabdfeb70fb4a96e64d",
+    "image_comparator_sha256": "cc25ec8e1c509812b8c93e872297913ee531bafd233aeb312cbd74abdcefce97",
+    "orchestration_sha256": "415863441ad2542d9c9804d67cdb88c6a2d3d821888cb7041f917235b4864c7d"
+  },
+  "fixtures": [
+    {
+      "id": "material_matrix",
+      "path": "tests/assets/product_e2e/prv3/material_matrix_854x480.urescene",
+      "sha256": "d0c817d0cd01a72806ee7de18b3b58a5793460893e0c9ead5f4637e7f82c19dd",
+      "expected_eligible_integrator_modes": 55
+    },
+    {
+      "id": "glass",
+      "path": "tests/assets/product_e2e/prv3/glass_854x480.urescene",
+      "sha256": "5c92014233bb4f1040efef690b187810a8999911793b00e289e011b761d154a4",
+      "expected_eligible_integrator_modes": 255
+    },
+    {
+      "id": "mie_volume",
+      "path": "tests/assets/product_e2e/prv3/mie_volume_854x480.urescene",
+      "sha256": "6147bec6da3aff9aca94596e3dd73d313e05f8daf67ee6ac8652346335bb2570",
+      "expected_eligible_integrator_modes": 51
+    },
+    {
+      "id": "diffractive",
+      "path": "tests/assets/product_e2e/prv3/diffractive_854x480.urescene",
+      "sha256": "be2e26ce7dcec459e4862905d063918734a7983a3f3b44c8583a6650d72c1f64",
+      "expected_eligible_integrator_modes": 1
+    },
+    {
+      "id": "fluorescent",
+      "path": "tests/assets/product_e2e/prv3/fluorescent_854x480.urescene",
+      "sha256": "9ce4fa26716a94240e86dbecac62b412efe8b2fac682a14c3de1a1eeba8b9b33",
+      "expected_eligible_integrator_modes": 1
+    }
+  ],
+  "runs": [
+    {
+      "transport": "direct",
+      "scene": "material_matrix",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "eligible_integrator_modes": 55,
+      "qualified_integrator_modes": 7,
+      "executed_integrator_modes": 7,
+      "plan_identity": "4b48a50a4a22bdb2a6ce3954b3ec6ae46e5041aa0db6012681ebd6d24f859ea9",
+      "frame_content_identity": "aa62248338f8e830ac2ad8a9c66cb1610ed6d65e0944853c72cb7af21c51efe8",
+      "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+      "driver_identity": "CUDA driver 13.3",
+      "compiler_identity": "CUDA toolkit 13.3",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "raw_sha256": "9dc3121561270d1cf85776b09f39fc05fa7b0d7912f567810d77bd96ab15e4a9",
+      "png_sha256": "ad2c0aef5fccf57f1261b2f768e4e700408c8bd453eb2969e290bd0c46aa74f9",
+      "metrics": {
+        "schema": "ure.preview.product-image-validation/1.0",
+        "raw_authority": {
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\material_matrix-direct.spp16.pfm",
+          "final_sha256": "9dc3121561270d1cf85776b09f39fc05fa7b0d7912f567810d77bd96ab15e4a9",
+          "low_sha256": "c4a561074d5fc7d55028739091bf8ffb2df3a549c449bf29e813564e7aebd26d",
+          "mid_sha256": "80163911baae911ee71c6f22208c5c01161f915bcb59b38b8ac4fb4cd1e16c16"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\material_matrix-direct.png",
+          "sha256": "ad2c0aef5fccf57f1261b2f768e4e700408c8bd453eb2969e290bd0c46aa74f9"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": 0.0,
+          "maximum": 7.247698783874512,
+          "mean_luminance": 0.10988919062154998,
+          "positive_energy": 45045.777019585075,
+          "luminance_standard_deviation": 0.24199450772380127,
+          "mean_spatial_gradient": 0.011744627276786114,
+          "nonzero_pixel_fraction": 0.8262295081967214,
+          "negative_component_fraction": 0.0
+        },
+        "convergence": {
+          "metric": "relative_rgb_nrmse_to_nested_final",
+          "low_to_final": 0.1482085320822773,
+          "mid_to_final": 0.08970683426231799,
+          "improvement_ratio": 0.6052744265257121
+        }
+      }
+    },
+    {
+      "transport": "worker",
+      "scene": "material_matrix",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "eligible_integrator_modes": 55,
+      "qualified_integrator_modes": 7,
+      "executed_integrator_modes": 7,
+      "plan_identity": "4b48a50a4a22bdb2a6ce3954b3ec6ae46e5041aa0db6012681ebd6d24f859ea9",
+      "frame_content_identity": "aa62248338f8e830ac2ad8a9c66cb1610ed6d65e0944853c72cb7af21c51efe8",
+      "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+      "driver_identity": "CUDA driver 13.3",
+      "compiler_identity": "CUDA toolkit 13.3",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "raw_sha256": "9dc3121561270d1cf85776b09f39fc05fa7b0d7912f567810d77bd96ab15e4a9",
+      "png_sha256": "ad2c0aef5fccf57f1261b2f768e4e700408c8bd453eb2969e290bd0c46aa74f9",
+      "metrics": {
+        "schema": "ure.preview.product-image-validation/1.0",
+        "raw_authority": {
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\material_matrix-worker.spp16.pfm",
+          "final_sha256": "9dc3121561270d1cf85776b09f39fc05fa7b0d7912f567810d77bd96ab15e4a9",
+          "low_sha256": "c4a561074d5fc7d55028739091bf8ffb2df3a549c449bf29e813564e7aebd26d",
+          "mid_sha256": "80163911baae911ee71c6f22208c5c01161f915bcb59b38b8ac4fb4cd1e16c16"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\material_matrix-worker.png",
+          "sha256": "ad2c0aef5fccf57f1261b2f768e4e700408c8bd453eb2969e290bd0c46aa74f9"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": 0.0,
+          "maximum": 7.247698783874512,
+          "mean_luminance": 0.10988919062154998,
+          "positive_energy": 45045.777019585075,
+          "luminance_standard_deviation": 0.24199450772380127,
+          "mean_spatial_gradient": 0.011744627276786114,
+          "nonzero_pixel_fraction": 0.8262295081967214,
+          "negative_component_fraction": 0.0
+        },
+        "convergence": {
+          "metric": "relative_rgb_nrmse_to_nested_final",
+          "low_to_final": 0.1482085320822773,
+          "mid_to_final": 0.08970683426231799,
+          "improvement_ratio": 0.6052744265257121
+        }
+      }
+    },
+    {
+      "transport": "direct",
+      "scene": "glass",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "eligible_integrator_modes": 255,
+      "qualified_integrator_modes": 7,
+      "executed_integrator_modes": 7,
+      "plan_identity": "095ed13882ca35758a24884a2005b0dc4f8b1f5372fa5e30e7943992b8b8cb68",
+      "frame_content_identity": "9326a6f9f6f79a102497d57605165b495f5e6b7d48d6605d1b6d1456d53da99f",
+      "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+      "driver_identity": "CUDA driver 13.3",
+      "compiler_identity": "CUDA toolkit 13.3",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "raw_sha256": "02dfacc41d2e1214287d30c29cc1065ee465a51b59ab3e020542d542361968f2",
+      "png_sha256": "6efed0ab494706b703170400a6a6300b88b13fb888eb88ae4931c994e64e5353",
+      "metrics": {
+        "schema": "ure.preview.product-image-validation/1.0",
+        "raw_authority": {
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\glass-direct.spp16.pfm",
+          "final_sha256": "02dfacc41d2e1214287d30c29cc1065ee465a51b59ab3e020542d542361968f2",
+          "low_sha256": "915345acfa5b6636c2cdf3491adf126b50de22d5bf8410806f004d022b49bb4f",
+          "mid_sha256": "30e6cc39572334ffea59b3417c95aa4bfa30155da62e32bf4fdd05cec09e58c8"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\glass-direct.png",
+          "sha256": "6efed0ab494706b703170400a6a6300b88b13fb888eb88ae4931c994e64e5353"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": 0.0,
+          "maximum": 3.8968605995178223,
+          "mean_luminance": 0.11699140181675642,
+          "positive_energy": 47957.11543272377,
+          "luminance_standard_deviation": 0.24346764297005385,
+          "mean_spatial_gradient": 0.019377423899661524,
+          "nonzero_pixel_fraction": 0.9431425644028103,
+          "negative_component_fraction": 0.0
+        },
+        "convergence": {
+          "metric": "relative_rgb_nrmse_to_nested_final",
+          "low_to_final": 0.22197299712807106,
+          "mid_to_final": 0.14057780773513764,
+          "improvement_ratio": 0.6333104006071014
+        }
+      }
+    },
+    {
+      "transport": "worker",
+      "scene": "glass",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "eligible_integrator_modes": 255,
+      "qualified_integrator_modes": 7,
+      "executed_integrator_modes": 7,
+      "plan_identity": "095ed13882ca35758a24884a2005b0dc4f8b1f5372fa5e30e7943992b8b8cb68",
+      "frame_content_identity": "9326a6f9f6f79a102497d57605165b495f5e6b7d48d6605d1b6d1456d53da99f",
+      "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+      "driver_identity": "CUDA driver 13.3",
+      "compiler_identity": "CUDA toolkit 13.3",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "raw_sha256": "02dfacc41d2e1214287d30c29cc1065ee465a51b59ab3e020542d542361968f2",
+      "png_sha256": "6efed0ab494706b703170400a6a6300b88b13fb888eb88ae4931c994e64e5353",
+      "metrics": {
+        "schema": "ure.preview.product-image-validation/1.0",
+        "raw_authority": {
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\glass-worker.spp16.pfm",
+          "final_sha256": "02dfacc41d2e1214287d30c29cc1065ee465a51b59ab3e020542d542361968f2",
+          "low_sha256": "915345acfa5b6636c2cdf3491adf126b50de22d5bf8410806f004d022b49bb4f",
+          "mid_sha256": "30e6cc39572334ffea59b3417c95aa4bfa30155da62e32bf4fdd05cec09e58c8"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\glass-worker.png",
+          "sha256": "6efed0ab494706b703170400a6a6300b88b13fb888eb88ae4931c994e64e5353"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": 0.0,
+          "maximum": 3.8968605995178223,
+          "mean_luminance": 0.11699140181675642,
+          "positive_energy": 47957.11543272377,
+          "luminance_standard_deviation": 0.24346764297005385,
+          "mean_spatial_gradient": 0.019377423899661524,
+          "nonzero_pixel_fraction": 0.9431425644028103,
+          "negative_component_fraction": 0.0
+        },
+        "convergence": {
+          "metric": "relative_rgb_nrmse_to_nested_final",
+          "low_to_final": 0.22197299712807106,
+          "mid_to_final": 0.14057780773513764,
+          "improvement_ratio": 0.6333104006071014
+        }
+      }
+    },
+    {
+      "transport": "direct",
+      "scene": "mie_volume",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "eligible_integrator_modes": 51,
+      "qualified_integrator_modes": 3,
+      "executed_integrator_modes": 3,
+      "plan_identity": "8a592a7839eb844f64c44331c27cfd16b6be1d489594d1a42f386598b44e26a2",
+      "frame_content_identity": "c812f70bfafe9554b3cee82ae00b7ed906e821ea35f85c01bd902157ab0ad95b",
+      "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+      "driver_identity": "CUDA driver 13.3",
+      "compiler_identity": "CUDA toolkit 13.3",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "raw_sha256": "ddd3dbc2d0f806f4cd5ae0310594046c8d94365c0d6bd488292f9fe8aa52384f",
+      "png_sha256": "72375744497f9b2de0234fefbce879ebeec8bcb823e271bf63778e88620caf9a",
+      "metrics": {
+        "schema": "ure.preview.product-image-validation/1.0",
+        "raw_authority": {
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\mie_volume-direct.spp16.pfm",
+          "final_sha256": "ddd3dbc2d0f806f4cd5ae0310594046c8d94365c0d6bd488292f9fe8aa52384f",
+          "low_sha256": "6da21afd06e612ed1e50752470f2366d86572d06472a2be2f699323626f408a7",
+          "mid_sha256": "852aabe9b49b8e83345ebb9fe41ff5c15a9c48ae2ccb2b55cf64ba54fd960b4c"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\mie_volume-direct.png",
+          "sha256": "72375744497f9b2de0234fefbce879ebeec8bcb823e271bf63778e88620caf9a"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": 0.0,
+          "maximum": 3.8775081634521484,
+          "mean_luminance": 0.07789997079652856,
+          "positive_energy": 31932.75602891394,
+          "luminance_standard_deviation": 0.2221471108477241,
+          "mean_spatial_gradient": 0.041443572556497874,
+          "nonzero_pixel_fraction": 0.9606313427010148,
+          "negative_component_fraction": 0.0
+        },
+        "convergence": {
+          "metric": "relative_rgb_nrmse_to_nested_final",
+          "low_to_final": 0.2700378621808079,
+          "mid_to_final": 0.17997955094190035,
+          "improvement_ratio": 0.666497466275275
+        }
+      }
+    },
+    {
+      "transport": "worker",
+      "scene": "mie_volume",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "eligible_integrator_modes": 51,
+      "qualified_integrator_modes": 3,
+      "executed_integrator_modes": 3,
+      "plan_identity": "8a592a7839eb844f64c44331c27cfd16b6be1d489594d1a42f386598b44e26a2",
+      "frame_content_identity": "c812f70bfafe9554b3cee82ae00b7ed906e821ea35f85c01bd902157ab0ad95b",
+      "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+      "driver_identity": "CUDA driver 13.3",
+      "compiler_identity": "CUDA toolkit 13.3",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "raw_sha256": "ddd3dbc2d0f806f4cd5ae0310594046c8d94365c0d6bd488292f9fe8aa52384f",
+      "png_sha256": "72375744497f9b2de0234fefbce879ebeec8bcb823e271bf63778e88620caf9a",
+      "metrics": {
+        "schema": "ure.preview.product-image-validation/1.0",
+        "raw_authority": {
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\mie_volume-worker.spp16.pfm",
+          "final_sha256": "ddd3dbc2d0f806f4cd5ae0310594046c8d94365c0d6bd488292f9fe8aa52384f",
+          "low_sha256": "6da21afd06e612ed1e50752470f2366d86572d06472a2be2f699323626f408a7",
+          "mid_sha256": "852aabe9b49b8e83345ebb9fe41ff5c15a9c48ae2ccb2b55cf64ba54fd960b4c"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\mie_volume-worker.png",
+          "sha256": "72375744497f9b2de0234fefbce879ebeec8bcb823e271bf63778e88620caf9a"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": 0.0,
+          "maximum": 3.8775081634521484,
+          "mean_luminance": 0.07789997079652856,
+          "positive_energy": 31932.75602891394,
+          "luminance_standard_deviation": 0.2221471108477241,
+          "mean_spatial_gradient": 0.041443572556497874,
+          "nonzero_pixel_fraction": 0.9606313427010148,
+          "negative_component_fraction": 0.0
+        },
+        "convergence": {
+          "metric": "relative_rgb_nrmse_to_nested_final",
+          "low_to_final": 0.2700378621808079,
+          "mid_to_final": 0.17997955094190035,
+          "improvement_ratio": 0.666497466275275
+        }
+      }
+    },
+    {
+      "transport": "direct",
+      "scene": "diffractive",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "eligible_integrator_modes": 1,
+      "qualified_integrator_modes": 1,
+      "executed_integrator_modes": 1,
+      "plan_identity": "06d75feddb94172b4c1eca7b5b695a87b3bae6e0f540f1ee82f8d0acd4261cd3",
+      "frame_content_identity": "cf045179aaf6202ada92a68b1994c0c24aa2bfd82800a227f3b9a6e82dfaae82",
+      "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+      "driver_identity": "CUDA driver 13.3",
+      "compiler_identity": "CUDA toolkit 13.3",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "raw_sha256": "966c2f7f268858508cfabb2b43a5760c6cd0583c78785c55c0b329c6965ed567",
+      "png_sha256": "0b61384739d27be8fb707954252a6bc6cbd4cabd750880f233a33e3dd8fbadc0",
+      "metrics": {
+        "schema": "ure.preview.product-image-validation/1.0",
+        "raw_authority": {
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\diffractive-direct.spp16.pfm",
+          "final_sha256": "966c2f7f268858508cfabb2b43a5760c6cd0583c78785c55c0b329c6965ed567",
+          "low_sha256": "db9bedc6dbc78ae99eb487c7b70413026565fc05ee3b7a18fe44351a4f20a109",
+          "mid_sha256": "82cbae0dc372ec298a2adf64234dc837bc7b0f49788e0b864bc304357c5ca8b7"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\diffractive-direct.png",
+          "sha256": "0b61384739d27be8fb707954252a6bc6cbd4cabd750880f233a33e3dd8fbadc0"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": 0.0,
+          "maximum": 3.8906662464141846,
+          "mean_luminance": 0.11400155230518813,
+          "positive_energy": 46731.51632094361,
+          "luminance_standard_deviation": 0.23885690087757178,
+          "mean_spatial_gradient": 0.010086483516719676,
+          "nonzero_pixel_fraction": 0.9924960967993754,
+          "negative_component_fraction": 0.0
+        },
+        "convergence": {
+          "metric": "relative_rgb_nrmse_to_nested_final",
+          "low_to_final": 0.12213639802432842,
+          "mid_to_final": 0.07293281963140928,
+          "improvement_ratio": 0.5971423818875169
+        }
+      }
+    },
+    {
+      "transport": "worker",
+      "scene": "diffractive",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "eligible_integrator_modes": 1,
+      "qualified_integrator_modes": 1,
+      "executed_integrator_modes": 1,
+      "plan_identity": "06d75feddb94172b4c1eca7b5b695a87b3bae6e0f540f1ee82f8d0acd4261cd3",
+      "frame_content_identity": "471348fc8d822732ffbbc288290d9145412f0a41be8c99b51df7f8d2cecd03f2",
+      "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+      "driver_identity": "CUDA driver 13.3",
+      "compiler_identity": "CUDA toolkit 13.3",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "raw_sha256": "26676b7b5ee4a9d690cfd8d7aeb8d707578793fb39d25ee561bdc84af58c5368",
+      "png_sha256": "0b61384739d27be8fb707954252a6bc6cbd4cabd750880f233a33e3dd8fbadc0",
+      "metrics": {
+        "schema": "ure.preview.product-image-validation/1.0",
+        "raw_authority": {
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\diffractive-worker.spp16.pfm",
+          "final_sha256": "26676b7b5ee4a9d690cfd8d7aeb8d707578793fb39d25ee561bdc84af58c5368",
+          "low_sha256": "655e92d57240343f4616a17a4814ca3a80ba0db62ad1c39fbd8e9d2f0fe6e218",
+          "mid_sha256": "825b1384535bd616189ff9d0cdffe2b8aa1c59df3aabef9b904a9cdb47dd2bbf"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\diffractive-worker.png",
+          "sha256": "0b61384739d27be8fb707954252a6bc6cbd4cabd750880f233a33e3dd8fbadc0"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": 0.0,
+          "maximum": 3.8906662464141846,
+          "mean_luminance": 0.11400155230702805,
+          "positive_energy": 46731.516321697374,
+          "luminance_standard_deviation": 0.23885690087683567,
+          "mean_spatial_gradient": 0.010086483517879254,
+          "nonzero_pixel_fraction": 0.9924960967993754,
+          "negative_component_fraction": 0.0
+        },
+        "convergence": {
+          "metric": "relative_rgb_nrmse_to_nested_final",
+          "low_to_final": 0.1221363980294598,
+          "mid_to_final": 0.0729328196325387,
+          "improvement_ratio": 0.597142381871676
+        }
+      }
+    },
+    {
+      "transport": "direct",
+      "scene": "fluorescent",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "eligible_integrator_modes": 1,
+      "qualified_integrator_modes": 1,
+      "executed_integrator_modes": 1,
+      "plan_identity": "f0c12da2c490a3eb5d1e99678ae82a9e84f26a9a006e36edb4dde7906a78e310",
+      "frame_content_identity": "ca33f681d13b8fa511e63d0154e452dfafdd7a1024258df5c9b5c567d80a9b70",
+      "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+      "driver_identity": "CUDA driver 13.3",
+      "compiler_identity": "CUDA toolkit 13.3",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "raw_sha256": "6b01963d1dad1020ae575191d49ce3c915dd5a6a2e5284ebf363b670f84a5e60",
+      "png_sha256": "8ab2db03fa3f09107e436058e46404eec6cb5bbb388194c18c537c5c8335866e",
+      "metrics": {
+        "schema": "ure.preview.product-image-validation/1.0",
+        "raw_authority": {
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\fluorescent-direct.spp16.pfm",
+          "final_sha256": "6b01963d1dad1020ae575191d49ce3c915dd5a6a2e5284ebf363b670f84a5e60",
+          "low_sha256": "3d34824d79e5c1217f6b742c23b5d06345df79d4358e5a99b973fa24b6888685",
+          "mid_sha256": "a89d4d62b81edfc854861bc2029d08ddf744ec982397de13e5ef35ae25e356c6"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\fluorescent-direct.png",
+          "sha256": "8ab2db03fa3f09107e436058e46404eec6cb5bbb388194c18c537c5c8335866e"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": 0.0,
+          "maximum": 9.764734268188477,
+          "mean_luminance": 0.11176431601322481,
+          "positive_energy": 45814.42842014253,
+          "luminance_standard_deviation": 0.2396306146953751,
+          "mean_spatial_gradient": 0.008937813517866246,
+          "nonzero_pixel_fraction": 0.9753537275565964,
+          "negative_component_fraction": 0.0
+        },
+        "convergence": {
+          "metric": "relative_rgb_nrmse_to_nested_final",
+          "low_to_final": 0.10991539267935337,
+          "mid_to_final": 0.07408476261949062,
+          "improvement_ratio": 0.6740162666352989
+        }
+      }
+    },
+    {
+      "transport": "worker",
+      "scene": "fluorescent",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "eligible_integrator_modes": 1,
+      "qualified_integrator_modes": 1,
+      "executed_integrator_modes": 1,
+      "plan_identity": "f0c12da2c490a3eb5d1e99678ae82a9e84f26a9a006e36edb4dde7906a78e310",
+      "frame_content_identity": "4791193e1c85543fc959f5a1ef32e78db5ac0be2f7f2108688a752cb0b5d9d43",
+      "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+      "driver_identity": "CUDA driver 13.3",
+      "compiler_identity": "CUDA toolkit 13.3",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "raw_sha256": "8820824b7bac28c68f716e5023c0371c5330cd13487be7e9c358980e5d3cbcc6",
+      "png_sha256": "8ab2db03fa3f09107e436058e46404eec6cb5bbb388194c18c537c5c8335866e",
+      "metrics": {
+        "schema": "ure.preview.product-image-validation/1.0",
+        "raw_authority": {
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\fluorescent-worker.spp16.pfm",
+          "final_sha256": "8820824b7bac28c68f716e5023c0371c5330cd13487be7e9c358980e5d3cbcc6",
+          "low_sha256": "00a8aa4aa89af6e5e87d34d152fcb459888dcf075b67fb6ac617907edde6c773",
+          "mid_sha256": "acd910cdd178e83feefe80ee659233a58dde55885efe2c5f6d9374e5f12e0eec"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\fluorescent-worker.png",
+          "sha256": "8ab2db03fa3f09107e436058e46404eec6cb5bbb388194c18c537c5c8335866e"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": 0.0,
+          "maximum": 9.764734268188477,
+          "mean_luminance": 0.11176431601285017,
+          "positive_energy": 45814.42841998832,
+          "luminance_standard_deviation": 0.23963061469407387,
+          "mean_spatial_gradient": 0.00893781351762277,
+          "nonzero_pixel_fraction": 0.9753537275565964,
+          "negative_component_fraction": 0.0
+        },
+        "convergence": {
+          "metric": "relative_rgb_nrmse_to_nested_final",
+          "low_to_final": 0.1099153926306027,
+          "mid_to_final": 0.07408476261163112,
+          "improvement_ratio": 0.6740162668627397
+        }
+      }
+    },
+    {
+      "transport": "direct",
+      "scene": "packaged_matrix",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "eligible_integrator_modes": 55,
+      "qualified_integrator_modes": 7,
+      "executed_integrator_modes": 7,
+      "plan_identity": "fd4d8ad80dc62cc832bd38a9aea374996e2420148303263f879740645d44f7d1",
+      "frame_content_identity": "aa62248338f8e830ac2ad8a9c66cb1610ed6d65e0944853c72cb7af21c51efe8",
+      "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+      "driver_identity": "CUDA driver 13.3",
+      "compiler_identity": "CUDA toolkit 13.3",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "raw_sha256": "9dc3121561270d1cf85776b09f39fc05fa7b0d7912f567810d77bd96ab15e4a9",
+      "png_sha256": "ad2c0aef5fccf57f1261b2f768e4e700408c8bd453eb2969e290bd0c46aa74f9",
+      "metrics": {
+        "schema": "ure.preview.product-image-validation/1.0",
+        "raw_authority": {
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\packaged_matrix-direct.spp16.pfm",
+          "final_sha256": "9dc3121561270d1cf85776b09f39fc05fa7b0d7912f567810d77bd96ab15e4a9",
+          "low_sha256": "c4a561074d5fc7d55028739091bf8ffb2df3a549c449bf29e813564e7aebd26d",
+          "mid_sha256": "80163911baae911ee71c6f22208c5c01161f915bcb59b38b8ac4fb4cd1e16c16"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\packaged_matrix-direct.png",
+          "sha256": "ad2c0aef5fccf57f1261b2f768e4e700408c8bd453eb2969e290bd0c46aa74f9"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": 0.0,
+          "maximum": 7.247698783874512,
+          "mean_luminance": 0.10988919062154998,
+          "positive_energy": 45045.777019585075,
+          "luminance_standard_deviation": 0.24199450772380127,
+          "mean_spatial_gradient": 0.011744627276786114,
+          "nonzero_pixel_fraction": 0.8262295081967214,
+          "negative_component_fraction": 0.0
+        },
+        "convergence": {
+          "metric": "relative_rgb_nrmse_to_nested_final",
+          "low_to_final": 0.1482085320822773,
+          "mid_to_final": 0.08970683426231799,
+          "improvement_ratio": 0.6052744265257121
+        }
+      }
+    },
+    {
+      "transport": "worker",
+      "scene": "packaged_matrix",
+      "requested_samples": 16,
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "resolution": "854x480",
+      "eligible_integrator_modes": 55,
+      "qualified_integrator_modes": 7,
+      "executed_integrator_modes": 7,
+      "plan_identity": "fd4d8ad80dc62cc832bd38a9aea374996e2420148303263f879740645d44f7d1",
+      "frame_content_identity": "aa62248338f8e830ac2ad8a9c66cb1610ed6d65e0944853c72cb7af21c51efe8",
+      "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+      "driver_identity": "CUDA driver 13.3",
+      "compiler_identity": "CUDA toolkit 13.3",
+      "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+      "raw_sha256": "9dc3121561270d1cf85776b09f39fc05fa7b0d7912f567810d77bd96ab15e4a9",
+      "png_sha256": "ad2c0aef5fccf57f1261b2f768e4e700408c8bd453eb2969e290bd0c46aa74f9",
+      "metrics": {
+        "schema": "ure.preview.product-image-validation/1.0",
+        "raw_authority": {
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\packaged_matrix-worker.spp16.pfm",
+          "final_sha256": "9dc3121561270d1cf85776b09f39fc05fa7b0d7912f567810d77bd96ab15e4a9",
+          "low_sha256": "c4a561074d5fc7d55028739091bf8ffb2df3a549c449bf29e813564e7aebd26d",
+          "mid_sha256": "80163911baae911ee71c6f22208c5c01161f915bcb59b38b8ac4fb4cd1e16c16"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\packaged_matrix-worker.png",
+          "sha256": "ad2c0aef5fccf57f1261b2f768e4e700408c8bd453eb2969e290bd0c46aa74f9"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": 0.0,
+          "maximum": 7.247698783874512,
+          "mean_luminance": 0.10988919062154998,
+          "positive_energy": 45045.777019585075,
+          "luminance_standard_deviation": 0.24199450772380127,
+          "mean_spatial_gradient": 0.011744627276786114,
+          "nonzero_pixel_fraction": 0.8262295081967214,
+          "negative_component_fraction": 0.0
+        },
+        "convergence": {
+          "metric": "relative_rgb_nrmse_to_nested_final",
+          "low_to_final": 0.1482085320822773,
+          "mid_to_final": 0.08970683426231799,
+          "improvement_ratio": 0.6052744265257121
+        }
+      }
+    }
+  ],
+  "transport_parity": [
+    {
+      "schema": "ure.preview.product-image-parity/1.0",
+      "metric": "relative_rgb_nrmse",
+      "candidate_sha256": "9dc3121561270d1cf85776b09f39fc05fa7b0d7912f567810d77bd96ab15e4a9",
+      "reference_sha256": "9dc3121561270d1cf85776b09f39fc05fa7b0d7912f567810d77bd96ab15e4a9",
+      "relative_rgb_nrmse": 0.0,
+      "maximum_relative_rgb_nrmse": 0.005,
+      "dimensions": [
+        854,
+        480
+      ],
+      "byte_identical": true
+    },
+    {
+      "schema": "ure.preview.product-image-parity/1.0",
+      "metric": "relative_rgb_nrmse",
+      "candidate_sha256": "02dfacc41d2e1214287d30c29cc1065ee465a51b59ab3e020542d542361968f2",
+      "reference_sha256": "02dfacc41d2e1214287d30c29cc1065ee465a51b59ab3e020542d542361968f2",
+      "relative_rgb_nrmse": 0.0,
+      "maximum_relative_rgb_nrmse": 0.005,
+      "dimensions": [
+        854,
+        480
+      ],
+      "byte_identical": true
+    },
+    {
+      "schema": "ure.preview.product-image-parity/1.0",
+      "metric": "relative_rgb_nrmse",
+      "candidate_sha256": "ddd3dbc2d0f806f4cd5ae0310594046c8d94365c0d6bd488292f9fe8aa52384f",
+      "reference_sha256": "ddd3dbc2d0f806f4cd5ae0310594046c8d94365c0d6bd488292f9fe8aa52384f",
+      "relative_rgb_nrmse": 0.0,
+      "maximum_relative_rgb_nrmse": 0.005,
+      "dimensions": [
+        854,
+        480
+      ],
+      "byte_identical": true
+    },
+    {
+      "schema": "ure.preview.product-image-parity/1.0",
+      "metric": "relative_rgb_nrmse",
+      "candidate_sha256": "26676b7b5ee4a9d690cfd8d7aeb8d707578793fb39d25ee561bdc84af58c5368",
+      "reference_sha256": "966c2f7f268858508cfabb2b43a5760c6cd0583c78785c55c0b329c6965ed567",
+      "relative_rgb_nrmse": 3.864770037365801E-09,
+      "maximum_relative_rgb_nrmse": 0.005,
+      "dimensions": [
+        854,
+        480
+      ],
+      "byte_identical": false
+    },
+    {
+      "schema": "ure.preview.product-image-parity/1.0",
+      "metric": "relative_rgb_nrmse",
+      "candidate_sha256": "8820824b7bac28c68f716e5023c0371c5330cd13487be7e9c358980e5d3cbcc6",
+      "reference_sha256": "6b01963d1dad1020ae575191d49ce3c915dd5a6a2e5284ebf363b670f84a5e60",
+      "relative_rgb_nrmse": 1.6663855901320229E-09,
+      "maximum_relative_rgb_nrmse": 0.005,
+      "dimensions": [
+        854,
+        480
+      ],
+      "byte_identical": false
+    },
+    {
+      "schema": "ure.preview.product-image-parity/1.0",
+      "metric": "relative_rgb_nrmse",
+      "candidate_sha256": "9dc3121561270d1cf85776b09f39fc05fa7b0d7912f567810d77bd96ab15e4a9",
+      "reference_sha256": "9dc3121561270d1cf85776b09f39fc05fa7b0d7912f567810d77bd96ab15e4a9",
+      "relative_rgb_nrmse": 0.0,
+      "maximum_relative_rgb_nrmse": 0.005,
+      "dimensions": [
+        854,
+        480
+      ],
+      "byte_identical": true
+    }
+  ],
+  "cli": [
+    {
+      "transport": "Direct",
+      "values": {
+        "transport": "direct",
+        "state": "succeeded",
+        "accepted_samples": "16",
+        "completed_samples": "16",
+        "eligible_integrator_modes": "55",
+        "qualified_integrator_modes": "7",
+        "executed_integrator_modes": "7",
+        "frame": "854x480",
+        "frame_bytes": "6558720",
+        "build_identity": "f9630fc52ca0b28be7368cd5b3a5005e1fa94998e971df25a5968c82ff4bef0e",
+        "snapshot_identity": "e9c0dc96be9294d6295191a0aaed7b0ca538fc9492ca4c03771638ccc2608b49",
+        "objective_identity": "1c0abc036e0dd2da79208d83a40166313e78ba41b17b9efbb4e5a61aa3b60503",
+        "plan_identity": "4b48a50a4a22bdb2a6ce3954b3ec6ae46e5041aa0db6012681ebd6d24f859ea9",
+        "frame_content_identity": "aa62248338f8e830ac2ad8a9c66cb1610ed6d65e0944853c72cb7af21c51efe8"
+      }
+    },
+    {
+      "transport": "Worker",
+      "values": {
+        "transport": "worker",
+        "state": "succeeded",
+        "accepted_samples": "16",
+        "completed_samples": "16",
+        "eligible_integrator_modes": "55",
+        "qualified_integrator_modes": "7",
+        "executed_integrator_modes": "7",
+        "frame": "854x480",
+        "frame_bytes": "6558720",
+        "build_identity": "f9630fc52ca0b28be7368cd5b3a5005e1fa94998e971df25a5968c82ff4bef0e",
+        "snapshot_identity": "e9c0dc96be9294d6295191a0aaed7b0ca538fc9492ca4c03771638ccc2608b49",
+        "objective_identity": "1c0abc036e0dd2da79208d83a40166313e78ba41b17b9efbb4e5a61aa3b60503",
+        "plan_identity": "4b48a50a4a22bdb2a6ce3954b3ec6ae46e5041aa0db6012681ebd6d24f859ea9",
+        "frame_content_identity": "aa62248338f8e830ac2ad8a9c66cb1610ed6d65e0944853c72cb7af21c51efe8"
+      }
+    }
+  ],
+  "package": {
+    "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\material_matrix.urepkg",
+    "sha256": "7f17448ba40a79de5fcf3eebde782e3f8a33e510702cff618700c8494cda04f8",
+    "authoring_source_deleted_before_render": true
+  },
+  "authoring": {
+    "purpose": "Supplementary adapter-to-canonical-artifact-to-ProductJob evidence; the 64x64 glTF case is contract smoke and does not replace the 480p functional matrix.",
+    "sources": [
+      {
+        "kind": "glTF",
+        "path": "scenes/textured_quad_validation.gltf",
+        "sha256": "dcd374e5e0e2ca771acce902828a373b6f85272f135863d19cb2cdf9989f0989"
+      },
+      {
+        "kind": "Preset",
+        "name": "clear_glass",
+        "base_scene_sha256": "d0c817d0cd01a72806ee7de18b3b58a5793460893e0c9ead5f4637e7f82c19dd"
+      },
+      {
+        "kind": "MaterialXDerived",
+        "direct_sha256": "6695bd6059c90291dd51eded3672f142681cb9f155fabef2b6783fe47c76cb19",
+        "worker_sha256": "6695bd6059c90291dd51eded3672f142681cb9f155fabef2b6783fe47c76cb19"
+      }
+    ],
+    "operations": {
+      "gltf_build": [
+        {
+          "schema": "ure.preview.scene-tool-report/0.2",
+          "operation": "build",
+          "ok": true,
+          "snapshot_identity": "6018d65e6edb382723f07be786fc33926ff79d99d3070bc090491246e63146e8",
+          "material_program_set_identity": "570d422eb0613360d0484cd54f38e9570c67d8d43667ac386f483a90e9d588d1",
+          "semantic_identity": "247d1c349299c2bdf744cdcc2d36c6c61a354110015e6ad6559c1af60eb011f0",
+          "inventory": {
+            "scenes": 1,
+            "resources": 1,
+            "caches": 0,
+            "dependencies": 0,
+            "material_programs": 1
+          },
+          "adapter_loss_report": {
+            "schema": "ure.adapter.loss/1.0",
+            "target": "gltf",
+            "lossless": true,
+            "exportable": true,
+            "losses": []
+          },
+          "adapter_loss_report_identity": "3d840194611fbe11818bb5d3209fe82685200a9f6e9e1fa671baacf123d0e30b",
+          "budget": {
+            "stored_bytes": 325,
+            "decompressed_bytes": 325,
+            "resident_bytes": 325,
+            "streamed_bytes": 0,
+            "temporary_bytes": 325,
+            "output_bytes": 49152
+          },
+          "feature_dispositions": [
+            {
+              "id": "material/d0a06fe7-271e-859c-97f7-b417bc5a6f88",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/image/00000000",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/0/material/base-color",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/0/material/graph/1",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000000/base-color",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000000/graph/1",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/ce0e85e9d066b0182f52089c09cf0611c7289ba495f22a1a7b71ab23502bdf1c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/texture/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.gltf",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.scene.native",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            }
+          ],
+          "diagnostics": []
+        },
+        {
+          "schema": "ure.preview.scene-tool-report/0.2",
+          "operation": "build",
+          "ok": true,
+          "snapshot_identity": "6018d65e6edb382723f07be786fc33926ff79d99d3070bc090491246e63146e8",
+          "material_program_set_identity": "570d422eb0613360d0484cd54f38e9570c67d8d43667ac386f483a90e9d588d1",
+          "semantic_identity": "247d1c349299c2bdf744cdcc2d36c6c61a354110015e6ad6559c1af60eb011f0",
+          "inventory": {
+            "scenes": 1,
+            "resources": 1,
+            "caches": 0,
+            "dependencies": 0,
+            "material_programs": 1
+          },
+          "adapter_loss_report": {
+            "schema": "ure.adapter.loss/1.0",
+            "target": "gltf",
+            "lossless": true,
+            "exportable": true,
+            "losses": []
+          },
+          "adapter_loss_report_identity": "3d840194611fbe11818bb5d3209fe82685200a9f6e9e1fa671baacf123d0e30b",
+          "budget": {
+            "stored_bytes": 325,
+            "decompressed_bytes": 325,
+            "resident_bytes": 325,
+            "streamed_bytes": 0,
+            "temporary_bytes": 325,
+            "output_bytes": 49152
+          },
+          "feature_dispositions": [
+            {
+              "id": "material/d0a06fe7-271e-859c-97f7-b417bc5a6f88",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/image/00000000",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/0/material/base-color",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/0/material/graph/1",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000000/base-color",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000000/graph/1",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/ce0e85e9d066b0182f52089c09cf0611c7289ba495f22a1a7b71ab23502bdf1c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/texture/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.gltf",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.scene.native",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            }
+          ],
+          "diagnostics": []
+        }
+      ],
+      "preset_realization": [
+        {
+          "schema": "ure.preview.scene-tool-report/0.2",
+          "operation": "material-preset",
+          "ok": true,
+          "snapshot_identity": "975f54e34213be458dde02ce25403b7f2baa6d2e0111c86c304d8e3a10ea260c",
+          "material_program_set_identity": "a941856f6cf767205db30ffd0c3293e81da57a08ff6d45a9a5f4b53cce827fe1",
+          "semantic_identity": "e2353522a38e833d013122cba02f5e3861f8031fb169b34d0043962b002aed5c",
+          "inventory": {
+            "scenes": 1,
+            "resources": 8,
+            "caches": 0,
+            "dependencies": 0,
+            "material_programs": 10
+          },
+          "material_update": {
+            "classification": "HotUpdate",
+            "changed_material_uuids": [
+              "85cdc1dd-f632-89b4-a94a-cf41f22c673e"
+            ]
+          },
+          "budget": {
+            "stored_bytes": 3850,
+            "decompressed_bytes": 3850,
+            "resident_bytes": 3850,
+            "streamed_bytes": 0,
+            "temporary_bytes": 3850,
+            "output_bytes": 4919040
+          },
+          "feature_dispositions": [
+            {
+              "id": "material/151d544f-976b-8578-8269-24842b3049b6",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/1f1a5954-2df8-8d7a-80d9-bc4d33314760",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/2c617ae7-8e25-854b-98d8-29481e55cd1d",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/5a384928-c9b0-8daa-8be4-75fe07a05e3c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/65a50f93-08bf-8524-bef9-c8d9b3a52d64",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/80e2ce03-1bc0-8ab2-9957-b70378a3d163",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/85cdc1dd-f632-89b4-a94a-cf41f22c673e",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/a71371f8-eecf-8dfa-a25d-417901325f3e",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/b97eb46d-c367-81ed-9aae-d121c25e1fe4",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/df84358d-ecfa-88db-9b9f-f3153e30e1f8",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/image/00000000",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/0/material/albedo-spd",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/4/material/graph/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000008/graph/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000009/albedo-spd",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/2e62e4a0a11ba59ea57ab85d83f6a516d0c3aa4e263bffd251795e2872d405cf",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/3410c271d94f75b01306b354cbfb6d72b1c5e87bb6fc31ea5a0fcfe49b230373",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/3e09b9e34aa117754a0b6ed53bd84a3457f5f6250ade406ef0d383784985e136",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/7fe2601f238bafe0080d2615a201d570b18022e7f8311a8ad62a78c6852ccaca",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/8fc7548526c85aff2280dea2c191cb98bf1e2d69297b68c29075479d65850b7c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/da4ed0b45bd0dfcaa6477b56348f4bc1844788d13e58a782a87cf50793342ad3",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/fa909af347d72a3813c7f01a37c31bf6278ae5dde320630e0dfab703d88bf106",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/facff341d6f68211cb2d1541b435e98357e26656eb8a9875e4bf7b97981b4858",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/texture/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.gltf",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.material-preset",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.scene.native",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            }
+          ],
+          "diagnostics": []
+        },
+        {
+          "schema": "ure.preview.scene-tool-report/0.2",
+          "operation": "material-preset",
+          "ok": true,
+          "snapshot_identity": "975f54e34213be458dde02ce25403b7f2baa6d2e0111c86c304d8e3a10ea260c",
+          "material_program_set_identity": "a941856f6cf767205db30ffd0c3293e81da57a08ff6d45a9a5f4b53cce827fe1",
+          "semantic_identity": "e2353522a38e833d013122cba02f5e3861f8031fb169b34d0043962b002aed5c",
+          "inventory": {
+            "scenes": 1,
+            "resources": 8,
+            "caches": 0,
+            "dependencies": 0,
+            "material_programs": 10
+          },
+          "material_update": {
+            "classification": "HotUpdate",
+            "changed_material_uuids": [
+              "85cdc1dd-f632-89b4-a94a-cf41f22c673e"
+            ]
+          },
+          "budget": {
+            "stored_bytes": 3850,
+            "decompressed_bytes": 3850,
+            "resident_bytes": 3850,
+            "streamed_bytes": 0,
+            "temporary_bytes": 3850,
+            "output_bytes": 4919040
+          },
+          "feature_dispositions": [
+            {
+              "id": "material/151d544f-976b-8578-8269-24842b3049b6",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/1f1a5954-2df8-8d7a-80d9-bc4d33314760",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/2c617ae7-8e25-854b-98d8-29481e55cd1d",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/5a384928-c9b0-8daa-8be4-75fe07a05e3c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/65a50f93-08bf-8524-bef9-c8d9b3a52d64",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/80e2ce03-1bc0-8ab2-9957-b70378a3d163",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/85cdc1dd-f632-89b4-a94a-cf41f22c673e",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/a71371f8-eecf-8dfa-a25d-417901325f3e",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/b97eb46d-c367-81ed-9aae-d121c25e1fe4",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/df84358d-ecfa-88db-9b9f-f3153e30e1f8",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/image/00000000",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/0/material/albedo-spd",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/4/material/graph/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000008/graph/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000009/albedo-spd",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/2e62e4a0a11ba59ea57ab85d83f6a516d0c3aa4e263bffd251795e2872d405cf",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/3410c271d94f75b01306b354cbfb6d72b1c5e87bb6fc31ea5a0fcfe49b230373",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/3e09b9e34aa117754a0b6ed53bd84a3457f5f6250ade406ef0d383784985e136",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/7fe2601f238bafe0080d2615a201d570b18022e7f8311a8ad62a78c6852ccaca",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/8fc7548526c85aff2280dea2c191cb98bf1e2d69297b68c29075479d65850b7c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/da4ed0b45bd0dfcaa6477b56348f4bc1844788d13e58a782a87cf50793342ad3",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/fa909af347d72a3813c7f01a37c31bf6278ae5dde320630e0dfab703d88bf106",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/facff341d6f68211cb2d1541b435e98357e26656eb8a9875e4bf7b97981b4858",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/texture/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.gltf",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.material-preset",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.scene.native",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            }
+          ],
+          "diagnostics": []
+        }
+      ],
+      "materialx_export": [
+        {
+          "schema": "ure.preview.scene-tool-report/0.2",
+          "operation": "material-export",
+          "ok": true,
+          "snapshot_identity": "975f54e34213be458dde02ce25403b7f2baa6d2e0111c86c304d8e3a10ea260c",
+          "material_program_set_identity": "a941856f6cf767205db30ffd0c3293e81da57a08ff6d45a9a5f4b53cce827fe1",
+          "semantic_identity": "e2353522a38e833d013122cba02f5e3861f8031fb169b34d0043962b002aed5c",
+          "inventory": {
+            "scenes": 0,
+            "resources": 14,
+            "caches": 0,
+            "dependencies": 0,
+            "material_programs": 10
+          },
+          "adapter_loss_report": {
+            "schema": "ure.adapter.loss/1.0",
+            "target": "materialx",
+            "lossless": true,
+            "exportable": true,
+            "losses": []
+          },
+          "adapter_loss_report_identity": "db6f889f321fc083f6ee50780fcef6a930d6243d15dff982cafb709f97e1510d",
+          "material_update": {
+            "classification": "HotUpdate",
+            "changed_material_uuids": []
+          },
+          "budget": {
+            "stored_bytes": 3850,
+            "decompressed_bytes": 3850,
+            "resident_bytes": 3850,
+            "streamed_bytes": 0,
+            "temporary_bytes": 3850,
+            "output_bytes": 4919040
+          },
+          "feature_dispositions": [
+            {
+              "id": "material/151d544f-976b-8578-8269-24842b3049b6",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/1f1a5954-2df8-8d7a-80d9-bc4d33314760",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/2c617ae7-8e25-854b-98d8-29481e55cd1d",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/5a384928-c9b0-8daa-8be4-75fe07a05e3c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/65a50f93-08bf-8524-bef9-c8d9b3a52d64",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/80e2ce03-1bc0-8ab2-9957-b70378a3d163",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/85cdc1dd-f632-89b4-a94a-cf41f22c673e",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/a71371f8-eecf-8dfa-a25d-417901325f3e",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/b97eb46d-c367-81ed-9aae-d121c25e1fe4",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/df84358d-ecfa-88db-9b9f-f3153e30e1f8",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/image/00000000",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/0/material/albedo-spd",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/4/material/graph/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000008/graph/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000009/albedo-spd",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/2e62e4a0a11ba59ea57ab85d83f6a516d0c3aa4e263bffd251795e2872d405cf",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/3410c271d94f75b01306b354cbfb6d72b1c5e87bb6fc31ea5a0fcfe49b230373",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/3e09b9e34aa117754a0b6ed53bd84a3457f5f6250ade406ef0d383784985e136",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/7fe2601f238bafe0080d2615a201d570b18022e7f8311a8ad62a78c6852ccaca",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/8fc7548526c85aff2280dea2c191cb98bf1e2d69297b68c29075479d65850b7c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/da4ed0b45bd0dfcaa6477b56348f4bc1844788d13e58a782a87cf50793342ad3",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/fa909af347d72a3813c7f01a37c31bf6278ae5dde320630e0dfab703d88bf106",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/facff341d6f68211cb2d1541b435e98357e26656eb8a9875e4bf7b97981b4858",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/texture/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.gltf",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.material-preset",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.scene.native",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            }
+          ],
+          "diagnostics": []
+        },
+        {
+          "schema": "ure.preview.scene-tool-report/0.2",
+          "operation": "material-export",
+          "ok": true,
+          "snapshot_identity": "975f54e34213be458dde02ce25403b7f2baa6d2e0111c86c304d8e3a10ea260c",
+          "material_program_set_identity": "a941856f6cf767205db30ffd0c3293e81da57a08ff6d45a9a5f4b53cce827fe1",
+          "semantic_identity": "e2353522a38e833d013122cba02f5e3861f8031fb169b34d0043962b002aed5c",
+          "inventory": {
+            "scenes": 0,
+            "resources": 14,
+            "caches": 0,
+            "dependencies": 0,
+            "material_programs": 10
+          },
+          "adapter_loss_report": {
+            "schema": "ure.adapter.loss/1.0",
+            "target": "materialx",
+            "lossless": true,
+            "exportable": true,
+            "losses": []
+          },
+          "adapter_loss_report_identity": "db6f889f321fc083f6ee50780fcef6a930d6243d15dff982cafb709f97e1510d",
+          "material_update": {
+            "classification": "HotUpdate",
+            "changed_material_uuids": []
+          },
+          "budget": {
+            "stored_bytes": 3850,
+            "decompressed_bytes": 3850,
+            "resident_bytes": 3850,
+            "streamed_bytes": 0,
+            "temporary_bytes": 3850,
+            "output_bytes": 4919040
+          },
+          "feature_dispositions": [
+            {
+              "id": "material/151d544f-976b-8578-8269-24842b3049b6",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/1f1a5954-2df8-8d7a-80d9-bc4d33314760",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/2c617ae7-8e25-854b-98d8-29481e55cd1d",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/5a384928-c9b0-8daa-8be4-75fe07a05e3c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/65a50f93-08bf-8524-bef9-c8d9b3a52d64",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/80e2ce03-1bc0-8ab2-9957-b70378a3d163",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/85cdc1dd-f632-89b4-a94a-cf41f22c673e",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/a71371f8-eecf-8dfa-a25d-417901325f3e",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/b97eb46d-c367-81ed-9aae-d121c25e1fe4",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/df84358d-ecfa-88db-9b9f-f3153e30e1f8",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/image/00000000",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/0/material/albedo-spd",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/4/material/graph/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000008/graph/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000009/albedo-spd",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/2e62e4a0a11ba59ea57ab85d83f6a516d0c3aa4e263bffd251795e2872d405cf",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/3410c271d94f75b01306b354cbfb6d72b1c5e87bb6fc31ea5a0fcfe49b230373",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/3e09b9e34aa117754a0b6ed53bd84a3457f5f6250ade406ef0d383784985e136",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/7fe2601f238bafe0080d2615a201d570b18022e7f8311a8ad62a78c6852ccaca",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/8fc7548526c85aff2280dea2c191cb98bf1e2d69297b68c29075479d65850b7c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/da4ed0b45bd0dfcaa6477b56348f4bc1844788d13e58a782a87cf50793342ad3",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/fa909af347d72a3813c7f01a37c31bf6278ae5dde320630e0dfab703d88bf106",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/facff341d6f68211cb2d1541b435e98357e26656eb8a9875e4bf7b97981b4858",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/texture/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.gltf",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.material-preset",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.scene.native",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            }
+          ],
+          "diagnostics": []
+        }
+      ],
+      "materialx_import": [
+        {
+          "schema": "ure.preview.scene-tool-report/0.2",
+          "operation": "material-import",
+          "ok": true,
+          "snapshot_identity": "677b775f8d507a1b2cc516eed3b3471dd81c87d509d4166776b27e2e9cf3cbcc",
+          "material_program_set_identity": "c1b08a541fdfa33faac026ab8b31fa09240e65eecb08eb61cf363d566e1bb55d",
+          "semantic_identity": "6ab82f83363ec28aa4384f910dd495b90006e34f066982c93fa943fb4dfe0423",
+          "inventory": {
+            "scenes": 1,
+            "resources": 9,
+            "caches": 0,
+            "dependencies": 0,
+            "material_programs": 10
+          },
+          "adapter_loss_report": {
+            "schema": "ure.adapter.loss/1.0",
+            "target": "materialx",
+            "lossless": true,
+            "exportable": true,
+            "losses": []
+          },
+          "adapter_loss_report_identity": "db6f889f321fc083f6ee50780fcef6a930d6243d15dff982cafb709f97e1510d",
+          "material_update": {
+            "classification": "HotUpdate",
+            "changed_material_uuids": [
+              "85cdc1dd-f632-89b4-a94a-cf41f22c673e"
+            ]
+          },
+          "budget": {
+            "stored_bytes": 4200,
+            "decompressed_bytes": 4200,
+            "resident_bytes": 4200,
+            "streamed_bytes": 0,
+            "temporary_bytes": 4200,
+            "output_bytes": 4919040
+          },
+          "feature_dispositions": [
+            {
+              "id": "material/151d544f-976b-8578-8269-24842b3049b6",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/1f1a5954-2df8-8d7a-80d9-bc4d33314760",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/2c617ae7-8e25-854b-98d8-29481e55cd1d",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/5a384928-c9b0-8daa-8be4-75fe07a05e3c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/65a50f93-08bf-8524-bef9-c8d9b3a52d64",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/80e2ce03-1bc0-8ab2-9957-b70378a3d163",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/85cdc1dd-f632-89b4-a94a-cf41f22c673e",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/a71371f8-eecf-8dfa-a25d-417901325f3e",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/b97eb46d-c367-81ed-9aae-d121c25e1fe4",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/df84358d-ecfa-88db-9b9f-f3153e30e1f8",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/image/00000000",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/0/material/albedo-spd",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/4/material/graph/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000008/graph/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000009/albedo-spd",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/2e62e4a0a11ba59ea57ab85d83f6a516d0c3aa4e263bffd251795e2872d405cf",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/3410c271d94f75b01306b354cbfb6d72b1c5e87bb6fc31ea5a0fcfe49b230373",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/3e09b9e34aa117754a0b6ed53bd84a3457f5f6250ade406ef0d383784985e136",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/7fe2601f238bafe0080d2615a201d570b18022e7f8311a8ad62a78c6852ccaca",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/8fc7548526c85aff2280dea2c191cb98bf1e2d69297b68c29075479d65850b7c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/da4ed0b45bd0dfcaa6477b56348f4bc1844788d13e58a782a87cf50793342ad3",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/fa909af347d72a3813c7f01a37c31bf6278ae5dde320630e0dfab703d88bf106",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/facff341d6f68211cb2d1541b435e98357e26656eb8a9875e4bf7b97981b4858",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/provenance/materialx/6695bd6059c90291",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/texture/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.gltf",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.materialx",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.scene.native",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            }
+          ],
+          "diagnostics": []
+        },
+        {
+          "schema": "ure.preview.scene-tool-report/0.2",
+          "operation": "material-import",
+          "ok": true,
+          "snapshot_identity": "677b775f8d507a1b2cc516eed3b3471dd81c87d509d4166776b27e2e9cf3cbcc",
+          "material_program_set_identity": "c1b08a541fdfa33faac026ab8b31fa09240e65eecb08eb61cf363d566e1bb55d",
+          "semantic_identity": "6ab82f83363ec28aa4384f910dd495b90006e34f066982c93fa943fb4dfe0423",
+          "inventory": {
+            "scenes": 1,
+            "resources": 9,
+            "caches": 0,
+            "dependencies": 0,
+            "material_programs": 10
+          },
+          "adapter_loss_report": {
+            "schema": "ure.adapter.loss/1.0",
+            "target": "materialx",
+            "lossless": true,
+            "exportable": true,
+            "losses": []
+          },
+          "adapter_loss_report_identity": "db6f889f321fc083f6ee50780fcef6a930d6243d15dff982cafb709f97e1510d",
+          "material_update": {
+            "classification": "HotUpdate",
+            "changed_material_uuids": [
+              "85cdc1dd-f632-89b4-a94a-cf41f22c673e"
+            ]
+          },
+          "budget": {
+            "stored_bytes": 4200,
+            "decompressed_bytes": 4200,
+            "resident_bytes": 4200,
+            "streamed_bytes": 0,
+            "temporary_bytes": 4200,
+            "output_bytes": 4919040
+          },
+          "feature_dispositions": [
+            {
+              "id": "material/151d544f-976b-8578-8269-24842b3049b6",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/1f1a5954-2df8-8d7a-80d9-bc4d33314760",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/2c617ae7-8e25-854b-98d8-29481e55cd1d",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/5a384928-c9b0-8daa-8be4-75fe07a05e3c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/65a50f93-08bf-8524-bef9-c8d9b3a52d64",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/80e2ce03-1bc0-8ab2-9957-b70378a3d163",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/85cdc1dd-f632-89b4-a94a-cf41f22c673e",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/a71371f8-eecf-8dfa-a25d-417901325f3e",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/b97eb46d-c367-81ed-9aae-d121c25e1fe4",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "material/df84358d-ecfa-88db-9b9f-f3153e30e1f8",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/image/00000000",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/0/material/albedo-spd",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/instance/4/material/graph/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000008/graph/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/material/00000009/albedo-spd",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/2e62e4a0a11ba59ea57ab85d83f6a516d0c3aa4e263bffd251795e2872d405cf",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/3410c271d94f75b01306b354cbfb6d72b1c5e87bb6fc31ea5a0fcfe49b230373",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/3e09b9e34aa117754a0b6ed53bd84a3457f5f6250ade406ef0d383784985e136",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/7fe2601f238bafe0080d2615a201d570b18022e7f8311a8ad62a78c6852ccaca",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/8fc7548526c85aff2280dea2c191cb98bf1e2d69297b68c29075479d65850b7c",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/da4ed0b45bd0dfcaa6477b56348f4bc1844788d13e58a782a87cf50793342ad3",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/fa909af347d72a3813c7f01a37c31bf6278ae5dde320630e0dfab703d88bf106",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/mesh/facff341d6f68211cb2d1541b435e98357e26656eb8a9875e4bf7b97981b4858",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/provenance/materialx/6695bd6059c90291",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "resource/texture/0",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.gltf",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.adapter.materialx",
+              "requirement": 1,
+              "disposition": "Executed",
+              "detail": 0
+            },
+            {
+              "id": "ure.scene.native",
+              "requirement": 0,
+              "disposition": "Executed",
+              "detail": 0
+            }
+          ],
+          "diagnostics": []
+        }
+      ]
+    },
+    "runs": [
+      {
+        "transport": "direct",
+        "scene": "authored_gltf",
+        "requested_samples": 64,
+        "accepted_samples": 64,
+        "completed_samples": 64,
+        "resolution": "64x64",
+        "eligible_integrator_modes": 255,
+        "qualified_integrator_modes": 103,
+        "executed_integrator_modes": 39,
+        "plan_identity": "5312168ea12eefcd6618ad81a17ee98f9ecb313a667ff308ca00dcf0392526ca",
+        "frame_content_identity": "21ae70b95df8a62602738ddc3e5acd0b5ce850902d23fa9a912ad782893eca6e",
+        "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "raw_sha256": "4dfd28b6bf2098ef4eaf178d598f620ac40d9c3652b629a52f4a23851cbb536f",
+        "png_sha256": "49a3b851bc7bd7f2be0b266423bd566847fd1b7b12a6c491c92655296fcb1950",
+        "metrics": {
+          "schema": "ure.preview.product-image-validation/1.0",
+          "raw_authority": {
+            "format": "PFM RGB float32 little-endian",
+            "orientation": "bottom-left",
+            "color_space": "linear_sRGB_D65",
+            "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\authored_gltf-direct.spp64.pfm",
+            "final_sha256": "4dfd28b6bf2098ef4eaf178d598f620ac40d9c3652b629a52f4a23851cbb536f",
+            "low_sha256": "fdffa35057d2734a305c8109cde813d88ad5662754d4f9d9b653bebb6ac07c03",
+            "mid_sha256": "56556aa66139ff809f524d072e211ad9f015ab4c32d1dee43af025cad0398fec"
+          },
+          "derived_view": {
+            "format": "PNG RGB8 sRGB",
+            "orientation": "top-left",
+            "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+            "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\authored_gltf-direct.png",
+            "sha256": "49a3b851bc7bd7f2be0b266423bd566847fd1b7b12a6c491c92655296fcb1950"
+          },
+          "metrics": {
+            "width": 64,
+            "height": 64,
+            "finite": true,
+            "minimum": 0.0,
+            "maximum": 0.3632730543613434,
+            "mean_luminance": 0.08939315971074398,
+            "positive_energy": 366.1543821752067,
+            "luminance_standard_deviation": 0.038200825210849054,
+            "mean_spatial_gradient": 0.007986684243680242,
+            "nonzero_pixel_fraction": 1.0,
+            "negative_component_fraction": 0.0
+          },
+          "convergence": {
+            "metric": "relative_rgb_nrmse_to_nested_final",
+            "low_to_final": 0.2753484994559199,
+            "mid_to_final": 0.16733056857362752,
+            "improvement_ratio": 0.6077046684629389
+          }
+        }
+      },
+      {
+        "transport": "worker",
+        "scene": "authored_gltf",
+        "requested_samples": 64,
+        "accepted_samples": 64,
+        "completed_samples": 64,
+        "resolution": "64x64",
+        "eligible_integrator_modes": 255,
+        "qualified_integrator_modes": 103,
+        "executed_integrator_modes": 39,
+        "plan_identity": "5312168ea12eefcd6618ad81a17ee98f9ecb313a667ff308ca00dcf0392526ca",
+        "frame_content_identity": "21ae70b95df8a62602738ddc3e5acd0b5ce850902d23fa9a912ad782893eca6e",
+        "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "raw_sha256": "4dfd28b6bf2098ef4eaf178d598f620ac40d9c3652b629a52f4a23851cbb536f",
+        "png_sha256": "49a3b851bc7bd7f2be0b266423bd566847fd1b7b12a6c491c92655296fcb1950",
+        "metrics": {
+          "schema": "ure.preview.product-image-validation/1.0",
+          "raw_authority": {
+            "format": "PFM RGB float32 little-endian",
+            "orientation": "bottom-left",
+            "color_space": "linear_sRGB_D65",
+            "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\authored_gltf-worker.spp64.pfm",
+            "final_sha256": "4dfd28b6bf2098ef4eaf178d598f620ac40d9c3652b629a52f4a23851cbb536f",
+            "low_sha256": "25d043c2f7fbefc09dfd6b6cfd17858c52175fe04b38b6e634de515fd9d5665f",
+            "mid_sha256": "56556aa66139ff809f524d072e211ad9f015ab4c32d1dee43af025cad0398fec"
+          },
+          "derived_view": {
+            "format": "PNG RGB8 sRGB",
+            "orientation": "top-left",
+            "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+            "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\authored_gltf-worker.png",
+            "sha256": "49a3b851bc7bd7f2be0b266423bd566847fd1b7b12a6c491c92655296fcb1950"
+          },
+          "metrics": {
+            "width": 64,
+            "height": 64,
+            "finite": true,
+            "minimum": 0.0,
+            "maximum": 0.3632730543613434,
+            "mean_luminance": 0.08939315971074398,
+            "positive_energy": 366.1543821752067,
+            "luminance_standard_deviation": 0.038200825210849054,
+            "mean_spatial_gradient": 0.007986684243680242,
+            "nonzero_pixel_fraction": 1.0,
+            "negative_component_fraction": 0.0
+          },
+          "convergence": {
+            "metric": "relative_rgb_nrmse_to_nested_final",
+            "low_to_final": 0.24399434948697854,
+            "mid_to_final": 0.16733056857362752,
+            "improvement_ratio": 0.685796900319438
+          }
+        }
+      },
+      {
+        "transport": "direct",
+        "scene": "authored_preset",
+        "requested_samples": 16,
+        "accepted_samples": 16,
+        "completed_samples": 16,
+        "resolution": "854x480",
+        "eligible_integrator_modes": 55,
+        "qualified_integrator_modes": 7,
+        "executed_integrator_modes": 7,
+        "plan_identity": "eb527d42e7ad71888fe1e3c9e31c7b74b3dd0b5008f9a10b0238a29d3012c710",
+        "frame_content_identity": "2f2ce79a72490c5888bb8208f67893ad7190f25c5a3407f9ae1e436e849a2e63",
+        "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "raw_sha256": "c306c7a858aa06392cdd13a5b5c0b4775ac7e7863ec8c6024d70f620fb6e1cb5",
+        "png_sha256": "4f375f76328c35767d22a17d4d3176ce66e90cfed6edc243e8cd2f06da86a56f",
+        "metrics": {
+          "schema": "ure.preview.product-image-validation/1.0",
+          "raw_authority": {
+            "format": "PFM RGB float32 little-endian",
+            "orientation": "bottom-left",
+            "color_space": "linear_sRGB_D65",
+            "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\authored_preset-direct.spp16.pfm",
+            "final_sha256": "c306c7a858aa06392cdd13a5b5c0b4775ac7e7863ec8c6024d70f620fb6e1cb5",
+            "low_sha256": "716a3091d07257d378d4ef49190d966163774c905599c48aacea8b840cd89843",
+            "mid_sha256": "b48421cbde63772d65057217c5d3f9956e61ac5c984d911e7406a829dbf66d8a"
+          },
+          "derived_view": {
+            "format": "PNG RGB8 sRGB",
+            "orientation": "top-left",
+            "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+            "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\authored_preset-direct.png",
+            "sha256": "4f375f76328c35767d22a17d4d3176ce66e90cfed6edc243e8cd2f06da86a56f"
+          },
+          "metrics": {
+            "width": 854,
+            "height": 480,
+            "finite": true,
+            "minimum": 0.0,
+            "maximum": 7.247698783874512,
+            "mean_luminance": 0.11186664027331977,
+            "positive_energy": 45856.37318083821,
+            "luminance_standard_deviation": 0.23945699679755963,
+            "mean_spatial_gradient": 0.010334066422769407,
+            "nonzero_pixel_fraction": 0.8583650468384075,
+            "negative_component_fraction": 0.0
+          },
+          "convergence": {
+            "metric": "relative_rgb_nrmse_to_nested_final",
+            "low_to_final": 0.10990042790808258,
+            "mid_to_final": 0.06961366842251035,
+            "improvement_ratio": 0.6334249078696321
+          }
+        }
+      },
+      {
+        "transport": "worker",
+        "scene": "authored_preset",
+        "requested_samples": 16,
+        "accepted_samples": 16,
+        "completed_samples": 16,
+        "resolution": "854x480",
+        "eligible_integrator_modes": 55,
+        "qualified_integrator_modes": 7,
+        "executed_integrator_modes": 7,
+        "plan_identity": "eb527d42e7ad71888fe1e3c9e31c7b74b3dd0b5008f9a10b0238a29d3012c710",
+        "frame_content_identity": "2f2ce79a72490c5888bb8208f67893ad7190f25c5a3407f9ae1e436e849a2e63",
+        "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "raw_sha256": "c306c7a858aa06392cdd13a5b5c0b4775ac7e7863ec8c6024d70f620fb6e1cb5",
+        "png_sha256": "4f375f76328c35767d22a17d4d3176ce66e90cfed6edc243e8cd2f06da86a56f",
+        "metrics": {
+          "schema": "ure.preview.product-image-validation/1.0",
+          "raw_authority": {
+            "format": "PFM RGB float32 little-endian",
+            "orientation": "bottom-left",
+            "color_space": "linear_sRGB_D65",
+            "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\authored_preset-worker.spp16.pfm",
+            "final_sha256": "c306c7a858aa06392cdd13a5b5c0b4775ac7e7863ec8c6024d70f620fb6e1cb5",
+            "low_sha256": "716a3091d07257d378d4ef49190d966163774c905599c48aacea8b840cd89843",
+            "mid_sha256": "b48421cbde63772d65057217c5d3f9956e61ac5c984d911e7406a829dbf66d8a"
+          },
+          "derived_view": {
+            "format": "PNG RGB8 sRGB",
+            "orientation": "top-left",
+            "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+            "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\authored_preset-worker.png",
+            "sha256": "4f375f76328c35767d22a17d4d3176ce66e90cfed6edc243e8cd2f06da86a56f"
+          },
+          "metrics": {
+            "width": 854,
+            "height": 480,
+            "finite": true,
+            "minimum": 0.0,
+            "maximum": 7.247698783874512,
+            "mean_luminance": 0.11186664027331977,
+            "positive_energy": 45856.37318083821,
+            "luminance_standard_deviation": 0.23945699679755963,
+            "mean_spatial_gradient": 0.010334066422769407,
+            "nonzero_pixel_fraction": 0.8583650468384075,
+            "negative_component_fraction": 0.0
+          },
+          "convergence": {
+            "metric": "relative_rgb_nrmse_to_nested_final",
+            "low_to_final": 0.10990042790808258,
+            "mid_to_final": 0.06961366842251035,
+            "improvement_ratio": 0.6334249078696321
+          }
+        }
+      },
+      {
+        "transport": "direct",
+        "scene": "authored_materialx",
+        "requested_samples": 16,
+        "accepted_samples": 16,
+        "completed_samples": 16,
+        "resolution": "854x480",
+        "eligible_integrator_modes": 55,
+        "qualified_integrator_modes": 7,
+        "executed_integrator_modes": 7,
+        "plan_identity": "c9c242de1eb01ff05620b760cc594f4d8728105346890f059d3df3444ed9f9fe",
+        "frame_content_identity": "9f4e18d76b4e239cd93da5f512dcb386d4a02ca467f760b0dd36a69421d7bc30",
+        "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "raw_sha256": "00808a7ddec4aecfc3094d66bf666b1666a1c61198e8ff12bc737d9380bfac4d",
+        "png_sha256": "f4191f5ffece0c295fc41f4d3df4c24260dfd841e431338ffe706fab1ebf4483",
+        "metrics": {
+          "schema": "ure.preview.product-image-validation/1.0",
+          "raw_authority": {
+            "format": "PFM RGB float32 little-endian",
+            "orientation": "bottom-left",
+            "color_space": "linear_sRGB_D65",
+            "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\authored_materialx-direct.spp16.pfm",
+            "final_sha256": "00808a7ddec4aecfc3094d66bf666b1666a1c61198e8ff12bc737d9380bfac4d",
+            "low_sha256": "dc9ed61aad929f43e97021b01e6032ba3416534b7932dbc9bd93596d975edec8",
+            "mid_sha256": "42f96fc1b2cfdd9a54e1b9b622205d206437a4ee0e70577e40b898878a4f02a6"
+          },
+          "derived_view": {
+            "format": "PNG RGB8 sRGB",
+            "orientation": "top-left",
+            "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+            "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\authored_materialx-direct.png",
+            "sha256": "f4191f5ffece0c295fc41f4d3df4c24260dfd841e431338ffe706fab1ebf4483"
+          },
+          "metrics": {
+            "width": 854,
+            "height": 480,
+            "finite": true,
+            "minimum": 0.0,
+            "maximum": 7.247698783874512,
+            "mean_luminance": 0.10992646333229772,
+            "positive_energy": 45061.05584917494,
+            "luminance_standard_deviation": 0.2395428379413046,
+            "mean_spatial_gradient": 0.009680773750351087,
+            "nonzero_pixel_fraction": 0.8591798399687745,
+            "negative_component_fraction": 0.0
+          },
+          "convergence": {
+            "metric": "relative_rgb_nrmse_to_nested_final",
+            "low_to_final": 0.10750009838456676,
+            "mid_to_final": 0.06726155447139782,
+            "improvement_ratio": 0.6256883061704641
+          }
+        }
+      },
+      {
+        "transport": "worker",
+        "scene": "authored_materialx",
+        "requested_samples": 16,
+        "accepted_samples": 16,
+        "completed_samples": 16,
+        "resolution": "854x480",
+        "eligible_integrator_modes": 55,
+        "qualified_integrator_modes": 7,
+        "executed_integrator_modes": 7,
+        "plan_identity": "c9c242de1eb01ff05620b760cc594f4d8728105346890f059d3df3444ed9f9fe",
+        "frame_content_identity": "9f4e18d76b4e239cd93da5f512dcb386d4a02ca467f760b0dd36a69421d7bc30",
+        "device_identity": "f00b1678d8588fa505882761eaf4a1eeb93dcbca6c22243050a34b96df863e75",
+        "driver_identity": "CUDA driver 13.3",
+        "compiler_identity": "CUDA toolkit 13.3",
+        "adapter_id": "cuda:45c8e9921a9c327d8838d42f4842e4dd",
+        "raw_sha256": "00808a7ddec4aecfc3094d66bf666b1666a1c61198e8ff12bc737d9380bfac4d",
+        "png_sha256": "f4191f5ffece0c295fc41f4d3df4c24260dfd841e431338ffe706fab1ebf4483",
+        "metrics": {
+          "schema": "ure.preview.product-image-validation/1.0",
+          "raw_authority": {
+            "format": "PFM RGB float32 little-endian",
+            "orientation": "bottom-left",
+            "color_space": "linear_sRGB_D65",
+            "final": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\authored_materialx-worker.spp16.pfm",
+            "final_sha256": "00808a7ddec4aecfc3094d66bf666b1666a1c61198e8ff12bc737d9380bfac4d",
+            "low_sha256": "dc9ed61aad929f43e97021b01e6032ba3416534b7932dbc9bd93596d975edec8",
+            "mid_sha256": "42f96fc1b2cfdd9a54e1b9b622205d206437a4ee0e70577e40b898878a4f02a6"
+          },
+          "derived_view": {
+            "format": "PNG RGB8 sRGB",
+            "orientation": "top-left",
+            "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+            "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv3_functional\\authored_materialx-worker.png",
+            "sha256": "f4191f5ffece0c295fc41f4d3df4c24260dfd841e431338ffe706fab1ebf4483"
+          },
+          "metrics": {
+            "width": 854,
+            "height": 480,
+            "finite": true,
+            "minimum": 0.0,
+            "maximum": 7.247698783874512,
+            "mean_luminance": 0.10992646333229772,
+            "positive_energy": 45061.05584917494,
+            "luminance_standard_deviation": 0.2395428379413046,
+            "mean_spatial_gradient": 0.009680773750351087,
+            "nonzero_pixel_fraction": 0.8591798399687745,
+            "negative_component_fraction": 0.0
+          },
+          "convergence": {
+            "metric": "relative_rgb_nrmse_to_nested_final",
+            "low_to_final": 0.10750009838456676,
+            "mid_to_final": 0.06726155447139782,
+            "improvement_ratio": 0.6256883061704641
+          }
+        }
+      }
+    ],
+    "transport_parity": [
+      {
+        "schema": "ure.preview.product-image-parity/1.0",
+        "metric": "relative_rgb_nrmse",
+        "candidate_sha256": "4dfd28b6bf2098ef4eaf178d598f620ac40d9c3652b629a52f4a23851cbb536f",
+        "reference_sha256": "4dfd28b6bf2098ef4eaf178d598f620ac40d9c3652b629a52f4a23851cbb536f",
+        "relative_rgb_nrmse": 0.0,
+        "maximum_relative_rgb_nrmse": 0.005,
+        "dimensions": [
+          64,
+          64
+        ],
+        "byte_identical": true
+      },
+      {
+        "schema": "ure.preview.product-image-parity/1.0",
+        "metric": "relative_rgb_nrmse",
+        "candidate_sha256": "c306c7a858aa06392cdd13a5b5c0b4775ac7e7863ec8c6024d70f620fb6e1cb5",
+        "reference_sha256": "c306c7a858aa06392cdd13a5b5c0b4775ac7e7863ec8c6024d70f620fb6e1cb5",
+        "relative_rgb_nrmse": 0.0,
+        "maximum_relative_rgb_nrmse": 0.005,
+        "dimensions": [
+          854,
+          480
+        ],
+        "byte_identical": true
+      },
+      {
+        "schema": "ure.preview.product-image-parity/1.0",
+        "metric": "relative_rgb_nrmse",
+        "candidate_sha256": "00808a7ddec4aecfc3094d66bf666b1666a1c61198e8ff12bc737d9380bfac4d",
+        "reference_sha256": "00808a7ddec4aecfc3094d66bf666b1666a1c61198e8ff12bc737d9380bfac4d",
+        "relative_rgb_nrmse": 0.0,
+        "maximum_relative_rgb_nrmse": 0.005,
+        "dimensions": [
+          854,
+          480
+        ],
+        "byte_identical": true
+      }
+    ]
+  }
+}

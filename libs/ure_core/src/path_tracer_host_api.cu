@@ -1670,12 +1670,16 @@ PathGuidingMemoryPlan plan_path_guiding_memory(const ure::RenderConfig& config,
     constexpr size_t kMiB = 1024ull * 1024ull;
     const size_t reserve = std::max<size_t>(256ull * kMiB, total_device_bytes / 10);
     const size_t allocatable = free_device_bytes > reserve ? free_device_bytes - reserve : 0;
+    size_t configured_limit = 0;
     if (config.path_guiding.memory_budget_mb > 0) {
         const size_t requested = static_cast<size_t>(config.path_guiding.memory_budget_mb) * kMiB;
-        plan.budget_bytes = std::min(requested, allocatable);
+        configured_limit = std::min(requested, free_device_bytes);
     } else {
-        plan.budget_bytes = std::min({allocatable, total_device_bytes / 20, 512ull * kMiB});
+        configured_limit = std::min({free_device_bytes, total_device_bytes / 20, 512ull * kMiB});
     }
+    const size_t minimum_viable = std::min(plan.required_bytes, free_device_bytes);
+    plan.budget_bytes = std::min(
+        configured_limit, std::max(allocatable, minimum_viable));
     if (plan.required_bytes > plan.budget_bytes) {
         throw std::runtime_error(
             "Path guiding cache requires " + std::to_string(plan.required_bytes) +

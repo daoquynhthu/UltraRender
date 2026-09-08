@@ -12,7 +12,10 @@ enum ProductMessageKind:uint {
   SceneToolMigrate = 2147483717,
   SceneToolPack = 2147483718,
   SceneToolUnpack = 2147483719,
-  SceneToolRealize = 2147483720
+  SceneToolRealize = 2147483720,
+  SceneToolMaterialImport = 2147483721,
+  SceneToolMaterialExport = 2147483722,
+  SceneToolMaterialPreset = 2147483723
 }
 
 table SceneToolRequest {
@@ -29,6 +32,8 @@ table SceneToolRequest {
   max_decompression_ratio:uint (id: 10);
   temporary_budget_bytes:ulong (id: 11);
   allow_script_execution:bool = false (id: 12);
+  material_selector:string (id: 13);
+  preset_name:string (id: 14);
 }
 
 table SceneToolResult {
@@ -48,6 +53,9 @@ table SceneToolResult {
   dependency_count:ulong (id: 13);
   report:string (id: 14);
   output_bytes:ulong (id: 15);
+  material_program_set_identity:[ubyte] (id: 16);
+  material_program_count:ulong (id: 17);
+  adapter_loss_report_size:ulong (id: 18);
 }
 
 table ProductIdentitySet {
@@ -104,6 +112,9 @@ table ProductJobStatus {
   remaining_min_ns:ulong (id: 12);
   remaining_max_ns:ulong (id: 13);
   latest_frame_generation:ulong (id: 14);
+  eligible_integrator_modes:ulong (id: 15);
+  qualified_integrator_modes:ulong (id: 16);
+  executed_integrator_modes:ulong (id: 17);
 }
 
 table ProductArtifactManifest {

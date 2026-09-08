@@ -970,9 +970,10 @@ __global__ __launch_bounds__(256) void shade_kernel(
              return;
         } else {
             float tr_vals[kMaxPacketLanes];
-            float prob_no_scatter = expf(-sigma_t_proposal * t_hit);
+            const float travel = fminf(t_hit, max_allowed);
+            float prob_no_scatter = expf(-sigma_t_proposal * travel);
             for (int c = 0; c < scene.num_spectral_channels; ++c) {
-                tr_vals[c] = expf(-sigma_t.values[c] * t_hit);
+                tr_vals[c] = expf(-sigma_t.values[c] * travel);
             }
 
             if (prob_no_scatter > 1e-6f) {

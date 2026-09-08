@@ -291,6 +291,9 @@ Json build_manifest() {
     field<std::uint64_t>(extension_types["ure_product_job_info_t"], "remaining_min_ns", offsetof(ure_product_job_info_t, remaining_min_ns));
     field<std::uint64_t>(extension_types["ure_product_job_info_t"], "remaining_max_ns", offsetof(ure_product_job_info_t, remaining_max_ns));
     field<std::uint64_t>(extension_types["ure_product_job_info_t"], "latest_frame_generation", offsetof(ure_product_job_info_t, latest_frame_generation));
+    field<std::uint64_t>(extension_types["ure_product_job_info_t"], "eligible_integrator_modes", offsetof(ure_product_job_info_t, eligible_integrator_modes));
+    field<std::uint64_t>(extension_types["ure_product_job_info_t"], "qualified_integrator_modes", offsetof(ure_product_job_info_t, qualified_integrator_modes));
+    field<std::uint64_t>(extension_types["ure_product_job_info_t"], "executed_integrator_modes", offsetof(ure_product_job_info_t, executed_integrator_modes));
     field<std::uint64_t[1]>(extension_types["ure_product_job_info_t"], "reserved", offsetof(ure_product_job_info_t, reserved));
     extension_types["ure_product_artifact_manifest_t"] = layout<ure_product_artifact_manifest_t>();
     field<ure_output_header_t>(extension_types["ure_product_artifact_manifest_t"], "header", offsetof(ure_product_artifact_manifest_t, header));
@@ -613,6 +616,8 @@ Json build_manifest() {
     field<ure_bool32_t>(extension_types["ure_scene_tool_request_t"], "allow_script_execution", offsetof(ure_scene_tool_request_t, allow_script_execution));
     field<std::uint32_t>(extension_types["ure_scene_tool_request_t"], "reserved32", offsetof(ure_scene_tool_request_t, reserved32));
     field<std::uint64_t[2]>(extension_types["ure_scene_tool_request_t"], "reserved", offsetof(ure_scene_tool_request_t, reserved));
+    field<ure_string_view_t>(extension_types["ure_scene_tool_request_t"], "material_selector", offsetof(ure_scene_tool_request_t, material_selector));
+    field<ure_string_view_t>(extension_types["ure_scene_tool_request_t"], "preset_name", offsetof(ure_scene_tool_request_t, preset_name));
     extension_types["ure_scene_tool_result_t"] = layout<ure_scene_tool_result_t>();
     field<ure_output_header_t>(extension_types["ure_scene_tool_result_t"], "header", offsetof(ure_scene_tool_result_t, header));
     field<std::uint32_t>(extension_types["ure_scene_tool_result_t"], "operation", offsetof(ure_scene_tool_result_t, operation));
@@ -632,6 +637,9 @@ Json build_manifest() {
     field<std::uint64_t>(extension_types["ure_scene_tool_result_t"], "dependency_count", offsetof(ure_scene_tool_result_t, dependency_count));
     field<std::uint64_t>(extension_types["ure_scene_tool_result_t"], "report_size", offsetof(ure_scene_tool_result_t, report_size));
     field<std::uint64_t[2]>(extension_types["ure_scene_tool_result_t"], "reserved", offsetof(ure_scene_tool_result_t, reserved));
+    field<ure_digest256_t>(extension_types["ure_scene_tool_result_t"], "material_program_set_identity", offsetof(ure_scene_tool_result_t, material_program_set_identity));
+    field<std::uint64_t>(extension_types["ure_scene_tool_result_t"], "material_program_count", offsetof(ure_scene_tool_result_t, material_program_count));
+    field<std::uint64_t>(extension_types["ure_scene_tool_result_t"], "adapter_loss_report_size", offsetof(ure_scene_tool_result_t, adapter_loss_report_size));
     extension_types["ure_scene_tool_interface_t"] = layout<ure_scene_tool_interface_t>();
     field<ure_interface_table_header_t>(extension_types["ure_scene_tool_interface_t"], "header", offsetof(ure_scene_tool_interface_t, header));
     field<decltype(ure_scene_tool_interface_t::execute)>(extension_types["ure_scene_tool_interface_t"], "execute", offsetof(ure_scene_tool_interface_t, execute));

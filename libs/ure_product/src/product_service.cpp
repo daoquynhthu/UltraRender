@@ -87,6 +87,13 @@ Identity plan_identity(const ProductIdentitySet& identities,
     return content_identity(bytes);
 }
 
+ProductFailureCode material_failure_code(std::uint32_t detail) {
+    if (detail == 700 || detail == 702 || detail == 703 ||
+        (detail >= 711 && detail <= 714))
+        return ProductFailureCode::MalformedScene;
+    return ProductFailureCode::CapabilityNotApplicable;
+}
+
 RenderConfig render_config(const ProductSnapshot& snapshot,
                            const ProductObjective& objective) {
     RenderConfig config = snapshot.solver_config().value_or(RenderConfig{});
@@ -95,6 +102,16 @@ RenderConfig render_config(const ProductSnapshot& snapshot,
         config.automatic_integrator.enabled = true;
     } else {
         config.automatic_integrator.enabled = false;
+    }
+    try {
+        configure_product_material_execution(snapshot.material_programs(),
+                                             config);
+    } catch (const ProductMaterialError& error) {
+        throw ProductError(
+            material_failure_code(error.detail()),
+            error.code() + " at " + error.field_path() + ": " + error.what(),
+            error.detail(), error.code(), error.field_path(),
+            error.recovery());
     }
     config.automatic_integrator.time_budget_milliseconds =
         objective.wall_time_budget_ns / UINT64_C(1000000);
@@ -210,6 +227,8 @@ struct PreparedRenderer {
     ProductMemoryPlan memory_plan;
     ProductExecutionInfo execution;
     bool automatic{};
+    IntegratorMode integrator_mode{IntegratorMode::Wavefront};
+    std::uint64_t eligible_integrator_modes{};
 };
 
 PreparedRenderer make_renderer(
@@ -265,7 +284,9 @@ PreparedRenderer make_renderer(
     execution.provider = 1;
     return PreparedRenderer{std::move(renderer), memory_plan,
                             std::move(execution),
-                            config.integrator.mode == IntegratorMode::Automatic};
+                            config.integrator.mode == IntegratorMode::Automatic,
+                            config.integrator.mode,
+                            config.automatic_integrator.eligible_integrator_modes};
 }
 
 std::shared_ptr<const ProductSnapshot> realize_or_throw(
@@ -287,8 +308,13 @@ std::shared_ptr<const ProductSnapshot> realize_or_throw(
              diagnostic.domain == ProductSceneDiagnosticDomain::Package ||
              diagnostic.domain == ProductSceneDiagnosticDomain::Procedural)
         code = ProductFailureCode::MalformedScene;
-    throw ProductError(code, diagnostic.code + ": " + diagnostic.message,
-                       diagnostic.detail);
+    else if (diagnostic.domain == ProductSceneDiagnosticDomain::Material)
+        code = material_failure_code(diagnostic.detail);
+    throw ProductError(
+        code, diagnostic.code + " at " + diagnostic.field_path + ": " +
+                  diagnostic.message,
+        diagnostic.detail, diagnostic.code, diagnostic.field_path,
+        diagnostic.recovery);
 }
 
 Identity frame_identity(const ProductFrame& frame) {
@@ -319,11 +345,14 @@ public:
         memory_plan_ = prepared.memory_plan;
         execution_ = std::move(prepared.execution);
         automatic_execution_ = prepared.automatic;
+        integrator_mode_ = prepared.integrator_mode;
+        eligible_integrator_modes_ = prepared.eligible_integrator_modes;
         identities_.plan = plan_identity(
             identities_, objective_, memory_plan_, execution_);
         renderer_ = std::move(prepared.renderer);
         operation_.requested_samples = objective_.requested_samples;
         operation_.accepted_samples = objective_.requested_samples;
+        operation_.eligible_integrator_modes = eligible_integrator_modes_;
     }
 
     const ProductIdentitySet& identities() const noexcept override {
@@ -357,12 +386,15 @@ public:
         memory_plan_ = prepared.memory_plan;
         execution_ = std::move(prepared.execution);
         automatic_execution_ = prepared.automatic;
+        integrator_mode_ = prepared.integrator_mode;
+        eligible_integrator_modes_ = prepared.eligible_integrator_modes;
         identities_.snapshot = snapshot_->identity();
         identities_.plan = plan_identity(
             identities_, objective_, memory_plan_, execution_);
         operation_ = {};
         operation_.requested_samples = objective_.requested_samples;
         operation_.accepted_samples = objective_.requested_samples;
+        operation_.eligible_integrator_modes = eligible_integrator_modes_;
     }
 
     void begin() override {
@@ -377,6 +409,8 @@ public:
         operation_.scene_realizations = 0;
         operation_.executor_creations = 0;
         operation_.actual_renderer_samples = 0;
+        operation_.qualified_integrator_modes = 0;
+        operation_.executed_integrator_modes = 0;
     }
 
     void render_sample() override {
@@ -406,10 +440,21 @@ public:
                 report.production_executor_creation_count;
             operation_.actual_renderer_samples =
                 report.production_sample_count;
+            operation_.qualified_integrator_modes = 0;
+            for (const auto& technique : report.techniques) {
+                if (technique.qualified)
+                    operation_.qualified_integrator_modes |=
+                        integrator_mode_bit(technique.mode);
+            }
+            operation_.executed_integrator_modes |=
+                report.technique_coverage_mask;
         } else {
             operation_.scene_realizations = 1;
             operation_.executor_creations = 1;
             operation_.actual_renderer_samples = completed;
+            const auto mode = integrator_mode_bit(integrator_mode_);
+            operation_.qualified_integrator_modes |= mode;
+            operation_.executed_integrator_modes |= mode;
         }
         operation_.completed_samples = completed;
     }
@@ -496,6 +541,7 @@ public:
         operation_ = {};
         operation_.requested_samples = objective_.requested_samples;
         operation_.accepted_samples = objective_.requested_samples;
+        operation_.eligible_integrator_modes = eligible_integrator_modes_;
     }
 
 private:
@@ -508,19 +554,38 @@ private:
     std::unique_ptr<RenderSession> renderer_;
     ProductOperationSnapshot operation_;
     bool automatic_execution_{};
+    IntegratorMode integrator_mode_{IntegratorMode::Wavefront};
+    std::uint64_t eligible_integrator_modes_{};
 };
 
 }
 
 ProductError::ProductError(ProductFailureCode code, std::string message,
-                           std::uint32_t detail)
-    : std::runtime_error(std::move(message)), code_(code), detail_(detail) {}
+                           std::uint32_t detail,
+                           std::string diagnostic_code,
+                           std::string field_path,
+                           std::string recovery)
+    : std::runtime_error(std::move(message)), code_(code), detail_(detail),
+      diagnostic_code_(std::move(diagnostic_code)),
+      field_path_(std::move(field_path)), recovery_(std::move(recovery)) {}
 
 ProductFailureCode ProductError::code() const noexcept {
     return code_;
 }
 
 std::uint32_t ProductError::detail() const noexcept { return detail_; }
+
+const std::string& ProductError::diagnostic_code() const noexcept {
+    return diagnostic_code_;
+}
+
+const std::string& ProductError::field_path() const noexcept {
+    return field_path_;
+}
+
+const std::string& ProductError::recovery() const noexcept {
+    return recovery_;
+}
 
 Identity identity_from_hex(std::span<const char, 64> text) {
     Identity output{};

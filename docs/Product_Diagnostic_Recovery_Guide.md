@@ -19,9 +19,9 @@ Recovery is determined by `retryability`:
 
 Messages are bounded presentation text. Automation should branch on result/domain/detail and versioned structured detail, not match message strings. Absolute private paths, addresses, credentials and unfiltered vendor text are not part of the diagnostic contract.
 
-## Scene and package recovery
+## Scene, material and package recovery
 
-Scene Tool 0.1 and ProductJob use catalog details 600-628 for PRV.2 failures. Clients should preserve the scene/package semantic identity, operation and sanitized field/resource location supplied with the detail.
+Scene Tool 0.2 and ProductJob exact-build 0.4 use catalog details 600-628 for PRV.2 failures and details 700-706/711-714 for the currently implemented PRV.3 material boundary. Values 707-710 are intentionally not registered because the production call sites do not currently emit them. Clients should preserve the scene/package semantic identity, operation and sanitized field/resource location supplied with the detail.
 
 - Parse, schema and request-shape details require correcting the input or selecting a supported schema before retry. Corrupt, truncated and ambiguous packages are input errors; do not guess a scene.
 - Feature, solver and simulation details distinguish required unsupported semantics from optional data retained for tooling. A required declaration must be removed, corrected or executed by an applicable product capability; retrying unchanged input cannot succeed.
@@ -30,3 +30,18 @@ Scene Tool 0.1 and ProductJob use catalog details 600-628 for PRV.2 failures. Cl
 - Package publication details require a writable explicit destination and an atomic retry after the cause is corrected. A rebuildable cache may be removed; required resource payloads may not.
 
 Direct, Worker and CLI preserve the originating result/domain/detail and cause graph. Worker adds transport context without replacing the scene failure. Presentation output redacts private path prefixes; recovery automation should use content identities and safe relative field locations rather than reconstructing a redacted path.
+
+### PRV.3 material recovery
+
+The Product Realizer validates canonical material graphs and all accepted packaged material payloads before renderer allocation. Texture bytes, SPD samples, Mie phase resources and medium coefficients are therefore fail-loud product inputs; a decode or validation failure is not converted into a default material or a late renderer warning.
+
+- `700` (`InvalidMaterialGraph`) and `701` (`UnsupportedMaterialNode`) require repairing the canonical graph or replacing the unsupported node with the maintained MaterialGraph subset.
+- `702` (`MaterialResourceMissing`) and `711` (`MaterialTextureDecodeFailed`) require packaging a readable content-bound image and rebuilding the scene/package from a trusted resource root.
+- `703` (`SpectralDomainMismatch`) and `712` (`SpectralResourceInvalid`) require a compatible, finite, strictly increasing SPD with complete 400–700 nm coverage; endpoint clamp outside that accepted domain is bound into compiler identity, and ambient search paths are not a recovery mechanism.
+- `704` (`WaveMaterialContractInvalid`) requires repairing the bounded radiometric wave-material contract or separating incompatible wave operators into different jobs.
+- `705` (`EstimatorNotApplicable`) means no requested/automatic estimator is applicable to the complete material program set; it must not be resolved by silently selecting a weaker semantic route.
+- `706` (`InvalidMaterialAdapterRequest`) requires correcting the MaterialX/preset selector, source or operation. Adapter loss reports remain evidence and do not authorize fallback execution.
+- `713` (`MieResourceInvalid`) requires regenerating and packaging a normalized content-addressed phase table.
+- `714` (`MediumContractInvalid`) requires finite physical coefficients, valid anisotropy and, for Mie media, non-conflicting analytic coefficients and a valid phase resource.
+
+These details are structured Product diagnostics. Direct, Worker and CLI paths preserve the same classification and recovery hint; Worker transport correlation is additional context only.

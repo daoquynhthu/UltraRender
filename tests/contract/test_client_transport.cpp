@@ -493,6 +493,21 @@ int main(int argc, char **argv) {
                   direct.info.execution.name ==
                       isolated.info.execution.name,
               "selected execution identity differs by client transport");
+        check(direct.info.eligible_integrator_modes ==
+                  isolated.info.eligible_integrator_modes &&
+                  direct.info.qualified_integrator_modes ==
+                      isolated.info.qualified_integrator_modes &&
+                  direct.info.executed_integrator_modes ==
+                      isolated.info.executed_integrator_modes,
+              "integrator applicability and execution reports differ by client transport");
+        check((direct.info.eligible_integrator_modes & UINT64_C(1)) != 0 &&
+                  (direct.info.qualified_integrator_modes & UINT64_C(1)) != 0 &&
+                  (direct.info.executed_integrator_modes & UINT64_C(1)) != 0 &&
+                  (direct.info.qualified_integrator_modes &
+                   ~direct.info.eligible_integrator_modes) == 0 &&
+                  (direct.info.executed_integrator_modes &
+                   ~direct.info.qualified_integrator_modes) == 0,
+              "integrator report masks violate eligibility/qualification/execution containment");
         check(direct.artifact.rgb_value_count ==
                       isolated.artifact.rgb_value_count,
               "client artifact layouts differ by transport");

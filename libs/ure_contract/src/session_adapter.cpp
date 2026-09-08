@@ -55,7 +55,7 @@ ProductErrorMapping map_product_error(
         mapping = {URE_RESULT_INTERNAL, 544};
         break;
     }
-    if (detail >= 600 && detail <= 619)
+    if (detail >= 600 && detail <= 719)
         mapping.detail = detail;
     return mapping;
 }
@@ -358,14 +358,15 @@ bool operation_nonterminal(ure_handle_t handle) {
 void finish_operation(const std::shared_ptr<OperationObject> &operation,
                       ure_handle_t operation_handle, std::uint32_t state,
                       ure_result_t result, std::uint32_t detail,
-                      std::string message) noexcept {
+                      std::string message,
+                      std::string recovery = {}) noexcept {
     {
         std::scoped_lock lock(operation->mutex);
         operation->state = state;
         if (result != URE_RESULT_SUCCESS)
             make_error(result, detail, std::move(message),
                        &operation->terminal_error, nullptr, operation_handle,
-                       &operation->diagnostic);
+                       &operation->diagnostic, recovery);
         ++operation->progress_sequence;
         operation->changed.notify_all();
     }
@@ -546,7 +547,8 @@ void run_render(const std::shared_ptr<SessionObject> &session,
         }
         finish_operation(operation, operation_handle,
                          URE_OPERATION_STATE_FAILED, mapping.result,
-                         mapping.detail, exception.what());
+                         mapping.detail, exception.what(),
+                         exception.recovery());
     } catch (const std::exception &exception) {
         session->job->fail();
         std::string message = exception.what();
@@ -618,7 +620,8 @@ ure_result_t create_impl(ure_handle_t instance_handle, ure_handle_t scene_handle
         const auto mapping = map_product_error(exception.code(),
                                                exception.detail());
         return make_error(mapping.result, mapping.detail,
-                          exception.what(), error);
+                          exception.what(), error, nullptr, nullptr,
+                          nullptr, exception.recovery());
     } catch (const std::exception &exception) {
         return make_error(URE_RESULT_INTERNAL, 505,
                           "renderer scene binding failed: " +
@@ -755,7 +758,8 @@ ure_result_t bind_scene_impl(ure_handle_t session_handle,
         const auto mapping = map_product_error(exception.code(),
                                                exception.detail());
         return make_error(mapping.result, mapping.detail,
-                          exception.what(), error);
+                          exception.what(), error, nullptr, nullptr,
+                          nullptr, exception.recovery());
     } catch (const std::exception &exception) {
         return make_error(URE_RESULT_INTERNAL, 515,
                           "renderer scene rebind failed: " +
@@ -978,6 +982,9 @@ ure_result_t get_product_info_impl(ure_handle_t session_handle,
     info->remaining_max_ns =
         saturated_multiply(remaining, session->quantum_max_ns);
     info->latest_frame_generation = session->latest_frame_generation;
+    info->eligible_integrator_modes = progress.eligible_integrator_modes;
+    info->qualified_integrator_modes = progress.qualified_integrator_modes;
+    info->executed_integrator_modes = progress.executed_integrator_modes;
     info->active_operation = session->active_operation;
     info->latest_frame = session->latest_frame;
     store(info->build_identity, identities.build);
@@ -1194,7 +1201,7 @@ const ure_session_interface_t &session_interface() noexcept {
 
 const ure_product_job_interface_t &product_job_interface() noexcept {
     static const ure_product_job_interface_t table{
-        {sizeof(table), 0, 3},
+        {sizeof(table), 0, 4},
         create_product_job,
         retain_session,
         release_session,

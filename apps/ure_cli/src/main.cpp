@@ -150,7 +150,7 @@ bool allowed_render_arguments(int argc, char **argv, std::string &error) {
             argument.starts_with("--cancel-after-ms="))
             continue;
         if (argument.starts_with('-')) {
-            error = "render option is not executable through ProductJob 0.3: " +
+            error = "render option is not executable through ProductJob 0.4: " +
                     std::string(argument);
             return false;
         }
@@ -176,7 +176,7 @@ ure::client::SceneFormat scene_format(const std::filesystem::path &path) {
     if (extension == ".urepkg")
         return ure::client::SceneFormat::UrePackage;
     throw std::runtime_error(
-        "ProductJob 0.3 accepts only .ure, .urescene, or .urepkg inputs");
+        "ProductJob 0.4 accepts only .ure, .urescene, or .urepkg inputs");
 }
 
 std::string digest_hex(std::span<const std::uint8_t, 32> digest) {
@@ -216,6 +216,12 @@ int render(const ure::config::CliResult &cli) {
                   << "state=succeeded\n"
                   << "accepted_samples=" << result.info.accepted_samples << '\n'
                   << "completed_samples=" << result.info.completed_samples << '\n'
+                  << "eligible_integrator_modes="
+                  << result.info.eligible_integrator_modes << '\n'
+                  << "qualified_integrator_modes="
+                  << result.info.qualified_integrator_modes << '\n'
+                  << "executed_integrator_modes="
+                  << result.info.executed_integrator_modes << '\n'
                   << "frame=" << result.frame.width << 'x'
                   << result.frame.height << '\n'
                   << "frame_bytes="
@@ -252,6 +258,12 @@ ure::client::SceneToolOperation scene_tool_operation(
         return ure::client::SceneToolOperation::Migrate;
     case ure::config::CliCommand::Realize:
         return ure::client::SceneToolOperation::Realize;
+    case ure::config::CliCommand::MaterialImport:
+        return ure::client::SceneToolOperation::ImportMaterialX;
+    case ure::config::CliCommand::MaterialExport:
+        return ure::client::SceneToolOperation::ExportMaterialX;
+    case ure::config::CliCommand::MaterialPreset:
+        return ure::client::SceneToolOperation::ApplyMaterialPreset;
     default:
         throw std::runtime_error("command is not a scene-tool operation");
     }
@@ -266,10 +278,15 @@ int scene_tool(const ure::config::CliResult &cli) {
             request.inputs.push_back(std::filesystem::absolute(input));
     } else {
         request.inputs = {std::filesystem::absolute(cli.scene_path)};
+        if (cli.command == ure::config::CliCommand::MaterialImport)
+            request.inputs.push_back(
+                std::filesystem::absolute(cli.input_paths.front()));
     }
     if (!cli.output_path.empty())
         request.output = std::filesystem::absolute(cli.output_path);
     request.package_scene_id = cli.scene_id;
+    request.material_selector = cli.material_selector;
+    request.preset_name = cli.preset_name;
     auto client = ure::client::Client::connect(connection_options(cli));
     const auto result = client.scene_tool(request);
     std::cout << result.report;

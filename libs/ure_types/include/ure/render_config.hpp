@@ -35,6 +35,22 @@ enum class IntegratorMode {
     Automatic
 };
 
+constexpr std::uint64_t integrator_mode_bit(IntegratorMode mode) {
+    return mode == IntegratorMode::Automatic
+               ? 0
+               : UINT64_C(1) << static_cast<unsigned>(mode);
+}
+
+inline constexpr std::uint64_t kAllProductionIntegratorModes =
+    integrator_mode_bit(IntegratorMode::Wavefront) |
+    integrator_mode_bit(IntegratorMode::PathGuided) |
+    integrator_mode_bit(IntegratorMode::RestirDI) |
+    integrator_mode_bit(IntegratorMode::SpecularManifold) |
+    integrator_mode_bit(IntegratorMode::MLT) |
+    integrator_mode_bit(IntegratorMode::RestirPT) |
+    integrator_mode_bit(IntegratorMode::BDPT) |
+    integrator_mode_bit(IntegratorMode::VCM);
+
 enum class IntegratorSampler {
     Default,
     LowDiscrepancy,
@@ -235,6 +251,8 @@ struct AutomaticIntegratorConfig {
     int maximum_techniques = 4;
     float minimum_wavefront_fraction = 0.1f;
     bool allow_experimental = false;
+    std::uint64_t eligible_integrator_modes =
+        kAllProductionIntegratorModes;
 };
 
 struct RenderConfig {

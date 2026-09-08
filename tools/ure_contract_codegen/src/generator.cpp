@@ -521,6 +521,9 @@ typedef struct ure_product_job_info_t {
     uint64_t remaining_min_ns;
     uint64_t remaining_max_ns;
     uint64_t latest_frame_generation;
+    uint64_t eligible_integrator_modes;
+    uint64_t qualified_integrator_modes;
+    uint64_t executed_integrator_modes;
     uint64_t reserved[1];
 } ure_product_job_info_t;
 
@@ -549,6 +552,8 @@ typedef struct ure_scene_tool_request_t {
     ure_bool32_t allow_script_execution;
     uint32_t reserved32;
     uint64_t reserved[2];
+    ure_string_view_t material_selector;
+    ure_string_view_t preset_name;
 } ure_scene_tool_request_t;
 
 typedef struct ure_scene_tool_result_t {
@@ -571,6 +576,9 @@ typedef struct ure_scene_tool_result_t {
     uint64_t dependency_count;
     uint64_t report_size;
     uint64_t reserved[2];
+    ure_digest256_t material_program_set_identity;
+    uint64_t material_program_count;
+    uint64_t adapter_loss_report_size;
 } ure_scene_tool_result_t;
 
 typedef struct ure_device_descriptor_t {

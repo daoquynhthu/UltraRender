@@ -189,13 +189,19 @@ static void test_fixed_multiscene_replicates() {
             std::filesystem::path(URE_TEST_SCENE_DIR) / name);
         CHECK(imported.ok());
         if (!imported.ok()) continue;
+        auto scene = imported.archive.scene;
+        for (auto& image : scene.images) {
+            if (image && std::filesystem::path(image->uri).is_relative())
+                image->uri = (imported.archive.execution_root /
+                              image->uri).string();
+        }
         std::vector<RenderEvidence> automatic;
         std::vector<double> references;
         for (std::uint64_t replicate = 0; replicate < 3; ++replicate) {
             automatic.push_back(render_automatic(
-                imported.archive.scene, replicate * 128));
+                scene, replicate * 128));
             references.push_back(render_reference(
-                imported.archive.scene, 10000 + replicate * 128));
+                scene, 10000 + replicate * 128));
             check_single_report(automatic.back());
         }
         std::vector<double> automatic_means;

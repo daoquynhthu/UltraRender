@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <limits>
 #include <sstream>
 
 #include <ure/log.hpp>
@@ -11,12 +12,12 @@
 namespace ure::spectral {
 
 SPDData load_spd_file(const std::string& path) {
-    SPDData result;
+    SPDData parsed;
 
     std::ifstream file(path);
     if (!file.is_open()) {
         UR_LOG_WARN(SceneIO, "could not open SPD file: {}", path);
-        return result;
+        return {};
     }
 
     std::string line;
@@ -30,33 +31,35 @@ SPDData load_spd_file(const std::string& path) {
         if (line[0] == '#') continue;
 
         std::istringstream ss(line);
-        float lambda, value;
-        if (!(ss >> lambda >> value)) {
-            UR_LOG_WARN(SceneIO, "skipping malformed SPD line: {}", line);
-            continue;
+        float lambda{};
+        float value{};
+        std::string trailing;
+        if (!(ss >> lambda >> value) || (ss >> trailing) ||
+            !std::isfinite(lambda) || !std::isfinite(value)) {
+            UR_LOG_WARN(SceneIO, "malformed SPD line: {}", line);
+            return {};
         }
 
-        result.lambdas.push_back(lambda);
-        result.values.push_back(value);
+        parsed.lambdas.push_back(lambda);
+        parsed.values.push_back(value);
     }
 
-    if (result.lambdas.empty()) {
-        return result;
-    }
+    if (file.bad() || parsed.lambdas.empty())
+        return {};
 
     // Ensure sorted by wavelength
-    std::vector<size_t> indices(result.lambdas.size());
+    std::vector<size_t> indices(parsed.lambdas.size());
     for (size_t i = 0; i < indices.size(); ++i) indices[i] = i;
     std::sort(indices.begin(), indices.end(), [&](size_t a, size_t b) {
-        return result.lambdas[a] < result.lambdas[b];
+        return parsed.lambdas[a] < parsed.lambdas[b];
     });
 
     SPDData sorted;
     sorted.lambdas.reserve(indices.size());
     sorted.values.reserve(indices.size());
     for (size_t i : indices) {
-        sorted.lambdas.push_back(result.lambdas[i]);
-        sorted.values.push_back(result.values[i]);
+        sorted.lambdas.push_back(parsed.lambdas[i]);
+        sorted.values.push_back(parsed.values[i]);
     }
 
     return sorted;

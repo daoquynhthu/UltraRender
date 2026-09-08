@@ -83,6 +83,17 @@
     {"value": 625, "owner": "SceneTool", "name": "SceneToolReportBufferTooSmall", "result": "BufferTooSmall"},
     {"value": 626, "owner": "SceneTool", "name": "InvalidSceneToolInstance", "result": "InvalidHandle"},
     {"value": 627, "owner": "SceneTool", "name": "SceneToolCapabilityUnavailable", "result": "CapabilityUnavailable"},
-    {"value": 628, "owner": "WorkerProtocol", "name": "MalformedSceneToolRequest", "result": "MalformedData"}
+    {"value": 628, "owner": "WorkerProtocol", "name": "MalformedSceneToolRequest", "result": "MalformedData"},
+    {"value": 700, "owner": "ProductMaterial", "name": "InvalidMaterialGraph", "result": "MalformedData"},
+    {"value": 701, "owner": "ProductMaterial", "name": "UnsupportedMaterialNode", "result": "CapabilityUnavailable"},
+    {"value": 702, "owner": "ProductMaterial", "name": "MaterialResourceMissing", "result": "MalformedData"},
+    {"value": 703, "owner": "ProductMaterial", "name": "SpectralDomainMismatch", "result": "MalformedData"},
+    {"value": 704, "owner": "ProductMaterial", "name": "WaveMaterialContractInvalid", "result": "CapabilityUnavailable"},
+    {"value": 705, "owner": "ProductMaterial", "name": "EstimatorNotApplicable", "result": "CapabilityUnavailable"},
+    {"value": 706, "owner": "MaterialAdapter", "name": "InvalidMaterialAdapterRequest", "result": "InvalidArgument"},
+    {"value": 711, "owner": "ProductMaterial", "name": "MaterialTextureDecodeFailed", "result": "MalformedData"},
+    {"value": 712, "owner": "ProductMaterial", "name": "SpectralResourceInvalid", "result": "MalformedData"},
+    {"value": 713, "owner": "ProductMaterial", "name": "MieResourceInvalid", "result": "MalformedData"},
+    {"value": 714, "owner": "ProductMaterial", "name": "MediumContractInvalid", "result": "MalformedData"}
   ]
 }

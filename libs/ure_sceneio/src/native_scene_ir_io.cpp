@@ -293,6 +293,16 @@ void save_native_scene(const std::filesystem::path& path,
     const std::string extension = path.extension().string();
     if (extension == ".urescene") {
         const auto bytes = write_scene_ir_binary(archive);
+        for (const auto& resource : archive.packaged_resources) {
+            const auto path_report = validate_exploded_resource_path(
+                path.parent_path(), resource.source_uri);
+            if (!path_report.ok())
+                throw std::invalid_argument(
+                    path_report.diagnostics.front().message);
+            atomic_write(path.parent_path() /
+                             std::filesystem::path(resource.source_uri),
+                         resource.payload);
+        }
         atomic_write(path, bytes);
         return;
     }

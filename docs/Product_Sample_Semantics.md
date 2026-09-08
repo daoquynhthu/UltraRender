@@ -1,6 +1,6 @@
 # Product sample semantics
 
-ProductJob 0.3 has one accepted production sample domain. A positive `ProductObjective.sample_budget` selects its size. When that value is zero, a positive `NativeScene.scene.spp` is inherited; if both are unspecified, the product default is one production sample.
+ProductJob 0.4 has one accepted production sample domain. A positive `ProductObjective.sample_budget` selects its size. When that value is zero, a positive `NativeScene.scene.spp` is inherited; if both are unspecified, the product default is one production sample.
 
 `NativeScene.simulation.spp_per_frame` belongs to the bounded simulation domain planned for PRV.7. It never multiplies the render sample budget. Automatic pilot work is also independent and is reported separately from completed production work.
 

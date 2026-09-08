@@ -466,6 +466,9 @@ static void test_validation_and_compiler_boundary() {
     auto loaded = ure::native_scene::read_scene_ir_binary(ure::native_scene::write_scene_ir_binary(archive), {});
     CHECK(loaded.ok());
     if (loaded.value) {
+        loaded.value->scene.images[0]->uri =
+            (std::filesystem::path(URE_TEST_ASSET_DIR) /
+             "textures/albedo.ppm").string();
         const auto compiled = ure::GpuSceneCompiler::compile(loaded.value->scene);
         CHECK(compiled.instances.size() == 1);
     }
