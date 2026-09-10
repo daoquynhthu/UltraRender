@@ -10,6 +10,7 @@
 
 #include <ure/backend_types.hpp>
 #include <ure/native_scene_ir.hpp>
+#include <ure/reconstruction/measurement.hpp>
 
 namespace ure::product {
 
@@ -38,6 +39,12 @@ struct ProductIdentitySet {
     Identity plan{};
 };
 
+struct ProductMeasurementSet {
+    reconstruction::MeasurementBundle estimate;
+    std::vector<reconstruction::MeasurementBundle> endpoints;
+    bool auxiliary_outputs_wavefront_only{};
+};
+
 enum class ProductOperationState : std::uint32_t {
     Ready,
     Running,
@@ -53,7 +60,8 @@ enum class ProductFailureCode : std::uint32_t {
     ResourceEscape,
     MemoryNotApplicable,
     CapabilityNotApplicable,
-    WorkAccounting
+    WorkAccounting,
+    MeasurementUnavailable
 };
 
 class ProductError final : public std::runtime_error {
@@ -117,13 +125,17 @@ struct ProductFrame {
     std::uint32_t width{};
     std::uint32_t height{};
     std::vector<float> rgb;
+    std::shared_ptr<const ProductMeasurementSet> measurements;
 };
 
 struct ProductArtifactManifest {
     ProductIdentitySet identities;
     Identity frame_content{};
+    Identity measurement_content{};
     std::uint64_t accepted_samples{};
     std::uint64_t rgb_value_count{};
+    std::uint64_t measurement_bundle_count{};
+    std::uint64_t measurement_plane_count{};
 };
 
 class ProductJob {

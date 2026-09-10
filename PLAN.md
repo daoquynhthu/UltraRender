@@ -1,6 +1,6 @@
 # UltraRender Preview 产品集成与端到端闭环路线图
 
-最后更新: 2026-09-07（PRV.3 闭环材质、资产与有界 radiometric-wave 组合；游标推进至尚未施工的 PRV.4）
+最后更新: 2026-09-10（PRV.4 闭环生产 MeasurementBundle 与输出系统；游标推进至尚未施工的 PRV.5）
 
 本文档是 UltraRender 当前唯一的全局施工权威。它将项目重心从继续扩展高阶研究能力，切换为已有非研究能力的产品总装、端到端闭环，以及训练无关重建/降噪的生产接入。
 
@@ -17,7 +17,7 @@
 
 ## 0. 权威状态
 
-当前游标: PRV.4 — 生产 MeasurementBundle 与输出系统（尚未开始施工）
+当前游标: PRV.5 — 训练无关重建与降噪（尚未开始施工）
 
 ### 0.1 唯一施工队列
 
@@ -41,10 +41,10 @@ PRV.2 complete scene realization and packages      [done]
 PRV.3 material, asset and bounded wave composition [done]
                   |
                   v
-PRV.4 production MeasurementBundle and output      [current, not started]
+PRV.4 production MeasurementBundle and output      [done]
                   |
                   v
-PRV.5 training-free reconstruction and denoising
+PRV.5 training-free reconstruction and denoising   [current, not started]
                   |
                   v
 PRV.6 automatic integration productization
@@ -94,7 +94,7 @@ Preview 不要求每个 backend 执行每个高级积分器，但要求每个宣
 - 默认继续单 Agent 工作；本项目不使用 subagent。
 - 不读取、维护、迁移或测试废弃的 `gui/`。
 - 不恢复 Phase X 通用插件系统，不引入 ambient provider/model/script discovery。
-- OpenEXR 产品输出采用官方 OpenEXR 3.4.12 作为首选基线，固定源码、许可证与构建身份；依赖门禁失败时不得以自制不完整 EXR writer 替代。
+- OpenEXR 产品输出采用官方 OpenEXR 3.4.14 作为首选基线，固定源码、许可证与构建身份；3.4.12/3.4.13 已被上游安全公告覆盖，不得作为现役基线，依赖门禁失败时不得以自制不完整 EXR writer 替代。
 - 所有产品阶段使用 Windows Release 完整门禁；CUDA-off Linux GCC/Clang 与 Windows MSVC CI 继续验证可移植 host/package 边界。
 - `ProductE2E` 证据必须走维护中的外部产品调用链；直接调用 `ure_core`、`RenderSession`、内部 helper 或临时诊断程序只能作为组件/定位证据。
 - 例行正确性、产品质量与压力/尺度证据分层执行；QHD/UHD 500+ spp 属于压力/尺度验证，不进入普通提交门禁。
@@ -535,6 +535,8 @@ Product Realizer 在 GPU allocation 前预检 texture、SPD、Mie 与 medium pay
 
 ## 6. PRV.4 — 生产 MeasurementBundle 与输出系统
 
+**状态**: 已完成；完整场景 typed measurement、不可变多 plane Frame、正式 artifact graph 与 Direct/Worker/CLI/外部 SDK 产品路径已在声明边界内闭环，PRV.5 可作为下一施工阶段。
+
 **目标**: 把renderer权威输出从临时RGB framebuffer提升为完整场景产生的typed measurement和artifact graph。
 
 **依赖**: PRV.3。
@@ -555,7 +557,7 @@ Product Realizer 在 GPU allocation 前预检 texture、SPD、Mie 与 medium pay
 
 ### PRV.4.3 — Output graph
 
-- 引入固定OpenEXR 3.4.12依赖，使用官方库写multi-channel/multipart flat image；Preview不宣称deep EXR；
+- 引入固定OpenEXR 3.4.14依赖，使用官方库写multi-channel/multipart flat image；Preview不宣称deep EXR；
 - EXR channel/part命名映射到registry semantic identity，保留scene/objective/plan/backend/provenance metadata；
 - MeasurementBundle/checkpoint使用独立versioned container，不依赖EXR表达全部统计和sample记录；
 - HDR/PPM/BMP是derived display products，tone-map请求被实际执行并记录；
@@ -583,6 +585,12 @@ Product Realizer 在 GPU allocation 前预检 texture、SPD、Mie 与 medium pay
 - CLI tone-map、output semantic和SPD/resource路径中已知no-op被消除或拒绝。
 - Direct、Worker、CLI和外部SDK读取同一正式artifact graph；raw权威与确定性PNG派生查看产物的方向、色彩、曝光和tone-map identity由门禁固定。
 - Beauty、Z/depth、normal、albedo、motion、denoise inputs及适用Spectrum/Stokes planes经Worker完整传输；多plane错误注入、lease/backpressure和诊断parity通过。
+
+**完成记录（2026-09-10）**: complete-scene CUDA producer 现在生成 BeautyRaw、normal、albedo、depth、UV、motion、sample count、first/second/lag-one moments、variance、ESS、first/last/max-absolute contribution、tail count、estimator weight 与 technique identity；当前 bounded product profile 实际发布 45 个带 observable/unit/measure/time/uncertainty/provenance 和 sample-range 身份的 plane。缺少真实 complete-scene producer 的 Spectrum/Stokes 请求在编译期以 detail 805 拒绝，不用零 plane 或 RGB 伪装。Measurement schema/checkpoint 演进到 v2，支持派生统计、canonical merge、不可变 snapshot 和真实分块读取；Core 1.0 客户端仍只看见兼容 Color fallback，Product exact-build 客户端取得完整集合。
+
+官方 OpenEXR 3.4.14 与 Imath 3.2.2 以静态依赖进入单 DLL runtime，保持最老 Core 1.0 seed 从任意目录加载的既有行为；正式输出图同时发布 flat multi-channel EXR、独立 Measurement checkpoint、可选 HDR/PPM/BMP 派生显示产物和原子 content manifest。MeasurementFrame/Output 仅作为 exact-build `UnstableExtension` 增加，冻结 Core ABI 1.0 与 Worker Protocol 1.0 前缀未变。854×480、16-sample Direct/Worker、CLI Direct/Worker 和 out-of-tree SDK 均读取同一 45-plane/artifact authority，4096-byte 中段 partial read、EXR/checkpoint 字节 parity、tone-map 执行和结构化 output 诊断通过。1280×720、500-sample Cornell 质量证据通过 finite、能量、空间结构和视觉审阅；相对留存 128-sample 图像，平均亮度稳定且平均空间梯度下降约 41.5%，暗部仍有可见 pre-denoise variance，明确留给 PRV.5 而不宣称已降噪。Windows Release 完整构建及 125/125 CTest 通过；这不声明 `UltraRender_preview`、deep EXR、生产重建或公共产品发布。
+
+PRV.4 闭环的是 MeasurementBundle/Output 基础设施及其 Cornell 产品路径，不会据此把尚无 estimator/material-specific spectral/time producer 的场景伪升为 ProductE2E。`textured_pbr`、`volume_mie`、`large_spectral`、`diffractive` 与 `fluorescent` 的 typed spectral/time 场景行保持 `RendererIntegrated`，由 PRV.6 在 automatic execution authority 接通真实 producer 后完成；在此之前，Spectrum/Stokes 请求必须经 Direct/Worker 一致拒绝并保留 detail 805。
 
 ---
 

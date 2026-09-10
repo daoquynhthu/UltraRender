@@ -29,12 +29,20 @@ struct RuntimeFailure {
 struct FramePlaneSnapshot {
     ure_frame_plane_info_t info{};
     std::uint64_t byte_offset{};
+    std::array<std::uint8_t, 32> content_identity{};
+    std::uint64_t sample_begin{};
+    std::uint64_t sample_count{};
+    std::uint32_t endpoint_index{UINT32_MAX};
+    std::uint32_t flags{};
 };
 
 struct FrameSnapshot {
     ure_frame_info_t frame{};
     ure_session_info_t session{};
     std::uint64_t session_id{};
+    std::uint64_t generation{};
+    std::array<std::uint8_t, 32> measurement_identity{};
+    std::uint32_t publication_status{};
     std::vector<FramePlaneSnapshot> planes;
     std::vector<std::uint8_t> bytes;
 };
@@ -136,6 +144,17 @@ struct ProductArtifactSnapshot {
     std::array<std::uint8_t, 32> frame_content_identity{};
 };
 
+struct ProductOutputSnapshot {
+    std::uint64_t job_id{};
+    std::uint32_t publication_status{};
+    std::uint32_t format{};
+    std::uint64_t artifact_count{};
+    std::uint64_t byte_count{};
+    std::array<std::uint8_t, 32> manifest_identity{};
+    std::array<std::uint8_t, 32> measurement_identity{};
+    std::array<std::uint8_t, 32> content_identity{};
+};
+
 struct SceneToolRequest {
     std::uint32_t operation{};
     std::vector<std::string> input_paths_utf8;
@@ -198,6 +217,19 @@ class RuntimeClient {
                                ProductStatusSnapshot &status,
                                FrameSnapshot &frame,
                                RuntimeFailure &failure);
+    bool publish_product_artifacts(std::uint64_t job_id, std::uint32_t format,
+                                   std::uint32_t tone_map,
+                                   const std::string &path,
+                                   std::uint64_t byte_budget,
+                                   ProductOutputSnapshot &output,
+                                   RuntimeFailure &failure);
+    bool acquire_product_plane_range(
+        std::uint64_t job_id, std::uint32_t plane_index,
+        std::uint64_t source_offset, std::uint64_t byte_count,
+        std::uint64_t expected_generation,
+        const std::array<std::uint8_t, 32> &expected_content_identity,
+        ProductStatusSnapshot &status, FrameSnapshot &snapshot,
+        RuntimeFailure &failure);
     bool execute_scene_tool(const SceneToolRequest &request,
                             SceneToolSnapshot &snapshot,
                             RuntimeFailure &failure);

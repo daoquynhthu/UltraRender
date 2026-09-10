@@ -30,7 +30,22 @@ void resolve_diffraction_framebuffer_kernel(
     int width,
     int height,
     int radius_pixels,
-    int wavelength_count);
+    int wavelength_count,
+    int sanitize_output);
+
+__global__ __launch_bounds__(256) void update_measurement_statistics_kernel(
+    const GpuVec3* contribution,
+    GpuVec3* accumulation,
+    GpuVec3* previous_contribution,
+    double* first_moment,
+    double* second_moment,
+    double* lag_one_product,
+    double* first_contribution,
+    GpuVec3* maximum_absolute,
+    unsigned long long* tail_event_count,
+    unsigned int* invalid_count,
+    int capture_statistics,
+    int pixel_count);
 
 __global__ __launch_bounds__(256) void fxaa_kernel(
     GpuVec3* output,

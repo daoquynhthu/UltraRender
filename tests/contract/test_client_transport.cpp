@@ -27,8 +27,12 @@ void check(bool condition, const std::string &message) {
 
 bool write_pfm(const std::filesystem::path &path,
                const ure::client::Frame &frame) {
-    if (frame.planes.size() != 1 || frame.width == 0 || frame.height == 0 ||
-        frame.planes.front().bytes.size() !=
+    const auto found = std::ranges::find_if(
+        frame.planes, [](const auto &plane) {
+            return plane.semantic == URE_FRAME_PLANE_COLOR;
+        });
+    if (found == frame.planes.end() || frame.width == 0 || frame.height == 0 ||
+        found->bytes.size() !=
             static_cast<std::size_t>(frame.width) * frame.height * 4 *
                 sizeof(float))
         return false;
@@ -37,7 +41,7 @@ bool write_pfm(const std::filesystem::path &path,
         return false;
     output << "PF\n" << frame.width << ' ' << frame.height << "\n-1.0\n";
     const auto *rgba = reinterpret_cast<const float *>(
-        frame.planes.front().bytes.data());
+        found->bytes.data());
     for (std::uint32_t y = frame.height; y-- > 0;) {
         for (std::uint32_t x = 0; x < frame.width; ++x) {
             const std::size_t offset =
@@ -60,25 +64,27 @@ bool equivalent_frames(const ure::client::Frame &left,
         const auto &b = right.planes[plane];
         if (a.semantic != b.semantic || a.scalar_type != b.scalar_type ||
             a.component_layout != b.component_layout ||
+            a.normalization != b.normalization ||
             a.width != b.width || a.height != b.height ||
             a.depth != b.depth || a.row_stride != b.row_stride ||
             a.slice_stride != b.slice_stride ||
             a.element_stride != b.element_stride ||
-            a.bytes.size() != b.bytes.size() ||
-            a.bytes.size() % sizeof(float) != 0)
+            a.observable_identity != b.observable_identity ||
+            a.unit_identity != b.unit_identity ||
+            a.measure_identity != b.measure_identity ||
+            a.time_identity != b.time_identity ||
+            a.uncertainty_identity != b.uncertainty_identity ||
+            a.provenance_identity != b.provenance_identity ||
+            a.content_identity != b.content_identity ||
+            a.sample_begin != b.sample_begin ||
+            a.sample_count != b.sample_count ||
+            a.endpoint_index != b.endpoint_index || a.flags != b.flags ||
+            a.bytes != b.bytes)
             return false;
-        for (std::size_t offset = 0; offset < a.bytes.size();
-             offset += sizeof(float)) {
-            float av{};
-            float bv{};
-            std::memcpy(&av, a.bytes.data() + offset, sizeof(av));
-            std::memcpy(&bv, b.bytes.data() + offset, sizeof(bv));
-            if (!std::isfinite(av) || !std::isfinite(bv) ||
-                std::abs(av - bv) >
-                    1.0e-6f * (1.0f + std::max(std::abs(av), std::abs(bv))))
-                return false;
-            nontrivial = nontrivial || std::abs(av) > 1.0e-6f;
-        }
+        if (a.semantic == URE_FRAME_PLANE_COLOR)
+            nontrivial = std::ranges::any_of(a.bytes, [](std::uint8_t value) {
+                return value != 0;
+            });
     }
     return nontrivial;
 }
@@ -137,6 +143,92 @@ ure::client::JobResult render(ure::client::TransportMode mode,
     return job.result();
 }
 
+void output_and_partial(ure::client::TransportMode mode,
+                        const std::filesystem::path &runtime,
+                        const std::filesystem::path &worker,
+                        const std::filesystem::path &scene_path,
+                        const std::filesystem::path &output_path) {
+    auto client = ure::client::Client::connect(options(mode, runtime, worker));
+    ure::client::Objective objective;
+    objective.output_semantics = {URE_FRAME_PLANE_COLOR};
+    objective.sample_budget = 2;
+    auto job = client.create_job(scene(scene_path), objective);
+    job.start();
+    check(job.wait(std::chrono::seconds(30)),
+          "output client product render timed out");
+    const auto result = job.result();
+    const auto manifest = job.publish_artifacts(
+        {ure::client::OutputFormat::OpenExr, output_path,
+         UINT64_C(512) * 1024 * 1024});
+    const auto manifest_path = output_path.parent_path() /
+        (output_path.filename().string() + ".manifest.json");
+    bool hashed_exr = false;
+    for (const auto &entry : std::filesystem::directory_iterator(
+             output_path.parent_path())) {
+        if (entry.path().filename().string().starts_with(
+                output_path.filename().string() + ".") &&
+            entry.path().extension() == ".exr") {
+            hashed_exr = true;
+            break;
+        }
+    }
+    check(manifest.publication_status == URE_PUBLICATION_COMPLETE &&
+              manifest.format == ure::client::OutputFormat::OpenExr &&
+              manifest.artifact_count >= 3 && manifest.byte_count != 0 &&
+              std::filesystem::exists(manifest_path) && hashed_exr,
+          "product output publication did not produce a complete artifact");
+    ure::client::OutputRequest display_request;
+    display_request.path = output_path.parent_path() /
+                           (output_path.filename().string() + ".display");
+    display_request.format = mode == ure::client::TransportMode::Direct
+                                 ? ure::client::OutputFormat::Ppm
+                                 : ure::client::OutputFormat::Bmp;
+    display_request.tone_map = mode == ure::client::TransportMode::Direct
+                                  ? ure::client::ToneMap::Reinhard
+                                  : ure::client::ToneMap::Aces;
+    const auto display_manifest = job.publish_artifacts(display_request);
+    const auto extension = mode == ure::client::TransportMode::Direct
+                               ? ".ppm"
+                               : ".bmp";
+    bool hashed_display = false;
+    for (const auto &entry : std::filesystem::directory_iterator(
+             output_path.parent_path())) {
+        if (entry.path().filename().string().starts_with(
+                display_request.path.filename().string() + ".") &&
+            entry.path().extension() == extension) {
+            hashed_display = true;
+            break;
+        }
+    }
+    check(display_manifest.publication_status == URE_PUBLICATION_COMPLETE &&
+              display_manifest.artifact_count == 4 && hashed_display,
+          "product display publication did not execute the requested tone map");
+    const auto plane = std::ranges::find_if(
+        result.frame.planes, [](const auto &value) {
+            return value.semantic == URE_FRAME_PLANE_COLOR &&
+                   std::ranges::any_of(value.content_identity,
+                                       [](std::uint8_t byte) { return byte != 0; });
+        });
+    check(plane != result.frame.planes.end() && result.frame.generation != 0 &&
+              std::ranges::any_of(result.frame.measurement_identity,
+                                  [](std::uint8_t byte) { return byte != 0; }),
+          "product frame did not expose measurement range identity");
+    if (plane == result.frame.planes.end() || result.frame.generation == 0)
+        return;
+    const std::size_t requested = std::min<std::size_t>(64, plane->bytes.size());
+    ure::client::PlaneRangeRequest range;
+    range.plane_index = static_cast<std::uint32_t>(
+        std::distance(result.frame.planes.begin(), plane));
+    range.byte_count = requested;
+    range.expected_generation = result.frame.generation;
+    range.expected_content_identity = plane->content_identity;
+    const auto bytes = job.copy_plane_range(range);
+    check(bytes.size() == requested &&
+              std::ranges::equal(bytes,
+                                 std::span(plane->bytes).first(requested)),
+          "product partial plane read differs from the immutable frame");
+}
+
 std::vector<ure::client::DeviceInfo>
 devices(ure::client::TransportMode mode,
         const std::filesystem::path &runtime,
@@ -191,6 +283,48 @@ rejected_memory(ure::client::TransportMode mode,
         if (mode == ure::client::TransportMode::Worker)
             check(error.info().transport_correlation_id != 0,
                   "Worker error lost its transport correlation identity");
+        return error.info();
+    }
+    return {};
+}
+
+ure::client::ErrorInfo
+rejected_output_semantics(ure::client::TransportMode mode,
+                          const std::filesystem::path &runtime,
+                          const std::filesystem::path &worker,
+                          const std::filesystem::path &scene_path) {
+    try {
+        auto client = ure::client::Client::connect(
+            options(mode, runtime, worker));
+        ure::client::Objective objective;
+        objective.sample_budget = 1;
+        objective.output_semantics = {URE_FRAME_PLANE_SPECTRAL,
+                                      URE_FRAME_PLANE_STOKES};
+        static_cast<void>(client.create_job(scene(scene_path), objective));
+        check(false, "unavailable spectral/Stokes outputs were accepted");
+    } catch (const ure::client::Error &error) {
+        check(error.info().result == URE_RESULT_CAPABILITY_UNAVAILABLE &&
+                  error.info().domain == URE_ERROR_DOMAIN_CORE &&
+                  error.info().detail == 805 &&
+                  error.info().structured_detail_schema == URE_PAYLOAD_ERROR &&
+                  !error.info().structured_detail.empty() &&
+                  std::ranges::any_of(
+                      error.info().correlation_identity,
+                      [](std::uint8_t value) { return value != 0; }) &&
+                  error.info().retryability == 1 &&
+                  !error.info().recovery_hint.empty(),
+              "unavailable output classification differs by client transport: " +
+                  std::to_string(static_cast<int>(mode)) + "/" +
+                  std::to_string(error.info().result) + "/" +
+                  std::to_string(error.info().domain) + "/" +
+                  std::to_string(error.info().detail) + "/" +
+                  std::to_string(error.info().structured_detail_schema) + "/" +
+                  std::to_string(error.info().structured_detail.size()) + "/" +
+                  std::to_string(error.info().retryability) + "/" +
+                  std::to_string(error.info().recovery_hint.size()));
+        if (mode == ure::client::TransportMode::Worker)
+            check(error.info().transport_correlation_id != 0,
+                  "Worker output error lost its transport correlation identity");
         return error.info();
     }
     return {};
@@ -512,14 +646,18 @@ int main(int argc, char **argv) {
                       isolated.artifact.rgb_value_count,
               "client artifact layouts differ by transport");
         check(direct.frame.width != 0 && direct.frame.height != 0 &&
-                  direct.frame.planes.size() == 1 &&
-                  isolated.frame.planes.size() == 1 &&
+                  direct.frame.planes.size() > 1 &&
+                  isolated.frame.planes.size() > 1 &&
                   !direct.frame.planes.front().bytes.empty() &&
                   equivalent_frames(direct.frame, isolated.frame),
               "client frame payloads are empty or transport-dependent");
         check(write_pfm(direct_output, direct.frame) &&
                   write_pfm(worker_output, isolated.frame),
               "client transports did not publish real image artifacts");
+        output_and_partial(ure::client::TransportMode::Direct, runtime, worker,
+                           scene_path, isolated_cwd / "direct.exr");
+        output_and_partial(ure::client::TransportMode::Worker, runtime, worker,
+                           scene_path, isolated_cwd / "worker.exr");
         rejected_objective(ure::client::TransportMode::Direct, runtime, worker,
                            scene_path);
         rejected_objective(ure::client::TransportMode::Worker, runtime, worker,
@@ -535,6 +673,20 @@ int main(int argc, char **argv) {
                   direct_memory.recovery_hint == worker_memory.recovery_hint &&
                   direct_memory.cause_depth == worker_memory.cause_depth,
               "structured diagnostic semantics differ by transport");
+        const auto direct_output_error = rejected_output_semantics(
+            ure::client::TransportMode::Direct, runtime, worker, scene_path);
+        const auto worker_output_error = rejected_output_semantics(
+            ure::client::TransportMode::Worker, runtime, worker, scene_path);
+        check(direct_output_error.result == worker_output_error.result &&
+                  direct_output_error.domain == worker_output_error.domain &&
+                  direct_output_error.detail == worker_output_error.detail &&
+                  direct_output_error.retryability ==
+                      worker_output_error.retryability &&
+                  direct_output_error.recovery_hint ==
+                      worker_output_error.recovery_hint &&
+                  direct_output_error.cause_depth ==
+                      worker_output_error.cause_depth,
+              "unavailable output diagnostics differ by transport");
         cancel(ure::client::TransportMode::Direct, runtime, worker, scene_path);
         cancel(ure::client::TransportMode::Worker, runtime, worker, scene_path);
         negative_wait(runtime, worker, scene_path);

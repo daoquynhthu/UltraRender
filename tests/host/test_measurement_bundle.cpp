@@ -231,6 +231,12 @@ static void test_schema_and_budget_selection() {
         rejected = true;
     }
     CHECK(rejected);
+
+    auto legacy = full;
+    legacy.version = 1;
+    for (auto& descriptor : legacy.planes) descriptor.version = 1;
+    rec::finalize_measurement_schema(legacy);
+    CHECK(rec::validate_measurement_schema(legacy).ok());
 }
 
 static void test_bundle_merge_is_canonical() {
@@ -445,6 +451,117 @@ static void test_derived_statistics_merge() {
                     10.0 / 3.0) < 1e-12);
 }
 
+static rec::MeasurementSchema lag_statistics_schema() {
+    rec::MeasurementSchema value;
+    value.width = 1;
+    value.height = 1;
+    value.planes.push_back(plane(
+        rec::MeasurementPlaneKind::SampleCount,
+        rec::MeasurementScalarType::UInt64,
+        rec::MeasurementMergeRule::Sum,
+        rec::MeasurementRetention::Required,
+        "lag.count", 1));
+    const auto additive = [&value](rec::MeasurementPlaneKind kind,
+                                   std::string_view identity) {
+        value.planes.push_back(plane(
+            kind, rec::MeasurementScalarType::Float64,
+            rec::MeasurementMergeRule::Sum,
+            rec::MeasurementRetention::Statistics,
+            identity, 1));
+    };
+    additive(rec::MeasurementPlaneKind::FirstMoment, "lag.first-moment");
+    additive(rec::MeasurementPlaneKind::SecondMoment, "lag.second-moment");
+    additive(rec::MeasurementPlaneKind::CrossMoment, "lag.cross-moment");
+    auto optional = plane(
+        rec::MeasurementPlaneKind::TechniqueIdentity,
+        rec::MeasurementScalarType::UInt32,
+        rec::MeasurementMergeRule::RequireEqual,
+        rec::MeasurementRetention::Attribution,
+        "lag.optional-technique", 1);
+    optional.required = false;
+    value.planes.push_back(optional);
+    value.planes.push_back(plane(
+        rec::MeasurementPlaneKind::FirstContribution,
+        rec::MeasurementScalarType::Float64,
+        rec::MeasurementMergeRule::KeepFirst,
+        rec::MeasurementRetention::Statistics,
+        "lag.first-contribution", 1));
+    value.planes.push_back(plane(
+        rec::MeasurementPlaneKind::LastContribution,
+        rec::MeasurementScalarType::Float64,
+        rec::MeasurementMergeRule::KeepLast,
+        rec::MeasurementRetention::Statistics,
+        "lag.last-contribution", 1));
+    auto variance = plane(
+        rec::MeasurementPlaneKind::Variance,
+        rec::MeasurementScalarType::Float64,
+        rec::MeasurementMergeRule::Derived,
+        rec::MeasurementRetention::Statistics,
+        "lag.variance", 1);
+    variance.derivation = {
+        rec::MeasurementDerivationKind::SampleVariance,
+        0, 1, 2, rec::kNoValidityPlane,
+        rec::kNoValidityPlane, rec::kNoValidityPlane};
+    value.planes.push_back(variance);
+    auto effective = plane(
+        rec::MeasurementPlaneKind::EffectiveSampleCount,
+        rec::MeasurementScalarType::Float64,
+        rec::MeasurementMergeRule::Derived,
+        rec::MeasurementRetention::Statistics,
+        "lag.effective-sample-count", 1);
+    effective.derivation = {
+        rec::MeasurementDerivationKind::LagOneEffectiveSampleCount,
+        0, 1, 2, 3, 5, 6};
+    value.planes.push_back(effective);
+    value.planes.push_back(plane(
+        rec::MeasurementPlaneKind::MaximumAbsoluteContribution,
+        rec::MeasurementScalarType::Float64,
+        rec::MeasurementMergeRule::Maximum,
+        rec::MeasurementRetention::Statistics,
+        "lag.maximum", 1));
+    rec::finalize_measurement_schema(value);
+    return value;
+}
+
+static void test_lag_statistics_merge_and_selection() {
+    const auto descriptor = lag_statistics_schema();
+    auto left = rec::make_measurement_bundle(
+        descriptor, provenance(0, 2, "lag-a"));
+    auto right = rec::make_measurement_bundle(
+        descriptor, provenance(2, 2, "lag-b"));
+    fill(left.planes[0], std::uint64_t{2});
+    fill(right.planes[0], std::uint64_t{2});
+    fill(left.planes[1], 3.0);
+    fill(right.planes[1], 7.0);
+    fill(left.planes[2], 5.0);
+    fill(right.planes[2], 25.0);
+    fill(left.planes[3], 2.0);
+    fill(right.planes[3], 12.0);
+    fill(left.planes[4], std::uint32_t{1});
+    fill(right.planes[4], std::uint32_t{1});
+    fill(left.planes[5], 1.0);
+    fill(right.planes[5], 3.0);
+    fill(left.planes[6], 2.0);
+    fill(right.planes[6], 4.0);
+    fill(left.planes[9], 2.0);
+    fill(right.planes[9], 4.0);
+    const std::vector shards{right, left};
+    const auto merged = rec::merge_measurement_bundles(shards);
+    CHECK(std::abs(first<double>(merged.planes[3]) - 20.0) < 1e-12);
+    CHECK(std::abs(first<double>(merged.planes[5]) - 1.0) < 1e-12);
+    CHECK(std::abs(first<double>(merged.planes[6]) - 4.0) < 1e-12);
+    CHECK(std::abs(first<double>(merged.planes[8]) - 2.4) < 1e-12);
+    CHECK(std::abs(first<double>(merged.planes[9]) - 4.0) < 1e-12);
+
+    const auto selected = rec::select_measurement_schema(
+        descriptor, UINT64_MAX, rec::MeasurementRetention::Statistics);
+    CHECK(selected.schema.planes.size() == 9);
+    CHECK(selected.schema.planes[7].derivation.cross_plane == 3);
+    CHECK(selected.schema.planes[7].derivation.first_sample_plane == 4);
+    CHECK(selected.schema.planes[7].derivation.last_sample_plane == 5);
+    CHECK(rec::validate_measurement_schema(selected.schema).ok());
+}
+
 static void test_checkpoint_and_partial_read() {
     const auto descriptor = schema();
     auto bundle = rec::make_measurement_bundle(
@@ -542,6 +659,7 @@ int main() {
     test_merge_rejects_invalid_semantics();
     test_typed_complex_plane();
     test_derived_statistics_merge();
+    test_lag_statistics_merge_and_selection();
     test_checkpoint_and_partial_read();
     if (failures != 0) {
         std::fprintf(stderr, "%d measurement bundle checks failed\n",

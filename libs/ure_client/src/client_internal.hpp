@@ -20,6 +20,9 @@ class JobTransport {
                             ProgressEvent &event) = 0;
     virtual Frame latest_frame() const = 0;
     virtual JobResult result() const = 0;
+    virtual OutputManifest publish_artifacts(const OutputRequest &request) = 0;
+    virtual std::vector<std::uint8_t>
+    copy_plane_range(const PlaneRangeRequest &request) = 0;
 };
 
 class ClientTransport {

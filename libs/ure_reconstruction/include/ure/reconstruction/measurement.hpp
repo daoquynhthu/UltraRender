@@ -10,7 +10,8 @@
 
 namespace ure::reconstruction {
 
-inline constexpr std::uint32_t kMeasurementSchemaVersion = 1;
+inline constexpr std::uint32_t kMeasurementSchemaVersion = 2;
+inline constexpr std::uint32_t kMinimumMeasurementSchemaVersion = 1;
 inline constexpr std::uint32_t kNoValidityPlane =
     static_cast<std::uint32_t>(-1);
 
@@ -46,7 +47,11 @@ enum class MeasurementPlaneKind : std::uint8_t {
     SampleRecord,
     ComplexField,
     JonesField,
-    MutualIntensity
+    MutualIntensity,
+    MaximumAbsoluteContribution,
+    FirstContribution,
+    LastContribution,
+    TailEventCount
 };
 
 enum class MeasurementScalarType : std::uint8_t {
@@ -63,14 +68,18 @@ enum class MeasurementMergeRule : std::uint8_t {
     Sum,
     RequireEqual,
     Append,
-    Derived
+    Derived,
+    Maximum,
+    KeepFirst,
+    KeepLast
 };
 
 enum class MeasurementDerivationKind : std::uint8_t {
     None,
     EffectiveSampleCount,
     SampleVariance,
-    SampleCovariance
+    SampleCovariance,
+    LagOneEffectiveSampleCount
 };
 
 struct MeasurementDerivation {
@@ -79,6 +88,8 @@ struct MeasurementDerivation {
     std::uint32_t first_plane = kNoValidityPlane;
     std::uint32_t second_plane = kNoValidityPlane;
     std::uint32_t cross_plane = kNoValidityPlane;
+    std::uint32_t first_sample_plane = kNoValidityPlane;
+    std::uint32_t last_sample_plane = kNoValidityPlane;
 
     bool operator==(const MeasurementDerivation&) const = default;
 };

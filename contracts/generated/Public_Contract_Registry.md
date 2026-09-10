@@ -2,7 +2,7 @@
 
 This generated reference freezes the Core ABI 1.x and Worker Protocol 1.x identity space. Extension maturity remains independent.
 
-Registry digest: `5ffc9242791e567adfdb4c85ff517a8caba2030be8bb3f2a864ca5a4f76b6791`
+Registry digest: `a4ed018fe8e50c2b8cad25f9b126116a45f9f7ce28c858fb3d14f72a457c5929`
 
 | Registry ID | Kind | Canonical name | Stability | Maturity | Since | Default | Dependencies |
 |---:|---|---|---|---|---|---|---|
@@ -222,6 +222,57 @@ Registry digest: `5ffc9242791e567adfdb4c85ff517a8caba2030be8bb3f2a864ca5a4f76b67
 |2147483721|Semantic|`ure.preview.operation.scene_tool.material_import`|UnstableExtension|Experimental|1.0.0|disabled|2147483708|
 |2147483722|Semantic|`ure.preview.operation.scene_tool.material_export`|UnstableExtension|Experimental|1.0.0|disabled|2147483708|
 |2147483723|Semantic|`ure.preview.operation.scene_tool.material_preset`|UnstableExtension|Experimental|1.0.0|disabled|2147483708|
+|2147483724|FramePlane|`ure.preview.frame_plane.beauty_raw`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483725|FramePlane|`ure.preview.frame_plane.normal`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483726|FramePlane|`ure.preview.frame_plane.albedo`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483727|FramePlane|`ure.preview.frame_plane.depth`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483728|FramePlane|`ure.preview.frame_plane.uv`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483729|FramePlane|`ure.preview.frame_plane.motion`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483730|FramePlane|`ure.preview.frame_plane.validity`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483731|FramePlane|`ure.preview.frame_plane.sample_count`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483732|FramePlane|`ure.preview.frame_plane.first_moment`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483733|FramePlane|`ure.preview.frame_plane.second_moment`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483734|FramePlane|`ure.preview.frame_plane.lag_one_product`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483735|FramePlane|`ure.preview.frame_plane.variance`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483736|FramePlane|`ure.preview.frame_plane.effective_sample_count`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483737|FramePlane|`ure.preview.frame_plane.maximum_absolute_contribution`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483738|FramePlane|`ure.preview.frame_plane.first_contribution`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483739|FramePlane|`ure.preview.frame_plane.last_contribution`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483740|FramePlane|`ure.preview.frame_plane.estimator_weight`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483741|FramePlane|`ure.preview.frame_plane.technique_identity`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483742|Capability|`ure.preview.capability.measurement_output`|UnstableExtension|Experimental|1.0.0|disabled|302, 2147483682|
+|2147483743|Structure|`ure.preview.structure.measurement_frame_info`|UnstableExtension|Experimental|1.0.0|disabled|2, 4, 27, 2147483742|
+|2147483744|Structure|`ure.preview.structure.measurement_plane_info`|UnstableExtension|Experimental|1.0.0|disabled|2, 4, 2147483742|
+|2147483745|Structure|`ure.preview.structure.measurement_plane_copy`|UnstableExtension|Experimental|1.0.0|disabled|1, 4, 6, 27, 2147483742|
+|2147483746|Structure|`ure.preview.structure.output_request`|UnstableExtension|Experimental|1.0.0|disabled|1, 7, 27, 2147483742|
+|2147483747|Structure|`ure.preview.structure.output_manifest`|UnstableExtension|Experimental|1.0.0|disabled|2, 4, 2147483742|
+|2147483748|Structure|`ure.preview.structure.measurement_output_interface`|UnstableExtension|Experimental|1.0.0|disabled|13, 27, 2147483743, 2147483744, 2147483745, 2147483746, 2147483747, 2147483749|
+|2147483749|Interface|`ure.preview.interface.measurement_output`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483750|Semantic|`ure.preview.scalar_type.float64`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483751|Semantic|`ure.preview.scalar_type.uint8`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483752|Semantic|`ure.preview.scalar_type.uint32`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483753|Semantic|`ure.preview.scalar_type.uint64`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483754|Semantic|`ure.preview.component_layout.scalar`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483755|Semantic|`ure.preview.component_layout.rg`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483756|Semantic|`ure.preview.component_layout.rgb`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483757|Semantic|`ure.preview.component_layout.vector`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483758|Semantic|`ure.preview.normalization.none`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483759|Semantic|`ure.preview.normalization.sample_sum`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483760|Semantic|`ure.preview.normalization.sample_statistic`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483761|Semantic|`ure.preview.output_format.openexr`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483762|Semantic|`ure.preview.output_format.measurement`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483763|Semantic|`ure.preview.publication.complete`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483764|Semantic|`ure.preview.publication.partial`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483765|Semantic|`ure.preview.publication.failed`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483766|FramePlane|`ure.preview.frame_plane.tail_event_count`|UnstableExtension|Experimental|1.0.0|disabled|302|
+|2147483767|Semantic|`ure.preview.operation.publish_product_artifacts`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483768|Semantic|`ure.preview.operation.acquire_measurement_plane_range`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483769|Semantic|`ure.preview.output_format.hdr`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483770|Semantic|`ure.preview.output_format.ppm`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483771|Semantic|`ure.preview.output_format.bmp`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483772|Semantic|`ure.preview.tone_map.linear`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483773|Semantic|`ure.preview.tone_map.reinhard`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
+|2147483774|Semantic|`ure.preview.tone_map.aces`|UnstableExtension|Experimental|1.0.0|disabled|2147483742|
 |4026531840|Semantic|`ure.private.mock.device_loss`|Private|NotApplicable|1.0.0|disabled|403|
 |4026531841|Semantic|`ure.private.mock.worker_crash`|Private|NotApplicable|1.0.0|disabled||
 |4026531842|Semantic|`ure.private.mock.event_gap`|Private|NotApplicable|1.0.0|disabled|402|

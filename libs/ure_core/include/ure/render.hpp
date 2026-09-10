@@ -30,6 +30,35 @@ struct IntegratorEstimatorMetadata {
     std::uint32_t scene_epoch = 0;
 };
 
+struct RenderMeasurementEndpointStatistics {
+    std::uint64_t sample_range_start{};
+    std::uint64_t sample_count{};
+    IntegratorEstimatorMetadata estimator;
+    double aggregation_weight{1.0};
+    std::vector<double> first_moment_sums;
+    std::vector<double> second_moment_sums;
+    std::vector<double> lag_one_product_sums;
+    std::vector<double> first_contributions;
+    std::vector<double> last_contributions;
+    std::vector<float> maximum_absolute_contributions;
+    std::vector<std::uint64_t> tail_event_counts;
+};
+
+struct RenderMeasurementStatistics {
+    std::uint32_t width{};
+    std::uint32_t height{};
+    std::vector<float> estimate;
+    std::vector<RenderMeasurementEndpointStatistics> endpoints;
+    std::vector<float> normal;
+    std::vector<float> albedo;
+    std::vector<float> depth;
+    std::vector<float> uv;
+    std::vector<float> motion;
+    IntegratorEstimatorMetadata auxiliary_estimator;
+    bool auxiliary_outputs_wavefront_only{};
+    bool valid{};
+};
+
 constexpr std::uint32_t kRestirDISampleSpaceVersion = 1;
 constexpr std::uint32_t kRestirPTSampleSpaceVersion = 1;
 constexpr std::uint32_t kAutomaticPortfolioSampleSpaceVersion = 1;
@@ -159,6 +188,9 @@ public:
 
     virtual AutomaticIntegratorReport
         get_automatic_integrator_report() const { return {}; }
+
+    virtual RenderMeasurementStatistics
+        get_measurement_statistics() const { return {}; }
 
     // Backward compatibility alias
     const std::vector<float>& get_frame_buffer() const { return get_framebuffer(); }

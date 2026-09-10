@@ -37,6 +37,17 @@ struct GpuContext {
     GpuVec3* d_output = nullptr;
     GpuVec3* d_accum_buffer = nullptr;
     int* d_sample_counts = nullptr;
+    GpuVec3* d_measurement_pass_contribution = nullptr;
+    GpuVec3* d_measurement_previous_contribution = nullptr;
+    double* d_measurement_first_moment = nullptr;
+    double* d_measurement_second_moment = nullptr;
+    double* d_measurement_lag_one_product = nullptr;
+    double* d_measurement_first_contribution = nullptr;
+    GpuVec3* d_measurement_maximum_absolute = nullptr;
+    unsigned long long* d_measurement_tail_event_count = nullptr;
+    unsigned int* d_measurement_invalid_count = nullptr;
+    int measurement_captured_spp = 0;
+    bool measurement_statistics_valid = true;
 
     GpuVec3* d_normal_buffer = nullptr;
     GpuVec3* d_albedo_buffer = nullptr;
@@ -228,6 +239,7 @@ struct GpuContext {
     float* d_wavelength_proposal_pdf = nullptr;
     int wavelength_proposal_count = 0;
     GpuVec3* d_diffraction_spectral_accum = nullptr;
+    GpuVec3* d_diffraction_spectral_pass = nullptr;
     float* d_diffraction_psf_weights = nullptr;
     float* d_diffraction_psf_prefix = nullptr;
     int diffraction_radius_pixels = 0;

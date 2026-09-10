@@ -88,7 +88,7 @@ function Write-PackageManifest([string]$Root, [string]$Kind) {
     }
     if ($Kind -eq "SDK") {
         $manifest["stable_component"] = "Core ABI 1.x and Worker Protocol 1.x"
-        $manifest["exact_build_components"] = @("Preview Client 0.3", "Generated C++ protocol headers")
+        $manifest["exact_build_components"] = @("Preview Client 0.4", "Generated C++ protocol headers")
     }
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $Root "package_manifest.json") -Encoding utf8NoBOM
 }
@@ -144,6 +144,8 @@ New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeStage "bin"), (Join
 Copy-Item -LiteralPath (Join-Path $RepoRoot "LICENSE") -Destination (Join-Path $RuntimeStage "share/licenses/ultrarender/LICENSE")
 Copy-Item -LiteralPath $RuntimeDll -Destination (Join-Path $RuntimeStage "bin")
 Copy-Item -LiteralPath $WorkerExecutable -Destination (Join-Path $RuntimeStage "bin")
+Copy-Tree (Join-Path $RepoRoot "third_party/openexr") (Join-Path $RuntimeStage "share/licenses/openexr")
+Copy-Tree (Join-Path $RepoRoot "third_party/imath") (Join-Path $RuntimeStage "share/licenses/imath")
 Copy-Item -LiteralPath (Join-Path $RepoRoot "contracts/abi/windows_x64_core_1_0.json") -Destination (Join-Path $RuntimeStage "share/ultrarender/abi")
 Copy-Item -LiteralPath (Join-Path $RepoRoot "contracts/generated/runtime_manifest_1.json") -Destination (Join-Path $RuntimeStage "share/ultrarender")
 Copy-Item -LiteralPath (Join-Path $RepoRoot "contracts/generated/registry/public_contract_registry.canonical.json") -Destination (Join-Path $RuntimeStage "share/ultrarender/registry")

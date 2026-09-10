@@ -22,7 +22,7 @@ namespace ure::worker {
 namespace {
 
 inline constexpr std::uint64_t kMaximumSnapshotBytes =
-    UINT64_C(256) * 1024 * 1024;
+    UINT64_C(512) * 1024 * 1024;
 
 namespace payload_fb = ultrarender::contract::v1;
 
@@ -185,6 +185,7 @@ struct RuntimeClient::Impl {
     const ure_product_job_interface_t *products{};
     const ure_scene_tool_interface_t *scene_tools{};
     const ure_device_execution_interface_t *device_execution{};
+    const ure_measurement_output_interface_t *measurement_output{};
 #if defined(URE_WORKER_CONFORMANCE)
     const ConformanceInterface *conformance{};
 #endif
@@ -251,6 +252,22 @@ struct RuntimeClient::Impl {
             error(result, error_handle, failure);
             return false;
         }
+        if (measurement_output) {
+            ure_measurement_frame_info_t measurement{};
+            measurement.header = {URE_STRUCTURE_MEASUREMENT_FRAME_INFO,
+                                  sizeof(measurement), nullptr};
+            ure_handle_t measurement_error{};
+            if (measurement_output->get_frame_info(handle, &measurement,
+                                                   &measurement_error) ==
+                URE_RESULT_SUCCESS) {
+                snapshot.generation = measurement.generation;
+                std::memcpy(snapshot.measurement_identity.data(),
+                            measurement.measurement_identity.bytes, 32);
+                snapshot.publication_status = measurement.publication_status;
+            } else if (measurement_error) {
+                errors->release(measurement_error);
+            }
+        }
         if (snapshot.frame.plane_count == 0 ||
             snapshot.frame.plane_count > 64) {
             failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 414,
@@ -269,6 +286,25 @@ struct RuntimeClient::Impl {
             if (result != URE_RESULT_SUCCESS) {
                 error(result, error_handle, failure);
                 return false;
+            }
+            if (measurement_output) {
+                ure_measurement_plane_info_t measurement{};
+                measurement.header = {URE_STRUCTURE_MEASUREMENT_PLANE_INFO,
+                                      sizeof(measurement), nullptr};
+                ure_handle_t measurement_error{};
+                const auto measurement_result =
+                    measurement_output->get_plane_info(
+                        handle, index, &measurement, &measurement_error);
+                if (measurement_result == URE_RESULT_SUCCESS) {
+                    std::memcpy(plane.content_identity.data(),
+                                measurement.content_identity.bytes, 32);
+                    plane.sample_begin = measurement.sample_begin;
+                    plane.sample_count = measurement.sample_count;
+                    plane.endpoint_index = measurement.endpoint_index;
+                    plane.flags = measurement.flags;
+                } else if (measurement_error) {
+                    errors->release(measurement_error);
+                }
             }
             if (plane.info.byte_extent == 0 ||
                 plane.info.byte_extent >
@@ -428,6 +464,8 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
         URE_INTERFACE_SCENE_TOOL_UUID_BYTES;
     static constexpr std::uint8_t device_execution_id[16] =
         URE_INTERFACE_DEVICE_EXECUTION_UUID_BYTES;
+    static constexpr std::uint8_t measurement_output_id[16] =
+        URE_INTERFACE_MEASUREMENT_OUTPUT_UUID_BYTES;
     const auto runtime = query_table<ure_runtime_interface_t>(
         query, runtime_id,
         offsetof(ure_runtime_interface_t, create_instance) +
@@ -467,6 +505,10 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
         query_device_table<ure_device_execution_interface_t>(
             query, device_execution_id,
             sizeof(ure_device_execution_interface_t));
+    impl_->measurement_output =
+        query_device_table<ure_measurement_output_interface_t>(
+            query, measurement_output_id,
+            sizeof(ure_measurement_output_interface_t));
 #if defined(URE_WORKER_CONFORMANCE)
     impl_->conformance =
         query_table<ConformanceInterface>(query, kConformanceInterfaceId,
@@ -474,7 +516,8 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
 #endif
     if (!runtime || !impl_->instances || !impl_->errors || !impl_->frames ||
         !impl_->scenes || !impl_->sessions || !impl_->operations ||
-        !impl_->products || !impl_->scene_tools || !impl_->device_execution
+        !impl_->products || !impl_->scene_tools || !impl_->device_execution ||
+        !impl_->measurement_output
 #if defined(URE_WORKER_CONFORMANCE)
         || !impl_->conformance
 #endif
@@ -488,12 +531,13 @@ bool RuntimeClient::open(const std::filesystem::path &runtime_path,
                                    URE_CAPABILITY_RENDER_SESSION,
                                    URE_CAPABILITY_PRODUCT_JOB,
                                    URE_CAPABILITY_DEVICE_EXECUTION,
-                                   URE_CAPABILITY_SCENE_TOOL};
+                                   URE_CAPABILITY_SCENE_TOOL,
+                                   URE_CAPABILITY_MEASUREMENT_OUTPUT};
     ure_instance_frame_budget_t budget{};
     budget.header = {URE_STRUCTURE_INSTANCE_FRAME_BUDGET, sizeof(budget),
                      nullptr};
     budget.max_retained_frames = 8;
-    budget.max_retained_bytes = UINT64_C(268435456);
+    budget.max_retained_bytes = UINT64_C(2147483648);
     ure_instance_create_info_t create{};
     create.header = {URE_STRUCTURE_INSTANCE_CREATE_INFO, sizeof(create), &budget};
     create.event_capacity = 256;
@@ -870,6 +914,181 @@ bool RuntimeClient::acquire_product_frame(
     frame.session.requested_samples = status.requested_samples;
     frame.session.completed_samples = status.completed_samples;
     frame.session_id = job_id;
+    return true;
+}
+
+bool RuntimeClient::publish_product_artifacts(
+    std::uint64_t job_id, std::uint32_t format, std::uint32_t tone_map,
+    const std::string &path,
+    std::uint64_t byte_budget, ProductOutputSnapshot &output,
+    RuntimeFailure &failure) {
+    if (!impl_->product_job || job_id != impl_->product_job_id) {
+        failure = {URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE, 832,
+                   "worker product job identity is unknown"};
+        return false;
+    }
+    if (path.empty() || path.size() > 32768 ||
+        path.find('\0') != std::string::npos || byte_budget == 0) {
+        failure = {URE_RESULT_INVALID_ARGUMENT, URE_ERROR_DOMAIN_CORE, 833,
+                   "worker product output path or budget is invalid"};
+        return false;
+    }
+    ure_output_request_t request{};
+    request.header = {URE_STRUCTURE_OUTPUT_REQUEST, sizeof(request), nullptr};
+    request.job = impl_->product_job;
+    request.format = format;
+    request.tone_map = tone_map;
+    request.output_path = {path.data(), path.size()};
+    request.byte_budget = byte_budget;
+    ure_output_manifest_t manifest{};
+    manifest.header = {URE_STRUCTURE_OUTPUT_MANIFEST, sizeof(manifest), nullptr};
+    ure_handle_t error_handle{};
+    const auto result = impl_->measurement_output->publish_artifacts(
+        &request, &manifest, &error_handle);
+    if (result != URE_RESULT_SUCCESS) {
+        impl_->error(result, error_handle, failure);
+        return false;
+    }
+    output = {};
+    output.job_id = job_id;
+    output.publication_status = manifest.publication_status;
+    output.format = manifest.format;
+    output.artifact_count = manifest.artifact_count;
+    output.byte_count = manifest.byte_count;
+    std::memcpy(output.manifest_identity.data(),
+                manifest.manifest_identity.bytes, 32);
+    std::memcpy(output.measurement_identity.data(),
+                manifest.measurement_identity.bytes, 32);
+    std::memcpy(output.content_identity.data(), manifest.content_identity.bytes,
+                32);
+    return true;
+}
+
+bool RuntimeClient::acquire_product_plane_range(
+    std::uint64_t job_id, std::uint32_t plane_index,
+    std::uint64_t source_offset, std::uint64_t byte_count,
+    std::uint64_t expected_generation,
+    const std::array<std::uint8_t, 32> &expected_content_identity,
+    ProductStatusSnapshot &status, FrameSnapshot &snapshot,
+    RuntimeFailure &failure) {
+    if (!impl_->product_job || job_id != impl_->product_job_id) {
+        failure = {URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE, 834,
+                   "worker product job identity is unknown"};
+        return false;
+    }
+    if (byte_count == 0 || byte_count > UINT32_MAX || expected_generation == 0) {
+        failure = {URE_RESULT_INVALID_ARGUMENT, URE_ERROR_DOMAIN_CORE, 835,
+                   "worker product plane range is invalid"};
+        return false;
+    }
+    if (!impl_->product_status(status, failure))
+        return false;
+    ure_handle_t frame_handle{};
+    ure_handle_t error_handle{};
+    auto result = impl_->products->acquire_frame(impl_->product_job,
+                                                 &frame_handle, &error_handle);
+    if (result != URE_RESULT_SUCCESS) {
+        impl_->error(result, error_handle, failure);
+        return false;
+    }
+    struct FrameRelease {
+        const ure_frame_interface_t *interface{};
+        ure_handle_t handle{};
+        ~FrameRelease() {
+            if (handle)
+                interface->release(handle, nullptr);
+        }
+    } release{impl_->frames, frame_handle};
+    ure_measurement_frame_info_t frame_info{};
+    frame_info.header = {URE_STRUCTURE_MEASUREMENT_FRAME_INFO,
+                         sizeof(frame_info), nullptr};
+    result = impl_->measurement_output->get_frame_info(frame_handle, &frame_info,
+                                                       &error_handle);
+    if (result != URE_RESULT_SUCCESS) {
+        impl_->error(result, error_handle, failure);
+        return false;
+    }
+    if (frame_info.generation != expected_generation) {
+        failure = {URE_RESULT_REVISION_CONFLICT, URE_ERROR_DOMAIN_CORE, 836,
+                   "worker measurement frame generation changed"};
+        return false;
+    }
+    ure_measurement_plane_info_t plane{};
+    plane.header = {URE_STRUCTURE_MEASUREMENT_PLANE_INFO, sizeof(plane), nullptr};
+    result = impl_->measurement_output->get_plane_info(
+        frame_handle, plane_index, &plane, &error_handle);
+    if (result != URE_RESULT_SUCCESS) {
+        impl_->error(result, error_handle, failure);
+        return false;
+    }
+    if (!std::equal(std::begin(plane.content_identity.bytes),
+                    std::end(plane.content_identity.bytes),
+                    expected_content_identity.begin())) {
+        failure = {URE_RESULT_REVISION_CONFLICT, URE_ERROR_DOMAIN_CORE, 837,
+                   "worker measurement plane content identity changed"};
+        return false;
+    }
+    if (source_offset > plane.byte_extent ||
+        byte_count > plane.byte_extent - source_offset) {
+        failure = {URE_RESULT_INVALID_ARGUMENT, URE_ERROR_DOMAIN_CORE, 838,
+                   "worker measurement plane range is out of bounds"};
+        return false;
+    }
+    snapshot = {};
+    snapshot.frame.header = {URE_STRUCTURE_FRAME_INFO, sizeof(snapshot.frame),
+                             nullptr};
+    result = impl_->frames->get_info(frame_handle, &snapshot.frame,
+                                     &error_handle);
+    if (result != URE_RESULT_SUCCESS) {
+        impl_->error(result, error_handle, failure);
+        return false;
+    }
+    snapshot.generation = frame_info.generation;
+    std::memcpy(snapshot.measurement_identity.data(),
+                frame_info.measurement_identity.bytes, 32);
+    snapshot.publication_status = frame_info.publication_status;
+    snapshot.planes.resize(1);
+    snapshot.planes[0].info.header = {URE_STRUCTURE_FRAME_PLANE_INFO,
+                                      sizeof(ure_frame_plane_info_t), nullptr};
+    snapshot.planes[0].info.plane_schema = plane.plane_schema;
+    snapshot.planes[0].info.scalar_type = plane.scalar_type;
+    snapshot.planes[0].info.component_layout = plane.component_layout;
+    snapshot.planes[0].info.normalization = plane.normalization;
+    snapshot.planes[0].info.width = static_cast<std::uint32_t>(byte_count);
+    snapshot.planes[0].info.height = 1;
+    snapshot.planes[0].info.depth = 1;
+    snapshot.planes[0].info.element_stride = 1;
+    snapshot.planes[0].info.row_stride = byte_count;
+    snapshot.planes[0].info.slice_stride = byte_count;
+    snapshot.planes[0].info.byte_extent = byte_count;
+    snapshot.planes[0].info.observable_identity = plane.observable_identity;
+    snapshot.planes[0].info.unit_identity = plane.unit_identity;
+    snapshot.planes[0].info.measure_identity = plane.measure_identity;
+    snapshot.planes[0].info.time_identity = plane.time_identity;
+    snapshot.planes[0].info.uncertainty_identity = plane.uncertainty_identity;
+    snapshot.planes[0].info.provenance_identity = plane.provenance_identity;
+    snapshot.planes[0].byte_offset = 0;
+    std::memcpy(snapshot.planes[0].content_identity.data(),
+                plane.content_identity.bytes, 32);
+    snapshot.planes[0].sample_begin = plane.sample_begin;
+    snapshot.planes[0].sample_count = plane.sample_count;
+    snapshot.planes[0].endpoint_index = plane.endpoint_index;
+    snapshot.planes[0].flags = plane.flags;
+    snapshot.bytes.resize(static_cast<std::size_t>(byte_count));
+    ure_measurement_plane_copy_t copy{};
+    copy.header = {URE_STRUCTURE_MEASUREMENT_PLANE_COPY, sizeof(copy), nullptr};
+    copy.frame = frame_handle;
+    copy.plane_index = plane_index;
+    copy.source_offset = source_offset;
+    copy.byte_count = byte_count;
+    copy.destination = {snapshot.bytes.data(), snapshot.bytes.size()};
+    copy.expected_generation = expected_generation;
+    copy.expected_content_identity = plane.content_identity;
+    result = impl_->measurement_output->copy_plane_range(&copy, &error_handle);
+    if (result != URE_RESULT_SUCCESS) {
+        impl_->error(result, error_handle, failure);
+        return false;
+    }
     return true;
 }
 

@@ -1,0 +1,71 @@
+{
+  "schema": "ure.phase_prv4.quality-validation/1.0",
+  "status": "AutomatedPassed",
+  "visual_review_required": true,
+  "product_release_declared": false,
+  "evidence_tier": "ProductQuality",
+  "fixture": {
+    "source": "tests/assets/product_e2e/cornell_1280x720.urescene",
+    "sha256": "d6158d42513c20353415af96bb71ca7ee9e34ff84b1ea297f6534b16887c4a62"
+  },
+  "run": {
+    "transport": "Direct",
+    "resolution": "1280x720",
+    "requested_samples": 500,
+    "completed_samples": 500,
+    "plane_count": 45,
+    "partial_plane": 10,
+    "partial_bytes": 4096,
+    "elapsed_ms": 404209,
+    "identities": {
+      "build": "1a06679e9fb78ff9f3156ebf82146560c4a160d1700abd2c2618673e606da427",
+      "snapshot": "b430ec50db5bd82c88b2574c19cce1e7f35ad229a692e88f83febd8cc7ba8ce2",
+      "objective": "73b19d101aa7a36bf89e6e4a61aec73c800c16b2c320cd1b40d80ba799949d1a",
+      "plan": "293d0b86bce70c2521fa24f0a023536053eb51d30787299609c9e0d1f7ca37da",
+      "measurement": "54f1a5fecf9bc547385d59850f256a2f04fc169bb0eb4bc9886ce9cd0635e402",
+      "manifest": "829d1ca39997d8f389ec82c60774058cd6dbdcebcd0c0e0cd690772dc193426c"
+    }
+  },
+  "artifacts": {
+    "beauty_pfm_sha256": "7669b11fdfaac2a90db5567f36fefe78403659754eb363b9778aa789f9e66ac0",
+    "openexr_sha256": "e5b323ac3c56792c9e24b286ff87ebf6e4962a1a4d79dc645070fdf669ec5788",
+    "checkpoint_sha256": "8af89a1c21ed2a9c9a189d1cb3a4db22bec31a9483862b109214382e694560d3",
+    "reinhard_ppm_sha256": "f1e68472dc5a7c013b2b10b71c62c46ea041120b8bdf21db3b8ff9d34bdb2ece",
+    "manifest_sha256": "829d1ca39997d8f389ec82c60774058cd6dbdcebcd0c0e0cd690772dc193426c",
+    "png_file": "cornell-1280x720-spp500-direct.png",
+    "png_sha256": "f91a4beacd0042b5614cd86d2e917f3cb5e66f4769f20a2ec113a8a526628f2e"
+  },
+  "image": {
+    "schema": "ure.preview.measurement-image-validation/1.0",
+    "raw_authority": {
+      "semantic": "BeautyRaw",
+      "format": "PFM RGB float32 little-endian",
+      "orientation": "bottom-left",
+      "color_space": "linear_sRGB_D65",
+      "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv4_quality\\cornell-1280x720-spp500-direct.beauty.pfm",
+      "sha256": "7669b11fdfaac2a90db5567f36fefe78403659754eb363b9778aa789f9e66ac0"
+    },
+    "derived_view": {
+      "format": "PNG RGB8 sRGB",
+      "orientation": "top-left",
+      "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+      "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv4_quality\\cornell-1280x720-spp500-direct.png",
+      "sha256": "f91a4beacd0042b5614cd86d2e917f3cb5e66f4769f20a2ec113a8a526628f2e"
+    },
+    "metrics": {
+      "width": 1280,
+      "height": 720,
+      "finite": true,
+      "minimum": 0.0006359280087053776,
+      "maximum": 3.8906657695770264,
+      "mean_luminance": 0.11343201051402713,
+      "positive_energy": 104538.94088972865,
+      "luminance_standard_deviation": 0.2397134262443268,
+      "mean_spatial_gradient": 0.0039985232160898955,
+      "nonzero_pixel_fraction": 1.0,
+      "negative_component_fraction": 0.0
+    }
+  },
+  "boundary": "720p/500 spp is milestone quality evidence, not a normal CTest or universal performance threshold",
+  "semantic_digest": "4c6d4d38b7be14b968742196be2f210d407d6be6405a4ee818d9149b5cb1115a"
+}

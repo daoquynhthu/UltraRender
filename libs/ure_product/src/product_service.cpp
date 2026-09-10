@@ -14,7 +14,9 @@
 #include <ure/backend.hpp>
 #include <ure/native_scene_hash.hpp>
 #include <ure/product/product_scene.hpp>
+#include <ure/product/product_measurement.hpp>
 #include <ure/product/product_service.hpp>
+#include <ure/reconstruction/checkpoint.hpp>
 #include <ure/session.hpp>
 
 namespace ure::product {
@@ -172,8 +174,15 @@ ProductMemoryPlan make_memory_plan(
         checked_multiply(triangle_count, 128),
         checked_multiply(
             scene.instances.size() + scene.spheres.size(), 128));
-    const auto per_framebuffer = checked_multiply(pixels, 72);
-    const auto per_spectral_plane = checked_multiply(pixels, 12);
+    const auto per_framebuffer = checked_multiply(pixels, 240);
+    const auto per_spectral_plane = config.wave_optics.camera_diffraction_enabled
+        ? checked_multiply(
+              checked_multiply(
+                  pixels,
+                  static_cast<std::uint64_t>(
+                      config.wave_optics.camera_wavelength_bin_count)),
+              24)
+        : 0;
     const auto per_queue = checked_multiply(
         checked_multiply(
             pixels, checked_add(288, checked_multiply(lanes, 56))),
@@ -194,7 +203,8 @@ ProductMemoryPlan make_memory_plan(
     result.executor_state_bytes = checked_multiply(
         executor_state, executors);
     result.scratch_bytes = scratch;
-    result.output_bytes = checked_multiply(pixels, 12);
+    result.output_bytes = checked_multiply(
+        pixels, checked_add(101, checked_multiply(executors, 212)));
     result.persistent_executor_count = static_cast<std::uint32_t>(executors);
     result.estimated_peak_bytes = result.framebuffer_bytes;
     result.estimated_peak_bytes = checked_add(
@@ -317,10 +327,41 @@ std::shared_ptr<const ProductSnapshot> realize_or_throw(
         diagnostic.recovery);
 }
 
+Identity measurement_identity(const ProductMeasurementSet& measurements) {
+    std::vector<std::uint8_t> bytes;
+    constexpr std::string_view domain =
+        "UltraRender.ProductMeasurementSet.v1";
+    bytes.insert(bytes.end(), domain.begin(), domain.end());
+    bytes.push_back(0);
+    const auto append_bundle = [&bytes](
+        const reconstruction::MeasurementBundle& bundle) {
+        const auto checkpoint =
+            reconstruction::write_measurement_checkpoint(bundle);
+        append_identity(bytes, content_identity(checkpoint));
+    };
+    append_bundle(measurements.estimate);
+    append_bytes(bytes, static_cast<std::uint8_t>(
+        measurements.auxiliary_outputs_wavefront_only ? 1 : 0));
+    append_bytes(bytes, static_cast<std::uint64_t>(
+        measurements.endpoints.size()));
+    for (const auto& endpoint : measurements.endpoints)
+        append_bundle(endpoint);
+    return content_identity(bytes);
+}
+
 Identity frame_identity(const ProductFrame& frame) {
-    const auto bytes = std::as_bytes(std::span(frame.rgb));
-    return content_identity(std::span(
-        reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()));
+    if (!frame.measurements)
+        throw std::invalid_argument("product frame has no measurements");
+    std::vector<std::uint8_t> bytes;
+    constexpr std::string_view domain = "UltraRender.ProductFrame.v1";
+    bytes.insert(bytes.end(), domain.begin(), domain.end());
+    bytes.push_back(0);
+    const auto rgb_bytes = std::as_bytes(std::span(frame.rgb));
+    append_identity(bytes, content_identity(std::span(
+        reinterpret_cast<const std::uint8_t*>(rgb_bytes.data()),
+        rgb_bytes.size())));
+    append_identity(bytes, measurement_identity(*frame.measurements));
+    return content_identity(bytes);
 }
 
 class ProductJobImpl final : public ProductJob {
@@ -463,7 +504,7 @@ public:
         int width{};
         int height{};
         renderer_->get_framebuffer_size(width, height);
-        const auto& framebuffer = renderer_->get_framebuffer();
+        auto statistics = renderer_->get_measurement_statistics();
         ProductFrame frame;
         {
             std::scoped_lock lock(mutex_);
@@ -476,7 +517,21 @@ public:
         }
         frame.width = static_cast<std::uint32_t>(width);
         frame.height = static_cast<std::uint32_t>(height);
-        frame.rgb = framebuffer;
+        if (!statistics.valid ||
+            statistics.width != frame.width ||
+            statistics.height != frame.height) {
+            throw ProductError(
+                ProductFailureCode::MeasurementUnavailable,
+                "renderer did not produce complete measurement statistics",
+                800, "URE-DIAG-OUTPUT-MEASUREMENT-MISSING",
+                "product.frame.measurements",
+                "Use a production-qualified estimator and one-sample work quantum.");
+        }
+        frame.rgb = renderer_->get_framebuffer();
+        frame.measurements = std::make_shared<const ProductMeasurementSet>(
+            make_product_measurement_set(
+                statistics, frame.identities, frame.accepted_samples,
+                execution_.device_identity));
         return frame;
     }
 
@@ -500,8 +555,16 @@ public:
         ProductArtifactManifest manifest;
         manifest.identities = frame.identities;
         manifest.frame_content = frame_identity(frame);
+        manifest.measurement_content =
+            measurement_identity(*frame.measurements);
         manifest.accepted_samples = frame.accepted_samples;
         manifest.rgb_value_count = frame.rgb.size();
+        manifest.measurement_bundle_count =
+            1 + frame.measurements->endpoints.size();
+        manifest.measurement_plane_count =
+            frame.measurements->estimate.planes.size();
+        for (const auto& endpoint : frame.measurements->endpoints)
+            manifest.measurement_plane_count += endpoint.planes.size();
         return manifest;
     }
 

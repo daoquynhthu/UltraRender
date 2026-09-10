@@ -105,6 +105,32 @@ JobResult Job::result() const {
     return impl_->transport_->result();
 }
 
+OutputManifest Job::publish_artifacts(const OutputRequest &request) const {
+    if (!impl_)
+        detail::throw_error(URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE,
+                            5, "client job is empty");
+    const auto path = request.path.generic_u8string();
+    if (path.empty() || path.size() > 32768 ||
+        std::ranges::find(path, char8_t{'\0'}) != path.end() ||
+        request.byte_budget == 0)
+        detail::throw_error(URE_RESULT_INVALID_ARGUMENT,
+                            URE_ERROR_DOMAIN_CORE, 825,
+                            "output path or byte budget is invalid");
+    return impl_->transport_->publish_artifacts(request);
+}
+
+std::vector<std::uint8_t>
+Job::copy_plane_range(const PlaneRangeRequest &request) const {
+    if (!impl_)
+        detail::throw_error(URE_RESULT_INVALID_HANDLE, URE_ERROR_DOMAIN_CORE,
+                            5, "client job is empty");
+    if (request.byte_count == 0 || request.expected_generation == 0)
+        detail::throw_error(URE_RESULT_INVALID_ARGUMENT,
+                            URE_ERROR_DOMAIN_CORE, 829,
+                            "plane range request is invalid");
+    return impl_->transport_->copy_plane_range(request);
+}
+
 Job::operator bool() const noexcept { return static_cast<bool>(impl_); }
 
 Client::Client() = default;

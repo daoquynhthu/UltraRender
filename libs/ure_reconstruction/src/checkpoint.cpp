@@ -193,6 +193,10 @@ std::vector<std::uint8_t> encode_metadata(
         writer.u32(plane.derivation.first_plane);
         writer.u32(plane.derivation.second_plane);
         writer.u32(plane.derivation.cross_plane);
+        if (bundle.schema.version >= 2) {
+            writer.u32(plane.derivation.first_sample_plane);
+            writer.u32(plane.derivation.last_sample_plane);
+        }
         writer.u8(plane.required ? 1 : 0);
     }
     write_identities(writer, bundle.provenance.identities);
@@ -252,6 +256,10 @@ MeasurementBundle decode_metadata(
         plane.derivation.first_plane = reader.u32();
         plane.derivation.second_plane = reader.u32();
         plane.derivation.cross_plane = reader.u32();
+        if (result.schema.version >= 2) {
+            plane.derivation.first_sample_plane = reader.u32();
+            plane.derivation.last_sample_plane = reader.u32();
+        }
         plane.required = reader.u8() != 0;
         result.schema.planes.push_back(plane);
     }

@@ -31,7 +31,7 @@ Assert-Package $SdkStage "SDK"
 Assert-Package $RuntimeStage "Runtime"
 $sdkManifest = Get-Content -Raw -LiteralPath (Join-Path $SdkStage "package_manifest.json") | ConvertFrom-Json
 if ($sdkManifest.stable_component -ne "Core ABI 1.x and Worker Protocol 1.x" -or
-    $sdkManifest.exact_build_components -notcontains "Preview Client 0.3" -or
+    $sdkManifest.exact_build_components -notcontains "Preview Client 0.4" -or
     $sdkManifest.exact_build_components -notcontains "Generated C++ protocol headers") {
     throw "SDK stable and exact-build component classifications are invalid"
 }
@@ -50,7 +50,9 @@ foreach ($path in @(
     (Join-Path $RuntimeStage "share/ultrarender/schemas/ure_worker_v1.fbs"),
     (Join-Path $RuntimeStage "share/ultrarender/docs/PB8_Stable_Compatibility_Report.md"),
     (Join-Path $RuntimeStage "share/licenses/ultrarender/LICENSE"),
-    (Join-Path $RuntimeStage "share/licenses/flatbuffers/LICENSE.txt")
+    (Join-Path $RuntimeStage "share/licenses/flatbuffers/LICENSE.txt"),
+    (Join-Path $RuntimeStage "share/licenses/openexr/LICENSE.md"),
+    (Join-Path $RuntimeStage "share/licenses/imath/LICENSE.md")
 )) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Required package boundary artifact is missing: $path"

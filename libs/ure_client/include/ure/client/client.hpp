@@ -233,12 +233,24 @@ struct FramePlane {
     std::uint32_t semantic{};
     std::uint32_t scalar_type{};
     std::uint32_t component_layout{};
+    std::uint32_t normalization{};
     std::uint32_t width{};
     std::uint32_t height{};
     std::uint32_t depth{};
     std::uint64_t row_stride{};
     std::uint64_t slice_stride{};
     std::uint64_t element_stride{};
+    std::array<std::uint8_t, 32> observable_identity{};
+    std::array<std::uint8_t, 32> unit_identity{};
+    std::array<std::uint8_t, 32> measure_identity{};
+    std::array<std::uint8_t, 32> time_identity{};
+    std::array<std::uint8_t, 32> uncertainty_identity{};
+    std::array<std::uint8_t, 32> provenance_identity{};
+    std::array<std::uint8_t, 32> content_identity{};
+    std::uint64_t sample_begin{};
+    std::uint64_t sample_count{};
+    std::uint32_t endpoint_index{UINT32_MAX};
+    std::uint32_t flags{};
     std::vector<std::uint8_t> bytes;
 };
 
@@ -248,6 +260,8 @@ struct Frame {
     std::uint64_t sample_begin{};
     std::uint64_t sample_count{};
     std::array<std::uint8_t, 32> identity{};
+    std::uint64_t generation{};
+    std::array<std::uint8_t, 32> measurement_identity{};
     std::vector<FramePlane> planes;
 };
 
@@ -256,6 +270,45 @@ struct ArtifactManifest {
     std::uint64_t rgb_value_count{};
     IdentitySet identities;
     std::array<std::uint8_t, 32> frame_content_identity{};
+};
+
+enum class OutputFormat : std::uint32_t {
+    OpenExr = URE_OUTPUT_FORMAT_OPENEXR,
+    Measurement = URE_OUTPUT_FORMAT_MEASUREMENT,
+    Hdr = URE_OUTPUT_FORMAT_HDR,
+    Ppm = URE_OUTPUT_FORMAT_PPM,
+    Bmp = URE_OUTPUT_FORMAT_BMP
+};
+
+enum class ToneMap : std::uint32_t {
+    Linear = URE_TONE_MAP_LINEAR,
+    Reinhard = URE_TONE_MAP_REINHARD,
+    Aces = URE_TONE_MAP_ACES
+};
+
+struct OutputRequest {
+    OutputFormat format{OutputFormat::OpenExr};
+    std::filesystem::path path;
+    std::uint64_t byte_budget{UINT64_C(1024) * 1024 * 1024};
+    ToneMap tone_map{ToneMap::Linear};
+};
+
+struct OutputManifest {
+    std::uint32_t publication_status{};
+    OutputFormat format{OutputFormat::OpenExr};
+    std::uint64_t artifact_count{};
+    std::uint64_t byte_count{};
+    std::array<std::uint8_t, 32> manifest_identity{};
+    std::array<std::uint8_t, 32> measurement_identity{};
+    std::array<std::uint8_t, 32> content_identity{};
+};
+
+struct PlaneRangeRequest {
+    std::uint32_t plane_index{};
+    std::uint64_t source_offset{};
+    std::uint64_t byte_count{};
+    std::uint64_t expected_generation{};
+    std::array<std::uint8_t, 32> expected_content_identity{};
 };
 
 struct JobResult {
@@ -281,6 +334,9 @@ class Job {
     bool wait_event(std::chrono::nanoseconds timeout, ProgressEvent &event);
     Frame latest_frame() const;
     JobResult result() const;
+    OutputManifest publish_artifacts(const OutputRequest &request) const;
+    std::vector<std::uint8_t>
+    copy_plane_range(const PlaneRangeRequest &request) const;
     explicit operator bool() const noexcept;
 
   private:

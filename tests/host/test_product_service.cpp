@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <cstdio>
 #include <filesystem>
 #include <stdexcept>
@@ -60,15 +61,26 @@ int main() {
         *loaded.value, snapshot, objective);
 
     const auto& memory_plan = job->memory_plan();
-    check(memory_plan.persistent_executor_count == 4 &&
-              memory_plan.framebuffer_bytes > 0 &&
-              memory_plan.spectral_plane_bytes > 0 &&
-              memory_plan.queue_bytes > 0 &&
-              memory_plan.executor_state_bytes > 0 &&
-              memory_plan.output_bytes > 0 &&
-              memory_plan.estimated_peak_bytes <=
-                  memory_plan.applicable_budget_bytes,
-          "product memory preflight did not retain a bounded plan");
+    check(memory_plan.persistent_executor_count == 4,
+          "product memory preflight executor count is incorrect");
+    check(memory_plan.framebuffer_bytes > 0,
+          "product memory preflight omitted framebuffer storage");
+    check(memory_plan.queue_bytes > 0,
+          "product memory preflight omitted queue storage");
+    check(memory_plan.executor_state_bytes > 0,
+          "product memory preflight omitted executor state");
+    check(memory_plan.output_bytes > 0,
+          "product memory preflight omitted output storage");
+    const auto planned_peak = memory_plan.framebuffer_bytes +
+        memory_plan.spectral_plane_bytes + memory_plan.queue_bytes +
+        memory_plan.acceleration_bytes + memory_plan.scene_resource_bytes +
+        memory_plan.executor_state_bytes + memory_plan.scratch_bytes +
+        memory_plan.output_bytes;
+    check(memory_plan.estimated_peak_bytes == planned_peak,
+          "product memory preflight peak does not equal its retained components");
+    check(memory_plan.estimated_peak_bytes <=
+              memory_plan.applicable_budget_bytes,
+          "product memory preflight exceeded the applicable budget");
     check(nonzero(job->identities().build), "build identity is empty");
     check(nonzero(job->identities().plan), "plan identity is empty");
     const auto product_snapshot = job->identities().snapshot;
@@ -143,12 +155,70 @@ int main() {
     check(std::ranges::all_of(frame.rgb,
                               [](float value) { return std::isfinite(value); }),
           "frame contains non-finite values");
+    check(frame.measurements != nullptr,
+          "frame did not publish typed measurements");
+    if (frame.measurements) {
+        check(ure::reconstruction::validate_measurement_bundle(
+                  frame.measurements->estimate).ok(),
+              "frame estimate measurement is invalid");
+        check(!frame.measurements->endpoints.empty(),
+              "frame did not retain estimator endpoint statistics");
+        std::uint64_t endpoint_samples = 0;
+        double endpoint_weight = 0.0;
+        for (const auto& endpoint : frame.measurements->endpoints) {
+            check(ure::reconstruction::validate_measurement_bundle(
+                      endpoint).ok(),
+                  "frame endpoint measurement is invalid");
+            const auto find_plane = [&endpoint](
+                ure::reconstruction::MeasurementPlaneKind kind) {
+                return std::ranges::find_if(
+                    endpoint.planes, [&endpoint, kind](const auto& plane) {
+                        return plane.schema_plane < endpoint.schema.planes.size() &&
+                            endpoint.schema.planes[plane.schema_plane].kind == kind;
+                    });
+            };
+            const auto sample_plane = find_plane(
+                ure::reconstruction::MeasurementPlaneKind::SampleCount);
+            const auto weight_plane = find_plane(
+                ure::reconstruction::MeasurementPlaneKind::EstimatorWeight);
+            check(sample_plane != endpoint.planes.end() &&
+                      weight_plane != endpoint.planes.end(),
+                  "endpoint omitted sample-count or estimator-weight plane");
+            if (sample_plane == endpoint.planes.end() ||
+                weight_plane == endpoint.planes.end())
+                continue;
+            std::uint64_t samples{};
+            double weight{};
+            std::memcpy(&samples, sample_plane->payload.data(),
+                        sizeof(samples));
+            std::memcpy(&weight, weight_plane->payload.data(),
+                        sizeof(weight));
+            endpoint_samples += samples;
+            endpoint_weight += weight;
+        }
+        check(endpoint_samples == frame.accepted_samples,
+              "endpoint statistics do not cover the accepted sample domain");
+        if (std::abs(endpoint_weight - 1.0) >= 1e-12) {
+            std::fprintf(stderr,
+                         "FAIL: endpoint aggregation weights total %.17g, expected 1\n",
+                         endpoint_weight);
+            ++failures;
+        }
+    }
     const auto artifact = job->artifact_manifest(frame);
     check(nonzero(artifact.frame_content), "artifact identity is empty");
+    check(nonzero(artifact.measurement_content),
+          "measurement artifact identity is empty");
     check(artifact.accepted_samples == 2,
           "artifact sample accounting is incorrect");
     check(artifact.rgb_value_count == frame.rgb.size(),
           "artifact layout accounting is incorrect");
+    check(frame.measurements &&
+              artifact.measurement_bundle_count ==
+                  1 + frame.measurements->endpoints.size() &&
+              artifact.measurement_plane_count >
+                  frame.measurements->estimate.planes.size(),
+          "measurement artifact accounting is incorrect");
 
     job->reset();
     check(job->operation().state ==

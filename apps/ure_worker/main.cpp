@@ -419,6 +419,56 @@ bool scene_tool_request(const product_fb::ProductEnvelope &envelope,
     return true;
 }
 
+bool product_output_request(const product_fb::ProductEnvelope &envelope,
+                            std::uint64_t expected_job,
+                            std::uint32_t &format, std::uint32_t &tone_map,
+                            std::string &path,
+                            std::uint64_t &byte_budget) {
+    const auto *source = envelope.output_request();
+    if (!source || envelope.kind() != product_fb::ProductMessageKind::PublishArtifacts ||
+        source->job_id() != expected_job || !source->output_path() ||
+        source->output_path()->size() == 0 ||
+        source->output_path()->size() > 32768 || source->byte_budget() == 0)
+        return false;
+    path = source->output_path()->str();
+    if (path.find('\0') != std::string::npos)
+        return false;
+    format = source->format();
+    tone_map = source->tone_map();
+    byte_budget = source->byte_budget();
+    const bool known_format = format == URE_OUTPUT_FORMAT_OPENEXR ||
+                              format == URE_OUTPUT_FORMAT_MEASUREMENT ||
+                              format == URE_OUTPUT_FORMAT_HDR ||
+                              format == URE_OUTPUT_FORMAT_PPM ||
+                              format == URE_OUTPUT_FORMAT_BMP;
+    const bool known_tone_map = tone_map == URE_TONE_MAP_LINEAR ||
+                                tone_map == URE_TONE_MAP_REINHARD ||
+                                tone_map == URE_TONE_MAP_ACES;
+    return known_format && known_tone_map;
+}
+
+bool product_plane_range_request(
+    const product_fb::ProductEnvelope &envelope, std::uint64_t expected_job,
+    std::uint32_t &plane_index, std::uint64_t &source_offset,
+    std::uint64_t &byte_count, std::uint64_t &expected_generation,
+    std::array<std::uint8_t, 32> &expected_content_identity) {
+    const auto *source = envelope.plane_range_request();
+    if (!source || envelope.kind() != product_fb::ProductMessageKind::AcquirePlaneRange ||
+        source->job_id() != expected_job || source->byte_count() == 0 ||
+        source->expected_generation() == 0 ||
+        !source->expected_content_identity() ||
+        source->expected_content_identity()->size() != 32)
+        return false;
+    plane_index = source->plane_index();
+    source_offset = source->source_offset();
+    byte_count = source->byte_count();
+    expected_generation = source->expected_generation();
+    std::copy(source->expected_content_identity()->begin(),
+              source->expected_content_identity()->end(),
+              expected_content_identity.begin());
+    return true;
+}
+
 std::vector<std::uint8_t> scene_tool_response_payload(
     product_fb::ProductMessageKind kind,
     const SceneToolSnapshot &snapshot) {
@@ -476,7 +526,8 @@ product_identities(const ProductStatusSnapshot &status) {
 
 std::vector<std::uint8_t> product_response_payload(
     product_fb::ProductMessageKind kind, const ProductStatusSnapshot &status,
-    const ProductArtifactSnapshot *artifact = nullptr) {
+    const ProductArtifactSnapshot *artifact = nullptr,
+    const ProductOutputSnapshot *output = nullptr) {
     product_fb::ProductEnvelopeT envelope;
     envelope.kind = kind;
     envelope.status = std::make_unique<product_fb::ProductJobStatusT>();
@@ -530,6 +581,23 @@ std::vector<std::uint8_t> product_response_payload(
             artifact->frame_content_identity.begin(),
             artifact->frame_content_identity.end());
         envelope.artifact->identities = product_identities(status);
+    }
+    if (output) {
+        envelope.output_manifest =
+            std::make_unique<product_fb::ProductOutputManifestT>();
+        auto &manifest = *envelope.output_manifest;
+        manifest.job_id = output->job_id;
+        manifest.publication_status = output->publication_status;
+        manifest.format = output->format;
+        manifest.artifact_count = output->artifact_count;
+        manifest.byte_count = output->byte_count;
+        manifest.manifest_identity.assign(output->manifest_identity.begin(),
+                                          output->manifest_identity.end());
+        manifest.measurement_identity.assign(
+            output->measurement_identity.begin(),
+            output->measurement_identity.end());
+        manifest.content_identity.assign(output->content_identity.begin(),
+                                         output->content_identity.end());
     }
     flatbuffers::FlatBufferBuilder builder;
     product_fb::FinishProductEnvelopeBuffer(
@@ -671,7 +739,7 @@ frame_descriptor(const FrameSnapshot &snapshot, std::uint64_t lease_id,
                  const std::array<std::uint8_t, 32> &worker_identity) {
     auto frame = std::make_unique<fb::FrameReadyDescriptorT>();
     frame->frame_id = lease_id;
-    frame->revision = generation;
+    frame->revision = snapshot.generation != 0 ? snapshot.generation : generation;
     for (std::size_t index = 0; index < snapshot.planes.size(); ++index) {
         const auto &source = snapshot.planes[index];
         const auto &info = source.info;
@@ -697,6 +765,12 @@ frame_descriptor(const FrameSnapshot &snapshot, std::uint64_t lease_id,
         plane->uncertainty_identity = bytes(info.uncertainty_identity);
         plane->provenance_identity = bytes(info.provenance_identity);
         plane->normalization = info.normalization;
+        plane->content_identity.assign(source.content_identity.begin(),
+                                       source.content_identity.end());
+        plane->sample_begin = source.sample_begin;
+        plane->sample_count = source.sample_count;
+        plane->endpoint_index = source.endpoint_index;
+        plane->flags = source.flags;
         frame->planes.push_back(std::move(plane));
     }
     frame->retained_bytes = snapshot.bytes.size();
@@ -725,7 +799,31 @@ frame_descriptor(const FrameSnapshot &snapshot, std::uint64_t lease_id,
     frame->bound_scene_revision = snapshot.session.bound_scene_revision;
     frame->completed_samples = snapshot.session.completed_samples;
     frame->requested_samples = snapshot.session.requested_samples;
+    frame->measurement_identity.assign(snapshot.measurement_identity.begin(),
+                                       snapshot.measurement_identity.end());
     return frame;
+}
+
+bool retain_legacy_color_plane(FrameSnapshot &snapshot) {
+    const auto found = std::ranges::find_if(
+        snapshot.planes, [](const FramePlaneSnapshot &plane) {
+            return plane.info.plane_schema == URE_FRAME_PLANE_COLOR;
+        });
+    if (found == snapshot.planes.end() || found->info.byte_extent == 0 ||
+        found->byte_offset > snapshot.bytes.size() ||
+        found->info.byte_extent > snapshot.bytes.size() - found->byte_offset)
+        return false;
+    std::vector<std::uint8_t> bytes(
+        snapshot.bytes.begin() + static_cast<std::ptrdiff_t>(found->byte_offset),
+        snapshot.bytes.begin() + static_cast<std::ptrdiff_t>(
+            found->byte_offset + found->info.byte_extent));
+    auto plane = *found;
+    plane.byte_offset = 0;
+    snapshot.planes.clear();
+    snapshot.planes.push_back(std::move(plane));
+    snapshot.bytes = std::move(bytes);
+    snapshot.measurement_identity.fill(0);
+    return true;
 }
 
 bool validate_envelope(const fb::WorkerEnvelope *envelope,
@@ -800,7 +898,8 @@ int run_worker(const Arguments &arguments) {
             capability != URE_CAPABILITY_RENDER_SESSION &&
             capability != URE_CAPABILITY_PRODUCT_JOB &&
             capability != URE_CAPABILITY_SCENE_TOOL &&
-            capability != URE_CAPABILITY_DEVICE_EXECUTION)
+            capability != URE_CAPABILITY_DEVICE_EXECUTION &&
+            capability != URE_CAPABILITY_MEASUREMENT_OUTPUT)
             return 27;
         if (std::find(required_capabilities.begin(), required_capabilities.end(),
                       capability) != required_capabilities.end())
@@ -839,7 +938,8 @@ int run_worker(const Arguments &arguments) {
                                capability == URE_CAPABILITY_RENDER_SESSION ||
                                capability == URE_CAPABILITY_PRODUCT_JOB ||
                                capability == URE_CAPABILITY_SCENE_TOOL ||
-                               capability == URE_CAPABILITY_DEVICE_EXECUTION;
+                               capability == URE_CAPABILITY_DEVICE_EXECUTION ||
+                               capability == URE_CAPABILITY_MEASUREMENT_OUTPUT;
         if (supported &&
             !contains_capability(handshake->required_capabilities(), capability) &&
             std::find(selected.optional_capabilities.begin(),
@@ -1113,6 +1213,115 @@ int run_worker(const Arguments &arguments) {
                     product_fb::ProductMessageKind::CancelJob, status);
                 response.declared_payload_bytes = response.payload.size();
             }
+        } else if (request->operation_kind() == 2147483767U &&
+                   request->payload_schema() == URE_PAYLOAD_PRODUCT_JOB) {
+            const std::span payload(request->payload()->data(),
+                                    request->payload()->size());
+            const auto *wire = product_payload(
+                payload, product_fb::ProductMessageKind::PublishArtifacts);
+            std::uint32_t format{};
+            std::uint32_t tone_map{};
+            std::string path;
+            std::uint64_t byte_budget{};
+            ProductOutputSnapshot output;
+            ProductStatusSnapshot status;
+            const bool valid_request =
+                wire && wire->request() &&
+                product_output_request(*wire, wire->request()->job_id(), format,
+                                       tone_map, path, byte_budget);
+            if (!valid_request) {
+                response.result = fb::ResultCode::MalformedData;
+                failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE,
+                           840, "product output request is malformed"};
+                response.error = error_descriptor(failure);
+            } else if (!runtime.inspect_product_job(wire->request()->job_id(),
+                                                     status, failure)) {
+                response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+            } else if (!runtime.publish_product_artifacts(
+                           wire->request()->job_id(), format, tone_map, path,
+                           byte_budget, output, failure)) {
+                response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+            } else {
+                response.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+                response.payload_version_major = 0;
+                response.payload_version_minor = 4;
+                response.payload = product_response_payload(
+                    product_fb::ProductMessageKind::PublishArtifacts, status,
+                    nullptr, &output);
+                response.declared_payload_bytes = response.payload.size();
+            }
+        } else if (request->operation_kind() == 2147483768U &&
+                   request->payload_schema() == URE_PAYLOAD_PRODUCT_JOB) {
+            const std::span payload(request->payload()->data(),
+                                    request->payload()->size());
+            const auto *wire = product_payload(
+                payload, product_fb::ProductMessageKind::AcquirePlaneRange);
+            std::uint32_t plane_index{};
+            std::uint64_t source_offset{};
+            std::uint64_t byte_count{};
+            std::uint64_t expected_generation{};
+            std::array<std::uint8_t, 32> expected_content_identity{};
+            ProductStatusSnapshot status;
+            FrameSnapshot snapshot;
+            if (!wire || !wire->request() ||
+                !product_plane_range_request(
+                    *wire, wire->request()->job_id(), plane_index, source_offset,
+                    byte_count, expected_generation,
+                    expected_content_identity)) {
+                response.result = fb::ResultCode::MalformedData;
+                failure = {URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE,
+                           841, "product plane range request is malformed"};
+                response.error = error_descriptor(failure);
+            } else if (!runtime.acquire_product_plane_range(
+                           wire->request()->job_id(), plane_index, source_offset,
+                           byte_count, expected_generation,
+                           expected_content_identity, status, snapshot,
+                           failure)) {
+                response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+                if (status.job_id != 0) {
+                    response.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+                    response.payload = product_response_payload(
+                        product_fb::ProductMessageKind::AcquirePlaneRange,
+                        status);
+                    response.declared_payload_bytes = response.payload.size();
+                }
+            } else if (snapshot.bytes.size() > negotiated_blob_bytes ||
+                       snapshot.bytes.size() > negotiated_frame_bytes ||
+                       leases.size() >= 8 || snapshot.bytes.size() >
+                           negotiated_blob_bytes - retained_blob_bytes) {
+                response.result = fb::ResultCode::Backpressure;
+                failure = {URE_RESULT_BACKPRESSURE, URE_ERROR_DOMAIN_CORE, 842,
+                           "product plane range exceeds the lease budget"};
+                response.error = error_descriptor(failure);
+            } else {
+                if (next_lease == 0 || next_generation == 0)
+                    return 36;
+                const std::uint64_t lease_id = next_lease++;
+                const std::uint64_t generation = next_generation++;
+                std::uint64_t remote_handle{};
+                Lease lease;
+                if (!create_read_only_shared_mapping(
+                        snapshot.bytes, client_process.get(), lease.mapping,
+                        remote_handle, error))
+                    return 37;
+                lease.generation = generation;
+                lease.retained_bytes = snapshot.bytes.size();
+                const auto content_digest =
+                    sha256("UltraRender.SharedFrameBlob.v1", snapshot.bytes);
+                response.message_kind = fb::MessageKind::FrameReady;
+                response.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+                response.payload = product_response_payload(
+                    product_fb::ProductMessageKind::AcquirePlaneRange, status);
+                response.declared_payload_bytes = response.payload.size();
+                response.frame = frame_descriptor(
+                    snapshot, lease_id, generation, remote_handle,
+                    content_digest, worker_identity);
+                leases.emplace(lease_id, std::move(lease));
+                retained_blob_bytes += snapshot.bytes.size();
+            }
         } else if (request->operation_kind() ==
                        URE_OPERATION_ACQUIRE_PRODUCT_FRAME &&
                    request->payload_schema() == URE_PAYLOAD_PRODUCT_JOB) {
@@ -1252,6 +1461,11 @@ int run_worker(const Arguments &arguments) {
                 response.error = error_descriptor(failure);
             } else if (!runtime.render_scene(objective, snapshot, failure)) {
                 response.result = static_cast<fb::ResultCode>(failure.result);
+                response.error = error_descriptor(failure);
+            } else if (!retain_legacy_color_plane(snapshot)) {
+                response.result = fb::ResultCode::Internal;
+                failure = {URE_RESULT_INTERNAL, URE_ERROR_DOMAIN_CORE, 320,
+                           "legacy render did not produce the Core color plane"};
                 response.error = error_descriptor(failure);
             } else if (snapshot.bytes.size() > negotiated_blob_bytes ||
                        snapshot.bytes.size() > negotiated_frame_bytes ||

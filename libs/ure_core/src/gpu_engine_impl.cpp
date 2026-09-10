@@ -488,6 +488,24 @@ public:
             config_, scene_epoch);
     }
 
+    RenderMeasurementStatistics
+    get_measurement_statistics() const override {
+        if (!gpu_context_) return {};
+        auto statistics = ure::gpu::copy_measurement_statistics_gpu(
+            gpu_context_, get_estimator_metadata());
+        if (statistics.valid) {
+            statistics.endpoints.front().sample_range_start =
+                config_.sample_index_offset;
+            statistics.normal = get_aov(AovType::Normal);
+            statistics.albedo = get_aov(AovType::Albedo);
+            statistics.depth = get_aov(AovType::Depth);
+            statistics.uv = get_aov(AovType::Uv);
+            statistics.motion = get_aov(AovType::MotionVector);
+            statistics.auxiliary_estimator = get_estimator_metadata();
+        }
+        return statistics;
+    }
+
     const BackendSelection& get_backend_selection() const override {
         return backend_selection_;
     }

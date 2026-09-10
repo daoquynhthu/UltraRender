@@ -34,7 +34,7 @@ namespace product_fb = ultrarender::contract::preview::v0;
 
 inline constexpr std::uint32_t kMaximumControlBytes = 1024U * 1024U;
 inline constexpr std::uint64_t kMaximumBlobBytes = UINT64_C(512) * 1024 * 1024;
-inline constexpr std::uint64_t kMaximumFrameBytes = UINT64_C(256) * 1024 * 1024;
+inline constexpr std::uint64_t kMaximumFrameBytes = UINT64_C(512) * 1024 * 1024;
 
 bool valid_handle(HANDLE handle) noexcept {
     return handle && handle != INVALID_HANDLE_VALUE;
@@ -136,6 +136,56 @@ product_payload(product_fb::ProductMessageKind kind, std::uint64_t scene_id,
         envelope.request->objective_digest.assign(
             objective->payload_digest.begin(), objective->payload_digest.end());
     }
+    flatbuffers::FlatBufferBuilder builder;
+    product_fb::FinishProductEnvelopeBuffer(
+        builder, product_fb::CreateProductEnvelope(builder, &envelope));
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
+}
+
+std::vector<std::uint8_t> output_payload(const OutputRequest &request,
+                                         std::uint64_t scene_id,
+                                         std::uint64_t job_id) {
+    product_fb::ProductEnvelopeT envelope;
+    envelope.kind = product_fb::ProductMessageKind::PublishArtifacts;
+    envelope.request = std::make_unique<product_fb::ProductJobRequestT>();
+    envelope.request->scene_id = scene_id;
+    envelope.request->job_id = job_id;
+    envelope.output_request = std::make_unique<product_fb::ProductOutputRequestT>();
+    auto &output = *envelope.output_request;
+    output.job_id = job_id;
+    output.format = static_cast<std::uint32_t>(request.format);
+    output.tone_map = static_cast<std::uint32_t>(request.tone_map);
+    output.byte_budget = request.byte_budget;
+    const auto path = request.path.generic_u8string();
+    output.output_path.assign(reinterpret_cast<const char *>(path.data()),
+                              path.size());
+    flatbuffers::FlatBufferBuilder builder;
+    product_fb::FinishProductEnvelopeBuffer(
+        builder, product_fb::CreateProductEnvelope(builder, &envelope));
+    return {builder.GetBufferPointer(),
+            builder.GetBufferPointer() + builder.GetSize()};
+}
+
+std::vector<std::uint8_t>
+plane_range_payload(const PlaneRangeRequest &request, std::uint64_t scene_id,
+                   std::uint64_t job_id) {
+    product_fb::ProductEnvelopeT envelope;
+    envelope.kind = product_fb::ProductMessageKind::AcquirePlaneRange;
+    envelope.request = std::make_unique<product_fb::ProductJobRequestT>();
+    envelope.request->scene_id = scene_id;
+    envelope.request->job_id = job_id;
+    envelope.plane_range_request =
+        std::make_unique<product_fb::ProductPlaneRangeRequestT>();
+    auto &range = *envelope.plane_range_request;
+    range.job_id = job_id;
+    range.plane_index = request.plane_index;
+    range.source_offset = request.source_offset;
+    range.byte_count = request.byte_count;
+    range.expected_generation = request.expected_generation;
+    range.expected_content_identity.assign(
+        request.expected_content_identity.begin(),
+        request.expected_content_identity.end());
     flatbuffers::FlatBufferBuilder builder;
     product_fb::FinishProductEnvelopeBuffer(
         builder, product_fb::CreateProductEnvelope(builder, &envelope));
@@ -353,6 +403,9 @@ class WorkerJob final : public JobTransport {
                     ProgressEvent &event) override;
     Frame latest_frame() const override;
     JobResult result() const override;
+    OutputManifest publish_artifacts(const OutputRequest &request) override;
+    std::vector<std::uint8_t>
+    copy_plane_range(const PlaneRangeRequest &request) override;
 
   private:
     JobInfo poll(bool require_result) const;
@@ -463,7 +516,7 @@ class WorkerConnection final
             URE_CAPABILITY_LIFECYCLE, URE_CAPABILITY_FRAME_LEASE,
             URE_CAPABILITY_NATIVE_SCENE, URE_CAPABILITY_RENDER_SESSION,
             URE_CAPABILITY_PRODUCT_JOB, URE_CAPABILITY_DEVICE_EXECUTION,
-            URE_CAPABILITY_SCENE_TOOL};
+            URE_CAPABILITY_SCENE_TOOL, URE_CAPABILITY_MEASUREMENT_OUTPUT};
         handshake.optional_capabilities = {URE_CAPABILITY_TELEMETRY};
         handshake.transport_features = 7;
         handshake.max_control_bytes = kMaximumControlBytes;
@@ -660,6 +713,32 @@ class WorkerConnection final
         return exchange_locked(request);
     }
 
+    std::unique_ptr<fb::WorkerEnvelopeT>
+    output_request(const OutputRequest &request, std::uint64_t scene_id,
+                   std::uint64_t job_id) {
+        std::scoped_lock lock(mutex_);
+        fb::WorkerEnvelopeT envelope;
+        envelope.message_kind = fb::MessageKind::OperationRequest;
+        envelope.operation_kind = 2147483767U;
+        envelope.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+        envelope.payload_version_minor = 4;
+        envelope.payload = output_payload(request, scene_id, job_id);
+        return exchange_locked(envelope);
+    }
+
+    std::unique_ptr<fb::WorkerEnvelopeT>
+    plane_range_request(const PlaneRangeRequest &request,
+                        std::uint64_t scene_id, std::uint64_t job_id) {
+        std::scoped_lock lock(mutex_);
+        fb::WorkerEnvelopeT envelope;
+        envelope.message_kind = fb::MessageKind::OperationRequest;
+        envelope.operation_kind = 2147483768U;
+        envelope.payload_schema = URE_PAYLOAD_PRODUCT_JOB;
+        envelope.payload_version_minor = 4;
+        envelope.payload = plane_range_payload(request, scene_id, job_id);
+        return exchange_locked(envelope);
+    }
+
     const product_fb::ProductEnvelope *
     parse_product(const fb::WorkerEnvelopeT &response,
                   product_fb::ProductMessageKind kind) const {
@@ -755,8 +834,12 @@ class WorkerConnection final
                 wire_plane.width == 0 || wire_plane.height == 0 ||
                 wire_plane.depth == 0 || wire_plane.element_stride == 0 ||
                 wire_plane.byte_extent == 0 ||
-                response.frame->width != wire_plane.width ||
-                response.frame->height != wire_plane.height ||
+                wire_plane.observable_identity.size() != 32 ||
+                wire_plane.unit_identity.size() != 32 ||
+                wire_plane.measure_identity.size() != 32 ||
+                wire_plane.time_identity.size() != 32 ||
+                wire_plane.uncertainty_identity.size() != 32 ||
+                wire_plane.provenance_identity.size() != 32 ||
                 !checked_product(wire_plane.width,
                                  wire_plane.element_stride, minimum_row) ||
                 wire_plane.row_stride < minimum_row ||
@@ -835,12 +918,39 @@ class WorkerConnection final
             plane.semantic = wire_plane.semantic_id;
             plane.scalar_type = wire_plane.scalar_type;
             plane.component_layout = wire_plane.component_layout;
+            plane.normalization = wire_plane.normalization;
             plane.width = wire_plane.width;
             plane.height = wire_plane.height;
             plane.depth = wire_plane.depth;
             plane.row_stride = wire_plane.row_stride;
             plane.slice_stride = wire_plane.slice_stride;
             plane.element_stride = wire_plane.element_stride;
+            std::copy(wire_plane.observable_identity.begin(),
+                      wire_plane.observable_identity.end(),
+                      plane.observable_identity.begin());
+            std::copy(wire_plane.unit_identity.begin(),
+                      wire_plane.unit_identity.end(),
+                      plane.unit_identity.begin());
+            std::copy(wire_plane.measure_identity.begin(),
+                      wire_plane.measure_identity.end(),
+                      plane.measure_identity.begin());
+            std::copy(wire_plane.time_identity.begin(),
+                      wire_plane.time_identity.end(),
+                      plane.time_identity.begin());
+            std::copy(wire_plane.uncertainty_identity.begin(),
+                      wire_plane.uncertainty_identity.end(),
+                      plane.uncertainty_identity.begin());
+            std::copy(wire_plane.provenance_identity.begin(),
+                      wire_plane.provenance_identity.end(),
+                      plane.provenance_identity.begin());
+            if (wire_plane.content_identity.size() == 32)
+                std::copy(wire_plane.content_identity.begin(),
+                          wire_plane.content_identity.end(),
+                          plane.content_identity.begin());
+            plane.sample_begin = wire_plane.sample_begin;
+            plane.sample_count = wire_plane.sample_count;
+            plane.endpoint_index = wire_plane.endpoint_index;
+            plane.flags = wire_plane.flags;
             const auto begin = static_cast<std::size_t>(
                 wire_plane.blob->byte_offset);
             const auto end = begin + static_cast<std::size_t>(
@@ -881,10 +991,17 @@ class WorkerConnection final
         result.frame.height = response.frame->height;
         result.frame.sample_begin = response.frame->sample_begin;
         result.frame.sample_count = response.frame->sample_count;
+        result.frame.generation = response.frame->revision;
         if (response.frame->frame_identity.size() == 32)
             std::copy(response.frame->frame_identity.begin(),
                       response.frame->frame_identity.end(),
                       result.frame.identity.begin());
+        if (response.frame->measurement_identity.size() != 32)
+            throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 840,
+                        "worker measurement identity is malformed");
+        std::copy(response.frame->measurement_identity.begin(),
+                  response.frame->measurement_identity.end(),
+                  result.frame.measurement_identity.begin());
         result.frame.planes = std::move(decoded_planes);
         return result;
     }
@@ -1212,6 +1329,55 @@ JobResult WorkerJob::result() const {
     if (!result_)
         poll(true);
     return *result_;
+}
+
+OutputManifest WorkerJob::publish_artifacts(const OutputRequest &request) {
+    std::scoped_lock lock(mutex_);
+    auto response = connection_->output_request(request, scene_id_, job_id_);
+    connection_->check_response(*response);
+    const auto *product = connection_->parse_product(
+        *response, product_fb::ProductMessageKind::PublishArtifacts);
+    if (!product->output_manifest() ||
+        !product->output_manifest()->manifest_identity() ||
+        !product->output_manifest()->measurement_identity() ||
+        !product->output_manifest()->content_identity() ||
+        product->output_manifest()->manifest_identity()->size() != 32 ||
+        product->output_manifest()->measurement_identity()->size() != 32 ||
+        product->output_manifest()->content_identity()->size() != 32)
+        throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 843,
+                    "worker output manifest is malformed");
+    const auto &manifest = *product->output_manifest();
+    OutputManifest result;
+    result.publication_status = manifest.publication_status();
+    result.format = static_cast<OutputFormat>(manifest.format());
+    result.artifact_count = manifest.artifact_count();
+    result.byte_count = manifest.byte_count();
+    std::copy(manifest.manifest_identity()->begin(),
+              manifest.manifest_identity()->end(),
+              result.manifest_identity.begin());
+    std::copy(manifest.measurement_identity()->begin(),
+              manifest.measurement_identity()->end(),
+              result.measurement_identity.begin());
+    std::copy(manifest.content_identity()->begin(),
+              manifest.content_identity()->end(), result.content_identity.begin());
+    return result;
+}
+
+std::vector<std::uint8_t>
+WorkerJob::copy_plane_range(const PlaneRangeRequest &request) {
+    std::scoped_lock lock(mutex_);
+    auto response = connection_->plane_range_request(request, scene_id_, job_id_);
+    connection_->check_response(*response);
+    const auto *product = connection_->parse_product(
+        *response, product_fb::ProductMessageKind::AcquirePlaneRange);
+    info_ = parse_status(*product->status(), job_id_);
+    const auto value = connection_->frame_result(
+        *response, info_, product_fb::ProductMessageKind::AcquirePlaneRange,
+        false);
+    if (value.frame.planes.size() != 1)
+        throw_error(URE_RESULT_MALFORMED_DATA, URE_ERROR_DOMAIN_CORE, 844,
+                    "worker plane-range response has unexpected plane count");
+    return value.frame.planes.front().bytes;
 }
 
 }

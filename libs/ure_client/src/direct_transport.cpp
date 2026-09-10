@@ -181,6 +181,8 @@ class DirectConnection final : public ClientTransport,
             URE_INTERFACE_SCENE_TOOL_UUID_BYTES;
         static constexpr std::uint8_t device_execution_id[16] =
             URE_INTERFACE_DEVICE_EXECUTION_UUID_BYTES;
+        static constexpr std::uint8_t measurement_output_id[16] =
+            URE_INTERFACE_MEASUREMENT_OUTPUT_UUID_BYTES;
         runtime_ = query_table<ure_runtime_interface_t>(query, runtime_id, 1, 0,
                                                         1, 0);
         instances_ = query_table<ure_instance_interface_t>(
@@ -199,8 +201,11 @@ class DirectConnection final : public ClientTransport,
             query, scene_tool_id, 0, 2, 0, 2);
         device_execution_ = query_table<ure_device_execution_interface_t>(
             query, device_execution_id, 0, 1, 0, 1);
+        measurement_output_ = query_table<ure_measurement_output_interface_t>(
+            query, measurement_output_id, 0, 1, 0, 1);
         if (!runtime_ || !instances_ || !errors_ || !operations_ || !frames_ ||
-            !scenes_ || !products_ || !scene_tools_ || !device_execution_)
+            !scenes_ || !products_ || !scene_tools_ || !device_execution_ ||
+            !measurement_output_)
             throw_error(URE_RESULT_CAPABILITY_UNAVAILABLE,
                         URE_ERROR_DOMAIN_CORE, 15,
                         "direct runtime is missing a required product interface");
@@ -208,12 +213,12 @@ class DirectConnection final : public ClientTransport,
             URE_CAPABILITY_LIFECYCLE, URE_CAPABILITY_FRAME_LEASE,
             URE_CAPABILITY_NATIVE_SCENE, URE_CAPABILITY_RENDER_SESSION,
             URE_CAPABILITY_PRODUCT_JOB, URE_CAPABILITY_DEVICE_EXECUTION,
-            URE_CAPABILITY_SCENE_TOOL};
+            URE_CAPABILITY_SCENE_TOOL, URE_CAPABILITY_MEASUREMENT_OUTPUT};
         ure_instance_frame_budget_t frame_budget{};
         frame_budget.header = {URE_STRUCTURE_INSTANCE_FRAME_BUDGET,
                                sizeof(frame_budget), nullptr};
         frame_budget.max_retained_frames = 8;
-        frame_budget.max_retained_bytes = UINT64_C(268435456);
+        frame_budget.max_retained_bytes = UINT64_C(2147483648);
         ure_instance_create_info_t create{};
         create.header = {URE_STRUCTURE_INSTANCE_CREATE_INFO, sizeof(create),
                          &frame_budget};
@@ -383,6 +388,7 @@ class DirectConnection final : public ClientTransport,
     const ure_product_job_interface_t *products_{};
     const ure_scene_tool_interface_t *scene_tools_{};
     const ure_device_execution_interface_t *device_execution_{};
+    const ure_measurement_output_interface_t *measurement_output_{};
 };
 
 class DirectJob final : public JobTransport {
@@ -538,6 +544,91 @@ class DirectJob final : public JobTransport {
         return output;
     }
 
+    OutputManifest publish_artifacts(const OutputRequest &request) override {
+        const auto path = request.path.generic_u8string();
+        const std::string path_text(reinterpret_cast<const char *>(path.data()),
+                                    path.size());
+        ure_output_request_t wire{};
+        wire.header = {URE_STRUCTURE_OUTPUT_REQUEST, sizeof(wire), nullptr};
+        wire.job = job_;
+        wire.format = static_cast<std::uint32_t>(request.format);
+        wire.tone_map = static_cast<std::uint32_t>(request.tone_map);
+        wire.output_path = {path_text.data(), path_text.size()};
+        wire.byte_budget = request.byte_budget;
+        ure_output_manifest_t manifest{};
+        manifest.header = {URE_STRUCTURE_OUTPUT_MANIFEST, sizeof(manifest),
+                           nullptr};
+        ure_handle_t error{};
+        connection_->check(connection_->measurement_output_->publish_artifacts(
+                               &wire, &manifest, &error), error);
+        OutputManifest result;
+        result.publication_status = manifest.publication_status;
+        result.format = static_cast<OutputFormat>(manifest.format);
+        result.artifact_count = manifest.artifact_count;
+        result.byte_count = manifest.byte_count;
+        std::memcpy(result.manifest_identity.data(),
+                    manifest.manifest_identity.bytes, 32);
+        std::memcpy(result.measurement_identity.data(),
+                    manifest.measurement_identity.bytes, 32);
+        std::memcpy(result.content_identity.data(),
+                    manifest.content_identity.bytes, 32);
+        return result;
+    }
+
+    std::vector<std::uint8_t>
+    copy_plane_range(const PlaneRangeRequest &request) override {
+        ure_handle_t frame{};
+        ure_handle_t error{};
+        connection_->check(connection_->products_->acquire_frame(job_, &frame,
+                                                                  &error),
+                           error);
+        struct FrameRelease {
+            const ure_frame_interface_t *interface{};
+            ure_handle_t handle{};
+            ~FrameRelease() {
+                if (handle)
+                    interface->release(handle, nullptr);
+            }
+        } frame_release{connection_->frames_, frame};
+        ure_measurement_frame_info_t frame_info{};
+        frame_info.header = {URE_STRUCTURE_MEASUREMENT_FRAME_INFO,
+                             sizeof(frame_info), nullptr};
+        connection_->check(connection_->measurement_output_->get_frame_info(
+                               frame, &frame_info, &error), error);
+        if (frame_info.generation != request.expected_generation)
+            throw_error(URE_RESULT_REVISION_CONFLICT, URE_ERROR_DOMAIN_CORE,
+                        830, "measurement frame generation changed");
+        ure_measurement_plane_info_t plane{};
+        plane.header = {URE_STRUCTURE_MEASUREMENT_PLANE_INFO, sizeof(plane),
+                        nullptr};
+        connection_->check(connection_->measurement_output_->get_plane_info(
+                               frame, request.plane_index, &plane, &error),
+                           error);
+        if (!std::equal(std::begin(plane.content_identity.bytes),
+                        std::end(plane.content_identity.bytes),
+                        request.expected_content_identity.begin()))
+            throw_error(URE_RESULT_REVISION_CONFLICT, URE_ERROR_DOMAIN_CORE,
+                        831, "measurement plane content identity changed");
+        if (request.source_offset > plane.byte_extent ||
+            request.byte_count > plane.byte_extent - request.source_offset)
+            throw_error(URE_RESULT_INVALID_ARGUMENT, URE_ERROR_DOMAIN_CORE,
+                        829, "measurement plane range is out of bounds");
+        std::vector<std::uint8_t> bytes(static_cast<std::size_t>(request.byte_count));
+        ure_measurement_plane_copy_t copy{};
+        copy.header = {URE_STRUCTURE_MEASUREMENT_PLANE_COPY, sizeof(copy),
+                       nullptr};
+        copy.frame = frame;
+        copy.plane_index = request.plane_index;
+        copy.source_offset = request.source_offset;
+        copy.byte_count = request.byte_count;
+        copy.destination = {bytes.data(), bytes.size()};
+        copy.expected_generation = request.expected_generation;
+        copy.expected_content_identity = plane.content_identity;
+        connection_->check(connection_->measurement_output_->copy_plane_range(
+                               &copy, &error), error);
+        return bytes;
+    }
+
   private:
     static ProgressEvent progress_event(const JobInfo &info) {
         return {info.state,
@@ -578,6 +669,15 @@ class DirectJob final : public JobTransport {
             output.sample_count = frame_info.sample_count;
             std::memcpy(output.identity.data(), frame_info.frame_identity.bytes,
                         output.identity.size());
+            ure_measurement_frame_info_t measurement_info{};
+            measurement_info.header = {URE_STRUCTURE_MEASUREMENT_FRAME_INFO,
+                                       sizeof(measurement_info), nullptr};
+            if (connection_->measurement_output_->get_frame_info(
+                    frame, &measurement_info, &error) == URE_RESULT_SUCCESS) {
+                output.generation = measurement_info.generation;
+                std::memcpy(output.measurement_identity.data(),
+                            measurement_info.measurement_identity.bytes, 32);
+            }
             output.planes.reserve(frame_info.plane_count);
             for (std::uint32_t index = 0; index < frame_info.plane_count; ++index) {
                 ure_frame_plane_info_t plane{};
@@ -591,12 +691,39 @@ class DirectJob final : public JobTransport {
                 client_plane.semantic = plane.plane_schema;
                 client_plane.scalar_type = plane.scalar_type;
                 client_plane.component_layout = plane.component_layout;
+                client_plane.normalization = plane.normalization;
                 client_plane.width = plane.width;
                 client_plane.height = plane.height;
                 client_plane.depth = plane.depth;
                 client_plane.row_stride = plane.row_stride;
                 client_plane.slice_stride = plane.slice_stride;
                 client_plane.element_stride = plane.element_stride;
+                std::memcpy(client_plane.observable_identity.data(),
+                            plane.observable_identity.bytes, 32);
+                std::memcpy(client_plane.unit_identity.data(),
+                            plane.unit_identity.bytes, 32);
+                std::memcpy(client_plane.measure_identity.data(),
+                            plane.measure_identity.bytes, 32);
+                std::memcpy(client_plane.time_identity.data(),
+                            plane.time_identity.bytes, 32);
+                std::memcpy(client_plane.uncertainty_identity.data(),
+                            plane.uncertainty_identity.bytes, 32);
+                std::memcpy(client_plane.provenance_identity.data(),
+                            plane.provenance_identity.bytes, 32);
+                ure_measurement_plane_info_t measurement_plane{};
+                measurement_plane.header = {
+                    URE_STRUCTURE_MEASUREMENT_PLANE_INFO,
+                    sizeof(measurement_plane), nullptr};
+                if (connection_->measurement_output_->get_plane_info(
+                        frame, index, &measurement_plane, &error) ==
+                    URE_RESULT_SUCCESS) {
+                    std::memcpy(client_plane.content_identity.data(),
+                                measurement_plane.content_identity.bytes, 32);
+                    client_plane.sample_begin = measurement_plane.sample_begin;
+                    client_plane.sample_count = measurement_plane.sample_count;
+                    client_plane.endpoint_index = measurement_plane.endpoint_index;
+                    client_plane.flags = measurement_plane.flags;
+                }
                 client_plane.bytes.resize(
                     static_cast<std::size_t>(plane.byte_extent));
                 ure_frame_copy_info_t copy{};

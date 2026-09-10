@@ -312,6 +312,14 @@ if(TARGET ure_core)
         URE_PRODUCT_RESOURCE_TEST_SCENE="${CMAKE_SOURCE_DIR}/tests/assets/native_scene/q3_full_scene/full_scene.ure")
     add_test(NAME test_product_service COMMAND test_product_service)
 
+    add_executable(test_product_measurement test_product_measurement.cpp)
+    target_link_libraries(test_product_measurement PRIVATE ure_product)
+    add_test(NAME test_product_measurement COMMAND test_product_measurement)
+
+    add_executable(test_product_output test_product_output.cpp)
+    target_link_libraries(test_product_output PRIVATE ure_product)
+    add_test(NAME test_product_output COMMAND test_product_output)
+
     add_executable(test_product_scene_realizer test_product_scene_realizer.cpp)
     target_link_libraries(test_product_scene_realizer PRIVATE ure_product ure_sceneio)
     target_compile_definitions(test_product_scene_realizer PRIVATE

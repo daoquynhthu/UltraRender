@@ -135,6 +135,8 @@ bool allowed_render_arguments(int argc, char **argv, std::string &error) {
         const bool option = argument == "--transport" ||
                             argument == "--runtime" || argument == "--worker" ||
                             argument == "--spp" ||
+                            argument == "--output" || argument == "--format" ||
+                            argument == "--tonemap" ||
                             argument == "--cancel-after-ms";
         if (option) {
             if (++index >= argc) {
@@ -147,6 +149,9 @@ bool allowed_render_arguments(int argc, char **argv, std::string &error) {
             argument.starts_with("--runtime=") ||
             argument.starts_with("--worker=") ||
             argument.starts_with("--spp=") ||
+            argument.starts_with("--output=") ||
+            argument.starts_with("--format=") ||
+            argument.starts_with("--tonemap=") ||
             argument.starts_with("--cancel-after-ms="))
             continue;
         if (argument.starts_with('-')) {
@@ -211,6 +216,39 @@ int render(const ure::config::CliResult &cli) {
             job.request_cancel();
     }
     const auto result = job.result();
+    if (!cli.config.output.file.empty()) {
+        ure::client::OutputRequest output;
+        output.path = std::filesystem::absolute(cli.config.output.file);
+        if (cli.config.output.format == "openexr" ||
+            cli.config.output.format == "exr")
+            output.format = ure::client::OutputFormat::OpenExr;
+        else if (cli.config.output.format == "measurement" ||
+                 cli.config.output.format == "uremeasurement")
+            output.format = ure::client::OutputFormat::Measurement;
+        else if (cli.config.output.format == "hdr")
+            output.format = ure::client::OutputFormat::Hdr;
+        else if (cli.config.output.format == "ppm")
+            output.format = ure::client::OutputFormat::Ppm;
+        else if (cli.config.output.format == "bmp")
+            output.format = ure::client::OutputFormat::Bmp;
+        else
+            throw std::runtime_error(
+                "ProductJob output format must be openexr, measurement, hdr, ppm, or bmp");
+        if (cli.config.output.tonemap == "linear")
+            output.tone_map = ure::client::ToneMap::Linear;
+        else if (cli.config.output.tonemap == "reinhard")
+            output.tone_map = ure::client::ToneMap::Reinhard;
+        else if (cli.config.output.tonemap == "aces")
+            output.tone_map = ure::client::ToneMap::Aces;
+        else
+            throw std::runtime_error(
+                "ProductJob tone map must be linear, reinhard, or aces");
+        const auto manifest = job.publish_artifacts(output);
+        if (!cli.quiet)
+            std::cout << "output_status=" << manifest.publication_status << '\n'
+                      << "output_artifacts=" << manifest.artifact_count << '\n'
+                      << "output_bytes=" << manifest.byte_count << '\n';
+    }
     if (!cli.quiet) {
         std::cout << "transport=" << cli.transport << '\n'
                   << "state=succeeded\n"

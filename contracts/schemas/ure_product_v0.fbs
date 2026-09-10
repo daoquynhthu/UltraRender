@@ -15,7 +15,9 @@ enum ProductMessageKind:uint {
   SceneToolRealize = 2147483720,
   SceneToolMaterialImport = 2147483721,
   SceneToolMaterialExport = 2147483722,
-  SceneToolMaterialPreset = 2147483723
+  SceneToolMaterialPreset = 2147483723,
+  PublishArtifacts = 2147483767,
+  AcquirePlaneRange = 2147483768
 }
 
 table SceneToolRequest {
@@ -125,6 +127,34 @@ table ProductArtifactManifest {
   identities:ProductIdentitySet (id: 4);
 }
 
+table ProductOutputRequest {
+  job_id:ulong (id: 0);
+  format:uint (id: 1);
+  tone_map:uint (id: 2);
+  output_path:string (id: 3);
+  byte_budget:ulong (id: 4);
+}
+
+table ProductOutputManifest {
+  job_id:ulong (id: 0);
+  publication_status:uint (id: 1);
+  format:uint (id: 2);
+  artifact_count:ulong (id: 3);
+  byte_count:ulong (id: 4);
+  manifest_identity:[ubyte] (id: 5);
+  measurement_identity:[ubyte] (id: 6);
+  content_identity:[ubyte] (id: 7);
+}
+
+table ProductPlaneRangeRequest {
+  job_id:ulong (id: 0);
+  plane_index:uint (id: 1);
+  source_offset:ulong (id: 2);
+  byte_count:ulong (id: 3);
+  expected_generation:ulong (id: 4);
+  expected_content_identity:[ubyte] (id: 5);
+}
+
 table ProductEnvelope {
   kind:ProductMessageKind = CreateJob (id: 0);
   request:ProductJobRequest (id: 1);
@@ -132,6 +162,9 @@ table ProductEnvelope {
   artifact:ProductArtifactManifest (id: 3);
   scene_tool_request:SceneToolRequest (id: 4);
   scene_tool_result:SceneToolResult (id: 5);
+  output_request:ProductOutputRequest (id: 6);
+  output_manifest:ProductOutputManifest (id: 7);
+  plane_range_request:ProductPlaneRangeRequest (id: 8);
 }
 
 root_type ProductEnvelope;

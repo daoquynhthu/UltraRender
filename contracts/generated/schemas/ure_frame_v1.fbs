@@ -22,6 +22,11 @@ table FramePlaneDescriptor {
   uncertainty_identity:[ubyte] (id: 16);
   provenance_identity:[ubyte] (id: 17);
   normalization:uint (id: 18);
+  content_identity:[ubyte] (id: 19);
+  sample_begin:ulong (id: 20);
+  sample_count:ulong (id: 21);
+  endpoint_index:uint (id: 22);
+  flags:uint (id: 23);
 }
 
 table FrameReadyDescriptor {
@@ -51,4 +56,5 @@ table FrameReadyDescriptor {
   bound_scene_revision:ulong (id: 23);
   completed_samples:ulong (id: 24);
   requested_samples:ulong (id: 25);
+  measurement_identity:[ubyte] (id: 26);
 }

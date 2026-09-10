@@ -19,7 +19,7 @@ set(UltraRender_CoreHeaders_FOUND TRUE)
 set(UltraRender_Client_FOUND TRUE)
 set(UltraRender_CORE_ABI_VERSION "1.0")
 set(UltraRender_WORKER_PROTOCOL_VERSION "1.0")
-set(UltraRender_PREVIEW_CLIENT_VERSION "0.3")
+set(UltraRender_PREVIEW_CLIENT_VERSION "0.4")
 set(UltraRender_PREVIEW_CLIENT_COMPATIBILITY "ExactBuild")
 
 foreach(_UltraRender_component IN LISTS UltraRender_FIND_COMPONENTS)

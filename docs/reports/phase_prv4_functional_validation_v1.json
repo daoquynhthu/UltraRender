@@ -1,0 +1,206 @@
+{
+  "schema": "ure.phase_prv4.functional-validation/1.0",
+  "status": "Passed",
+  "product_release_declared": false,
+  "stable_contract": "Core ABI 1.0 / Worker Protocol 1.0",
+  "exact_build_product": "ProductJob 0.4 / Preview Client 0.4",
+  "evidence_tier": "ProductFunctional",
+  "fixture": {
+    "source": "tests/assets/product_e2e/cornell_854x480.urescene",
+    "sha256": "7e2521a21e00ac1ed45ec02f2ebd6ef5794eb847d8f86e8e6942010f078ba264"
+  },
+  "binaries": {
+    "runtime_sha256": "541c05a6d112f5316a9c6515acf1e22d7a78caedea4a517a805b5b3825327d40",
+    "worker_sha256": "315daa58d84f14149e705d21e9147e8b830306e4dfca30bf6edac03b74206637",
+    "cli_sha256": "1cac09cbe8d02d36096404e8cf2eaa83df5ac93a5911262ec1958f197b54d3e4",
+    "runner_sha256": "4cb5513fa7a54435c49855caa12ae6fad843b7381cab9ac986eee5c96cd3701d"
+  },
+  "runs": [
+    {
+      "transport": "direct",
+      "resolution": "854x480",
+      "samples": 16,
+      "plane_count": 45,
+      "partial_plane": 10,
+      "partial_bytes": 4096,
+      "elapsed_ms": 55412,
+      "identities": {
+        "build": "1a06679e9fb78ff9f3156ebf82146560c4a160d1700abd2c2618673e606da427",
+        "snapshot": "a8b40c04c6f055c400c2a691179dd93099dc9120df6ed96be8d341b69c335d08",
+        "objective": "2aad6d6a174350bd5801cdd0116828eba22884fbc6a72d48beb9032cd768a363",
+        "plan": "068b155fa9a466bcfbd443945d0c674c90693138cb56b3e742a29f45c99bca9f",
+        "measurement": "0559a4ed892bef0bb915be00e23c853feae0f6602ae80b0bcad991416686c644",
+        "manifest": "b7e34e47713182b47fb06bfa594008f3d3eb04501e88e96d327c249965dfbfab"
+      },
+      "artifacts": {
+        "beauty_pfm_sha256": "d2c0dcedcc6d67c474f824d9704659001d3e9818eacbdcc48f0cff7dac7473d0",
+        "exr_sha256": "a487d55ba9c4b82dd3554177bf1462dd6f48aff3d02d28381af8b7e65197aa57",
+        "checkpoint_sha256": "f56a4c2e4b8ade673159bf985f5c25d3723aa6d50ac68056cc89d731818aa670",
+        "display_ppm_sha256": "8deb1c86f0791065919a9b0ec15841714ae97813d47f1902956f7a7556551e72",
+        "manifest_sha256": "b7e34e47713182b47fb06bfa594008f3d3eb04501e88e96d327c249965dfbfab",
+        "png_sha256": "f981669846b0264d3a309d999ca8ddbc8fc284de9868d83285e2742b77aa216d"
+      },
+      "image": {
+        "schema": "ure.preview.measurement-image-validation/1.0",
+        "raw_authority": {
+          "semantic": "BeautyRaw",
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv4_functional\\direct\\frame.beauty.pfm",
+          "sha256": "d2c0dcedcc6d67c474f824d9704659001d3e9818eacbdcc48f0cff7dac7473d0"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv4_functional\\direct\\frame.png",
+          "sha256": "f981669846b0264d3a309d999ca8ddbc8fc284de9868d83285e2742b77aa216d"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": -0.029934488236904144,
+          "maximum": 3.8906660079956055,
+          "mean_luminance": 0.1134674395859089,
+          "positive_energy": 46512.57283505695,
+          "luminance_standard_deviation": 0.2395771191622857,
+          "mean_spatial_gradient": 0.01370774625449416,
+          "nonzero_pixel_fraction": 0.9330479117876659,
+          "negative_component_fraction": 0.0008139799635701275
+        }
+      }
+    },
+    {
+      "transport": "worker",
+      "resolution": "854x480",
+      "samples": 16,
+      "plane_count": 45,
+      "partial_plane": 10,
+      "partial_bytes": 4096,
+      "elapsed_ms": 53726,
+      "identities": {
+        "build": "1a06679e9fb78ff9f3156ebf82146560c4a160d1700abd2c2618673e606da427",
+        "snapshot": "a8b40c04c6f055c400c2a691179dd93099dc9120df6ed96be8d341b69c335d08",
+        "objective": "2aad6d6a174350bd5801cdd0116828eba22884fbc6a72d48beb9032cd768a363",
+        "plan": "068b155fa9a466bcfbd443945d0c674c90693138cb56b3e742a29f45c99bca9f",
+        "measurement": "0559a4ed892bef0bb915be00e23c853feae0f6602ae80b0bcad991416686c644",
+        "manifest": "b7e34e47713182b47fb06bfa594008f3d3eb04501e88e96d327c249965dfbfab"
+      },
+      "artifacts": {
+        "beauty_pfm_sha256": "d2c0dcedcc6d67c474f824d9704659001d3e9818eacbdcc48f0cff7dac7473d0",
+        "exr_sha256": "a487d55ba9c4b82dd3554177bf1462dd6f48aff3d02d28381af8b7e65197aa57",
+        "checkpoint_sha256": "f56a4c2e4b8ade673159bf985f5c25d3723aa6d50ac68056cc89d731818aa670",
+        "display_ppm_sha256": "8deb1c86f0791065919a9b0ec15841714ae97813d47f1902956f7a7556551e72",
+        "manifest_sha256": "b7e34e47713182b47fb06bfa594008f3d3eb04501e88e96d327c249965dfbfab",
+        "png_sha256": "f981669846b0264d3a309d999ca8ddbc8fc284de9868d83285e2742b77aa216d"
+      },
+      "image": {
+        "schema": "ure.preview.measurement-image-validation/1.0",
+        "raw_authority": {
+          "semantic": "BeautyRaw",
+          "format": "PFM RGB float32 little-endian",
+          "orientation": "bottom-left",
+          "color_space": "linear_sRGB_D65",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv4_functional\\worker\\frame.beauty.pfm",
+          "sha256": "d2c0dcedcc6d67c474f824d9704659001d3e9818eacbdcc48f0cff7dac7473d0"
+        },
+        "derived_view": {
+          "format": "PNG RGB8 sRGB",
+          "orientation": "top-left",
+          "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+          "path": "E:\\Render Engine\\build_modular_x64\\artifacts\\Release\\evidence\\prv4_functional\\worker\\frame.png",
+          "sha256": "f981669846b0264d3a309d999ca8ddbc8fc284de9868d83285e2742b77aa216d"
+        },
+        "metrics": {
+          "width": 854,
+          "height": 480,
+          "finite": true,
+          "minimum": -0.029934488236904144,
+          "maximum": 3.8906660079956055,
+          "mean_luminance": 0.1134674395859089,
+          "positive_energy": 46512.57283505695,
+          "luminance_standard_deviation": 0.2395771191622857,
+          "mean_spatial_gradient": 0.01370774625449416,
+          "nonzero_pixel_fraction": 0.9330479117876659,
+          "negative_component_fraction": 0.0008139799635701275
+        }
+      }
+    }
+  ],
+  "cli": [
+    {
+      "transport": "direct",
+      "format": "bmp",
+      "tone_map": "linear",
+      "resolution": "854x480",
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "output_artifacts": 4,
+      "identities": {
+        "build": "1a06679e9fb78ff9f3156ebf82146560c4a160d1700abd2c2618673e606da427",
+        "snapshot": "a8b40c04c6f055c400c2a691179dd93099dc9120df6ed96be8d341b69c335d08",
+        "objective": "1c0abc036e0dd2da79208d83a40166313e78ba41b17b9efbb4e5a61aa3b60503",
+        "plan": "5261ba6bb83b383c11ca7989aad4a64cca33ef116a06ebd1cffe81359a067ff1",
+        "measurement": "cef9c38bc3b0112f5accc8533c08dd7cd3ce08d84b9564ff4f510140f046582b",
+        "exr": "22820fee0dc97c109c9b6ee73c14343038e393f2bba687e2e94240c7496e3f01",
+        "display": "9b729e78d82ec04be88c13cf5d6415e284c3a94d43f4e70046b3cb2c60b150b5"
+      },
+      "artifacts": {
+        "exr_sha256": "22820fee0dc97c109c9b6ee73c14343038e393f2bba687e2e94240c7496e3f01",
+        "checkpoint_sha256": "cef9c38bc3b0112f5accc8533c08dd7cd3ce08d84b9564ff4f510140f046582b",
+        "display_sha256": "9b729e78d82ec04be88c13cf5d6415e284c3a94d43f4e70046b3cb2c60b150b5",
+        "manifest_sha256": "5d0a5dcb3fd2236821f6c014b1a4e941f83a7bfd3d174e17ede95bb51cbc97b0"
+      }
+    },
+    {
+      "transport": "worker",
+      "format": "ppm",
+      "tone_map": "aces",
+      "resolution": "854x480",
+      "accepted_samples": 16,
+      "completed_samples": 16,
+      "output_artifacts": 4,
+      "identities": {
+        "build": "1a06679e9fb78ff9f3156ebf82146560c4a160d1700abd2c2618673e606da427",
+        "snapshot": "a8b40c04c6f055c400c2a691179dd93099dc9120df6ed96be8d341b69c335d08",
+        "objective": "1c0abc036e0dd2da79208d83a40166313e78ba41b17b9efbb4e5a61aa3b60503",
+        "plan": "5261ba6bb83b383c11ca7989aad4a64cca33ef116a06ebd1cffe81359a067ff1",
+        "measurement": "cef9c38bc3b0112f5accc8533c08dd7cd3ce08d84b9564ff4f510140f046582b",
+        "exr": "22820fee0dc97c109c9b6ee73c14343038e393f2bba687e2e94240c7496e3f01",
+        "display": "894d7e304f69cf4fea2633cc8acfdd100d9a3125ca4879ca8d9ceff983d74fb1"
+      },
+      "artifacts": {
+        "exr_sha256": "22820fee0dc97c109c9b6ee73c14343038e393f2bba687e2e94240c7496e3f01",
+        "checkpoint_sha256": "cef9c38bc3b0112f5accc8533c08dd7cd3ce08d84b9564ff4f510140f046582b",
+        "display_sha256": "894d7e304f69cf4fea2633cc8acfdd100d9a3125ca4879ca8d9ceff983d74fb1",
+        "manifest_sha256": "a56db32f0cc1c0ab31875dd069a38f10d68c217ed3b33335d6fdf8bcc9f187f3"
+      }
+    }
+  ],
+  "parity": {
+    "direct_worker_measurement_identity": true,
+    "direct_worker_beauty_bytes": true,
+    "direct_worker_openexr_bytes": true,
+    "direct_worker_checkpoint_bytes": true,
+    "direct_worker_tonemapped_ppm_bytes": true,
+    "cli_direct_worker_openexr_bytes": true,
+    "cli_direct_worker_checkpoint_bytes": true
+  },
+  "external_sdk": {
+    "gate": "test_external_client_package",
+    "boundary": "staged exact-build SDK only; no renderer-private linkage or flatc invocation",
+    "calls": [
+      "Direct",
+      "Worker"
+    ],
+    "evidence": [
+      "typed raw/AOV/statistics",
+      "partial plane read",
+      "official OpenEXR artifact graph",
+      "PFM image"
+    ]
+  },
+  "semantic_digest": "5dc44b336bb9fb25512f703b663ab5700fa3ed1597d993a1bb4f28c141bdd016"
+}

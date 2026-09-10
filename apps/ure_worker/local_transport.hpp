@@ -36,7 +36,7 @@ class UniqueHandle {
 
 inline constexpr std::uint32_t kMaximumControlBytes = 1024U * 1024U;
 inline constexpr std::uint64_t kMaximumBlobBytes = UINT64_C(512) * 1024 * 1024;
-inline constexpr std::uint64_t kMaximumFrameBytes = UINT64_C(256) * 1024 * 1024;
+inline constexpr std::uint64_t kMaximumFrameBytes = UINT64_C(512) * 1024 * 1024;
 
 UniqueHandle create_same_user_pipe(const std::wstring &name,
                                    std::string &error);

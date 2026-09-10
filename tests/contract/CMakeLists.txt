@@ -128,6 +128,10 @@ if(TARGET ure_contract)
     target_link_libraries(product_scenario_runner PRIVATE ure_client)
     add_dependencies(product_scenario_runner ure_worker ure_contract)
 
+    add_executable(product_measurement_scenario_runner product_measurement_scenario_runner.cpp)
+    target_link_libraries(product_measurement_scenario_runner PRIVATE ure_client)
+    add_dependencies(product_measurement_scenario_runner ure_worker ure_contract)
+
     add_executable(generate_product_fixtures generate_product_fixtures.cpp)
     target_link_libraries(generate_product_fixtures PRIVATE ure_sceneio)
 
@@ -172,7 +176,7 @@ if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
     endforeach()
     if(TARGET ure_contract)
-        foreach(target contract_image_artifact test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction test_product_extension test_client_transport test_scene_tool_extension product_scenario_runner generate_product_fixtures worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
+        foreach(target contract_image_artifact test_abi_layout_c test_abi_layout_cpp test_loader_client test_runtime_lifecycle test_frame_leases test_scene_boundary test_scene_transaction test_product_extension test_client_transport test_scene_tool_extension product_scenario_runner product_measurement_scenario_runner generate_product_fixtures worker_test_support test_worker_protocol test_worker_crash test_scene_worker test_pb7_fuzz test_worker_runtime_security)
             target_compile_options(${target} PRIVATE /W4 /WX /utf-8 /wd4819)
         endforeach()
         target_compile_options(test_loader_client PRIVATE /wd4191)
@@ -310,6 +314,13 @@ add_test(
         ${UR_PWSH_EXECUTABLE}
         -NoProfile
         -File ${CMAKE_SOURCE_DIR}/scripts/check_phase_prv3_static.ps1
+        -RepoRoot ${CMAKE_SOURCE_DIR})
+add_test(
+    NAME test_phase_prv4_static
+    COMMAND
+        ${UR_PWSH_EXECUTABLE}
+        -NoProfile
+        -File ${CMAKE_SOURCE_DIR}/scripts/check_phase_prv4_static.ps1
         -RepoRoot ${CMAKE_SOURCE_DIR})
 add_test(
     NAME test_mock_worker_external_client
@@ -553,6 +564,7 @@ set_tests_properties(
     test_phase_prv1_static
     test_phase_prv2_static
     test_phase_prv3_static
+    test_phase_prv4_static
     test_mock_worker_external_client
     PROPERTIES TIMEOUT 60)
 

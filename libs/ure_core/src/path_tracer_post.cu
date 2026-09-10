@@ -46,7 +46,8 @@ void resolve_diffraction_framebuffer_kernel(
     int width,
     int height,
     int radius_pixels,
-    int wavelength_count) {
+    int wavelength_count,
+    int sanitize_output) {
     const int x = blockIdx.x * blockDim.x + threadIdx.x;
     const int y = blockIdx.y * blockDim.y + threadIdx.y;
     if (x >= width || y >= height) return;
@@ -83,8 +84,8 @@ void resolve_diffraction_framebuffer_kernel(
                 }
                 const int source_index =
                     source_y * width + source_x;
-                const int source_sample_count =
-                    sample_counts[source_index];
+                const int source_sample_count = sample_counts
+                    ? sample_counts[source_index] : 1;
                 if (source_sample_count <= 0) {
                     continue;
                 }
@@ -141,15 +142,65 @@ void resolve_diffraction_framebuffer_kernel(
         xyz = xyz + filtered;
     }
     GpuVec3 final_value = xyz_to_rgb(xyz);
-    if (!isfinite(final_value.x) ||
-        !isfinite(final_value.y) ||
-        !isfinite(final_value.z)) {
-        final_value = {};
+    if (sanitize_output) {
+        if (!isfinite(final_value.x) ||
+            !isfinite(final_value.y) ||
+            !isfinite(final_value.z)) {
+            final_value = {};
+        }
+        final_value.x = fmaxf(0.0f, final_value.x);
+        final_value.y = fmaxf(0.0f, final_value.y);
+        final_value.z = fmaxf(0.0f, final_value.z);
     }
-    final_value.x = fmaxf(0.0f, final_value.x);
-    final_value.y = fmaxf(0.0f, final_value.y);
-    final_value.z = fmaxf(0.0f, final_value.z);
     output[pixel_index] = final_value;
+}
+
+__global__ __launch_bounds__(256) void update_measurement_statistics_kernel(
+    const GpuVec3* contribution_buffer,
+    GpuVec3* accumulation,
+    GpuVec3* previous_contribution,
+    double* first_moment,
+    double* second_moment,
+    double* lag_one_product,
+    double* first_contribution,
+    GpuVec3* maximum_absolute,
+    unsigned long long* tail_event_count,
+    unsigned int* invalid_count,
+    int capture_statistics,
+    int pixel_count) {
+    const int pixel = blockIdx.x * blockDim.x + threadIdx.x;
+    if (pixel >= pixel_count) return;
+    const GpuVec3 contribution = contribution_buffer[pixel];
+    accumulation[pixel] = accumulation[pixel] + contribution;
+    if (!capture_statistics) return;
+    if (!isfinite(contribution.x) || !isfinite(contribution.y) ||
+        !isfinite(contribution.z)) {
+        atomicAdd(invalid_count, 1u);
+        return;
+    }
+    const GpuVec3 prior_contribution = previous_contribution[pixel];
+    const float values[3] = {contribution.x, contribution.y, contribution.z};
+    const float prior_values[3] = {
+        prior_contribution.x, prior_contribution.y, prior_contribution.z};
+    GpuVec3 maxima = maximum_absolute[pixel];
+    float* maximum_values = &maxima.x;
+    for (int component = 0; component < 3; ++component) {
+        const int index = pixel * 3 + component;
+        const double value = static_cast<double>(values[component]);
+        first_moment[index] += value;
+        second_moment[index] += value * value;
+        if (capture_statistics > 1) {
+            lag_one_product[index] +=
+                static_cast<double>(prior_values[component]) * value;
+        }
+        if (capture_statistics == 1) first_contribution[index] = value;
+        maximum_values[component] =
+            fmaxf(maximum_values[component], fabsf(values[component]));
+        if (fabsf(values[component]) > 64.0f)
+            atomicAdd(tail_event_count + index, 1ULL);
+    }
+    previous_contribution[pixel] = contribution;
+    maximum_absolute[pixel] = maxima;
 }
 
 static __device__ __forceinline__ float luma(GpuVec3 rgb) {

@@ -22,6 +22,7 @@
 #include "ure/specular_manifold.hpp"
 
 #include "../../libs/ure_core/src/path_tracer_kernel.cu"
+#include "../../libs/ure_core/src/path_tracer_api_decl.cuh"
 namespace ure::gpu {
 #include "../../libs/ure_core/src/bidirectional_runtime.cuh"
 }
@@ -4692,10 +4693,111 @@ static int test_mlt_small_step_kernel_is_deterministic_and_wrapped() {
     return 0;
 }
 
+static int test_measurement_statistics_track_sample_moments() {
+    REQUIRE_GPU();
+    GpuVec3* contribution = nullptr;
+    GpuVec3* accumulation = nullptr;
+    GpuVec3* previous_contribution = nullptr;
+    GpuVec3* maximum = nullptr;
+    double* first = nullptr;
+    double* second = nullptr;
+    double* lag = nullptr;
+    double* first_contribution = nullptr;
+    unsigned long long* tail_event_count = nullptr;
+    unsigned int* invalid = nullptr;
+    CHECK_CUDA(cudaMalloc(&contribution, sizeof(GpuVec3)));
+    DeviceMem contribution_input_guard(contribution);
+    CHECK_CUDA(cudaMalloc(&accumulation, sizeof(GpuVec3)));
+    DeviceMem accumulation_guard(accumulation);
+    CHECK_CUDA(cudaMalloc(&previous_contribution, sizeof(GpuVec3)));
+    DeviceMem contribution_guard(previous_contribution);
+    CHECK_CUDA(cudaMalloc(&maximum, sizeof(GpuVec3)));
+    DeviceMem maximum_guard(maximum);
+    CHECK_CUDA(cudaMalloc(&first, 3 * sizeof(double)));
+    DeviceMem first_guard(first);
+    CHECK_CUDA(cudaMalloc(&second, 3 * sizeof(double)));
+    DeviceMem second_guard(second);
+    CHECK_CUDA(cudaMalloc(&lag, 3 * sizeof(double)));
+    DeviceMem lag_guard(lag);
+    CHECK_CUDA(cudaMalloc(&first_contribution, 3 * sizeof(double)));
+    DeviceMem first_contribution_guard(first_contribution);
+    CHECK_CUDA(cudaMalloc(&tail_event_count, 3 * sizeof(unsigned long long)));
+    DeviceMem tail_event_count_guard(tail_event_count);
+    CHECK_CUDA(cudaMalloc(&invalid, sizeof(unsigned int)));
+    DeviceMem invalid_guard(invalid);
+    CHECK_CUDA(cudaMemset(accumulation, 0, sizeof(GpuVec3)));
+    CHECK_CUDA(cudaMemset(previous_contribution, 0, sizeof(GpuVec3)));
+    CHECK_CUDA(cudaMemset(maximum, 0, sizeof(GpuVec3)));
+    CHECK_CUDA(cudaMemset(first, 0, 3 * sizeof(double)));
+    CHECK_CUDA(cudaMemset(second, 0, 3 * sizeof(double)));
+    CHECK_CUDA(cudaMemset(lag, 0, 3 * sizeof(double)));
+    CHECK_CUDA(cudaMemset(first_contribution, 0, 3 * sizeof(double)));
+    CHECK_CUDA(cudaMemset(tail_event_count, 0,
+                          3 * sizeof(unsigned long long)));
+    CHECK_CUDA(cudaMemset(invalid, 0, sizeof(unsigned int)));
+
+    GpuVec3 host_contribution(1.0f, 2.0f, 3.0f);
+    CHECK_CUDA(cudaMemcpy(contribution, &host_contribution,
+                          sizeof(host_contribution),
+                          cudaMemcpyHostToDevice));
+    update_measurement_statistics_kernel<<<1, 1>>>(
+        contribution, accumulation, previous_contribution, first, second,
+        lag, first_contribution, maximum, tail_event_count, invalid, 1, 1);
+    CHECK_CUDA(cudaGetLastError());
+    host_contribution = GpuVec3(3.0f, 4.0f, 5.0f);
+    CHECK_CUDA(cudaMemcpy(contribution, &host_contribution,
+                          sizeof(host_contribution),
+                          cudaMemcpyHostToDevice));
+    update_measurement_statistics_kernel<<<1, 1>>>(
+        contribution, accumulation, previous_contribution, first, second,
+        lag, first_contribution, maximum, tail_event_count, invalid, 2, 1);
+    CHECK_CUDA(cudaGetLastError());
+
+    double host_first[3]{};
+    double host_second[3]{};
+    double host_lag[3]{};
+    GpuVec3 host_maximum;
+    CHECK_CUDA(cudaMemcpy(host_first, first, sizeof(host_first),
+                          cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(host_second, second, sizeof(host_second),
+                          cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(host_lag, lag, sizeof(host_lag),
+                          cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&host_maximum, maximum, sizeof(host_maximum),
+                          cudaMemcpyDeviceToHost));
+    CHECK(std::abs(host_first[0] - 4.0) < 1e-12);
+    CHECK(std::abs(host_first[1] - 6.0) < 1e-12);
+    CHECK(std::abs(host_first[2] - 8.0) < 1e-12);
+    CHECK(std::abs(host_second[0] - 10.0) < 1e-12);
+    CHECK(std::abs(host_second[1] - 20.0) < 1e-12);
+    CHECK(std::abs(host_second[2] - 34.0) < 1e-12);
+    CHECK(std::abs(host_lag[0] - 3.0) < 1e-12);
+    CHECK(std::abs(host_lag[1] - 8.0) < 1e-12);
+    CHECK(std::abs(host_lag[2] - 15.0) < 1e-12);
+    CHECK_FLOAT_EQ(host_maximum.x, 3.0f, 1e-6f);
+    CHECK_FLOAT_EQ(host_maximum.y, 4.0f, 1e-6f);
+    CHECK_FLOAT_EQ(host_maximum.z, 5.0f, 1e-6f);
+    host_contribution = GpuVec3(65.0f, 64.0f, -70.0f);
+    CHECK_CUDA(cudaMemcpy(contribution, &host_contribution,
+                          sizeof(host_contribution), cudaMemcpyHostToDevice));
+    update_measurement_statistics_kernel<<<1, 1>>>(
+        contribution, accumulation, previous_contribution, first, second,
+        lag, first_contribution, maximum, tail_event_count, invalid, 3, 1);
+    CHECK_CUDA(cudaGetLastError());
+    unsigned long long host_tail_event_count[3]{};
+    CHECK_CUDA(cudaMemcpy(host_tail_event_count, tail_event_count,
+                          sizeof(host_tail_event_count), cudaMemcpyDeviceToHost));
+    CHECK(host_tail_event_count[0] == 1);
+    CHECK(host_tail_event_count[1] == 0);
+    CHECK(host_tail_event_count[2] == 1);
+    return 0;
+}
+
 int main() {
     ure::log::set_min_level(ure::log::Level::Warn);
     printf("[GPU Basic Render Test]\n");
     RUN_TEST(test_ray_sphere_intersection);
+    RUN_TEST(test_measurement_statistics_track_sample_moments);
     RUN_TEST(test_shade_kernel_emissive);
     RUN_TEST(test_dispersive_dielectric_splits_packet_to_lanes);
     RUN_TEST(test_dispersive_dielectric_critical_angle_splits_n8);

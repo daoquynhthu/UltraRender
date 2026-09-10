@@ -11,13 +11,13 @@
   ],
   "guarded_sources": [
     {"path":"libs/ure_config/include/ure/config.hpp","sha256":"7a3d3811bbb7dd6d4e6924660ce0fe024b91f0e9929814382ec016373ad00bb0","reason":"Maintained JSON/CLI field declarations, scene-tool commands and explicit product transport selection"},
-    {"path":"libs/ure_config/src/config_impl.cpp","sha256":"c65109aafaefbe394829436d6c4682fad80f3df2ed52cdc9f94b50440268e214","reason":"Maintained JSON/CLI and scene-tool request parsing"},
-    {"path":"apps/ure_cli/src/main.cpp","sha256":"0461aa2cc9866758b02fe6529b5d9b811967847b9c87f2a9ee6470022bafa2b8","reason":"Product client submission, runtime scene-tool delegation and fail-loud option boundary"},
-    {"path":"libs/ure_contract/src/session_adapter.cpp","sha256":"d4b30cd5b114f8623e81b91d3c58c1d1447f3b06f29b3e5fd28e2858ec35fa34","reason":"Stable Core Objective translation, immutable revision binding, rejection policy and product accounting"},
+    {"path":"libs/ure_config/src/config_impl.cpp","sha256":"06757aab376843125880f78fdfcba7da1585e7512e9c6bbb4c7f7ff586076bb9","reason":"Maintained JSON/CLI and scene-tool request parsing"},
+    {"path":"apps/ure_cli/src/main.cpp","sha256":"1e44e8764965a0fb3528b21728c9a8a6b3406994d622931d74da8269081046cc","reason":"Product client submission, runtime scene-tool delegation and fail-loud option boundary"},
+    {"path":"libs/ure_contract/src/session_adapter.cpp","sha256":"578bea169c8f55060c0c38049092c4647da2af45cc16fd399efe13978889c4fd","reason":"Stable Core Objective translation, immutable revision binding, rejection policy and product accounting"},
     {"path":"libs/ure_contract/src/device_execution_adapter.cpp","sha256":"c32c5dd7fc0e34d87f936f7621da14b2d664c99fc559c6495b98d07a1886124d","reason":"Exact-build product device inventory and selected execution translation"},
-    {"path":"libs/ure_product/src/product_service.cpp","sha256":"18312c219687272bef5d3c614ab1016346e8ae78c0f99fa7f487e89a03bf4815","reason":"ProductSnapshot objective device applicability, stable identity and plan binding"},
+    {"path":"libs/ure_product/src/product_service.cpp","sha256":"058a97b1aa79c2a13ebeb66cbba1e6d38ab1e4c2e1add4a322bdcf739813e23c","reason":"ProductSnapshot objective device applicability, stable identity and plan binding"},
     {"path":"libs/ure_sceneio/include/ure/native_scene_ir.hpp","sha256":"11ca0643c00fc994bcf0133b84bf35ea7574724984681918da38944967e37ba7","reason":"Complete NativeSceneArchive package-resource and feature blocks"},
-    {"path":"libs/ure_core/src/automatic_render_engine.cpp","sha256":"8b6b6076dbad9646d6e28fb50e249a0e48d1da6596e98ac8f222746e61bc630f","reason":"Current automatic execution bridge"}
+    {"path":"libs/ure_core/src/automatic_render_engine.cpp","sha256":"b4efe985aad5b739dd30fddda29e543f26432132de5a3e2ac695969952704c89","reason":"Current automatic execution bridge"}
   ],
   "entries": [
     {"id":"core_output_semantics","owner":"ProductRuntime","input_surface":"Core Objective.output_semantics","consumer":"Product 0.4 objective decoder and color Frame publication","current_behavior":"Executed","impact":"The default and explicit color semantic produce the color Frame; every other output semantic rejects until PRV.4 supplies it.","target_disposition":"Executed","migration_phase":"PRV.4","source":{"path":"libs/ure_contract/src/session_adapter.cpp","pattern":"output_semantics"}},

@@ -236,7 +236,8 @@ CliResult parse_cli(int argc, char** argv) {
     app.add_flag("-q,--quiet", quiet, "Quiet output (Error+ only)");
 
     auto* render_cmd = app.add_subcommand("render", "Render a scene file");
-    std::string scene_render, config_render, output_render, format_render;
+    std::string scene_render, config_render, output_render, format_render,
+                tonemap_render;
     std::string transport_render = "worker", runtime_render, worker_render;
     std::uint64_t cancel_after_ms = 0;
     int spp_render = 0, width_render = 0, height_render = 0;
@@ -343,7 +344,10 @@ CliResult parse_cli(int argc, char** argv) {
     render_cmd->add_option("--width", width_render, "Render width");
     render_cmd->add_option("--height", height_render, "Render height");
     render_cmd->add_option("-o,--output", output_render, "Output image path");
-    render_cmd->add_option("--format", format_render, "Output format: bmp, ppm, hdr");
+    render_cmd->add_option("--format", format_render,
+                           "Output format: openexr, measurement, bmp, ppm, hdr");
+    render_cmd->add_option("--tonemap", tonemap_render,
+                           "Display tone map: linear, reinhard, aces");
     render_cmd->add_option("--spectral-domain-bins", spectral_domain_bins, "Spectral resource/domain resolution");
     render_cmd->add_option("--spectral-packet-lanes", spectral_packet_lanes, "GPU spectral packet lanes");
     render_cmd->add_option("--spectral-max-resident-mb", spectral_max_resident_mb, "Resident spectral resource budget in MB");
@@ -644,6 +648,7 @@ CliResult parse_cli(int argc, char** argv) {
         if (height_render > 0) cfg.height = height_render;
         if (!output_render.empty()) cfg.output.file = output_render;
         if (!format_render.empty()) cfg.output.format = format_render;
+        if (!tonemap_render.empty()) cfg.output.tonemap = tonemap_render;
         if (spectral_domain_bins > 0) cfg.spectral.domain_bins = spectral_domain_bins;
         if (spectral_packet_lanes > 0) cfg.spectral.packet_lanes = spectral_packet_lanes;
         if (spectral_max_resident_mb > 0) cfg.spectral.max_resident_mb = spectral_max_resident_mb;

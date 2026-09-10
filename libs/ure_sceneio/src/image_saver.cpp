@@ -27,11 +27,14 @@ static float linear_clamp(float x) {
 
 // Gamma correction (sRGB approximation)
 static float gamma_correct(float x) {
-    return std::pow(x, 1.0f / 2.2f);
+    return x <= 0.0031308f ? 12.92f * x
+                           : 1.055f * std::pow(x, 1.0f / 2.4f) - 0.055f;
 }
 
 static float apply_tone_map(float val, ToneMapType type, float exposure) {
     float exposed = val * exposure;
+    if (!std::isfinite(exposed)) exposed = 0.0f;
+    exposed = std::max(0.0f, exposed);
     float mapped = 0.0f;
     
     switch (type) {
@@ -48,7 +51,7 @@ static float apply_tone_map(float val, ToneMapType type, float exposure) {
     }
     
     // Apply Gamma Correction after Tone Mapping
-    return gamma_correct(mapped);
+    return gamma_correct(std::clamp(mapped, 0.0f, 1.0f));
 }
 
 bool ImageSaver::save_ppm(const std::string& filename, int width, int height, const std::vector<core::Vec3f>& pixels, ToneMapType tm_type, float exposure) {
@@ -65,21 +68,22 @@ bool ImageSaver::save_ppm(const std::string& filename, int width, int height, co
         ofs.write(reinterpret_cast<const char*>(&b), 1);
     }
     ofs.close();
-    return true;
+    return static_cast<bool>(ofs);
 }
 
 bool ImageSaver::save_bmp(const std::string& filename, int width, int height, const std::vector<core::Vec3f>& pixels, ToneMapType tm_type, float exposure) {
     std::ofstream ofs(filename, std::ios::out | std::ios::binary);
     if (!ofs.is_open()) return false;
 
-    uint32_t file_size = 54 + 3 * width * height;
+    const uint32_t row_size = static_cast<uint32_t>((width * 3 + 3) & ~3);
+    uint32_t file_size = 54 + row_size * static_cast<uint32_t>(height);
     uint32_t reserved = 0;
     uint32_t offset = 54;
     uint32_t header_size = 40;
     uint16_t planes = 1;
     uint16_t bpp = 24;
     uint32_t compression = 0;
-    uint32_t img_size = 3 * width * height;
+    uint32_t img_size = row_size * static_cast<uint32_t>(height);
     uint32_t x_ppm = 2835;
     uint32_t y_ppm = 2835;
     uint32_t colors = 0;
@@ -119,7 +123,7 @@ bool ImageSaver::save_bmp(const std::string& filename, int width, int height, co
     }
 
     ofs.close();
-    return true;
+    return static_cast<bool>(ofs);
 }
 
 bool ImageSaver::save_hdr(const std::string& filename, int width, int height, const std::vector<core::Vec3f>& pixels, float exposure) {
@@ -150,7 +154,8 @@ bool ImageSaver::save_hdr(const std::string& filename, int width, int height, co
         }
     }
 
-    return true;
+    ofs.close();
+    return static_cast<bool>(ofs);
 }
 
 } // namespace ure::io

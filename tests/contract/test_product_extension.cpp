@@ -156,6 +156,8 @@ int main(int argc, char **argv) {
     constexpr std::uint8_t product_id[16] URE_INTERFACE_PRODUCT_JOB_UUID_BYTES;
     constexpr std::uint8_t device_execution_id[16]
         URE_INTERFACE_DEVICE_EXECUTION_UUID_BYTES;
+    constexpr std::uint8_t measurement_output_id[16]
+        URE_INTERFACE_MEASUREMENT_OUTPUT_UUID_BYTES;
     const auto *runtime = query_table<ure_runtime_interface_t>(query, runtime_id, 1, 0);
     const auto *instances = query_table<ure_instance_interface_t>(query, instance_id, 1, 0);
     const auto *errors = query_table<ure_error_interface_t>(query, error_id, 1, 0);
@@ -166,8 +168,11 @@ int main(int argc, char **argv) {
     const auto *device_execution =
         query_table<ure_device_execution_interface_t>(
             query, device_execution_id, 0, 1);
+    const auto *measurement_output =
+        query_table<ure_measurement_output_interface_t>(
+            query, measurement_output_id, 0, 1);
     check(runtime && instances && errors && operations && frames && scenes &&
-              products && device_execution,
+              products && device_execution && measurement_output,
           "required interface query failed");
 
     ure_interface_query_t wrong_version{};
@@ -182,7 +187,7 @@ int main(int argc, char **argv) {
               URE_RESULT_INCOMPATIBLE_VERSION,
           "extension accepted an incompatible interface version");
     if (!runtime || !instances || !errors || !operations || !frames ||
-        !scenes || !products || !device_execution) {
+        !scenes || !products || !device_execution || !measurement_output) {
         FreeLibrary(module);
         return 1;
     }
@@ -225,6 +230,19 @@ int main(int argc, char **argv) {
                                       nullptr) == URE_RESULT_SUCCESS &&
               descriptor.enabled == 1 && descriptor.applicable == 1,
           "product capability enablement failed");
+    capability_query = {};
+    capability_query.header = {URE_STRUCTURE_CAPABILITY_QUERY,
+                               sizeof(capability_query), nullptr};
+    capability_query.capability_id = URE_CAPABILITY_MEASUREMENT_OUTPUT;
+    descriptor = {};
+    descriptor.header = {URE_STRUCTURE_CAPABILITY_DESCRIPTOR,
+                         sizeof(descriptor), nullptr};
+    check(instances->query_capability(instance, &capability_query, &descriptor,
+                                      nullptr) == URE_RESULT_SUCCESS &&
+              descriptor.version_major == 0 && descriptor.version_minor == 1 &&
+              descriptor.stability == URE_STABILITY_UNSTABLE_EXTENSION &&
+              descriptor.enabled == 1 && descriptor.applicable == 1,
+          "measurement output capability discovery is invalid");
     capability_query = {};
     capability_query.header = {URE_STRUCTURE_CAPABILITY_QUERY,
                                sizeof(capability_query), nullptr};
@@ -295,12 +313,36 @@ int main(int argc, char **argv) {
               !rejected_job,
           "unsupported objective semantics were accepted");
 
-    const std::uint32_t color_output = URE_FRAME_PLANE_COLOR;
+    const std::uint32_t unavailable_spectral_output =
+        URE_FRAME_PLANE_SPECTRAL;
+    unsupported.latency_budget_ns = 0;
+    unsupported.output_count = 1;
+    unsupported.output_semantics = &unavailable_spectral_output;
+    ure_handle_t unsupported_output_error{};
+    check(products->create(instance, scene, &unsupported, &rejected_job,
+                           &unsupported_output_error) ==
+              URE_RESULT_CAPABILITY_UNAVAILABLE && !rejected_job,
+          "spectral output without a complete-scene producer was accepted");
+    ure_error_info_t unsupported_output_info{};
+    unsupported_output_info.header = {
+        URE_STRUCTURE_ERROR_INFO, sizeof(unsupported_output_info), nullptr};
+    check(unsupported_output_error &&
+              errors->get_info(unsupported_output_error,
+                               &unsupported_output_info) ==
+                  URE_RESULT_SUCCESS &&
+              unsupported_output_info.detail == 805,
+          "unsupported output semantic lost its diagnostic classification");
+    if (unsupported_output_error)
+        errors->release(unsupported_output_error);
+
+    const std::array<std::uint32_t, 2> requested_outputs{
+        URE_FRAME_PLANE_BEAUTY_RAW, URE_FRAME_PLANE_NORMAL};
     ure_objective_envelope_t objective{};
     objective.header = {URE_STRUCTURE_OBJECTIVE_ENVELOPE, sizeof(objective),
                         nullptr};
-    objective.output_count = 1;
-    objective.output_semantics = &color_output;
+    objective.output_count =
+        static_cast<std::uint32_t>(requested_outputs.size());
+    objective.output_semantics = requested_outputs.data();
     objective.sample_budget = 2;
     std::array<std::uint8_t, 32> missing_device{};
     missing_device.fill(0xff);
@@ -439,6 +481,116 @@ int main(int argc, char **argv) {
     ure_handle_t frame{};
     check(products->acquire_frame(job, &frame, nullptr) == URE_RESULT_SUCCESS,
           "product frame acquisition failed");
+    ure_measurement_frame_info_t measurement_frame{};
+    measurement_frame.header = {URE_STRUCTURE_MEASUREMENT_FRAME_INFO,
+                                sizeof(measurement_frame), nullptr};
+    check(frame && measurement_output->get_frame_info(
+                       frame, &measurement_frame, nullptr) ==
+                       URE_RESULT_SUCCESS &&
+              measurement_frame.plane_count >= 20 &&
+              measurement_frame.generation != 0 &&
+              measurement_frame.publication_status == URE_PUBLICATION_COMPLETE &&
+              digest_nonzero(measurement_frame.frame_identity) &&
+              digest_nonzero(measurement_frame.measurement_identity),
+          "measurement frame metadata is incomplete");
+    bool beauty{};
+    bool normal{};
+    bool albedo{};
+    bool depth{};
+    bool motion{};
+    bool sample_count{};
+    bool variance{};
+    bool effective_samples{};
+    ure_measurement_plane_info_t copy_source{};
+    for (std::uint32_t index = 0;
+         index < measurement_frame.plane_count; ++index) {
+        ure_measurement_plane_info_t plane{};
+        plane.header = {URE_STRUCTURE_MEASUREMENT_PLANE_INFO,
+                        sizeof(plane), nullptr};
+        check(measurement_output->get_plane_info(frame, index, &plane,
+                                                 nullptr) ==
+                  URE_RESULT_SUCCESS &&
+                  plane.width != 0 && plane.height != 0 &&
+                  plane.byte_extent != 0 && plane.element_stride != 0 &&
+                  digest_nonzero(plane.observable_identity) &&
+                  digest_nonzero(plane.unit_identity) &&
+                  digest_nonzero(plane.measure_identity) &&
+                  digest_nonzero(plane.time_identity) &&
+                  digest_nonzero(plane.uncertainty_identity) &&
+                  digest_nonzero(plane.provenance_identity) &&
+                  digest_nonzero(plane.content_identity),
+              "measurement plane metadata is incomplete");
+        beauty = beauty || plane.plane_schema == URE_FRAME_PLANE_BEAUTY_RAW;
+        normal = normal || plane.plane_schema == URE_FRAME_PLANE_NORMAL;
+        albedo = albedo || plane.plane_schema == URE_FRAME_PLANE_ALBEDO;
+        depth = depth || plane.plane_schema == URE_FRAME_PLANE_DEPTH;
+        motion = motion || plane.plane_schema == URE_FRAME_PLANE_MOTION;
+        sample_count = sample_count ||
+                       plane.plane_schema == URE_FRAME_PLANE_SAMPLE_COUNT;
+        variance = variance || plane.plane_schema == URE_FRAME_PLANE_VARIANCE;
+        effective_samples = effective_samples ||
+            plane.plane_schema == URE_FRAME_PLANE_EFFECTIVE_SAMPLE_COUNT;
+        if (plane.plane_schema == URE_FRAME_PLANE_BEAUTY_RAW)
+            copy_source = plane;
+    }
+    check(beauty && normal && albedo && depth && motion && sample_count &&
+              variance && effective_samples,
+          "required production measurement planes are missing");
+    std::array<std::uint8_t, 17> partial{};
+    ure_measurement_plane_copy_t copy{};
+    copy.header = {URE_STRUCTURE_MEASUREMENT_PLANE_COPY, sizeof(copy), nullptr};
+    copy.frame = frame;
+    copy.plane_index = 1;
+    copy.source_offset = 3;
+    copy.byte_count = partial.size();
+    copy.destination = {partial.data(), partial.size()};
+    copy.expected_generation = measurement_frame.generation;
+    copy.expected_content_identity = copy_source.content_identity;
+    check(measurement_output->copy_plane_range(&copy, nullptr) ==
+              URE_RESULT_SUCCESS,
+          "measurement partial read failed");
+    ++copy.expected_generation;
+    check(measurement_output->copy_plane_range(&copy, nullptr) ==
+              URE_RESULT_REVISION_CONFLICT,
+          "measurement partial read accepted a stale generation");
+    --copy.expected_generation;
+    copy.expected_content_identity.bytes[0] ^= 1;
+    check(measurement_output->copy_plane_range(&copy, nullptr) ==
+              URE_RESULT_MALFORMED_DATA,
+          "measurement partial read accepted a wrong digest");
+    copy.expected_content_identity = copy_source.content_identity;
+    check(measurement_output->copy_plane_range(&copy, nullptr) ==
+              URE_RESULT_SUCCESS,
+          "measurement frame changed after a rejected partial read");
+    const auto output_directory = std::filesystem::temp_directory_path() /
+                                  "ultrarender_prv4_contract_output";
+    std::error_code output_error;
+    std::filesystem::remove_all(output_directory, output_error);
+    const auto output_base = output_directory / "frame";
+    const auto output_text = output_base.generic_string();
+    ure_output_request_t output_request{};
+    output_request.header = {URE_STRUCTURE_OUTPUT_REQUEST,
+                             sizeof(output_request), nullptr};
+    output_request.job = job;
+    output_request.format = URE_OUTPUT_FORMAT_OPENEXR;
+    output_request.tone_map = URE_TONE_MAP_LINEAR;
+    output_request.output_path = {output_text.data(), output_text.size()};
+    output_request.byte_budget = UINT64_C(67108864);
+    ure_output_manifest_t output_manifest{};
+    output_manifest.header = {URE_STRUCTURE_OUTPUT_MANIFEST,
+                              sizeof(output_manifest), nullptr};
+    check(measurement_output->publish_artifacts(
+              &output_request, &output_manifest, nullptr) ==
+                  URE_RESULT_SUCCESS &&
+              output_manifest.publication_status == URE_PUBLICATION_COMPLETE &&
+              output_manifest.artifact_count == 3 &&
+              output_manifest.byte_count != 0 &&
+              digest_nonzero(output_manifest.manifest_identity) &&
+              digest_nonzero(output_manifest.measurement_identity) &&
+              digest_nonzero(output_manifest.content_identity) &&
+              std::filesystem::exists(output_base.string() + ".manifest.json"),
+          "product artifact publication failed");
+    std::filesystem::remove_all(output_directory, output_error);
     if (frame)
         frames->release(frame, nullptr);
     if (operation)

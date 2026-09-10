@@ -1,0 +1,34 @@
+{
+  "schema": "ure.phase_prv4.visual-review/1.0",
+  "status": "PassedWithinDeclaredBoundary",
+  "reviewed_at": "2026-09-09",
+  "quality_report": "docs/reports/phase_prv4_quality_validation_v1.json",
+  "quality_report_sha256": "fbc3227662cc0b26e94ac5800de00c0764e78847acae30e697eea01d791c64f0",
+  "review": {
+    "fixture": "cornell_1280x720",
+    "resolution": "1280x720",
+    "samples": 500,
+    "transport": "Direct",
+    "raw_semantic": "BeautyRaw",
+    "png_sha256": "f91a4beacd0042b5614cd86d2e917f3cb5e66f4769f20a2ec113a8a526628f2e",
+    "view_transform": "ure.preview.view.linear-srgb-reinhard-srgb8/1.0",
+    "orientation": "top-left",
+    "verdict": "PassWithVisiblePreDenoiseVariance",
+    "observations": [
+      "Cornell geometry, ceiling emitter, red and green walls, camera orientation and exposure are coherent.",
+      "No row inversion, channel swap, banding, missing region, non-finite value, negative component or empty pixel is visible or reported.",
+      "Fine-grained variance remains visible in dark diffuse regions; this is not described as a clean final image and remains an input to PRV.5 reconstruction and denoising."
+    ]
+  },
+  "comparison_to_retained_128_spp": {
+    "reference_report": "docs/reports/phase_prv1r_quality_validation_v1.json",
+    "reference_raw_sha256": "55c956356ffafacc503cafbcb4eb608db7d337cc148552bcafe51eb7a938ddc0",
+    "relative_rgb_nrmse": 0.03683088771181093,
+    "mean_luminance_128": 0.113427661804925,
+    "mean_luminance_500": 0.11343201051402713,
+    "mean_spatial_gradient_128": 0.00683625599297057,
+    "mean_spatial_gradient_500": 0.0039985232160898955,
+    "assessment": "Energy is stable while high-frequency variation decreases materially, so the 500-sample result is converging rather than exhibiting an SPP accounting or output regression."
+  },
+  "boundary": "This review accepts PRV.4 measurement and output correctness only. It does not claim denoised production quality or complete UltraRender_preview."
+}

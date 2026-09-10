@@ -624,6 +624,81 @@ typedef struct ure_execution_info_t {
     uint64_t reserved[2];
 } ure_execution_info_t;
 
+typedef struct ure_measurement_frame_info_t {
+    ure_output_header_t header;
+    ure_digest256_t frame_identity;
+    ure_digest256_t measurement_identity;
+    uint64_t generation;
+    uint64_t retained_bytes;
+    uint32_t plane_count;
+    uint32_t publication_status;
+    uint64_t reserved[2];
+} ure_measurement_frame_info_t;
+
+typedef struct ure_measurement_plane_info_t {
+    ure_output_header_t header;
+    uint32_t plane_schema;
+    uint32_t scalar_type;
+    uint32_t component_layout;
+    uint32_t normalization;
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    uint32_t element_stride;
+    uint64_t row_stride;
+    uint64_t slice_stride;
+    uint64_t byte_extent;
+    ure_digest256_t observable_identity;
+    ure_digest256_t unit_identity;
+    ure_digest256_t measure_identity;
+    ure_digest256_t time_identity;
+    ure_digest256_t uncertainty_identity;
+    ure_digest256_t provenance_identity;
+    ure_digest256_t content_identity;
+    uint64_t sample_begin;
+    uint64_t sample_count;
+    uint32_t endpoint_index;
+    uint32_t flags;
+    uint64_t reserved[2];
+} ure_measurement_plane_info_t;
+
+typedef struct ure_measurement_plane_copy_t {
+    ure_input_header_t header;
+    ure_handle_t frame;
+    uint32_t plane_index;
+    uint32_t reserved32;
+    uint64_t source_offset;
+    uint64_t byte_count;
+    ure_mutable_byte_span_t destination;
+    uint64_t expected_generation;
+    ure_digest256_t expected_content_identity;
+    uint64_t reserved[2];
+} ure_measurement_plane_copy_t;
+
+typedef struct ure_output_request_t {
+    ure_input_header_t header;
+    ure_handle_t job;
+    uint32_t format;
+    uint32_t tone_map;
+    ure_string_view_t output_path;
+    uint32_t output_count;
+    const uint32_t *output_semantics;
+    uint64_t byte_budget;
+    uint64_t reserved[2];
+} ure_output_request_t;
+
+typedef struct ure_output_manifest_t {
+    ure_output_header_t header;
+    uint32_t publication_status;
+    uint32_t format;
+    uint64_t artifact_count;
+    uint64_t byte_count;
+    ure_digest256_t manifest_identity;
+    ure_digest256_t measurement_identity;
+    ure_digest256_t content_identity;
+    uint64_t reserved[2];
+} ure_output_manifest_t;
+
 typedef struct ure_runtime_interface_t {
     ure_interface_table_header_t header;
     ure_result_t (URE_CALL *create_instance)(
@@ -716,6 +791,14 @@ typedef struct ure_device_execution_interface_t {
     ure_result_t (URE_CALL *get_descriptor)(ure_handle_t instance, uint32_t index, ure_device_descriptor_t *descriptor, ure_handle_t *error);
     ure_result_t (URE_CALL *get_job_execution)(ure_handle_t job, ure_execution_info_t *info, ure_handle_t *error);
 } ure_device_execution_interface_t;
+
+typedef struct ure_measurement_output_interface_t {
+    ure_interface_table_header_t header;
+    ure_result_t (URE_CALL *get_frame_info)(ure_handle_t frame, ure_measurement_frame_info_t *info, ure_handle_t *error);
+    ure_result_t (URE_CALL *get_plane_info)(ure_handle_t frame, uint32_t plane_index, ure_measurement_plane_info_t *info, ure_handle_t *error);
+    ure_result_t (URE_CALL *copy_plane_range)(const ure_measurement_plane_copy_t *copy, ure_handle_t *error);
+    ure_result_t (URE_CALL *publish_artifacts)(const ure_output_request_t *request, ure_output_manifest_t *manifest, ure_handle_t *error);
+} ure_measurement_output_interface_t;
 
 typedef struct ure_session_interface_t {
     ure_interface_table_header_t header;

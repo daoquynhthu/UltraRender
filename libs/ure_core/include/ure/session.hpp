@@ -53,6 +53,7 @@ public:
     const std::vector<float>& get_aov(AovType type) const;
     IntegratorEstimatorMetadata get_estimator_metadata() const;
     AutomaticIntegratorReport get_automatic_integrator_report() const;
+    RenderMeasurementStatistics get_measurement_statistics() const;
     AccelerationStats get_acceleration_stats() const;
     runtime::DynamicGeometryStats
         get_dynamic_geometry_stats() const;

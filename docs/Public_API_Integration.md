@@ -9,7 +9,7 @@ Core 1.0 defines a small interaction grammar: dynamic discovery, instance/error/
 The locally staged SDK and runtime packages are independent:
 
 - the SDK package contains C11 loader/value headers, Worker Protocol 1 schemas, pre-generated C++ protocol headers, the exact-build Preview client library and examples, the canonical registry, mock conformance worker, FlatBuffers headers, fixtures, goldens, reports, and this guide;
-- the runtime package contains `ultrarender_runtime_1.dll`, `ultrarender_worker_1.exe`, ABI/runtime/registry manifests, protocol inspection schemas, reports, licenses, and the support policy.
+- the runtime package contains `ultrarender_runtime_1.dll`, `ultrarender_worker_1.exe`, ABI/runtime/registry manifests, protocol inspection schemas, reports, licenses, and the support policy. Official OpenEXR/Imath code is linked statically so the Core runtime remains independently loadable as one product DLL; their licenses remain included.
 
 The runtime package has no import library or compiler headers. The SDK has no product runtime. Neither package exposes renderer-private C++/CUDA/Vulkan/D3D12/OpenUSD types or enables ambient plugin, script, solver, model, or executable discovery.
 
@@ -44,6 +44,8 @@ The UUID transaction facility is an `UnstableExtension`. Query `URE_INTERFACE_SC
 
 ProductJob exact-build 0.4 is also an `UnstableExtension`. The maintained `ure_client` library negotiates it over explicit Direct or Worker transport and is the current path used by CLI render. It exposes a bounded native-scene/color job, product build/snapshot/objective/plan identities, requested/accepted/completed work, monotonic progress, latest immutable frame generations, an artifact manifest, and the eligible/qualified/executed integrator masks for the realized product plan. These masks are observations, not a public request to select an estimator. Unsupported objective semantics reject; Worker failure or registry mismatch never changes transport implicitly. This Preview surface is exact-build product integration, not an additional stable Core promise.
 
+MeasurementFrame 0.1 and Output 0.1 are exact-build `UnstableExtension` interfaces. They expose complete typed plane descriptors, measurement identity, arbitrary bounded byte-range copies and atomic artifact publication for the same ProductJob. The current bounded producer supplies 45 BeautyRaw/AOV/statistics/estimator planes. Spectrum or Stokes requests reject at compile time where no complete-scene producer exists. Output publication always creates the official flat multi-channel OpenEXR, versioned measurement checkpoint and content manifest, with HDR/PPM/BMP as optional derived display products. None of these structures or semantics are added to the stable Core promise.
+
 Scene Tool exact-build 0.2 is a separate `UnstableExtension` for validation, inspection, build/migration, package realization and bounded material import/export/preset operations. It returns canonical native artifacts or an explicit adapter-loss report; it does not publish SceneIR or MaterialGraph as a stable ABI. The canonical material program set is the product authority: MaterialGraph supplies topology and all backend-consumed material state is identity-bound with it. glTF and MaterialX/preset conversion paths are bounded adapters, while Hydra remains a legacy adapter path; their complete ProductJob rendering status is evidence-scoped, and component conversion tests alone do not establish ProductE2E.
 
 Spectral, Stokes/polarimetric, MeasurementBundle, reconstruction, integrator, material, physical-world, differentiation, telemetry, and solver/provider capabilities follow the same rule: they are absent from Core unless separately identified and versioned.
@@ -61,7 +63,7 @@ The worker opens no TCP/UDP listener and requests no firewall exception. It uses
 The staged SDK exports `UltraRender::Client` for renderer-free C++23 consumers:
 
 ```cmake
-find_package(UltraRender 0.3.0 EXACT CONFIG REQUIRED COMPONENTS Client)
+find_package(UltraRender 0.4.0 EXACT CONFIG REQUIRED COMPONENTS Client)
 target_link_libraries(my_client PRIVATE UltraRender::Client)
 ```
 
@@ -73,9 +75,11 @@ Ordinary C++ integration does not run `flatc`. The SDK carries generated Worker/
 
 Frames are immutable retained snapshots. Query plane metadata, then either map for read or copy into caller storage. The Core color plane is float32 RGBA with explicit dimensions, strides, extent, normalization, identities, completion, sample range, and provenance. Limits are negotiated per instance/runtime and are not fixed ABI constants.
 
-The packaged external E2E builds independent C11, C++23 extension, raw Worker Protocol, and maintained Preview client examples without invoking `flatc`. They render real scenes and write eight PFM images covering direct map/copy, transaction replay/replacement, worker first-run/restart, and `UltraRender::Client` Direct/Worker paths. Each image gate rejects non-finite, all-zero, or spatially constant RGB data; paired paths also compare exact evidence or content identity. PRV.3 material/adapter work uses the same Product Realizer boundary: bounded canonical material programs plus glTF, preset and MaterialX-derived artifacts now have retained Direct/Worker ProductJob images, and accepted texture/SPD/Mie/medium plus radiometric-wave routes have functional/quality evidence. Hydra-derived material conversion produces a canonical artifact, but the Hydra viewport remains outside ProductJob until PRV.10. Broader typed measurement/output semantics remain open for PRV.4.
+The packaged external E2E builds independent C11, C++23 extension, raw Worker Protocol, and maintained Preview client examples without invoking `flatc`. They render real scenes and write PFM images covering direct map/copy, transaction replay/replacement, worker first-run/restart, and `UltraRender::Client` Direct/Worker paths. Each image gate rejects non-finite, all-zero, or spatially constant RGB data; paired paths also compare exact evidence or content identity. PRV.3 material/adapter work uses the same Product Realizer boundary for bounded canonical material, glTF, preset and MaterialX-derived artifacts. PRV.4 upgrades the Preview client example to read raw/AOV/statistics planes, perform a middle-range partial copy, request the official OpenEXR/checkpoint/display/manifest graph and preserve BeautyRaw PFM through both Direct and Worker. Hydra remains outside ProductJob until PRV.10.
 
 The maintained PRV.1R product matrix adds a shared renderer-free scenario runner. It exercises `ure_client` Direct/Worker and CLI Direct/Worker at 854×480 and retains milestone 1280×720 Direct plus 1920×1080 Worker evidence at 128 spp. The runtime float PFM is authoritative; a deterministic `ure.preview.view.linear-srgb-reinhard-srgb8/1.0` conversion produces review PNGs. Finite values, energy, spatial structure and nested-sample convergence are checked independently of byte parity. The machine records are `phase_prv1r_functional_validation_v1.json`, `phase_prv1r_quality_validation_v1.json` and `phase_prv1r_visual_review_v1.json` under `docs/reports`; they certify only the bounded exact-build color workflow and create no stable extension or product-release promise.
+
+The PRV.4 matrix separately retains 854×480, 16-sample Direct/Worker/CLI/SDK measurement-output evidence and a 1280×720, 500-sample Cornell quality run. Direct and Worker agree on measurement identity and official EXR/checkpoint bytes; this proves transfer and publication integrity, while finite/energy/spatial checks, comparison with the retained 128-sample raw image, and a recorded visual review establish the bounded image-quality conclusion. Fine pre-denoise variance remains visible and is not described as reconstructed or denoised output.
 
 ## Errors, cancellation, and cleanup
 

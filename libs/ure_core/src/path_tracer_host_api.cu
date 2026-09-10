@@ -11,6 +11,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 #include <iostream>
 #include <iomanip>
@@ -31,6 +32,7 @@
 #include "ure/mie_phase_validation.hpp"
 #include "ure/runtime/execution_graph.hpp"
 #include "ure/runtime/resource_plan.hpp"
+#include "ure/render.hpp"
 #include "ure/specular_manifold.hpp"
 #include "ure/wave_optics.hpp"
 #include "ure/path_tracer_sampling.cuh"
@@ -106,6 +108,8 @@ void free_debug_log() {
 #endif
 
 namespace ure::gpu {
+
+static void capture_measurement_statistics(GpuContext* ctx);
 
 GpuContext::GpuContext() = default;
 GpuContext::~GpuContext() = default;
@@ -3329,8 +3333,9 @@ GpuContext* init_gpu_renderer(int width, int height,
         const std::size_t prefix_bytes =
             diffraction_psf_prefix.size() *
             sizeof(float);
+        const std::size_t measurement_film_bytes = film_bytes * 2;
         if (config.backend.memory_budget_bytes != 0 &&
-            film_bytes >
+            measurement_film_bytes >
                 config.backend.memory_budget_bytes -
                     std::min(
                         config.backend.memory_budget_bytes,
@@ -3344,7 +3349,7 @@ GpuContext* init_gpu_renderer(int width, int height,
             &free_device_bytes,
             &total_device_bytes));
         static_cast<void>(total_device_bytes);
-        if (film_bytes + psf_bytes + prefix_bytes >
+        if (measurement_film_bytes + psf_bytes + prefix_bytes >
             free_device_bytes -
                 free_device_bytes / 20) {
             throw std::runtime_error(
@@ -3352,6 +3357,9 @@ GpuContext* init_gpu_renderer(int width, int height,
         }
         UR_CUDA_CHECK(cudaMalloc(
             &ctx->d_diffraction_spectral_accum,
+            film_bytes));
+        UR_CUDA_CHECK(cudaMalloc(
+            &ctx->d_diffraction_spectral_pass,
             film_bytes));
         UR_CUDA_CHECK(cudaMalloc(
             &ctx->d_diffraction_psf_weights,
@@ -3362,11 +3370,17 @@ GpuContext* init_gpu_renderer(int width, int height,
         ctx->resources->retain_allocation(
             ctx->d_diffraction_spectral_accum);
         ctx->resources->retain_allocation(
+            ctx->d_diffraction_spectral_pass);
+        ctx->resources->retain_allocation(
             ctx->d_diffraction_psf_weights);
         ctx->resources->retain_allocation(
             ctx->d_diffraction_psf_prefix);
         UR_CUDA_CHECK(cudaMemset(
             ctx->d_diffraction_spectral_accum,
+            0,
+            film_bytes));
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_diffraction_spectral_pass,
             0,
             film_bytes));
         UR_CUDA_CHECK(cudaMemcpy(
@@ -3400,10 +3414,59 @@ GpuContext* init_gpu_renderer(int width, int height,
         &ctx->d_specular_emitter_accum, framebuffer_size));
     UR_CUDA_CHECK(cudaMalloc(&ctx->d_sample_counts, width * height * sizeof(int)));
 
+    const size_t measurement_scalar_count =
+        static_cast<size_t>(width) * static_cast<size_t>(height) * 3;
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_measurement_pass_contribution, framebuffer_size));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_measurement_previous_contribution, framebuffer_size));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_measurement_first_moment,
+        measurement_scalar_count * sizeof(double)));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_measurement_second_moment,
+        measurement_scalar_count * sizeof(double)));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_measurement_lag_one_product,
+        measurement_scalar_count * sizeof(double)));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_measurement_first_contribution,
+        measurement_scalar_count * sizeof(double)));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_measurement_maximum_absolute, framebuffer_size));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_measurement_tail_event_count,
+        measurement_scalar_count * sizeof(unsigned long long)));
+    UR_CUDA_CHECK(cudaMalloc(
+        &ctx->d_measurement_invalid_count, sizeof(unsigned int)));
+
     UR_CUDA_CHECK(cudaMemset(ctx->d_accum_buffer, 0, framebuffer_size));
     UR_CUDA_CHECK(cudaMemset(
         ctx->d_specular_emitter_accum, 0, framebuffer_size));
     UR_CUDA_CHECK(cudaMemset(ctx->d_sample_counts, 0, width * height * sizeof(int)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_pass_contribution, 0, framebuffer_size));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_previous_contribution, 0, framebuffer_size));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_first_moment, 0,
+        measurement_scalar_count * sizeof(double)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_second_moment, 0,
+        measurement_scalar_count * sizeof(double)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_lag_one_product, 0,
+        measurement_scalar_count * sizeof(double)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_first_contribution, 0,
+        measurement_scalar_count * sizeof(double)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_maximum_absolute, 0, framebuffer_size));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_tail_event_count, 0,
+        measurement_scalar_count * sizeof(unsigned long long)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_invalid_count, 0, sizeof(unsigned int)));
 
     UR_CUDA_CHECK(cudaMalloc(&ctx->d_normal_buffer, framebuffer_size));
     UR_CUDA_CHECK(cudaMemset(ctx->d_normal_buffer, 0, framebuffer_size));
@@ -4133,8 +4196,36 @@ void update_medium_gpu(GpuContext* ctx, float medium_density, float medium_aniso
 
 void reset_accumulation_gpu(GpuContext* ctx) {
     size_t framebuffer_size = ctx->width * ctx->height * sizeof(GpuVec3);
+    const size_t measurement_scalar_count =
+        static_cast<size_t>(ctx->width) *
+        static_cast<size_t>(ctx->height) * 3;
     cudaMemset(ctx->d_accum_buffer, 0, framebuffer_size);
     cudaMemset(ctx->d_sample_counts, 0, ctx->width * ctx->height * sizeof(int));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_pass_contribution, 0, framebuffer_size));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_previous_contribution, 0, framebuffer_size));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_first_moment, 0,
+        measurement_scalar_count * sizeof(double)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_second_moment, 0,
+        measurement_scalar_count * sizeof(double)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_lag_one_product, 0,
+        measurement_scalar_count * sizeof(double)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_first_contribution, 0,
+        measurement_scalar_count * sizeof(double)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_maximum_absolute, 0, framebuffer_size));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_tail_event_count, 0,
+        measurement_scalar_count * sizeof(unsigned long long)));
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_invalid_count, 0, sizeof(unsigned int)));
+    ctx->measurement_captured_spp = 0;
+    ctx->measurement_statistics_valid = true;
     cudaMemset(ctx->d_normal_buffer, 0, framebuffer_size);
     cudaMemset(ctx->d_albedo_buffer, 0, framebuffer_size);
     cudaMemset(ctx->d_depth_buffer, 0, ctx->width * ctx->height * sizeof(float));
@@ -4143,6 +4234,14 @@ void reset_accumulation_gpu(GpuContext* ctx) {
     if (ctx->d_diffraction_spectral_accum) {
         UR_CUDA_CHECK(cudaMemset(
             ctx->d_diffraction_spectral_accum,
+            0,
+            static_cast<std::size_t>(ctx->width) *
+                static_cast<std::size_t>(ctx->height) *
+                static_cast<std::size_t>(
+                    ctx->diffraction_wavelength_count) *
+                sizeof(GpuVec3)));
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_diffraction_spectral_pass,
             0,
             static_cast<std::size_t>(ctx->width) *
                 static_cast<std::size_t>(ctx->height) *
@@ -4203,6 +4302,15 @@ void free_gpu_renderer(GpuContext* ctx) {
     cudaFree(ctx->d_accum_buffer);
     cudaFree(ctx->d_specular_emitter_accum);
     cudaFree(ctx->d_sample_counts);
+    cudaFree(ctx->d_measurement_pass_contribution);
+    cudaFree(ctx->d_measurement_previous_contribution);
+    cudaFree(ctx->d_measurement_first_moment);
+    cudaFree(ctx->d_measurement_second_moment);
+    cudaFree(ctx->d_measurement_lag_one_product);
+    cudaFree(ctx->d_measurement_first_contribution);
+    cudaFree(ctx->d_measurement_maximum_absolute);
+    cudaFree(ctx->d_measurement_tail_event_count);
+    cudaFree(ctx->d_measurement_invalid_count);
     cudaFree(ctx->d_normal_buffer);
     cudaFree(ctx->d_albedo_buffer);
     cudaFree(ctx->d_depth_buffer);
@@ -4671,7 +4779,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
         ctx->material_fluorescence_table_count;
     scene.num_spectral_channels = ctx->num_spectral_channels;
     scene.diffraction_spectral_accum =
-        ctx->d_diffraction_spectral_accum;
+        ctx->d_diffraction_spectral_pass;
     scene.diffraction_psf_weights =
         ctx->d_diffraction_psf_weights;
     scene.diffraction_pixel_count =
@@ -4802,6 +4910,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     scene.medium_max_distance = ctx->medium_max_distance;
 
     if (ctx->render_config.integrator.mode == ure::IntegratorMode::MLT) {
+        ctx->measurement_statistics_valid = false;
         return complete_execution(
             render_mlt_pass(ctx, scene, samples_per_pass));
     }
@@ -4821,6 +4930,16 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
     const int primary_ray_count = checked_primary_ray_count(ctx->width, ctx->height);
     const int max_rays = ctx->queueA.capacity;
     const int num_threads_wf = cfg.rays_per_block;
+    UR_CUDA_CHECK(cudaMemset(
+        ctx->d_measurement_pass_contribution, 0,
+        static_cast<size_t>(primary_ray_count) * sizeof(GpuVec3)));
+    if (ctx->d_diffraction_spectral_pass) {
+        UR_CUDA_CHECK(cudaMemset(
+            ctx->d_diffraction_spectral_pass, 0,
+            static_cast<size_t>(primary_ray_count) *
+                static_cast<size_t>(ctx->diffraction_wavelength_count) *
+                sizeof(GpuVec3)));
+    }
     if (num_threads_wf <= 0) {
         throw std::runtime_error("RenderConfig rays_per_block must be positive");
     }
@@ -5014,7 +5133,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
                (ctx->render_config.bidirectional.enabled ||
                ctx->render_config.vcm.enabled)
                 ? ctx->d_bidirectional_camera_accum
-                : ctx->d_accum_buffer);
+                : ctx->d_measurement_pass_contribution);
         if (restir_pt) {
             UR_CUDA_CHECK(cudaMemset(
                 candidate_accumulation, 0,
@@ -5117,7 +5236,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
                 primary_ray_count, num_threads_wf);
             finalize_restir_pt_reservoir_kernel<<<blocks, num_threads_wf>>>(
                 ctx->d_restir_pt_reservoirs[restir_pt_output_index],
-                ctx->d_accum_buffer, primary_ray_count,
+                ctx->d_measurement_pass_contribution, primary_ray_count,
                 ctx->render_config.restir_pt.max_history,
                 ctx->restir_pt_scene_epoch, ctx->d_restir_pt_telemetry);
             UR_CUDA_CHECK(cudaGetLastError());
@@ -5328,7 +5447,7 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
                 ? ctx->d_vcm_volume_merge_accum : nullptr,
             ctx->render_config.specular_manifold.enabled
                 ? ctx->d_manifold_accum : nullptr,
-            ctx->d_accum_buffer, primary_ray_count);
+            ctx->d_measurement_pass_contribution, primary_ray_count);
         UR_CUDA_CHECK(cudaGetLastError());
     }
     GpuAccelerationTelemetry acceleration_telemetry{};
@@ -5395,6 +5514,12 @@ int render_pass_gpu(GpuContext* ctx, int samples_per_pass) {
             throw std::runtime_error("VCM spatial hash entry capacity overflow");
         }
     }
+    const bool capture_statistics =
+        samples_per_pass == 1 &&
+        ctx->current_spp == ctx->measurement_captured_spp + 1 &&
+        ctx->measurement_statistics_valid;
+    if (!capture_statistics) ctx->measurement_statistics_valid = false;
+    capture_measurement_statistics(ctx);
     return complete_execution(ctx->current_spp);
 }
 
@@ -5413,7 +5538,7 @@ AccelerationStats get_acceleration_stats(const GpuContext* ctx) {
     return ctx->acceleration_stats;
 }
 
-void copy_frame_buffer_gpu(GpuContext* ctx, float* host_buffer) {
+static void resolve_framebuffer_device(GpuContext* ctx) {
     dim3 threadsPerBlock(16, 16);
     dim3 numBlocks((ctx->width + threadsPerBlock.x - 1) / threadsPerBlock.x,
                    (ctx->height + threadsPerBlock.y - 1) / threadsPerBlock.y);
@@ -5430,7 +5555,8 @@ void copy_frame_buffer_gpu(GpuContext* ctx, float* host_buffer) {
                 ctx->width,
                 ctx->height,
                 ctx->diffraction_radius_pixels,
-                ctx->diffraction_wavelength_count);
+                ctx->diffraction_wavelength_count,
+                1);
     } else {
         resolve_framebuffer_kernel<<<numBlocks, threadsPerBlock>>>(
             ctx->d_accum_buffer,
@@ -5441,6 +5567,64 @@ void copy_frame_buffer_gpu(GpuContext* ctx, float* host_buffer) {
         );
     }
     UR_CUDA_CHECK(cudaGetLastError());
+}
+
+static void capture_measurement_statistics(GpuContext* ctx) {
+    constexpr int threads = 256;
+    const int pixel_count = ctx->width * ctx->height;
+    const int blocks = (pixel_count + threads - 1) / threads;
+    if (ctx->d_diffraction_spectral_pass) {
+        const int spectral_count =
+            pixel_count * ctx->diffraction_wavelength_count;
+        const int spectral_blocks =
+            (spectral_count + threads - 1) / threads;
+        update_measurement_statistics_kernel<<<spectral_blocks, threads>>>(
+            ctx->d_diffraction_spectral_pass,
+            ctx->d_diffraction_spectral_accum,
+            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr,
+            0, spectral_count);
+        UR_CUDA_CHECK(cudaGetLastError());
+        dim3 image_threads(16, 16);
+        dim3 image_blocks(
+            (ctx->width + image_threads.x - 1) / image_threads.x,
+            (ctx->height + image_threads.y - 1) / image_threads.y);
+        resolve_diffraction_framebuffer_kernel<<<
+            image_blocks, image_threads>>>(
+                ctx->d_diffraction_spectral_pass,
+                ctx->d_diffraction_psf_weights,
+                ctx->d_diffraction_psf_prefix,
+                nullptr,
+                ctx->d_measurement_pass_contribution,
+                ctx->width,
+                ctx->height,
+                ctx->diffraction_radius_pixels,
+                ctx->diffraction_wavelength_count,
+                0);
+        UR_CUDA_CHECK(cudaGetLastError());
+    }
+    const int capture_state = ctx->measurement_statistics_valid
+        ? (ctx->measurement_captured_spp > 0 ? 2 : 1)
+        : 0;
+    update_measurement_statistics_kernel<<<blocks, threads>>>(
+        ctx->d_measurement_pass_contribution,
+        ctx->d_accum_buffer,
+        ctx->d_measurement_previous_contribution,
+        ctx->d_measurement_first_moment,
+        ctx->d_measurement_second_moment,
+        ctx->d_measurement_lag_one_product,
+        ctx->d_measurement_first_contribution,
+        ctx->d_measurement_maximum_absolute,
+        ctx->d_measurement_tail_event_count,
+        ctx->d_measurement_invalid_count,
+        capture_state,
+        pixel_count);
+    UR_CUDA_CHECK(cudaGetLastError());
+    ctx->measurement_captured_spp = ctx->current_spp;
+}
+
+void copy_frame_buffer_gpu(GpuContext* ctx, float* host_buffer) {
+    resolve_framebuffer_device(ctx);
     UR_CUDA_CHECK(cudaDeviceSynchronize());
 
     size_t framebuffer_size = ctx->width * ctx->height * sizeof(GpuVec3);
@@ -5449,6 +5633,85 @@ void copy_frame_buffer_gpu(GpuContext* ctx, float* host_buffer) {
         ctx->d_output,
         framebuffer_size,
         cudaMemcpyDeviceToHost));
+}
+
+RenderMeasurementStatistics copy_measurement_statistics_gpu(
+    GpuContext* ctx,
+    const IntegratorEstimatorMetadata& estimator) {
+    RenderMeasurementStatistics result;
+    result.width = static_cast<std::uint32_t>(ctx->width);
+    result.height = static_cast<std::uint32_t>(ctx->height);
+    unsigned int invalid_count{};
+    UR_CUDA_CHECK(cudaMemcpy(
+        &invalid_count, ctx->d_measurement_invalid_count,
+        sizeof(invalid_count), cudaMemcpyDeviceToHost));
+    result.valid = ctx->measurement_statistics_valid &&
+                   ctx->measurement_captured_spp == ctx->current_spp &&
+                   ctx->current_spp > 0 && invalid_count == 0;
+    if (!result.valid) return result;
+    RenderMeasurementEndpointStatistics endpoint;
+    endpoint.sample_count = static_cast<std::uint64_t>(
+        ctx->measurement_captured_spp);
+    endpoint.estimator = estimator;
+    const size_t scalar_count = static_cast<size_t>(ctx->width) *
+                                static_cast<size_t>(ctx->height) * 3;
+    const size_t pixel_count = static_cast<size_t>(ctx->width) *
+                               static_cast<size_t>(ctx->height);
+    endpoint.first_moment_sums.resize(scalar_count);
+    endpoint.second_moment_sums.resize(scalar_count);
+    endpoint.lag_one_product_sums.resize(scalar_count);
+    endpoint.first_contributions.resize(scalar_count);
+    endpoint.last_contributions.resize(scalar_count);
+    endpoint.maximum_absolute_contributions.resize(scalar_count);
+    endpoint.tail_event_counts.resize(scalar_count);
+    std::vector<GpuVec3> maximum(pixel_count);
+    std::vector<GpuVec3> last_contribution(pixel_count);
+    UR_CUDA_CHECK(cudaMemcpy(
+        endpoint.first_moment_sums.data(), ctx->d_measurement_first_moment,
+        scalar_count * sizeof(double), cudaMemcpyDeviceToHost));
+    UR_CUDA_CHECK(cudaMemcpy(
+        endpoint.second_moment_sums.data(), ctx->d_measurement_second_moment,
+        scalar_count * sizeof(double), cudaMemcpyDeviceToHost));
+    UR_CUDA_CHECK(cudaMemcpy(
+        endpoint.lag_one_product_sums.data(),
+        ctx->d_measurement_lag_one_product,
+        scalar_count * sizeof(double), cudaMemcpyDeviceToHost));
+    UR_CUDA_CHECK(cudaMemcpy(
+        endpoint.first_contributions.data(),
+        ctx->d_measurement_first_contribution,
+        scalar_count * sizeof(double), cudaMemcpyDeviceToHost));
+    UR_CUDA_CHECK(cudaMemcpy(
+        last_contribution.data(),
+        ctx->d_measurement_previous_contribution,
+        pixel_count * sizeof(GpuVec3), cudaMemcpyDeviceToHost));
+    UR_CUDA_CHECK(cudaMemcpy(
+        maximum.data(), ctx->d_measurement_maximum_absolute,
+        pixel_count * sizeof(GpuVec3), cudaMemcpyDeviceToHost));
+    UR_CUDA_CHECK(cudaMemcpy(
+        endpoint.tail_event_counts.data(),
+        ctx->d_measurement_tail_event_count,
+        scalar_count * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
+    result.estimate.resize(scalar_count);
+    const double inverse_sample_count = 1.0 /
+        static_cast<double>(endpoint.sample_count);
+    for (size_t value = 0; value < scalar_count; ++value) {
+        result.estimate[value] = static_cast<float>(
+            endpoint.first_moment_sums[value] * inverse_sample_count);
+        const size_t pixel = value / 3;
+        const size_t component = value % 3;
+        const float components[3] = {
+            last_contribution[pixel].x,
+            last_contribution[pixel].y,
+            last_contribution[pixel].z};
+        endpoint.last_contributions[value] = components[component];
+    }
+    for (size_t pixel = 0; pixel < pixel_count; ++pixel) {
+        endpoint.maximum_absolute_contributions[pixel * 3] = maximum[pixel].x;
+        endpoint.maximum_absolute_contributions[pixel * 3 + 1] = maximum[pixel].y;
+        endpoint.maximum_absolute_contributions[pixel * 3 + 2] = maximum[pixel].z;
+    }
+    result.endpoints.push_back(std::move(endpoint));
+    return result;
 }
 
 void copy_normal_buffer_gpu(GpuContext* ctx, float* host_buffer) {

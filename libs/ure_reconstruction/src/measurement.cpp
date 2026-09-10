@@ -70,9 +70,12 @@ void add(MeasurementValidation& result,
     result.diagnostics.push_back({issue, plane});
 }
 
-bool valid_plane_kind(MeasurementPlaneKind value) {
+bool valid_plane_kind(MeasurementPlaneKind value,
+                      std::uint32_t schema_version) {
     return value >= MeasurementPlaneKind::Observable &&
-           value <= MeasurementPlaneKind::MutualIntensity;
+           value <= (schema_version >= 2
+               ? MeasurementPlaneKind::TailEventCount
+               : MeasurementPlaneKind::MutualIntensity);
 }
 
 bool valid_scalar_type(MeasurementScalarType value) {
@@ -80,14 +83,20 @@ bool valid_scalar_type(MeasurementScalarType value) {
            value <= MeasurementScalarType::ComplexFloat64;
 }
 
-bool valid_merge_rule(MeasurementMergeRule value) {
+bool valid_merge_rule(MeasurementMergeRule value,
+                      std::uint32_t schema_version) {
     return value >= MeasurementMergeRule::Sum &&
-           value <= MeasurementMergeRule::Derived;
+           value <= (schema_version >= 2
+               ? MeasurementMergeRule::KeepLast
+               : MeasurementMergeRule::Derived);
 }
 
-bool valid_derivation_kind(MeasurementDerivationKind value) {
+bool valid_derivation_kind(MeasurementDerivationKind value,
+                           std::uint32_t schema_version) {
     return value >= MeasurementDerivationKind::None &&
-           value <= MeasurementDerivationKind::SampleCovariance;
+           value <= (schema_version >= 2
+               ? MeasurementDerivationKind::LagOneEffectiveSampleCount
+               : MeasurementDerivationKind::SampleCovariance);
 }
 
 bool valid_retention(MeasurementRetention value) {
@@ -123,10 +132,18 @@ bool observable_matches_kind(
 }
 
 bool scalar_matches_kind(const MeasurementPlaneDescriptor& plane) {
+    if (plane.kind ==
+            MeasurementPlaneKind::MaximumAbsoluteContribution ||
+        plane.kind == MeasurementPlaneKind::FirstContribution ||
+        plane.kind == MeasurementPlaneKind::LastContribution) {
+        return plane.scalar_type == MeasurementScalarType::Float32 ||
+               plane.scalar_type == MeasurementScalarType::Float64;
+    }
     if (plane.kind == MeasurementPlaneKind::ValidityMask) {
         return plane.scalar_type == MeasurementScalarType::UInt8;
     }
     if (plane.kind == MeasurementPlaneKind::SampleCount ||
+        plane.kind == MeasurementPlaneKind::TailEventCount ||
         plane.kind == MeasurementPlaneKind::TechniqueIdentity ||
         plane.kind == MeasurementPlaneKind::SampleIdentity ||
         plane.kind == MeasurementPlaneKind::MaterialIdentity ||
@@ -146,6 +163,17 @@ bool scalar_matches_kind(const MeasurementPlaneDescriptor& plane) {
 }
 
 bool rule_matches_kind(const MeasurementPlaneDescriptor& plane) {
+    if (plane.kind ==
+        MeasurementPlaneKind::MaximumAbsoluteContribution) {
+        return plane.merge_rule == MeasurementMergeRule::Maximum;
+    }
+    if (plane.kind == MeasurementPlaneKind::FirstContribution)
+        return plane.merge_rule == MeasurementMergeRule::KeepFirst;
+    if (plane.kind == MeasurementPlaneKind::LastContribution)
+        return plane.merge_rule == MeasurementMergeRule::KeepLast;
+    if (plane.merge_rule == MeasurementMergeRule::Maximum ||
+        plane.merge_rule == MeasurementMergeRule::KeepFirst ||
+        plane.merge_rule == MeasurementMergeRule::KeepLast) return false;
     if (plane.kind == MeasurementPlaneKind::SampleRecord) {
         return plane.merge_rule == MeasurementMergeRule::Append;
     }
@@ -303,6 +331,43 @@ void sum_payload(MeasurementScalarType type,
     }
 }
 
+template <typename T>
+void maximum_float_payload(std::vector<std::uint8_t>& target,
+                           std::span<const std::uint8_t> source) {
+    for (std::size_t offset = 0; offset < target.size();
+         offset += sizeof(T)) {
+        const auto value = std::max(
+            load_value<T>(target.data() + offset),
+            load_value<T>(source.data() + offset));
+        store_value(target.data() + offset, value);
+    }
+}
+
+void maximum_payload(MeasurementScalarType type,
+                     std::vector<std::uint8_t>& target,
+                     std::span<const std::uint8_t> source) {
+    if (type == MeasurementScalarType::Float32) {
+        maximum_float_payload<float>(target, source);
+    } else if (type == MeasurementScalarType::Float64) {
+        maximum_float_payload<double>(target, source);
+    } else {
+        throw std::invalid_argument(
+            "Measurement maximum requires a real floating scalar");
+    }
+}
+
+void add_boundary_product(std::vector<std::uint8_t>& cross,
+                          std::span<const std::uint8_t> previous,
+                          std::span<const std::uint8_t> next) {
+    for (std::size_t offset = 0; offset < cross.size();
+         offset += sizeof(double)) {
+        const double value = load_value<double>(cross.data() + offset) +
+            load_value<double>(previous.data() + offset) *
+            load_value<double>(next.data() + offset);
+        store_value(cross.data() + offset, value);
+    }
+}
+
 bool finite_payload(const MeasurementPlaneDescriptor& descriptor,
                     std::span<const std::uint8_t> payload) {
     if (descriptor.scalar_type == MeasurementScalarType::Float32 ||
@@ -402,6 +467,10 @@ semantic::IdentityDigest compute_measurement_schema_identity(
         encoder.u32(plane.derivation.first_plane);
         encoder.u32(plane.derivation.second_plane);
         encoder.u32(plane.derivation.cross_plane);
+        if (schema.version >= 2) {
+            encoder.u32(plane.derivation.first_sample_plane);
+            encoder.u32(plane.derivation.last_sample_plane);
+        }
         encoder.u8(plane.required ? 1 : 0);
     }
     return runtime::identity_digest(encoder.bytes());
@@ -418,7 +487,8 @@ void finalize_measurement_schema(MeasurementSchema& schema) {
 MeasurementValidation validate_measurement_schema(
     const MeasurementSchema& schema) {
     MeasurementValidation result;
-    if (schema.version != kMeasurementSchemaVersion) {
+    if (schema.version < kMinimumMeasurementSchemaVersion ||
+        schema.version > kMeasurementSchemaVersion) {
         add(result, MeasurementIssue::Version);
     }
     if (schema.width == 0 || schema.height == 0 || schema.planes.empty()) {
@@ -430,8 +500,8 @@ MeasurementValidation validate_measurement_schema(
     for (std::size_t index = 0; index < schema.planes.size(); ++index) {
         const auto& plane = schema.planes[index];
         const auto ordinal = static_cast<std::uint32_t>(index);
-        if (plane.version != kMeasurementSchemaVersion ||
-            !valid_plane_kind(plane.kind) ||
+        if (plane.version != schema.version ||
+            !valid_plane_kind(plane.kind, schema.version) ||
             !valid_retention(plane.retention) ||
             plane.component_count == 0 || plane.element_count == 0) {
             add(result, MeasurementIssue::Shape, ordinal);
@@ -440,13 +510,14 @@ MeasurementValidation validate_measurement_schema(
             !scalar_matches_kind(plane)) {
             add(result, MeasurementIssue::ScalarType, ordinal);
         }
-        if (!valid_merge_rule(plane.merge_rule) ||
+        if (!valid_merge_rule(plane.merge_rule, schema.version) ||
             !rule_matches_kind(plane)) {
             add(result, MeasurementIssue::MergeRule, ordinal);
         }
         const bool derived = plane.merge_rule ==
             MeasurementMergeRule::Derived;
-        if (!valid_derivation_kind(plane.derivation.kind) ||
+        if (!valid_derivation_kind(
+                plane.derivation.kind, schema.version) ||
             derived != (plane.derivation.kind !=
                         MeasurementDerivationKind::None)) {
             add(result, MeasurementIssue::MergeRule, ordinal);
@@ -493,6 +564,17 @@ MeasurementValidation validate_measurement_schema(
                     MeasurementPlaneKind::SampleCount &&
                 schema.planes[plane.derivation.count_plane].scalar_type ==
                     MeasurementScalarType::UInt64;
+            const auto valid_boundary =
+                [index, &schema](std::uint32_t source,
+                                 MeasurementPlaneKind kind,
+                                 MeasurementMergeRule rule) {
+                    return source < index &&
+                        source < schema.planes.size() &&
+                        schema.planes[source].kind == kind &&
+                        schema.planes[source].merge_rule == rule &&
+                        schema.planes[source].scalar_type ==
+                            MeasurementScalarType::Float64;
+                };
             const auto valid_dependency_retention =
                 [&plane, &schema](std::uint32_t source) {
                     if (source >= schema.planes.size()) return false;
@@ -512,11 +594,27 @@ MeasurementValidation validate_measurement_schema(
                      MeasurementDerivationKind::EffectiveSampleCount ||
                  (valid_count && valid_dependency_retention(
                      plane.derivation.count_plane))) &&
-                (plane.derivation.kind !=
-                     MeasurementDerivationKind::SampleCovariance ||
+                ((plane.derivation.kind !=
+                      MeasurementDerivationKind::SampleCovariance &&
+                  plane.derivation.kind !=
+                      MeasurementDerivationKind::LagOneEffectiveSampleCount) ||
                  (valid_source(plane.derivation.cross_plane) &&
                   valid_dependency_retention(
-                      plane.derivation.cross_plane)));
+                      plane.derivation.cross_plane))) &&
+                (plane.derivation.kind !=
+                     MeasurementDerivationKind::LagOneEffectiveSampleCount ||
+                 (valid_boundary(
+                      plane.derivation.first_sample_plane,
+                      MeasurementPlaneKind::FirstContribution,
+                      MeasurementMergeRule::KeepFirst) &&
+                  valid_boundary(
+                      plane.derivation.last_sample_plane,
+                      MeasurementPlaneKind::LastContribution,
+                      MeasurementMergeRule::KeepLast) &&
+                  valid_dependency_retention(
+                      plane.derivation.first_sample_plane) &&
+                  valid_dependency_retention(
+                      plane.derivation.last_sample_plane)));
             const auto same_shape =
                 [index, &schema](std::uint32_t source) {
                     return source < schema.planes.size() &&
@@ -528,9 +626,15 @@ MeasurementValidation validate_measurement_schema(
             const bool valid_shapes =
                 same_shape(plane.derivation.first_plane) &&
                 same_shape(plane.derivation.second_plane) &&
-                (plane.derivation.kind !=
-                     MeasurementDerivationKind::SampleCovariance ||
+                ((plane.derivation.kind !=
+                      MeasurementDerivationKind::SampleCovariance &&
+                  plane.derivation.kind !=
+                      MeasurementDerivationKind::LagOneEffectiveSampleCount) ||
                  same_shape(plane.derivation.cross_plane)) &&
+                (plane.derivation.kind !=
+                     MeasurementDerivationKind::LagOneEffectiveSampleCount ||
+                 (same_shape(plane.derivation.first_sample_plane) &&
+                  same_shape(plane.derivation.last_sample_plane))) &&
                 (plane.derivation.kind ==
                      MeasurementDerivationKind::EffectiveSampleCount ||
                  (valid_count &&
@@ -612,9 +716,17 @@ MeasurementSchemaSelection select_measurement_schema(
                  (plane.derivation.kind ==
                       MeasurementDerivationKind::EffectiveSampleCount ||
                   selected_source(plane.derivation.count_plane)) &&
-                 (plane.derivation.kind !=
-                      MeasurementDerivationKind::SampleCovariance ||
-                  selected_source(plane.derivation.cross_plane)));
+                 ((plane.derivation.kind !=
+                       MeasurementDerivationKind::SampleCovariance &&
+                   plane.derivation.kind !=
+                       MeasurementDerivationKind::LagOneEffectiveSampleCount) ||
+                  (selected_source(plane.derivation.cross_plane) &&
+                   (plane.derivation.kind !=
+                        MeasurementDerivationKind::LagOneEffectiveSampleCount ||
+                    (selected_source(
+                         plane.derivation.first_sample_plane) &&
+                     selected_source(
+                         plane.derivation.last_sample_plane))))));
             const bool fits = bytes <= budget_bytes -
                 std::min(budget_bytes, result.report.selected_bytes);
             if (permitted && dependencies_selected && fits) {
@@ -656,9 +768,18 @@ MeasurementSchemaSelection select_measurement_schema(
                     remap[plane.derivation.count_plane];
             }
             if (plane.derivation.kind ==
-                MeasurementDerivationKind::SampleCovariance) {
+                    MeasurementDerivationKind::SampleCovariance ||
+                plane.derivation.kind ==
+                    MeasurementDerivationKind::LagOneEffectiveSampleCount) {
                 plane.derivation.cross_plane =
                     remap[plane.derivation.cross_plane];
+            }
+            if (plane.derivation.kind ==
+                MeasurementDerivationKind::LagOneEffectiveSampleCount) {
+                plane.derivation.first_sample_plane =
+                    remap[plane.derivation.first_sample_plane];
+                plane.derivation.last_sample_plane =
+                    remap[plane.derivation.last_sample_plane];
             }
         }
     }
@@ -758,7 +879,9 @@ void refresh_derived_measurement_planes(MeasurementBundle& bundle) {
         const std::vector<std::uint8_t>* cross_payload = nullptr;
         const std::vector<std::uint8_t>* count_payload = nullptr;
         if (descriptor.derivation.kind ==
-            MeasurementDerivationKind::SampleCovariance) {
+                MeasurementDerivationKind::SampleCovariance ||
+            descriptor.derivation.kind ==
+                MeasurementDerivationKind::LagOneEffectiveSampleCount) {
             cross_payload = &bundle.planes[
                 descriptor.derivation.cross_plane].payload;
         }
@@ -807,6 +930,36 @@ void refresh_derived_measurement_planes(MeasurementBundle& bundle) {
                                static_cast<double>(count)) /
                               static_cast<double>(count - 1)
                         : 0.0;
+                    break;
+                }
+                case MeasurementDerivationKind::LagOneEffectiveSampleCount: {
+                    const auto lag_product = load_value<double>(
+                        cross_payload->data() + offset);
+                    if (count < 3) {
+                        value = count == 0 ? 0.0 : 1.0;
+                        break;
+                    }
+                    const double mean = first_value /
+                        static_cast<double>(count);
+                    const double variance_sum = second_value -
+                        first_value * mean;
+                    if (!(variance_sum > 0.0)) {
+                        value = static_cast<double>(count);
+                        break;
+                    }
+                    const double lag_covariance =
+                        lag_product /
+                            static_cast<double>(count - 1) -
+                        mean * mean;
+                    const double variance = variance_sum /
+                        static_cast<double>(count - 1);
+                    const double correlation = std::clamp(
+                        lag_covariance / variance, 0.0, 0.99);
+                    value = std::clamp(
+                        static_cast<double>(count) *
+                            (1.0 - correlation) /
+                            (1.0 + correlation),
+                        1.0, static_cast<double>(count));
                     break;
                 }
                 case MeasurementDerivationKind::None:
@@ -911,6 +1064,37 @@ MeasurementBundle merge_measurement_bundles(
     for (std::size_t ordered_index = 1;
          ordered_index < ordered.size(); ++ordered_index) {
         const auto& source = *ordered[ordered_index];
+        const auto& previous = *ordered[ordered_index - 1];
+        const auto& previous_range =
+            previous.provenance.sample_ranges.back();
+        const auto& source_range =
+            source.provenance.sample_ranges.front();
+        const bool contiguous = previous_range.start +
+            previous_range.count == source_range.start;
+        const bool has_lag_statistics = std::ranges::any_of(
+            result.schema.planes,
+            [](const MeasurementPlaneDescriptor& descriptor) {
+                return descriptor.derivation.kind ==
+                    MeasurementDerivationKind::LagOneEffectiveSampleCount;
+            });
+        if (has_lag_statistics && !contiguous) {
+            throw std::invalid_argument(
+                "Lag-one measurement shards must be contiguous");
+        }
+        if (contiguous) {
+            for (const auto& descriptor : result.schema.planes) {
+                if (descriptor.derivation.kind !=
+                    MeasurementDerivationKind::LagOneEffectiveSampleCount) {
+                    continue;
+                }
+                add_boundary_product(
+                    result.planes[descriptor.derivation.cross_plane].payload,
+                    result.planes[
+                        descriptor.derivation.last_sample_plane].payload,
+                    source.planes[
+                        descriptor.derivation.first_sample_plane].payload);
+            }
+        }
         for (std::size_t plane_index = 0;
              plane_index < result.planes.size(); ++plane_index) {
             auto& target_plane = result.planes[plane_index];
@@ -944,6 +1128,16 @@ MeasurementBundle merge_measurement_bundles(
                 break;
             }
             case MeasurementMergeRule::Derived:
+                break;
+            case MeasurementMergeRule::Maximum:
+                maximum_payload(descriptor.scalar_type,
+                                target_plane.payload,
+                                source_plane.payload);
+                break;
+            case MeasurementMergeRule::KeepFirst:
+                break;
+            case MeasurementMergeRule::KeepLast:
+                target_plane.payload = source_plane.payload;
                 break;
             }
         }

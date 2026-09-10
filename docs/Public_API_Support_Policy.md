@@ -9,6 +9,7 @@ The `UltraRender_preview` integration route does not expand this promise. Previe
 Within runtime major 1:
 
 - `ultrarender_runtime_1.dll` exports exactly `ureGetRuntimeManifest` and `ureQueryInterface` using the Windows x64 C calling convention;
+- the retained oldest Core 1 client can load `ultrarender_runtime_1.dll` by explicit path from an arbitrary working directory without modifying `PATH`; implementation dependencies introduced after 1.0 must not turn sibling private DLL discovery into a new client obligation;
 - published Core interface UUIDs, table prefixes, function signatures, structure prefixes, field order/types, numeric IDs, enum/result values, successful semantics, ownership, synchronization, and required lifetime behavior do not change;
 - additions are optional tail fields/functions, new schema versions, or new extension UUIDs/IDs; a caller may continue using only its known prefix;
 - Worker Protocol 1 preserves envelope/handshake field IDs and meanings, same-user locality, bounded framing, explicit registry negotiation, immutable shared-memory lease semantics, crash invalidation, and no network listener;

@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(UltraRender 0.3.0 EXACT CONFIG REQUIRED COMPONENTS Client)
+find_package(UltraRender 0.4.0 EXACT CONFIG REQUIRED COMPONENTS Client)
 if(NOT UltraRender_PREVIEW_CLIENT_COMPATIBILITY STREQUAL "ExactBuild")
     message(FATAL_ERROR "The Preview client package lost exact-build classification")
 endif()

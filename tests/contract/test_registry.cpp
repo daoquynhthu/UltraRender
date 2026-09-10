@@ -1,6 +1,7 @@
 #include <array>
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <filesystem>
 #include <span>
 #include <stdexcept>
@@ -12,7 +13,7 @@
 #include "registry.hpp"
 #include "sha256.hpp"
 
-int main() {
+int run_test() {
     const std::array<std::uint8_t, 3> abc{'a', 'b', 'c'};
     if (ure::contract_codegen::sha256_hex(abc) != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad") {
         throw std::runtime_error("SHA-256 known vector failed");
@@ -23,7 +24,8 @@ int main() {
     const auto product_interface = std::ranges::find(
         registry.entries, "ure.preview.interface.product_job",
         &ure::contract_codegen::RegistryEntry::canonical_name);
-    if (registry.version != "1.0.0" || registry.entries.size() != 224 || registry.tombstones.size() != 11 ||
+    if (registry.version != "1.0.0" || registry.entries.size() != 275 ||
+        registry.tombstones.size() != 11 ||
         registry.digest_hex != URE_REGISTRY_DIGEST_HEX || sizeof(ure_uuid_t) != 16 ||
         sizeof(ure_digest256_t) != 32 || sizeof(ure_input_header_t) != sizeof(ure_output_header_t) ||
         product_interface == registry.entries.end() ||
@@ -43,4 +45,13 @@ int main() {
         throw std::runtime_error("Mock scenario matrix is incomplete");
     }
     return 0;
+}
+
+int main() {
+    try {
+        return run_test();
+    } catch (const std::exception& error) {
+        std::fprintf(stderr, "Contract registry test failed: %s\n", error.what());
+        return 1;
+    }
 }

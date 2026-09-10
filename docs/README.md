@@ -1,8 +1,8 @@
 # UltraRender Documentation Index
 
-Last reviewed: 2026-09-07
+Last reviewed: 2026-09-10
 
-This index separates current authorities, completed subsystem references, and historical records. The root `PLAN.md` is the only authoritative global execution queue; PRV.3 is complete and its next unstarted cursor is PRV.4. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
+This index separates current authorities, completed subsystem references, and historical records. The root `PLAN.md` is the only authoritative global execution queue; PRV.4 is complete and its next unstarted cursor is PRV.5. `README.md` and `STATUS.md` summarize the current user-visible state; source code, CMake/CTest registration and fresh command output remain the strongest implementation evidence.
 
 ## Current project references
 
@@ -10,7 +10,7 @@ This index separates current authorities, completed subsystem references, and hi
 |---|---|
 | [`../README.md`](../README.md) | Project entry, supported baseline and build commands |
 | [`../STATUS.md`](../STATUS.md) | Current capability and limitation matrix |
-| [`../PLAN.md`](../PLAN.md) | Authoritative `UltraRender_preview` integration queue; PRV.3 material/asset/radiometric-wave composition is complete and PRV.4 is next |
+| [`../PLAN.md`](../PLAN.md) | Authoritative `UltraRender_preview` integration queue; PRV.4 typed measurement/output integration is complete and PRV.5 is next |
 | [`../AGENTS.md`](../AGENTS.md) | Agent governance and workflow |
 | [`CI.md`](CI.md) | Hosted non-GPU compiler matrix, test/install coverage, exclusions, pinned tools, and cache policy |
 | [`UltraRender_Preview_Architecture.md`](UltraRender_Preview_Architecture.md) | Normative one-product-service architecture, closure/evidence model, continuous diagnostic maturity, client/transport boundary, backend profiles and Preview completion rules |
@@ -26,6 +26,9 @@ This index separates current authorities, completed subsystem references, and hi
 | [`reports/phase_prv3_functional_validation_v1.json`](reports/phase_prv3_functional_validation_v1.json) | PRV.3 854×480 material/asset/Mie/radiometric-wave ProductE2E matrix plus bounded glTF/preset/MaterialX authoring-to-render evidence |
 | [`reports/phase_prv3_quality_validation_v1.json`](reports/phase_prv3_quality_validation_v1.json) | PRV.3 five-scene 1280×720, 500-sample production-profile quality and convergence evidence |
 | [`reports/phase_prv3_visual_review_v1.json`](reports/phase_prv3_visual_review_v1.json) | Retained PRV.3 quality and authoring-artifact visual review with explicit pre-denoise variance boundaries |
+| [`reports/phase_prv4_functional_validation_v1.json`](reports/phase_prv4_functional_validation_v1.json) | PRV.4 854×480 Direct/Worker/CLI/external-SDK typed measurement, partial-read and official artifact evidence |
+| [`reports/phase_prv4_quality_validation_v1.json`](reports/phase_prv4_quality_validation_v1.json) | PRV.4 1280×720, 500-sample Cornell typed measurement and convergence evidence |
+| [`reports/phase_prv4_visual_review_v1.json`](reports/phase_prv4_visual_review_v1.json) | PRV.4 visual review bound to the quality artifact with visible pre-denoise variance retained |
 | [`Public_API_ABI_Architecture.md`](Public_API_ABI_Architecture.md) | Normative minimal C ABI/local-worker architecture and PB.8 stable-major gates |
 | [`PB_Public_Boundary_PLAN.md`](PB_Public_Boundary_PLAN.md) | Read-only completed PB.0-PB.8 subordinate sequence and declaration evidence |
 | [`Public_API_Integration.md`](Public_API_Integration.md) | Core 1.0 loader, table-prefix, scene/session/frame, worker, and unstable-transaction integration guide |

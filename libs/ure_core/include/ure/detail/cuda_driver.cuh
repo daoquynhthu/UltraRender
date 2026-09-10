@@ -12,6 +12,11 @@
 // Disable C4819 warning for MSVC (encoding issue)
 #pragma warning(disable: 4819)
 
+namespace ure {
+struct IntegratorEstimatorMetadata;
+struct RenderMeasurementStatistics;
+}
+
 namespace ure::gpu {
 
 struct RenderMesh {
@@ -95,4 +100,7 @@ void copy_albedo_buffer_gpu(GpuContext* ctx, float* host_buffer);
 void copy_depth_buffer_gpu(GpuContext* ctx, float* host_buffer);
 void copy_uv_buffer_gpu(GpuContext* ctx, float* host_buffer);
 void copy_motion_vector_buffer_gpu(GpuContext* ctx, float* host_buffer);
+RenderMeasurementStatistics copy_measurement_statistics_gpu(
+    GpuContext* ctx,
+    const IntegratorEstimatorMetadata& estimator);
 } // namespace ure::gpu

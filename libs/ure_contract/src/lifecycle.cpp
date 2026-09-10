@@ -308,7 +308,7 @@ ure_result_t create_instance_impl(const ure_instance_create_info_t *info, ure_ha
             frame_budget = static_cast<const ure_instance_frame_budget_t *>(next);
             if (frame_budget->reserved != 0 || frame_budget->max_retained_frames == 0 ||
                 frame_budget->max_retained_frames > 64 || frame_budget->max_retained_bytes < 16 ||
-                frame_budget->max_retained_bytes > UINT64_C(1073741824)) {
+                frame_budget->max_retained_bytes > UINT64_C(2147483648)) {
                 return make_error(URE_RESULT_INVALID_ARGUMENT, 100, "invalid frame lease budget",
                                   error);
             }
@@ -321,6 +321,7 @@ ure_result_t create_instance_impl(const ure_instance_create_info_t *info, ure_ha
     bool product_required = false;
     bool scene_tool_required = false;
     bool device_execution_required = false;
+    bool measurement_output_required = false;
     for (std::uint32_t index = 0; index < info->required_capability_count; ++index) {
         const std::uint32_t capability = info->required_capabilities[index];
         if (capability != URE_CAPABILITY_BOOTSTRAP && capability != URE_CAPABILITY_LIFECYCLE &&
@@ -329,7 +330,8 @@ ure_result_t create_instance_impl(const ure_instance_create_info_t *info, ure_ha
             capability != URE_CAPABILITY_RENDER_SESSION &&
             capability != URE_CAPABILITY_PRODUCT_JOB &&
             capability != URE_CAPABILITY_SCENE_TOOL &&
-            capability != URE_CAPABILITY_DEVICE_EXECUTION) {
+            capability != URE_CAPABILITY_DEVICE_EXECUTION &&
+            capability != URE_CAPABILITY_MEASUREMENT_OUTPUT) {
             return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 101,
                               "required capability is unavailable", error);
         }
@@ -340,6 +342,8 @@ ure_result_t create_instance_impl(const ure_instance_create_info_t *info, ure_ha
         if (capability == URE_CAPABILITY_SCENE_TOOL) scene_tool_required = true;
         if (capability == URE_CAPABILITY_DEVICE_EXECUTION)
             device_execution_required = true;
+        if (capability == URE_CAPABILITY_MEASUREMENT_OUTPUT)
+            measurement_output_required = true;
     }
     if (session_required && (!frame_required || !scene_required))
         return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 101,
@@ -348,6 +352,9 @@ ure_result_t create_instance_impl(const ure_instance_create_info_t *info, ure_ha
         (!frame_required || !scene_required || !session_required))
         return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 101,
                           "product job dependencies were not requested", error);
+    if (measurement_output_required && !product_required)
+        return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 101,
+                          "measurement output dependency was not requested", error);
     if (product_required)
         device_execution_required = true;
     try {
@@ -359,6 +366,8 @@ ure_result_t create_instance_impl(const ure_instance_create_info_t *info, ure_ha
         instance->scene_enabled = scene_required;
         instance->session_enabled = session_required;
         instance->product_enabled = product_required;
+        instance->measurement_output_enabled =
+            product_required || measurement_output_required;
         instance->scene_tool_enabled = scene_tool_required;
         instance->device_execution_enabled = device_execution_required;
         if (frame_budget) {
@@ -542,8 +551,38 @@ ure_result_t query_capability_impl(ure_handle_t instance, const ure_capability_q
                                       "product job dependencies are not enabled", error);
                 object->product_enabled = true;
                 object->device_execution_enabled = true;
+                object->measurement_output_enabled = true;
             }
             descriptor->enabled = object->product_enabled ? 1U : 0U;
+            descriptor->applicable = descriptor->enabled;
+            descriptor->runtime_state = descriptor->enabled
+                                            ? URE_RUNTIME_STATE_APPLICABLE
+                                            : URE_RUNTIME_STATE_AVAILABLE;
+        }
+        return URE_RESULT_SUCCESS;
+    }
+    if (query->capability_id == URE_CAPABILITY_MEASUREMENT_OUTPUT) {
+        static constexpr std::uint32_t measurement_dependencies[]{
+            URE_CAPABILITY_FRAME_LEASE, URE_CAPABILITY_PRODUCT_JOB};
+        descriptor->version_major = 0;
+        descriptor->version_minor = 1;
+        descriptor->stability = URE_STABILITY_UNSTABLE_EXTENSION;
+        descriptor->maturity = URE_MATURITY_EXPERIMENTAL;
+        descriptor->runtime_state = URE_RUNTIME_STATE_AVAILABLE;
+        descriptor->dependencies = measurement_dependencies;
+        descriptor->dependency_count = 2;
+        {
+            std::scoped_lock lock(object->mutex);
+            if (query->required || query->request_enable) {
+                if (!object->frame_enabled || !object->product_enabled)
+                    return make_error(
+                        URE_RESULT_CAPABILITY_UNAVAILABLE, 110,
+                        "measurement output dependencies are not enabled",
+                        error);
+                object->measurement_output_enabled = true;
+            }
+            descriptor->enabled =
+                object->measurement_output_enabled ? 1U : 0U;
             descriptor->applicable = descriptor->enabled;
             descriptor->runtime_state = descriptor->enabled
                                             ? URE_RUNTIME_STATE_APPLICABLE

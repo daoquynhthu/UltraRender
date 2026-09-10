@@ -123,6 +123,11 @@ struct PlaneData {
     Digest time{};
     Digest uncertainty{};
     Digest provenance{};
+    Digest content{};
+    std::uint64_t sample_begin{};
+    std::uint64_t sample_count{};
+    std::uint32_t endpoint_index{UINT32_MAX};
+    std::uint32_t flags{};
     std::vector<std::uint8_t> bytes;
 };
 
@@ -150,6 +155,7 @@ struct FrameObject final : Object {
     Digest objective{};
     Digest estimator{};
     Digest provenance{};
+    Digest measurement_identity{};
     ure_handle_t operation{};
     std::uint64_t sample_begin{};
     std::uint64_t sample_count{1};
@@ -162,6 +168,7 @@ struct FrameObject final : Object {
     std::uint64_t map_token{};
     std::uint64_t next_map_token{1};
     bool budget_accounted{};
+    std::uint32_t publication_status{URE_PUBLICATION_COMPLETE};
 };
 
 ure_result_t frame_retain_impl(ure_handle_t frame, ure_handle_t *error) {
@@ -334,18 +341,263 @@ ure_result_t frame_copy_impl(const ure_frame_copy_info_t *info,
     if (info->destination_row_stride < row_bytes)
         return make_error(URE_RESULT_INVALID_ARGUMENT, 216,
                           "destination row stride is too small", error);
+    std::uint64_t minimum_destination_slice{};
+    if (!checked_multiply(info->destination_row_stride, plane.height,
+                          minimum_destination_slice) ||
+        info->destination_slice_stride < minimum_destination_slice)
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 216,
+                          "destination slice stride is too small", error);
+    std::uint64_t last_slice_offset{};
     std::uint64_t last_row_offset{};
-    if (!checked_multiply(info->destination_row_stride, plane.height - 1,
+    if (!checked_multiply(info->destination_slice_stride, plane.depth - 1,
+                          last_slice_offset) ||
+        !checked_multiply(info->destination_row_stride, plane.height - 1,
                           last_row_offset) ||
-        last_row_offset > std::numeric_limits<std::uint64_t>::max() - row_bytes ||
-        last_row_offset + row_bytes > info->destination_size)
+        last_slice_offset > std::numeric_limits<std::uint64_t>::max() -
+                                last_row_offset ||
+        last_slice_offset + last_row_offset >
+            std::numeric_limits<std::uint64_t>::max() - row_bytes ||
+        last_slice_offset + last_row_offset + row_bytes >
+            info->destination_size)
         return make_error(URE_RESULT_BUFFER_TOO_SMALL, 217,
                           "destination frame buffer is too small", error);
-    for (std::uint32_t row = 0; row < plane.height; ++row) {
-        std::memcpy(info->destination + info->destination_row_stride * row,
-                    plane.bytes.data() + plane.row_stride * row,
-                    static_cast<std::size_t>(row_bytes));
+    for (std::uint32_t slice = 0; slice < plane.depth; ++slice) {
+        for (std::uint32_t row = 0; row < plane.height; ++row) {
+            std::memcpy(
+                info->destination + info->destination_slice_stride * slice +
+                    info->destination_row_stride * row,
+                plane.bytes.data() + plane.slice_stride * slice +
+                    plane.row_stride * row,
+                static_cast<std::size_t>(row_bytes));
+        }
     }
+    return URE_RESULT_SUCCESS;
+}
+
+ure_result_t create_measurement_snapshot_impl(
+    ure_handle_t instance_handle, ure_handle_t operation_handle,
+    const ure_digest256_t &scene_revision,
+    const ure_digest256_t &objective, const Digest &frame_identity,
+    const Digest &measurement_identity, std::uint64_t sample_count,
+    std::uint32_t width, std::uint32_t height,
+    std::span<const FramePlaneSource> sources, ure_handle_t *output,
+    ure_handle_t *error) {
+    clear_error(error);
+    if (output) *output = nullptr;
+    const auto instance =
+        handles().get<InstanceObject>(instance_handle, ObjectType::Instance);
+    if (!instance)
+        return make_error(URE_RESULT_INVALID_HANDLE, 850,
+                          "invalid measurement frame owner", error);
+    if (!output || width == 0 || height == 0 || width > 8192 ||
+        height > 8192 || sources.empty() || sources.size() > 64 ||
+        sample_count == 0)
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 851,
+                          "invalid measurement frame description", error);
+    std::uint64_t retained_bytes{};
+    for (const auto &source : sources) {
+        std::uint64_t minimum_row{};
+        std::uint64_t minimum_slice{};
+        std::uint64_t minimum_extent{};
+        if (source.width == 0 || source.height == 0 || source.depth == 0 ||
+            source.element_stride == 0 ||
+            !checked_multiply(source.width, source.element_stride,
+                              minimum_row) ||
+            source.row_stride < minimum_row ||
+            !checked_multiply(source.row_stride, source.height,
+                              minimum_slice) ||
+            source.slice_stride < minimum_slice ||
+            !checked_multiply(source.slice_stride, source.depth,
+                              minimum_extent) ||
+            source.bytes.size() != minimum_extent ||
+            source.bytes.size() > UINT64_C(1073741824) - retained_bytes)
+            return make_error(URE_RESULT_INVALID_ARGUMENT, 852,
+                              "invalid measurement plane layout", error);
+        retained_bytes += source.bytes.size();
+    }
+    if (operation_handle &&
+        !handles().get<OperationObject>(operation_handle,
+                                       ObjectType::Operation))
+        return make_error(URE_RESULT_INVALID_HANDLE, 853,
+                          "invalid measurement frame operation", error);
+    {
+        std::scoped_lock lock(instance->mutex);
+        if (!instance->frame_enabled)
+            return make_error(URE_RESULT_CAPABILITY_UNAVAILABLE, 854,
+                              "frame capability is not enabled", error);
+        if (instance->retained_frames >= instance->max_retained_frames ||
+            retained_bytes >
+                instance->max_retained_bytes - instance->retained_bytes)
+            return make_error(URE_RESULT_BACKPRESSURE, 855,
+                              "measurement frame lease budget is exhausted",
+                              error);
+    }
+    auto frame = std::make_shared<FrameObject>();
+    frame->type = ObjectType::Frame;
+    frame->thread_policy = URE_THREAD_POLICY_CONCURRENT_READ;
+    frame->owner = instance_handle;
+    frame->parent = instance_handle;
+    frame->instance = instance;
+    frame->frame_identity = frame_identity;
+    frame->measurement_identity = measurement_identity;
+    std::memcpy(frame->scene_revision.data(), scene_revision.bytes,
+                frame->scene_revision.size());
+    std::memcpy(frame->objective.data(), objective.bytes,
+                frame->objective.size());
+    frame->camera_revision = digest(
+        "UltraRender.CameraRevision.NativeScene.v1",
+        std::span(scene_revision.bytes, sizeof(scene_revision.bytes)));
+    frame->estimator = digest("UltraRender.Estimator.ProductMeasurement.v1");
+    frame->provenance = measurement_identity;
+    frame->sample_count = sample_count;
+    frame->created_ns = timestamp_ns();
+    frame->retained_bytes = retained_bytes;
+    frame->width = width;
+    frame->height = height;
+    frame->planes.reserve(sources.size());
+    for (const auto &source : sources) {
+        PlaneData plane;
+        plane.schema = source.schema;
+        plane.scalar_type = source.scalar_type;
+        plane.component_layout = source.component_layout;
+        plane.normalization = source.normalization;
+        plane.width = source.width;
+        plane.height = source.height;
+        plane.depth = source.depth;
+        plane.element_stride = source.element_stride;
+        plane.row_stride = source.row_stride;
+        plane.slice_stride = source.slice_stride;
+        plane.observable = source.observable;
+        plane.unit = source.unit;
+        plane.measure = source.measure;
+        plane.time = source.time;
+        plane.uncertainty = source.uncertainty;
+        plane.provenance = source.provenance;
+        plane.sample_begin = source.sample_begin;
+        plane.sample_count = source.sample_count;
+        plane.endpoint_index = source.endpoint_index;
+        plane.flags = source.flags;
+        plane.bytes.assign(source.bytes.begin(), source.bytes.end());
+        plane.content = digest("UltraRender.MeasurementPlane.Content.v1",
+                               plane.bytes);
+        frame->planes.push_back(std::move(plane));
+    }
+    if (operation_handle) {
+        if (!handles().retain(operation_handle, ObjectType::Operation))
+            return make_error(URE_RESULT_INVALID_HANDLE, 853,
+                              "invalid measurement frame operation", error);
+        frame->operation = operation_handle;
+    }
+    {
+        std::scoped_lock lock(instance->mutex);
+        if (instance->retained_frames >= instance->max_retained_frames ||
+            retained_bytes >
+                instance->max_retained_bytes - instance->retained_bytes)
+            return make_error(URE_RESULT_BACKPRESSURE, 855,
+                              "measurement frame lease budget is exhausted",
+                              error);
+        ++instance->retained_frames;
+        instance->retained_bytes += retained_bytes;
+        frame->budget_accounted = true;
+    }
+    *output = handles().insert(frame);
+    emit_event(instance, URE_EVENT_FRAME_READY, operation_handle, *output);
+    return URE_RESULT_SUCCESS;
+}
+
+ure_result_t measurement_frame_info_impl(
+    ure_handle_t handle, ure_measurement_frame_info_t *info,
+    ure_handle_t *error) {
+    clear_error(error);
+    const auto frame = handles().get<FrameObject>(handle, ObjectType::Frame);
+    if (!frame)
+        return make_error(URE_RESULT_INVALID_HANDLE, 860,
+                          "invalid measurement frame handle", error);
+    if (!valid_output(info, URE_STRUCTURE_MEASUREMENT_FRAME_INFO) ||
+        info->reserved[0] != 0 || info->reserved[1] != 0)
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 861,
+                          "invalid measurement frame info output", error);
+    store_digest(info->frame_identity, frame->frame_identity);
+    store_digest(info->measurement_identity, frame->measurement_identity);
+    info->generation = frame->generation;
+    info->retained_bytes = frame->retained_bytes;
+    info->plane_count = static_cast<std::uint32_t>(frame->planes.size());
+    info->publication_status = frame->publication_status;
+    return URE_RESULT_SUCCESS;
+}
+
+ure_result_t measurement_plane_info_impl(
+    ure_handle_t handle, std::uint32_t plane_index,
+    ure_measurement_plane_info_t *info, ure_handle_t *error) {
+    clear_error(error);
+    const auto frame = handles().get<FrameObject>(handle, ObjectType::Frame);
+    if (!frame)
+        return make_error(URE_RESULT_INVALID_HANDLE, 862,
+                          "invalid measurement frame handle", error);
+    if (!valid_output(info, URE_STRUCTURE_MEASUREMENT_PLANE_INFO) ||
+        info->reserved[0] != 0 || info->reserved[1] != 0 ||
+        plane_index >= frame->planes.size())
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 863,
+                          "invalid measurement plane query", error);
+    const auto &plane = frame->planes[plane_index];
+    info->plane_schema = plane.schema;
+    info->scalar_type = plane.scalar_type;
+    info->component_layout = plane.component_layout;
+    info->normalization = plane.normalization;
+    info->width = plane.width;
+    info->height = plane.height;
+    info->depth = plane.depth;
+    info->element_stride = plane.element_stride;
+    info->row_stride = plane.row_stride;
+    info->slice_stride = plane.slice_stride;
+    info->byte_extent = plane.bytes.size();
+    store_digest(info->observable_identity, plane.observable);
+    store_digest(info->unit_identity, plane.unit);
+    store_digest(info->measure_identity, plane.measure);
+    store_digest(info->time_identity, plane.time);
+    store_digest(info->uncertainty_identity, plane.uncertainty);
+    store_digest(info->provenance_identity, plane.provenance);
+    store_digest(info->content_identity, plane.content);
+    info->sample_begin = plane.sample_begin;
+    info->sample_count = plane.sample_count;
+    info->endpoint_index = plane.endpoint_index;
+    info->flags = plane.flags;
+    return URE_RESULT_SUCCESS;
+}
+
+ure_result_t measurement_copy_range_impl(
+    const ure_measurement_plane_copy_t *copy, ure_handle_t *error) {
+    clear_error(error);
+    if (!valid_input(copy, URE_STRUCTURE_MEASUREMENT_PLANE_COPY) ||
+        copy->reserved32 != 0 || copy->reserved[0] != 0 ||
+        copy->reserved[1] != 0 || !copy->destination.data ||
+        copy->byte_count == 0 || copy->destination.size < copy->byte_count)
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 864,
+                          "invalid measurement plane range copy", error);
+    const auto frame =
+        handles().get<FrameObject>(copy->frame, ObjectType::Frame);
+    if (!frame)
+        return make_error(URE_RESULT_INVALID_HANDLE, 865,
+                          "invalid measurement frame handle", error);
+    if (copy->plane_index >= frame->planes.size())
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 866,
+                          "invalid measurement plane index", error);
+    const auto &plane = frame->planes[copy->plane_index];
+    if (copy->expected_generation != frame->generation)
+        return make_error(URE_RESULT_REVISION_CONFLICT, 867,
+                          "measurement frame generation changed", error);
+    if (std::memcmp(copy->expected_content_identity.bytes,
+                    plane.content.data(), plane.content.size()) != 0)
+        return make_error(URE_RESULT_MALFORMED_DATA, 868,
+                          "measurement plane content identity differs",
+                          error);
+    if (copy->source_offset > plane.bytes.size() ||
+        copy->byte_count > plane.bytes.size() - copy->source_offset)
+        return make_error(URE_RESULT_INVALID_ARGUMENT, 869,
+                          "measurement plane range exceeds its extent", error);
+    std::memcpy(copy->destination.data,
+                plane.bytes.data() + copy->source_offset,
+                static_cast<std::size_t>(copy->byte_count));
     return URE_RESULT_SUCCESS;
 }
 
@@ -640,11 +892,49 @@ ure_result_t URE_CALL frame_copy(const ure_frame_copy_info_t *info,
     return guard_entry(error, [&] { return frame_copy_impl(info, error); });
 }
 
+ure_result_t URE_CALL measurement_frame_info(
+    ure_handle_t frame, ure_measurement_frame_info_t *info,
+    ure_handle_t *error) noexcept {
+    return guard_entry(error, [&] {
+        return measurement_frame_info_impl(frame, info, error);
+    });
+}
+
+ure_result_t URE_CALL measurement_plane_info(
+    ure_handle_t frame, std::uint32_t plane_index,
+    ure_measurement_plane_info_t *info, ure_handle_t *error) noexcept {
+    return guard_entry(error, [&] {
+        return measurement_plane_info_impl(frame, plane_index, info, error);
+    });
+}
+
+ure_result_t URE_CALL measurement_copy_range(
+    const ure_measurement_plane_copy_t *copy, ure_handle_t *error) noexcept {
+    return guard_entry(error, [&] {
+        return measurement_copy_range_impl(copy, error);
+    });
+}
+
+ure_result_t URE_CALL publish_artifacts(
+    const ure_output_request_t *request, ure_output_manifest_t *manifest,
+    ure_handle_t *error) noexcept {
+    return publish_product_artifacts(request, manifest, error);
+}
+
 }
 
 const ure_frame_interface_t &frame_interface() noexcept {
     static const ure_frame_interface_t table{
         {sizeof(table), 1, 0}, frame_retain, frame_release, frame_get_info, frame_get_plane_info, frame_map, frame_unmap, frame_copy};
+    return table;
+}
+
+const ure_measurement_output_interface_t &
+measurement_output_interface() noexcept {
+    static const ure_measurement_output_interface_t table{
+        {sizeof(table), 0, 1}, measurement_frame_info,
+        measurement_plane_info, measurement_copy_range,
+        publish_artifacts};
     return table;
 }
 
@@ -659,6 +949,22 @@ ure_result_t create_frame_snapshot(
         return create_snapshot_impl(instance, operation, scene_revision, objective,
                                     sample_count, width, height, rgb, rgb_count,
                                     frame, error);
+    });
+}
+
+ure_result_t create_measurement_frame_snapshot(
+    ure_handle_t instance, ure_handle_t operation,
+    const ure_digest256_t &scene_revision,
+    const ure_digest256_t &objective, const Digest &frame_identity,
+    const Digest &measurement_identity, std::uint64_t sample_count,
+    std::uint32_t width, std::uint32_t height,
+    std::span<const FramePlaneSource> planes, ure_handle_t *frame,
+    ure_handle_t *error) noexcept {
+    return guard_entry(error, [&] {
+        return create_measurement_snapshot_impl(
+            instance, operation, scene_revision, objective,
+            frame_identity, measurement_identity, sample_count, width,
+            height, planes, frame, error);
     });
 }
 

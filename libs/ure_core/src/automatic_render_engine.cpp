@@ -326,6 +326,55 @@ public:
         return report_;
     }
 
+    RenderMeasurementStatistics
+    get_measurement_statistics() const override {
+        RenderMeasurementStatistics result;
+        result.width = static_cast<std::uint32_t>(
+            loaded_ ? scene_.width : 0);
+        result.height = static_cast<std::uint32_t>(
+            loaded_ ? scene_.height : 0);
+        result.estimate.assign(
+            static_cast<std::size_t>(result.width) * result.height * 3,
+            0.0f);
+        result.auxiliary_outputs_wavefront_only = true;
+        result.valid = !selected_indices_.empty() &&
+                       !framebuffer_.empty();
+        for (const auto index : selected_indices_) {
+            const auto& state = candidates_[index];
+            if (state.rendered_spp <= 0) continue;
+            auto endpoint = state.executor->get_measurement_statistics();
+            if (!endpoint.valid || endpoint.endpoints.size() != 1 ||
+                endpoint.width != result.width ||
+                endpoint.height != result.height ||
+                endpoint.estimate.size() != result.estimate.size()) {
+                result.valid = false;
+                result.endpoints.clear();
+                return result;
+            }
+            endpoint.endpoints.front().aggregation_weight =
+                state.report.aggregation_weight;
+            if (index == selected_indices_.front()) {
+                result.normal = std::move(endpoint.normal);
+                result.albedo = std::move(endpoint.albedo);
+                result.depth = std::move(endpoint.depth);
+                result.uv = std::move(endpoint.uv);
+                result.motion = std::move(endpoint.motion);
+                result.auxiliary_estimator =
+                    endpoint.auxiliary_estimator;
+            }
+            for (std::size_t value = 0;
+                 value < result.estimate.size(); ++value) {
+                result.estimate[value] += static_cast<float>(
+                    state.report.aggregation_weight *
+                    static_cast<double>(endpoint.estimate[value]));
+            }
+            result.endpoints.push_back(
+                std::move(endpoint.endpoints.front()));
+        }
+        result.valid = result.valid && !result.endpoints.empty();
+        return result;
+    }
+
 private:
     void validate_config() const {
         const auto& automatic = config_.automatic_integrator;
